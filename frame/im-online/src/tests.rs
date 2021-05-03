@@ -29,7 +29,7 @@ use sp_core::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 };
 use frame_support::{dispatch, assert_noop};
-use sp_runtime::{testing::UintAuthorityId, transaction_validity::TransactionValidityError};
+use sp_runtime::{testing::UintAuthorityId, transaction_validity::{TransactionValidityError, InvalidTransaction}};
 
 #[test]
 fn test_unresponsiveness_slash_fraction() {
@@ -131,7 +131,7 @@ fn heartbeat(
 
 	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))
 		.map_err(|e| match e {
-			TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_VALIDATORS_LEN)) =>
+			TransactionValidityError::Invalid(InvalidTransaction::Custom(_)) =>
 				"invalid validators len",
 			e @ _ => <&'static str>::from(e),
 		})?;

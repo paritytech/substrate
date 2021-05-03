@@ -82,10 +82,6 @@ use sp_std::convert::TryInto;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
 	traits::{AtLeast32BitUnsigned, Convert, Saturating},
-	transaction_validity::{
-		InvalidTransaction, TransactionSource, TransactionValidity,
-		ValidTransaction,
-	},
 	Perbill, Percent, RuntimeDebug,
 };
 use sp_staking::{
@@ -93,8 +89,7 @@ use sp_staking::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use frame_support::traits::{
-	EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
-	ValidatorSetWithIdentification,
+	EstimateNextSessionRotation, OneSessionHandler, ValidatorSet, ValidatorSetWithIdentification,
 };
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 pub use weights::WeightInfo;
@@ -239,11 +234,13 @@ type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Config>::B
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::Get};
 	use frame_system::{pallet_prelude::*, ensure_none};
 	use sp_runtime::{
 		traits::{Member, MaybeSerializeDeserialize},
-		transaction_validity::TransactionPriority,
+		transaction_validity::{
+			InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity, ValidTransaction,
+		},
 	};
 	use frame_support::Parameter;
 	use super::*;
@@ -450,6 +447,62 @@ pub mod pallet {
 					"Skipping heartbeat at {:?}. Not a validator.",
 					now,
 				)
+			}
+		}
+	}
+
+	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
+	const INVALID_VALIDATORS_LEN: u8 = 10;
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			if let Call::heartbeat(heartbeat, signature) = call {
+				if <Pallet<T>>::is_online(heartbeat.authority_index) {
+					// we already received a heartbeat for this authority
+					return InvalidTransaction::Stale.into();
+				}
+
+				// check if session index from heartbeat is recent
+				let current_session = T::ValidatorSet::session_index();
+				if heartbeat.session_index != current_session {
+					return InvalidTransaction::Stale.into();
+				}
+
+				// verify that the incoming (unverified) pubkey is actually an authority id
+				let keys = Keys::<T>::get();
+				if keys.len() as u32 != heartbeat.validators_len {
+					return InvalidTransaction::Custom(INVALID_VALIDATORS_LEN).into();
+				}
+				let authority_id = match keys.get(heartbeat.authority_index as usize) {
+					Some(id) => id,
+					None => return InvalidTransaction::BadProof.into(),
+				};
+
+				// check signature (this is expensive so we do it last).
+				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
+					authority_id.verify(&encoded_heartbeat, &signature)
+				});
+
+				if !signature_valid {
+					return InvalidTransaction::BadProof.into();
+				}
+
+				ValidTransaction::with_tag_prefix("ImOnline")
+					.priority(T::UnsignedPriority::get())
+					.and_provides((current_session, authority_id))
+					.longevity(
+						TryInto::<u64>::try_into(
+							T::NextSessionRotation::average_session_length() / 2u32.into(),
+						)
+						.unwrap_or(64_u64),
+					)
+					.propagate(true)
+					.build()
+			} else {
+				InvalidTransaction::Call.into()
 			}
 		}
 	}
@@ -752,61 +805,6 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 
 	fn on_disabled(_i: usize) {
 		// ignore
-	}
-}
-
-/// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
-const INVALID_VALIDATORS_LEN: u8 = 10;
-
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Pallet<T> {
-	type Call = Call<T>;
-
-	fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-		if let Call::heartbeat(heartbeat, signature) = call {
-			if <Pallet<T>>::is_online(heartbeat.authority_index) {
-				// we already received a heartbeat for this authority
-				return InvalidTransaction::Stale.into();
-			}
-
-			// check if session index from heartbeat is recent
-			let current_session = T::ValidatorSet::session_index();
-			if heartbeat.session_index != current_session {
-				return InvalidTransaction::Stale.into();
-			}
-
-			// verify that the incoming (unverified) pubkey is actually an authority id
-			let keys = Keys::<T>::get();
-			if keys.len() as u32 != heartbeat.validators_len {
-				return InvalidTransaction::Custom(INVALID_VALIDATORS_LEN).into();
-			}
-			let authority_id = match keys.get(heartbeat.authority_index as usize) {
-				Some(id) => id,
-				None => return InvalidTransaction::BadProof.into(),
-			};
-
-			// check signature (this is expensive so we do it last).
-			let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
-				authority_id.verify(&encoded_heartbeat, &signature)
-			});
-
-			if !signature_valid {
-				return InvalidTransaction::BadProof.into();
-			}
-
-			ValidTransaction::with_tag_prefix("ImOnline")
-				.priority(T::UnsignedPriority::get())
-				.and_provides((current_session, authority_id))
-				.longevity(
-					TryInto::<u64>::try_into(
-						T::NextSessionRotation::average_session_length() / 2u32.into(),
-					)
-					.unwrap_or(64_u64),
-				)
-				.propagate(true)
-				.build()
-		} else {
-			InvalidTransaction::Call.into()
-		}
 	}
 }
 
