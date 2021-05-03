@@ -2709,7 +2709,7 @@ where
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
 		Self::reward_by_ids(vec![
-			(<pallet_authorship::Module<T>>::author(), 2),
+			(<pallet_authorship::Pallet<T>>::author(), 2),
 			(author, 1)
 		])
 	}
@@ -2736,11 +2736,8 @@ impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>
 	for ExposureOf<T>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
-		if let Some(active_era) = <Module<T>>::active_era() {
-			Some(<Module<T>>::eras_stakers(active_era.index, &validator))
-		} else {
-			None
-		}
+		<Module<T>>::active_era()
+			.map(|active_era| <Module<T>>::eras_stakers(active_era.index, &validator))
 	}
 }
 
