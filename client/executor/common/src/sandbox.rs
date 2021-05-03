@@ -346,7 +346,7 @@ where
 
 enum BackendInstance {
 	Wasmi(wasmi::ModuleRef),
-	Wasmtime(wasmtime::Instance),
+	// Wasmtime(wasmtime::Instance),
 	Wasmer(wasmer::Instance),
 }
 
@@ -412,7 +412,7 @@ impl<FR> SandboxInstance<FR> {
 							Ok(wasmi_result)
 						}
 
-						BackendInstance::Wasmtime(wasmtime_instance) => {
+						/*BackendInstance::Wasmtime(wasmtime_instance) => {
 							let wasmtime_function = wasmtime_instance
 								.get_func(export_name)
 								.ok_or(wasmi::Error::Function("wasmtime function failed".to_string()))?;
@@ -448,7 +448,7 @@ impl<FR> SandboxInstance<FR> {
 							};
 
 							Ok(wasmtime_result)
-						}
+						}*/
 
 						BackendInstance::Wasmer(wasmer_instance) => {
 							let function = wasmer_instance
@@ -510,7 +510,7 @@ impl<FR> SandboxInstance<FR> {
 				Some(wasmi_global.into())
 			}
 
-			BackendInstance::Wasmtime(wasmtime_instance) => {
+			/*BackendInstance::Wasmtime(wasmtime_instance) => {
 				let wasmtime_global = wasmtime_instance.get_global(name)?.get();
 				let wasmtime_value = match wasmtime_global {
 					Val::I32(val) => Value::I32(val),
@@ -521,7 +521,7 @@ impl<FR> SandboxInstance<FR> {
 				};
 
 				Some(wasmtime_value)
-			}
+			}*/
 
 			BackendInstance::Wasmer(wasmer_instance) => {
 				let global = wasmer_instance.exports.get_global(name).ok()?;
@@ -669,7 +669,7 @@ pub enum SandboxBackend {
 	Wasmi,
 
 	/// Wasmtime environment
-	Wasmtime,
+	// Wasmtime,
 
 	/// Wasmer environment
 	Wasmer,
@@ -705,7 +705,7 @@ struct WasmerBackend {
 
 enum BackendContext {
 	Wasmi,
-	Wasmtime,
+	// Wasmtime,
 	Wasmer(WasmerBackend),
 }
 
@@ -713,7 +713,7 @@ impl BackendContext {
 	pub fn new(backend: SandboxBackend) -> BackendContext {
 		match backend {
 			SandboxBackend::Wasmi => BackendContext::Wasmi,
-			SandboxBackend::Wasmtime => todo!(),
+			// SandboxBackend::Wasmtime => todo!(),
 
 			SandboxBackend::Wasmer => {
 				let compiler = Singlepass::default();
@@ -772,7 +772,7 @@ impl<FR> Store<FR> {
 				)
 			}
 
-			BackendContext::Wasmtime => todo!(),
+			// BackendContext::Wasmtime => todo!(),
 		};
 
 		let mem_idx = memories.len();
@@ -932,7 +932,7 @@ impl<FR> Store<FR> {
 				sandbox_instance
 			}
 
-			BackendContext::Wasmtime => {
+			/*BackendContext::Wasmtime => {
 				let mut config = wasmtime::Config::new();
 				config.cranelift_opt_level(wasmtime::OptLevel::None);
 				config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
@@ -1057,7 +1057,7 @@ impl<FR> Store<FR> {
 					dispatch_thunk: DTH::with_dispatch_thunk(|dispatch_thunk| dispatch_thunk.clone()),
 					guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
 				})
-			}
+			}*/
 
 			BackendContext::Wasmer(context) => {
 				// let compiler = Singlepass::default();
