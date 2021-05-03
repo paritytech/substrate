@@ -17,6 +17,7 @@
 
 use super::*;
 use crate as multi_phase;
+use multi_phase::unsigned::{IndexAssignmentOf, Voter};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
 	parameter_types,
@@ -41,7 +42,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16,
 };
-use std::sync::Arc;
+use std::{convert::TryFrom, sync::Arc};
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, Call, (), ()>;
@@ -95,18 +96,69 @@ pub fn roll_to_with_ocw(n: u64) {
 	}
 }
 
+pub struct TrimHelpers {
+	pub voters: Vec<Voter<Runtime>>,
+	pub assignments: Vec<IndexAssignmentOf<Runtime>>,
+	pub encoded_size_of:
+		Box<dyn Fn(&[IndexAssignmentOf<Runtime>]) -> Result<usize, sp_npos_elections::Error>>,
+	pub voter_index: Box<
+		dyn Fn(
+			&<Runtime as frame_system::Config>::AccountId,
+		) -> Option<CompactVoterIndexOf<Runtime>>,
+	>,
+}
+
+/// Helpers for setting up trimming tests.
+///
+/// Assignments are pre-sorted in reverse order of stake.
+pub fn trim_helpers() -> TrimHelpers {
+	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
+	let stakes: std::collections::HashMap<_, _> =
+		voters.iter().map(|(id, stake, _)| (*id, *stake)).collect();
+
+	// Compute the size of a compact solution comprised of the selected arguments.
+	//
+	// This function completes in `O(edges)`; it's expensive, but linear.
+	let encoded_size_of = Box::new(|assignments: &[IndexAssignmentOf<Runtime>]| {
+		CompactOf::<Runtime>::try_from(assignments).map(|compact| compact.encoded_size())
+	});
+	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
+	let voter_index = helpers::voter_index_fn_owned::<Runtime>(cache);
+	let target_index = helpers::target_index_fn::<Runtime>(&targets);
+
+	let desired_targets = MultiPhase::desired_targets().unwrap();
+
+	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(
+		desired_targets as usize,
+		targets.clone(),
+		voters.clone(),
+		None,
+	)
+	.unwrap();
+
+	// sort by decreasing order of stake
+	assignments.sort_unstable_by_key(|assignment| {
+		std::cmp::Reverse(stakes.get(&assignment.who).cloned().unwrap_or_default())
+	});
+
+	// convert to IndexAssignment
+	let assignments = assignments
+		.iter()
+		.map(|assignment| {
+			IndexAssignmentOf::<Runtime>::new(assignment, &voter_index, &target_index)
+		})
+		.collect::<Result<Vec<_>, _>>()
+		.expect("test assignments don't contain any voters with too many votes");
+
+	TrimHelpers { voters, assignments, encoded_size_of, voter_index: Box::new(voter_index) }
+}
+
 /// Spit out a verifiable raw solution.
 ///
 /// This is a good example of what an offchain miner would do.
 pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
-
-	// closures
-	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
-	let voter_index = helpers::voter_index_fn_linear::<Runtime>(&voters);
-	let target_index = helpers::target_index_fn_linear::<Runtime>(&targets);
-	let stake_of = helpers::stake_of_fn::<Runtime>(&voters, &cache);
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(
 		desired_targets as usize,
@@ -116,6 +168,12 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	)
 	.unwrap();
 
+	// closures
+	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
+	let voter_index = helpers::voter_index_fn_linear::<Runtime>(&voters);
+	let target_index = helpers::target_index_fn_linear::<Runtime>(&targets);
+	let stake_of = helpers::stake_of_fn::<Runtime>(&voters, &cache);
+
 	let winners = to_without_backing(winners);
 
 	let score = {
@@ -123,7 +181,7 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 		to_supports(&winners, &staked).unwrap().evaluate()
 	};
 	let compact =
-		<CompactOf<Runtime>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
+		<CompactOf<Runtime>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
 
 	let round = MultiPhase::round();
 	RawSolution { compact, score, round }
