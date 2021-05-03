@@ -41,6 +41,8 @@ pub fn duration_now() -> Duration {
 
 /// Returns the duration until the next slot from now.
 pub fn time_until_next(slot_duration: Duration) -> Duration {
+	// WESTEND HOTFIX: poll the slot 12 times as often since we might be in a time warp.
+	let slot_duration = slot_duration / 12;
 	let remaining_full_millis = slot_duration.as_millis()
 		- (duration_now().as_millis() % slot_duration.as_millis())
 		- 1;
