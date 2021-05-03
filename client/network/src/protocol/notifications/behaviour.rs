@@ -555,6 +555,11 @@ impl Notifications {
 			.map(|((id, _), _)| id)
 	}
 
+	/// Returns the list of reserved peers.
+	pub fn reserved_peers<'a>(&'a self, set_id: sc_peerset::SetId) -> impl Iterator<Item = &'a PeerId> + 'a {
+		self.peerset.reserved_peers(set_id)
+	}
+
 	/// Sends a notification to a peer.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.

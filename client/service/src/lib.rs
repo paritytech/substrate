@@ -302,6 +302,14 @@ async fn build_network_future<
 							))),
 						};
 					}
+					sc_rpc::system::Request::NetworkReservedPeers(sender) => {
+						let reserved_peers = network.reserved_peers();
+						let reserved_peers = reserved_peers
+							.map(|peer_id| peer_id.to_base58())
+							.collect();
+
+						let _ = sender.send(reserved_peers);
+					}
 					sc_rpc::system::Request::NodeRoles(sender) => {
 						use sc_rpc::system::NodeRole;
 
