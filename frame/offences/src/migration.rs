@@ -35,8 +35,8 @@ type DeferredOffenceOf<T> = (
 // Deferred reports that have been rejected by the offence handler and need to be submitted
 // at a later time.
 generate_storage_alias!(
-    Offences,
-    DeferredOffences<T: Config> => Value<Vec<DeferredOffenceOf<T>>>
+	Offences,
+	DeferredOffences<T: Config> => Value<Vec<DeferredOffenceOf<T>>>
 );
 
 pub fn remove_deferred_storage<T: Config>() -> Weight {
