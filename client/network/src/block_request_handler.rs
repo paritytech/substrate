@@ -80,6 +80,7 @@ struct SeenRequestsKey<B: BlockT> {
 	max_blocks: usize,
 	direction: Direction,
 	attributes: BlockAttributes,
+	support_multiple_justifications: bool,
 }
 
 impl<B: BlockT> Hash for SeenRequestsKey<B> {
@@ -180,12 +181,15 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 		let attributes = BlockAttributes::from_be_u32(request.fields)?;
 
+		let support_multiple_justifications = request.support_multiple_justifications;
+
 		let key = SeenRequestsKey {
 			peer: *peer,
 			max_blocks,
 			direction,
 			from: from_block_id.clone(),
 			attributes,
+			support_multiple_justifications,
 		};
 
 		let mut reputation_changes = Vec::new();
@@ -221,6 +225,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				from_block_id,
 				direction,
 				max_blocks,
+				support_multiple_justifications,
 			)?;
 
 			// If any of the blocks contains nay data, we can consider it as successful request.
@@ -259,6 +264,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 		mut block_id: BlockId<B>,
 		direction: Direction,
 		max_blocks: usize,
+		support_multiple_justifications: bool,
 	) -> Result<BlockResponse, HandleRequestError> {
 		let get_header = attributes.contains(BlockAttributes::HEADER);
 		let get_body = attributes.contains(BlockAttributes::BODY);
@@ -277,22 +283,33 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				None
 			};
 
-			// TODO: In a follow up PR tracked by https://github.com/paritytech/substrate/issues/8172
-			// we want to send/receive all justifications.
-			// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
-			// the first one. When sending we could have just taken the first one, since we don't
-			// expect there to be any other kind currently, but when receiving we need to add the
-			// engine ID tag.
-			// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and will be
-			// removed when resolving the above issue.
-			let justification = justifications.and_then(|just| just.into_justification(*b"FRNK"));
+			let (justifications, justification, is_empty_justification) =
+				if support_multiple_justifications {
+					let justifications = match justifications {
+						Some(v) => v.encode(),
+						None => Vec::new(),
+					};
+					(justifications, Vec::new(), false)
+				} else {
+					// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
+					// the first one. When sending we could have just taken the first one, since we don't
+					// expect there to be any other kind currently, but when receiving we need to add the
+					// engine ID tag.
+					// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and will be
+					// removed once we remove the backwards compatibility.
+					// See: https://github.com/paritytech/substrate/issues/8172
+					let justification =
+						justifications.and_then(|just| just.into_justification(*b"FRNK"));
 
-			let is_empty_justification = justification
-				.as_ref()
-				.map(|j| j.is_empty())
-				.unwrap_or(false);
+					let is_empty_justification = justification
+						.as_ref()
+						.map(|j| j.is_empty())
+						.unwrap_or(false);
 
-			let justification = justification.unwrap_or_default();
+					let justification = justification.unwrap_or_default();
+
+					(Vec::new(), justification, is_empty_justification)
+				};
 
 			let body = if get_body {
 				match self.client.block_body(&BlockId::Hash(hash))? {
@@ -320,6 +337,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				message_queue: Vec::new(),
 				justification,
 				is_empty_justification,
+				justifications,
 			};
 
 			total_size += block_data.body.len();
