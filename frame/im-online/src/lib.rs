@@ -452,7 +452,7 @@ pub mod pallet {
 	}
 
 	/// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
-	const INVALID_VALIDATORS_LEN: u8 = 10;
+	pub(crate) const INVALID_VALIDATORS_LEN: u8 = 10;
 
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
