@@ -280,27 +280,10 @@ where
 	///
 	/// If `include_proof` is `true`, the estimated size of the storage proof will be added
 	/// to the estimation.
-	/// If `compact_proof` is `true`, the size of the compacted storage proof will be added
-	/// to the estimation. This can be slow.
-	pub fn estimate_block_size(&self, include_proof: bool, compact_proof: bool) -> usize {
+	pub fn estimate_block_size(&self, include_proof: bool) -> usize {
 		let size = self.estimated_header_size + self.extrinsics.encoded_size();
 
-		if compact_proof {
-			let proof = self.api.proof_recorder().to_storage_proof();
-			let proof_recorder_root = self.proof_recorder_root.get();
-			let compact_size = if proof_recorder_root == Default::default() || proof_size == 1 {
-				// empty trie
-				proof_size
-			} else {
-				if let Some(size) = CompactProof::encoded_compact_size::<HashFor<Block>>(
-					proof,
-					proof_recorder_root,
-				) {
-					size as u32
-				} else {
-				}
-			size + CompactProof::<Block
-		} else if include_proof {
+		if include_proof {
 			size + self.api.proof_recorder().map(|pr| pr.estimate_encoded_size()).unwrap_or(0)
 		} else {
 			size
