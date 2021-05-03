@@ -83,7 +83,7 @@ use enumflags2::BitFlags;
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput, Saturating};
-use frame_support::traits::{Currency, ReservableCurrency, OnUnbalanced, BalanceStatus, Get};
+use frame_support::traits::{Currency, ReservableCurrency, OnUnbalanced, BalanceStatus};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
