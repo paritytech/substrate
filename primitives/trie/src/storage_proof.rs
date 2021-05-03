@@ -88,6 +88,26 @@ impl CompactProof {
 	pub fn iter_compact_encoded_nodes(&self) -> impl Iterator<Item = &[u8]> {
 		self.encoded_nodes.iter().map(Vec::as_slice)
 	}
+
+	/// Returns the estimated encoded size of the compact proof.
+	///
+	/// Runing this operation is a slow operation (build the whole compact proof) and should only be
+	/// in non sensitive path.
+	/// Return `None` on error.
+	pub fn encoded_compact_size<H: Hasher>(
+		proof: StorageProof,
+		root: H::Out,
+	) -> Option<usize> {
+		let compact_proof = crate::encode_compact::<crate::Layout<H>>(
+			proof,
+			root,
+		);
+		if let Ok(proof) = compact_proof {
+			Some(proof.encoded_size())
+		} else {
+			None
+		}
+	}
 }
 
 /// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to

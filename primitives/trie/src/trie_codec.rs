@@ -20,10 +20,13 @@
 //! This uses compact proof from trie crate and extends
 //! it to substrate specific layout and child trie system.
 
-use crate::{EMPTY_PREFIX, HashDBT,
-	TrieHash, TrieError, TrieConfiguration, CompactProof, StorageProof};
+use crate::{
+	EMPTY_PREFIX, HashDBT, TrieHash, TrieError, TrieConfiguration,
+	CompactProof, StorageProof,
+};
 use sp_std::boxed::Box;
 use sp_std::vec::Vec;
+use trie_db::Trie;
 
 type VerifyError<L> = crate::VerifyError<TrieHash<L>, Box<TrieError<L>>>;
 
@@ -65,7 +68,6 @@ pub fn decode_compact<'a, L, DB, I>(
 		// fetch child trie roots
 		let trie = crate::TrieDB::<L>::new(db, &top_root).map_err(verify_error::<L>)?;
 
-		use trie_db::Trie;
 		let mut iter = trie.iter().map_err(verify_error::<L>)?;
 
 		let childtrie_roots = sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
@@ -126,6 +128,13 @@ pub fn decode_compact<'a, L, DB, I>(
 	Ok(top_root)
 }
 
+/// Encode a compact proof.
+///
+/// Takes as input all full encoded node from the proof, and
+/// the root.
+/// Then parse all child trie root and compress main trie content first
+/// then all child trie contents.
+/// Child trie are ordered by the order of their roots in the top trie.
 pub fn encode_compact<'a, L>(
 	proof: StorageProof,
 	root: TrieHash<L>,
@@ -138,7 +147,6 @@ pub fn encode_compact<'a, L>(
 	let mut compact_proof = {
 		let trie = crate::TrieDB::<L>::new(&partial_db, &root)?;
 
-		use trie_db::Trie;
 		let mut iter = trie.iter()?;
 
 		let childtrie_roots = sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;

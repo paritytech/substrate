@@ -51,6 +51,16 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 /// transferred to other nodes.
 pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
+/// Should proof size be included.
+pub enum IncludeProofSize {
+	/// Include full proof size.
+	True,
+	/// Do not include proof size.
+	False,
+	/// Include proof size in compact form.
+	Compacted,
+}
+
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -67,7 +77,7 @@ pub struct ProposerFactory<A, B, C, PR> {
 	default_block_size_limit: usize,
 	telemetry: Option<TelemetryHandle>,
 	/// When estimating the block size, should the proof be included?
-	include_proof_in_block_size_estimation: bool,
+	include_proof_in_block_size_estimation: IncludeProofSize,
 	/// phantom member to pin the `Backend`/`ProofRecording` type.
 	_phantom: PhantomData<(B, PR)>,
 }
@@ -90,7 +100,7 @@ impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
 			telemetry,
 			client,
-			include_proof_in_block_size_estimation: false,
+			include_proof_in_block_size_estimation: IncludeProofSize::False,
 			_phantom: PhantomData,
 		}
 	}
@@ -117,14 +127,22 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 			metrics: PrometheusMetrics::new(prometheus),
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
 			telemetry,
-			include_proof_in_block_size_estimation: true,
+			include_proof_in_block_size_estimation: IncludeProofSize::True,
 			_phantom: PhantomData,
 		}
 	}
 
 	/// Disable the proof inclusion when estimating the block size.
 	pub fn disable_proof_in_block_size_estimation(&mut self) {
-		self.include_proof_in_block_size_estimation = false;
+		self.include_proof_in_block_size_estimation = IncludeProofSize::False;
+	}
+
+	/// Use the size of the compact proof in block size estimation.
+	/// Generally this is highly discourage as it can be slow.
+	/// Therefore using non compact proof as an over-estimation can
+	/// be better when slow is not possible.
+	pub fn use_compact_proof_in_block_size_estimation(&mut self) {
+		self.include_proof_in_block_size_estimation = IncludeProofSize::Compacted;
 	}
 }
 
@@ -215,7 +233,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
 	default_block_size_limit: usize,
-	include_proof_in_block_size_estimation: bool,
+	include_proof_in_block_size_estimation: IncludeProofSize,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<(B, PR)>,
 }
