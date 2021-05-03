@@ -3510,7 +3510,7 @@ fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
 		let zero_offence_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1);
-		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), Ok(zero_offence_weight));
+		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), zero_offence_weight);
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
 		let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
@@ -3523,7 +3523,7 @@ fn offences_weight_calculated_correctly() {
 					reporters: vec![],
 				}
 			).collect();
-		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), Ok(n_offence_unapplied_weight));
+		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), n_offence_unapplied_weight);
 
 		// On Offence with one offenders, Applied
 		let one_offender = [
@@ -3544,7 +3544,7 @@ fn offences_weight_calculated_correctly() {
 			// `reward_cost` * reporters (1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
 
-		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), Ok(one_offence_unapplied_weight));
+		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), one_offence_unapplied_weight);
 	});
 }
 

@@ -2765,11 +2765,7 @@ where
 		>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
-	) -> Result<Weight, ()> {
-		if !Self::can_report() {
-			return Err(());
-		}
-
+	) -> Weight {
 		let reward_proportion = SlashRewardFraction::get();
 		let mut consumed_weight: Weight = 0;
 		let mut add_db_reads_writes = |reads, writes| {
@@ -2781,7 +2777,7 @@ where
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
 				// this offence need not be re-submitted.
-				return Ok(consumed_weight)
+				return consumed_weight
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -2806,7 +2802,7 @@ where
 			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
 				Some(&(ref slash_era, _)) => *slash_era,
 				// before bonding period. defensive - should be filtered out.
-				None => return Ok(consumed_weight),
+				None => return consumed_weight,
 			}
 		};
 
@@ -2874,12 +2870,7 @@ where
 			}
 		}
 
-		Ok(consumed_weight)
-	}
-
-	fn can_report() -> bool {
-		// TODO: https://github.com/paritytech/substrate/issues/8343
-		true
+		consumed_weight
 	}
 }
 

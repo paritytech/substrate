@@ -25,7 +25,6 @@ use codec::Encode;
 use frame_support::{
 	parameter_types,
 	traits::{KeyOwnerProofSystem, OnFinalize, OnInitialize},
-	weights::Weight,
 };
 use pallet_staking::EraIndex;
 use sp_core::{crypto::KeyTypeId, H256};
@@ -221,15 +220,10 @@ impl pallet_staking::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
-}
-
 impl pallet_offences::Config for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
-	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 parameter_types! {
