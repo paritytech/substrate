@@ -18,7 +18,7 @@
 
 use structopt::StructOpt;
 use sc_cli::{
-	Error, VanityCmd, SignCmd, VerifyCmd, GenerateNodeKeyCmd, GenerateCmd, InspectCmd,
+	Error, VanityCmd, SignCmd, VerifyCmd, GenerateNodeKeyCmd, GenerateCmd, InspectKeyCmd,
 	InspectNodeKeyCmd
 };
 
@@ -37,7 +37,7 @@ pub enum Subkey {
 	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
-	Inspect(InspectCmd),
+	Inspect(InspectKeyCmd),
 
 	/// Print the peer ID corresponding to the node key in the given file
 	InspectNodeKey(InspectNodeKeyCmd),
@@ -52,7 +52,7 @@ pub enum Subkey {
 	Verify(VerifyCmd),
 }
 
-/// Run the subkey command, given the apropriate runtime.
+/// Run the subkey command, given the appropriate runtime.
 pub fn run() -> Result<(), Error> {
 	match Subkey::from_args() {
 		Subkey::GenerateNodeKey(cmd) => cmd.run(),

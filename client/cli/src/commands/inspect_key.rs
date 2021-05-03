@@ -28,7 +28,7 @@ use structopt::StructOpt;
 	name = "inspect",
 	about = "Gets a public key and a SS58 address from the provided Secret URI"
 )]
-pub struct InspectCmd {
+pub struct InspectKeyCmd {
 	/// A Key URI to be inspected. May be a secret seed, secret URI
 	/// (with derivation paths and password), SS58, public URI or a hex encoded public key.
 	///
@@ -61,7 +61,7 @@ pub struct InspectCmd {
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
-impl InspectCmd {
+impl InspectKeyCmd {
 	/// Run the command
 	pub fn run(&self) -> Result<(), Error> {
 		let uri = utils::read_uri(self.uri.as_ref())?;
@@ -104,10 +104,10 @@ mod tests {
 		let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
 
 		let inspect =
-			InspectCmd::from_iter(&["inspect-key", words, "--password", "12345"]);
+			InspectKeyCmd::from_iter(&["inspect-key", words, "--password", "12345"]);
 		assert!(inspect.run().is_ok());
 
-		let inspect = InspectCmd::from_iter(&["inspect-key", seed]);
+		let inspect = InspectKeyCmd::from_iter(&["inspect-key", seed]);
 		assert!(inspect.run().is_ok());
 	}
 
@@ -115,7 +115,7 @@ mod tests {
 	fn inspect_public_key() {
 		let public = "0x12e76e0ae8ce41b6516cce52b3f23a08dcb4cfeed53c6ee8f5eb9f7367341069";
 
-		let inspect = InspectCmd::from_iter(&["inspect-key", "--public", public]);
+		let inspect = InspectKeyCmd::from_iter(&["inspect-key", "--public", public]);
 		assert!(inspect.run().is_ok());
 	}
 }

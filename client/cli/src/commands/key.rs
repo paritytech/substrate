@@ -22,7 +22,7 @@ use structopt::StructOpt;
 
 use super::{
 	insert_key::InsertKeyCmd,
-	inspect_key::InspectCmd,
+	inspect_key::InspectKeyCmd,
 	generate::GenerateCmd,
 	inspect_node_key::InspectNodeKeyCmd,
 	generate_node_key::GenerateNodeKeyCmd,
@@ -39,7 +39,7 @@ pub enum KeySubcommand {
 	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
-	Inspect(InspectCmd),
+	Inspect(InspectKeyCmd),
 
 	/// Print the peer ID corresponding to the node key in the given file
 	InspectNodeKey(InspectNodeKeyCmd),
