@@ -109,7 +109,7 @@ pub(crate) fn create_and_compile(
 		project_cargo_toml,
 		&wasm_workspace,
 		&crate_metadata,
-		&crate_metadata.workspace_root,
+		crate_metadata.workspace_root.as_ref(),
 		features_to_enable,
 	);
 

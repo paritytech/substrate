@@ -2709,7 +2709,7 @@ where
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
 		Self::reward_by_ids(vec![
-			(<pallet_authorship::Module<T>>::author(), 2),
+			(<pallet_authorship::Pallet<T>>::author(), 2),
 			(author, 1)
 		])
 	}
