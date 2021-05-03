@@ -621,8 +621,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
-		self.network_service.behaviour().user_protocol().reserved_peers(pending_response)
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.network_service.behaviour().user_protocol().reserved_peers()
 	}
 }
 

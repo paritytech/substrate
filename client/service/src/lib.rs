@@ -40,7 +40,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::task::Poll;
 
-use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*, channel::oneshot};
+use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
@@ -303,12 +303,11 @@ async fn build_network_future<
 						};
 					}
 					sc_rpc::system::Request::NetworkReservedPeers(sender) => {
-						let (tx, rx) = oneshot::channel();
-						let _ = network.reserved_peers(tx);
-						let reserved_peers = rx.await.unwrap();
+						let reserved_peers = network.reserved_peers();
 						let reserved_peers = reserved_peers.into_iter()
 							.map(|peer_id| peer_id.to_base58())
 							.collect();
+
 						let _ = sender.send(reserved_peers);
 					}
 					sc_rpc::system::Request::NodeRoles(sender) => {
