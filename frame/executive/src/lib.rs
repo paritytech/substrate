@@ -206,10 +206,10 @@ where
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
 		let mut weight = 0;
+		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
 		weight = weight.saturating_add(
 			<frame_system::Pallet<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
 		);
-		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
 		weight = weight.saturating_add(<AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade());
 
 		weight

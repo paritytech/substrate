@@ -25,7 +25,7 @@ use sp_npos_elections::{
 	assignment_staked_to_ratio_normalized,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
-use sp_std::cmp::Ordering;
+use sp_std::{cmp::Ordering, convert::TryFrom};
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -33,6 +33,23 @@ pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-electio
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
+
+/// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
+/// voted.
+pub type Voter<T> = (
+	<T as frame_system::Config>::AccountId,
+	sp_npos_elections::VoteWeight,
+	Vec<<T as frame_system::Config>::AccountId>,
+);
+
+/// The relative distribution of a voter's stake among the winning targets.
+pub type Assignment<T> = sp_npos_elections::Assignment<
+	<T as frame_system::Config>::AccountId,
+	CompactAccuracyOf<T>,
+>;
+
+/// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular runtime `T`.
+pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<CompactOf<T>>;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum MinerError {
@@ -144,7 +161,7 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
-		// closures.
+		// now make some helper closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
 		let voter_index = helpers::voter_index_fn::<T>(&cache);
 		let target_index = helpers::target_index_fn::<T>(&targets);
@@ -152,40 +169,70 @@ impl<T: Config> Pallet<T> {
 		let target_at = helpers::target_at_fn::<T>(&targets);
 		let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
 
+		// Compute the size of a compact solution comprised of the selected arguments.
+		//
+		// This function completes in `O(edges)`; it's expensive, but linear.
+		let encoded_size_of = |assignments: &[IndexAssignmentOf<T>]| {
+			CompactOf::<T>::try_from(assignments).map(|compact| compact.encoded_size())
+		};
+
 		let ElectionResult { assignments, winners } = election_result;
 
-		// convert to staked and reduce.
-		let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
-			.map_err::<MinerError, _>(Into::into)?;
-		sp_npos_elections::reduce(&mut staked);
+		// Reduce (requires round-trip to staked form)
+		let sorted_assignments = {
+			// convert to staked and reduce.
+			let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
-		// convert back to ration and make compact.
-		let ratio = assignment_staked_to_ratio_normalized(staked)?;
-		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
+			// we reduce before sorting in order to ensure that the reduction process doesn't
+			// accidentally change the sort order
+			sp_npos_elections::reduce(&mut staked);
 
+			// Sort the assignments by reversed voter stake. This ensures that we can efficiently
+			// truncate the list.
+			staked.sort_by_key(
+				|sp_npos_elections::StakedAssignment::<T::AccountId> { who, .. }| {
+					// though staked assignments are expressed in terms of absolute stake, we'd
+					// still need to iterate over all votes in order to actually compute the total
+					// stake. it should be faster to look it up from the cache.
+					let stake = cache
+						.get(who)
+						.map(|idx| {
+							let (_, stake, _) = voters[*idx];
+							stake
+						})
+						.unwrap_or_default();
+					sp_std::cmp::Reverse(stake)
+				},
+			);
+
+			// convert back.
+			assignment_staked_to_ratio_normalized(staked)?
+		};
+
+		// convert to `IndexAssignment`. This improves the runtime complexity of repeatedly
+		// converting to `Compact`.
+		let mut index_assignments = sorted_assignments
+			.into_iter()
+			.map(|assignment| IndexAssignmentOf::<T>::new(&assignment, &voter_index, &target_index))
+			.collect::<Result<Vec<_>, _>>()?;
+
+		// trim assignments list for weight and length.
 		let size =
 			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
-		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
+		Self::trim_assignments_weight(
 			desired_targets,
 			size,
 			T::MinerMaxWeight::get(),
+			&mut index_assignments,
 		);
-
-		log!(
-			debug,
-			"initial solution voters = {}, snapshot = {:?}, maximum_allowed(capped) = {}",
-			compact.voter_count(),
-			size,
-			maximum_allowed_voters,
-		);
-
-		// trim length and weight
-		let compact = Self::trim_compact_weight(maximum_allowed_voters, compact, &voter_index)?;
-		let compact = Self::trim_compact_length(
+		Self::trim_assignments_length(
 			T::MinerMaxLength::get(),
-			compact,
-			&voter_index,
+			&mut index_assignments,
+			&encoded_size_of,
 		)?;
+
+		// now make compact.
+		let compact = CompactOf::<T>::try_from(&index_assignments)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -212,15 +259,14 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Greedily reduce the size of the a solution to fit into the block, w.r.t. weight.
+	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
 	///
 	/// The weight of the solution is foremost a function of the number of voters (i.e.
-	/// `compact.len()`). Aside from this, the other components of the weight are invariant. The
+	/// `assignments.len()`). Aside from this, the other components of the weight are invariant. The
 	/// number of winners shall not be changed (otherwise the solution is invalid) and the
 	/// `ElectionSize` is merely a representation of the total number of stakers.
 	///
-	/// Thus, we reside to stripping away some voters. This means only changing the `compact`
-	/// struct.
+	/// Thus, we reside to stripping away some voters from the `assignments`.
 	///
 	/// Note that the solution is already computed, and the winners are elected based on the merit
 	/// of the entire stake in the system. Nonetheless, some of the voters will be removed further
@@ -228,50 +274,24 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
 	/// much or remove a winner, then the solution must be discarded **after** this step.
-	pub fn trim_compact_weight<FN>(
-		maximum_allowed_voters: u32,
-		mut compact: CompactOf<T>,
-		voter_index: FN,
-	) -> Result<CompactOf<T>, MinerError>
-	where
-		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
-	{
-		match compact.voter_count().checked_sub(maximum_allowed_voters as usize) {
-			Some(to_remove) if to_remove > 0 => {
-				// grab all voters and sort them by least stake.
-				let RoundSnapshot { voters, .. } =
-					Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
-				let mut voters_sorted = voters
-					.into_iter()
-					.map(|(who, stake, _)| (who.clone(), stake))
-					.collect::<Vec<_>>();
-				voters_sorted.sort_by_key(|(_, y)| *y);
-
-				// start removing from the least stake. Iterate until we know enough have been
-				// removed.
-				let mut removed = 0;
-				for (maybe_index, _stake) in
-					voters_sorted.iter().map(|(who, stake)| (voter_index(&who), stake))
-				{
-					let index = maybe_index.ok_or(MinerError::SnapshotUnAvailable)?;
-					if compact.remove_voter(index) {
-						removed += 1
-					}
-
-					if removed >= to_remove {
-						break;
-					}
-				}
-
-				log!(debug, "removed {} voter to meet the max weight limit.", to_remove);
-				Ok(compact)
-			}
-			_ => {
-				// nada, return as-is
-				log!(debug, "didn't remove any voter for weight limits.");
-				Ok(compact)
-			}
-		}
+	fn trim_assignments_weight(
+		desired_targets: u32,
+		size: SolutionOrSnapshotSize,
+		max_weight: Weight,
+		assignments: &mut Vec<IndexAssignmentOf<T>>,
+	) {
+		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
+			desired_targets,
+			size,
+			max_weight,
+		);
+		let removing: usize = assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
+		log!(
+			debug,
+			"from {} assignments, truncating to {} for weight, removing {}",
+			assignments.len(), maximum_allowed_voters, removing,
+		);
+		assignments.truncate(maximum_allowed_voters as usize);
 	}
 
 	/// Greedily reduce the size of the solution to fit into the block w.r.t length.
@@ -283,39 +303,62 @@ impl<T: Config> Pallet<T> {
 	/// the total stake in the system. Nevertheless, some of the voters may be removed here.
 	///
 	/// Sometimes, removing a voter can cause a validator to also be implicitly removed, if
-	/// that voter was the only backer of that winner. In such cases, this solution is invalid, which
-	/// will be caught prior to submission.
+	/// that voter was the only backer of that winner. In such cases, this solution is invalid,
+	/// which will be caught prior to submission.
 	///
 	/// The score must be computed **after** this step. If this step reduces the score too much,
 	/// then the solution must be discarded.
-	pub fn trim_compact_length(
+	pub(crate) fn trim_assignments_length(
 		max_allowed_length: u32,
-		mut compact: CompactOf<T>,
-		voter_index: impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>>,
-	) -> Result<CompactOf<T>, MinerError> {
-		// short-circuit to avoid getting the voters if possible
-		// this involves a redundant encoding, but that should hopefully be relatively cheap
-		if (compact.encoded_size().saturated_into::<u32>()) <= max_allowed_length {
-			return Ok(compact);
+		assignments: &mut Vec<IndexAssignmentOf<T>>,
+		encoded_size_of: impl Fn(&[IndexAssignmentOf<T>]) -> Result<usize, sp_npos_elections::Error>,
+	) -> Result<(), MinerError> {
+		// Perform a binary search for the max subset of which can fit into the allowed
+		// length. Having discovered that, we can truncate efficiently.
+		let max_allowed_length: usize = max_allowed_length.saturated_into();
+		let mut high = assignments.len();
+		let mut low = 0;
+
+		while high - low > 1 {
+			let test = (high + low) / 2;
+			if encoded_size_of(&assignments[..test])? <= max_allowed_length {
+				low = test;
+			} else {
+				high = test;
+			}
 		}
+		let maximum_allowed_voters =
+			if encoded_size_of(&assignments[..low + 1])? <= max_allowed_length {
+				low + 1
+			} else {
+				low
+			};
 
-		// grab all voters and sort them by least stake.
-		let RoundSnapshot { voters, .. } =
-			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
-		let mut voters_sorted = voters
-			.into_iter()
-			.map(|(who, stake, _)| (who.clone(), stake))
-			.collect::<Vec<_>>();
-		voters_sorted.sort_by_key(|(_, y)| *y);
-		voters_sorted.reverse();
+		// ensure our postconditions are correct
+		debug_assert!(
+			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap() <= max_allowed_length
+		);
+		debug_assert!(if maximum_allowed_voters < assignments.len() {
+			encoded_size_of(&assignments[..maximum_allowed_voters + 1]).unwrap()
+				> max_allowed_length
+		} else {
+			true
+		});
 
-		while compact.encoded_size() > max_allowed_length.saturated_into() {
-			let (smallest_stake_voter, _) = voters_sorted.pop().ok_or(MinerError::NoMoreVoters)?;
-			let index = voter_index(&smallest_stake_voter).ok_or(MinerError::SnapshotUnAvailable)?;
-			compact.remove_voter(index);
-		}
+		// NOTE: before this point, every access was immutable.
+		// after this point, we never error.
+		// check before edit.
 
-		Ok(compact)
+		log!(
+			debug,
+			"from {} assignments, truncating to {} for length, removing {}",
+			assignments.len(),
+			maximum_allowed_voters,
+			assignments.len().saturating_sub(maximum_allowed_voters),
+		);
+		assignments.truncate(maximum_allowed_voters);
+
+		Ok(())
 	}
 
 	/// Find the maximum `len` that a compact can have in order to fit into the block weight.
@@ -552,15 +595,19 @@ mod max_weight {
 
 #[cfg(test)]
 mod tests {
-	use super::{
-		mock::{Origin, *},
-		Call, *,
+	use super::*;
+	use crate::{
+		mock::{
+			assert_noop, assert_ok, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin,
+			roll_to_with_ocw, roll_to, Runtime, TestCompact, TrimHelpers, trim_helpers, witness,
+		},
 	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
-	use helpers::voter_index_fn_linear;
 	use mock::Call as OuterCall;
-	use frame_election_provider_support::Assignment;
+	use sp_npos_elections::IndexAssignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
+
+	type Assignment = crate::unsigned::Assignment<Runtime>;
 
 	#[test]
 	fn validate_unsigned_retracts_wrong_phase() {
@@ -943,88 +990,86 @@ mod tests {
 	}
 
 	#[test]
-	fn trim_compact_length_does_not_modify_when_short_enough() {
+	fn trim_assignments_length_does_not_modify_when_short_enough() {
 		let mut ext = ExtBuilder::default().build();
 		ext.execute_with(|| {
 			roll_to(25);
 
 			// given
-			let RoundSnapshot { voters, ..} = MultiPhase::snapshot().unwrap();
-			let RawSolution { mut compact, .. } = raw_solution();
-			let encoded_len = compact.encode().len() as u32;
+			let TrimHelpers {
+				mut assignments,
+				encoded_size_of,
+				..
+			} = trim_helpers();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
+			let encoded_len = compact.encoded_size() as u32;
 			let compact_clone = compact.clone();
 
 			// when
-			assert!(encoded_len < <Runtime as Config>::MinerMaxLength::get());
+			MultiPhase::trim_assignments_length(encoded_len, &mut assignments, encoded_size_of).unwrap();
 
 			// then
-			compact = MultiPhase::trim_compact_length(
-				encoded_len,
-				compact,
-				voter_index_fn_linear::<Runtime>(&voters),
-			).unwrap();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
 			assert_eq!(compact, compact_clone);
 		});
 	}
 
 	#[test]
-	fn trim_compact_length_modifies_when_too_long() {
+	fn trim_assignments_length_modifies_when_too_long() {
 		let mut ext = ExtBuilder::default().build();
 		ext.execute_with(|| {
 			roll_to(25);
 
-			let RoundSnapshot { voters, ..} =
-				MultiPhase::snapshot().unwrap();
-
-			let RawSolution { mut compact, .. } = raw_solution();
-			let encoded_len = compact.encoded_size() as u32;
+			// given
+			let TrimHelpers {
+				mut assignments,
+				encoded_size_of,
+				..
+			} = trim_helpers();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
+			let encoded_len = compact.encoded_size();
 			let compact_clone = compact.clone();
 
-			compact = MultiPhase::trim_compact_length(
-				encoded_len - 1,
-				compact,
-				voter_index_fn_linear::<Runtime>(&voters),
-			).unwrap();
+			// when
+			MultiPhase::trim_assignments_length(encoded_len as u32 - 1, &mut assignments, encoded_size_of).unwrap();
 
+			// then
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
 			assert_ne!(compact, compact_clone);
-			assert!((compact.encoded_size() as u32) < encoded_len);
+			assert!(compact.encoded_size() < encoded_len);
 		});
 	}
 
 	#[test]
-	fn trim_compact_length_trims_lowest_stake() {
+	fn trim_assignments_length_trims_lowest_stake() {
 		let mut ext = ExtBuilder::default().build();
 		ext.execute_with(|| {
 			roll_to(25);
 
-			let RoundSnapshot { voters, ..} =
-				MultiPhase::snapshot().unwrap();
-
-			let RawSolution { mut compact, .. } = raw_solution();
+			// given
+			let TrimHelpers {
+				voters,
+				mut assignments,
+				encoded_size_of,
+				voter_index,
+			} = trim_helpers();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
 			let encoded_len = compact.encoded_size() as u32;
-			let voter_count = compact.voter_count();
+			let count = assignments.len();
 			let min_stake_voter = voters.iter()
 				.map(|(id, weight, _)| (weight, id))
 				.min()
-				.map(|(_, id)| id)
+				.and_then(|(_, id)| voter_index(id))
 				.unwrap();
 
+			// when
+			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments, encoded_size_of).unwrap();
 
-			compact = MultiPhase::trim_compact_length(
-				encoded_len - 1,
-				compact,
-				voter_index_fn_linear::<Runtime>(&voters),
-			).unwrap();
-
-			assert_eq!(compact.voter_count(), voter_count - 1, "we must have removed exactly 1 voter");
-
-			let assignments = compact.into_assignment(
-				|voter| Some(voter as AccountId),
-				|target| Some(target as AccountId),
-			).unwrap();
+			// then
+			assert_eq!(assignments.len(), count - 1, "we must have removed exactly one assignment");
 			assert!(
 				assignments.iter()
-					.all(|Assignment{ who, ..}| who != min_stake_voter),
+					.all(|IndexAssignment{ who, ..}| *who != min_stake_voter),
 				"min_stake_voter must no longer be in the set of voters",
 			);
 		});
