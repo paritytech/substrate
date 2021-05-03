@@ -194,10 +194,6 @@
 //! **Score based on (byte) size**: We should always prioritize small solutions over bigger ones, if
 //! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
 //!
-//! **Offchain resubmit**: Essentially port <https://github.com/paritytech/substrate/pull/7976> to
-//! this pallet as well. The `OFFCHAIN_REPEAT` also needs to become an adjustable parameter of the
-//! pallet.
-//!
 //! **Make the number of nominators configurable from the runtime**. Remove `sp_npos_elections`
 //! dependency from staking and the compact solution type. It should be generated at runtime, there
 //! it should be encoded how many votes each nominators have. Essentially translate
@@ -224,7 +220,7 @@ use frame_support::{
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use frame_election_provider_support::{ElectionDataProvider, ElectionProvider, onchain};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
+	assignment_ratio_to_staked_normalized, CompactSolution, ElectionScore,
 	EvaluateSupport, PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
@@ -235,7 +231,10 @@ use sp_runtime::{
 	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 	traits::Bounded,
 };
-use sp_std::prelude::*;
+use sp_std::{
+	convert::TryInto,
+	prelude::*,
+};
 use sp_arithmetic::{
 	UpperOf,
 	traits::{Zero, CheckedAdd},
@@ -304,8 +303,16 @@ pub enum Phase<Bn> {
 	Off,
 	/// Signed phase is open.
 	Signed,
-	/// Unsigned phase. First element is whether it is open or not, second the starting block
+	/// Unsigned phase. First element is whether it is active or not, second the starting block
 	/// number.
+	///
+	/// We do not yet check whether the unsigned phase is active or passive. The intent is for the
+	/// blockchain to be able to declare: "I believe that there exists an adequate signed solution,"
+	/// advising validators not to bother running the unsigned offchain worker.
+	///
+	/// As validator nodes are free to edit their OCW code, they could simply ignore this advisory
+	/// and always compute their own solution. However, by default, when the unsigned phase is passive,
+	/// the offchain workers will not bother running.
 	Unsigned((bool, Bn)),
 }
 
@@ -316,27 +323,27 @@ impl<Bn> Default for Phase<Bn> {
 }
 
 impl<Bn: PartialEq + Eq> Phase<Bn> {
-	/// Weather the phase is signed or not.
+	/// Whether the phase is signed or not.
 	pub fn is_signed(&self) -> bool {
 		matches!(self, Phase::Signed)
 	}
 
-	/// Weather the phase is unsigned or not.
+	/// Whether the phase is unsigned or not.
 	pub fn is_unsigned(&self) -> bool {
 		matches!(self, Phase::Unsigned(_))
 	}
 
-	/// Weather the phase is unsigned and open or not, with specific start.
+	/// Whether the phase is unsigned and open or not, with specific start.
 	pub fn is_unsigned_open_at(&self, at: Bn) -> bool {
 		matches!(self, Phase::Unsigned((true, real)) if *real == at)
 	}
 
-	/// Weather the phase is unsigned and open or not.
+	/// Whether the phase is unsigned and open or not.
 	pub fn is_unsigned_open(&self) -> bool {
 		matches!(self, Phase::Unsigned((true, _)))
 	}
 
-	/// Weather the phase is off or not.
+	/// Whether the phase is off or not.
 	pub fn is_off(&self) -> bool {
 		matches!(self, Phase::Off)
 	}
@@ -512,7 +519,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event> + TryInto<Event<Self>>;
 
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
@@ -528,6 +535,13 @@ pub mod pallet {
 		/// "better" (in any phase).
 		#[pallet::constant]
 		type SolutionImprovementThreshold: Get<Perbill>;
+
+		/// The repeat threshold of the offchain worker.
+		///
+		/// For example, if it is 5, that means that at least 5 blocks will elapse between attempts
+		/// to submit the worker's solution.
+		#[pallet::constant]
+		type OffchainRepeat: Get<Self::BlockNumber>;
 
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		type MinerTxPriority: Get<TransactionPriority>;
@@ -638,16 +652,38 @@ pub mod pallet {
 			}
 		}
 
-		fn offchain_worker(n: T::BlockNumber) {
-			// We only run the OCW in the first block of the unsigned phase.
-			if Self::current_phase().is_unsigned_open_at(n) {
-				match Self::try_acquire_offchain_lock(n) {
-					Ok(_) => {
-						let outcome = Self::mine_check_and_submit().map_err(ElectionError::from);
-						log!(info, "mine_check_and_submit execution done: {:?}", outcome);
-					}
-					Err(why) => log!(warn, "denied offchain worker: {:?}", why),
+		fn offchain_worker(now: T::BlockNumber) {
+			match Self::current_phase() {
+				Phase::Unsigned((true, opened)) if opened == now => {
+					// mine a new solution, cache it, and attempt to submit it
+					let initial_output = Self::try_acquire_offchain_lock(now)
+						.and_then(|_| Self::mine_check_save_submit());
+					log!(info, "initial OCW output at {:?}: {:?}", now, initial_output);
 				}
+				Phase::Unsigned((true, opened)) if opened < now => {
+					// keep trying to submit solutions. worst case, we note that the stored solution
+					// is better than our cached/computed one, and decide not to submit after all.
+					//
+					// the offchain_lock prevents us from spamming submissions too often.
+					let resubmit_output = Self::try_acquire_offchain_lock(now)
+						.and_then(|_| Self::restore_or_compute_then_maybe_submit());
+					log!(info, "resubmit OCW output at {:?}: {:?}", now, resubmit_output);
+				}
+				_ => {}
+			}
+			// after election finalization, clear OCW solution storage
+			if <frame_system::Pallet<T>>::events()
+				.into_iter()
+				.filter_map(|event_record| {
+					let local_event = <T as Config>::Event::from(event_record.event);
+					local_event.try_into().ok()
+				})
+				.find(|event| {
+					matches!(event, Event::ElectionFinalized(_))
+				})
+				.is_some()
+			{
+				unsigned::kill_ocw_solution::<T>();
 			}
 		}
 
@@ -784,6 +820,8 @@ pub mod pallet {
 		PreDispatchWrongWinnerCount,
 		/// Submission was too weak, score-wise.
 		PreDispatchWeakSubmission,
+		/// OCW submitted solution for wrong round
+		OcwCallWrongEra,
 	}
 
 	#[pallet::origin]

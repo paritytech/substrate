@@ -29,7 +29,6 @@ use frame_system::InitKind;
 use frame_support::{
 	parameter_types,
 	traits::{KeyOwnerProofSystem, OnInitialize},
-	weights::Weight,
 };
 use sp_io;
 use sp_core::{H256, U256, crypto::{IsWrappedBy, KeyTypeId, Pair}};
@@ -215,16 +214,10 @@ impl pallet_staking::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60)
-		* BlockWeights::get().max_block;
-}
-
 impl pallet_offences::Config for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
-	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 parameter_types! {
