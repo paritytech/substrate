@@ -35,7 +35,7 @@
 mod peersstate;
 
 use std::{collections::HashSet, collections::VecDeque};
-use futures::prelude::*;
+use futures::{channel::oneshot, prelude::*};
 use log::{debug, error, trace};
 use serde_json::json;
 use std::{collections::HashMap, pin::Pin, task::{Context, Poll}, time::Duration};
@@ -58,6 +58,7 @@ enum Action {
 	RemoveReservedPeer(SetId, PeerId),
 	SetReservedPeers(SetId, HashSet<PeerId>),
 	SetReservedOnly(SetId, bool),
+	GetReservedPeers(SetId, oneshot::Sender<Vec<PeerId>>),
 	ReportPeer(PeerId, ReputationChange),
 	AddToPeersSet(SetId, PeerId),
 	RemoveFromPeersSet(SetId, PeerId),
@@ -148,8 +149,8 @@ impl PeersetHandle {
 	}
 
 	/// Get the list of reserved peers for the given set.
-	pub fn get_reserved_peers(&self, _set_id: SetId) -> Vec<PeerId> {
-		vec![] // TODO
+	pub fn get_reserved_peers(&self, set_id: SetId, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		let _ = self.tx.unbounded_send(Action::GetReservedPeers(set_id, pending_response));
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
@@ -382,6 +383,11 @@ impl Peerset {
 		} else {
 			self.alloc_slots(set_id);
 		}
+	}
+
+	fn on_get_reserved_peers(&mut self, set_id: SetId, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		let peers = self.reserved_nodes[set_id.0].0.iter().cloned().collect::<Vec<_>>();
+		let _ = pending_response.send(peers);
 	}
 
 	/// Adds a node to the given set. The peerset will, if possible and not already the case,
@@ -714,6 +720,8 @@ impl Stream for Peerset {
 					self.on_set_reserved_peers(set_id, peer_ids),
 				Action::SetReservedOnly(set_id, reserved) =>
 					self.on_set_reserved_only(set_id, reserved),
+				Action::GetReservedPeers(set_id, pending_response) =>
+					self.on_get_reserved_peers(set_id, pending_response),
 				Action::ReportPeer(peer_id, score_diff) =>
 					self.on_report_peer(peer_id, score_diff),
 				Action::AddToPeersSet(sets_name, peer_id) =>

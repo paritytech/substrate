@@ -620,9 +620,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.service.add_reserved_peer(peer)
 	}
 
-	/// Returns the list of resurved peers.
-	pub fn reserved_peers(&self) -> Vec<String> {
-		self.network_service.behaviour().user_protocol().reserved_peers()
+	/// Returns the list of reserved peers.
+	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		self.network_service.behaviour().user_protocol().reserved_peers(pending_response)
 	}
 }
 

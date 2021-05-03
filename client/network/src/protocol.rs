@@ -1015,12 +1015,9 @@ impl<B: BlockT> Protocol<B> {
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self) -> Vec<String> {
+	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
 		self.peerset_handle
-			.get_reserved_peers(HARDCODED_PEERSETS_SYNC)
-			.into_iter()
-			.map(|peer_id| peer_id.to_base58())
-			.collect()
+			.get_reserved_peers(HARDCODED_PEERSETS_SYNC, pending_response)
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
