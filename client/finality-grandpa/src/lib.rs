@@ -1134,13 +1134,12 @@ fn local_authority_id(
 	voters: &VoterSet<AuthorityId>,
 	keystore: Option<&SyncCryptoStorePtr>,
 ) -> Option<AuthorityId> {
-	match keystore {
-		Some(keystore) => voters
-			.iter()
-			.find(|(p, _)| {
-				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
-			})
-			.map(|(p, _)| p.clone()),
-		None => None,
-	}
+	keystore.and_then(|keystore| { 
+		voters
+		.iter()
+		.find(|(p, _)| {
+			SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
+		})
+		.map(|(p, _)| p.clone()) 
+	})
 }

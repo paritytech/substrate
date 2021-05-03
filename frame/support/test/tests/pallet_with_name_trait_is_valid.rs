@@ -46,7 +46,7 @@ frame_support::decl_module! {
 		const Foo: u32 = u32::max_value();
 
 		#[weight = 0]
-		fn accumulate_dummy(origin, increase_by: T::Balance) {
+		fn accumulate_dummy(_origin, _increase_by: T::Balance) {
 			unimplemented!();
 		}
 
@@ -82,6 +82,10 @@ impl<T: Trait> frame_support::inherent::ProvideInherent for Module<T> {
 		_: &Self::Call,
 		_: &frame_support::inherent::InherentData,
 	) -> std::result::Result<(), Self::Error> {
+		unimplemented!();
+	}
+
+	fn is_inherent(_call: &Self::Call) -> bool {
 		unimplemented!();
 	}
 }

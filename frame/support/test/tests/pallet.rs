@@ -288,6 +288,10 @@ pub mod pallet {
 			T::AccountId::from(SomeType6); // Test for where clause
 			unimplemented!();
 		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
+			unimplemented!();
+		}
 	}
 
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
@@ -363,6 +367,25 @@ pub mod pallet2 {
 	{
 		fn build(&self) {}
 	}
+}
+
+/// Test that the supertrait check works when we pass some parameter to the `frame_system::Config`.
+#[frame_support::pallet]
+pub mod pallet3 {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config<Origin = ()> {}
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {}
 }
 
 frame_support::parameter_types!(
@@ -837,4 +860,15 @@ fn metadata() {
 	let pallet_metadata = ModuleMetadata::decode(&mut &modules_metadata[1].encode()[..]).unwrap();
 
 	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
+}
+
+#[test]
+fn test_pallet_info_access() {
+	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::name(), "System");
+	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::name(), "Example");
+	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::name(), "Example2");
+
+	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
+	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);
+	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 2);
 }

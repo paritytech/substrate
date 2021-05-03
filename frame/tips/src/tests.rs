@@ -24,7 +24,7 @@ use super::*;
 use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
-	weights::Weight, traits::Contains,
+	weights::Weight, traits::SortedMembers,
 	PalletId
 };
 use sp_runtime::Permill;
@@ -98,7 +98,7 @@ thread_local! {
 	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
 }
 pub struct TenToFourteen;
-impl Contains<u128> for TenToFourteen {
+impl SortedMembers<u128> for TenToFourteen {
 	fn sorted_members() -> Vec<u128> {
 		TEN_TO_FOURTEEN.with(|v| {
 			v.borrow().clone()
@@ -127,6 +127,7 @@ parameter_types! {
 	pub const DataDepositPerByte: u64 = 1;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const MaximumReasonLength: u32 = 16384;
+	pub const MaxApprovals: u32 = 100;
 }
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
@@ -142,6 +143,7 @@ impl pallet_treasury::Config for Test {
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
+	type MaxApprovals = MaxApprovals;
 }
 parameter_types! {
 	pub const TipCountdown: u64 = 1;

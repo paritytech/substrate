@@ -61,6 +61,10 @@ pub struct SlotInfo<B: BlockT> {
 	pub duration: Duration,
 	/// The chain header this slot is based on.
 	pub chain_head: B::Header,
+	/// Some potential block size limit for the block to be authored at this slot.
+	///
+	/// For more information see [`Proposer::propose`](sp_consensus::Proposer::propose).
+	pub block_size_limit: Option<usize>,
 }
 
 impl<B: BlockT> SlotInfo<B> {
@@ -73,6 +77,7 @@ impl<B: BlockT> SlotInfo<B> {
 		inherent_data: InherentData,
 		duration: Duration,
 		chain_head: B::Header,
+		block_size_limit: Option<usize>,
 	) -> Self {
 		Self {
 			slot,
@@ -80,6 +85,7 @@ impl<B: BlockT> SlotInfo<B> {
 			inherent_data,
 			duration,
 			chain_head,
+			block_size_limit,
 			ends_at: Instant::now() + time_until_next(duration),
 		}
 	}
@@ -182,6 +188,7 @@ where
 					inherent_data,
 					self.slot_duration,
 					chain_head,
+					None,
 				))
 			}
 		}

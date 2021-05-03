@@ -65,6 +65,7 @@ fn decl_genesis_config_and_impl_default(
 	let genesis_struct = &genesis_config.genesis_struct;
 	let genesis_impl = &genesis_config.genesis_impl;
 	let genesis_where_clause = &genesis_config.genesis_where_clause;
+	let serde_crate = format!("{}::serde", scrate);
 
 	quote!(
 		/// Genesis config for the module, allow to build genesis storage.
@@ -72,6 +73,7 @@ fn decl_genesis_config_and_impl_default(
 		#[cfg(feature = "std")]
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
+		#[serde(crate = #serde_crate)]
 		#serde_bug_bound
 		pub struct GenesisConfig#genesis_struct_decl #genesis_where_clause {
 			#( #config_fields )*

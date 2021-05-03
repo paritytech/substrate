@@ -169,6 +169,7 @@ impl core::Benchmark for ConstructionBenchmark {
 				timestamp_provider.create_inherent_data().expect("Create inherent data failed"),
 				Default::default(),
 				std::time::Duration::from_secs(20),
+				None,
 			),
 		).map(|r| r.block).expect("Proposing failed");
 

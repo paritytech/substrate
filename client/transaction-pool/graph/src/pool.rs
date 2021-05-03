@@ -322,10 +322,7 @@ impl<B: ChainApi> Pool<B> {
 	) -> Result<(), B::Error> {
 		log::debug!(target: "txpool", "Pruning at {:?}", at);
 		// Prune all transactions that provide given tags
-		let prune_status = match self.validated_pool.prune_tags(tags) {
-			Ok(prune_status) => prune_status,
-			Err(e) => return Err(e),
-		};
+		let prune_status = self.validated_pool.prune_tags(tags)?;
 
 		// Make sure that we don't revalidate extrinsics that were part of the recently
 		// imported block. This is especially important for UTXO-like chains cause the

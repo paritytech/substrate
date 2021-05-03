@@ -112,7 +112,7 @@ use crate::{
 	weights::WeightInfo,
 	wasm::PrefabWasmModule,
 };
-use sp_core::crypto::UncheckedFrom;
+use sp_core::{Bytes, crypto::UncheckedFrom};
 use sp_std::prelude::*;
 use sp_runtime::{
 	traits::{
@@ -127,6 +127,7 @@ use frame_support::{
 use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult,
+	ContractInstantiateResult, Code, InstantiateReturnValue,
 };
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
@@ -666,8 +667,8 @@ where
 {
 	/// Perform a call to a specified contract.
 	///
-	/// This function is similar to `Self::call`, but doesn't perform any address lookups and better
-	/// suitable for calling directly from Rust.
+	/// This function is similar to [`Self::call`], but doesn't perform any address lookups
+	/// and better suitable for calling directly from Rust.
 	///
 	/// It returns the execution result and the amount of used weight.
 	pub fn bare_call(
@@ -683,8 +684,65 @@ where
 		let result = ctx.call(dest, value, &mut gas_meter, input_data);
 		let gas_consumed = gas_meter.gas_spent();
 		ContractExecResult {
-			exec_result: result.map(|r| r.0).map_err(|r| r.0),
+			result: result.map(|r| r.0).map_err(|r| r.0.error),
 			gas_consumed,
+			debug_message: Bytes(Vec::new()),
+		}
+	}
+
+	/// Instantiate a new contract.
+	///
+	/// This function is similar to [`Self::instantiate`], but doesn't perform any address lookups
+	/// and better suitable for calling directly from Rust.
+	///
+	/// It returns the execution result, account id and the amount of used weight.
+	///
+	/// If `compute_projection` is set to `true` the result also contains the rent projection.
+	/// This is optional because some non trivial and stateful work is performed to compute
+	/// the projection. See [`Self::rent_projection`].
+	pub fn bare_instantiate(
+		origin: T::AccountId,
+		endowment: BalanceOf<T>,
+		gas_limit: Weight,
+		code: Code<CodeHash<T>>,
+		data: Vec<u8>,
+		salt: Vec<u8>,
+		compute_projection: bool,
+	) -> ContractInstantiateResult<T::AccountId, T::BlockNumber> {
+		let mut gas_meter = GasMeter::new(gas_limit);
+		let schedule = <CurrentSchedule<T>>::get();
+		let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
+		let executable = match code {
+			Code::Upload(Bytes(binary)) => PrefabWasmModule::from_code(binary, &schedule),
+			Code::Existing(hash) => PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter),
+		};
+		let executable = match executable {
+			Ok(executable) => executable,
+			Err(error) => return ContractInstantiateResult {
+				result: Err(error.into()),
+				gas_consumed: gas_meter.gas_spent(),
+				debug_message: Bytes(Vec::new()),
+			}
+		};
+		let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
+			.and_then(|(account_id, result)| {
+				let rent_projection = if compute_projection {
+					Some(Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
+						.map_err(|_| <Error<T>>::NewContractNotFunded)?)
+				} else {
+					None
+				};
+
+				Ok(InstantiateReturnValue {
+					result,
+					account_id,
+					rent_projection,
+				})
+		});
+		ContractInstantiateResult {
+			result: result.map_err(|e| e.error),
+			gas_consumed: gas_meter.gas_spent(),
+			debug_message: Bytes(Vec::new()),
 		}
 	}
 
