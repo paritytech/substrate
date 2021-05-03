@@ -580,6 +580,11 @@ impl<B: BlockT> Protocol<B> {
 				} else {
 					None
 				},
+				justifications: if !block_data.justifications.is_empty() {
+					Some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?)
+				} else {
+					None
+				},
 			})
 		}).collect::<Result<Vec<_>, codec::Error>>();
 
@@ -908,6 +913,7 @@ impl<B: BlockT> Protocol<B> {
 						receipt: None,
 						message_queue: None,
 						justification: None,
+						justifications: None,
 					},
 				],
 			},
@@ -1006,6 +1012,11 @@ impl<B: BlockT> Protocol<B> {
 	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
 		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
+	}
+
+	/// Returns the list of reserved peers.
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.behaviour.reserved_peers(HARDCODED_PEERSETS_SYNC)
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
@@ -1123,6 +1134,7 @@ fn prepare_block_request<B: BlockT>(
 		to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
 		direction: request.direction as i32,
 		max_blocks: request.max.unwrap_or(0),
+		support_multiple_justifications: true,
 	};
 
 	CustomMessageOutcome::BlockRequest {
@@ -1523,16 +1535,24 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		self.behaviour.inject_dial_failure(peer_id)
 	}
 
-	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_new_listen_addr(addr)
+	fn inject_new_listener(&mut self, id: ListenerId) {
+		self.behaviour.inject_new_listener(id)
 	}
 
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_expired_listen_addr(addr)
+	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.behaviour.inject_new_listen_addr(id, addr)
+	}
+
+	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.behaviour.inject_expired_listen_addr(id, addr)
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.behaviour.inject_new_external_addr(addr)
+	}
+
+	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
+		self.behaviour.inject_expired_external_addr(addr)
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {

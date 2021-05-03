@@ -42,6 +42,16 @@ pub use sp_storage::TrackedStorageKey;
 #[doc(hidden)]
 pub use log;
 
+/// Whitelist the given account.
+#[macro_export]
+macro_rules! whitelist {
+	($acc:ident) => {
+		frame_benchmarking::benchmarking::add_to_whitelist(
+			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+		);
+	};
+}
+
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
 /// Works around the idea of complexity parameters, named by a single letter (which is usually
