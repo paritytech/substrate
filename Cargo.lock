@@ -344,9 +344,9 @@ checksum = "e91831deabf0d6d7ec49552e489aed63b7456a7a3c46cff62adad428110b0af0"
 
 [[package]]
 name = "async-trait"
-version = "0.1.47"
+version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e098e9c493fdf92832223594d9a164f96bdf17ba81a42aff86f85c76768726a"
+checksum = "36ea56748e10732c49404c153638a15ec3d6211ec5ff35d9bb20e13b93576adf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1871,7 +1871,6 @@ dependencies = [
  "rustversion",
  "serde",
  "sp-core",
- "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-state-machine",
@@ -4130,6 +4129,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-consensus-slots",
+ "sc-consensus-uncles",
  "sc-finality-grandpa",
  "sc-finality-grandpa-warp-sync",
  "sc-keystore",
@@ -4145,6 +4145,7 @@ dependencies = [
  "serde_json",
  "soketto",
  "sp-authority-discovery",
+ "sp-authorship",
  "sp-consensus",
  "sp-consensus-babe",
  "sp-core",
@@ -4384,6 +4385,7 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-inherents",
  "sp-runtime",
+ "sp-timestamp",
  "sp-transaction-pool",
  "structopt",
  "substrate-build-script-utils",
@@ -4691,7 +4693,6 @@ dependencies = [
  "serde",
  "sp-authorship",
  "sp-core",
- "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-std",
@@ -7287,7 +7288,6 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-runtime",
- "sp-timestamp",
  "substrate-prometheus-endpoint",
 ]
 
@@ -7298,6 +7298,7 @@ dependencies = [
  "async-trait",
  "futures 0.3.13",
  "futures-timer 3.0.2",
+ "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
  "sc-client-api",
@@ -7322,13 +7323,10 @@ dependencies = [
 name = "sc-consensus-uncles"
 version = "0.9.0"
 dependencies = [
- "log",
  "sc-client-api",
  "sp-authorship",
- "sp-consensus",
- "sp-core",
- "sp-inherents",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -8606,6 +8604,7 @@ dependencies = [
 name = "sp-authorship"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
  "parity-scale-codec",
  "sp-inherents",
  "sp-runtime",
@@ -8679,6 +8678,7 @@ dependencies = [
 name = "sp-consensus-aura"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "parity-scale-codec",
  "sp-api",
  "sp-application-crypto",
@@ -8694,6 +8694,7 @@ dependencies = [
 name = "sp-consensus-babe"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "merlin",
  "parity-scale-codec",
  "serde",
@@ -8837,9 +8838,12 @@ dependencies = [
 name = "sp-inherents"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
+ "futures 0.3.13",
+ "impl-trait-for-tuples",
  "parity-scale-codec",
- "parking_lot 0.11.1",
  "sp-core",
+ "sp-runtime",
  "sp-std",
  "thiserror",
 ]
@@ -9180,11 +9184,15 @@ dependencies = [
 name = "sp-timestamp"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
+ "futures-timer 3.0.2",
+ "log",
  "parity-scale-codec",
  "sp-api",
  "sp-inherents",
  "sp-runtime",
  "sp-std",
+ "thiserror",
  "wasm-timer",
 ]
 
@@ -9778,6 +9786,7 @@ dependencies = [
  "sp-keyring",
  "sp-keystore",
  "sp-runtime",
+ "sp-timestamp",
  "test-runner",
 ]
 
