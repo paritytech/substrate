@@ -1703,6 +1703,7 @@ impl NetworkBehaviour for Notifications {
 
 				match self.peers.get_mut(&(source.clone(), set_id)) {
 					// Move the connection from `Closing` to `Closed`.
+					Some(PeerState::Incoming { connections, .. }) |
 					Some(PeerState::DisabledPendingEnable { connections, .. }) |
 					Some(PeerState::Disabled { connections, .. }) |
 					Some(PeerState::Enabled { connections, .. }) => {
