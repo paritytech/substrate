@@ -24,7 +24,7 @@ use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
 
 sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
-	#[api_version(4)]
+	#[api_version(5)]
 	pub trait BlockBuilder {
 		/// Apply the given extrinsic.
 		///
