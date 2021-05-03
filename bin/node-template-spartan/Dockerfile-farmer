@@ -9,7 +9,12 @@ RUN \
         llvm \
         clang \
         make \
-        m4 && \
+        m4 \
+        netcat-openbsd && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
 
 RUN bash -c "source /root/.cargo/env && cargo install spartan-farmer"
+
+COPY entrypoint-farmer.sh /entrypoint-farmer.sh
+
+ENTRYPOINT ["/entrypoint-farmer.sh"]

@@ -23,7 +23,7 @@ use futures::future::Either;
 use futures::{FutureExt as _, SinkExt, StreamExt, TryFutureExt as _, TryStreamExt};
 use jsonrpc_core::{
     futures::future as rpc_future,
-    futures::{future::Executor as Executor01, future::Future as Future01, Future, Sink, Stream},
+    futures::{future::Executor as Executor01, future::Future as Future01, Sink, Stream},
     Error as RpcError, Result as RpcResult,
 };
 use jsonrpc_derive::rpc;
@@ -140,12 +140,12 @@ impl PoCRpcHandler {
                 )> = new_slot_notifier();
 
                 move || {
-                    /// `new_slot_notifier` receives messages with a tuple containing slot info and
-                    /// sender for solution.
-                    ///
-                    /// We then send slot info to all subscribers and wait for their solutions. As
-                    /// soon as solution is found we send it back and ignore any other solutions for
-                    /// that slot.
+                    // `new_slot_notifier` receives messages with a tuple containing slot info and
+                    // sender for solution.
+                    //
+                    // We then send slot info to all subscribers and wait for their solutions. As
+                    // soon as solution is found we send it back and ignore any other solutions for
+                    // that slot.
                     while let Ok((new_slot_info, sync_solution_sender)) = new_slot_notifier.recv() {
                         futures::executor::block_on(async {
                             let (solution_sender, mut solution_receiver) =

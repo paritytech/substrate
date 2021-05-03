@@ -1,6 +1,6 @@
 [package]
 name = "node-template-spartan-runtime"
-version = "3.0.0"
+version = "0.1.0"
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>", "Subspace Labs <https://subspace.network>"]
 edition = "2018"
 license = "Unlicense"
@@ -44,7 +44,7 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../.
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 hex-literal = { version = "0.3.1", optional = true }
 
-pallet-template-spartan = { version = "3.0.0", default-features = false, path = "../pallets/template" }
+pallet-template-spartan = { version = "0.1.0", default-features = false, path = "../pallets/template" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builder" }

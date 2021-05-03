@@ -10,6 +10,7 @@ services:
     environment:
       - CARGO_HOME=/var/www/node-template-spartan/.cargo
       - RUST_LOG=info
+      - CARGO_INCREMENTAL=0
     volumes:
       - ../..:/var/www/node-template-spartan
       - type: bind
@@ -32,4 +33,3 @@ services:
         source: ./.local
         target: /root/.local
     restart: unless-stopped
-    command: bash -c "source /root/.cargo/env && spartan-farmer plot 256000 spartan && spartan-farmer farm --ws-server ws://node:9944"

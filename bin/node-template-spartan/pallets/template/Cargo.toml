@@ -2,7 +2,7 @@
 authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
 edition = '2018'
 name = 'pallet-template-spartan'
-version = "3.0.0"
+version = "0.1.0"
 license = "Unlicense"
 homepage = "https://subspace.network"
 repository = "https://github.com/subspace/substrate"
