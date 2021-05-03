@@ -102,6 +102,10 @@ pub trait SystemApi<Hash, Number> {
 	fn system_remove_reserved_peer(&self, peer_id: String)
 		-> Compat<BoxFuture<'static, Result<(), jsonrpc_core::Error>>>;
 
+	/// Returns the list of reserved peers
+	#[rpc(name = "system_reservedPeers", returns = "Vec<String>")]
+	fn system_reserved_peers(&self) -> Receiver<Vec<String>>;
+
 	/// Returns the roles the node is running as.
 	#[rpc(name = "system_nodeRoles", returns = "Vec<NodeRole>")]
 	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>>;
