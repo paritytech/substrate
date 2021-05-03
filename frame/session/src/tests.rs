@@ -18,6 +18,7 @@
 // Tests for the Session Pallet
 
 use super::*;
+use mock::Test;
 use codec::Decode;
 use frame_support::{traits::OnInitialize, assert_ok, assert_noop};
 use sp_core::crypto::key_types::DUMMY;
@@ -26,7 +27,7 @@ use mock::{
 	SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 	set_next_validators, set_session_length, session_changed, Origin, System, Session,
 	reset_before_session_end_called, before_session_end_called, new_test_ext,
-	PreUpgradeMockSessionKeys, Test,
+	PreUpgradeMockSessionKeys,
 };
 
 fn initialize_block(block: u64) {
@@ -255,7 +256,6 @@ fn session_changed_flag_works() {
 
 #[test]
 fn periodic_session_works() {
-
 	frame_support::parameter_types! {
 		const Period: u64 = 10;
 		const Offset: u64 = 3;
@@ -263,24 +263,67 @@ fn periodic_session_works() {
 
 	type P = PeriodicSessions<Period, Offset>;
 
+	// make sure that offset phase behaves correctly
 	for i in 0u64..3 {
 		assert!(!P::should_end_session(i));
-		assert_eq!(P::estimate_next_session_rotation(i).unwrap(), 3);
+		assert_eq!(P::estimate_next_session_rotation(i).0.unwrap(), 3);
+
+		// the last block of the session (i.e. the one before session rotation)
+		// should have progress 100%.
+		if P::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
+			assert_eq!(
+				P::estimate_current_session_progress(i).0.unwrap(),
+				Percent::from_percent(100)
+			);
+		} else {
+			assert!(
+				P::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100)
+			);
+		}
 	}
 
+	// we end the session at block #3 and we consider this block the first one
+	// from the next session. since we're past the offset phase it represents
+	// 1/10 of progress.
 	assert!(P::should_end_session(3u64));
-	assert_eq!(P::estimate_next_session_rotation(3u64).unwrap(), 3);
+	assert_eq!(P::estimate_next_session_rotation(3u64).0.unwrap(), 3);
+	assert_eq!(
+		P::estimate_current_session_progress(3u64).0.unwrap(),
+		Percent::from_percent(10),
+	);
 
 	for i in (1u64..10).map(|i| 3 + i) {
 		assert!(!P::should_end_session(i));
-		assert_eq!(P::estimate_next_session_rotation(i).unwrap(), 13);
+		assert_eq!(P::estimate_next_session_rotation(i).0.unwrap(), 13);
+
+		// as with the offset phase the last block of the session must have 100%
+		// progress.
+		if P::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
+			assert_eq!(
+				P::estimate_current_session_progress(i).0.unwrap(),
+				Percent::from_percent(100)
+			);
+		} else {
+			assert!(
+				P::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100)
+			);
+		}
 	}
 
+	// the new session starts and we proceed in 1/10 increments.
 	assert!(P::should_end_session(13u64));
-	assert_eq!(P::estimate_next_session_rotation(13u64).unwrap(), 23);
+	assert_eq!(P::estimate_next_session_rotation(13u64).0.unwrap(), 23);
+	assert_eq!(
+		P::estimate_current_session_progress(13u64).0.unwrap(),
+		Percent::from_percent(10)
+	);
 
 	assert!(!P::should_end_session(14u64));
-	assert_eq!(P::estimate_next_session_rotation(14u64).unwrap(), 23);
+	assert_eq!(P::estimate_next_session_rotation(14u64).0.unwrap(), 23);
+	assert_eq!(
+		P::estimate_current_session_progress(14u64).0.unwrap(),
+		Percent::from_percent(20)
+	);
 }
 
 #[test]
@@ -317,7 +360,6 @@ fn return_true_if_more_than_third_is_disabled() {
 #[test]
 fn upgrade_keys() {
 	use frame_support::storage;
-	use mock::Test;
 	use sp_core::crypto::key_types::DUMMY;
 
 	// This test assumes certain mocks.

@@ -49,8 +49,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Example: example_offchain_worker::{Module, Call, Storage, Event<T>, ValidateUnsigned},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Example: example_offchain_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
 	}
 );
 
@@ -82,6 +82,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 type Extrinsic = TestXt<Call, ()>;

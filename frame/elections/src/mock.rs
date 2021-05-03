@@ -58,6 +58,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types! {
@@ -102,7 +103,7 @@ impl ChangeMembers<u64> for TestChangeMembers {
 }
 
 parameter_types!{
-	pub const ElectionModuleId: LockIdentifier = *b"py/elect";
+	pub const ElectionPalletId: LockIdentifier = *b"py/elect";
 }
 
 impl elections::Config for Test {
@@ -122,7 +123,7 @@ impl elections::Config for Test {
 	type InactiveGracePeriod = InactiveGracePeriod;
 	type VotingPeriod = VotingPeriod;
 	type DecayRatio = DecayRatio;
-	type ModuleId = ElectionModuleId;
+	type PalletId = ElectionPalletId;
 }
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -135,9 +136,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event<T>},
-		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-		Elections: elections::{Module, Call, Event<T>, Config<T>},
+		System: system::{Pallet, Call, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+		Elections: elections::{Pallet, Call, Event<T>, Config<T>},
 	}
 );
 

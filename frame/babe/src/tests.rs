@@ -19,13 +19,13 @@
 
 use super::{Call, *};
 use frame_support::{
-	assert_err, assert_ok,
-	traits::{Currency, OnFinalize},
+	assert_err, assert_ok, assert_noop,
+	traits::{Currency, EstimateNextSessionRotation, OnFinalize},
 	weights::{GetDispatchInfo, Pays},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, Slot, BabeEpochConfiguration};
+use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
 use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -92,11 +92,11 @@ fn first_block_epoch_zero_start() {
 		Babe::on_finalize(1);
 		let header = System::finalize();
 
-		assert_eq!(SegmentIndex::get(), 0);
-		assert_eq!(UnderConstruction::get(0), vec![vrf_randomness]);
+		assert_eq!(SegmentIndex::<Test>::get(), 0);
+		assert_eq!(UnderConstruction::<Test>::get(0), vec![vrf_randomness]);
 		assert_eq!(Babe::randomness(), [0; 32]);
 		assert_eq!(Babe::author_vrf_randomness(), None);
-		assert_eq!(NextRandomness::get(), [0; 32]);
+		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 
 		assert_eq!(header.digest.logs.len(), 2);
 		assert_eq!(pre_digest.logs.len(), 1);
@@ -221,6 +221,38 @@ fn can_predict_next_epoch_change() {
 }
 
 #[test]
+fn can_estimate_current_epoch_progress() {
+	new_test_ext(1).execute_with(|| {
+		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
+
+		// with BABE the genesis block is not part of any epoch, the first epoch starts at block #1,
+		// therefore its last block should be #3
+		for i in 1u64..4 {
+			progress_to_block(i);
+
+			assert_eq!(Babe::estimate_next_session_rotation(i).0.unwrap(), 4);
+
+			// the last block of the epoch must have 100% progress.
+			if Babe::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
+				assert_eq!(
+					Babe::estimate_current_session_progress(i).0.unwrap(),
+					Percent::from_percent(100)
+				);
+			} else {
+				assert!(Babe::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100));
+			}
+		}
+
+		// the first block of the new epoch counts towards the epoch progress as well
+		progress_to_block(4);
+		assert_eq!(
+			Babe::estimate_current_session_progress(4).0.unwrap(),
+			Percent::from_percent(33),
+		);
+	})
+}
+
+#[test]
 fn can_enact_next_config() {
 	new_test_ext(1).execute_with(|| {
 		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
@@ -246,10 +278,10 @@ fn can_enact_next_config() {
 			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
 		};
 
-		EpochConfig::put(current_config);
-		NextEpochConfig::put(next_config.clone());
+		EpochConfig::<Test>::put(current_config);
+		NextEpochConfig::<Test>::put(next_config.clone());
 
-		assert_eq!(NextEpochConfig::get(), Some(next_config.clone()));
+		assert_eq!(NextEpochConfig::<Test>::get(), Some(next_config.clone()));
 
 		Babe::plan_config_change(
 			Origin::root(),
@@ -263,8 +295,8 @@ fn can_enact_next_config() {
 		Babe::on_finalize(9);
 		let header = System::finalize();
 
-		assert_eq!(EpochConfig::get(), Some(next_config));
-		assert_eq!(NextEpochConfig::get(), Some(next_next_config.clone()));
+		assert_eq!(EpochConfig::<Test>::get(), Some(next_config));
+		assert_eq!(NextEpochConfig::<Test>::get(), Some(next_next_config.clone()));
 
 		let consensus_log = sp_consensus_babe::ConsensusLog::NextConfigData(
 			NextConfigDescriptor::V1 {
@@ -293,14 +325,14 @@ fn only_root_can_enact_config_change() {
 			next_config.clone(),
 		);
 
-		assert_eq!(res, Err(DispatchError::BadOrigin));
+		assert_noop!(res, DispatchError::BadOrigin);
 
 		let res = Babe::plan_config_change(
 			Origin::signed(1),
 			next_config.clone(),
 		);
 
-		assert_eq!(res, Err(DispatchError::BadOrigin));
+		assert_noop!(res, DispatchError::BadOrigin);
 
 		let res = Babe::plan_config_change(
 			Origin::root(),
@@ -314,7 +346,7 @@ fn only_root_can_enact_config_change() {
 #[test]
 fn can_fetch_current_and_next_epoch_data() {
 	new_test_ext(5).execute_with(|| {
-		EpochConfig::put(BabeEpochConfiguration {
+		EpochConfig::<Test>::put(BabeEpochConfiguration {
 			c: (1, 4),
 			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
 		});
@@ -324,7 +356,6 @@ fn can_fetch_current_and_next_epoch_data() {
 			Babe::current_epoch().authorities,
 			Babe::next_epoch().authorities,
 		);
-
 		// 1 era = 3 epochs
 		// 1 epoch = 3 slots
 		// Eras start from 0.
@@ -412,7 +443,7 @@ fn report_equivocation_current_session_works() {
 		let equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get(),
+			CurrentSlot::<Test>::get(),
 		);
 
 		// create the key ownership proof
@@ -486,7 +517,7 @@ fn report_equivocation_old_session_works() {
 		let equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get(),
+			CurrentSlot::<Test>::get(),
 		);
 
 		// create the key ownership proof
@@ -552,7 +583,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		let equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get(),
+			CurrentSlot::<Test>::get(),
 		);
 
 		// create the key ownership proof
@@ -632,7 +663,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		let mut equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get(),
+			CurrentSlot::<Test>::get(),
 		);
 		equivocation_proof.second_header = equivocation_proof.first_header.clone();
 		assert_invalid_equivocation(equivocation_proof);
@@ -641,7 +672,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		let mut equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get(),
+			CurrentSlot::<Test>::get(),
 		);
 		equivocation_proof.first_header.digest_mut().logs.remove(0);
 		assert_invalid_equivocation(equivocation_proof);
@@ -650,7 +681,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		let mut equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get(),
+			CurrentSlot::<Test>::get(),
 		);
 		equivocation_proof.first_header.digest_mut().logs.remove(1);
 		assert_invalid_equivocation(equivocation_proof);
@@ -659,7 +690,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		let mut equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get(),
+			CurrentSlot::<Test>::get(),
 		);
 		equivocation_proof.slot = Slot::from(0);
 		assert_invalid_equivocation(equivocation_proof.clone());
@@ -669,7 +700,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		let mut equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get() + 1,
+			CurrentSlot::<Test>::get() + 1,
 		);
 
 		// use the header from the previous equivocation generated
@@ -682,7 +713,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		let mut equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get() + 1,
+			CurrentSlot::<Test>::get() + 1,
 		);
 
 		// replace the seal digest with the digest from the
@@ -721,7 +752,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		let equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
-			CurrentSlot::get(),
+			CurrentSlot::<Test>::get(),
 		);
 
 		let key = (
@@ -743,7 +774,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 
 		// the transaction is valid when passed as local
-		let tx_tag = (offending_authority_pair.public(), CurrentSlot::get());
+		let tx_tag = (offending_authority_pair.public(), CurrentSlot::<Test>::get());
 		assert_eq!(
 			<Babe as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
 				TransactionSource::Local,
@@ -816,7 +847,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// generate an equivocation proof.
 		let equivocation_proof =
-			generate_equivocation_proof(0, &offending_authority_pair, CurrentSlot::get());
+			generate_equivocation_proof(0, &offending_authority_pair, CurrentSlot::<Test>::get());
 
 		// create the key ownership proof.
 		let key_owner_proof = Historical::prove((
@@ -909,7 +940,7 @@ fn add_epoch_configurations_migration_works() {
 			&[],
 		).is_none());
 
-		assert_eq!(EpochConfig::get(), Some(current_epoch));
-		assert_eq!(PendingEpochConfigChange::get(), Some(next_config_descriptor));
+		assert_eq!(EpochConfig::<Test>::get(), Some(current_epoch));
+		assert_eq!(PendingEpochConfigChange::<Test>::get(), Some(next_config_descriptor));
 	});
 }

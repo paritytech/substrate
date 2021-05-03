@@ -27,6 +27,7 @@ mod transactional;
 mod debug_no_bound;
 mod clone_no_bound;
 mod partial_eq_no_bound;
+mod default_no_bound;
 
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
@@ -192,7 +193,7 @@ use proc_macro::TokenStream;
 /// construct_runtime!(
 /// 	pub enum Runtime with ... {
 ///         ...,
-///         Example: example::{Module, Storage, ..., Config<T>},
+///         Example: example::{Pallet, Storage, ..., Config<T>},
 ///         ...,
 ///	}
 /// );
@@ -258,13 +259,13 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         NodeBlock = runtime::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
-///         System: system::{Module, Call, Event<T>, Config<T>} = 0,
-///         Test: test::{Module, Call} = 1,
-///         Test2: test_with_long_module::{Module, Event<T>},
+///         System: system::{Pallet, Call, Event<T>, Config<T>} = 0,
+///         Test: test::{Pallet, Call} = 1,
+///         Test2: test_with_long_module::{Pallet, Event<T>},
 ///
 ///         // Module with instances
-///         Test3_Instance1: test3::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
-///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
+///         Test3_Instance1: test3::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
+///         Test3_DefaultInstance: test3::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
 ///     }
 /// )
 /// ```
@@ -306,7 +307,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// # Type definitions
 ///
 /// * The macro generates a type alias for each pallet to their `Module` (or `Pallet`).
-///   E.g. `type System = frame_system::Module<Runtime>`
+///   E.g. `type System = frame_system::Pallet<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
@@ -412,6 +413,12 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 	).into()
 }
 
+/// derive `Default` but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
+#[proc_macro_derive(DefaultNoBound)]
+pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
+	default_no_bound::derive_default_no_bound(input)
+}
+
 #[proc_macro_attribute]
 pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::require_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
@@ -421,3 +428,7 @@ pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStre
 pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
 	pallet_version::crate_to_pallet_version(input).unwrap_or_else(|e| e.to_compile_error()).into()
 }
+
+/// The number of module instances supported by the runtime, starting at index 1,
+/// and up to `NUMBER_OF_INSTANCE`.
+pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;

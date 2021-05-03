@@ -156,7 +156,7 @@ pub trait Config: frame_system::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Identifier for the elections pallet's lock
-	type ModuleId: Get<LockIdentifier>;
+	type PalletId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -391,7 +391,7 @@ decl_module! {
 		/// The chunk size of the approval vector.
 		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
 
-		const ModuleId: LockIdentifier = T::ModuleId::get();
+		const PalletId: LockIdentifier = T::PalletId::get();
 
 		fn deposit_event() = default;
 
@@ -491,7 +491,7 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-				T::ModuleId::get(),
+				T::PalletId::get(),
 				if valid { &who } else { &reporter }
 			);
 
@@ -529,7 +529,7 @@ decl_module! {
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
-			T::Currency::remove_lock(T::ModuleId::get(), &who);
+			T::Currency::remove_lock(T::PalletId::get(), &who);
 		}
 
 		/// Submit oneself for candidacy.
@@ -713,7 +713,7 @@ decl_event!(
 		BadReaperSlashed(AccountId),
 		/// A tally (for approval votes of \[seats\]) has started.
 		TallyStarted(u32),
-		/// A tally (for approval votes of seat(s)) has ended (with one or more new members). 
+		/// A tally (for approval votes of seat(s)) has ended (with one or more new members).
 		/// \[incoming, outgoing\]
 		TallyFinalized(Vec<AccountId>, Vec<AccountId>),
 	}
@@ -759,7 +759,7 @@ impl<T: Config> Module<T> {
 					// if there's a tally in progress, then next tally can begin immediately afterwards
 					(tally_end, c.len() - leavers.len() + comers as usize, comers)
 				} else {
-					(<frame_system::Module<T>>::block_number(), c.len(), 0)
+					(<frame_system::Pallet<T>>::block_number(), c.len(), 0)
 				};
 			if count < desired_seats as usize {
 				Some(next_possible)
@@ -890,7 +890,7 @@ impl<T: Config> Module<T> {
 		}
 
 		T::Currency::set_lock(
-			T::ModuleId::get(),
+			T::PalletId::get(),
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),
@@ -914,7 +914,7 @@ impl<T: Config> Module<T> {
 	fn start_tally() {
 		let members = Self::members();
 		let desired_seats = Self::desired_seats() as usize;
-		let number = <frame_system::Module<T>>::block_number();
+		let number = <frame_system::Pallet<T>>::block_number();
 		let expiring =
 			members.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
 		let retaining_seats = members.len() - expiring.len();
@@ -942,7 +942,7 @@ impl<T: Config> Module<T> {
 				.ok_or("finalize can only be called after a tally is started.")?;
 		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take()
 			.unwrap_or_default();
-		let new_expiry = <frame_system::Module<T>>::block_number() + Self::term_duration();
+		let new_expiry = <frame_system::Pallet<T>>::block_number() + Self::term_duration();
 
 		// return bond to winners.
 		let candidacy_bond = T::CandidacyBond::get();

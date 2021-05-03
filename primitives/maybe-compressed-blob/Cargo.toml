@@ -1,0 +1,17 @@
+[package]
+name = "sp-maybe-compressed-blob"
+version = "3.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Handling of blobs, usually Wasm code, which may be compresed"
+documentation = "https://docs.rs/sp-maybe-compressed-blob"
+readme = "README.md"
+
+[target.'cfg(not(target_os = "unknown"))'.dependencies]
+zstd = { version = "0.6.0", default-features = false }
+
+[target.'cfg(target_os = "unknown")'.dependencies]
+ruzstd = { version = "0.2.2" }

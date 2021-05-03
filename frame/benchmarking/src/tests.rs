@@ -76,8 +76,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		TestPallet: pallet_test::{Module, Call, Storage},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		TestPallet: pallet_test::{Pallet, Call, Storage},
 	}
 );
 
@@ -104,6 +104,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types!{
@@ -133,7 +134,7 @@ mod benchmarks {
 	use crate::{BenchmarkingSetup, BenchmarkParameter, account};
 
 	// Additional used internally by the benchmark macro.
-	use super::pallet_test::{Call, Config, Module};
+	use super::pallet_test::{Call, Config, Pallet};
 
 	crate::benchmarks!{
 		where_clause {

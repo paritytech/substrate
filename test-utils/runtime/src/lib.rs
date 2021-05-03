@@ -190,7 +190,7 @@ impl BlindCheckable for Extrinsic {
 					Err(InvalidTransaction::BadProof.into())
 				}
 			},
-			Extrinsic::IncludeData(_) => Err(InvalidTransaction::BadProof.into()),
+			Extrinsic::IncludeData(v) => Ok(Extrinsic::IncludeData(v)),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
@@ -451,13 +451,13 @@ impl From<frame_system::Event<Runtime>> for Event {
 impl frame_support::traits::PalletInfo for Runtime {
 	fn index<P: 'static>() -> Option<usize> {
 		let type_id = sp_std::any::TypeId::of::<P>();
-		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
 			return Some(0)
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
 			return Some(1)
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some(2)
 		}
 
@@ -465,13 +465,13 @@ impl frame_support::traits::PalletInfo for Runtime {
 	}
 	fn name<P: 'static>() -> Option<&'static str> {
 		let type_id = sp_std::any::TypeId::of::<P>();
-		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
 			return Some("System")
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
 			return Some("Timestamp")
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("Babe")
 		}
 
@@ -515,6 +515,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -762,7 +763,10 @@ cfg_if! {
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1000 }
+				fn slot_duration() -> sp_consensus_aura::SlotDuration {
+					sp_consensus_aura::SlotDuration::from_millis(1000)
+				}
+
 				fn authorities() -> Vec<AuraId> {
 					system::authorities().into_iter().map(|a| {
 						let authority: sr25519::Public = a.into();
@@ -779,21 +783,21 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
 				fn current_epoch_start() -> Slot {
-					<pallet_babe::Module<Runtime>>::current_epoch_start()
+					<pallet_babe::Pallet<Runtime>>::current_epoch_start()
 				}
 
 				fn current_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::current_epoch()
+					<pallet_babe::Pallet<Runtime>>::current_epoch()
 				}
 
 				fn next_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::next_epoch()
+					<pallet_babe::Pallet<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -1015,12 +1019,15 @@ cfg_if! {
 				}
 
 				fn do_trace_log() {
-					log::error!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
+					log::trace!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
 				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1000 }
+				fn slot_duration() -> sp_consensus_aura::SlotDuration {
+					sp_consensus_aura::SlotDuration::from_millis(1000)
+				}
+
 				fn authorities() -> Vec<AuraId> {
 					system::authorities().into_iter().map(|a| {
 						let authority: sr25519::Public = a.into();
@@ -1037,21 +1044,21 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
 				fn current_epoch_start() -> Slot {
-					<pallet_babe::Module<Runtime>>::current_epoch_start()
+					<pallet_babe::Pallet<Runtime>>::current_epoch_start()
 				}
 
 				fn current_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::current_epoch()
+					<pallet_babe::Pallet<Runtime>>::current_epoch()
 				}
 
 				fn next_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::next_epoch()
+					<pallet_babe::Pallet<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -1255,7 +1262,7 @@ mod tests {
 			(BlockId::Hash(hash), block)
 		};
 
-		client.import(BlockOrigin::Own, block).unwrap();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		// Allocation of 1024k while having ~2048k should succeed.
 		let ret = client.runtime_api().vec_with_capacity(&new_block_id, 1048576);

@@ -56,7 +56,7 @@ macro_rules! __impl_outer_config_types {
 /// specific genesis configuration.
 ///
 /// ```ignore
-/// pub struct GenesisConfig for Runtime where AllModulesWithSystem = AllModulesWithSystem {
+/// pub struct GenesisConfig for Runtime where AllPalletsWithSystem = AllPalletsWithSystem {
 /// 	rust_module_one: Option<ModuleOneConfig>,
 /// 	...
 /// }
@@ -65,7 +65,7 @@ macro_rules! __impl_outer_config_types {
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident where
-			AllModulesWithSystem = $all_modules_with_system:ident
+			AllPalletsWithSystem = $all_pallets_with_system:ident
 		{
 			$( $config:ident =>
 				$snake:ident $( $instance:ident )? $( <$generic:ident> )*, )*
@@ -77,9 +77,12 @@ macro_rules! impl_outer_config {
 
 		$crate::paste::item! {
 			#[cfg(any(feature = "std", test))]
+			use $crate::serde as __genesis_config_serde_import__;
+			#[cfg(any(feature = "std", test))]
 			#[derive($crate::serde::Serialize, $crate::serde::Deserialize, Default)]
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
+			#[serde(crate = "__genesis_config_serde_import__")]
 			pub struct $main {
 				$(
 					pub [< $snake $(_ $instance )? >]: $config,
@@ -103,7 +106,7 @@ macro_rules! impl_outer_config {
 					)*
 
 					$crate::BasicExternalities::execute_with_storage(storage, || {
-						<$all_modules_with_system as $crate::traits::OnGenesis>::on_genesis();
+						<$all_pallets_with_system as $crate::traits::OnGenesis>::on_genesis();
 					});
 
 					Ok(())

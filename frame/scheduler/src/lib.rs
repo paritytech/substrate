@@ -18,9 +18,9 @@
 //! # Scheduler
 //! A module for scheduling dispatches.
 //!
-//! - [`scheduler::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Overview
 //!
@@ -76,8 +76,8 @@ pub trait Config: system::Config {
 	type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
 	/// The aggregated origin which the dispatch will take.
-	type Origin: OriginTrait<PalletsOrigin =
-		Self::PalletsOrigin> + From<Self::PalletsOrigin> + IsType<<Self as system::Config>::Origin>;
+	type Origin: OriginTrait<PalletsOrigin = Self::PalletsOrigin>
+		+ From<Self::PalletsOrigin> + IsType<<Self as system::Config>::Origin>;
 
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq;
@@ -465,7 +465,7 @@ impl<T: Config> Module<T> {
 	}
 
 	fn resolve_time(when: DispatchTime<T::BlockNumber>) -> Result<T::BlockNumber, DispatchError> {
-		let now = frame_system::Module::<T>::block_number();
+		let now = frame_system::Pallet::<T>::block_number();
 
 		let when = match when {
 			DispatchTime::At(x) => x,
@@ -793,9 +793,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Logger: logger::{Module, Call, Event},
-			Scheduler: scheduler::{Module, Call, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Logger: logger::{Pallet, Call, Event},
+			Scheduler: scheduler::{Pallet, Call, Storage, Event<T>},
 		}
 	);
 
@@ -835,6 +835,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	impl logger::Config for Test {
 		type Event = Event;

@@ -345,7 +345,7 @@ pub(crate) fn run_and_compare<Output: PerThing128>(
 			for (candidate, per_thingy) in distribution {
 				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
 					assert_eq_error_rate!(
-						Output::from_fraction(float_assignment.1).deconstruct(),
+						Output::from_float(float_assignment.1).deconstruct(),
 						per_thingy.deconstruct(),
 						Output::Inner::one(),
 					);

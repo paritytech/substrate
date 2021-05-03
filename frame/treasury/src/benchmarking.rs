@@ -55,7 +55,7 @@ fn create_approved_proposals<T: Config<I>, I: Instance>(n: u32) -> Result<(), &'
 		let proposal_id = <ProposalCount<I>>::get() - 1;
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
 	}
-	ensure!(<Approvals<I>>::get().len() == n as usize, "Not all approved");
+	ensure!(<Approvals<T, I>>::get().len() == n as usize, "Not all approved");
 	Ok(())
 }
 
@@ -85,6 +85,8 @@ benchmarks_instance! {
 	}: _(RawOrigin::Root, proposal_id)
 
 	approve_proposal {
+		let p in 0 .. T::MaxApprovals::get() - 1;
+		create_approved_proposals::<T, _>(p)?;
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
@@ -95,7 +97,7 @@ benchmarks_instance! {
 	}: _(RawOrigin::Root, proposal_id)
 
 	on_initialize_proposals {
-		let p in 0 .. 100;
+		let p in 0 .. T::MaxApprovals::get();
 		setup_pot_account::<T, _>();
 		create_approved_proposals::<T, _>(p)?;
 	}: {

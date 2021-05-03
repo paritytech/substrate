@@ -278,7 +278,7 @@ pub fn open_database<Block: BlockT>(
 		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
 			crate::parity_db::open(&path, db_type)
-				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
+				.map_err(|e| sp_blockchain::Error::Backend(format!("{}", e)))?
 		},
 		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
@@ -395,10 +395,8 @@ pub fn read_meta<Block>(db: &dyn Database<DbHash>, col_header: u32) -> Result<
 	};
 
 	let load_meta_block = |desc, key| -> Result<_, sp_blockchain::Error> {
-		if let Some(Some(header)) = match db.get(COLUMN_META, key) {
-				Some(id) => db.get(col_header, &id).map(|b| Block::Header::decode(&mut &b[..]).ok()),
-				None => None,
-			}
+		if let Some(Some(header)) = db.get(COLUMN_META, key)
+			.and_then(|id| db.get(col_header, &id).map(|b| Block::Header::decode(&mut &b[..]).ok()))
 		{
 			let hash = header.hash();
 			debug!(
@@ -449,10 +447,35 @@ impl DatabaseType {
 	}
 }
 
+pub(crate) struct JoinInput<'a, 'b>(&'a [u8], &'b [u8]);
+
+pub(crate) fn join_input<'a, 'b>(i1: &'a[u8], i2: &'b [u8]) -> JoinInput<'a, 'b> {
+	JoinInput(i1, i2)
+}
+
+impl<'a, 'b> codec::Input for JoinInput<'a, 'b> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(Some(self.0.len() + self.1.len()))
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let mut read = 0;
+		if self.0.len() > 0 {
+			read = std::cmp::min(self.0.len(), into.len());
+			self.0.read(&mut into[..read])?;
+		}
+		if read < into.len() {
+			self.1.read(&mut into[read..])?;
+		}
+		Ok(())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use codec::Input;
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	#[test]
@@ -468,5 +491,26 @@ mod tests {
 	fn database_type_as_str_works() {
 		assert_eq!(DatabaseType::Full.as_str(), "full");
 		assert_eq!(DatabaseType::Light.as_str(), "light");
+	}
+
+	#[test]
+	fn join_input_works() {
+		let buf1 = [1, 2, 3, 4];
+		let buf2 = [5, 6, 7, 8];
+		let mut test = [0, 0, 0];
+		let mut joined = join_input(buf1.as_ref(), buf2.as_ref());
+		assert_eq!(joined.remaining_len().unwrap(), Some(8));
+
+		joined.read(&mut test).unwrap();
+		assert_eq!(test, [1, 2, 3]);
+		assert_eq!(joined.remaining_len().unwrap(), Some(5));
+
+		joined.read(&mut test).unwrap();
+		assert_eq!(test, [4, 5, 6]);
+		assert_eq!(joined.remaining_len().unwrap(), Some(2));
+
+		joined.read(&mut test[0..2]).unwrap();
+		assert_eq!(test, [7, 8, 6]);
+		assert_eq!(joined.remaining_len().unwrap(), Some(0));
 	}
 }
