@@ -105,7 +105,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					};
 				}
 				Request::NetworkReservedPeers(sender) => {
-					let _ = sender.send(vec!["peer_A".to_string()]);
+					let _ = sender.send(vec!["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string()]);
 				}
 				Request::NodeRoles(sender) => {
 					let _ = sender.send(vec![NodeRole::Authority]);
@@ -344,7 +344,7 @@ fn system_network_remove_reserved() {
 fn system_network_reserved_peers() {
 	assert_eq!(
 		wait_receiver(api(None).system_reserved_peers()),
-		vec!["peer_A".to_string()]
+		vec!["QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string()]
 	);
 }
 
