@@ -201,12 +201,6 @@ impl<T: BoundedVecValue, S: Get<u32>> sp_std::ops::Deref for BoundedVec<T, S> {
 	}
 }
 
-impl<T: BoundedVecValue, S: Get<u32>> sp_std::ops::DerefMut for BoundedVec<T, S> {
-    fn deref_mut(&mut self) -> &mut Vec<T> {
-        &mut self.0
-    }
-}
-
 // Allows for indexing similar to a normal `Vec`. Can panic if out of bound.
 impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> Index<I> for BoundedVec<T, S> {
 	type Output = I::Output;
