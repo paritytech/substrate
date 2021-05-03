@@ -731,7 +731,7 @@ mod tests {
 
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
+			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
 				slot_duration,
 				block_import: client.clone(),
 				select_chain,
