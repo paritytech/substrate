@@ -38,7 +38,7 @@ sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 
 # These dependencies are used for the node template's RPCs
-jsonrpc-core = "15.1.0"
+jsonrpc-core = "17.0.0"
 sc-rpc = { version = "3.0.0", path = "../../../client/rpc" }
 sp-api = { version = "3.0.0", path = "../../../primitives/api" }
 sc-rpc-api = { version = "0.9.0", path = "../../../client/rpc-api" }
