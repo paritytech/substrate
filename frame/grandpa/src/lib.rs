@@ -277,6 +277,67 @@ pub mod pallet {
 		/// A given equivocation report is valid but already previously reported.
 		DuplicateOffenceReport,
 	}
+
+	#[pallet::type_value]
+	pub(super) fn DefaultForState<T: Config>() -> StoredState<T::BlockNumber> {
+		StoredState::Live
+	}
+
+	/// State of the current authority set.
+	#[pallet::storage]
+	#[pallet::getter(fn state)]
+	pub(super) type State<T: Config> = StorageValue<_, StoredState<T::BlockNumber>, ValueQuery, DefaultForState<T>>;
+
+	/// Pending change: (signaled at, scheduled change).
+	#[pallet::storage]
+	#[pallet::getter(fn pending_change)]
+	pub(super) type PendingChange<T: Config> = StorageValue<_, StoredPendingChange<T::BlockNumber>>;
+
+	/// next block number where we can force a change.
+	#[pallet::storage]
+	#[pallet::getter(fn next_forced)]
+	pub(super) type NextForced<T: Config> = StorageValue<_, T::BlockNumber>;
+
+	/// `true` if we are currently stalled.
+	#[pallet::storage]
+	#[pallet::getter(fn stalled)]
+	pub(super) type Stalled<T: Config> = StorageValue<_, (T::BlockNumber, T::BlockNumber)>;
+
+	/// The number of changes (both in terms of keys and underlying economic responsibilities)
+	/// in the "set" of Grandpa validators from genesis.
+	#[pallet::storage]
+	#[pallet::getter(fn current_set_id)]
+	pub(super) type CurrentSetId<T: Config> = StorageValue<_, SetId, ValueQuery>;
+
+	/// A mapping from grandpa set ID to the index of the *most recent* session for which its
+	/// members were responsible.
+	///
+	/// TWOX-NOTE: `SetId` is not under user control.
+	#[pallet::storage]
+	#[pallet::getter(fn session_for_set)]
+	pub(super) type SetIdSession<T: Config> = StorageMap<_, Twox64Concat, SetId, SessionIndex>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {
+		pub authorities: AuthorityList,
+	}
+
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self {
+				authorities: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
+			CurrentSetId::<T>::put(fg_primitives::SetId::default());
+			Pallet::<T>::initialize(&self.authorities)
+		}
+	}
 }
 
 pub trait WeightInfo {
@@ -352,39 +413,6 @@ pub enum StoredState<N> {
 		delay: N,
 	},
 }
-
-decl_storage! {
-	trait Store for Module<T: Config> as GrandpaFinality {
-		/// State of the current authority set.
-		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
-
-		/// Pending change: (signaled at, scheduled change).
-		PendingChange get(fn pending_change): Option<StoredPendingChange<T::BlockNumber>>;
-
-		/// next block number where we can force a change.
-		NextForced get(fn next_forced): Option<T::BlockNumber>;
-
-		/// `true` if we are currently stalled.
-		Stalled get(fn stalled): Option<(T::BlockNumber, T::BlockNumber)>;
-
-		/// The number of changes (both in terms of keys and underlying economic responsibilities)
-		/// in the "set" of Grandpa validators from genesis.
-		CurrentSetId get(fn current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
-
-		/// A mapping from grandpa set ID to the index of the *most recent* session for which its
-		/// members were responsible.
-		///
-		/// TWOX-NOTE: `SetId` is not under user control.
-		SetIdSession get(fn session_for_set): map hasher(twox_64_concat) SetId => Option<SessionIndex>;
-	}
-	add_extra_genesis {
-		config(authorities): AuthorityList;
-		build(|config| {
-			Module::<T>::initialize(&config.authorities)
-		})
-	}
-}
-
 
 impl<T: Config> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
@@ -496,7 +524,7 @@ impl<T: Config> Module<T> {
 		// NOTE: initialize first session of first set. this is necessary for
 		// the genesis set and session since we only update the set -> session
 		// mapping whenever a new session starts, i.e. through `on_new_session`.
-		SetIdSession::insert(0, 0);
+		SetIdSession::<T>::insert(0, 0);
 	}
 
 	fn do_report_equivocation(
@@ -621,7 +649,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Module<T>
 			};
 
 			if res.is_ok() {
-				CurrentSetId::mutate(|s| {
+				CurrentSetId::<T>::mutate(|s| {
 					*s += 1;
 					*s
 				})
@@ -640,7 +668,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Module<T>
 		// if we didn't issue a change, we update the mapping to note that the current
 		// set corresponds to the latest equivalent session (i.e. now).
 		let session_index = <pallet_session::Module<T>>::current_index();
-		SetIdSession::insert(current_set_id, &session_index);
+		SetIdSession::<T>::insert(current_set_id, &session_index);
 	}
 
 	fn on_disabled(i: usize) {
