@@ -679,7 +679,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::freeze())]
-		pub fn freeze(
+		pub(super) fn freeze(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			who: <T::Lookup as StaticLookup>::Source
@@ -711,7 +711,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::thaw())]
-		pub fn thaw(
+		pub(super) fn thaw(
 			origin: OriginFor<T>,
 			#[pallet::compact]
 			id: T::AssetId,
@@ -1099,7 +1099,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
-		pub fn approve_transfer(
+		pub(super) fn approve_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			delegate: <T::Lookup as StaticLookup>::Source,
@@ -1139,7 +1139,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::cancel_approval())]
-		pub fn cancel_approval(
+		pub(super) fn cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			delegate: <T::Lookup as StaticLookup>::Source,
@@ -1213,7 +1213,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::transfer_approved())]
-		pub fn transfer_approved(
+		pub(super) fn transfer_approved(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
