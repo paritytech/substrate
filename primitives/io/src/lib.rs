@@ -81,6 +81,13 @@ pub enum EcdsaVerifyError {
 	BadSignature,
 }
 
+/// Error creating ECDSA signature
+#[derive(Encode, Decode)]
+pub enum EcdsaSignError {
+	BadMessage,
+	BadSecretKey,
+}
+
 /// The outcome of calling `storage_kill`. Returned value is the number of storage items
 /// removed from the trie from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
@@ -766,6 +773,31 @@ pub trait Crypto {
 		let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize_compressed())
+	}
+
+	/// Sign hash using SECP256k1 ECDSA signature
+	///
+	/// - `msg` is the blake2-256/keccak-256 hash of the message.
+	/// - `secret` is private key to generate signature for
+	///
+	/// Returns signature in RSV format
+	fn secp256k1_ecdsa_sign(
+		msg: &[u8; 32],
+		secret: &[u8; 32],
+	) -> Result<[u8; 65], EcdsaSignError> {
+		let msg = secp256k1::Message::parse_slice(msg.as_ref())
+			.map_err(|_| EcdsaSignError::BadMessage)?;
+		let secret = secp256k1::SecretKey::parse_slice(secret.as_ref())
+			.map_err(|_| EcdsaSignError::BadSecretKey)?;
+		let (signature, v) = secp256k1::sign(&msg, &secret);
+		let signature = signature.serialize();
+		let v = v.serialize();
+
+		let mut out = [0; 65];
+		out[0..64].copy_from_slice(&signature);
+		out[64] = v;
+
+		Ok(out)
 	}
 }
 
