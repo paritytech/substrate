@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{mem, marker::PhantomData};
-use crate::Encode;
+use codec::Encode;
+use sp_std::{mem, marker::PhantomData};
 
 /// Items implementing `BoundedEncodedLen` have a statically known maximum encoded size.
 ///
