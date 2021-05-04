@@ -325,7 +325,7 @@ fn patch_and_filter(mut span: SpanDatum, targets: &str) -> Option<Span> {
 
 /// Check if a `target` matches any `targets` by prefix
 fn check_target(targets: &str, target: &str, level: &Level) -> bool {
-	for (t, l) in targets.split(',').map(|s| crate::parse_target(s)) {
+	for (t, l) in targets.split(',').map(crate::parse_target) {
 		if target.starts_with(t.as_str()) && level <= &l {
 			return true;
 		}
