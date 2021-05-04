@@ -15,14 +15,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! # Proof-of-Replication (PoR) Consensus for Spartan
+//! # Proof-of-Capacity (PoC) Consensus
 //!
-//! Spartan is a slot-based block production mechanism which uses a PoR to
+//! PoC is a slot-based block production mechanism which uses a Proof-of-Capacity to
 //! randomly perform the slot allocation. On every slot, all the farmers evaluate
 //! their disk-based plot. If they have a tag (reflecting a commitment to a valid
 //! encoding) that it is lower than a given threshold (which is proportional to
 //! the total space pledged by the network) they may produce a new block. The
-//! proof of the PoR function execution will be used by other peers to validate
+//! proof of the PoC function execution will be used by other peers to validate
 //! the legitimacy of the slot claim.
 //!
 //! The engine is also responsible for collecting entropy on-chain which will be

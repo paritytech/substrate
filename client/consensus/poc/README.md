@@ -1,6 +1,6 @@
-# Spartan Proof-of-Replication (PoR) Consensus
+# Proof-of-Capacity (PoC) Consensus
 
-Spartan is a slot-based block production mechanism which uses a PoR to
+PoC is a slot-based block production mechanism which uses a Proof-of-Capacity to
 randomly perform the slot allocation. On every slot, all the farmers evaluate
 their disk-based plot. If they have a tag (reflecting a commitment to a valid
 encoding) that it is lower than a given threshold (which is proportional to
@@ -10,7 +10,7 @@ the legitimacy of the slot claim.
 
 The engine is also responsible for collecting entropy on-chain which will be
 used to seed the given PoR challenge. An epoch is a contiguous number of slots
-under which we will be using the same base PoR challenge. During an epoch all PoR
+under which we will be using the same base PoC challenge. During an epoch all PoR
 outputs produced as a result of block production will be collected into an
 on-chain randomness pool. Epoch changes are announced one epoch in advance,
 i.e. when ending epoch N, we announce the parameters (i.e, new randomness)
