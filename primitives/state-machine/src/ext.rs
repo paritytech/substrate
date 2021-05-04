@@ -207,7 +207,7 @@ where
 			method = "Get",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
-			result = %value.as_ref().map(HexDisplay::from),
+			result = ?result.as_ref().map(HexDisplay::from),
 			result_encoded = %HexDisplay::from(
 				&result
 					.as_ref()
@@ -375,8 +375,8 @@ where
 			method = "Put",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
-			result = %HexDisplay::from(&value.encode()),
-			result = %HexDisplay::from(
+			result = ?value.as_ref().map(HexDisplay::from),
+			result_encoded = %HexDisplay::from(
 				&value
 					.as_ref()
 					.map(|v| EncodeOpaqueValue(v.clone()))
