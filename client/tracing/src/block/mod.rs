@@ -16,8 +16,7 @@
 
 //! Utilities for tracing block execution
 
-use std::{collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}};
-use std::time::Instant;
+use std::{collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}, time::Instant};
 
 use parking_lot::Mutex;
 use tracing::{Dispatch, dispatcher, Subscriber, Level, span::{Attributes, Record, Id}};
@@ -54,8 +53,6 @@ const BASE_PAYLOAD: usize = 100;
 // Default to only pallet, frame support and state related traces
 const DEFAULT_TARGETS: &str = "pallet,frame,state";
 const TRACE_TARGET: &str = "block_trace";
-// Default to not filtering based on storage keys as storage keys vary per chain.
-const DEFAULT_STORAGE_KEYS: &str = "";
 // The name of a field required for all events.
 const REQUIRED_EVENT_FIELD: &str  = "method";
 
@@ -88,7 +85,7 @@ impl BlockSubscriber {
 		let next_id = AtomicU64::new(1);
 		let mut targets: Vec<_> = targets
 			.split(',')
-			.map(|s| crate::parse_target(s))
+			.map(crate::parse_target)
 			.collect();
 		// Ensure that WASM traces are always enabled
 		// Filtering happens when decoding the actual target / level
@@ -221,16 +218,12 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
 		let parent_hash = *header.parent_hash();
 		let parent_id = BlockId::Hash(parent_hash);
-		// Pop digest else RuntimePanic due to: 'Number of digest items must match that calculated.'
-		header.digest_mut().pop();
+		// Remove all `Seal`s as they are added by the consensus engines after building the block.
+		// On import they are normally removed by the consensus engine.
+		header.digest_mut().logs.retain(|d| d.as_seal().is_none());
 		let block = Block::new(header, extrinsics);
 
 		let targets = if let Some(t) = &self.targets { t } else { DEFAULT_TARGETS };
-		let storage_keys = if let Some(s) = &self.storage_keys {
-			s
-		} else {
-			DEFAULT_STORAGE_KEYS
-		};
 		let block_subscriber = BlockSubscriber::new(targets);
 		let dispatch = Dispatch::new(block_subscriber);
 
@@ -266,7 +259,11 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let events: Vec<_> = block_subscriber.events
 			.lock()
 			.drain(..)
-			.filter(|e| event_key_filter(e, storage_keys))
+			.filter(|e| self.storage_keys
+				.as_ref()
+				.map(|keys| event_key_filter(e, keys))
+				.unwrap_or(false)
+			)
 			.map(|s| s.into())
 			.collect();
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
@@ -282,7 +279,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 				block_hash: block_id_as_string(id),
 				parent_hash: block_id_as_string(parent_id),
 				tracing_targets: targets.to_string(),
-				storage_keys: storage_keys.to_string(),
+				storage_keys: self.storage_keys.clone().unwrap_or_default(),
 				spans,
 				events,
 			})

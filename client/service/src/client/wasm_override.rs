@@ -164,14 +164,15 @@ where
 					log::info!(
 						target: "wasm_overrides",
 						"Found wasm override in file: `{:?}`, version: {}",
-						path.to_str(), version
+						path.to_str(),
+						version,
 					);
 					if let Some(_duplicate) = overrides.insert(version.spec_version, wasm) {
 						log::info!(
 							target: "wasm_overrides",
 							"Found duplicate spec version for runtime in file: `{:?}`, version: {}",
 							path.to_str(),
-							version
+							version,
 						);
 						duplicates.push(format!("{}", path.display()));
 					}

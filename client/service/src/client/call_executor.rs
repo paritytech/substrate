@@ -34,8 +34,6 @@ use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
 use super::{client::ClientConfig, wasm_override::WasmOverride};
 
-use log::debug;
-
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
 pub struct LocalCallExecutor<B, E> {

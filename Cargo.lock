@@ -1777,7 +1777,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
- "log",
  "pallet-balances",
  "pallet-indices",
  "pallet-transaction-payment",
