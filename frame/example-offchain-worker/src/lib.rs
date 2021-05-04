@@ -99,6 +99,17 @@ struct MetricInfo {
 	requests: u32,
 }
 
+impl MetricInfo {
+    fn new() -> Self {
+        Self {
+            appPubKey: Default::default(),
+			partitionId: Default::default(),
+            bytes: Default::default(),
+			requests: Default::default(),
+        }
+    }
+}
+
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -384,13 +395,12 @@ impl<T: Trait> Module<T> {
 		})?;
 		debug::info!("Partition_info length: {:#?}", partition_info.len());
 
-		let mut node_info_iter = node_info.iter(); // id is Vec<u8>
-		// debug::info!("node_info_iter: {:?}", node_info_iter);
-
+		let mut agreated_result: Vec<MetricInfo> = Vec::new();
 		for one_partition in partition_info.iter() {
-			let mut id_from_partition = sp_std::str::from_utf8(&one_partition.nodeId).unwrap();
+			let id_from_partition = sp_std::str::from_utf8(&one_partition.nodeId).unwrap();
 
-			let mut equal_index = node_info_iter.position(|node| id_from_partition.eq(sp_std::str::from_utf8(&node.id).unwrap()));
+			let mut node_info_iter = node_info.iter(); // id is Vec<u8>
+			let equal_index = node_info_iter.position(|node| id_from_partition.eq(sp_std::str::from_utf8(&node.id).unwrap()));
 			// debug::info!("id_from_partition: {}", id_from_partition);
 			debug::info!("equal_index: {:?}", &equal_index);
 
@@ -443,11 +453,30 @@ impl<T: Trait> Module<T> {
 			})?;
 			debug::info!("fetch_metric length: {:?}", fetch_metric.len());
 
-			for one_metric in fetch_metric.iter() {
-				debug::info!("Metric item. App: {:?}, bytes: {:?}, requests: {:?}", sp_std::str::from_utf8(&one_metric.appPubKey).unwrap(), one_metric.bytes, one_metric.requests);
+			// for one_metric in fetch_metric.iter() {
+			// let mut agreated_temp = agreated_result.iter();
+			let pubkey_from_metric = sp_std::str::from_utf8(&fetch_metric[0].appPubKey).unwrap();
+			let existing_pubkey_index = agreated_result.iter().position(|one_result_obj| pubkey_from_metric.eq(sp_std::str::from_utf8(&one_result_obj.appPubKey).unwrap()));
+
+			if existing_pubkey_index.is_none() {
+				// Pust data to result
+				let mut new_metric_obj = MetricInfo::new();
+				new_metric_obj.appPubKey =  fetch_metric[0].appPubKey.clone();
+				new_metric_obj.requests =  fetch_metric[0].requests;
+				new_metric_obj.bytes =  fetch_metric[0].bytes;
+
+				agreated_result.push(new_metric_obj);
+			} else {
+				// Agreate request and byte
+				agreated_result[existing_pubkey_index.unwrap()].requests +=  fetch_metric[0].requests;
+				agreated_result[existing_pubkey_index.unwrap()].bytes +=  fetch_metric[0].bytes;
 			}
+			// debug::info!("Metric item. App: {:?}, bytes: {:?}, requests: {:?}", sp_std::str::from_utf8(&one_metric.appPubKey).unwrap(), one_metric.bytes, one_metric.requests);
+			// }
 		}
 	
+		debug::info!("Metric. agreated_result: {:?}", agreated_result);
+
 		Ok(())
 	}
 
