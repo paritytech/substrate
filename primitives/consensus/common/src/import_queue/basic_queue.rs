@@ -402,7 +402,6 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'stat
 
 /// A future that will always `yield` on the first call of `poll` but schedules the current task for
 /// re-execution.
-
 ///
 /// This is done by getting the waker and calling `wake_by_ref` followed by returning `Pending`.
 /// The next time the `poll` is called, it will return `Ready`.

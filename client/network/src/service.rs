@@ -550,7 +550,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let known_addresses = NetworkBehaviour::addresses_of_peer(swarm.behaviour_mut(), peer_id)
 					.into_iter().collect();
 
-				let endpoint = if let Some(e) = swarm.behaviour_mut().node(peer_id).map(|i| i.endpoint()) {
+				let endpoint = if let Some(e) = swarm.behaviour_mut().node(peer_id).map(|i| i.endpoint()).flatten() {
 					e.clone().into()
 				} else {
 					error!(target: "sub-libp2p", "Found state inconsistency between custom protocol \
@@ -618,6 +618,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// and peer ID of the remote node.
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
+	}
+
+	/// Returns the list of reserved peers.
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.network_service.behaviour().user_protocol().reserved_peers()
 	}
 }
 

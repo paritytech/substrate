@@ -18,14 +18,14 @@
 
 //! Command ran by the CLI
 
-use crate::cli::{InspectCmd, InspectSubCmd};
+use crate::cli::{InspectKeyCmd, InspectSubCmd};
 use crate::Inspector;
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_service::{new_full_client, Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::Block;
 use std::str::FromStr;
 
-impl InspectCmd {
+impl InspectKeyCmd {
 	/// Run the inspect command, passing the inspector.
 	pub fn run<B, RA, EX>(&self, config: Configuration) -> Result<()>
 	where
@@ -54,7 +54,7 @@ impl InspectCmd {
 	}
 }
 
-impl CliConfiguration for InspectCmd {
+impl CliConfiguration for InspectKeyCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
 	}

@@ -49,7 +49,8 @@ sp-consensus-babe = { version = "0.9.0", path = "../../../primitives/consensus/b
 grandpa-primitives = { version = "3.0.0", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-timestamp = { version = "3.0.0", default-features = false, path = "../../../primitives/timestamp" }
+sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
+sp-authorship = { version = "3.0.0", path = "../../../primitives/authorship" }
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
 sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
@@ -65,6 +66,7 @@ sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-p
 sc-network = { version = "0.9.0", path = "../../../client/network" }
 sc-consensus-slots = { version = "0.9.0", path = "../../../client/consensus/slots" }
 sc-consensus-babe = { version = "0.9.0", path = "../../../client/consensus/babe" }
+sc-consensus-uncles = { version = "0.9.0", path = "../../../client/consensus/uncles" }
 grandpa = { version = "0.9.0", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
 sc-client-db = { version = "0.9.0", default-features = false, path = "../../../client/db" }
 sc-offchain = { version = "3.0.0", path = "../../../client/offchain" }

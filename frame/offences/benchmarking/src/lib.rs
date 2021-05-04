@@ -26,13 +26,13 @@ use sp_std::vec;
 
 use frame_system::{RawOrigin, Pallet as System, Config as SystemConfig};
 use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
-use frame_support::traits::{Currency, OnInitialize, ValidatorSet, ValidatorSetWithIdentification};
+use frame_support::traits::{Currency, ValidatorSet, ValidatorSetWithIdentification};
 
 use sp_runtime::{
 	Perbill,
 	traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto},
 };
-use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
+use sp_staking::offence::{ReportOffence, Offence};
 
 use pallet_balances::Config as BalancesConfig;
 use pallet_babe::BabeEquivocationOffence;
@@ -51,7 +51,6 @@ const SEED: u32 = 0;
 const MAX_REPORTERS: u32 = 100;
 const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
-const MAX_DEFERRED_OFFENCES: u32 = 100;
 
 pub struct Pallet<T: Config>(Offences<T>);
 
@@ -271,8 +270,6 @@ benchmarks! {
 		);
 	}
 	verify {
-		// make sure the report was not deferred
-		assert!(Offences::<T>::deferred_offences().is_empty());
 		let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());
 		let slash_amount = slash_fraction * bond_amount;
 		let reward_amount = slash_amount * (1 + n) / 2;
@@ -306,7 +303,6 @@ benchmarks! {
 					pallet_offences::Event::Offence(
 						UnresponsivenessOffence::<T>::ID,
 						0_u32.to_le_bytes().to_vec(),
-						true
 					)
 				).into()))
 		);
@@ -336,8 +332,6 @@ benchmarks! {
 		let _ = Offences::<T>::report_offence(reporters, offence);
 	}
 	verify {
-		// make sure the report was not deferred
-		assert!(Offences::<T>::deferred_offences().is_empty());
 		// make sure that all slashes have been applied
 		assert_eq!(
 			System::<T>::event_count(), 0
@@ -372,8 +366,6 @@ benchmarks! {
 		let _ = Offences::<T>::report_offence(reporters, offence);
 	}
 	verify {
-		// make sure the report was not deferred
-		assert!(Offences::<T>::deferred_offences().is_empty());
 		// make sure that all slashes have been applied
 		assert_eq!(
 			System::<T>::event_count(), 0
@@ -382,42 +374,6 @@ benchmarks! {
 			+ 1 // offenders slashed
 			+ n // nominators slashed
 		);
-	}
-
-	on_initialize {
-		let d in 1 .. MAX_DEFERRED_OFFENCES;
-		let o = 10;
-		let n = 100;
-
-		let mut deferred_offences = vec![];
-		let offenders = make_offenders::<T>(o, n)?.0;
-		let offence_details = offenders.into_iter()
-			.map(|offender| OffenceDetails {
-				offender: T::convert(offender),
-				reporters: vec![],
-			})
-			.collect::<Vec<_>>();
-
-		for i in 0 .. d {
-			let fractions = offence_details.iter()
-				.map(|_| Perbill::from_percent(100 * (i + 1) / MAX_DEFERRED_OFFENCES))
-				.collect::<Vec<_>>();
-			deferred_offences.push((offence_details.clone(), fractions.clone(), 0u32));
-		}
-
-		Offences::<T>::set_deferred_offences(deferred_offences);
-		assert!(!Offences::<T>::deferred_offences().is_empty());
-	}: {
-		Offences::<T>::on_initialize(0u32.into());
-	}
-	verify {
-		// make sure that all deferred offences were reported with Ok status.
-		assert!(Offences::<T>::deferred_offences().is_empty());
-		assert_eq!(
-			System::<T>::event_count(), d * (0
-			+ o // offenders slashed
-			+ o * n // nominators slashed
-		));
 	}
 }
 
