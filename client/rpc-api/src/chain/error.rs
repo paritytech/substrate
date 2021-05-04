@@ -20,7 +20,6 @@
 
 use crate::errors;
 use jsonrpc_core as rpc;
-use jsonrpsee_types::Error as RpseeError;
 
 /// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -33,7 +32,7 @@ pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error>
 pub enum Error {
 	/// Client error.
 	#[display(fmt="Client error: {}", _0)]
-	Client(Box<dyn std::error::Error + Send>),
+	Client(Box<dyn std::error::Error + Send + Sync>),
 	/// Other error type.
 	Other(String),
 }
@@ -60,21 +59,5 @@ impl From<Error> for rpc::Error {
 			},
 			e => errors::internal(e),
 		}
-	}
-}
-
-impl From<Error> for RpseeError {
-	fn from(e: Error) -> Self {
-		match e {
-			Error::Other(message) => RpseeError::Custom(message),
-			Error::Client(e) => RpseeError::Custom(e.to_string()) // TODO: what see error variant should we use here?
-		}
-	}
-}
-
-impl From<RpseeError> for Error {
-	fn from(e: RpseeError) -> Self {
-		// TODO: map Rpc errors to Error
-		Error::Other("dunno, TODO".into())
 	}
 }

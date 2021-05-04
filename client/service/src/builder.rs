@@ -762,7 +762,7 @@ fn gen_rpc_module<TBl, TBackend, TCl>(
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
 	let subscriptions = SubscriptionManager::new(Arc::new(task_executor.clone()));
 
-	let (chain, _state, _child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
+	let (chain, state, _child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
 		(remote_blockchain, on_demand) {
 		// Light clients
 		let chain = sc_rpc::chain::new_light(

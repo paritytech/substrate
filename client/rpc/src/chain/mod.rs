@@ -35,7 +35,7 @@ use rpc::{
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
-use jsonrpsee_types::error::Error as JsonRpseeError;
+use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
@@ -351,6 +351,6 @@ fn client_err(err: sp_blockchain::Error) -> StateError {
 	StateError::Client(Box::new(err))
 }
 
-fn rpc_err(err: StateError) -> JsonRpseeError {
-	JsonRpseeError::Custom(err.to_string())
+fn rpc_err(err: StateError) -> JsonRpseeCallError {
+	JsonRpseeCallError::Failed(Box::new(err))
 }
