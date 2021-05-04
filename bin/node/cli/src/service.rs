@@ -27,7 +27,6 @@ use node_runtime::RuntimeApi;
 use sc_service::{
 	config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager,
 };
-use sp_inherents::InherentDataProviders;
 use sc_network::{Event, NetworkService};
 use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
@@ -109,15 +108,29 @@ pub fn new_partial(
 		client.clone(),
 	)?;
 
-	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-
+	let slot_duration = babe_link.config().slot_duration();
 	let import_queue = sc_consensus_babe::import_queue(
 		babe_link.clone(),
 		block_import.clone(),
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		inherent_data_providers.clone(),
+		move |_, ()| {
+			async move {
+				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+				let slot =
+					sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						slot_duration,
+					);
+
+				let uncles =
+					sp_authorship::InherentDataProvider::<<Block as BlockT>::Header>::check_inherents();
+
+				Ok((timestamp, slot, uncles))
+			}
+		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
@@ -183,14 +196,12 @@ pub fn new_partial(
 		select_chain,
 		import_queue,
 		transaction_pool,
-		inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry),
 	})
 }
 
 pub struct NewFullBase {
 	pub task_manager: TaskManager,
-	pub inherent_data_providers: InherentDataProviders,
 	pub client: Arc<FullClient>,
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	pub network_status_sinks: sc_service::NetworkStatusSinks<Block>,
@@ -213,7 +224,6 @@ pub fn new_full_base(
 		keystore_container,
 		select_chain,
 		transaction_pool,
-		inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup, mut telemetry),
 	} = new_partial(&config)?;
 
@@ -291,6 +301,8 @@ pub fn new_full_base(
 		let can_author_with =
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
+		let client_clone = client.clone();
+		let slot_duration = babe_link.config().slot_duration();
 		let babe_config = sc_consensus_babe::BabeParams {
 			keystore: keystore_container.sync_keystore(),
 			client: client.clone(),
@@ -298,7 +310,25 @@ pub fn new_full_base(
 			env: proposer,
 			block_import,
 			sync_oracle: network.clone(),
-			inherent_data_providers: inherent_data_providers.clone(),
+			create_inherent_data_providers: move |parent, ()| {
+				let client_clone = client_clone.clone();
+				async move {
+					let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
+						&*client_clone,
+						parent,
+					)?;
+
+					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+					let slot =
+						sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+							*timestamp,
+							slot_duration,
+						);
+
+					Ok((timestamp, slot, uncles))
+				}
+			},
 			force_authoring,
 			backoff_authoring_blocks,
 			babe_link,
@@ -383,7 +413,6 @@ pub fn new_full_base(
 	network_starter.start_network();
 	Ok(NewFullBase {
 		task_manager,
-		inherent_data_providers,
 		client,
 		network,
 		network_status_sinks,
@@ -463,15 +492,27 @@ pub fn new_light_base(
 		client.clone(),
 	)?;
 
-	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-
+	let slot_duration = babe_link.config().slot_duration();
 	let import_queue = sc_consensus_babe::import_queue(
 		babe_link,
 		babe_block_import,
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		inherent_data_providers.clone(),
+		move |_, ()| async move {
+			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+			let slot =
+				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+					*timestamp,
+					slot_duration,
+				);
+
+			let uncles =
+				sp_authorship::InherentDataProvider::<<Block as BlockT>::Header>::check_inherents();
+
+			Ok((timestamp, slot, uncles))
+		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
@@ -568,6 +609,7 @@ mod tests {
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 	use sc_client_api::BlockBackend;
 	use sc_keystore::LocalKeystore;
+	use sp_inherents::InherentDataProvider;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
@@ -597,7 +639,7 @@ mod tests {
 			|config| {
 				let mut setup_handles = None;
 				let NewFullBase {
-					task_manager, inherent_data_providers, client, network, transaction_pool, ..
+					task_manager, client, network, transaction_pool, ..
 				} = new_full_base(config,
 					|
 						block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
@@ -610,17 +652,13 @@ mod tests {
 				let node = sc_service_test::TestNetComponents::new(
 					task_manager, client, network, transaction_pool
 				);
-				Ok((node, (inherent_data_providers, setup_handles.unwrap())))
+				Ok((node, setup_handles.unwrap()))
 			},
 			|config| {
 				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
-			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
-				let mut inherent_data = inherent_data_providers
-					.create_inherent_data()
-					.expect("Creates inherent data.");
-
+			|service, &mut (ref mut block_import, ref babe_link)| {
 				let parent_id = BlockId::number(service.client().chain_info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
 				let parent_hash = parent_header.hash();
@@ -648,11 +686,6 @@ mod tests {
 				// even though there's only one authority some slots might be empty,
 				// so we must keep trying the next slots until we can claim one.
 				let (babe_pre_digest, epoch_descriptor) = loop {
-					inherent_data.replace_data(
-						sp_timestamp::INHERENT_IDENTIFIER,
-						&(slot * SLOT_DURATION),
-					);
-
 					let epoch_descriptor = babe_link.epoch_changes().shared_data().epoch_descriptor_for_child_of(
 						descendent_query(&*service.client()),
 						&parent_hash,
@@ -675,6 +708,13 @@ mod tests {
 
 					slot += 1;
 				};
+
+				let inherent_data = (
+					sp_timestamp::InherentDataProvider::new(
+						std::time::Duration::from_millis(SLOT_DURATION * slot).into(),
+					),
+					sp_consensus_babe::inherents::InherentDataProvider::new(slot.into()),
+				).create_inherent_data().expect("Creates inherent data");
 
 				digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 
