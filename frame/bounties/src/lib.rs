@@ -237,10 +237,7 @@ pub enum SubBountyStatus<AccountId, BlockNumber> {
 	/// The Subbounty is added and waiting for curator assignment.
 	Added,
 	/// A Subcurator has been proposed by the `curator`. Waiting for acceptance from the subcurator.
-	SubCuratorProposed {
-		/// The assigned subcurator of this bounty.
-		subcurator: AccountId,
-	},
+	SubCuratorProposed(AccountId),
 	/// The subbounty is active and waiting to be awarded.
 	Active {
 		/// The subcurator of this subbounty.
