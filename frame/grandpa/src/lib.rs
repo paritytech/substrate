@@ -187,8 +187,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		type Error = Error<T>;
 
-		fn deposit_event() = default;
-
 		/// Report voter equivocation/misbehavior. This method will verify the
 		/// equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence
@@ -249,6 +247,17 @@ pub mod pallet {
 
 			Ok(Self::on_stalled(delay, best_finalized_block_number).into())
 		}
+	}
+
+	#[pallet::event]
+	#[pallet::generate_deposit(fn deposit_event)]
+	pub enum Event {
+		/// New authority set has been applied. \[authority_set\]
+		NewAuthorities(AuthorityList),
+		/// Current authority set has been paused.
+		Paused,
+		/// Current authority set has been resumed.
+		Resumed,
 	}
 }
 
@@ -324,17 +333,6 @@ pub enum StoredState<N> {
 		/// Number of blocks after which the change will be enacted.
 		delay: N,
 	},
-}
-
-decl_event! {
-	pub enum Event {
-		/// New authority set has been applied. \[authority_set\]
-		NewAuthorities(AuthorityList),
-		/// Current authority set has been paused.
-		Paused,
-		/// Current authority set has been resumed.
-		Resumed,
-	}
 }
 
 decl_error! {
