@@ -22,7 +22,7 @@ use sp_std::prelude::*;
 use sp_std::{convert::TryFrom, marker::PhantomData};
 use codec::{FullCodec, Encode, EncodeLike, Decode};
 use crate::{
-	traits::{Get, BoundedEncodedLen},
+	traits::{Get, MaxEncodedLen},
 	storage::{generator, StorageDecodeLength, StorageValue, StorageMap, StorageDoubleMap},
 };
 
@@ -319,9 +319,9 @@ impl<
 	}
 }
 
-impl<T, S> BoundedEncodedLen for BoundedVec<T, S>
+impl<T, S> MaxEncodedLen for BoundedVec<T, S>
 where
-	T: BoundedVecValue + BoundedEncodedLen,
+	T: BoundedVecValue + MaxEncodedLen,
 	S: Get<u32>,
 	BoundedVec<T, S>: Encode,
 {
