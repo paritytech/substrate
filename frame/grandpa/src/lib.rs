@@ -413,7 +413,7 @@ pub enum StoredState<N> {
 	},
 }
 
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> AuthorityList {
 		storage::unhashed::get_or_default::<VersionedAuthorityList>(GRANDPA_AUTHORITIES_KEY).into()
@@ -616,11 +616,11 @@ impl<T: Config> Module<T> {
 	}
 }
 
-impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> OneSessionHandler<T::AccountId> for Module<T>
+impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T>
 	where T: pallet_session::Config
 {
 	type Key = AuthorityId;
@@ -666,7 +666,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Module<T>
 
 		// if we didn't issue a change, we update the mapping to note that the current
 		// set corresponds to the latest equivalent session (i.e. now).
-		let session_index = <pallet_session::Module<T>>::current_index();
+		let session_index = <pallet_session::Pallet<T>>::current_index();
 		SetIdSession::<T>::insert(current_set_id, &session_index);
 	}
 
