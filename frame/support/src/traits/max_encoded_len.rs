@@ -106,3 +106,27 @@ impl<T> MaxEncodedLen for PhantomData<T> {
 		0
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	macro_rules! test_compact_length {
+		($(fn $name:ident($t:ty);)*) => {
+			$(
+				#[test]
+				fn $name() {
+					assert_eq!(Compact(<$t>::MAX).encode().len(), Compact::<$t>::max_encoded_len());
+				}
+			)*
+		};
+	}
+
+	test_compact_length!(
+		fn compact_u8(u8);
+		fn compact_u16(u16);
+		fn compact_u32(u32);
+		fn compact_u64(u64);
+		fn compact_u128(u128);
+	);
+}
