@@ -67,39 +67,55 @@ pub use equivocation::{
 	HandleEquivocation,
 };
 
-pub trait Config: frame_system::Config {
-	/// The event type of this module.
-	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
+pub use pallet::*;
 
-	/// The function call.
-	type Call: From<Call<Self>>;
+#[frame_support::pallet]
+pub mod pallet {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+	use super::*;
 
-	/// The proof of key ownership, used for validating equivocation reports.
-	/// The proof must include the session index and validator count of the
-	/// session at which the equivocation occurred.
-	type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
 
-	/// The identification of a key owner, used when reporting equivocations.
-	type KeyOwnerIdentification: Parameter;
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// The event type of this module.
+		type Event: From<Event>
+			+ Into<<Self as frame_system::Config>::Event>
+			+ IsType<<Self as frame_system::Config>::Event>;
 
-	/// A system for proving ownership of keys, i.e. that a given key was part
-	/// of a validator set, needed for validating equivocation reports.
-	type KeyOwnerProofSystem: KeyOwnerProofSystem<
-		(KeyTypeId, AuthorityId),
-		Proof = Self::KeyOwnerProof,
-		IdentificationTuple = Self::KeyOwnerIdentification,
-	>;
+		/// The function call.
+		type Call: From<Call<Self>>;
 
-	/// The equivocation handling subsystem, defines methods to report an
-	/// offence (after the equivocation has been validated) and for submitting a
-	/// transaction to report an equivocation (from an offchain context).
-	/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
-	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
-	/// definition.
-	type HandleEquivocation: HandleEquivocation<Self>;
+		/// The proof of key ownership, used for validating equivocation reports
+		/// The proof must include the session index and validator count of the
+		/// session at which the equivocation occurred.
+		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
 
-	/// Weights for this pallet.
-	type WeightInfo: WeightInfo;
+		/// The identification of a key owner, used when reporting equivocations.
+		type KeyOwnerIdentification: Parameter;
+
+		/// A system for proving ownership of keys, i.e. that a given key was part
+		/// of a validator set, needed for validating equivocation reports.
+		type KeyOwnerProofSystem: KeyOwnerProofSystem<
+			(KeyTypeId, AuthorityId),
+			Proof = Self::KeyOwnerProof,
+			IdentificationTuple = Self::KeyOwnerIdentification,
+		>;
+
+		/// The equivocation handling subsystem, defines methods to report an
+		/// offence (after the equivocation has been validated) and for submitting a
+		/// transaction to report an equivocation (from an offchain context).
+		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
+		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
+		/// definition.
+		type HandleEquivocation: HandleEquivocation<Self>;
+
+		/// Weights for this pallet.
+		type WeightInfo: WeightInfo;
+	}
 }
 
 pub trait WeightInfo {
