@@ -18,7 +18,8 @@ First, complete the [basic Rust setup instructions](./doc/rust-setup.md).
 If you have not previously installed the `gmp_mpfr_sys` crate, follow these [instructions](https://docs.rs/gmp-mpfr-sys/1.3.0/gmp_mpfr_sys/index.html#building-on-gnulinux).
 
 On Linux, RocksDB requires Clang
-`sudo apt-get install llvm clang`
+
+`sudo apt-get install llvm clang gcc make m4`
 
 #### Setup Spartan-Farmer
 
@@ -26,7 +27,7 @@ On Linux, RocksDB requires Clang
 git clone https://github.com/subspace/spartan-farmer.git
 cd spartan-farmer
 cargo +nightly build --release
-cargo +nightly run plot 256000 subspace
+cargo +nightly run plot -- 256000 subspace
 ```
 This will create a 1 GB plot in the OS-specific user local data directory
 
@@ -38,10 +39,11 @@ This will run a spartan-client in one terminal and a spartan-farmer in a second 
 # Install Node
 git clone https://github.com/subspace/substrate.git
 cd substrate
-git checkout poc
 
 # Build and run Node  (first terminal)
 cargo run --bin node-template-spartan -- --dev --tmp
+
+# wait for the client to start before continuing...
 
 # Run Farmer (second terminal)
 cd /back/to/spartan-farmer
@@ -57,13 +59,12 @@ Then run the following commands to start a single node development chain with a 
 
 ```bash
 git clone https://github.com/subspace/substrate.git
-cd substrate
-git checkout poc
-cd bin/node-template-spartan
+cd substrate/bin/node-template-spartan
 docker-compose up
 ```
 
 It will take a while to build the docker images and plot before the node begins producing blocks. Please be patient :sweat_smile:
+
 We suggest only using Docker on a Linux system, as it takes a very, very long time to build on OSX. 
 
 ### Run Tests
@@ -89,8 +90,8 @@ cargo test
 Once the project has been built, the following command can be used to explore all parameters and
 subcommands:
 
-```sh
-./target/release/node-template-spartan -h
+```bash
+cargo run --bin node-template-spartan -- -h
 ```
 
 ## Run
@@ -104,19 +105,19 @@ node.
 This command will start the single-node development chain with persistent state:
 
 ```bash
-./target/release/node-template-spratan --dev
+cargo run --bin node-template-spartan -- -dev
 ```
 
 Purge the development chain's state:
 
 ```bash
-./target/release/node-template-spartan purge-chain --dev
+cargo run --bin node-template-spartan -- purge-chain -dev
 ```
 
 Start the development chain with detailed logging:
 
 ```bash
-RUST_BACKTRACE=1 ./target/release/node-template-spartan -ldebug --dev
+RUST_BACKTRACE=1 cargo run --bin node-template-spartan -- -ldebug -dev
 ```
 
 ## Template Structure
