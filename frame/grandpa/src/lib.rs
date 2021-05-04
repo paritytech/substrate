@@ -116,6 +116,140 @@ pub mod pallet {
 		/// Weights for this pallet.
 		type WeightInfo: WeightInfo;
 	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_finalize(block_number: T::BlockNumber) {
+			// check for scheduled pending authority set changes
+			if let Some(pending_change) = <PendingChange<T>>::get() {
+				// emit signal if we're at the block that scheduled the change
+				if block_number == pending_change.scheduled_at {
+					if let Some(median) = pending_change.forced {
+						Self::deposit_log(ConsensusLog::ForcedChange(
+							median,
+							ScheduledChange {
+								delay: pending_change.delay,
+								next_authorities: pending_change.next_authorities.clone(),
+							}
+						))
+					} else {
+						Self::deposit_log(ConsensusLog::ScheduledChange(
+							ScheduledChange {
+								delay: pending_change.delay,
+								next_authorities: pending_change.next_authorities.clone(),
+							}
+						));
+					}
+				}
+
+				// enact the change if we've reached the enacting block
+				if block_number == pending_change.scheduled_at + pending_change.delay {
+					Self::set_grandpa_authorities(&pending_change.next_authorities);
+					Self::deposit_event(
+						Event::NewAuthorities(pending_change.next_authorities)
+					);
+					<PendingChange<T>>::kill();
+				}
+			}
+
+			// check for scheduled pending state changes
+			match <State<T>>::get() {
+				StoredState::PendingPause { scheduled_at, delay } => {
+					// signal change to pause
+					if block_number == scheduled_at {
+						Self::deposit_log(ConsensusLog::Pause(delay));
+					}
+
+					// enact change to paused state
+					if block_number == scheduled_at + delay {
+						<State<T>>::put(StoredState::Paused);
+						Self::deposit_event(Event::Paused);
+					}
+				},
+				StoredState::PendingResume { scheduled_at, delay } => {
+					// signal change to resume
+					if block_number == scheduled_at {
+						Self::deposit_log(ConsensusLog::Resume(delay));
+					}
+
+					// enact change to live state
+					if block_number == scheduled_at + delay {
+						<State<T>>::put(StoredState::Live);
+						Self::deposit_event(Event::Resumed);
+					}
+				},
+				_ => {},
+			}
+		}
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		type Error = Error<T>;
+
+		fn deposit_event() = default;
+
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		fn report_equivocation(
+			origin: OriginFor<T>,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			let reporter = ensure_signed(origin)?;
+
+			Self::do_report_equivocation(
+				Some(reporter),
+				equivocation_proof,
+				key_owner_proof,
+			)
+		}
+
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		///
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		fn report_equivocation_unsigned(
+			origin: OriginFor<T>,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+
+			Self::do_report_equivocation(
+				T::HandleEquivocation::block_author(),
+				equivocation_proof,
+				key_owner_proof,
+			)
+		}
+
+		/// Note that the current authority set of the GRANDPA finality gadget has
+		/// stalled. This will trigger a forced authority set change at the beginning
+		/// of the next session, to be enacted `delay` blocks after that. The delay
+		/// should be high enough to safely assume that the block signalling the
+		/// forced change will not be re-orged (e.g. 1000 blocks). The GRANDPA voters
+		/// will start the new authority set using the given finalized block as base.
+		/// Only callable by root.
+		#[pallet::weight(T::WeightInfo::note_stalled())]
+		fn note_stalled(
+			origin: OriginFor<T>,
+			delay: T::BlockNumber,
+			best_finalized_block_number: T::BlockNumber,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+
+			Ok(Self::on_stalled(delay, best_finalized_block_number).into())
+		}
+	}
 }
 
 pub trait WeightInfo {
@@ -256,137 +390,6 @@ decl_storage! {
 	}
 }
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
-
-		fn deposit_event() = default;
-
-		/// Report voter equivocation/misbehavior. This method will verify the
-		/// equivocation proof and validate the given key ownership proof
-		/// against the extracted offender. If both are valid, the offence
-		/// will be reported.
-		#[weight = T::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
-		fn report_equivocation(
-			origin,
-			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-			key_owner_proof: T::KeyOwnerProof,
-		) -> DispatchResultWithPostInfo {
-			let reporter = ensure_signed(origin)?;
-
-			Self::do_report_equivocation(
-				Some(reporter),
-				equivocation_proof,
-				key_owner_proof,
-			)
-		}
-
-		/// Report voter equivocation/misbehavior. This method will verify the
-		/// equivocation proof and validate the given key ownership proof
-		/// against the extracted offender. If both are valid, the offence
-		/// will be reported.
-		///
-		/// This extrinsic must be called unsigned and it is expected that only
-		/// block authors will call it (validated in `ValidateUnsigned`), as such
-		/// if the block author is defined it will be defined as the equivocation
-		/// reporter.
-		#[weight = T::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
-		fn report_equivocation_unsigned(
-			origin,
-			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-			key_owner_proof: T::KeyOwnerProof,
-		) -> DispatchResultWithPostInfo {
-			ensure_none(origin)?;
-
-			Self::do_report_equivocation(
-				T::HandleEquivocation::block_author(),
-				equivocation_proof,
-				key_owner_proof,
-			)
-		}
-
-		/// Note that the current authority set of the GRANDPA finality gadget has
-		/// stalled. This will trigger a forced authority set change at the beginning
-		/// of the next session, to be enacted `delay` blocks after that. The delay
-		/// should be high enough to safely assume that the block signalling the
-		/// forced change will not be re-orged (e.g. 1000 blocks). The GRANDPA voters
-		/// will start the new authority set using the given finalized block as base.
-		/// Only callable by root.
-		#[weight = T::WeightInfo::note_stalled()]
-		fn note_stalled(
-			origin,
-			delay: T::BlockNumber,
-			best_finalized_block_number: T::BlockNumber,
-		) {
-			ensure_root(origin)?;
-
-			Self::on_stalled(delay, best_finalized_block_number)
-		}
-
-		fn on_finalize(block_number: T::BlockNumber) {
-			// check for scheduled pending authority set changes
-			if let Some(pending_change) = <PendingChange<T>>::get() {
-				// emit signal if we're at the block that scheduled the change
-				if block_number == pending_change.scheduled_at {
-					if let Some(median) = pending_change.forced {
-						Self::deposit_log(ConsensusLog::ForcedChange(
-							median,
-							ScheduledChange {
-								delay: pending_change.delay,
-								next_authorities: pending_change.next_authorities.clone(),
-							}
-						))
-					} else {
-						Self::deposit_log(ConsensusLog::ScheduledChange(
-							ScheduledChange {
-								delay: pending_change.delay,
-								next_authorities: pending_change.next_authorities.clone(),
-							}
-						));
-					}
-				}
-
-				// enact the change if we've reached the enacting block
-				if block_number == pending_change.scheduled_at + pending_change.delay {
-					Self::set_grandpa_authorities(&pending_change.next_authorities);
-					Self::deposit_event(
-						Event::NewAuthorities(pending_change.next_authorities)
-					);
-					<PendingChange<T>>::kill();
-				}
-			}
-
-			// check for scheduled pending state changes
-			match <State<T>>::get() {
-				StoredState::PendingPause { scheduled_at, delay } => {
-					// signal change to pause
-					if block_number == scheduled_at {
-						Self::deposit_log(ConsensusLog::Pause(delay));
-					}
-
-					// enact change to paused state
-					if block_number == scheduled_at + delay {
-						<State<T>>::put(StoredState::Paused);
-						Self::deposit_event(Event::Paused);
-					}
-				},
-				StoredState::PendingResume { scheduled_at, delay } => {
-					// signal change to resume
-					if block_number == scheduled_at {
-						Self::deposit_log(ConsensusLog::Resume(delay));
-					}
-
-					// enact change to live state
-					if block_number == scheduled_at + delay {
-						<State<T>>::put(StoredState::Live);
-						Self::deposit_event(Event::Resumed);
-					}
-				},
-				_ => {},
-			}
-		}
-	}
-}
 
 impl<T: Config> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
