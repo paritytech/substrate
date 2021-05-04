@@ -185,8 +185,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		type Error = Error<T>;
-
 		/// Report voter equivocation/misbehavior. This method will verify the
 		/// equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence
@@ -258,6 +256,26 @@ pub mod pallet {
 		Paused,
 		/// Current authority set has been resumed.
 		Resumed,
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Attempt to signal GRANDPA pause when the authority set isn't live
+		/// (either paused or already pending pause).
+		PauseFailed,
+		/// Attempt to signal GRANDPA resume when the authority set isn't paused
+		/// (either live or already pending resume).
+		ResumeFailed,
+		/// Attempt to signal GRANDPA change with one already pending.
+		ChangePending,
+		/// Cannot signal forced change so soon after last.
+		TooSoon,
+		/// A key ownership proof provided as part of an equivocation report is invalid.
+		InvalidKeyOwnershipProof,
+		/// An equivocation proof provided as part of an equivocation report is invalid.
+		InvalidEquivocationProof,
+		/// A given equivocation report is valid but already previously reported.
+		DuplicateOffenceReport,
 	}
 }
 
@@ -333,27 +351,6 @@ pub enum StoredState<N> {
 		/// Number of blocks after which the change will be enacted.
 		delay: N,
 	},
-}
-
-decl_error! {
-	pub enum Error for Module<T: Config> {
-		/// Attempt to signal GRANDPA pause when the authority set isn't live
-		/// (either paused or already pending pause).
-		PauseFailed,
-		/// Attempt to signal GRANDPA resume when the authority set isn't paused
-		/// (either live or already pending resume).
-		ResumeFailed,
-		/// Attempt to signal GRANDPA change with one already pending.
-		ChangePending,
-		/// Cannot signal forced change so soon after last.
-		TooSoon,
-		/// A key ownership proof provided as part of an equivocation report is invalid.
-		InvalidKeyOwnershipProof,
-		/// An equivocation proof provided as part of an equivocation report is invalid.
-		InvalidEquivocationProof,
-		/// A given equivocation report is valid but already previously reported.
-		DuplicateOffenceReport,
-	}
 }
 
 decl_storage! {
