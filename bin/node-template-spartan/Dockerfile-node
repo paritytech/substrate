@@ -13,3 +13,7 @@ RUN \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
 
 RUN bash -c "source /root/.cargo/env && rustup target add wasm32-unknown-unknown --toolchain nightly"
+
+COPY entrypoint-node.sh /entrypoint-node.sh
+
+ENTRYPOINT ["/entrypoint-node.sh"]

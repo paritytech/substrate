@@ -2,7 +2,9 @@ version: "3.2"
 
 services:
   node:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile-node
     container_name: node-template-spartan
     working_dir: /var/www/node-template-spartan
     ports:

@@ -9,4 +9,4 @@ while ! nc -z node 9944; do
   sleep 1
 done
 
-spartan-farmer farm --ws-server ws://node:9944
+exec spartan-farmer farm --ws-server ws://node:9944
