@@ -27,7 +27,7 @@ On Linux, RocksDB requires Clang
 git clone https://github.com/subspace/spartan-farmer.git
 cd spartan-farmer
 cargo +nightly build --release
-cargo +nightly run plot -- 256000 subspace
+cargo +nightly run plot -- 256000 spartan
 ```
 This will create a 1 GB plot in the OS-specific user local data directory
 
