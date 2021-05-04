@@ -116,7 +116,7 @@ macro_rules! __runtime_modules_to_metadata {
 	) => {
 		$crate::__runtime_modules_to_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::ModuleMetadata {
+			$( $metadata, )* $crate::metadata::PalletMetadata {
 				name: stringify!($name),
 				index: $index,
 				storage: $crate::__runtime_modules_to_metadata_calls_storage!(
