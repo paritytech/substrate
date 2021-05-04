@@ -42,7 +42,7 @@ macro_rules! impl_primitives {
 	};
 }
 
-impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
+impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool);
 
 impl<T> BoundedEncodedLen for Compact<T>
 where
