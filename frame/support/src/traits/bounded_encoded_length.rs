@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::Encode;
+use codec::{Compact, Encode};
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_std::{mem, marker::PhantomData};
 
@@ -35,8 +35,7 @@ macro_rules! impl_primitives {
 		$(
 			impl BoundedEncodedLen for $t {
 				fn max_encoded_len() -> usize {
-					// a compact encoding of a primitive can take 1 byte more than its actual size
-					mem::size_of::<$t>().saturating_add(1)
+					mem::size_of::<$t>()
 				}
 			}
 		)+
@@ -45,10 +44,22 @@ macro_rules! impl_primitives {
 
 impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
+impl<T> BoundedEncodedLen for Compact<T>
+where
+	Compact<T>: Encode,
+	T: BoundedEncodedLen,
+{
+	// The compact encoding of a type usually requires fewer bytes, but can occupy 1 additional
+	// byte in the worst case.
+	fn max_encoded_len() -> usize {
+		T::max_encoded_len().saturating_add(1)
+	}
+}
+
 // impl_for_tuples for values 19 and higher fails because that's where the WrapperTypeEncode impl stops.
 #[impl_for_tuples(18)]
 impl BoundedEncodedLen for Tuple {
-	for_tuples!( where #( Tuple: BoundedEncodedLen )* );
+	// for_tuples!( where #( Tuple: BoundedEncodedLen )* );
 	fn max_encoded_len() -> usize {
 		let mut len: usize = 0;
 		for_tuples!( #( len = len.saturating_add(Tuple::max_encoded_len()); )* );
