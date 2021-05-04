@@ -23,7 +23,6 @@ use crate as pallet_assets_freezer;
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use frame_support::{parameter_types, construct_runtime};
-use frame_support::traits::StorageMapShim;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -110,11 +109,8 @@ impl pallet_assets::Config for Test {
 impl Config for Test {
 	type Event = Event;
 	type Assets = Assets;
-	type Store = pallet_assets::Pallet<Test>;
+	type Store = Assets;
 }
-
-use std::cell::RefCell;
-use std::collections::HashMap;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
