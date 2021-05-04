@@ -894,7 +894,8 @@ decl_module! {
 		/// - `subcurator`: Address of subcurator.
 		/// - `fee`: payment fee to subcurator for execution.
 		#[weight = <T as Config>::WeightInfo::propose_subcurator()]
-		fn propose_subcurator(origin, #[compact] bounty_id: BountyIndex,
+		fn propose_subcurator(origin, #[compact] 
+			bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
 			subcurator: <T::Lookup as StaticLookup>::Source,
 			#[compact] fee: BalanceOf<T>,
