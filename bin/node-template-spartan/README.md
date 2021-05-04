@@ -1,4 +1,4 @@
-# Substrate Node Template
+# Node Template Spartan
 
 A fresh FRAME-based [Substrate](https://www.substrate.io/) node, modified for Spartan PoC consensus :rocket:
 
@@ -6,27 +6,82 @@ Based on a fork Substrate Node Template.
 
 ## Getting Started
 
-Follow these steps to get started with the Node Template :hammer_and_wrench:
+Follow these steps to get started with the Spartan Node Template :hammer_and_wrench:
 
-### Rust Setup
+### Run In Development Mode
+
+#### Install Rust
 
 First, complete the [basic Rust setup instructions](./doc/rust-setup.md).
 
-### Run
+#### Install Dependencies
+If you have not previously installed the `gmp_mpfr_sys` crate, follow these [instructions](https://docs.rs/gmp-mpfr-sys/1.3.0/gmp_mpfr_sys/index.html#building-on-gnulinux).
 
-Use Rust's native `cargo` command to build and launch the template node:
+On Linux, RocksDB requires Clang
+`sudo apt-get install llvm clang`
 
-```sh
-cargo run --release -- --dev --tmp
+#### Setup Spartan-Farmer
+
+```bash
+git clone https://github.com/subspace/spartan-farmer.git
+cd spartan-farmer
+cargo +nightly build --release
+cargo +nightly run plot 256000 subspace
+```
+This will create a 1 GB plot in the OS-specific user local data directory
+
+#### Install and Run Node
+
+This will run a spartan-client in one terminal and a spartan-farmer in a second terminal. The client will send slot notification challenges to the farmer. If the farmer finds a valid solution it will reply, and the client will produce a new block.
+
+```bash
+# Install Node
+git clone https://github.com/subspace/substrate.git
+cd substrate
+git checkout poc
+
+# Build and run Node  (first terminal)
+cargo run --bin node-template-spartan -- --dev --tmp
+
+# Run Farmer (second terminal)
+cd /back/to/spartan-farmer
+RUST_LOG=debug cargo run farm
 ```
 
-### Build
+### Run with Docker
 
-The `cargo run` command will perform an initial build. Use the following command to build the node
-without launching it:
+First, install [Docker](https://docs.docker.com/get-docker/) and
+[Docker Compose](https://docs.docker.com/compose/install/).
 
-```sh
-cargo build --release
+Then run the following commands to start a single node development chain with a farmer.
+
+```bash
+git clone https://github.com/subspace/substrate.git
+cd substrate
+git checkout poc
+cd bin/node-template-spartan
+docker-compose up
+```
+
+It will take a while to build the docker images and plot before the node begins producing blocks. Please be patient :sweat_smile:
+We suggest only using Docker on a Linux system, as it takes a very, very long time to build on OSX. 
+
+### Run Tests
+
+```bash
+
+# PoC tests
+cd substrate/client/consensus/poc
+cargo test
+
+# Spartan tests
+cd substrate/frame/spartan
+cargo test
+
+# Farmer tests
+cd spartan-farmer
+cargo test
+
 ```
 
 ### Embedded Docs
@@ -35,7 +90,7 @@ Once the project has been built, the following command can be used to explore al
 subcommands:
 
 ```sh
-./target/release/node-template -h
+./target/release/node-template-spartan -h
 ```
 
 ## Run
@@ -49,25 +104,20 @@ node.
 This command will start the single-node development chain with persistent state:
 
 ```bash
-./target/release/node-template --dev
+./target/release/node-template-spratan --dev
 ```
 
 Purge the development chain's state:
 
 ```bash
-./target/release/node-template purge-chain --dev
+./target/release/node-template-spartan purge-chain --dev
 ```
 
 Start the development chain with detailed logging:
 
 ```bash
-RUST_BACKTRACE=1 ./target/release/node-template -ldebug --dev
+RUST_BACKTRACE=1 ./target/release/node-template-spartan -ldebug --dev
 ```
-
-### Multi-Node Local Testnet
-
-If you want to see the multi-node consensus algorithm in action, refer to
-[our Start a Private Network tutorial](https://substrate.dev/docs/en/tutorials/start-a-private-network/).
 
 ## Template Structure
 
@@ -112,7 +162,7 @@ After the node has been [built](#build), refer to the embedded documentation to 
 capabilities and configuration parameters that it exposes:
 
 ```shell
-./target/release/node-template --help
+./target/release/node-template-spartan --help
 ```
 
 ### Runtime
@@ -160,13 +210,5 @@ A FRAME pallet is compromised of a number of blockchain primitives:
 -   Config: The `Config` configuration interface is used to define the types and parameters upon
     which a FRAME pallet depends.
 
-### Run in Docker
 
-First, install [Docker](https://docs.docker.com/get-docker/) and
-[Docker Compose](https://docs.docker.com/compose/install/).
 
-Then run the following command to start a single node development chain with a farmer.
-
-```bash
-docker-compose up
-```

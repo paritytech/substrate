@@ -87,7 +87,7 @@ use futures::channel::oneshot;
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
-use sc_consensus_slots::{SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation, BackoffAuthoringBlocksStrategy, SimpleSlotWorker};
+use sc_consensus_slots::{SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, BackoffAuthoringBlocksStrategy, SimpleSlotWorker};
 use sc_consensus_epochs::{
 	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
 };
