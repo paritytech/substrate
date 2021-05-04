@@ -1006,8 +1006,7 @@ decl_module! {
 					.ok_or(Error::<T>::InvalidIndex)?;
 
 				// Ensure subbounty is in expected state
-				if let SubBountyStatus::SubCuratorProposed { ref subcurator } = subbounty.status
-				{
+				if let SubBountyStatus::SubCuratorProposed { ref subcurator } = subbounty.status {
 					ensure!(signer == *subcurator, Error::<T>::RequireSubCurator);
 
 					// Reserve subcurator deposit
