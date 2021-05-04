@@ -66,6 +66,8 @@ pub enum Request<B: traits::Block> {
 	NetworkAddReservedPeer(String, oneshot::Sender<Result<()>>),
 	/// Must return any potential parse error.
 	NetworkRemoveReservedPeer(String, oneshot::Sender<Result<()>>),
+	/// Must return the list of reserved peers
+	NetworkReservedPeers(oneshot::Sender<Vec<String>>),
 	/// Must return the node role.
 	NodeRoles(oneshot::Sender<Vec<NodeRole>>),
 	/// Must return the state of the node syncing.
@@ -185,6 +187,12 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 				Err(_) => Err(rpc::Error::internal_error()),
 			}
 		}.boxed().compat()
+	}
+
+	fn system_reserved_peers(&self) -> Receiver<Vec<String>> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
+		Receiver(Compat::new(rx))
 	}
 
 	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>> {

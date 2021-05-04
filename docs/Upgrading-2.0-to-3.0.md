@@ -20,11 +20,11 @@ We'll be taking the diff from 2.0.1 to 3.0.0 on `bin/node` as the baseline of wh
 
 ### Versions upgrade
 
-First and foremost you have to upgrade the version pf the dependencies of course, that's `0.8.x -> 0.9.0` and `2.0.x -> 3.0.0` for all `sc-`, `sp-`, `frame-`, and `pallet-` coming from Parity. Further more this release also upgraded its own dependencies, most notably, we are now using `parity-scale-codec 2.0`, `parking_lot 0.11` and `substrate-wasm-builder 3.0.0` (as build dependency). All other dependency upgrades should resolve automatically or are just internal. However you might see some error that another dependency/type you have as a dependency and one of our upgraded crates don't match up, if so please check the version of said dependency - we've probably ugraded it.
+First and foremost you have to upgrade the version pf the dependencies of course, that's `0.8.x -> 0.9.0` and `2.0.x -> 3.0.0` for all `sc-`, `sp-`, `frame-`, and `pallet-` coming from Parity. Further more this release also upgraded its own dependencies, most notably, we are now using `parity-scale-codec 2.0`, `parking_lot 0.11` and `substrate-wasm-builder 3.0.0` (as build dependency). All other dependency upgrades should resolve automatically or are just internal. However you might see some error that another dependency/type you have as a dependency and one of our upgraded crates don't match up, if so please check the version of said dependency - we've probably upgraded it.
 
 ### WASM-Builder
 
-The new version of wasm-builder has gotten a bit smarter and a lot faster (you should definitly switch). Once you've upgraded the dependency, in most cases you just have to remove the now obsolete `with_wasm_builder_from_crates_or_path`-function and you are good to go:
+The new version of wasm-builder has gotten a bit smarter and a lot faster (you should definitely switch). Once you've upgraded the dependency, in most cases you just have to remove the now obsolete `with_wasm_builder_from_crates_or_path`-function and you are good to go:
 
 ```diff: rust
 --- a/bin/node/runtime/build.rs
@@ -244,7 +244,7 @@ Finality Tracker has been removed in favor of a different approach to handle the
 
 #### (changes) Elections Phragmen
 
-The pallet has been moved to a new system in which the exact amount of deposit for each voter, candidate, member, or runner-up is now deposited on-chain. Moreover, the concept of a `defunct_voter` is removed, since votes now have adequet deposit associated with them. A number of configuration parameters has changed to reflect this, as shown below:
+The pallet has been moved to a new system in which the exact amount of deposit for each voter, candidate, member, or runner-up is now deposited on-chain. Moreover, the concept of a `defunct_voter` is removed, since votes now have adequate deposit associated with them. A number of configuration parameters has changed to reflect this, as shown below:
 
 ```diff=
  parameter_types! {
@@ -439,7 +439,7 @@ and add the new service:
 
 The telemetry subsystem has seen a few fixes and refactorings to allow for a more flexible handling, in particular in regards to parachains. Most notably `sc_service::spawn_tasks` now returns the `telemetry_connection_notifier` as the second member of the tuple, (`let (_rpc_handlers, telemetry_connection_notifier) = sc_service::spawn_tasks(`), which should be passed to `telemetry_on_connect` of `new_full_base` now: `telemetry_on_connect: telemetry_connection_notifier.map(|x| x.on_connect_stream()),` (see the service-section below for a full diff).
 
-On the browser-side, this complicates setup a tiny bit, yet not terribly. Instead of `init_console_log`,  we now use `init_logging_and_telemetry` and need to make sure we spawn the runner for its handleat the end (the other changes are formatting and cosmetics):
+On the browser-side, this complicates setup a tiny bit, yet not terribly. Instead of `init_console_log`,  we now use `init_logging_and_telemetry` and need to make sure we spawn the runner for its handle at the end (the other changes are formatting and cosmetics):
 
 ```diff
 --- a/bin/node/cli/src/browser.rs

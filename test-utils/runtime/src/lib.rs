@@ -665,10 +665,6 @@ cfg_if! {
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
 					CheckInherentsResult::new()
 				}
-
-				fn random_seed() -> <Block as BlockT>::Hash {
-					unimplemented!()
-				}
 			}
 
 			impl self::TestAPI<Block> for Runtime {
@@ -922,10 +918,6 @@ cfg_if! {
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
 					CheckInherentsResult::new()
 				}
-
-				fn random_seed() -> <Block as BlockT>::Hash {
-					unimplemented!()
-				}
 			}
 
 			impl self::TestAPI<Block> for Runtime {
@@ -1019,7 +1011,7 @@ cfg_if! {
 				}
 
 				fn do_trace_log() {
-					log::error!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
+					log::trace!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
 				}
 			}
 

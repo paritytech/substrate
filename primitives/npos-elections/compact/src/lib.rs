@@ -25,6 +25,7 @@ use syn::parse::{Parse, ParseStream, Result};
 
 mod assignment;
 mod codec;
+mod index_assignment;
 
 // prefix used for struct fields in compact.
 const PREFIX: &'static str = "votes";
@@ -177,6 +178,7 @@ fn struct_def(
 
 	let from_impl = assignment::from_impl(count);
 	let into_impl = assignment::into_impl(count, weight_type.clone());
+	let from_index_impl = index_assignment::from_impl(count);
 
 	Ok(quote! (
 		/// A struct to encode a election assignment in a compact way.
@@ -223,7 +225,7 @@ fn struct_def(
 			}
 
 			fn from_assignment<FV, FT, A>(
-				assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>,
+				assignments: &[_npos::Assignment<A, #weight_type>],
 				index_of_voter: FV,
 				index_of_target: FT,
 			) -> Result<Self, _npos::Error>
@@ -254,6 +256,29 @@ fn struct_def(
 				let mut assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>> = Default::default();
 				#into_impl
 				Ok(assignments)
+			}
+		}
+		type __IndexAssignment = _npos::IndexAssignment<
+			<#ident as _npos::CompactSolution>::Voter,
+			<#ident as _npos::CompactSolution>::Target,
+			<#ident as _npos::CompactSolution>::Accuracy,
+		>;
+		impl<'a> _npos::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
+			type Error = _npos::Error;
+			fn try_from(index_assignments: &'a [__IndexAssignment]) -> Result<Self, Self::Error> {
+				let mut compact =  #ident::default();
+
+				for _npos::IndexAssignment { who, distribution } in index_assignments {
+					match distribution.len() {
+						0 => {}
+						#from_index_impl
+						_ => {
+							return Err(_npos::Error::CompactTargetOverflow);
+						}
+					}
+				};
+
+				Ok(compact)
 			}
 		}
 	))
