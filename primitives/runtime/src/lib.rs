@@ -468,6 +468,8 @@ pub enum DispatchError {
 	NoProviders,
 	/// An error to do with tokens.
 	Token(TokenError),
+	/// An arithmetic error.
+	Arithmetic(ArithmeticError),
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -569,6 +571,28 @@ impl From<TokenError> for DispatchError {
 	}
 }
 
+/// Arithmetic errors.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum ArithmeticError {
+	/// Underflow.
+	Underflow,
+	/// Overflow.
+	Overflow,
+	/// Division by zero.
+	DivisionByZero,
+}
+
+impl From<ArithmeticError> for &'static str {
+	fn from(e: ArithmeticError) -> &'static str {
+		match e {
+			ArithmeticError::Underflow => "An underflow would occur",
+			ArithmeticError::Overflow => "An overflow would occur",
+			ArithmeticError::DivisionByZero => "Division by zero",
+		}
+	}
+}
+
 impl From<&'static str> for DispatchError {
 	fn from(err: &'static str) -> DispatchError {
 		Self::Other(err)
@@ -585,6 +609,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
 			DispatchError::Token(e) => e.into(),
+			DispatchError::Arithmetic(e) => e.into(),
 		}
 	}
 }
@@ -616,6 +641,10 @@ impl traits::Printable for DispatchError {
 			Self::Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();
+			},
+			Self::Arithmetic(e) => {
+				"Arithmetic error: ".print();
+				<&'static str>::from(*e).print();
 			}
 		}
 	}
@@ -643,6 +672,7 @@ impl PartialEq for DispatchError {
 
 			(Token(l), Token(r)) => l == r,
 			(Other(l), Other(r)) => l == r,
+			(Arithmetic(l), Arithmetic(r)) => l == r,
 
 			(
 				Module { index: index_l, error: error_l, .. },
