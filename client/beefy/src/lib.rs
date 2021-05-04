@@ -45,16 +45,9 @@ pub const BEEFY_PROTOCOL_NAME: &str = "/paritytech/beefy/1";
 /// Returns the configuration value to put in
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
 pub fn beefy_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
-	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: BEEFY_PROTOCOL_NAME.into(),
-		max_notification_size: 1024 * 1024,
-		set_config: sc_network::config::SetConfig {
-			in_peers: 25,
-			out_peers: 25,
-			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network::config::NonReservedPeerMode::Accept,
-		},
-	}
+	let mut cfg = sc_network::config::NonDefaultSetConfig::new(BEEFY_PROTOCOL_NAME.into(), 1024 * 1024);
+	cfg.allow_non_reserved(25, 25);
+	cfg
 }
 
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
