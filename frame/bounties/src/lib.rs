@@ -277,10 +277,10 @@ decl_storage! {
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
 
 		/// SubBounties that have been made.
-		pub SubBounties get(fn subbounties):
-			double_map hasher(twox_64_concat) BountyIndex,
-			hasher(twox_64_concat) BountyIndex =>
-			Option<SubBounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
+		pub SubBounties get(fn subbounties): double_map 
+			hasher(twox_64_concat) BountyIndex,
+			hasher(twox_64_concat) BountyIndex
+			=> Option<SubBounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 	}
 }
 
