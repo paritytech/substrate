@@ -238,7 +238,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			let dispatcher_span = tracing::debug_span!(
 				target: "state_tracing",
 				"execute_block",
-				extrinsics_len = block.extrinsics().len()
+				extrinsics_len = block.extrinsics().len(),
 			);
 			let _guard = dispatcher_span.enter();
 			if let Err(e) = dispatcher::with_default(&dispatch, || {
