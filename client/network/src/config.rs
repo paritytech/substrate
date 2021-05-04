@@ -560,6 +560,7 @@ impl NonDefaultSetConfig {
 		NonDefaultSetConfig {
 			notifications_protocol,
 			max_notification_size,
+			fallback_names: Vec::new(),
 			set_config: SetConfig {
 				in_peers: 0,
 				out_peers: 0,
