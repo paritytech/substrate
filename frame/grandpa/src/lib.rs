@@ -40,10 +40,9 @@ use fg_primitives::{
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResultWithPostInfo,
-	storage, traits::{OneSessionHandler, KeyOwnerProofSystem}, weights::{Pays, Weight}, Parameter,
+	dispatch::DispatchResultWithPostInfo,
+	storage, traits::{OneSessionHandler, KeyOwnerProofSystem}, weights::{Pays, Weight},
 };
-use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_runtime::{
 	generic::DigestItem,
 	traits::Zero,
