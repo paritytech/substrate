@@ -44,17 +44,30 @@ macro_rules! impl_primitives {
 
 impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool);
 
-impl<T> BoundedEncodedLen for Compact<T>
-where
-	Compact<T>: Encode,
-	T: BoundedEncodedLen,
-{
-	// The compact encoding of a type usually requires fewer bytes, but can occupy 1 additional
-	// byte in the worst case.
-	fn max_encoded_len() -> usize {
-		T::max_encoded_len().saturating_add(1)
-	}
+macro_rules! impl_compact {
+	($( $t:ty => $e:expr; )*) => {
+		$(
+			impl BoundedEncodedLen for Compact<$t> {
+				fn max_encoded_len() -> usize {
+					$e
+				}
+			}
+		)*
+	};
 }
+
+impl_compact!(
+	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L261
+	u8 => 2;
+	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L291
+	u16 => 4;
+	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L326
+	u32 => 5;
+	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L369
+	u64 => 9;
+	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L413
+	u128 => 17;
+);
 
 // impl_for_tuples for values 19 and higher fails because that's where the WrapperTypeEncode impl stops.
 #[impl_for_tuples(18)]
