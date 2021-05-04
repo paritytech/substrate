@@ -48,7 +48,6 @@ impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 // impl_for_tuples for values 19 and higher fails because that's where the WrapperTypeEncode impl stops.
 #[impl_for_tuples(18)]
 impl BoundedEncodedLen for Tuple {
-	for_tuples!( where #( Tuple: BoundedEncodedLen )* );
 	fn max_encoded_len() -> usize {
 		let mut len: usize = 0;
 		for_tuples!( #( len = len.saturating_add(Tuple::max_encoded_len()); )* );
