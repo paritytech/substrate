@@ -77,11 +77,11 @@ pub mod pallet {
 
 		/// The minimum length a name may be.
 		#[pallet::constant]
-		type MinLength: Get<usize>;
+		type MinLength: Get<u32>;
 
 		/// The maximum length a name may be.
 		#[pallet::constant]
-		type MaxLength: Get<usize>;
+		type MaxLength: Get<u32>;
 	}
 
 	#[pallet::event]
@@ -141,11 +141,11 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(50_000_000)]
-		fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub(super) fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(name.len() >= T::MinLength::get(), Error::<T>::TooShort);
-			ensure!(name.len() <= T::MaxLength::get(), Error::<T>::TooLong);
+			ensure!(name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
+			ensure!(name.len() <= T::MaxLength::get() as usize, Error::<T>::TooLong);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
 				Self::deposit_event(Event::<T>::NameChanged(sender.clone()));
@@ -172,7 +172,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(70_000_000)]
-		fn clear_name(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub(super) fn clear_name(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 
 			let deposit = <NameOf<T>>::take(&sender).ok_or(Error::<T>::Unnamed)?.1;
@@ -198,7 +198,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(70_000_000)]
-		fn kill_name(
+		pub(super) fn kill_name(
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source
 		) -> DispatchResultWithPostInfo {
@@ -228,7 +228,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(70_000_000)]
-		fn force_name(
+		pub(super) fn force_name(
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source,
 			name: Vec<u8>
@@ -316,8 +316,8 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;
-		pub const MinLength: usize = 3;
-		pub const MaxLength: usize = 16;
+		pub const MinLength: u32 = 3;
+		pub const MaxLength: u32 = 16;
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
