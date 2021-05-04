@@ -214,7 +214,7 @@ impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> Index<I> for BoundedVe
 impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> IndexMut<I> for BoundedVec<T, S> {
 	#[inline]
 	fn index_mut(&mut self, index: I) -> &mut Self::Output {
-		IndexMut::index_mut(&mut **self, index)
+		self.0.index_mut(index)
 	}
 }
 
