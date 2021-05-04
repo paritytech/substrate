@@ -585,8 +585,7 @@ decl_module! {
 
 		/// Award bounty to a beneficiary account. The beneficiary will be able to claim the funds after a delay.
 		///
-		/// Call may gets failed if Subbounties are active, Ensure to close
-		/// subbounty explicitly.
+		/// Call may fail if Subbounties are active, Ensure to close subbounty explicitly.
 		///
 		/// The dispatch origin for this call must be the curator of this bounty.
 		///
