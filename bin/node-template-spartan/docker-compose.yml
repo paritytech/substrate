@@ -18,7 +18,7 @@ services:
         target: /root/.local
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9615/metrics"]
-    command: bash -c "source /root/.cargo/env && cargo run --bin node-template-spartan -- --dev --ws-external"
+    command: bash -c "source /root/.cargo/env && cargo run --bin node-template-spartan -- --dev --tmp --ws-external"
   farmer:
     build:
       context: .
