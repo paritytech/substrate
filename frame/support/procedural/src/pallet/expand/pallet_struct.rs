@@ -26,7 +26,7 @@ use crate::pallet::{Def, parse::helper::get_doc_literals};
 pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_generics(def.pallet_struct.attr_span);
+	let type_impl_gen = &def.type_impl_scale_info_bounded_generics(def.pallet_struct.attr_span);
 	let type_use_gen = &def.type_use_generics(def.pallet_struct.attr_span);
 	let type_decl_gen = &def.type_decl_generics(def.pallet_struct.attr_span);
 	let pallet_ident = &def.pallet_struct.pallet;
