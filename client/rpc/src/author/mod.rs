@@ -31,6 +31,8 @@ use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
 use sc_rpc_api::DenyUnsafe;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
+use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use codec::{Encode, Decode};
 use sp_core::Bytes;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
@@ -60,6 +62,7 @@ pub struct Author<P, Client> {
 	deny_unsafe: DenyUnsafe,
 }
 
+
 impl<P, Client> Author<P, Client> {
 	/// Create new instance of Authoring API.
 	pub fn new(
@@ -77,6 +80,41 @@ impl<P, Client> Author<P, Client> {
 			deny_unsafe,
 		}
 	}
+}
+
+impl<P, Client> Author<P, Client>
+	where
+		P: TransactionPool + Sync + Send + 'static,
+		Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
+		Client::Api: SessionKeys<P::Block>,
+{
+	/// Convert a [`Author`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
+	pub fn into_rpc_module(self) -> std::result::Result<RpcModule, JsonRpseeError> {
+		let mut rpc_module = RpcContextModule::new(self);
+
+		rpc_module.register_method::<_, TxHash<P>>("author_submitExtrinsic", |params, author| {
+			log::info!("author_submitExtrinsic [{:?}]", params);
+			// TODO: make is possible to register async methods on jsonrpsee servers.
+			//https://github.com/paritytech/jsonrpsee/issues/291
+			//
+			// NOTE(niklasad1): will block the connection task on the server.
+			let ext: Bytes = params.one()?;
+			let xt = match Decode::decode(&mut &ext[..]) {
+				Ok(xt) => xt,
+				Err(err) => return Err(JsonRpseeCallError::Failed(err.into())),
+			};
+			let best_block_hash = author.client.info().best_hash;
+			let fut = author.pool.submit_one(&generic::BlockId::hash(best_block_hash), TX_SOURCE, xt);
+
+			futures::executor::block_on(fut)
+				.map_err(|e| e.into_pool_error()
+					.map(|e| JsonRpseeCallError::Failed(Box::new(e)))
+					.unwrap_or_else(|e| JsonRpseeCallError::Failed(Box::new(e))))
+		})?;
+
+		Ok(rpc_module.into_module())
+	}
+
 }
 
 /// Currently we treat all RPC transactions as externals.

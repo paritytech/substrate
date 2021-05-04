@@ -390,8 +390,7 @@ mod waiting {
 fn start_rpc_servers<
 	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
 	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
-	R: FnMut(sc_rpc::DenyUnsafe) -> jsonrpsee_ws_server::RpcModule,
-
+	R: FnMut(sc_rpc::DenyUnsafe) -> Vec<jsonrpsee_ws_server::RpcModule>,
 >(
 	config: &Configuration,
 	mut gen_handler: H,
@@ -414,7 +413,7 @@ fn start_rpc_servers<
 			) ).transpose()
 		}
 
-	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
+	let modules = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
 	let rpsee_addr = config.rpc_ws.map(|mut addr| {
 		let port = addr.port() + 1;
 		addr.set_port(port);
@@ -429,7 +428,9 @@ fn start_rpc_servers<
 		rt.block_on(async {
 			let mut server = WsServer::new(rpsee_addr).await.unwrap();
 
-			server.register_module(module).unwrap();
+			for module in modules {
+				server.register_module(module).unwrap();
+			}
 
 			server.start().await;
 		});

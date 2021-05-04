@@ -661,7 +661,9 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 			deny_unsafe,
 			task_manager.spawn_handle(),
 			client.clone(), on_demand.clone(),
-			remote_blockchain.clone()
+			remote_blockchain.clone(),
+			transaction_pool.clone(),
+			keystore.clone(),
 		)
 	};
 
@@ -741,13 +743,15 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 
 // Maciej: This is very WIP, mocking the original `gen_handler`. All of the `jsonrpsee`
 // specific logic should be merged back to `gen_handler` down the road.
-fn gen_rpc_module<TBl, TBackend, TCl>(
+fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	deny_unsafe: sc_rpc::DenyUnsafe,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
 	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
-) -> RpcModule
+	transaction_pool: Arc<TExPool>,
+	keystore: SyncCryptoStorePtr,
+) -> Vec<RpcModule>
 	where
 		TBl: BlockT,
 		TCl: ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + HeaderBackend<TBl> +
@@ -758,11 +762,12 @@ fn gen_rpc_module<TBl, TBackend, TCl>(
 		<TCl as ProvideRuntimeApi<TBl>>::Api:
 			sp_session::SessionKeys<TBl> +
 			sp_api::Metadata<TBl>,
+		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
 	let subscriptions = SubscriptionManager::new(Arc::new(task_executor.clone()));
 
-	let (chain, state, _child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
+	let (chain, _state, _child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
 		(remote_blockchain, on_demand) {
 		// Light clients
 		let chain = sc_rpc::chain::new_light(
@@ -791,7 +796,21 @@ fn gen_rpc_module<TBl, TBackend, TCl>(
 		(chain, state, child_state)
 	};
 
-	chain.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?")
+
+	let author = sc_rpc::author::Author::new(
+		client,
+		transaction_pool,
+		subscriptions,
+		keystore,
+		deny_unsafe,
+	);
+
+	let mut modules = Vec::new();
+	// TODO: get rid of this uglyness.
+    modules.push(chain.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?"));
+	modules.push(author.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?"));
+
+	modules
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
