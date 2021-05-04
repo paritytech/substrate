@@ -207,7 +207,7 @@ impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> Index<I> for BoundedVe
 
 	#[inline]
 	fn index(&self, index: I) -> &Self::Output {
-		Index::index(&**self, index)
+		self.0.index(index)
 	}
 }
 
