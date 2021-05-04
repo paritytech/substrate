@@ -91,7 +91,7 @@ where
 			})
 			.transpose()?
 			.flatten() {
-			debug!(target: "wasm_overrides", "using WASM override for block {}", id);
+			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
 			d
 		} else {
 			log::debug!(
