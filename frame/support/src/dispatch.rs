@@ -2314,15 +2314,21 @@ macro_rules! __dispatch_impl_metadata {
 	(
 		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
 		{ $( $other_where_bounds:tt )* }
+		$call_type:ident
 		$($rest:tt)*
 	) => {
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+		// todo: [AJ] another Instance: TypeInfo bound to remove
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable + $crate::scale_info::TypeInfo)? + $crate::scale_info::TypeInfo> $mod_type<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn call_functions() -> $crate::dispatch::Vec<$crate::metadata::FunctionMetadata> {
-				$crate::__call_to_functions!($($rest)*)
+			pub fn call_functions() -> $crate::metadata::PalletCallMetadata {
+				let ty = $crate::scale_info::meta_type::<$call_type<$trait_instance $(, $instance)?>>();
+				$crate::metadata::PalletCallMetadata {
+					ty,
+					calls: $crate::__call_to_functions!($($rest)*),
+				}
 			}
 		}
 	}
@@ -2471,7 +2477,7 @@ macro_rules! __impl_module_constants_metadata {
 #[doc(hidden)]
 macro_rules! __call_to_functions {
 	(
-		$call_type:ident $origin_type:ty
+		$origin_type:ty
 		{
 			$(
 				$(#[doc = $doc_attr:tt])*
