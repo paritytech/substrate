@@ -105,19 +105,19 @@ node.
 This command will start the single-node development chain with persistent state:
 
 ```bash
-cargo run --bin node-template-spartan -- -dev
+cargo run --bin node-template-spartan -- --dev
 ```
 
 Purge the development chain's state:
 
 ```bash
-cargo run --bin node-template-spartan -- purge-chain -dev
+cargo run --bin node-template-spartan -- purge-chain --dev
 ```
 
 Start the development chain with detailed logging:
 
 ```bash
-RUST_BACKTRACE=1 cargo run --bin node-template-spartan -- -ldebug -dev
+RUST_BACKTRACE=1 cargo run --bin node-template-spartan -- -ldebug --dev
 ```
 
 ## Template Structure
