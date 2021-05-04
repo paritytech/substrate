@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use codec::Encode;
+use impl_trait_for_tuples::impl_for_tuples;
 use sp_std::{mem, marker::PhantomData};
 
 /// Items implementing `BoundedEncodedLen` have a statically known maximum encoded size.
@@ -44,37 +45,16 @@ macro_rules! impl_primitives {
 
 impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
-impl BoundedEncodedLen for () {
+// impl_for_tuples for values 19 and higher fails because that's where the WrapperTypeEncode impl stops.
+#[impl_for_tuples(18)]
+impl BoundedEncodedLen for Tuple {
+	for_tuples!( where #( Tuple: BoundedEncodedLen )* );
 	fn max_encoded_len() -> usize {
-		0
+		let mut len: usize = 0;
+		for_tuples!( #( len = len.saturating_add(Tuple::max_encoded_len()); )* );
+		len
 	}
 }
-
-macro_rules! impl_tuples {
-	// end of recursive descent
-	() => {};
-	// recursive producer
-	( $head:ident $(, $rest:ident )* ) => {
-		impl<$head $(, $rest)*> BoundedEncodedLen for ( $head, $($rest),* )
-		where
-			$head: BoundedEncodedLen,
-			$(
-				$rest: BoundedEncodedLen,
-			)*
-		{
-			fn max_encoded_len() -> usize {
-				$head::max_encoded_len()
-				$(
-					.saturating_add($rest::max_encoded_len())
-				)*
-			}
-		}
-
-		impl_tuples!($($rest),*);
-	};
-}
-
-impl_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R);
 
 impl<T: BoundedEncodedLen, const N: usize> BoundedEncodedLen for [T; N] {
 	fn max_encoded_len() -> usize {
