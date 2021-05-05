@@ -524,7 +524,6 @@ macro_rules! __impl_outer_event_json_metadata {
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-	use crate::metadata::*;
 	use serde::Serialize;
 	use codec::{Encode, Decode};
 

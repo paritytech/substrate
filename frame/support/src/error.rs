@@ -20,8 +20,6 @@
 #[doc(hidden)]
 pub use sp_runtime::traits::{LookupError, BadOrigin};
 
-use sp_std::prelude::Vec;
-
 /// Declare an error type for a runtime module.
 ///
 /// `decl_error!` supports only variants that do not hold any data. The dispatchable
