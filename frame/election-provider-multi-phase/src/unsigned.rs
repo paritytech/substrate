@@ -451,13 +451,13 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		let maximum_allowed_voters =
-			if encoded_size_of(&assignments[..low + 1])? <= max_allowed_length {
+			if low < assignments.len() && encoded_size_of(&assignments[..low + 1])? <= max_allowed_length {
 				low + 1
 			} else {
 				low
 			};
 
-		// ensure our postconditions are correct
+		// ensure our post-conditions are correct
 		debug_assert!(
 			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap() <= max_allowed_length
 		);
