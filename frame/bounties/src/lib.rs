@@ -1264,7 +1264,7 @@ decl_module! {
 		///
 		/// Subbounty must be in "PendingPayout" state, for
 		/// processing the call. And instance of subbounty is
-		/// deallocated from DB on successful call completion.
+		/// removed from DB on successful call completion.
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
 		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
