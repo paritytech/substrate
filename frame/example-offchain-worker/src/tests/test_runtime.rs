@@ -227,11 +227,13 @@ parameter_types! {
 		CURRENT_METRICS_CONTRACT_ID.with(|v| *v.borrow())
 	};
 	pub DdcUrl: Vec<u8> = "https://TEST_DDC".as_bytes().to_vec();
+    pub const OcwBlockInterval: u32 = crate::BLOCK_INTERVAL;
 }
 
 impl Trait for Test {
     type ContractId = MetricsContractId;
     type DdcUrl = DdcUrl;
+    type BlockInterval = OcwBlockInterval;
 
     type CT = Self;
     type CST = Self;
