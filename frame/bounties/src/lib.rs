@@ -1098,8 +1098,7 @@ decl_module! {
 						.as_mut()
 						.ok_or(Error::<T>::InvalidIndex)?;
 
-					let slash_curator = |arg_curator: &T::AccountId,
-						curator_deposit: &mut BalanceOf<T>| {
+					let slash_curator = | arg_curator: &T::AccountId, curator_deposit: &mut BalanceOf<T>| {
 							let imbalance = T::Currency::slash_reserved(
 								arg_curator,
 								*curator_deposit,
@@ -1236,9 +1235,7 @@ decl_module! {
 						.ok_or(Error::<T>::InvalidIndex)?;
 
 					// Ensure Subbounty is in active state
-					if let SubBountyStatus::Active { ref subcurator } =
-						subbounty.status
-					{
+					if let SubBountyStatus::Active { ref subcurator } = subbounty.status {
 						ensure!(
 							signer == *subcurator,
 							Error::<T>::RequireSubCurator,
@@ -1278,7 +1275,7 @@ decl_module! {
 		///
 		/// Subbounty must be in "PendingPayout" state, for
 		/// processing the call. And instance of subbounty is
-		/// deallocated from DB on successful call completion.
+		/// removed from DB on successful call completion.
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
 		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
@@ -1359,8 +1356,7 @@ decl_module! {
 						);
 						// Remove the subbounty description
 						BountyDescriptions::remove(subbounty_id);
-						// Remove the subbounty instance
-						// from DB
+						// Remove the subbounty instance from DB
 						*maybe_subbounty = None;
 						Ok(())
 					} else {
@@ -1388,7 +1384,7 @@ decl_module! {
 		/// for this subbounty call to work. For origin
 		/// T::RejectOrigin execution is forced.
 		///
-		/// Instance of subbounty is deallocated from DB
+		/// Instance of subbounty is removed from DB
 		/// on successful call completion.
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
