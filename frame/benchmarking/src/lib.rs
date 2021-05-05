@@ -1328,8 +1328,20 @@ macro_rules! add_benchmark {
 			repeat,
 			verify,
 			extra,
+			list,
 		} = config;
-		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
+
+		if *list {
+			$crate::log::info!("\npallet: {}", stringify!($name));
+			for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
+				$crate::log::info!(
+					"benchmarks: {}",
+						$crate::sp_std::str::from_utf8(benchmark)
+							.map_err(|_| "`extrinsic` is not a valid utf8 string!")?
+				);
+			}
+		}
+		else if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
 					$batches.push($crate::BenchmarkBatch {

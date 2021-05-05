@@ -75,6 +75,32 @@ impl BenchmarkCmd {
 		let (offchain, _) = TestOffchainExt::new();
 		extensions.register(OffchainWorkerExt::new(offchain));
 
+		// Dummy string that can be passed into dispatch_benchmark for --list command
+		let default_string: String = Default::default();
+
+		// Allows for --list command with no args for pallet and extrinsic
+		let pallet = if !self.list {
+			match &self.pallet {
+				Some(i) => i,
+				None => return Err(
+					"Must provide required arguments:  --extrinsic '<extrinsic>'    --pallet '<pallet>'   ".into()
+				),
+			}
+		} else {
+			&default_string
+		};
+
+		let extrinsic = if !self.list {
+			match &self.extrinsic {
+				Some(i) => i,
+				None => return Err(
+					"Must provide required arguments:  --extrinsic '<extrinsic>'    --pallet '<pallet>'   ".into()
+				),
+			}
+		} else {
+			&default_string
+		};
+
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
 			None,
@@ -82,14 +108,15 @@ impl BenchmarkCmd {
 			&executor,
 			"Benchmark_dispatch_benchmark",
 			&(
-				&self.pallet,
-				&self.extrinsic,
+				pallet,
+				extrinsic,
 				self.lowest_range_values.clone(),
 				self.highest_range_values.clone(),
 				self.steps.clone(),
 				self.repeat,
 				!self.no_verify,
 				self.extra,
+				self.list,
 			).encode(),
 			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,

@@ -84,6 +84,8 @@ pub struct BenchmarkConfig {
 	pub verify: bool,
 	/// Enable benchmarking of "extra" extrinsics, i.e. those that are not directly used in a pallet.
 	pub extra: bool,
+	/// Enable --list CLI command
+	pub list: bool,
 }
 
 sp_api::decl_runtime_apis! {
