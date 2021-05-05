@@ -20,7 +20,7 @@ Spartan is a stepping stone towards the larger goal of deploying [Subspace](http
 
 A fresh FRAME-based [Substrate](https://www.substrate.io/) node, modified for Spartan PoC consensus :rocket:
 
-Based on a fork Substrate Node Template.
+Based on a fork of Substrate Node Template.
 
 **Notes:** The code is un-audited and not production ready, use it at your own risk.
 
@@ -39,7 +39,9 @@ If you have not previously installed the `gmp_mpfr_sys` crate, follow these [ins
 
 On Linux, RocksDB requires Clang
 
-`sudo apt-get install llvm clang gcc make m4`
+```bash
+sudo apt-get install llvm clang gcc make m4
+```
 
 #### Setup Spartan-Farmer
 
