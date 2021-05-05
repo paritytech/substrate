@@ -201,11 +201,22 @@ where
 		let _guard = guard();
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
-		trace!(target: "state", "{:04x}: Get {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
+
+		// NOTE: be careful about touching the key names – used outside substrate!
+		trace!(
+			target: "state",
+			method = "Get",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			result = ?result.as_ref().map(HexDisplay::from),
+			result_encoded = %HexDisplay::from(
+				&result
+					.as_ref()
+					.map(|v| EncodeOpaqueValue(v.clone()))
+					.encode()
+			),
 		);
+
 		result
 	}
 
@@ -354,16 +365,26 @@ where
 	}
 
 	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
-		trace!(target: "state", "{:04x}: Put {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			value.as_ref().map(HexDisplay::from)
-		);
 		let _guard = guard();
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to directly set child storage key");
 			return;
 		}
+
+		// NOTE: be careful about touching the key names – used outside substrate!
+		trace!(
+			target: "state",
+			method = "Put",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			value = ?value.as_ref().map(HexDisplay::from),
+			value_encoded = %HexDisplay::from(
+				&value
+					.as_ref()
+					.map(|v| EncodeOpaqueValue(v.clone()))
+					.encode()
+			),
+		);
 
 		self.mark_dirty();
 		self.overlay.set_storage(key, value);
