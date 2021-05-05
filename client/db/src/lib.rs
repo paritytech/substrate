@@ -1372,7 +1372,6 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, is_best);
-			println!("DB Commit {:?} ({}), best = {}", hash, number, is_best);
 
 			let displaced_leaf = {
 				let mut leaves = self.blockchain.leaves.write();
@@ -1993,7 +1992,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		let mut leaves = self.blockchain.leaves.write();
 		if !leaves.contains(hdr.number, *hash) {
-			println!("{:?} HASHES: {:?}", hash, leaves.hashes());
 			return Err(
 				sp_blockchain::Error::Backend(
 					format!("Can't remove non-leaf block {:?}", hash)

@@ -479,6 +479,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			commit.meta.deleted.push(overlay.journal_key);
 			self.parents.remove(&overlay.hash);
 			discard_values(&mut self.values, overlay.inserted);
+			break;
 		}
 		if self.levels.back().map_or(false, |l| l.blocks.is_empty()) {
 			self.levels.pop_back();
