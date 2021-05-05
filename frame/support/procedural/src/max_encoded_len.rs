@@ -106,7 +106,8 @@ fn data_length_expr(data: &Data) -> proc_macro2::TokenStream {
 			//     .saturating_add(1)
 			//
 			// The 1 derives from the discriminant; see
-			// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/derive/src/encode.rs#L211-L216
+			// https://github.com/paritytech/parity-scale-codec/
+			//   blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/derive/src/encode.rs#L211-L216
 			//
 			// Each variant expression's sum is computed the way an equivalent struct's would be.
 
@@ -122,7 +123,8 @@ fn data_length_expr(data: &Data) -> proc_macro2::TokenStream {
 			}
 		}
 		Data::Union(ref data) => {
-			// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/derive/src/encode.rs#L290-L293
+			// https://github.com/paritytech/parity-scale-codec/
+			//   blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/derive/src/encode.rs#L290-L293
 			syn::Error::new(data.union_token.span(), "Union types are not supported")
 				.to_compile_error()
 		}
