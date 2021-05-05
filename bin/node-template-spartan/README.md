@@ -1,8 +1,28 @@
+<div align="center">
+
+  <h1><code>node-template-spartan</code></h1>
+  
+  <strong>A Substrate Node Template which implements Spartan Proof-of-Capacity (PoC) consensus.</strong>
+
+</div>
+
+# Overview
+
+This repo is an implementation of Spartan Proof-of-Capacity (PoC) consensus for the Substrate framework, organized as a Substrate pallet and several dependencies. It is largely based on a fork of `pallet_babe`, with which it shares many similarities. This work is supported by a [Web 3 Foundation grant](https://github.com/w3f/Open-Grants-Program/blob/master/applications/spartan_poc_consensus_module.md) to develop PoC consensus for Substrate. PoC is a generic term for consensus based on disk space, including proofs of space, storage, space-time, and replication.
+
+Spartan is a simple and secure PoC consensus protocol, which replaces 'one-cpu-one-vote' with 'one-disk-one-vote'. This allows for mass participation in consensus by ordinary users with commodity hardware. Since PoC consensus is energy-efficient, widespread adoption is also environmentally sustainable. Spartan retains several key features of Nakamoto Consensus, including: the longest-chain fork-choice rule, dynamic availability (i.e., it is permissionless), and the honest majority assumption. Similar to proof-of-stake protocols, there is no mining delay, so we instead employ a round based notion of time, which is almost identical to the Ouroborous family of protocols and BABE.
+
+To learn more about Spartan, read the [design document](https://github.com/subspace/substrate/blob/poc/frame/spartan/design.md).
+
+Spartan is a stepping stone towards the larger goal of deploying [Subspace](https://www.subspace.network/) as a parachain on the Polkadot Network. Subspace is a proof-of-storage blockchain that resolves the farmer's dilemma, to learn more read our <a href="https://drive.google.com/file/d/1v847u_XeVf0SBz7Y7LEMXi72QfqirstL/view">white paper</a>. 
+
 # Node Template Spartan
 
 A fresh FRAME-based [Substrate](https://www.substrate.io/) node, modified for Spartan PoC consensus :rocket:
 
 Based on a fork Substrate Node Template.
+
+**Notes:** The code is un-audited and not production ready, use it at your own risk.
 
 ## Getting Started
 
