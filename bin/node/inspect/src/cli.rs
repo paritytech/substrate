@@ -24,7 +24,7 @@ use structopt::StructOpt;
 
 /// The `inspect` command used to print decoded chain data.
 #[derive(Debug, StructOpt)]
-pub struct InspectCmd {
+pub struct InspectKeyCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub command: InspectSubCmd,

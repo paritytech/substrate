@@ -31,6 +31,16 @@ pub trait PalletInfo {
 	fn name<P: 'static>() -> Option<&'static str>;
 }
 
+/// Provides information about the pallet setup in the runtime.
+///
+/// Access the information provided by [`PalletInfo`] for a specific pallet.
+pub trait PalletInfoAccess {
+	/// Index of the pallet as configured in the runtime.
+	fn index() -> usize;
+	/// Name of the pallet as configured in the runtime.
+	fn name() -> &'static str;
+}
+
 /// The function and pallet name of the Call.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct CallMetadata {

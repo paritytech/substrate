@@ -18,17 +18,18 @@
 
 //! Basic example of end to end runtime tests.
 
-use test_runner::{Node, ChainInfo, SignatureVerificationOverride};
+use test_runner::{Node, ChainInfo, SignatureVerificationOverride, default_config};
 use grandpa::GrandpaBlockImport;
-use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts};
+use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, TaskExecutor};
 use std::sync::Arc;
-use sp_inherents::InherentDataProviders;
+use sp_inherents::CreateInherentDataProviders;
 use sc_consensus_babe::BabeBlockImport;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_keyring::sr25519::Keyring::Alice;
 use sp_consensus_babe::AuthorityId;
 use sc_consensus_manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
 use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
+use node_cli::chain_spec::development_config;
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -58,6 +59,10 @@ impl ChainInfo for NodeTemplateChainInfo {
 		Self::SelectChain,
 	>;
 	type SignedExtras = node_runtime::SignedExtra;
+	type InherentDataProviders = (
+		sp_timestamp::InherentDataProvider,
+		sp_consensus_babe::inherents::InherentDataProvider,
+	);
 
 	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras {
 		(
@@ -71,6 +76,10 @@ impl ChainInfo for NodeTemplateChainInfo {
 		)
 	}
 
+	fn config(task_executor: TaskExecutor) -> Configuration {
+		default_config(task_executor, Box::new(development_config()))
+	}
+
 	fn create_client_parts(
 		config: &Configuration,
 	) -> Result<
@@ -79,7 +88,11 @@ impl ChainInfo for NodeTemplateChainInfo {
 			Arc<TFullBackend<Self::Block>>,
 			SyncCryptoStorePtr,
 			TaskManager,
-			InherentDataProviders,
+			Box<dyn CreateInherentDataProviders<
+				Self::Block,
+				(),
+				InherentDataProviders = Self::InherentDataProviders
+			>>,
 			Option<
 				Box<
 					dyn ConsensusDataProvider<
@@ -100,7 +113,6 @@ impl ChainInfo for NodeTemplateChainInfo {
 			new_full_parts::<Self::Block, Self::RuntimeApi, Self::Executor>(config, None)?;
 		let client = Arc::new(client);
 
-		let inherent_providers = InherentDataProviders::new();
 		let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
 		let (grandpa_block_import, ..) =
@@ -111,8 +123,9 @@ impl ChainInfo for NodeTemplateChainInfo {
 				None
 			)?;
 
+		let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
 		let (block_import, babe_link) = sc_consensus_babe::block_import(
-			sc_consensus_babe::Config::get_or_compute(&*client)?,
+			slot_duration.clone(),
 			grandpa_block_import,
 			client.clone(),
 		)?;
@@ -120,7 +133,6 @@ impl ChainInfo for NodeTemplateChainInfo {
 		let consensus_data_provider = BabeConsensusDataProvider::new(
 			client.clone(),
 			keystore.sync_keystore(),
-			&inherent_providers,
 			babe_link.epoch_changes().clone(),
 			vec![(AuthorityId::from(Alice.public()), 1000)],
 		)
@@ -131,7 +143,18 @@ impl ChainInfo for NodeTemplateChainInfo {
 			backend,
 			keystore.sync_keystore(),
 			task_manager,
-			inherent_providers,
+			Box::new(move |_, _| {
+				let slot_duration = slot_duration.clone();
+				async move {
+					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+					let slot = sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						slot_duration.slot_duration(),
+					);
+
+					Ok((timestamp, slot))
+				}
+			}),
 			Some(Box::new(consensus_data_provider)),
 			select_chain,
 			block_import,
@@ -151,20 +174,10 @@ mod tests {
 	use super::*;
 	use test_runner::NodeConfig;
 	use log::LevelFilter;
-	use sc_client_api::execution_extensions::ExecutionStrategies;
-	use node_cli::chain_spec::development_config;
 
 	#[test]
 	fn test_runner() {
 		let config = NodeConfig {
-			execution_strategies: ExecutionStrategies {
-				syncing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				importing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				block_construction: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				offchain_worker: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				other: sc_client_api::ExecutionStrategy::AlwaysWasm,
-			},
-			chain_spec: Box::new(development_config()),
 			log_targets: vec![
 				("yamux", LevelFilter::Off),
 				("multistream_select", LevelFilter::Off),

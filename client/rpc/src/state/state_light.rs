@@ -474,6 +474,15 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
+
+	fn trace_block(
+		&self,
+		_block: Block::Hash,
+		_targets: Option<String>,
+		_storage_keys: Option<String>,
+	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
 }
 
 impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F, Client>
@@ -722,13 +731,10 @@ fn maybe_share_remote_request<Block: BlockT, Requests, V, IssueRequest, IssueReq
 fn display_error<F, T>(future: F) -> impl std::future::Future<Output=Result<T, ()>> where
 	F: std::future::Future<Output=Result<T, Error>>
 {
-	future.then(|result| ready(match result {
-		Ok(result) => Ok(result),
-		Err(err) => {
+	future.then(|result| ready(result.or_else(|err| {
 			warn!("Remote request for subscription data has failed with: {:?}", err);
 			Err(())
-		},
-	}))
+		})))
 }
 
 /// Convert successful future result into Ok(Some(result)) and error into Ok(None),

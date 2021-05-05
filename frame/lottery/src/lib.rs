@@ -56,7 +56,7 @@ pub mod weights;
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	DispatchError, ModuleId,
+	DispatchError,
 	traits::{AccountIdConversion, Saturating, Zero},
 };
 use frame_support::{
@@ -66,7 +66,7 @@ use frame_support::{
 		Currency, ReservableCurrency, Get, EnsureOrigin, ExistenceRequirement::KeepAlive, Randomness,
 	},
 };
-use frame_support::weights::Weight;
+use frame_support::{weights::Weight, PalletId};
 use frame_system::ensure_signed;
 use codec::{Encode, Decode};
 pub use weights::WeightInfo;
@@ -76,7 +76,7 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 /// The module's config trait.
 pub trait Config: frame_system::Config {
 	/// The Lottery's module id
-	type ModuleId: Get<ModuleId>;
+	type PalletId: Get<PalletId>;
 
 	/// A dispatchable call.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + From<frame_system::Call<Self>>;
@@ -211,7 +211,7 @@ decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system = frame_system {
 		type Error = Error<T>;
 
-		const ModuleId: ModuleId = T::ModuleId::get();
+		const PalletId: PalletId = T::PalletId::get();
 		const MaxCalls: u32 = T::MaxCalls::get() as u32;
 
 		fn deposit_event() = default;
@@ -361,7 +361,7 @@ impl<T: Config> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::ModuleId::get().into_account()
+		T::PalletId::get().into_account()
 	}
 
 	/// Return the pot account and amount of money in the pot.
@@ -449,7 +449,7 @@ impl<T: Config> Module<T> {
 	// TODO: deal with randomness freshness
 	// https://github.com/paritytech/substrate/issues/8311
 	fn generate_random_number(seed: u32) -> u32 {
-		let (random_seed, _) = T::Randomness::random(&(T::ModuleId::get(), seed).encode());
+		let (random_seed, _) = T::Randomness::random(&(T::PalletId::get(), seed).encode());
 		let random_number = <u32>::decode(&mut random_seed.as_ref())
 			.expect("secure hashes should always be bigger than u32; qed");
 		random_number
