@@ -98,3 +98,52 @@ fn tuple_generic_max_length() {
 	assert_eq!(TupleGeneric::<u8>::max_encoded_len(), u8::max_encoded_len() * 2);
 	assert_eq!(TupleGeneric::<u32>::max_encoded_len(), u32::max_encoded_len() * 2);
 }
+
+#[derive(Encode, MaxEncodedLen)]
+#[allow(unused)]
+enum UnitEnum {
+	A,
+	B,
+}
+
+#[test]
+fn unit_enum_max_length() {
+	assert_eq!(UnitEnum::max_encoded_len(), 1);
+}
+
+#[derive(Encode, MaxEncodedLen)]
+#[allow(unused)]
+enum TupleEnum {
+	A(u32),
+	B,
+}
+
+#[test]
+fn tuple_enum_max_length() {
+	assert_eq!(TupleEnum::max_encoded_len(), 1 + u32::max_encoded_len());
+}
+
+#[derive(Encode, MaxEncodedLen)]
+#[allow(unused)]
+enum StructEnum {
+	A { sixty_four: u64, one_twenty_eight: u128 },
+	B,
+}
+
+#[test]
+fn struct_enum_max_length() {
+	assert_eq!(StructEnum::max_encoded_len(), 1 + u64::max_encoded_len() + u128::max_encoded_len());
+}
+
+// ensure that enums take the max of variant length, not the sum
+#[derive(Encode, MaxEncodedLen)]
+#[allow(unused)]
+enum EnumMaxNotSum {
+	A(u32),
+	B(u32),
+}
+
+#[test]
+fn enum_max_not_sum_max_length() {
+	assert_eq!(EnumMaxNotSum::max_encoded_len(), 1 + u32::max_encoded_len());
+}

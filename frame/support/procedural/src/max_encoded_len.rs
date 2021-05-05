@@ -37,13 +37,13 @@ pub fn derive_max_encoded_len(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let generics = add_trait_bounds(input.generics, mel_trait.clone());
 	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-	let sum_expr = sum_expr(&input.data);
+	let data_expr = data_length_expr(&input.data);
 
 	quote::quote!(
 		const _: () = {
 			impl #impl_generics #mel_trait for #name #ty_generics #where_clause {
 				fn max_encoded_len() -> usize {
-					#sum_expr
+					#data_expr
 				}
 			}
 		};
@@ -66,41 +66,65 @@ fn add_trait_bounds(mut generics: Generics, mel_trait: TraitBound) -> Generics {
 	generics
 }
 
+/// generate an expression to sum up the max encoded length from several fields
+fn fields_length_expr(fields: &Fields) -> proc_macro2::TokenStream {
+	let type_iter: Box<dyn Iterator<Item = &Type>> = match fields {
+		Fields::Named(ref fields) => Box::new(fields.named.iter().map(|field| &field.ty)),
+		Fields::Unnamed(ref fields) => Box::new(fields.unnamed.iter().map(|field| &field.ty)),
+		Fields::Unit => Box::new(std::iter::empty()),
+	};
+	// expands to an expression like
+	//
+	//   0
+	//     .saturating_add(<type of first field>::max_encoded_len())
+	//     .saturating_add(<type of second field>::max_encoded_len())
+	//
+	// We match the span of each field to the span of the corresponding
+	// `max_encoded_len` call. This way, if one field's type doesn't implement
+	// `MaxEncodedLen`, the compiler's error message will underline which field
+	// caused the issue.
+	let expansion = type_iter.map(|ty| {
+		quote_spanned! {
+			ty.span() => .saturating_add(<#ty>::max_encoded_len())
+		}
+	});
+	quote! {
+		0_usize #( #expansion )*
+	}
+}
+
 // generate an expression to sum up the max encoded length of each field
-fn sum_expr(data: &Data) -> proc_macro2::TokenStream {
+fn data_length_expr(data: &Data) -> proc_macro2::TokenStream {
 	match *data {
-		Data::Struct(ref data) => {
-			let type_iter: Box<dyn Iterator<Item = &Type>> = match data.fields {
-				Fields::Named(ref fields) => Box::new(fields.named.iter().map(|field| &field.ty)),
-				Fields::Unnamed(ref fields) => {
-					Box::new(fields.unnamed.iter().map(|field| &field.ty))
-				}
-				Fields::Unit => Box::new(std::iter::empty()),
-			};
-			// expands to an expression like
+		Data::Struct(ref data) => fields_length_expr(&data.fields),
+		Data::Enum(ref data) => {
+			// We need an expression expanded for each variant like
 			//
 			//   0
-			//     .saturating_add(<type of first field>::max_encoded_len())
-			//     .saturating_add(<type of second field>::max_encoded_len())
+			//     .max(<variant expression>)
+			//     .max(<variant expression>)
+			//     .saturating_add(1)
 			//
-			// We match the span of each field to the span of the corresponding
-			// `max_encoded_len` call. This way, if one field's type doesn't implement
-			// `MaxEncodedLen`, the compiler's error message will underline which field
-			// caused the issue.
-			let expansion = type_iter.map(|ty| {
-				quote_spanned! {
-					ty.span() => .saturating_add(<#ty>::max_encoded_len())
+			// The 1 derives from the discriminant; see
+			// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/derive/src/encode.rs#L211-L216
+			//
+			// Each variant expression's sum is computed the way an equivalent struct's would be.
+
+			let expansion = data.variants.iter().map(|variant| {
+				let variant_expression = fields_length_expr(&variant.fields);
+				quote! {
+					.max(#variant_expression)
 				}
 			});
+
 			quote! {
-				0_usize #( #expansion )*
+				0_usize #( #expansion )* .saturating_add(1)
 			}
 		}
-		Data::Enum(ref _data) => {
-			unimplemented!()
-		}
-		Data::Union(ref _data) => {
-			unimplemented!()
+		Data::Union(ref data) => {
+			// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/derive/src/encode.rs#L290-L293
+			syn::Error::new(data.union_token.span(), "Union types are not supported")
+				.to_compile_error()
 		}
 	}
 }
