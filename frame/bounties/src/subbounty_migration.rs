@@ -32,11 +32,8 @@ pub type BountyIndex = u32;
 
 /// Trait to implement to give information about types used for migration
 pub trait SubBountyMigration {
-
 	type AccountId: 'static + FullCodec;
-
 	type BlockNumber: 'static + FullCodec;
-
 	type Balance: 'static + FullCodec + Copy;
 }
 
