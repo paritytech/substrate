@@ -237,10 +237,7 @@ pub enum SubBountyStatus<AccountId, BlockNumber> {
 	/// The Subbounty is added and waiting for curator assignment.
 	Added,
 	/// A Subcurator has been proposed by the `curator`. Waiting for acceptance from the subcurator.
-	SubCuratorProposed {
-		/// The assigned subcurator of this bounty.
-		subcurator: AccountId,
-	},
+	SubCuratorProposed(AccountId),
 	/// The subbounty is active and waiting to be awarded.
 	Active {
 		/// The subcurator of this subbounty.
@@ -280,10 +277,10 @@ decl_storage! {
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
 
 		/// SubBounties that have been made.
-		pub SubBounties get(fn subbounties):
-			double_map hasher(twox_64_concat) BountyIndex,
-			hasher(twox_64_concat) BountyIndex =>
-			Option<SubBounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
+		pub SubBounties get(fn subbounties): double_map 
+			hasher(twox_64_concat) BountyIndex,
+			hasher(twox_64_concat) BountyIndex
+			=> Option<SubBounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 	}
 }
 
@@ -588,8 +585,7 @@ decl_module! {
 
 		/// Award bounty to a beneficiary account. The beneficiary will be able to claim the funds after a delay.
 		///
-		/// Call may gets failed if Subbounties are active, Ensure to close
-		/// subbounty explicitly.
+		/// Call may fail if Subbounties are active, Ensure to close subbounty explicitly.
 		///
 		/// The dispatch origin for this call must be the curator of this bounty.
 		///
@@ -906,7 +902,8 @@ decl_module! {
 		/// - `subcurator`: Address of subcurator.
 		/// - `fee`: payment fee to subcurator for execution.
 		#[weight = <T as Config>::WeightInfo::propose_subcurator()]
-		fn propose_subcurator(origin, #[compact] bounty_id: BountyIndex,
+		fn propose_subcurator(origin, #[compact] 
+			bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
 			subcurator: <T::Lookup as StaticLookup>::Source,
 			#[compact] fee: BalanceOf<T>,
@@ -1017,8 +1014,7 @@ decl_module! {
 					.ok_or(Error::<T>::InvalidIndex)?;
 
 				// Ensure subbounty is in expected state
-				if let SubBountyStatus::SubCuratorProposed { ref subcurator } = subbounty.status
-				{
+				if let SubBountyStatus::SubCuratorProposed { ref subcurator } = subbounty.status {
 					ensure!(signer == *subcurator, Error::<T>::RequireSubCurator);
 
 					// Reserve subcurator deposit
