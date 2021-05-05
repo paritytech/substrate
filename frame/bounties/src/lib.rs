@@ -1087,8 +1087,7 @@ decl_module! {
 						.as_mut()
 						.ok_or(Error::<T>::InvalidIndex)?;
 
-					let slash_curator = |arg_curator: &T::AccountId,
-						curator_deposit: &mut BalanceOf<T>| {
+					let slash_curator = | arg_curator: &T::AccountId, curator_deposit: &mut BalanceOf<T>| {
 							let imbalance = T::Currency::slash_reserved(
 								arg_curator,
 								*curator_deposit,
