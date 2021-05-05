@@ -80,3 +80,6 @@ pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 
 mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+
+mod max_encoded_len;
+pub use max_encoded_len::MaxEncodedLen;
