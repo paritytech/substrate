@@ -619,6 +619,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
+
+	/// Returns the list of reserved peers.
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.network_service.behaviour().user_protocol().reserved_peers()
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {

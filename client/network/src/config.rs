@@ -530,6 +530,9 @@ impl Default for SetConfig {
 }
 
 /// Extension to [`SetConfig`] for sets that aren't the default set.
+///
+/// > **Note**: As new fields might be added in the future, please consider using the `new` method
+/// >			and modifiers instead of creating this struct manually.
 #[derive(Clone, Debug)]
 pub struct NonDefaultSetConfig {
 	/// Name of the notifications protocols of this set. A substream on this set will be
@@ -542,6 +545,34 @@ pub struct NonDefaultSetConfig {
 	pub max_notification_size: u64,
 	/// Base configuration.
 	pub set_config: SetConfig,
+}
+
+impl NonDefaultSetConfig {
+	/// Creates a new [`NonDefaultSetConfig`]. Zero slots and accepts only reserved nodes.
+	pub fn new(notifications_protocol: Cow<'static, str>, max_notification_size: u64) -> Self {
+		NonDefaultSetConfig {
+			notifications_protocol,
+			max_notification_size,
+			set_config: SetConfig {
+				in_peers: 0,
+				out_peers: 0,
+				reserved_nodes: Vec::new(),
+				non_reserved_mode: NonReservedPeerMode::Deny,
+			},
+		}
+	}
+
+	/// Modifies the configuration to allow non-reserved nodes.
+	pub fn allow_non_reserved(&mut self, in_peers: u32, out_peers: u32) {
+		self.set_config.in_peers = in_peers;
+		self.set_config.out_peers = out_peers;
+		self.set_config.non_reserved_mode = NonReservedPeerMode::Accept;
+	}
+
+	/// Add a node to the list of reserved nodes.
+	pub fn add_reserved(&mut self, peer: MultiaddrWithPeerId) {
+		self.set_config.reserved_nodes.push(peer);
+	}
 }
 
 /// Configuration for the transport layer.
