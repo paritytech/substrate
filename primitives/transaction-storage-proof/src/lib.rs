@@ -24,6 +24,7 @@ use sp_std::{result::Result, prelude::*};
 
 use codec::{Encode, Decode};
 use sp_inherents::{Error, InherentIdentifier, InherentData, IsFatalError};
+use sp_runtime::{traits::{Block as BlockT, NumberFor}};
 
 /// The identifier for the proof inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"tx_proof";
@@ -68,36 +69,40 @@ impl TransactionStorageProofInherentData for InherentData {
 
 /// Provider for inherent data.
 #[cfg(feature = "std")]
-pub struct InherentDataProvider<F> {
-	inner: F,
+pub struct InherentDataProvider {
+	proof: Option<TransactionStorageProof>,
 }
 
 #[cfg(feature = "std")]
-impl<F> InherentDataProvider<F> {
-	pub fn new(proof_oracle: F) -> Self {
-		InherentDataProvider { inner: proof_oracle }
+impl InherentDataProvider {
+	pub fn new(proof: Option<TransactionStorageProof>) -> Self {
+		InherentDataProvider { proof }
 	}
 }
 
 #[cfg(feature = "std")]
-impl<F> sp_inherents::ProvideInherentData for InherentDataProvider<F>
-where F: Fn() -> Result<Option<TransactionStorageProof>, Error>
-{
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
+#[async_trait::async_trait]
+impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
-		let proof = (self.inner)()?;
-		if let Some(proof) = proof {
-			inherent_data.put_data(INHERENT_IDENTIFIER, &proof)
+		if let Some(proof) = &self.proof {
+			inherent_data.put_data(INHERENT_IDENTIFIER, proof)
 		} else {
 			Ok(())
 		}
 	}
 
-	fn error_to_string(&self, _error: &[u8]) -> Option<String> {
-		Some(format!("no further information"))
+	async fn try_handle_error(
+		&self,
+		identifier: &InherentIdentifier,
+		error: &[u8],
+	) -> Option<Result<(), Error>> {
+		if *identifier != INHERENT_IDENTIFIER {
+			return None
+		}
+
+		let error = InherentError::decode(&mut &error[..]).ok()?;
+
+		Some(Err(Error::Application(Box::from(format!("{:?}", error)))))
 	}
 }
 
@@ -114,14 +119,18 @@ pub fn encode_index(input: u32) -> Vec<u8> {
 	codec::Encode::encode(&codec::Compact(input))
 }
 
+/// An interface to request indexed data from the client.
+pub trait IndexedBody<B: BlockT> {
+	fn block_indexed_body(
+		&self,
+		number: NumberFor<B>,
+	) -> Result<Option<Vec<Vec<u8>>>, sp_inherents::Error>;
+}
+
 #[cfg(feature = "std")]
 pub mod registration {
-	use sp_consensus::SelectChain;
-	use sp_inherents::{InherentDataProviders};
 	use log::warn;
-	use sc_client_api::{HeaderBackend, BlockBackend};
-	use sp_runtime::{traits::{Block as BlockT, Header, Saturating, Zero}, generic::BlockId};
-	use std::sync::Arc;
+	use sp_runtime::{traits::{Block as BlockT, Saturating, Zero, NumberFor}};
 	use sp_trie::TrieMut;
 	use super::*;
 
@@ -129,51 +138,35 @@ pub mod registration {
 	type TrieLayout = sp_trie::Layout::<Hasher>;
 
 	/// Register uncles inherent data provider, if not registered already.
-	pub fn register_storage_proof_inherent_data_provider<B, C, SC>(
-		client: Arc<C>,
-		select_chain: SC,
-		inherent_data_providers: &InherentDataProviders,
-	) -> Result<(), sp_consensus::Error> where
-	B: BlockT,
-	C: BlockBackend<B> + HeaderBackend<B> + Send + Sync + 'static,
-	SC: SelectChain<B> + 'static,
+	pub fn new_data_provider<B, C>(
+		client: &C,
+		head_number: NumberFor<B>,
+		parent: &B::Hash,
+	) -> Result<InherentDataProvider, sp_inherents::Error>
+	where
+		B: BlockT,
+		C: IndexedBody<B>,
 	{
-		if !inherent_data_providers.has_provider(&INHERENT_IDENTIFIER) {
-			inherent_data_providers
-				.register_provider(InherentDataProvider::new(move || {
-					{
-						let chain_head = match select_chain.best_chain() {
-							Ok(x) => x,
-							Err(e) => {
-								warn!(target: "storage-proof", "Unable to get chain head: {:?}", e);
-								return Ok(None);
-							}
-						};
-
-						let number = chain_head.number().saturating_sub(DEFAULT_STORAGE_PERIOD.into());
-						if number.is_zero() {
-							// Too early to collect proofs.
-							return Ok(None);
-						}
-
-						match client.block_indexed_body(&BlockId::number(number)) {
-							Ok(Some(transactions)) => {
-								Ok(Some(build_proof(chain_head.parent_hash().as_ref(), transactions)?))
-							},
-							Ok(None) => {
-								// Nothing was indexed in that block.
-								Ok(None)
-							}
-							Err(e) => {
-								warn!(target: "storage-proof", "Unable to get transactions: {:?}", e);
-								Ok(None)
-							}
-						}
-					}
-				}))
-			.map_err(|err| sp_consensus::Error::InherentData(err.into()))?;
+		let number = head_number.saturating_sub(DEFAULT_STORAGE_PERIOD.into());
+		if number.is_zero() {
+			// Too early to collect proofs.
+			return Ok(InherentDataProvider::new(None));
 		}
-		Ok(())
+
+		let proof = match client.block_indexed_body(number) {
+			Ok(Some(transactions)) => {
+				Some(build_proof(parent.as_ref(), transactions)?)
+			},
+			Ok(None) => {
+				// Nothing was indexed in that block.
+				None
+			}
+			Err(e) => {
+				warn!(target: "storage-proof", "Unable to get transactions: {:?}", e);
+				None
+			}
+		};
+		Ok(InherentDataProvider::new(proof))
 	}
 
 	/// Build a proof for a given source of randomness and indexed transactions.
@@ -202,7 +195,7 @@ pub mod registration {
 				for (index, chunk) in chunks.enumerate() {
 					let index = encode_index(index as u32);
 					trie.insert(&index, &chunk)
-						.map_err(|e| sp_inherents::Error::from(format!("Trie error: {:?}", e)))?;
+						.map_err(|e| sp_inherents::Error::Application(Box::new(e)))?;
 					if chunk_index == target_chunk_index {
 						target_chunk = Some(chunk);
 						target_chunk_key = index;
@@ -217,7 +210,7 @@ pub mod registration {
 					&db,
 					transaction_root.clone(),
 					&[target_chunk_key.clone()]
-				).map_err(|e| sp_inherents::Error::from(format!("Trie error: {:?}", e)))?;
+				).map_err(|e| sp_inherents::Error::Application(Box::new(e)))?;
 			}
 		};
 

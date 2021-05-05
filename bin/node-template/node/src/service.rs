@@ -227,7 +227,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				select_chain,
 				block_import,
 				proposer_factory,
-				create_inherent_data_providers: move |_, ()| async move {
+				create_inherent_data_providers: move |_, _| async move {
 					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 					let slot =

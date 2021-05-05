@@ -4203,6 +4203,7 @@ dependencies = [
  "sp-runtime",
  "sp-timestamp",
  "sp-transaction-pool",
+ "sp-transaction-storage-proof",
  "sp-trie",
  "structopt",
  "substrate-browser-utils",
@@ -7974,6 +7975,7 @@ dependencies = [
  "sp-state-machine",
  "sp-tracing",
  "sp-transaction-pool",
+ "sp-transaction-storage-proof",
  "sp-trie",
  "sp-utils",
  "sp-version",
@@ -9339,10 +9341,9 @@ dependencies = [
 name = "sp-transaction-storage-proof"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
  "log",
  "parity-scale-codec",
- "sc-client-api",
- "sp-consensus",
  "sp-core",
  "sp-inherents",
  "sp-runtime",

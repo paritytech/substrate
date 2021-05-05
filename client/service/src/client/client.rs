@@ -2057,3 +2057,18 @@ impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B,
 		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
 	}
 }
+
+impl<BE, E, B, RA> sp_transaction_storage_proof::IndexedBody<B> for Client<BE, E, B, RA>
+where
+	BE: backend::Backend<B>,
+	E: CallExecutor<B>,
+	B: BlockT,
+{
+	fn block_indexed_body(
+		&self,
+		number: NumberFor<B>,
+	) ->Result<Option<Vec<Vec<u8>>>, sp_inherents::Error> {
+		self.backend.blockchain().block_indexed_body(BlockId::number(number))
+			.map_err(|e| sp_inherents::Error::Application(Box::new(e)))
+	}
+}
