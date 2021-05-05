@@ -246,6 +246,13 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
+	fn remove_leaf_block(
+		&self,
+		_hash: &Block::Hash,
+	) -> ClientResult<()> {
+		Err(ClientError::NotAvailableOnLightClient)
+	}
+
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
