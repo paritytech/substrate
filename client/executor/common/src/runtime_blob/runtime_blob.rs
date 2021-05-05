@@ -101,7 +101,7 @@ impl RuntimeBlob {
 			.expect("serializing into a vec should succeed; qed")
 	}
 
-	/// Destruct this structure into the underlying parity-wasm Module.
+	/// Destructure this structure into the underlying parity-wasm Module.
 	pub fn into_inner(self) -> RawModule {
 		self.raw_module
 	}

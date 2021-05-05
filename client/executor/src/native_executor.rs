@@ -463,7 +463,7 @@ impl sp_core::traits::ReadRuntimeVersion for ReadRuntimeVersion {
 	}
 }
 
-/// Pre-registers the built-in extensions to the currently effective extenalities.
+/// Pre-registers the built-in extensions to the currently effective externalities.
 ///
 /// Meant to be called each time before calling into the runtime.
 fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {

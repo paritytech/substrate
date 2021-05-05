@@ -385,7 +385,7 @@ fn decode_runtime_apis(mut apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError
 	Ok(result)
 }
 
-/// Take the runtime blob and scans it for the custom wasm sections containing the version information
+/// Take the runtime blob and scan it for the custom wasm sections containing the version information
 /// and construct the `RuntimeVersion` from them.
 ///
 /// If there are no such sections, it returns `None`. If there is an error during decoding those
