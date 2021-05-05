@@ -380,14 +380,8 @@ fn event_util_functions_should_work() {
 		System::set_block_number(1);
 		System::deposit_event(SysEvent::CodeUpdated);
 
-		assert!(System::has_event(SysEvent::CodeUpdated.into()));
 		System::assert_has_event(SysEvent::CodeUpdated.into());
-
-		assert_eq!(System::last_event(), SysEvent::CodeUpdated.into());
 		System::assert_last_event(SysEvent::CodeUpdated.into());
-
-		assert!(!System::has_event(SysEvent::NewAccount(1).into()));
-		assert_ne!(System::last_event(), SysEvent::NewAccount(1).into());
 	});
 }
 
