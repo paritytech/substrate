@@ -1449,6 +1449,30 @@ impl<T: Config> Pallet<T> {
 		<EventTopics<T>>::remove_all();
 	}
 
+	/// Returns `true` if the given `event` exists.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	pub fn has_event(event: T::Event) -> bool {
+		Self::events().iter().any(|record| record.event == event)
+	}
+
+	/// Assert the given `event` exists.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	pub fn assert_has_event(event: T::Event) {
+		assert!(Self::has_event(event))
+	}
+
+	/// Returns the last event.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	pub fn last_event() -> T::Event {
+		Self::events().last().expect("events expected").event.clone()
+	}
+
+	/// Assert the last event equal to the given `event`.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	pub fn assert_last_event(event: T::Event) {
+		assert_eq!(Self::last_event(), event);
+	}
+
 	/// Return the chain's current runtime version.
 	pub fn runtime_version() -> RuntimeVersion { T::Version::get() }
 

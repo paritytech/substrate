@@ -54,10 +54,6 @@ macro_rules! decl_tests {
 			evt
 		}
 
-		fn last_event() -> Event {
-			system::Pallet::<Test>::events().pop().expect("Event expected").event
-		}
-
 		#[test]
 		fn basic_locking_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
@@ -467,9 +463,8 @@ macro_rules! decl_tests {
 				let _ = Balances::deposit_creating(&2, 1);
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
-				assert_eq!(
-					last_event(),
-					Event::pallet_balances(crate::Event::ReserveRepatriated(1, 2, 41, Status::Free)),
+				System::assert_last_event(
+					Event::pallet_balances(crate::Event::ReserveRepatriated(1, 2, 41, Status::Free))
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -688,27 +683,18 @@ macro_rules! decl_tests {
 					System::set_block_number(2);
 					assert_ok!(Balances::reserve(&1, 10));
 
-					assert_eq!(
-						last_event(),
-						Event::pallet_balances(crate::Event::Reserved(1, 10)),
-					);
+					System::assert_last_event(Event::pallet_balances(crate::Event::Reserved(1, 10)));
 
 					System::set_block_number(3);
 					assert!(Balances::unreserve(&1, 5).is_zero());
 
-					assert_eq!(
-						last_event(),
-						Event::pallet_balances(crate::Event::Unreserved(1, 5)),
-					);
+					System::assert_last_event(Event::pallet_balances(crate::Event::Unreserved(1, 5)));
 
 					System::set_block_number(4);
 					assert_eq!(Balances::unreserve(&1, 6), 1);
 
 					// should only unreserve 5
-					assert_eq!(
-						last_event(),
-						Event::pallet_balances(crate::Event::Unreserved(1, 5)),
-					);
+					System::assert_last_event(Event::pallet_balances(crate::Event::Unreserved(1, 5)));
 				});
 		}
 
