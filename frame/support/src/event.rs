@@ -789,11 +789,6 @@ mod tests {
 	}
 
 	#[test]
-	fn outer_event_metadata() {
-		assert_eq!(expected_metadata(), TestRuntime::outer_event_metadata());
-	}
-
-	#[test]
 	fn test_codec() {
 		let runtime_1_event_module_2 = TestEvent::event_module2(
 			event_module2::Event::<TestRuntime>::TestEvent(3)
