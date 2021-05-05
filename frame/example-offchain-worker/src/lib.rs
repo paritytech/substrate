@@ -429,8 +429,8 @@ impl<T: Trait> Module<T> {
 			let metrics_url_with_partition = format!("{}{}{}", metrics_url_with_key, METRICS_PARAM_PARTITIONID, partition_id_str);
 			// debug::info!("metrics_url_with_partition: {}", metrics_url_with_partition);
 
-			let last_time_stamp: u64 = 1619690465923;
-			let metrics_url_with_last_time = format!("{}{}{}", metrics_url_with_partition, METRICS_PARAM_FROM, last_time_stamp);
+			let last_time_stamp = sp_io::offchain::timestamp().sub(Duration::from_millis(24*3_600_000));
+			let metrics_url_with_last_time = format!("{}{}{}", metrics_url_with_partition, METRICS_PARAM_FROM, last_time_stamp.unix_millis());
 			// debug::info!("metrics_url_with_last_time: {}", metrics_url_with_last_time);
 
 			let to_time = sp_io::offchain::timestamp().sub(Duration::from_millis(120_000));
