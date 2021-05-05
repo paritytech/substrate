@@ -851,6 +851,14 @@ decl_module! {
 						// Read parent bounty account info
 						let bounty_account = Self::bounty_account_id(bounty_id);
 
+						// Ensure parent bounty has enough balance after
+						// adding subbounty
+						let balance = T::Currency::free_balance(&bounty_account);
+						ensure!(
+							balance.saturating_sub(value) >= T::Currency::minimum_balance(),
+							Error::<T>::InsufficientBountyBalance,
+						);
+
 						// Create subbounty ID.
 						let subbounty_id = Self::bounty_count();
 

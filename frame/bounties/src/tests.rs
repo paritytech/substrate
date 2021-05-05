@@ -1001,12 +1001,10 @@ fn subbounty_add_subbounty_works() {
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 50);
 		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 0);
 
-		// Add subbounty value is equal or greater than parent bounty value,
-		// & check for error InsufficientBountyBalance.
-		// assert_noop!(
-		// 	Bounties::add_subbounty(Origin::signed(4), 0, 50, b"12345-p1".to_vec()),
-		// 	Error::<Test>::InsufficientBountyBalance,
-		// );
+		assert_noop!(
+			Bounties::add_subbounty(Origin::signed(4), 0, 50, b"12345-p1".to_vec()),
+			Error::<Test>::InsufficientBountyBalance,
+		);
 
 		// Add subbounty with valid value, which can be funded by parent bounty.
 		assert_ok!(
