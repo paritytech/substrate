@@ -1373,7 +1373,7 @@ decl_module! {
 		/// for this subbounty call to work. For origin
 		/// T::RejectOrigin execution is forced.
 		///
-		/// Instance of subbounty is deallocated from DB
+		/// Instance of subbounty is removed from DB
 		/// on successful call completion.
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
