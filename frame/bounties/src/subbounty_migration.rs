@@ -103,18 +103,7 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	active_subbounty_count: BountyIndex,
 }
 
-struct StorageMigrationBounties;
-impl frame_support::traits::StorageInstance for StorageMigrationBounties {
-	fn pallet_prefix() -> &'static str { "Treasury" }
-	const STORAGE_PREFIX: &'static str = "Bounties";
-}
-#[allow(type_alias_bounds)]
-type Bounties<T: SubBountyMigration> = StorageMap<
-	StorageMigrationBounties,
-	Twox64Concat,
-	BountyIndex,
-	Bounty<T::AccountId, T::Balance, T::BlockNumber>
->;
+frame_support::generate_storage_alias!(Treasury, Bounties => Map<(Twox64Concat, BountyIndex), Bounty<T::AccountId, T::Balance, T::BlockNumber>>);
 
 /// Apply all of the migrations for SubbountyExtn.
 ///
