@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 mod sandbox;
 
+use std::sync::Arc;
 use codec::{Encode, Decode};
 use hex_literal::hex;
 use sp_core::{
@@ -29,7 +30,10 @@ use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_wasm_interface::HostFunctions as _;
 use sp_runtime::traits::BlakeTwo256;
-use sc_executor_common::runtime_blob::RuntimeBlob;
+use sc_executor_common::{
+	wasm_runtime::WasmModule,
+	runtime_blob::RuntimeBlob,
+};
 use tracing_subscriber::layer::SubscriberExt;
 
 use crate::WasmExecutionMethod;
@@ -554,16 +558,30 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	assert!(err.contains("Allocator ran out of space"));
 }
 
-test_wasm_execution!(returns_mutable_static);
-fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
-	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
+fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: u64) -> Arc<dyn WasmModule> {
+	let raw =
+		sp_maybe_compressed_blob::decompress(
+			&wasm_binary_unwrap()[..],
+			sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
+		)
+		.expect("failed to uncompress the test runtime");
+	let blob = RuntimeBlob::new(&raw)
+		.expect("failed to create a runtime blob out of test runtime");
+
+	crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
-		1024,
-		RuntimeBlob::new(&wasm_binary_unwrap()[..]).unwrap(),
+		pages,
+		blob,
 		HostFunctions::host_functions(),
 		true,
 		None,
-	).expect("Creates runtime");
+	)
+	.expect("failed to instantiate wasm runtime")
+}
+
+test_wasm_execution!(returns_mutable_static);
+fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
+	let runtime = mk_test_runtime(wasm_method, 1024);
 
 	let instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
@@ -590,14 +608,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	// to our allocator algorithm there are inefficiencies.
 	const REQUIRED_MEMORY_PAGES: u64 = 32;
 
-	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
-		wasm_method,
-		REQUIRED_MEMORY_PAGES,
-		RuntimeBlob::new(&wasm_binary_unwrap()[..]).unwrap(),
-		HostFunctions::host_functions(),
-		true,
-		None,
-	).expect("Creates runtime");
+	let runtime = mk_test_runtime(wasm_method, REQUIRED_MEMORY_PAGES);
 	let instance = runtime.new_instance().unwrap();
 
 	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
@@ -611,14 +622,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
-	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
-		wasm_method,
-		1024,
-		RuntimeBlob::new(&wasm_binary_unwrap()[..]).unwrap(),
-		HostFunctions::host_functions(),
-		true,
-		None,
-	).expect("Creates runtime");
+	let runtime = mk_test_runtime(wasm_method, 1024);
 	let instance = runtime.new_instance().unwrap();
 
 	let heap_base = instance.get_global_const("__heap_base")
@@ -672,9 +676,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(wasm_tracing_should_work);
 fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
-
-	use std::sync::{Arc, Mutex};
-
+	use std::sync::Mutex;
 	use sc_tracing::{SpanDatum, TraceEvent};
 
 	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
