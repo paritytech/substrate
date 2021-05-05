@@ -424,7 +424,7 @@ cfg_if! {
 	}
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, scale_info::TypeInfo)]
 pub struct Runtime;
 
 impl GetNodeBlockType for Runtime {
@@ -488,7 +488,7 @@ parameter_types! {
 	};
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
-	pub RuntimeBlockWeights: BlockWeights =
+k	pub RuntimeBlockWeights: BlockWeights =
 		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
 }
 
