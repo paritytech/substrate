@@ -106,6 +106,7 @@ parameter_types! {
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const DataDepositPerByte: u64 = 1;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub const MaxApprovals: u32 = 100;
 }
 // impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
@@ -122,6 +123,7 @@ impl pallet_treasury::Config for Test {
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = Bounties;
+	type MaxApprovals = MaxApprovals;
 }
 parameter_types! {
 	pub const BountyDepositBase: u64 = 80;

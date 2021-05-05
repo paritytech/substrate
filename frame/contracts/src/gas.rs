@@ -127,10 +127,7 @@ where
 		}
 
 		let amount = token.calculate_amount(metadata);
-		let new_value = match self.gas_left.checked_sub(amount) {
-			None => None,
-			Some(val) => Some(val),
-		};
+		let new_value = self.gas_left.checked_sub(amount);
 
 		// We always consume the gas even if there is not enough gas.
 		self.gas_left = new_value.unwrap_or_else(Zero::zero);
