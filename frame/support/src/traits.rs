@@ -82,4 +82,7 @@ mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
 
 mod max_encoded_len;
+// This looks like an overlapping import/export, but it isn't:
+// macros and traits live in distinct namespaces.
 pub use max_encoded_len::MaxEncodedLen;
+pub use frame_support_procedural::MaxEncodedLen;
