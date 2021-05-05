@@ -40,7 +40,6 @@ pub struct OnOffenceHandler;
 
 thread_local! {
 	pub static ON_OFFENCE_PERBILL: RefCell<Vec<Perbill>> = RefCell::new(Default::default());
-	pub static CAN_REPORT: RefCell<bool> = RefCell::new(true);
 	pub static OFFENCE_WEIGHT: RefCell<Weight> = RefCell::new(Default::default());
 }
 
@@ -51,35 +50,19 @@ impl<Reporter, Offender>
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		_offence_session: SessionIndex,
-	) -> Result<Weight, ()> {
-		if <Self as offence::OnOffenceHandler<Reporter, Offender, Weight>>::can_report() {
-			ON_OFFENCE_PERBILL.with(|f| {
-				*f.borrow_mut() = slash_fraction.to_vec();
-			});
+	) -> Weight {
+		ON_OFFENCE_PERBILL.with(|f| {
+			*f.borrow_mut() = slash_fraction.to_vec();
+		});
 
-			Ok(OFFENCE_WEIGHT.with(|w| *w.borrow()))
-		} else {
-			Err(())
-		}
+		OFFENCE_WEIGHT.with(|w| *w.borrow())
 	}
-
-	fn can_report() -> bool {
-		CAN_REPORT.with(|c| *c.borrow())
-	}
-}
-
-pub fn set_can_report(can_report: bool) {
-	CAN_REPORT.with(|c| *c.borrow_mut() = can_report);
 }
 
 pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
 	ON_OFFENCE_PERBILL.with(|fractions| {
 		f(&mut *fractions.borrow_mut())
 	})
-}
-
-pub fn set_offence_weight(new: Weight) {
-	OFFENCE_WEIGHT.with(|w| *w.borrow_mut() = new);
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -127,16 +110,10 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 }
 
-parameter_types! {
-	pub OffencesWeightSoftLimit: Weight =
-		Perbill::from_percent(60) * BlockWeights::get().max_block;
-}
-
 impl Config for Runtime {
 	type Event = Event;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
-	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

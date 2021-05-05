@@ -19,11 +19,11 @@
 
 use super::*;
 
-impl<T: Config> StoredMap<(T::AssetId, T::AccountId), T::Extra> for Pallet<T> {
+impl<T: Config<I>, I: 'static> StoredMap<(T::AssetId, T::AccountId), T::Extra> for Pallet<T, I> {
 	fn get(id_who: &(T::AssetId, T::AccountId)) -> T::Extra {
 		let &(id, ref who) = id_who;
-		if Account::<T>::contains_key(id, who) {
-			Account::<T>::get(id, who).extra
+		if Account::<T, I>::contains_key(id, who) {
+			Account::<T, I>::get(id, who).extra
 		} else {
 			Default::default()
 		}
@@ -34,13 +34,13 @@ impl<T: Config> StoredMap<(T::AssetId, T::AccountId), T::Extra> for Pallet<T> {
 		f: impl FnOnce(&mut Option<T::Extra>) -> Result<R, E>,
 	) -> Result<R, E> {
 		let &(id, ref who) = id_who;
-		let mut maybe_extra = Some(Account::<T>::get(id, who).extra);
+		let mut maybe_extra = Some(Account::<T, I>::get(id, who).extra);
 		let r = f(&mut maybe_extra)?;
 		// They want to write some value or delete it.
 		// If the account existed and they want to write a value, then we write.
 		// If the account didn't exist and they want to delete it, then we let it pass.
 		// Otherwise, we fail.
-		Account::<T>::try_mutate_exists(id, who, |maybe_account| {
+		Account::<T, I>::try_mutate_exists(id, who, |maybe_account| {
 			if let Some(extra) = maybe_extra {
 				// They want to write a value. Let this happen only if the account actually exists.
 				if let Some(ref mut account) = maybe_account {

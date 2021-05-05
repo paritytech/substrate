@@ -699,7 +699,9 @@ pub struct BlockImportOperation<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
+		let mut count = 0;
 		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain(..) {
+			count += 1;
 			let key = crate::offchain::concatenate_prefix_and_key(&prefix, &key);
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) =>
@@ -707,6 +709,10 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 				OffchainOverlayedChange::Remove =>
 					transaction.remove(columns::OFFCHAIN, &key),
 			}
+		}
+
+		if count > 0 {
+			log::debug!(target: "sc_offchain", "Applied {} offchain indexing changes.", count);
 		}
 	}
 
