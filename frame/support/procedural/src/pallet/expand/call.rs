@@ -185,8 +185,9 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
-			pub fn call_functions() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::FunctionMetadata> {
-				#frame_support::scale_info::prelude::vec![ #(
+			pub fn call_functions() -> #frame_support::metadata::PalletCallMetadata {
+				let ty = #frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>();
+				let calls = #frame_support::scale_info::prelude::vec![ #(
 					#frame_support::metadata::FunctionMetadata {
 						name: stringify!(#fn_name),
 						arguments: #frame_support::scale_info::prelude::vec![ #(
@@ -197,7 +198,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 						)* ],
 						documentation: #frame_support::scale_info::prelude::vec![ #( #fn_doc ),* ],
 					},
-				)* ]
+				)* ];
+				#frame_support::metadata::PalletCallMetadata { ty, calls }
 			}
 		}
 	)
