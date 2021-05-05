@@ -1345,8 +1345,7 @@ decl_module! {
 						);
 						// Remove the subbounty description
 						BountyDescriptions::remove(subbounty_id);
-						// Remove the subbounty instance
-						// from DB
+						// Remove the subbounty instance from DB
 						*maybe_subbounty = None;
 						Ok(())
 					} else {
