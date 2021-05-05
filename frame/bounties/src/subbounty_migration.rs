@@ -30,6 +30,8 @@ use sp_runtime::RuntimeDebug;
 /// An index of a bounty. Just a `u32`.
 pub type BountyIndex = u32;
 
+// These are historical storage types and
+// we only duplicate them to make the migrations reusable.
 /// Trait to implement to give information about types used for migration
 pub trait SubBountyMigration {
 	type AccountId: 'static + FullCodec;
@@ -103,7 +105,18 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	active_subbounty_count: BountyIndex,
 }
 
-frame_support::generate_storage_alias!(Treasury, Bounties => Map<(Twox64Concat, BountyIndex), Bounty<T::AccountId, T::Balance, T::BlockNumber>>);
+struct StorageMigrationBounties;
+impl frame_support::traits::StorageInstance for StorageMigrationBounties {
+	fn pallet_prefix() -> &'static str { "Treasury" }
+	const STORAGE_PREFIX: &'static str = "Bounties";
+}
+#[allow(type_alias_bounds)]
+type Bounties<T: SubBountyMigration> = StorageMap<
+	StorageMigrationBounties,
+	Twox64Concat,
+	BountyIndex,
+	Bounty<T::AccountId, T::Balance, T::BlockNumber>
+>;
 
 /// Apply all of the migrations for SubbountyExtn.
 ///
