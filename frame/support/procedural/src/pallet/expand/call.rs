@@ -23,7 +23,7 @@ use syn::spanned::Spanned;
 pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_generics(def.call.attr_span);
+	let type_impl_gen = &def.type_impl_scale_info_bounded_generics(def.call.attr_span);
 	let type_decl_bounded_gen = &def.type_decl_bounded_generics(def.call.attr_span);
 	let type_use_gen = &def.type_use_generics(def.call.attr_span);
 	let call_ident = syn::Ident::new("Call", def.call.attr_span);
