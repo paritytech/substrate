@@ -1224,9 +1224,7 @@ decl_module! {
 						.ok_or(Error::<T>::InvalidIndex)?;
 
 					// Ensure Subbounty is in active state
-					if let SubBountyStatus::Active { ref subcurator } =
-						subbounty.status
-					{
+					if let SubBountyStatus::Active { ref subcurator } = subbounty.status {
 						ensure!(
 							signer == *subcurator,
 							Error::<T>::RequireSubCurator,
