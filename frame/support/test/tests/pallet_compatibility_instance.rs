@@ -281,19 +281,19 @@ mod test {
 	#[test]
 	fn metadata() {
 		let metadata = Runtime::metadata();
-		let modules = match metadata.1 {
+		let pallets = match metadata.1 {
 			frame_support::metadata::RuntimeMetadata::V13(frame_support::metadata::RuntimeMetadataLastVersion {
-				modules: m,
+				pallets: p,
 				..
-			}) => m,
+			}) => p,
 			_ => unreachable!(),
 		};
 		for i in vec![1, 3, 5].into_iter() {
-			pretty_assertions::assert_eq!(modules[i].storage, modules[i+1].storage);
-			pretty_assertions::assert_eq!(modules[i].calls, modules[i+1].calls);
-			pretty_assertions::assert_eq!(modules[i].event, modules[i+1].event);
-			pretty_assertions::assert_eq!(modules[i].constants, modules[i+1].constants);
-			pretty_assertions::assert_eq!(modules[i].errors, modules[i+1].errors);
+			pretty_assertions::assert_eq!(pallets[i].storage, pallets[i+1].storage);
+			pretty_assertions::assert_eq!(pallets[i].calls, pallets[i+1].calls);
+			pretty_assertions::assert_eq!(pallets[i].event, pallets[i+1].event);
+			pretty_assertions::assert_eq!(pallets[i].constants, pallets[i+1].constants);
+			pretty_assertions::assert_eq!(pallets[i].error, pallets[i+1].error);
 		}
 	}
 

@@ -2318,7 +2318,7 @@ macro_rules! __dispatch_impl_metadata {
 		$($rest:tt)*
 	) => {
 		// todo: [AJ] another Instance: TypeInfo bound to remove
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable + $crate::scale_info::TypeInfo)? + $crate::scale_info::TypeInfo> $mod_type<$trait_instance $(, $instance)?>
+		impl<$trait_instance: $trait_name $(<I> + $crate::scale_info::TypeInfo, $instance: $instantiable + $crate::scale_info::TypeInfo)? + $crate::scale_info::TypeInfo> $mod_type<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
@@ -2706,7 +2706,7 @@ mod tests {
 		}
 	}
 
-	fn expected_metadata() -> Vec<FunctionMetadata> {
+	fn expected_calls() -> Vec<FunctionMetadata> {
 		vec![
 			FunctionMetadata {
 				name: "aux_0",
@@ -2824,7 +2824,11 @@ mod tests {
 	#[test]
 	fn module_json_metadata() {
 		let metadata = Module::<TraitImpl>::call_functions();
-		assert_eq!(expected_metadata(), metadata);
+		let expected_metadata = PalletCallMetadata {
+			calls: expected_calls(),
+			ty: scale_info::meta_type::<Call<TraitImpl>>(),
+		};
+		assert_eq!(expected_metadata, metadata);
 	}
 
 	#[test]

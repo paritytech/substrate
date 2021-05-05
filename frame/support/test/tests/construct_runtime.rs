@@ -286,7 +286,7 @@ fn call_codec() {
 // 	use frame_metadata::*;
 // 	let expected_metadata: RuntimeMetadataLastVersion = RuntimeMetadataLastVersion {
 // 		modules: DecodeDifferent::Encode(&[
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("System"),
 // 				storage: None,
 // 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
@@ -315,7 +315,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 30,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module1_1"),
 // 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
 // 					prefix: DecodeDifferent::Encode("Instance1Module"),
@@ -337,7 +337,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 31,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module2"),
 // 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
 // 					prefix: DecodeDifferent::Encode("Module"),
@@ -361,7 +361,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 32,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module1_2"),
 // 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
 // 					prefix: DecodeDifferent::Encode("Instance2Module"),
@@ -381,7 +381,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 33,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module1_3"),
 // 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
 // 					prefix: DecodeDifferent::Encode("Instance3Module"),
@@ -393,7 +393,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 6,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module1_4"),
 // 				storage: None,
 // 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
@@ -406,7 +406,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 3,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module1_5"),
 // 				storage: None,
 // 				calls: None,
@@ -419,7 +419,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 4,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module1_6"),
 // 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
 // 					prefix: DecodeDifferent::Encode("Instance6Module"),
@@ -439,7 +439,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 1,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module1_7"),
 // 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
 // 					prefix: DecodeDifferent::Encode("Instance7Module"),
@@ -459,7 +459,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 2,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module1_8"),
 // 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
 // 					prefix: DecodeDifferent::Encode("Instance8Module"),
@@ -479,7 +479,7 @@ fn call_codec() {
 // 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 // 				index: 12,
 // 			},
-// 			ModuleMetadata {
+// 			PalletMetadata {
 // 				name: DecodeDifferent::Encode("Module1_9"),
 // 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
 // 					prefix: DecodeDifferent::Encode("Instance9Module"),
@@ -513,103 +513,103 @@ fn call_codec() {
 fn test_metadata() {
 	use frame_support::metadata::*;
 	let modules = vec![
-		ModuleMetadata {
+		PalletMetadata {
 			name: "System",
 			storage: None,
-			calls: Some(vec![]),
-			event: Some(vec![]),
+			calls: None,
+			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 0
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module1_1",
 			storage: None,
-			calls: Some(vec![]),
-			event: Some(vec![]),
+			calls: None,
+			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 1
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module2",
 			storage: None,
-			calls: Some(vec![]),
-			event: Some(vec![]),
+			calls: None,
+			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 2
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module1_2",
 			storage: None,
-			calls: Some(vec![]),
-			event: Some(vec![]),
+			calls: None,
+			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 3
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module1_3",
 			storage: None,
 			calls: None,
 			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 4
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module1_4",
 			storage: None,
-			calls: Some(vec![]),
+			calls: None,
 			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 5
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module1_5",
 			storage: None,
 			calls: None,
-			event: Some(vec![]),
+			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 6
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module1_6",
 			storage: None,
-			calls: Some(vec![]),
-			event: Some(vec![]),
+			calls: None,
+			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 7
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module1_7",
 			storage: None,
-			calls: Some(vec![]),
-			event: Some(vec![]),
+			calls: None,
+			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 8
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module1_8",
 			storage: None,
-			calls: Some(vec![]),
-			event: Some(vec![]),
+			calls: None,
+			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 9
 		},
-		ModuleMetadata {
+		PalletMetadata {
 			name: "Module1_9",
 			storage: None,
-			calls: Some(vec![]),
-			event: Some(vec![]),
+			calls: None,
+			event: None,
 			constants: vec![],
-			errors: vec![],
+			error: None,
 			index: 10
 		}
 	];

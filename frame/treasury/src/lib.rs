@@ -133,7 +133,7 @@ pub trait Config<I=DefaultInstance>: frame_system::Config {
 	type SpendFunds: SpendFunds<Self, I>;
 
 	/// The maximum number of approvals that can wait in the spending queue.
-	type MaxApprovals: Get<u32>;
+	type MaxApprovals: Get<u32> + scale_info::TypeInfo; // todo: [AJ] see if we can remove this bound for Get storages
 }
 
 /// A trait to allow the Treasury Pallet to spend it's funds for other purposes.

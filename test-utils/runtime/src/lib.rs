@@ -488,7 +488,7 @@ parameter_types! {
 	};
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
-k	pub RuntimeBlockWeights: BlockWeights =
+	pub RuntimeBlockWeights: BlockWeights =
 		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
 }
 

@@ -633,7 +633,7 @@ fn metadata() {
 	use frame_support::metadata::*;
 	use codec::{Decode, Encode};
 
-	let expected_pallet_metadata = ModuleMetadata {
+	let expected_pallet_metadata = PalletMetadata {
 		index: 1,
 		name: "Example",
 		storage: Some(StorageMetadata {
@@ -737,67 +737,45 @@ fn metadata() {
 				},
 			],
 		}),
-		calls: Some(vec![
-			FunctionMetadata {
-				name: "foo",
-				arguments: vec![
-					FunctionArgumentMetadata {
-						name: "_foo",
-						ty: scale_info::meta_type::<codec::Compact<u32>>(),
-					},
-					FunctionArgumentMetadata {
-						name: "_bar",
-						ty: scale_info::meta_type::<u32>(),
-					}
-				],
-				documentation: vec![
-					" Doc comment put in metadata",
-				],
-			},
-			FunctionMetadata {
-				name: "foo_transactional",
-				arguments: vec![
-					FunctionArgumentMetadata {
-						name: "foo",
-						ty: scale_info::meta_type::<codec::Compact<u32>>(),
-					}
-				],
-				documentation: vec![
-					" Doc comment put in metadata",
-				],
-			},
-			FunctionMetadata {
-				name: "foo_no_post_info",
-				arguments: vec![],
-				documentation: vec![],
-			},
-		]),
-		event: Some(vec![
-			EventMetadata {
-				name: "Proposed",
-				arguments: vec![TypeSpec::new::<u32>("<T as frame_system::Config>::AccountId")],
-				documentation: vec![
-					" doc comment put in metadata"
-				],
-			},
-			EventMetadata {
-				name: "Spending",
-				arguments: vec![TypeSpec::new::<u64>("Balance")],
-				documentation: vec![
-					" doc"
-				],
-			},
-			EventMetadata {
-				name: "Something",
-				arguments: vec![TypeSpec::new::<u32>("Other")],
-				documentation: vec![],
-			},
-			EventMetadata {
-				name: "SomethingElse",
-				arguments: vec![TypeSpec::new::<u64>("<T::AccountId as SomeAssociation1>::_1")],
-				documentation: vec![],
-			},
-		]),
+		calls: Some(PalletCallMetadata {
+			ty: scale_info::meta_type::<pallet::Call<Runtime>>(),
+			calls: vec![
+				FunctionMetadata {
+					name: "foo",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "_foo",
+							ty: scale_info::meta_type::<codec::Compact<u32>>(),
+						},
+						FunctionArgumentMetadata {
+							name: "_bar",
+							ty: scale_info::meta_type::<u32>(),
+						}
+					],
+					documentation: vec![
+						" Doc comment put in metadata",
+					],
+				},
+				FunctionMetadata {
+					name: "foo_transactional",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "foo",
+							ty: scale_info::meta_type::<codec::Compact<u32>>(),
+						}
+					],
+					documentation: vec![
+						" Doc comment put in metadata",
+					],
+				},
+				FunctionMetadata {
+					name: "foo_no_post_info",
+					arguments: vec![],
+					documentation: vec![],
+				},
+			]
+		}),
+		event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet::Event<Runtime>>() }),
 		constants: vec![
 			PalletConstantMetadata {
 				name: "MyGetParam",
@@ -841,14 +819,7 @@ fn metadata() {
 				],
 			},
 		],
-		errors: vec![
-			ErrorMetadata {
-				name: "InsufficientProposersBalance",
-				documentation: vec![
-					" doc comment put into metadata",
-				],
-			},
-		],
+		error: Some(PalletErrorMetadata { ty: scale_info::meta_type::<pallet::Error<Runtime>>() }),
 	};
 
 	let metadata = match Runtime::metadata().1 {
@@ -856,8 +827,8 @@ fn metadata() {
 		_ => panic!("metadata has been bump, test needs to be updated"),
 	};
 
-	let pallet_metadata = ModuleMetadata::<PortableForm>::decode(
-		&mut &metadata.modules[1].encode()[..]
+	let pallet_metadata = PalletMetadata::<PortableForm>::decode(
+		&mut &metadata.pallets[1].encode()[..]
 	).unwrap();
 
 	let mut registry = scale_info::Registry::new();

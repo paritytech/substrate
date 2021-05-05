@@ -253,7 +253,10 @@ impl scale_info::TypeInfo for IdentityFields {
 			.path(scale_info::Path::new("IdentityFields", module_path!()))
 			.composite(
 				scale_info::build::Fields::unnamed()
-					.field_of::<u64>("BitFlags<IdentityField>")
+					.field_of::<u64>(
+						"BitFlags<IdentityField>",
+						&["Wrapper type for `BitFlags<IdentityField>`"]
+					)
 			)
 	}
 }
