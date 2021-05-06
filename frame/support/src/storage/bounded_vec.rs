@@ -23,7 +23,7 @@ use sp_std::{convert::TryFrom, marker::PhantomData};
 use codec::{FullCodec, Encode, EncodeLike, Decode};
 use core::{ops::{Index, IndexMut}, slice::SliceIndex};
 use crate::{
-	traits::Get,
+	traits::{Get, MaxEncodedLen},
 	storage::{generator, StorageDecodeLength, StorageValue, StorageMap, StorageDoubleMap},
 };
 
@@ -344,6 +344,21 @@ impl<
 		} else {
 			Err(())
 		}
+	}
+}
+
+impl<T, S> MaxEncodedLen for BoundedVec<T, S>
+where
+	T: BoundedVecValue + MaxEncodedLen,
+	S: Get<u32>,
+	BoundedVec<T, S>: Encode,
+{
+	fn max_encoded_len() -> usize {
+		// BoundedVec<T, S> encodes like Vec<T> which encodes like [T], which is a compact u32
+		// plus each item in the slice:
+		// https://substrate.dev/rustdocs/v3.0.0/src/parity_scale_codec/codec.rs.html#798-808
+		codec::Compact::<u32>::max_encoded_len()
+			.saturating_add(Self::bound().saturating_mul(T::max_encoded_len()))
 	}
 }
 

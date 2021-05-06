@@ -216,8 +216,8 @@ impl<H, N> LeafSet<H, N> where
 		self.pending_removed.clear();
 	}
 
-	#[cfg(test)]
-	fn contains(&self, number: N, hash: H) -> bool {
+	/// Check if given block is a leaf.
+	pub fn contains(&self, number: N, hash: H) -> bool {
 		self.storage.get(&Reverse(number)).map_or(false, |hashes| hashes.contains(&hash))
 	}
 
