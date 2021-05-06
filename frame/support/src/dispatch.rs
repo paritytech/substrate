@@ -2759,7 +2759,7 @@ mod tests {
 				arguments: vec![
 					FunctionArgumentMetadata {
 						name: "_data",
-						ty: scale_info::meta_type::<u32>(),
+						ty: scale_info::meta_type::<i32>(),
 					},
 					FunctionArgumentMetadata {
 						name: "_data2",

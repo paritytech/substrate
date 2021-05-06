@@ -1100,7 +1100,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u64>(),
 						unused: false,
 					},
-					default: vec![],
+					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -1112,7 +1112,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u32>(),
 						unused: false,
 					},
-					default: vec![],
+					default: vec![0],
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -1124,7 +1124,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u32>(),
 						unused: false
 					},
-					default: vec![],
+					default: vec![0, 0, 0, 0],
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -1136,7 +1136,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u32>(),
 						unused: false
 					},
-					default: vec![],
+					default: vec![0],
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -1149,7 +1149,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u64>(),
 						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
-					default: vec![],
+					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -1162,7 +1162,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u32>(),
 						key2_hasher: StorageHasher::Identity,
 					},
-					default: vec![],
+					default: vec![0, 0, 0, 0],
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -1175,7 +1175,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u32>(),
 						key2_hasher: StorageHasher::Twox64Concat,
 					},
-					default: vec![],
+					default: vec![0],
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -1188,7 +1188,7 @@ pub mod tests {
 						value: scale_info::meta_type::<Vec<u32>>(),
 						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
-					default: vec![],
+					default: vec![0],
 					documentation: vec![],
 				},
 			],
