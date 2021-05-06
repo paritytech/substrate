@@ -53,6 +53,7 @@ use sp_staking::SessionIndex;
 
 mod equivocation;
 mod default_weights;
+pub mod migrations;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
