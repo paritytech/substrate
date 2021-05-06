@@ -317,3 +317,105 @@ impl<K, V, S> codec::EncodeLike<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S> whe
 	BTreeMap<K, V>: Encode
 {
 }
+
+#[cfg(test)]
+pub mod test {
+	use super::*;
+	use sp_io::TestExternalities;
+	use sp_std::convert::TryInto;
+	use crate::Twox128;
+
+	crate::parameter_types! {
+		pub const Seven: u32 = 7;
+		pub const Four: u32 = 4;
+	}
+
+	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeMap<u32, (), Seven>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeMap<u32, (), Seven>> }
+	crate::generate_storage_alias! {
+		Prefix,
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeMap<u32, (), Seven>>
+	}
+
+	fn map_from_keys<K>(keys: &[K]) -> BTreeMap<K, ()>
+	where
+		K: Ord + Copy,
+	{
+		keys.iter().copied().zip(std::iter::repeat(())).collect()
+	}
+
+	fn boundedmap_from_keys<K, S>(keys: &[K]) -> BoundedBTreeMap<K, (), S>
+	where
+		K: Ord + Copy,
+		S: Get<u32>,
+	{
+		map_from_keys(keys).try_into().unwrap()
+	}
+
+	#[test]
+	fn decode_len_works() {
+		TestExternalities::default().execute_with(|| {
+			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			Foo::put(bounded);
+			assert_eq!(Foo::decode_len().unwrap(), 3);
+		});
+
+		TestExternalities::default().execute_with(|| {
+			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			FooMap::insert(1, bounded);
+			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
+			assert!(FooMap::decode_len(0).is_none());
+			assert!(FooMap::decode_len(2).is_none());
+		});
+
+		TestExternalities::default().execute_with(|| {
+			let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+			FooDoubleMap::insert(1, 1, bounded);
+			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 3);
+			assert!(FooDoubleMap::decode_len(2, 1).is_none());
+			assert!(FooDoubleMap::decode_len(1, 2).is_none());
+			assert!(FooDoubleMap::decode_len(2, 2).is_none());
+		});
+	}
+
+	#[test]
+	fn try_insert_works() {
+		let mut bounded = boundedmap_from_keys::<u32, Four>(&[1, 2, 3]);
+		bounded.try_insert(0, ()).unwrap();
+		assert_eq!(*bounded, map_from_keys(&[1, 0, 2, 3]));
+
+		assert!(bounded.try_insert(9, ()).is_err());
+		assert_eq!(*bounded, map_from_keys(&[1, 0, 2, 3]));
+	}
+
+	#[test]
+	fn deref_coercion_works() {
+		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3]);
+		// these methods come from deref-ed vec.
+		assert_eq!(bounded.len(), 3);
+		assert!(bounded.iter().next().is_some());
+		assert!(!bounded.is_empty());
+	}
+
+	#[test]
+	fn try_mutate_works() {
+		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
+		let bounded = bounded
+			.try_mutate(|v| {
+				v.insert(7, ());
+			})
+			.unwrap();
+		assert_eq!(bounded.len(), 7);
+		assert!(bounded
+			.try_mutate(|v| {
+				v.insert(8, ());
+			})
+			.is_none());
+	}
+
+	#[test]
+	fn btree_map_eq_works() {
+		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
+		assert_eq!(bounded, map_from_keys(&[1, 2, 3, 4, 5, 6]));
+	}
+}
