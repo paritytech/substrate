@@ -243,18 +243,20 @@ decl_module! {
 				return; // Skip the execution for this block
 			}
 
-			let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
+			let aggregated_metrics = Self::fetch_app_metrics(block_number);
 
 			// TODO: abort on error.
-			if let Err(e) = res {
+			if let Err(ref e) = aggregated_metrics {
 				debug::error!("Some error occurred: {:?}", e);
 			}
 
-			debug::info!("[OCW] About to send mock transaction");
-			let sc_res = Self::send_to_sc_mock();
+			if let Ok(aggregated_metrics) = aggregated_metrics {
+				debug::info!("[OCW] About to send mock transaction");
+				let sc_res = Self::send_metrics_to_sc(aggregated_metrics);
 
-			if let Err(e) = sc_res {
-				debug::error!("Some error occurred: {:?}", e);
+				if let Err(e) = sc_res {
+					debug::error!("Some error occurred: {:?}", e);
+				}
 			}
 
             debug::info!("[OCW] Finishing!");
@@ -297,64 +299,47 @@ impl<T: Trait> Module<T> {
 	}
 
 
-	fn send_to_sc_mock() -> Result<(), &'static str> {
-
-		debug::info!("[OCW] Getting signer");
+	fn send_metrics_to_sc(metrics: Vec<MetricInfo>) -> Result<(), &'static str> {
 		let signer = Signer::<T::CST, T::AuthorityId>::any_account();
-		debug::info!("[OCW] Checking signer");
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC."
 			)?
 		}
 
-		debug::info!("[OCW] Continue, signer exists!");
+		for one_metric in metrics.iter() {
+			// Prepare call params: app_id, day_start_ms, metrics: MetricValue. Reference: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs#L587
 
-		// Using `send_signed_transaction` associated type we create and submit a transaction
-		// representing the call, we've just created.
-		// Submit signed will return a vector of results for all accounts that were found in the
-		// local keystore with expected `KEY_TYPE`.
-		let results = signer.send_signed_transaction(
-			|_account| {
+			let results = signer.send_signed_transaction(
+				|_account| {
 
-				let mut test_call_param = CallData::new();
-				test_call_param.push_arg(&REPORT_METRICS_SELECTOR);
-				test_call_param.push_arg(&[0x01; 128]);
-				test_call_param.push_arg(&[0x01; 128]);
-				test_call_param.push_arg(&[0x01; 128]);
-				test_call_param.push_arg(&[0x01; 128]);
+					let mut test_call_param = CallData::new();
+					test_call_param.push_arg(&REPORT_METRICS_SELECTOR);
+					test_call_param.push_arg(&[0x01; 128]);
+					test_call_param.push_arg(&[0x01; 128]);
+					test_call_param.push_arg(&[0x01; 128]);
+					test_call_param.push_arg(&[0x01; 128]);
 
-				pallet_contracts::Call::call(
-					T::ContractId::get(),
-					0u32.into(),
-					100_000_000_000,
-					test_call_param.params().to_vec()
-				)
-			}
-		);
+					pallet_contracts::Call::call(
+						T::ContractId::get(),
+						0u32.into(),
+						100_000_000_000,
+						test_call_param.params().to_vec()
+					)
+				}
+			);
 
-		for (_acc, res) in &results {
-			match res {
-				Ok(()) => debug::info!("Submitted TX to SC!"),
-				Err(e) => debug::error!("Some error occured: {:?}", e),
+			for (_acc, res) in &results {
+				match res {
+					Ok(()) => debug::info!("Submitted TX to SC!"),
+					Err(e) => debug::error!("Some error occured: {:?}", e),
+				}
 			}
 		}
 
 		Ok(())
 	}
 
-
-	fn fetch_ddc_data_and_send_to_sc(_block_number: T::BlockNumber) -> Result<(), http::Error> {
-		let topology = Self::fetch_ddc_network_topology().map_err(|_| "Failed to fetch topology");
-
-		debug::info!("Network topology: {:?}", topology);
-
-		Ok(())
-	}
-
-//	fn get_nodes_data(topology: Vec<u32>) -> Result<u32, http::Error> {
-//		debug::warn("Topology: {}", topology)
-//	}
 
 	/// This function uses the `offchain::http` API to query data
 	/// For get method, input url and returns the JSON response as vector of bytes.
@@ -397,7 +382,7 @@ impl<T: Trait> Module<T> {
 		Ok(response_data)
 	}
 
-	fn fetch_ddc_network_topology() -> Result<(), http::Error> {
+	fn fetch_app_metrics(_block_number: T::BlockNumber) -> Result<Vec<MetricInfo>, http::Error> {
 		let mut url = T::DdcUrl::get();
 		url.extend_from_slice(HTTP_NODES.as_bytes());
 		let url = from_utf8(&url).unwrap();
@@ -522,9 +507,7 @@ impl<T: Trait> Module<T> {
 			// }
 		}
 	
-		debug::info!("Metric. agreated_result: {:?}", agreated_result);
-
-		Ok(())
+		Ok(agreated_result)
 	}
 
 	// fn parse_topology(topology_str: &str) -> Result<(), http::Error> {
