@@ -1332,13 +1332,13 @@ macro_rules! add_benchmark {
 		} = config;
 
 		if *list {
-			$crate::log::info!("\npallet: {}", stringify!($name));
 			for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
-				$crate::log::info!(
-					"benchmarks: {}",
-						$crate::sp_std::str::from_utf8(benchmark)
-							.map_err(|_| "`extrinsic` is not a valid utf8 string!")?
-				);
+				$batches.push($crate::BenchmarkBatch {
+					pallet: name_string.to_vec(),
+					instance: instance_string.to_vec(),
+					benchmark: benchmark.to_vec(),
+					results: Default::default(),
+				});
 			}
 		}
 		else if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
