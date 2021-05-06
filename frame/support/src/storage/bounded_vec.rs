@@ -357,7 +357,7 @@ where
 		// BoundedVec<T, S> encodes like Vec<T> which encodes like [T], which is a compact u32
 		// plus each item in the slice:
 		// https://substrate.dev/rustdocs/v3.0.0/src/parity_scale_codec/codec.rs.html#798-808
-		codec::Compact::<u32>::max_encoded_len()
+		codec::Compact(S::get()).encoded_size()
 			.saturating_add(Self::bound().saturating_mul(T::max_encoded_len()))
 	}
 }
