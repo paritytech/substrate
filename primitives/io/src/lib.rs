@@ -486,7 +486,7 @@ pub trait Misc {
 		self.extension::<CallInWasmExt>()
 			.expect("No `CallInWasmExt` associated for the current context!")
 			.call_in_wasm(
-				wasm,
+				uncompressed_wasm,
 				None,
 				"Core_version",
 				&[],
