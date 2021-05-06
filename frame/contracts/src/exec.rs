@@ -430,6 +430,7 @@ pub struct Stack<'a, T: Config, E> {
 	/// finishes executing.
 	account_counter: Option<u64>,
 	/// The actual call stack. One entry per nested contract called/instantiated.
+	/// This does **not** include the [`Self::first_frame`].
 	frames: SmallVec<T::CallStack>,
 	/// Statically guarantee that each call stack has at least one frame.
 	first_frame: Frame<T>,
@@ -457,15 +458,25 @@ pub struct Frame<T: Config> {
 }
 
 /// Parameter passed in when creating a new `Frame`.
+///
+/// It determines whether the new frame is for a call or an instantiate.
 enum FrameArgs<'a, T: Config, E> {
-	/// Create a frame that constitutes a call.
-	///
-	/// \[caller, cached_info\]
-	Call(T::AccountId, Option<AliveContractInfo<T>>),
-	/// Create a frame that constitutes an instantiate.
-	///
-	/// \[sender, account_seed, executable, salt\]
-	Instantiate(T::AccountId, u64, E, &'a [u8]),
+	Call {
+		/// The account id of the contract that is to be called.
+		dest: T::AccountId,
+		/// If `None` the contract info needs to be reloaded from storage.
+		cached_info: Option<AliveContractInfo<T>>,
+	},
+	Instantiate {
+		/// The contract or signed origin which instantiates the new contract.
+		sender: T::AccountId,
+		/// The seed that should be used to derive a new trie id for the contract.
+		trie_seed: u64,
+		/// The executable whose `deploy` function is run.
+		executable: E,
+		/// A salt used in the contract address deriviation of the new contract.
+		salt: &'a [u8],
+	},
 }
 
 /// Describes the different states of a contract as contained in a `Frame`.
@@ -561,12 +572,12 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Executable<T>,
 {
-	/// Create a new call stack by calling into `dest`.
+	/// Create an run a new call stack by calling into `dest`.
 	///
 	/// # Return Value
 	///
 	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
-	pub fn with_call(
+	pub fn run_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
 		gas_meter: &'a mut GasMeter<T>,
@@ -575,7 +586,7 @@ where
 		input_data: Vec<u8>,
 	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
 		let (mut stack, executable) = Self::new(
-			FrameArgs::Call(dest, None),
+			FrameArgs::Call{dest, cached_info: None},
 			origin,
 			gas_meter,
 			schedule,
@@ -584,12 +595,12 @@ where
 		stack.run(executable, input_data)
 	}
 
-	/// Create a new call stack by instantiating a new contract.
+	/// Create and run a new call stack by instantiating a new contract.
 	///
 	/// # Return Value
 	///
 	/// Result<(NewContractAccountId, ExecReturnValue), ExecError)>
-	pub fn with_instantiate(
+	pub fn run_instantiate(
 		origin: T::AccountId,
 		executable: E,
 		gas_meter: &'a mut GasMeter<T>,
@@ -599,15 +610,18 @@ where
 		salt: &[u8],
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
 		let (mut stack, executable) = Self::new(
-			FrameArgs::Instantiate(
-				origin.clone(), Self::initial_account_seed(), executable, salt,
-			),
+			FrameArgs::Instantiate {
+				sender: origin.clone(),
+				trie_seed: Self::initial_trie_seed(),
+				executable,
+				salt,
+			},
 			origin,
 			gas_meter,
 			schedule,
 			value,
 		).map_err(|(e, _code_len)| e)?;
-		let account_id = stack.frame().account_id.clone();
+		let account_id = stack.top_frame().account_id.clone();
 		stack.run(executable, input_data)
 			.map(|(ret, _code_len)| (account_id, ret))
 			.map_err(|(err, _code_len)| err)
@@ -649,11 +663,11 @@ where
 		schedule: &Schedule<T>
 	) -> Result<(Frame<T>, E), (ExecError, u32)> {
 		let (account_id, contract_info, executable, entry_point) = match frame_args {
-			FrameArgs::Call(account_id, contract) => {
-				let contract = if let Some(contract) = contract {
+			FrameArgs::Call{dest, cached_info} => {
+				let contract = if let Some(contract) = cached_info {
 					contract
 				} else {
-					<ContractInfoOf<T>>::get(&account_id)
+					<ContractInfoOf<T>>::get(&dest)
 						.and_then(|contract| contract.get_alive())
 						.ok_or((Error::<T>::NotCallable.into(), 0))?
 				};
@@ -667,16 +681,16 @@ where
 				// contract.
 				// See: https://github.com/paritytech/substrate/issues/6439#issuecomment-648754324
 				let contract = Rent::<T, E>
-					::charge(&account_id, contract, executable.occupied_storage())
+					::charge(&dest, contract, executable.occupied_storage())
 					.map_err(|e| (e.into(), executable.code_len()))?
 					.ok_or((Error::<T>::NotCallable.into(), executable.code_len()))?;
-				(account_id, contract, executable, ExportedFunction::Call)
+				(dest, contract, executable, ExportedFunction::Call)
 			}
-			FrameArgs::Instantiate(caller, seed, executable, salt) => {
+			FrameArgs::Instantiate{sender, trie_seed, executable, salt} => {
 				let account_id = <Contracts<T>>::contract_address(
-					&caller, executable.code_hash(), &salt,
+					&sender, executable.code_hash(), &salt,
 				);
-				let trie_id = Storage::<T>::generate_trie_id(&account_id, seed);
+				let trie_id = Storage::<T>::generate_trie_id(&account_id, trie_seed);
 				let contract = Storage::<T>::new_contract(
 					&account_id,
 					trie_id,
@@ -734,7 +748,7 @@ where
 		executable: E,
 		input_data: Vec<u8>
 	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
-		let entry_point = self.frame().entry_point;
+		let entry_point = self.top_frame().entry_point;
 		let do_transaction = || {
 			// Cache the value before calling into the constructor because that
 			// consumes the value. If the constructor creates additional contracts using
@@ -755,12 +769,12 @@ where
 
 			// Additional work needs to be performed in case of an instantiation.
 			if output.is_success() && entry_point == ExportedFunction::Constructor {
-				let frame = self.frame_mut();
+				let frame = self.top_frame_mut();
 				let account_id = frame.account_id.clone();
 
 				// It is not allowed to terminate a contract inside its constructor.
 				if let CachedContract::Terminated = frame.contract_info {
-					return Err((Error::<T>::NotCallable.into(), code_len));
+					return Err((Error::<T>::TerminatedInConstructor.into(), code_len));
 				}
 
 				// Collect the rent for the first block to prevent the creation of very large
@@ -806,7 +820,7 @@ where
 	/// and invalidates all stale references to it that might exist further down the call stack.
 	fn pop_frame(&mut self, persist: bool) {
 		// Revert the account counter in case of a failed instantiation.
-		if !persist && self.frame().entry_point == ExportedFunction::Constructor {
+		if !persist && self.top_frame().entry_point == ExportedFunction::Constructor {
 			self.account_counter.as_mut().map(|c| *c = c.wrapping_sub(1));
 		}
 
@@ -815,7 +829,7 @@ where
 		let frame = self.frames.pop();
 
 		if let Some(frame) = frame {
-			let prev = self.frame_mut();
+			let prev = self.top_frame_mut();
 			let account_id = &frame.account_id;
 			prev.nested_meter.absorb_nested(frame.nested_meter);
 			// Only gas counter changes are persisted in case of a failure.
@@ -856,7 +870,7 @@ where
 		}
 	}
 
-	/// Transfer some funds from `transactor` to `dest`.
+	/// Transfer some funds from `from` to `to`.
 	///
 	/// We only allow allow for draining all funds of the sender if `allow_death` is
 	/// is specified as `true`. Otherwise, any transfer that would bring the sender below the
@@ -895,26 +909,26 @@ where
 	// The transfer as performed by a call or instantiate.
 	fn initial_transfer(&self) -> DispatchResult {
 		Self::transfer(
-			self.caller_is_contract(),
+			self.caller_is_origin(),
 			false,
 			self.caller(),
-			&self.frame().account_id,
-			self.frame().value_transferred,
+			&self.top_frame().account_id,
+			self.top_frame().value_transferred,
 		)
 	}
 
-	/// Wether the caller is a contract (opposed to the origin of the call stack).
-	fn caller_is_contract(&self) -> bool {
+	/// Wether the caller is the initiator of the call stack.
+	fn caller_is_origin(&self) -> bool {
 		!self.frames.is_empty()
 	}
 
 	/// Reference to the current (top) frame.
-	fn frame(&self) -> &Frame<T> {
+	fn top_frame(&self) -> &Frame<T> {
 		self.frames.last().unwrap_or(&self.first_frame)
 	}
 
 	/// Mutable reference to the current (top) frame.
-	fn frame_mut(&mut self) -> &mut Frame<T> {
+	fn top_frame_mut(&mut self) -> &mut Frame<T> {
 		self.frames.last_mut().unwrap_or(&mut self.first_frame)
 	}
 
@@ -936,23 +950,23 @@ where
 
 	/// Returns whether the current contract is on the stack multiple times.
 	fn is_recursive(&self) -> bool {
-		let account_id = &self.frame().account_id;
+		let account_id = &self.top_frame().account_id;
 		self.frames().skip(1).any(|f| &f.account_id == account_id)
 	}
 
-	/// Increments the cached account id and returns the value to be used for the next contract.
-	fn next_account_seed(&mut self) -> u64 {
+	/// Increments the cached account id and returns the value to be used for the trie_id.
+	fn next_trie_seed(&mut self) -> u64 {
 		let next = if let Some(current) = self.account_counter {
 			current + 1
 		} else {
-			Self::initial_account_seed()
+			Self::initial_trie_seed()
 		};
 		self.account_counter = Some(next);
 		next
 	}
 
 	/// The account seed to be used to instantiate the account counter cache.
-	fn initial_account_seed() -> u64 {
+	fn initial_trie_seed() -> u64 {
 		<AccountCounter<T>>::get().wrapping_add(1)
 	}
 }
@@ -972,7 +986,7 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
-		let existing = self
+		let cached_info = self
 			.frames()
 			.filter(|f| f.entry_point == ExportedFunction::Call)
 			.find(|f| f.account_id == to)
@@ -982,7 +996,11 @@ where
 					_ => None,
 				}
 			});
-		let executable = self.push_frame(FrameArgs::Call(to, existing), value, gas_limit)?;
+		let executable = self.push_frame(
+			FrameArgs::Call{dest: to, cached_info},
+			value,
+			gas_limit
+		)?;
 		self.run(executable, input_data)
 	}
 
@@ -996,13 +1014,18 @@ where
 	) -> Result<(AccountIdOf<T>, ExecReturnValue, u32), (ExecError, u32)> {
 		let executable = E::from_storage(code_hash, &self.schedule, self.gas_meter())
 			.map_err(|e| (e.into(), 0))?;
-		let seed = self.next_account_seed();
+		let trie_seed = self.next_trie_seed();
 		let executable = self.push_frame(
-			FrameArgs::Instantiate(self.frame().account_id.clone(), seed, executable, salt),
+			FrameArgs::Instantiate {
+				sender: self.top_frame().account_id.clone(),
+				trie_seed,
+				executable,
+				salt,
+			},
 			endowment,
 			gas_limit,
 		)?;
-		let account_id = self.frame().account_id.clone();
+		let account_id = self.top_frame().account_id.clone();
 		self.run(executable, input_data)
 			.map(|(ret, code_len)| (account_id, ret, code_len))
 	}
@@ -1014,7 +1037,7 @@ where
 		if self.is_recursive() {
 			return Err((Error::<T>::ReentranceDenied.into(), 0));
 		}
-		let frame = self.frame_mut();
+		let frame = self.top_frame_mut();
 		let info = frame.terminate();
 		Storage::<T>::queue_trie_for_deletion(&info).map_err(|e| (e, 0))?;
 		<Stack<'a, T, E>>::transfer(
@@ -1042,9 +1065,9 @@ where
 		if self.is_recursive() {
 			return Err((Error::<T>::ReentranceDenied.into(), 0, 0));
 		}
-		let origin_contract = self.frame_mut().contract_info().clone();
+		let origin_contract = self.top_frame_mut().contract_info().clone();
 		let result = Rent::<T, E>::restore_to(
-			&self.frame().account_id,
+			&self.top_frame().account_id,
 			origin_contract,
 			dest.clone(),
 			code_hash.clone(),
@@ -1055,13 +1078,13 @@ where
 			deposit_event::<Self::T>(
 				vec![],
 				Event::Restored(
-					self.frame().account_id.clone(),
+					self.top_frame().account_id.clone(),
 					dest,
 					code_hash,
 					rent_allowance,
 				),
 			);
-			self.frame_mut().terminate();
+			self.top_frame_mut().terminate();
 		}
 		result
 	}
@@ -1071,23 +1094,23 @@ where
 		to: &T::AccountId,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		Self::transfer(true, false, &self.frame().account_id, to, value)
+		Self::transfer(true, false, &self.top_frame().account_id, to, value)
 	}
 
 	fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>> {
-		Storage::<T>::read(&self.frame_mut().contract_info().trie_id, key)
+		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
 	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult {
 		let block_number = self.block_number;
-		let frame = self.frame_mut();
+		let frame = self.top_frame_mut();
 		Storage::<T>::write(
 			block_number, frame.contract_info(), &key, value,
 		)
 	}
 
 	fn address(&self) -> &T::AccountId {
-		&self.frame().account_id
+		&self.top_frame().account_id
 	}
 
 	fn caller(&self) -> &T::AccountId {
@@ -1095,11 +1118,11 @@ where
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
-		T::Currency::free_balance(&self.frame().account_id)
+		T::Currency::free_balance(&self.top_frame().account_id)
 	}
 
 	fn value_transferred(&self) -> BalanceOf<T> {
-		self.frame().value_transferred
+		self.top_frame().value_transferred
 	}
 
 	fn random(&self, subject: &[u8]) -> (SeedOf<T>, BlockNumberOf<T>) {
@@ -1121,16 +1144,16 @@ where
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		deposit_event::<Self::T>(
 			topics,
-			Event::ContractEmitted(self.frame().account_id.clone(), data)
+			Event::ContractEmitted(self.top_frame().account_id.clone(), data)
 		);
 	}
 
 	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<T>) {
-		self.frame_mut().contract_info().rent_allowance = rent_allowance;
+		self.top_frame_mut().contract_info().rent_allowance = rent_allowance;
 	}
 
 	fn rent_allowance(&mut self) -> BalanceOf<T> {
-		self.frame_mut().contract_info().rent_allowance
+		self.top_frame_mut().contract_info().rent_allowance
 	}
 
 	fn block_number(&self) -> T::BlockNumber { self.block_number }
@@ -1148,11 +1171,11 @@ where
 	}
 
 	fn rent_params(&self) -> &RentParams<Self::T> {
-		&self.frame().rent_params
+		&self.top_frame().rent_params
 	}
 
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
-		&mut self.frame_mut().nested_meter
+		&mut self.top_frame_mut().nested_meter
 	}
 }
 
@@ -1391,7 +1414,7 @@ mod tests {
 			place_contract(&BOB, exec_ch);
 
 			assert_matches!(
-				MockStack::with_call(
+				MockStack::run_call(
 					ALICE, BOB, &mut gas_meter, &schedule, value, vec![],
 				),
 				Ok(_)
@@ -1443,7 +1466,7 @@ mod tests {
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
 
-			let output = MockStack::with_call(
+			let output = MockStack::run_call(
 				origin.clone(),
 				dest.clone(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
@@ -1502,7 +1525,7 @@ mod tests {
 			let schedule = <CurrentSchedule<Test>>::get();
 			place_contract(&BOB, return_ch);
 
-			let result = MockStack::with_call(
+			let result = MockStack::run_call(
 				origin,
 				dest,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
@@ -1532,7 +1555,7 @@ mod tests {
 			let schedule = <CurrentSchedule<Test>>::get();
 			place_contract(&dest, return_ch);
 
-			let result = MockStack::with_call(
+			let result = MockStack::run_call(
 				origin,
 				dest,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
@@ -1559,7 +1582,7 @@ mod tests {
 			let schedule = <CurrentSchedule<Test>>::get();
 			place_contract(&BOB, input_data_ch);
 
-			let result = MockStack::with_call(
+			let result = MockStack::run_call(
 				ALICE,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
@@ -1589,7 +1612,7 @@ mod tests {
 
 			set_balance(&ALICE, subsistence * 10);
 
-			let result = MockStack::with_instantiate(
+			let result = MockStack::run_instantiate(
 				ALICE,
 				executable,
 				&mut gas_meter,
@@ -1638,7 +1661,7 @@ mod tests {
 			set_balance(&BOB, 1);
 			place_contract(&BOB, recurse_ch);
 
-			let result = MockStack::with_call(
+			let result = MockStack::run_call(
 				ALICE,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
@@ -1687,7 +1710,7 @@ mod tests {
 			place_contract(&dest, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
 
-			let result = MockStack::with_call(
+			let result = MockStack::run_call(
 				origin.clone(),
 				dest.clone(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
@@ -1726,7 +1749,7 @@ mod tests {
 			place_contract(&BOB, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
 
-			let result = MockStack::with_call(
+			let result = MockStack::run_call(
 				ALICE,
 				BOB,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
@@ -1751,7 +1774,7 @@ mod tests {
 			).unwrap();
 
 			assert_matches!(
-				MockStack::with_instantiate(
+				MockStack::run_instantiate(
 					ALICE,
 					executable,
 					&mut gas_meter,
@@ -1781,7 +1804,7 @@ mod tests {
 			set_balance(&ALICE, 1000);
 
 			let instantiated_contract_address = assert_matches!(
-				MockStack::with_instantiate(
+				MockStack::run_instantiate(
 					ALICE,
 					executable,
 					&mut gas_meter,
@@ -1818,7 +1841,7 @@ mod tests {
 			set_balance(&ALICE, 1000);
 
 			let instantiated_contract_address = assert_matches!(
-				MockStack::with_instantiate(
+				MockStack::run_instantiate(
 					ALICE,
 					executable,
 					&mut gas_meter,
@@ -1864,7 +1887,7 @@ mod tests {
 			place_contract(&BOB, instantiator_ch);
 
 			assert_matches!(
-				MockStack::with_call(
+				MockStack::run_call(
 					ALICE, BOB, &mut GasMeter::<Test>::new(GAS_LIMIT), &schedule, 20, vec![],
 				),
 				Ok(_)
@@ -1915,7 +1938,7 @@ mod tests {
 			place_contract(&BOB, instantiator_ch);
 
 			assert_matches!(
-				MockStack::with_call(
+				MockStack::run_call(
 					ALICE, BOB, &mut GasMeter::<Test>::new(GAS_LIMIT), &schedule, 20, vec![],
 				),
 				Ok(_)
@@ -1946,7 +1969,7 @@ mod tests {
 				set_balance(&ALICE, 1000);
 
 				assert_eq!(
-					MockStack::with_instantiate(
+					MockStack::run_instantiate(
 						ALICE,
 						executable,
 						&mut gas_meter,
@@ -1955,7 +1978,7 @@ mod tests {
 						vec![],
 						&[],
 					),
-					Err(Error::<Test>::NotCallable.into())
+					Err(Error::<Test>::TerminatedInConstructor.into())
 				);
 
 				assert_eq!(
@@ -1985,7 +2008,7 @@ mod tests {
 			).unwrap();
 			set_balance(&ALICE, subsistence * 10);
 
-			let result = MockStack::with_instantiate(
+			let result = MockStack::run_instantiate(
 				ALICE,
 				executable,
 				&mut gas_meter,
@@ -2015,7 +2038,7 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, subsistence * 10);
 			place_contract(&BOB, code_hash);
-			MockStack::with_call(
+			MockStack::run_call(
 				ALICE,
 				BOB,
 				&mut gas_meter,
@@ -2064,7 +2087,7 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, subsistence * 100);
 			place_contract(&BOB, code_hash);
-			MockStack::with_call(
+			MockStack::run_call(
 				ALICE,
 				BOB,
 				&mut gas_meter,

@@ -1844,7 +1844,7 @@ fn cannot_self_destruct_in_constructor() {
 					vec![],
 					vec![],
 				),
-				Error::<Test>::NotCallable,
+				Error::<Test>::TerminatedInConstructor,
 			);
 		});
 }

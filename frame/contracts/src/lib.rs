@@ -316,7 +316,7 @@ pub mod pallet {
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = <CurrentSchedule<T>>::get();
-			let (result, code_len) = match ExecStack::<T, PrefabWasmModule<T>>::with_call(
+			let (result, code_len) = match ExecStack::<T, PrefabWasmModule<T>>::run_call(
 				origin, dest, &mut gas_meter, &schedule, value, data
 			) {
 				Ok((output, len)) => (Ok(output), len),
@@ -369,7 +369,7 @@ pub mod pallet {
 			let executable = PrefabWasmModule::from_code(code, &schedule)?;
 			let code_len = executable.code_len();
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
-			let result = ExecStack::<T, PrefabWasmModule<T>>::with_instantiate(
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt,
 			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
@@ -400,7 +400,7 @@ pub mod pallet {
 			let schedule = <CurrentSchedule<T>>::get();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
 			let code_len = executable.code_len();
-			let result = ExecStack::<T, PrefabWasmModule<T>>::with_instantiate(
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt,
 			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
@@ -610,6 +610,10 @@ pub mod pallet {
 		StorageExhausted,
 		/// A contract with the same AccountId already exists.
 		DuplicateContract,
+		/// A contract self destructed in its constructor.
+		///
+		/// This can be triggered by a call to `seal_terminate` or `seal_restore_to`.
+		TerminatedInConstructor,
 	}
 
 	/// Current cost schedule for contracts.
@@ -684,7 +688,7 @@ where
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let schedule = <CurrentSchedule<T>>::get();
-		let result = ExecStack::<T, PrefabWasmModule<T>>::with_call(
+		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
 			origin, dest, &mut gas_meter, &schedule, value, input_data,
 		);
 		let gas_consumed = gas_meter.gas_spent();
@@ -728,7 +732,7 @@ where
 				debug_message: Bytes(Vec::new()),
 			}
 		};
-		let result = ExecStack::<T, PrefabWasmModule<T>>::with_instantiate(
+		let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 			origin, executable, &mut gas_meter, &schedule, endowment, data, &salt,
 		).and_then(|(account_id, result)| {
 			let rent_projection = if compute_projection {

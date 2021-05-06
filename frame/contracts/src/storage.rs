@@ -247,7 +247,7 @@ where
 			pair_count: 0,
 			last_write: None,
 			_reserved: None,
-			};
+		};
 
 		Ok(contract)
 	}
