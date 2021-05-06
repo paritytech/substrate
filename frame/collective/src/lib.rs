@@ -48,14 +48,13 @@ use sp_io::storage;
 use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
+	decl_error, decl_event, decl_module, decl_storage, ensure, BoundedVec,
 	codec::{Decode, Encode},
-	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
 	},
-	ensure,
-	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
+	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing},
 	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -165,6 +164,15 @@ pub enum RawOrigin<AccountId, I> {
 	_Phantom(sp_std::marker::PhantomData<I>),
 }
 
+impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
+	fn get_backing(&self) -> Option<Backing> {
+		match self {
+			RawOrigin::Members(n, d) => Some(Backing { approvals: *n, eligible: *d }),
+			_ => None,
+		}
+	}
+}
+
 /// Origin for the collective module.
 pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as frame_system::Config>::AccountId, I>;
 
@@ -186,7 +194,7 @@ pub struct Votes<AccountId, BlockNumber> {
 decl_storage! {
 	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Collective {
 		/// The hashes of the active proposals.
-		pub Proposals get(fn proposals): Vec<T::Hash>;
+		pub Proposals get(fn proposals): BoundedVec<T::Hash, T::MaxProposals>;
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(fn proposal_of):
 			map hasher(identity) T::Hash => Option<<T as Config<I>>::Proposal>;
@@ -462,17 +470,13 @@ decl_module! {
 			} else {
 				let active_proposals =
 					<Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
-						proposals.push(proposal_hash);
-						ensure!(
-							proposals.len() <= T::MaxProposals::get() as usize,
-							Error::<T, I>::TooManyProposals
-						);
+						proposals.try_push(proposal_hash).map_err(|_| Error::<T, I>::TooManyProposals)?;
 						Ok(proposals.len())
 					})?;
 				let index = Self::proposal_count();
 				<ProposalCount<I>>::mutate(|i| *i += 1);
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
-				let end = system::Module::<T>::block_number() + T::MotionDuration::get();
+				let end = system::Pallet::<T>::block_number() + T::MotionDuration::get();
 				let votes = Votes { index, threshold, ayes: vec![who.clone()], nays: vec![], end };
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
@@ -647,7 +651,7 @@ decl_module! {
 			}
 
 			// Only allow actual closing of the proposal after the voting period has ended.
-			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
+			ensure!(system::Pallet::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
 			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
 
@@ -1004,6 +1008,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	impl Config<Instance1> for Test {
 		type Origin = Origin;
@@ -1045,10 +1050,10 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event<T>},
-			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
-			CollectiveMajority: collective::<Instance2>::{Module, Call, Event<T>, Origin<T>, Config<T>},
-			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
+			System: system::{Pallet, Call, Event<T>},
+			Collective: collective::<Instance1>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+			CollectiveMajority: collective::<Instance2>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+			DefaultCollective: collective::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
 		}
 	);
 
@@ -1076,7 +1081,7 @@ mod tests {
 	fn motions_basic_environment_works() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
-			assert_eq!(Collective::proposals(), Vec::<H256>::new());
+			assert_eq!(*Collective::proposals(), Vec::<H256>::new());
 		});
 	}
 
@@ -1306,7 +1311,7 @@ mod tests {
 			let hash = proposal.blake2_256().into();
 			let end = 4;
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
-			assert_eq!(Collective::proposals(), vec![hash]);
+			assert_eq!(*Collective::proposals(), vec![hash]);
 			assert_eq!(Collective::proposal_of(&hash), Some(proposal));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1567,9 +1572,9 @@ mod tests {
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
 			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len));
-			assert_eq!(Collective::proposals(), vec![]);
+			assert_eq!(*Collective::proposals(), vec![]);
 			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
-			assert_eq!(Collective::proposals(), vec![hash]);
+			assert_eq!(*Collective::proposals(), vec![hash]);
 		});
 	}
 

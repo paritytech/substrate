@@ -196,6 +196,13 @@ pub trait Proposer<B: BlockT> {
 	/// a maximum duration for building this proposal is given. If building the proposal takes
 	/// longer than this maximum, the proposal will be very likely discarded.
 	///
+	/// If `block_size_limit` is given, the proposer should push transactions until the block size
+	/// limit is hit. Depending on the `finalize_block` implementation of the runtime, it probably
+	/// incorporates other operations (that are happening after the block limit is hit). So,
+	/// when the block size estimation also includes a proof that is recorded alongside the block
+	/// production, the proof can still grow. This means that the `block_size_limit` should not be
+	/// the hard limit of what is actually allowed.
+	///
 	/// # Return
 	///
 	/// Returns a future that resolves to a [`Proposal`] or to [`Error`].
@@ -204,6 +211,7 @@ pub trait Proposer<B: BlockT> {
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<B>,
 		max_duration: Duration,
+		block_size_limit: Option<usize>,
 	) -> Self::Proposal;
 }
 
@@ -303,16 +311,8 @@ impl<Block: BlockT> CanAuthorWith<Block> for NeverCanAuthor {
 /// A type from which a slot duration can be obtained.
 pub trait SlotData {
 	/// Gets the slot duration.
-	fn slot_duration(&self) -> u64;
+	fn slot_duration(&self) -> sp_std::time::Duration;
 
 	/// The static slot key
 	const SLOT_KEY: &'static [u8];
-}
-
-impl SlotData for u64 {
-	fn slot_duration(&self) -> u64 {
-		*self
-	}
-
-	const SLOT_KEY: &'static [u8] = b"aura_slot_duration";
 }

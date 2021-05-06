@@ -122,6 +122,10 @@ mod module1 {
 		fn check_inherent(_: &Self::Call, _: &InherentData) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
+			unimplemented!();
+		}
 	}
 }
 
@@ -180,6 +184,10 @@ mod module2 {
 		}
 
 		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
+			unimplemented!();
+		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
 			unimplemented!();
 		}
 	}
@@ -264,24 +272,24 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event<T>},
+		System: system::{Pallet, Call, Event<T>},
 		Module1_1: module1::<Instance1>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module1_2: module1::<Instance2>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
-		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
+		Module2: module2::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
 		Module2_1: module2::<Instance1>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module2_2: module2::<Instance2>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module2_3: module2::<Instance3>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
-		Module3: module3::{Module, Call},
+		Module3: module3::{Pallet, Call},
 	}
 );
 

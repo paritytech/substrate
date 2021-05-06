@@ -37,7 +37,6 @@ use crate::{
 use sp_std::{rc::Rc, vec::Vec};
 use sp_std::collections::btree_map::BTreeMap;
 use sp_arithmetic::{traits::Zero, Perbill};
-
 /// The type used as the threshold.
 ///
 /// Just some reading sugar; Must always be same as [`ExtendedBalance`];
@@ -364,7 +363,7 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 		let candidate = edge.candidate.borrow();
 		if candidate.elected {
 			let extra =
-				Perbill::one().min(Perbill::from_rational_approximation(t, candidate.backed_stake))
+				Perbill::one().min(Perbill::from_rational(t, candidate.backed_stake))
 				* edge.weight;
 			acc.saturating_add(extra)
 		} else {

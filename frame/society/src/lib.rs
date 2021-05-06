@@ -17,8 +17,8 @@
 
 //! # Society Module
 //!
-//! - [`society::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!
@@ -254,13 +254,13 @@ mod tests;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_runtime::{Percent, ModuleId, RuntimeDebug,
+use sp_runtime::{Percent, RuntimeDebug,
 	traits::{
 		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
 		TrailingZeroInput, CheckedSub
 	}
 };
-use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
+use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult, PalletId};
 use frame_support::weights::Weight;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
@@ -272,12 +272,12 @@ type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as system::Con
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// The module's configuration trait.
-pub trait Config<I=DefaultInstance>: system::Config {
+pub trait Config<I = DefaultInstance>: system::Config {
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 
 	/// The societies's module id
-	type ModuleId: Get<ModuleId>;
+	type PalletId: Get<PalletId>;
 
 	/// The currency type used for bidding.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -316,6 +316,9 @@ pub trait Config<I=DefaultInstance>: system::Config {
 
 	/// The number of blocks between membership challenges.
 	type ChallengePeriod: Get<Self::BlockNumber>;
+
+	/// The maximum number of candidates that we accept per round.
+	type MaxCandidateIntake: Get<u32>;
 }
 
 /// A vote by a member on a candidate application.
@@ -495,7 +498,10 @@ decl_module! {
 		const ChallengePeriod: T::BlockNumber = T::ChallengePeriod::get();
 
 		/// The societies's module id
-		const ModuleId: ModuleId = T::ModuleId::get();
+		const PalletId: PalletId = T::PalletId::get();
+
+		/// Maximum candidate intake per round.
+		const MaxCandidateIntake: u32 = T::MaxCandidateIntake::get();
 
 		// Used for handling module events.
 		fn deposit_event() = default;
@@ -584,7 +590,8 @@ decl_module! {
 					// no reason that either should fail.
 					match b.remove(pos).kind {
 						BidKind::Deposit(deposit) => {
-							let _ = T::Currency::unreserve(&who, deposit);
+							let err_amount = T::Currency::unreserve(&who, deposit);
+							debug_assert!(err_amount.is_zero());
 						}
 						BidKind::Vouch(voucher, _) => {
 							<Vouching<T, I>>::remove(&voucher);
@@ -793,7 +800,7 @@ decl_module! {
 
 			let mut payouts = <Payouts<T, I>>::get(&who);
 			if let Some((when, amount)) = payouts.first() {
-				if when <= &<system::Module<T>>::block_number() {
+				if when <= &<system::Pallet<T>>::block_number() {
 					T::Currency::transfer(&Self::payouts(), &who, *amount, AllowDeath)?;
 					payouts.remove(0);
 					if payouts.is_empty() {
@@ -981,7 +988,7 @@ decl_module! {
 						// Reduce next pot by payout
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
-						let maturity = <system::Module<T>>::block_number()
+						let maturity = <system::Pallet<T>>::block_number()
 							+ Self::lock_duration(Self::members().len() as u32);
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
 					}
@@ -990,7 +997,8 @@ decl_module! {
 						match kind {
 							BidKind::Deposit(deposit) => {
 								// Slash deposit and move it to the society account
-								let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit, BalanceStatus::Free);
+								let res = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit, BalanceStatus::Free);
+								debug_assert!(res.is_ok());
 							}
 							BidKind::Vouch(voucher, _) => {
 								// Ban the voucher from vouching again
@@ -1235,7 +1243,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			let Bid { who: popped, kind, .. } = bids.pop().expect("b.len() > 1000; qed");
 			match kind {
 				BidKind::Deposit(deposit) => {
-					let _ = T::Currency::unreserve(&popped, deposit);
+					let err_amount = T::Currency::unreserve(&popped, deposit);
+					debug_assert!(err_amount.is_zero());
 				}
 				BidKind::Vouch(voucher, _) => {
 					<Vouching<T, I>>::remove(&voucher);
@@ -1324,7 +1333,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			// critical issues or side-effects. This is auto-correcting as members fall out of society.
 			members.reserve(candidates.len());
 
-			let maturity = <system::Module<T>>::block_number()
+			let maturity = <system::Pallet<T>>::block_number()
 				+ Self::lock_duration(members.len() as u32);
 
 			let mut rewardees = Vec::new();
@@ -1402,7 +1411,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					Self::bump_payout(winner, maturity, total_slash);
 				} else {
 					// Move the slashed amount back from payouts account to local treasury.
-					let _ = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+					let res = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+					debug_assert!(res.is_ok());
 				}
 			}
 
@@ -1413,7 +1423,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 				// this should never fail since we ensure we can afford the payouts in a previous
 				// block, but there's not much we can do to recover if it fails anyway.
-				let _ = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
+				let res = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
+				debug_assert!(res.is_ok());
 			}
 
 			// if at least one candidate was accepted...
@@ -1514,7 +1525,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			BidKind::Deposit(deposit) => {
 				// In the case that a normal deposit bid is accepted we unreserve
 				// the deposit.
-				let _ = T::Currency::unreserve(candidate, deposit);
+				let err_amount = T::Currency::unreserve(candidate, deposit);
+				debug_assert!(err_amount.is_zero());
 				value
 			}
 			BidKind::Vouch(voucher, tip) => {
@@ -1589,7 +1601,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::ModuleId::get().into_account()
+		T::PalletId::get().into_account()
 	}
 
 	/// The account ID of the payouts pot. This is where payouts are made from.
@@ -1597,7 +1609,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn payouts() -> T::AccountId {
-		T::ModuleId::get().into_sub_account(b"payouts")
+		T::PalletId::get().into_sub_account(b"payouts")
 	}
 
 	/// Return the duration of the lock, in blocks, with the given number of members.
@@ -1615,11 +1627,11 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// May be empty.
 	pub fn take_selected(
 		members_len: usize,
-		pot: BalanceOf<T, I>
+		pot: BalanceOf<T, I>,
 	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>> {
 		let max_members = MaxMembers::<I>::get() as usize;
-		// No more than 10 will be returned.
-		let mut max_selections: usize = 10.min(max_members.saturating_sub(members_len));
+		let mut max_selections: usize =
+			(T::MaxCandidateIntake::get() as usize).min(max_members.saturating_sub(members_len));
 
 		if max_selections > 0 {
 			// Get the number of left-most bidders whose bids add up to less than `pot`.

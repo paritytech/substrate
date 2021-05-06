@@ -42,9 +42,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Lottery: pallet_lottery::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Lottery: pallet_lottery::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -78,6 +78,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types! {
@@ -95,13 +96,13 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub const LotteryModuleId: ModuleId = ModuleId(*b"py/lotto");
+	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
 	pub const MaxCalls: usize = 2;
 	pub const MaxGenerateRandom: u32 = 10;
 }
 
 impl Config for Test {
-	type ModuleId = LotteryModuleId;
+	type PalletId = LotteryPalletId;
 	type Call = Call;
 	type Currency = Balances;
 	type Randomness = TestRandomness<Self>;

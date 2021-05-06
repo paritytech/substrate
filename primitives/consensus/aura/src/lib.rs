@@ -84,14 +84,39 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with aura.
 	pub trait AuraApi<AuthorityId: Codec> {
-		/// Return the slot duration in seconds for Aura.
-		/// Currently, only the value provided by this type at genesis
-		/// will be used.
+		/// Returns the slot duration for Aura.
 		///
-		/// Dynamic slot duration may be supported in the future.
-		fn slot_duration() -> u64;
+		/// Currently, only the value provided by this type at genesis will be used.
+		fn slot_duration() -> SlotDuration;
 
 		// Return the current set of authorities.
 		fn authorities() -> Vec<AuthorityId>;
 	}
+}
+
+/// Aura slot duration.
+///
+/// Internally stored as milliseconds.
+#[derive(sp_runtime::RuntimeDebug, Encode, Decode, PartialEq, Clone, Copy)]
+pub struct SlotDuration(u64);
+
+impl SlotDuration {
+	/// Initialize from the given milliseconds.
+	pub fn from_millis(val: u64) -> Self {
+		Self(val)
+	}
+
+	/// Returns the slot duration in milli seconds.
+	pub fn get(&self) -> u64 {
+		self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl sp_consensus::SlotData for SlotDuration {
+	fn slot_duration(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(self.0)
+	}
+
+	const SLOT_KEY: &'static [u8] = b"aura_slot_duration";
 }

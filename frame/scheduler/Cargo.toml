@@ -10,7 +10,6 @@ description = "FRAME example pallet"
 readme = "README.md"
 
 [dependencies]
-serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
@@ -28,7 +27,6 @@ substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
 	"sp-runtime/std",
 	"frame-benchmarking/std",

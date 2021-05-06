@@ -18,7 +18,7 @@
 //! Concrete externalities implementation.
 
 use crate::{
-	StorageKey, StorageValue, OverlayedChanges,
+	StorageKey, StorageValue, OverlayedChanges, IndexOperation,
 	backend::Backend, overlayed_changes::OverlayedExtensions,
 };
 use hash_db::Hasher;
@@ -568,6 +568,36 @@ where
 		}
 	}
 
+	fn storage_index_transaction(&mut self, index: u32, offset: u32) {
+		trace!(
+			target: "state",
+			"{:04x}: IndexTransaction ({}): [{}..]",
+			self.id,
+			index,
+			offset,
+		);
+		self.overlay.add_transaction_index(IndexOperation::Insert {
+			extrinsic: index,
+			offset,
+		});
+	}
+
+	/// Renew existing piece of data storage.
+	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8], size: u32) {
+		trace!(
+			target: "state",
+			"{:04x}: RenewTransactionIndex ({}) {} bytes",
+			self.id,
+			HexDisplay::from(&hash),
+			size,
+		);
+		self.overlay.add_transaction_index(IndexOperation::Renew {
+			extrinsic: index,
+			hash: hash.to_vec(),
+			size
+		});
+	}
+
 	#[cfg(not(feature = "std"))]
 	fn storage_changes_root(&mut self, _parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
@@ -681,6 +711,10 @@ where
 
 	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>) {
 		self.backend.set_whitelist(new)
+	}
+
+	fn proof_size(&self) -> Option<u32> {
+		self.backend.proof_size()
 	}
 }
 
