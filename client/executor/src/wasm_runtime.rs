@@ -423,13 +423,9 @@ fn create_versioned_wasm_runtime(
 		.map_err(|e| WasmError::Other(format!("Decompression error: {:?}", e)))?;
 	let blob = sc_executor_common::runtime_blob::RuntimeBlob::new(&code)?;
 
-	let mut version = None;
-
 	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary pertaining
 	// to runtime version. We do it before consuming the runtime blob for creating the runtime.
-	if let Some(embedded_version) = read_embedded_version(&blob)? {
-		version = Some(embedded_version);
-	}
+	let mut version: Option<_> = read_embedded_version(&blob)?;
 
 	let runtime = create_wasm_runtime_with_code(
 		wasm_method,
