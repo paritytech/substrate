@@ -18,6 +18,7 @@
 use super::helper;
 use syn::spanned::Spanned;
 use quote::ToTokens;
+use std::collections::HashMap;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -51,12 +52,12 @@ impl syn::parse::Parse for PalletStorageAttr {
 
 /// The value and key types used by storages. Needed to expand metadata.
 pub enum Metadata{
-	Value { value: syn::GenericArgument },
-	Map { value: syn::GenericArgument, key: syn::GenericArgument },
+	Value { value: syn::Type },
+	Map { value: syn::Type, key: syn::Type },
 	DoubleMap {
-		value: syn::GenericArgument,
-		key1: syn::GenericArgument,
-		key2: syn::GenericArgument
+		value: syn::Type,
+		key1: syn::Type,
+		key2: syn::Type
 	},
 }
 
@@ -93,24 +94,287 @@ pub struct StorageDef {
 	pub attr_span: proc_macro2::Span,
 	/// The `cfg` attributes.
 	pub cfg_attrs: Vec<syn::Attribute>,
+	/// If generics are named (e.g. `StorageValue<Value = u32, ..>`) then this contains all the
+	/// generics of the storage.
+	/// If generics are not named, this is none.
+	pub named_generics: Option<StorageGenerics>,
 }
 
-/// In `Foo<A, B, C>` retrieve the argument at given position, i.e. A is argument at position 0.
-fn retrieve_arg(
-	segment: &syn::PathSegment,
-	arg_pos: usize,
-) -> syn::Result<syn::GenericArgument> {
-	if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-		if arg_pos < args.args.len() {
-			Ok(args.args[arg_pos].clone())
-		} else {
-			let msg = format!("pallet::storage unexpected number of generic argument, expected at \
-				least {} args, found {}", arg_pos + 1, args.args.len());
-			Err(syn::Error::new(args.span(), msg))
+
+/// The parsed generic from the
+#[derive(Clone)]
+pub enum StorageGenerics {
+	DoubleMap {
+		hasher1: syn::Type,
+		key1: syn::Type,
+		hasher2: syn::Type,
+		key2: syn::Type,
+		value: syn::Type,
+		query_kind: Option<syn::Type>,
+		on_empty: Option<syn::Type>,
+	},
+	Map {
+		hasher: syn::Type,
+		key: syn::Type,
+		value: syn::Type,
+		query_kind: Option<syn::Type>,
+		on_empty: Option<syn::Type>,
+	},
+	Value {
+		value: syn::Type,
+		query_kind: Option<syn::Type>,
+		on_empty: Option<syn::Type>,
+	},
+}
+
+impl StorageGenerics {
+	/// Return the metadata from the defined generics
+	fn metadata(&self) -> Metadata {
+		match self.clone() {
+			Self::DoubleMap { value, key1, key2, .. } => Metadata::DoubleMap { value, key1, key2 },
+			Self::Map { value, key, .. } => Metadata::Map { value, key },
+			Self::Value { value, .. } => Metadata::Value { value },
 		}
+	}
+
+	/// Return the query kind from the defined generics
+	fn query_kind(&self) -> Option<syn::Type> {
+		match &self {
+			Self::DoubleMap { query_kind, .. }
+			| Self::Map { query_kind, .. }
+			| Self::Value { query_kind, .. }
+				=> query_kind.clone(),
+		}
+	}
+}
+
+enum StorageKind {
+	Value,
+	Map,
+	DoubleMap
+}
+
+/// Returns `(named generics, metadata, query kind)`
+fn process_named_generics(
+	storage: &StorageKind,
+	args_span: proc_macro2::Span,
+	args: &[syn::Binding],
+) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>)> {
+	let mut parsed = HashMap::<String, syn::Binding>::new();
+
+	// Ensure no duplicate.
+	for arg in args {
+		if let Some(other) = parsed.get(&arg.ident.to_string()) {
+			let msg = "Invalid pallet::storage, Duplicated named generic";
+			let mut err = syn::Error::new(arg.ident.span(), msg);
+			err.combine(syn::Error::new(other.ident.span(), msg));
+			return Err(err);
+		}
+		parsed.insert(arg.ident.to_string(), arg.clone());
+	}
+
+	// Error on unfound mandatory generic
+	let unfound_error = |storage_name: &str, generic_name: &str| {
+		let msg = format!("Invalid `{}`, cannot find `{}` generic", storage_name, generic_name);
+		syn::Error::new(args_span, msg)
+	};
+
+	let unexpected_remainings = |storage_name: &str, unexpected: HashMap<_, syn::Binding>| {
+		if unexpected.len() != 0 {
+			let mut unexpected = unexpected.values();
+			let msg = |gen| {
+				format!(
+					"Invalid pallet::storage, Unexpected generic `{}` for `{}`.",
+					gen, storage_name,
+				)
+			};
+
+			let first = unexpected.next().expect("not empty as checked above");
+
+			let mut error = syn::Error::new(first.ident.span(), msg(first.ident.clone()));
+			for other in unexpected {
+				error.combine(syn::Error::new(other.ident.span(), msg(other.ident.clone())));
+			}
+			Err(error)
+		} else {
+			Ok(())
+		}
+	};
+
+	let generics = match storage {
+		StorageKind::Value => {
+			let generics = StorageGenerics::Value {
+				value: parsed.remove("Value")
+					.map(|binding| binding.ty)
+					.ok_or_else(|| unfound_error("StorageValue", "Value"))?,
+				query_kind: parsed.remove("QueryKind")
+					.map(|binding| binding.ty),
+				on_empty: parsed.remove("OnEmpty")
+					.map(|binding| binding.ty),
+			};
+			unexpected_remainings("StorageValue", parsed)?;
+			generics
+		}
+		StorageKind::Map => {
+			let generics = StorageGenerics::Map {
+				hasher: parsed.remove("Hasher")
+					.map(|binding| binding.ty)
+					.ok_or_else(|| unfound_error("StorageMap", "Hasher"))?,
+				key: parsed.remove("Key")
+					.map(|binding| binding.ty)
+					.ok_or_else(|| unfound_error("StorageMap", "Key"))?,
+				value: parsed.remove("Value")
+					.map(|binding| binding.ty)
+					.ok_or_else(|| unfound_error("StorageMap", "Value"))?,
+				query_kind: parsed.remove("QueryKind")
+					.map(|binding| binding.ty),
+				on_empty: parsed.remove("OnEmpty")
+					.map(|binding| binding.ty),
+			};
+			unexpected_remainings("StorageMap", parsed)?;
+			generics
+		}
+		StorageKind::DoubleMap => {
+			let generics = StorageGenerics::DoubleMap {
+				hasher1: parsed.remove("Hasher1")
+					.map(|binding| binding.ty)
+					.ok_or_else(|| unfound_error("StorageDoubleMap", "Hasher1"))?,
+				key1: parsed.remove("Key1")
+					.map(|binding| binding.ty)
+					.ok_or_else(|| unfound_error("StorageDoubleMap", "Key1"))?,
+				hasher2: parsed.remove("Hasher2")
+					.map(|binding| binding.ty)
+					.ok_or_else(|| unfound_error("StorageDoubleMap", "Hasher2"))?,
+				key2: parsed.remove("Key2")
+					.map(|binding| binding.ty)
+					.ok_or_else(|| unfound_error("StorageDoubleMap", "Key2"))?,
+				value: parsed.remove("Value")
+					.map(|binding| binding.ty)
+					.ok_or_else(|| unfound_error("StorageDoubleMap", "Value"))?,
+				query_kind: parsed.remove("QueryKind")
+					.map(|binding| binding.ty),
+				on_empty: parsed.remove("OnEmpty")
+					.map(|binding| binding.ty),
+			};
+			unexpected_remainings("StorageDoubleMap", parsed)?;
+			generics
+		}
+	};
+
+	let metadata = generics.metadata();
+	let query_kind = generics.query_kind();
+
+	Ok((Some(generics), metadata, query_kind))
+}
+
+/// Returns `(named generics, metadata, query kind)`
+fn process_unnamed_generics(
+	storage: &StorageKind,
+	args_span: proc_macro2::Span,
+	args: &[syn::Type],
+) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>)> {
+	let retrieve_arg = |arg_pos| {
+		args.get(arg_pos)
+			.cloned()
+			.ok_or_else(|| {
+				let msg = format!(
+					"Invalid pallet::storage, unexpected number of generic argument, \
+						expect at least {} args, found {}.",
+					arg_pos + 1,
+					args.len(),
+				);
+				syn::Error::new(args_span, msg)
+			})
+	};
+
+	let prefix_arg = retrieve_arg(0)?;
+	syn::parse2::<syn::Token![_]>(prefix_arg.to_token_stream())
+		.map_err(|e| {
+			let msg = "Invalid pallet::storage, for unnamed generic arguments the type \
+				first generic argument must be `_`, the argument is then replaced by macro.";
+			let mut err = syn::Error::new(prefix_arg.span(), msg);
+			err.combine(e);
+			err
+		})?;
+
+	let res = match storage {
+		StorageKind::Value => (
+			None,
+			Metadata::Value { value: retrieve_arg(1)? },
+			retrieve_arg(2).ok(),
+		),
+		StorageKind::Map => (
+			None,
+			Metadata::Map {
+				key: retrieve_arg(2)?,
+				value: retrieve_arg(3)?,
+			},
+			retrieve_arg(4).ok(),
+		),
+		StorageKind::DoubleMap => (
+			None,
+			Metadata::DoubleMap {
+				key1: retrieve_arg(2)?,
+				key2: retrieve_arg(4)?,
+				value: retrieve_arg(5)?,
+			},
+			retrieve_arg(6).ok(),
+		),
+	};
+
+	Ok(res)
+}
+
+/// Returns `(named generics, metadata, query kind)`
+fn process_generics(
+	segment: &syn::PathSegment,
+) -> syn::Result<(Option<StorageGenerics>, Metadata, Option<syn::Type>)> {
+	let storage_kind = match &*segment.ident.to_string() {
+		"StorageValue" => StorageKind::Value,
+		"StorageMap" => StorageKind::Map,
+		"StorageDoubleMap" => StorageKind::DoubleMap,
+		found => {
+			let msg = format!(
+				"Invalid pallet::storage, expected ident: `StorageValue` or \
+				`StorageMap` or `StorageDoubleMap` in order to expand metadata, found \
+				`{}`.",
+				found,
+			);
+			return Err(syn::Error::new(segment.ident.span(), msg));
+		}
+	};
+
+	let args_span = segment.arguments.span();
+
+	let args = match &segment.arguments {
+		syn::PathArguments::AngleBracketed(args) if args.args.len() != 0 => args,
+		_ => {
+			let msg = "Invalid pallet::storage, invalid number of generic generic arguments, \
+				expect more that 0 generic arguments.";
+			return Err(syn::Error::new(segment.span(), msg));
+		}
+	};
+
+	if args.args.iter().all(|gen| matches!(gen, syn::GenericArgument::Type(_))) {
+		let args = args.args.iter()
+			.map(|gen| match gen {
+				syn::GenericArgument::Type(gen) => gen.clone(),
+				_ => unreachable!("It is asserted above that all generics are types"),
+			})
+			.collect::<Vec<_>>();
+		process_unnamed_generics(&storage_kind, args_span, &args)
+	} else if args.args.iter().all(|gen| matches!(gen, syn::GenericArgument::Binding(_))) {
+		let args = args.args.iter()
+			.map(|gen| match gen {
+				syn::GenericArgument::Binding(gen) => gen.clone(),
+				_ => unreachable!("It is asserted above that all generics are bindings"),
+			})
+			.collect::<Vec<_>>();
+		process_named_generics(&storage_kind, args_span, &args)
 	} else {
-		let msg = format!("pallet::storage unexpected number of generic argument, expected at \
-			least {} args, found none", arg_pos + 1);
+		let msg = "Invalid pallet::storage, invalid generic declaration for storage. Expect only \
+			type generics or binding generics, e.g. `<Name1 = Gen1, Name2 = Gen2, ..>` or \
+			`<Gen1, Gen2, ..>`.";
 		Err(syn::Error::new(segment.span(), msg))
 	}
 }
@@ -124,7 +388,7 @@ impl StorageDef {
 		let item = if let syn::Item::Type(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::storage, expected item type"));
+			return Err(syn::Error::new(item.span(), "Invalid pallet::storage, expect item type."));
 		};
 
 		let mut attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
@@ -154,45 +418,14 @@ impl StorageDef {
 			return Err(syn::Error::new(item.ty.span(), msg));
 		}
 
-		let query_kind;
-		let metadata = match &*typ.path.segments[0].ident.to_string() {
-			"StorageValue" => {
-				query_kind = retrieve_arg(&typ.path.segments[0], 2);
-				Metadata::Value {
-					value: retrieve_arg(&typ.path.segments[0], 1)?,
-				}
-			}
-			"StorageMap" => {
-				query_kind = retrieve_arg(&typ.path.segments[0], 4);
-				Metadata::Map {
-					key: retrieve_arg(&typ.path.segments[0], 2)?,
-					value: retrieve_arg(&typ.path.segments[0], 3)?,
-				}
-			}
-			"StorageDoubleMap" => {
-				query_kind = retrieve_arg(&typ.path.segments[0], 6);
-				Metadata::DoubleMap {
-					key1: retrieve_arg(&typ.path.segments[0], 2)?,
-					key2: retrieve_arg(&typ.path.segments[0], 4)?,
-					value: retrieve_arg(&typ.path.segments[0], 5)?,
-				}
-			}
-			found => {
-				let msg = format!(
-					"Invalid pallet::storage, expected ident: `StorageValue` or \
-					`StorageMap` or `StorageDoubleMap` in order to expand metadata, found \
-					`{}`",
-					found,
-				);
-				return Err(syn::Error::new(item.ty.span(), msg));
-			}
-		};
+		let (named_generics, metadata, query_kind) = process_generics(&typ.path.segments[0])?;
+
 		let query_kind = query_kind
 			.map(|query_kind| match query_kind {
-				syn::GenericArgument::Type(syn::Type::Path(path))
+				syn::Type::Path(path)
 					if path.path.segments.last().map_or(false, |s| s.ident == "OptionQuery")
 				=> Some(QueryKind::OptionQuery),
-				syn::GenericArgument::Type(syn::Type::Path(path))
+				syn::Type::Path(path)
 					if path.path.segments.last().map_or(false, |s| s.ident == "ValueQuery")
 				=> Some(QueryKind::ValueQuery),
 				_ => None,
@@ -206,16 +439,6 @@ impl StorageDef {
 			return Err(syn::Error::new(getter.unwrap().span(), msg));
 		}
 
-		let prefix_arg = retrieve_arg(&typ.path.segments[0], 0)?;
-		syn::parse2::<syn::Token![_]>(prefix_arg.to_token_stream())
-			.map_err(|e| {
-				let msg = "Invalid use of `#[pallet::storage]`, the type first generic argument \
-					must be `_`, the final argument is automatically set by macro.";
-				let mut err = syn::Error::new(prefix_arg.span(), msg);
-				err.combine(e);
-				err
-			})?;
-
 		Ok(StorageDef {
 			attr_span,
 			index,
@@ -228,6 +451,7 @@ impl StorageDef {
 			query_kind,
 			where_clause,
 			cfg_attrs,
+			named_generics,
 		})
 	}
 }

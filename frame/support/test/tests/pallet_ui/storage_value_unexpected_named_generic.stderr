@@ -1,0 +1,5 @@
+error: Invalid `StorageValue`, cannot find `Value` generic
+  --> $DIR/storage_value_unexpected_named_generic.rs:19:28
+   |
+19 |     type Foo<T> = StorageValue<P = u32>;
+   |                               ^
