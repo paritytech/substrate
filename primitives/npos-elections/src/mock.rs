@@ -17,15 +17,39 @@
 
 //! Mock file for npos-elections.
 
-#![cfg(test)]
+#![cfg(any(test, mocks))]
 
-use crate::*;
+use std::{
+	collections::{HashSet, HashMap},
+	convert::TryInto,
+	hash::Hash,
+};
+
+use rand::{self, Rng, seq::SliceRandom};
 use sp_arithmetic::{
 	traits::{One, SaturatedConversion, Zero},
 	PerThing,
 };
 use sp_runtime::assert_eq_error_rate;
 use sp_std::collections::btree_map::BTreeMap;
+
+use crate::{Assignment, ElectionResult, ExtendedBalance, PerThing128, VoteWeight, seq_phragmen};
+
+sp_npos_elections_compact::generate_solution_type!(
+	#[compact]
+	pub struct Compact::<VoterIndex = u32, TargetIndex = u16, Accuracy = Accuracy>(16)
+);
+
+pub type AccountId = u64;
+/// The candidate mask allows easy disambiguation between voters and candidates: accounts
+/// for which this bit is set are candidates, and without it, are voters.
+pub const CANDIDATE_MASK: AccountId = 1 << ((std::mem::size_of::<AccountId>() * 8) - 1);
+pub type CandidateId = AccountId;
+
+pub type Accuracy = sp_runtime::Perbill;
+
+pub type MockAssignment = crate::Assignment<AccountId, Accuracy>;
+pub type Voter = (AccountId, VoteWeight, Vec<AccountId>);
 
 #[derive(Default, Debug)]
 pub(crate) struct _Candidate<A> {
@@ -60,8 +84,6 @@ pub(crate) struct _Support<A> {
 pub(crate) type _Assignment<A> = (A, f64);
 pub(crate) type _SupportMap<A> = BTreeMap<A, _Support<A>>;
 
-pub(crate) type AccountId = u64;
-
 #[derive(Debug, Clone)]
 pub(crate) struct _ElectionResult<A: Clone> {
 	pub winners: Vec<(A, ExtendedBalance)>,
@@ -72,14 +94,13 @@ pub(crate) fn auto_generate_self_voters<A: Clone>(candidates: &[A]) -> Vec<(A, V
 	candidates.iter().map(|c| (c.clone(), vec![c.clone()])).collect()
 }
 
-pub(crate) fn elect_float<A, FS>(
+pub(crate) fn elect_float<A>(
 	candidate_count: usize,
 	initial_candidates: Vec<A>,
 	initial_voters: Vec<(A, Vec<A>)>,
-	stake_of: FS,
+	stake_of: impl Fn(&A) -> VoteWeight,
 ) -> Option<_ElectionResult<A>> where
 	A: Default + Ord + Copy,
-	for<'r> FS: Fn(&'r A) -> VoteWeight,
 {
 	let mut elected_candidates: Vec<(A, ExtendedBalance)>;
 	let mut assigned: Vec<(A, Vec<_Assignment<A>>)>;
@@ -299,16 +320,15 @@ pub(crate) fn do_equalize_float<A>(
 
 
 pub(crate) fn create_stake_of(stakes: &[(AccountId, VoteWeight)])
-	-> Box<dyn Fn(&AccountId) -> VoteWeight>
+	-> impl Fn(&AccountId) -> VoteWeight
 {
 	let mut storage = BTreeMap::<AccountId, VoteWeight>::new();
 	stakes.iter().for_each(|s| { storage.insert(s.0, s.1); });
-	let stake_of = move |who: &AccountId| -> VoteWeight { storage.get(who).unwrap().to_owned() };
-	Box::new(stake_of)
+	move |who: &AccountId| -> VoteWeight { storage.get(who).unwrap().to_owned() }
 }
 
 
-pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId, T>>) {
+pub fn check_assignments_sum<T: PerThing>(assignments: &[Assignment<AccountId, T>]) {
 	for Assignment { distribution, .. } in assignments {
 		let mut sum: u128 = Zero::zero();
 		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into::<u128>());
@@ -316,12 +336,16 @@ pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId,
 	}
 }
 
-pub(crate) fn run_and_compare<Output: PerThing128>(
+pub(crate) fn run_and_compare<Output: PerThing128, FS>(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, Vec<AccountId>)>,
-	stake_of: &Box<dyn Fn(&AccountId) -> VoteWeight>,
+	stake_of: FS,
 	to_elect: usize,
-) {
+)
+where
+	Output: PerThing128,
+	FS: Fn(&AccountId) -> VoteWeight,
+{
 	// run fixed point code.
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(
 		to_elect,
@@ -340,10 +364,10 @@ pub(crate) fn run_and_compare<Output: PerThing128>(
 
 	assert_eq!(winners.iter().map(|(x, _)| x).collect::<Vec<_>>(), truth_value.winners.iter().map(|(x, _)| x).collect::<Vec<_>>());
 
-	for Assignment { who, distribution } in assignments.clone() {
-		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == who) {
+	for Assignment { who, distribution } in assignments.iter() {
+		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == *who) {
 			for (candidate, per_thingy) in distribution {
-				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
+				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == *candidate ) {
 					assert_eq_error_rate!(
 						Output::from_float(float_assignment.1).deconstruct(),
 						per_thingy.deconstruct(),
@@ -362,15 +386,13 @@ pub(crate) fn run_and_compare<Output: PerThing128>(
 		}
 	}
 
-	check_assignments_sum(assignments);
+	check_assignments_sum(&assignments);
 }
 
-pub(crate) fn build_support_map_float<FS>(
+pub(crate) fn build_support_map_float(
 	result: &mut _ElectionResult<AccountId>,
-	stake_of: FS,
-) -> _SupportMap<AccountId>
-	where for<'r> FS: Fn(&'r AccountId) -> VoteWeight
-{
+	stake_of: impl Fn(&AccountId) -> VoteWeight,
+) -> _SupportMap<AccountId> {
 	let mut supports = <_SupportMap<AccountId>>::new();
 	result.winners
 		.iter()
@@ -392,4 +414,125 @@ pub(crate) fn build_support_map_float<FS>(
 		}
 	}
 	supports
+}
+
+/// Generate voter and assignment lists. Makes no attempt to be realistic about winner or assignment fairness.
+///
+/// Maintains these invariants:
+///
+/// - candidate ids have `CANDIDATE_MASK` bit set
+/// - voter ids do not have `CANDIDATE_MASK` bit set
+/// - assignments have the same ordering as voters
+/// - `assignments.distribution.iter().map(|(_, frac)| frac).sum() == One::one()`
+/// - a coherent set of winners is chosen.
+/// - the winner set is a subset of the candidate set.
+/// - `assignments.distribution.iter().all(|(who, _)| winners.contains(who))`
+pub fn generate_random_votes(
+	candidate_count: usize,
+	voter_count: usize,
+	mut rng: impl Rng,
+) -> (Vec<Voter>, Vec<MockAssignment>, Vec<CandidateId>) {
+	// cache for fast generation of unique candidate and voter ids
+	let mut used_ids = HashSet::with_capacity(candidate_count + voter_count);
+
+	// candidates are easy: just a completely random set of IDs
+	let mut candidates: Vec<AccountId> = Vec::with_capacity(candidate_count);
+	while candidates.len() < candidate_count {
+		let mut new = || rng.gen::<AccountId>() | CANDIDATE_MASK;
+		let mut id = new();
+		// insert returns `false` when the value was already present
+		while !used_ids.insert(id) {
+			id = new();
+		}
+		candidates.push(id);
+	}
+
+	// voters are random ids, random weights, random selection from the candidates
+	let mut voters = Vec::with_capacity(voter_count);
+	while voters.len() < voter_count {
+		let mut new = || rng.gen::<AccountId>() & !CANDIDATE_MASK;
+		let mut id = new();
+		// insert returns `false` when the value was already present
+		while !used_ids.insert(id) {
+			id = new();
+		}
+
+		let vote_weight = rng.gen();
+
+		// it's not interesting if a voter chooses 0 or all candidates, so rule those cases out.
+		// also, let's not generate any cases which result in a compact overflow.
+		let n_candidates_chosen = rng.gen_range(1, candidates.len().min(16));
+
+		let mut chosen_candidates = Vec::with_capacity(n_candidates_chosen);
+		chosen_candidates.extend(candidates.choose_multiple(&mut rng, n_candidates_chosen));
+		voters.push((id, vote_weight, chosen_candidates));
+	}
+
+	// always generate a sensible number of winners: elections are uninteresting if nobody wins,
+	// or everybody wins
+	let num_winners = rng.gen_range(1, candidate_count);
+	let mut winners: HashSet<AccountId> = HashSet::with_capacity(num_winners);
+	winners.extend(candidates.choose_multiple(&mut rng, num_winners));
+	assert_eq!(winners.len(), num_winners);
+
+	let mut assignments = Vec::with_capacity(voters.len());
+	for (voter_id, _, votes) in voters.iter() {
+		let chosen_winners = votes.iter().filter(|vote| winners.contains(vote)).cloned();
+		let num_chosen_winners = chosen_winners.clone().count();
+
+		// distribute the available stake randomly
+		let stake_distribution = if num_chosen_winners == 0 {
+			Vec::new()
+		} else {
+			let mut available_stake = 1000;
+			let mut stake_distribution = Vec::with_capacity(num_chosen_winners);
+			for _ in 0..num_chosen_winners - 1 {
+				let stake = rng.gen_range(0, available_stake);
+				stake_distribution.push(Accuracy::from_perthousand(stake));
+				available_stake -= stake;
+			}
+			stake_distribution.push(Accuracy::from_perthousand(available_stake));
+			stake_distribution.shuffle(&mut rng);
+			stake_distribution
+		};
+
+		assignments.push(MockAssignment {
+			who: *voter_id,
+			distribution: chosen_winners.zip(stake_distribution).collect(),
+		});
+	}
+
+	(voters, assignments, candidates)
+}
+
+fn generate_cache<Voters, Item>(voters: Voters) -> HashMap<Item, usize>
+where
+	Voters: Iterator<Item = Item>,
+	Item: Hash + Eq + Copy,
+{
+	let mut cache = HashMap::new();
+	for (idx, voter_id) in voters.enumerate() {
+		cache.insert(voter_id, idx);
+	}
+	cache
+}
+
+/// Create a function that returns the index of a voter in the voters list.
+pub fn make_voter_fn<VoterIndex>(voters: &[Voter]) -> impl Fn(&AccountId) -> Option<VoterIndex>
+where
+	usize: TryInto<VoterIndex>,
+{
+	let cache = generate_cache(voters.iter().map(|(id, _, _)| *id));
+	move |who| cache.get(who).cloned().and_then(|i| i.try_into().ok())
+}
+
+/// Create a function that returns the index of a candidate in the candidates list.
+pub fn make_target_fn<TargetIndex>(
+	candidates: &[CandidateId],
+) -> impl Fn(&CandidateId) -> Option<TargetIndex>
+where
+	usize: TryInto<TargetIndex>,
+{
+	let cache = generate_cache(candidates.iter().cloned());
+	move |who| cache.get(who).cloned().and_then(|i| i.try_into().ok())
 }

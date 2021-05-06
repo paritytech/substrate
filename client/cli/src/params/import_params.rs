@@ -28,7 +28,7 @@ use structopt::StructOpt;
 use std::path::PathBuf;
 
 /// Parameters for block import.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct ImportParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -125,7 +125,7 @@ impl ImportParams {
 }
 
 /// Execution strategies parameters.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct ExecutionStrategiesParams {
 	/// The means of execution used when calling into the runtime for importing blocks as
 	/// part of an initial sync.
