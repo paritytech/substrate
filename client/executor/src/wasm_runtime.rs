@@ -356,33 +356,23 @@ fn decode_version(version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 	}
 }
 
-fn decode_runtime_apis(mut apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
-	use std::convert::TryInto;
+fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
+	use std::convert::TryFrom;
+	use sp_api::RUNTIME_API_INFO_SIZE;
 
-	if apis.len() % 12 != 0 {
-		return Err(WasmError::Other(format!(
-			"the runtime apis section doesn't have a correct size"
-		)));
-	}
-
-	let mut result = Vec::with_capacity(apis.len() / 12);
-	while apis.len() != 0 {
-		let id: [u8; 8] = apis[0..8]
-			.try_into()
-			.expect("the source slice size is equal to the dest array length; qed");
-
-		let version = u32::from_le_bytes(
-			apis[8..12]
-				.try_into()
-				.expect("the source slice size is equal to the array length; qed"),
-		);
-
-		result.push((id, version));
-
-		apis = &apis[12..];
-	}
-
-	Ok(result)
+	apis.chunks(RUNTIME_API_INFO_SIZE)
+		.map(|chunk| {
+			// `chunk` can be less than `RUNTIME_API_INFO_SIZE` if the total length of `apis` doesn't
+			// completely divide by `RUNTIME_API_INFO_SIZE`.
+			<[u8; RUNTIME_API_INFO_SIZE]>::try_from(chunk)
+				.map(sp_api::deserialize_runtime_api_info)
+				.map_err(|_| {
+					WasmError::Other(format!(
+						"a clipped runtime api info declaration"
+					))
+				})
+		})
+		.collect::<Result<Vec<_>, WasmError>>()
 }
 
 /// Take the runtime blob and scan it for the custom wasm sections containing the version information

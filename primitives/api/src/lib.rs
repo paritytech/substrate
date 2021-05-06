@@ -613,14 +613,16 @@ pub trait RuntimeApiInfo {
 	const VERSION: u32;
 }
 
-/// Crude and simple way to serialize the `RuntimeApiInfo` into a bunch of bytes.
+/// The number of bytes required to encode a [`RuntimeApiInfo`].
 ///
-/// Used internally by macros.
-#[doc(hidden)]
-pub const fn serialize_runtime_api_info(id: [u8; 8], version: u32) -> [u8; 12] {
+/// 8 bytes for `ID` and 4 bytes for a version.
+pub const RUNTIME_API_INFO_SIZE: usize = 12;
+
+/// Crude and simple way to serialize the `RuntimeApiInfo` into a bunch of bytes.
+pub const fn serialize_runtime_api_info(id: [u8; 8], version: u32) -> [u8; RUNTIME_API_INFO_SIZE] {
 	let version = version.to_le_bytes();
 
-	let mut r = [0; 12];
+	let mut r = [0; RUNTIME_API_INFO_SIZE];
 	r[0] = id[0];
 	r[1] = id[1];
 	r[2] = id[2];
@@ -635,6 +637,23 @@ pub const fn serialize_runtime_api_info(id: [u8; 8], version: u32) -> [u8; 12] {
 	r[10] = version[2];
 	r[11] = version[3];
 	r
+}
+
+/// Deserialize the runtime API info serialized by [`serialize_runtime_api_info`].
+pub fn deserialize_runtime_api_info(bytes: [u8; RUNTIME_API_INFO_SIZE]) -> ([u8; 8], u32) {
+	use sp_std::convert::TryInto;
+
+	let id: [u8; 8] = bytes[0..8]
+		.try_into()
+		.expect("the source slice size is equal to the dest array length; qed");
+
+	let version = u32::from_le_bytes(
+		bytes[8..12]
+			.try_into()
+			.expect("the source slice size is equal to the array length; qed"),
+	);
+
+	(id, version)
 }
 
 #[derive(codec::Encode, codec::Decode)]
