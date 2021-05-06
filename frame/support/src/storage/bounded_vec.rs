@@ -58,22 +58,14 @@ impl<T: BoundedVecValue, S: Get<u32>> BoundedVec<T, S> {
 	}
 
 	/// Create `Self` from `t` without any checks.
-	///
-	/// # WARNING
-	///
-	/// Only use when you are sure you know what you are doing.
-	fn unchecked_from(t: Vec<T>) -> Self {
+	unsafe fn unchecked_from(t: Vec<T>) -> Self {
 		Self(t, Default::default())
 	}
 
 	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
 	/// respected. The additional scope can be used to indicate where a potential overflow is
 	/// happening.
-	///
-	/// # WARNING
-	///
-	/// Only use when you are sure you know what you are doing.
-	pub fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
+	pub unsafe fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
 		if t.len() > Self::bound() {
 			log::warn!(
 				target: crate::LOG_TARGET,
@@ -166,7 +158,8 @@ impl<T: BoundedVecValue, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 	type Error = ();
 	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
 		if t.len() <= Self::bound() {
-			Ok(Self::unchecked_from(t))
+			// explicit check just above
+			Ok(unsafe {Self::unchecked_from(t)})
 		} else {
 			Err(())
 		}
@@ -434,11 +427,11 @@ pub mod test {
 			// append to a non-existing
 			assert!(FooMap::get(2).is_none());
 			assert_ok!(FooMap::try_append(2, 4));
-			assert_eq!(FooMap::get(2).unwrap(), BoundedVec::<u32, Seven>::unchecked_from(vec![4]));
+			assert_eq!(FooMap::get(2).unwrap(), unsafe {BoundedVec::<u32, Seven>::unchecked_from(vec![4])});
 			assert_ok!(FooMap::try_append(2, 5));
 			assert_eq!(
 				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])
+				unsafe {BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])}
 			);
 		});
 
@@ -458,12 +451,12 @@ pub mod test {
 			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
 			assert_eq!(
 				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4])
+				unsafe {BoundedVec::<u32, Seven>::unchecked_from(vec![4])}
 			);
 			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
 			assert_eq!(
 				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])
+				unsafe {BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])}
 			);
 		});
 	}
