@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::protocol::notifications::{
-	handler::{NotificationsSink, NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn}
+	handler::{self, NotificationsSink, NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn}
 };
 
 use bytes::BytesMut;
@@ -95,10 +95,8 @@ use wasm_timer::Instant;
 /// accommodates for any number of connections.
 ///
 pub struct Notifications {
-	/// Notification protocols. Entries are only ever added and not removed.
-	/// Contains, for each protocol, the protocol name and the message to send as part of the
-	/// initial handshake.
-	notif_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>, u64)>,
+	/// Notification protocols. Entries never change after initialization.
+	notif_protocols: Vec<handler::ProtocolConfig>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -128,6 +126,19 @@ pub struct Notifications {
 
 	/// Events to produce from `poll()`.
 	events: VecDeque<NetworkBehaviourAction<NotifsHandlerIn, NotificationsOut>>,
+}
+
+/// Configuration for a notifications protocol.
+#[derive(Debug, Clone)]
+pub struct ProtocolConfig {
+	/// Name of the protocol.
+	pub name: Cow<'static, str>,
+	/// Names of the protocol to use if the main one isn't available.
+	pub fallback_names: Vec<Cow<'static, str>>,
+	/// Handshake of the protocol.
+	pub handshake: Vec<u8>,
+	/// Maximum allowed size for a notification.
+	pub max_notification_size: u64,
 }
 
 /// Identifier for a delay firing.
@@ -311,6 +322,9 @@ pub enum NotificationsOut {
 		peer_id: PeerId,
 		/// Peerset set ID the substream is tied to.
 		set_id: sc_peerset::SetId,
+		/// If `Some`, a fallback protocol name has been used rather the main protocol name.
+		/// Always matches one of the fallback names passed at initialization.
+		negotiated_fallback: Option<Cow<'static, str>>,
 		/// Handshake that was sent to us.
 		/// This is normally a "Status" message, but this is out of the concern of this code.
 		received_handshake: Vec<u8>,
@@ -358,10 +372,15 @@ impl Notifications {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		peerset: sc_peerset::Peerset,
-		notif_protocols: impl Iterator<Item = (Cow<'static, str>, Vec<u8>, u64)>,
+		notif_protocols: impl Iterator<Item = ProtocolConfig>,
 	) -> Self {
 		let notif_protocols = notif_protocols
-			.map(|(n, hs, sz)| (n, Arc::new(RwLock::new(hs)), sz))
+			.map(|cfg| handler::ProtocolConfig {
+				name: cfg.name,
+				fallback_names: cfg.fallback_names,
+				handshake: Arc::new(RwLock::new(cfg.handshake)),
+				max_notification_size: cfg.max_notification_size,
+			})
 			.collect::<Vec<_>>();
 
 		assert!(!notif_protocols.is_empty());
@@ -385,7 +404,7 @@ impl Notifications {
 		handshake_message: impl Into<Vec<u8>>
 	) {
 		if let Some(p) = self.notif_protocols.get_mut(usize::from(set_id)) {
-			*p.1.write() = handshake_message.into();
+			*p.handshake.write() = handshake_message.into();
 		} else {
 			log::error!(target: "sub-libp2p", "Unknown handshake change set: {:?}", set_id);
 			debug_assert!(false);
@@ -1728,7 +1747,9 @@ impl NetworkBehaviour for Notifications {
 				}
 			}
 
-			NotifsHandlerOut::OpenResultOk { protocol_index, received_handshake, notifications_sink, .. } => {
+			NotifsHandlerOut::OpenResultOk {
+				protocol_index, negotiated_fallback, received_handshake, notifications_sink, ..
+			} => {
 				let set_id = sc_peerset::SetId::from(protocol_index);
 				trace!(target: "sub-libp2p",
 					"Handler({}, {:?}) => OpenResultOk({:?})",
@@ -1748,6 +1769,7 @@ impl NetworkBehaviour for Notifications {
 								let event = NotificationsOut::CustomProtocolOpen {
 									peer_id: source,
 									set_id,
+									negotiated_fallback,
 									received_handshake,
 									notifications_sink: notifications_sink.clone(),
 								};
