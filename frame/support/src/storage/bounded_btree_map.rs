@@ -253,11 +253,7 @@ where
 	fn max_encoded_len() -> usize {
 		Self::bound()
 			.saturating_mul(K::max_encoded_len().saturating_add(V::max_encoded_len()))
-			.saturating_add(
-				// https://github.com/paritytech/parity-scale-codec/
-				//   blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/codec.rs#L876
-				codec::Compact::<u32>::max_encoded_len(),
-			)
+			.saturating_add(codec::Compact(S::get()).encoded_size())
 	}
 }
 
