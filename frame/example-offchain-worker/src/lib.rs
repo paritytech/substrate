@@ -39,8 +39,8 @@ extern crate alloc;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv";
-pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
+pub const METRICS_CONTRACT_ADDR: &str = "5FrHBnz6HEJuoyqVMMQ3gyMtrR7oY3bD7A8exxFaK5JW1Tpw";
+pub const METRICS_CONTRACT_ID: [u8; 32] = [167, 118, 241, 3, 137, 115, 90, 184, 186, 56, 140, 34, 7, 68, 135, 171, 183, 135, 62, 149, 222, 60, 156, 20, 77, 200, 102, 213, 230, 163, 68, 207];
 pub const BLOCK_INTERVAL: u32 = 10;
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
@@ -118,6 +118,53 @@ pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 	Ok(s.as_bytes().to_vec())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallData {
+    bytes: Vec<u8>,
+}
+
+impl CallData {
+    /// Creates new call ABI data for the given selector.
+    pub fn new() -> Self {
+        let bytes = "35320bbe".as_bytes();
+        Self {
+            bytes: vec![bytes[0], bytes[1], bytes[2], bytes[3]],
+        }
+    }
+
+    /// Pushes the given argument onto the call ABI data in encoded form.
+    pub fn push_arg<A>(&mut self, arg: &A)
+    where
+        A: codec::Encode,
+    {
+        arg.encode_to(&mut self.bytes)
+    }
+
+    /// Returns the selector of `self`.
+    // pub fn selector(&self) -> &[u8] {
+    //     debug_assert!(self.bytes.len() >= 4);
+    //     let bytes = [self.bytes[0], self.bytes[1], self.bytes[2], self.bytes[3]];
+    //     bytes.into()
+    // }
+
+    /// Returns the underlying bytes of the encoded input parameters.
+    pub fn params(&self) -> &[u8] {
+        debug_assert!(self.bytes.len() >= 4);
+        &self.bytes[4..]
+    }
+
+    /// Returns the underlying byte representation.
+    pub fn to_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
+impl codec::Encode for CallData {
+
+    fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
+        dest.write(self.bytes.as_slice());
+    }
+}
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -277,11 +324,18 @@ impl<T: Trait> Module<T> {
 					4,
 				]);
 
+				let mut test_call_param = CallData::new();
+				test_call_param.push_arg(&REPORT_METRICS_SELECTOR);
+				test_call_param.push_arg(&[0x01; 128]);
+				test_call_param.push_arg(&[0x01; 128]);
+				test_call_param.push_arg(&[0x01; 128]);
+				test_call_param.push_arg(&[0x01; 128]);
+
 				pallet_contracts::Call::call(
 					T::ContractId::get(),
 					0u32.into(),
 					10_000_000_000,
-					call_data
+					test_call_param.params().to_vec()
 				)
 			}
 		);
