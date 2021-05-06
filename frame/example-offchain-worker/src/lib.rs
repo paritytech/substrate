@@ -39,8 +39,8 @@ extern crate alloc;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5FrHBnz6HEJuoyqVMMQ3gyMtrR7oY3bD7A8exxFaK5JW1Tpw";
-pub const METRICS_CONTRACT_ID: [u8; 32] = [167, 118, 241, 3, 137, 115, 90, 184, 186, 56, 140, 34, 7, 68, 135, 171, 183, 135, 62, 149, 222, 60, 156, 20, 77, 200, 102, 213, 230, 163, 68, 207];
+pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv"; // address params: no salt, symbol: CERE, endowement: 1000
+pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
 pub const BLOCK_INTERVAL: u32 = 10;
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
@@ -316,13 +316,6 @@ impl<T: Trait> Module<T> {
 		// local keystore with expected `KEY_TYPE`.
 		let results = signer.send_signed_transaction(
 			|_account| {
-				let mut call_data = REPORT_METRICS_SELECTOR.to_vec();
-				call_data.extend_from_slice(&[
-					1,
-					2,
-					3,
-					4,
-				]);
 
 				let mut test_call_param = CallData::new();
 				test_call_param.push_arg(&REPORT_METRICS_SELECTOR);
@@ -334,7 +327,7 @@ impl<T: Trait> Module<T> {
 				pallet_contracts::Call::call(
 					T::ContractId::get(),
 					0u32.into(),
-					10_000_000_000,
+					100_000_000_000,
 					test_call_param.params().to_vec()
 				)
 			}
