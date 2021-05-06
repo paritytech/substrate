@@ -15,15 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Multisig Module
-//! A module for doing multisig dispatch.
+//! # Multisig pallet
+//! A pallet for doing multisig dispatch.
 //!
 //! - [`Config`]
 //! - [`Call`]
 //!
 //! ## Overview
 //!
-//! This module contains functionality for multi-signature dispatch, a (potentially) stateful
+//! This pallet contains functionality for multi-signature dispatch, a (potentially) stateful
 //! operation, allowing multiple signed
 //! origins (accounts) to coordinate and dispatch a call from a well-known origin, derivable
 //! deterministically from the set of account IDs and the threshold number of accounts from the
