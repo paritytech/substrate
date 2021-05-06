@@ -96,14 +96,8 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::{result, cmp};
-use sp_inherents::InherentData;
 use frame_support::traits::{Time, UnixTime, OnTimestampSet};
-use sp_runtime::{
-	RuntimeString,
-	traits::{
-		AtLeast32Bit, Zero, SaturatedConversion, Scale,
-	}
-};
+use sp_runtime::traits::{AtLeast32Bit, Zero, SaturatedConversion, Scale};
 use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,
 };
@@ -213,8 +207,9 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-			let inherent_data = extract_inherent_data(data)
-				.expect("Gets and decodes timestamp inherent data");
+			let inherent_data = data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+				.expect("Timestamp inherent data not correctly encoded")
+				.expect("Timestamp inherent data must be provided");
 			let data = (*inherent_data).saturated_into::<T::Moment>();
 
 			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
@@ -230,11 +225,13 @@ pub mod pallet {
 				_ => return Ok(()),
 			};
 
-			let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
+			let data = data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+				.expect("Timestamp inherent data not correctly encoded")
+				.expect("Timestamp inherent data must be provided");
 
 			let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
 			if t > *(data + MAX_TIMESTAMP_DRIFT_MILLIS) {
-				Err(InherentError::Other("Timestamp too far in future to accept".into()))
+				Err(InherentError::TooFarInFuture)
 			} else if t < minimum {
 				Err(InherentError::ValidAtTimestamp(minimum.into()))
 			} else {
@@ -262,12 +259,6 @@ impl<T: Config> Pallet<T> {
 	pub fn set_timestamp(now: T::Moment) {
 		Now::<T>::put(now);
 	}
-}
-
-fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
-	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
-		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
-		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
 }
 
 impl<T: Config> Time for Pallet<T> {
