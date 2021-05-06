@@ -22,7 +22,7 @@ sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }
 sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
 sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
-wasmtime = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
+# wasmtime = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
 
 wasmer = "1.0"
 wasmer-compiler-singlepass = "1.0"

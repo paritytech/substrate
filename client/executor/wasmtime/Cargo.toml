@@ -23,11 +23,13 @@ sp-runtime-interface = { version = "3.0.0", path = "../../../primitives/runtime-
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }
 pwasm-utils = "0.14.0"
-wasmtime = { git = "https://github.com/Vurich/wasmtime.git", branch="master", features=["lightbeam"] }
-wasmtime-runtime = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
-wasmtime-environ = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
-cranelift-wasm = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
-cranelift-codegen = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
+
+wasmtime = "0.24"
+# wasmtime = { git = "https://github.com/Vurich/wasmtime.git", branch="master", features=["lightbeam"] }
+# wasmtime-runtime = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
+# wasmtime-environ = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
+# cranelift-wasm = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
+# cranelift-codegen = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"

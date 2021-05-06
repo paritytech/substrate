@@ -29,7 +29,7 @@ use sp_core::sandbox as sandbox_primitives;
 use wasmi::{Externals, ImportResolver, MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages};
 
 use sp_wasm_interface::Value;
-use wasmtime::Val;
+// use wasmtime::Val;
 
 // use crate::sandbox:: wasmtime::instance_wrapper::InstanceWrapper;
 

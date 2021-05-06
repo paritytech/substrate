@@ -78,10 +78,10 @@ pub fn resolve_imports(
 /// Because we are not using this proposal we could safely unwrap the name.
 /// However, we opt for an error in order to avoid panics at all costs.
 fn import_name<'a, 'b: 'a>(import: &'a ImportType<'b>) -> Result<&'a str, WasmError> {
-	// let name = import.name().ok_or_else(||
-	// 	WasmError::Other("The module linking proposal is not supported.".to_owned())
-	// )?;
-	Ok(import.name())
+	let name = import.name().ok_or_else(||
+		WasmError::Other("The module linking proposal is not supported.".to_owned())
+	)?;
+	Ok(name)
 }
 
 fn resolve_memory_import(
@@ -277,17 +277,17 @@ fn wasmtime_func_sig(func: &dyn Function) -> wasmtime::FuncType {
 		.args
 		.iter()
 		.cloned()
-		.map(into_wasmtime_val_type)
-		.collect::<Vec<_>>()
-		.into_boxed_slice();
+		.map(into_wasmtime_val_type);
+		// .collect::<Vec<_>>()
+		// .into_boxed_slice();
 
 	let results = signature
 		.return_value
 		.iter()
 		.cloned()
-		.map(into_wasmtime_val_type)
-		.collect::<Vec<_>>()
-		.into_boxed_slice();
+		.map(into_wasmtime_val_type);
+		// .collect::<Vec<_>>()
+		// .into_boxed_slice();
 
 	wasmtime::FuncType::new(params, results)
 }

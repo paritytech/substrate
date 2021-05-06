@@ -126,8 +126,8 @@ impl EntryPoint {
 	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {
 		use wasmtime::ValType;
 		let entry_point = wasmtime::FuncType::new(
-			Box::new([ValType::I32, ValType::I32]),
-			Box::new([ValType::I64]),
+			[ValType::I32, ValType::I32].iter().cloned(),
+			[ValType::I64].iter().cloned(),
 		);
 		if func.ty() == entry_point {
 			Ok(Self { func, call_type: EntryPointType::Direct })
@@ -139,8 +139,8 @@ impl EntryPoint {
 	pub fn wrapped(dispatcher: wasmtime::Func, func: u32) -> std::result::Result<Self, &'static str> {
 		use wasmtime::ValType;
 		let entry_point = wasmtime::FuncType::new(
-			Box::new([ValType::I32, ValType::I32, ValType::I32]),
-			Box::new([ValType::I64]),
+			[ValType::I32, ValType::I32, ValType::I32].iter().cloned(),
+			[ValType::I64].iter().cloned(),
 		);
 		if dispatcher.ty() == entry_point {
 			Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
