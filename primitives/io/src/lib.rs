@@ -70,6 +70,8 @@ mod batch_verifier;
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
 
+const LOG_TARGET: &str = "runtime::io";
+
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
 pub enum EcdsaVerifyError {
@@ -432,6 +434,9 @@ pub trait Trie {
 /// Interface that provides miscellaneous functions for communicating between the runtime and the node.
 #[runtime_interface]
 pub trait Misc {
+	// NOTE: We use the target 'runtime' for messages produced by general printing functions, instead
+	// of LOG_TARGET.
+
 	/// Print a number.
 	fn print_num(val: u64) {
 		log::debug!(target: "runtime", "{}", val);
@@ -467,11 +472,20 @@ pub trait Misc {
 	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
 		use sp_core::traits::ReadRuntimeVersionExt;
 
-		let uncompressed_wasm = sp_maybe_compressed_blob::decompress(
+		let uncompressed_wasm = match sp_maybe_compressed_blob::decompress(
 			wasm,
 			sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
-		)
-		.ok()?;
+		) {
+			Ok(v) => v,
+			Err(err) => {
+				log::debug!(
+					target: LOG_TARGET,
+					"version cannot be read due to decompression failure: {}",
+					err,
+				);
+				return None;
+			}
+		};
 
 		if let Some(read_version_ext) = self.extension::<ReadRuntimeVersionExt>() {
 			if let Ok(Some(opaque_version)) =
@@ -486,7 +500,7 @@ pub trait Misc {
 		self.extension::<CallInWasmExt>()
 			.expect("No `CallInWasmExt` associated for the current context!")
 			.call_in_wasm(
-				uncompressed_wasm,
+				&uncompressed_wasm,
 				None,
 				"Core_version",
 				&[],
