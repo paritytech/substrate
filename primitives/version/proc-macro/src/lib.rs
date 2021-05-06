@@ -18,7 +18,7 @@
 //! An attribute that accepts a version declaration of a runtime and generates a custom wasm section
 //! with the equivalent contents.
 //!
-//! The custom section allows ti read the version of the runtime without having to execute any code.
+//! The custom section allows to read the version of the runtime without having to execute any code.
 //! Instead, the generated custom section can be relatively easily parsed from the wasm binary. The
 //! identifier of the custom section is "runtime_version".
 //!
@@ -40,7 +40,7 @@
 //! };
 //! ```
 //!
-//! and will pass it through and add code required for emit a custom section. The information that
+//! It will pass it through and add code required for emitting a custom section. The information that
 //! will go into the custom section is parsed from the item declaration. Due to that, the macro is
 //! somewhat rigid in terms of the code it accepts. There are the following considerations:
 //!
@@ -53,7 +53,6 @@
 //!
 //! - `apis` doesn't have any specific constraints. This is because this information doesn't get into
 //!   the custom section and is not parsed.
-//!
 //!
 
 #![recursion_limit = "512"]
