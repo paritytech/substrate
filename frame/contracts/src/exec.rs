@@ -853,14 +853,19 @@ where
 			}
 			if let CachedContract::Cached(contract) = frame.contract_info {
 				// optimization: Predecessor is the same contract.
-				// We can just merge into the predecesor without a storage write.
+				// We can just copy the contract into the predecesor without a storage write.
+				// This is possible between there is no other contract in-between that could
+				// trigger a rollback.
 				if prev.account_id == *account_id {
 					prev.contract_info = CachedContract::Cached(contract);
 					return;
 				}
 
-				// Predecessor is a different contract: Write to storage and invalidate all
-				// references to it.
+				// Predecessor is a different contract: We persist the info and invalidate the first
+				// stale cache we find. This triggers a reload from storage on next use. We skip(1)
+				// because that case is already handled by the optimization above. Only the first
+				// cache needs to be invalidated because that one will invalidate the next cache
+				// once persisted.
 				<ContractInfoOf<T>>::insert(account_id, ContractInfo::Alive(contract));
 				if let Some(c) = self.frames_mut().skip(1).find(|f| f.account_id == *account_id) {
 					c.contract_info = CachedContract::Invalidated;
@@ -1001,10 +1006,12 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
+		// We ignore instantiate frames in our search for a cached contract.
+		// Otherwise it would be possible to recursively call a contract from its own
+		// constructor: We disallow calling not fully constructed contracts.
 		let cached_info = self
 			.frames()
-			.filter(|f| f.entry_point == ExportedFunction::Call)
-			.find(|f| f.account_id == to)
+			.find(|f| f.entry_point == ExportedFunction::Call && f.account_id == to)
 			.and_then(|f| {
 				match &f.contract_info {
 					CachedContract::Cached(contract) => Some(contract.clone()),
