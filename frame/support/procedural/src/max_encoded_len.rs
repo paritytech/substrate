@@ -22,6 +22,7 @@ use syn::{
 	parse_quote, spanned::Spanned,
 };
 
+/// impl for `#[derive(MaxEncodedLen)]`
 pub fn derive_max_encoded_len(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input: DeriveInput = match syn::parse(input) {
 		Ok(input) => input,
