@@ -725,6 +725,21 @@ where
 		if self.frames.len() == T::CallStack::size() {
 			return Err((Error::<T>::MaxCallDepthReached.into(), 0));
 		}
+
+		// We need to make sure that changes made to the contract info are not discarded.
+		// See the `in_memory_changes_not_discarded` test for more information.
+		// We do not store on instantiate because we do not allow to call into a contract
+		// from its own constructor.
+		let frame = self.top_frame();
+		if let (CachedContract::Cached(contract), ExportedFunction::Call) =
+			(&frame.contract_info, frame.entry_point)
+		{
+			<ContractInfoOf<T>>::insert(
+				frame.account_id.clone(),
+				ContractInfo::Alive(contract.clone()),
+			);
+		}
+
 		let nested_meter = &mut self.frames
 			.last_mut()
 			.unwrap_or(&mut self.first_frame)
@@ -1394,6 +1409,10 @@ mod tests {
 
 	fn exec_success() -> ExecResult {
 		Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
+	}
+
+	fn exec_trapped() -> ExecResult {
+		Err(ExecError { error: <Error<Test>>::ContractTrapped.into(), origin: ErrorOrigin::Callee })
 	}
 
 	#[test]
@@ -2095,6 +2114,89 @@ mod tests {
 				subsistence * 50,
 				vec![],
 			).unwrap();
+		});
+	}
+
+	#[test]
+	fn in_memory_changes_not_discarded() {
+		// Call stack: BOB -> CHARLIE (trap) -> BOB' (success)
+		// This tests verfies some edge case of the contract info cache:
+		// We change some value in our contract info before calling into a contract
+		// that calls into ourself. This triggers a case where BOBs contract info
+		// is written to storage and invalidated by the successful execution of BOB'.
+		// The trap of CHARLIE reverts the storage changes to BOB. When the root BOB regains
+		// control it reloads its contract info from storage. We check that changes that
+		// are made before calling into CHARLIE are not discarded.
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			if ctx.input_data[0] == 0 {
+				let original_allowance = ctx.ext.rent_allowance();
+				let changed_allowance = <BalanceOf<Test>>::max_value() / 2;
+				assert_ne!(original_allowance, changed_allowance);
+				ctx.ext.set_rent_allowance(changed_allowance);
+				assert_eq!(
+					ctx.ext.call(0, CHARLIE, 0, vec![]).map(|v| v.0).map_err(|e| e.0),
+					exec_trapped()
+				);
+				assert_eq!(ctx.ext.rent_allowance(), changed_allowance);
+				assert_ne!(ctx.ext.rent_allowance(), original_allowance);
+			}
+			exec_success()
+		});
+		let code_charlie = MockLoader::insert(Call, |ctx, _| {
+			assert!(ctx.ext.call(0, BOB, 0, vec![99]).is_ok());
+			exec_trapped()
+		});
+
+		// This one tests passing the input data into a contract via call.
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <CurrentSchedule<Test>>::get();
+			place_contract(&BOB, code_bob);
+			place_contract(&CHARLIE, code_charlie);
+
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&schedule,
+				0,
+				vec![0],
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn recursive_call_during_constructor_fails() {
+		let code = MockLoader::insert(Constructor, |ctx, executable| {
+			let my_hash = <Contracts<Test>>::contract_address(&ALICE, &executable.code_hash, &[]);
+			assert_matches!(
+				ctx.ext.call(0, my_hash, 0, vec![]),
+				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::NotCallable.into()
+			);
+			exec_success()
+		});
+
+		// This one tests passing the input data into a contract via instantiate.
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <CurrentSchedule<Test>>::get();
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			let executable = MockExecutable::from_storage(
+				code, &schedule, &mut gas_meter
+			).unwrap();
+
+			set_balance(&ALICE, subsistence * 10);
+
+			let result = MockStack::run_instantiate(
+				ALICE,
+				executable,
+				&mut gas_meter,
+				&schedule,
+				subsistence * 3,
+				vec![],
+				&[],
+			);
+			assert_matches!(result, Ok(_));
 		});
 	}
 }
