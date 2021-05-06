@@ -384,7 +384,15 @@ pub(crate) fn read_embedded_version(
 	blob: &RuntimeBlob,
 ) -> Result<Option<RuntimeVersion>, WasmError> {
 	if let Some(version_section) = blob.custom_section_contents("runtime_version") {
-		let mut decoded_version = decode_version(&version_section)?;
+		// We do not use `decode_version` here because the runtime_version section is not supposed
+		// to ever contain a legacy version. Apart from that `decode_version` relies on presence
+		// of a special API in the `apis` field to treat the input as a non-legacy version. However
+		// the structure found in the `runtime_version` always contain an empty `apis` field. Therefore
+		// the version read will be mistakingly treated as an legacy one.
+		let mut decoded_version = sp_api::RuntimeVersion::decode(&mut &version_section[..])
+			.map_err(|_|
+				WasmError::Instantiation("failed to decode verison section".into())
+			)?;
 
 		// Don't stop on this and check if there is a special section that encodes all runtime APIs.
 		if let Some(apis_section) = blob.custom_section_contents("runtime_apis") {
