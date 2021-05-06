@@ -187,6 +187,7 @@ where
 	}
 }
 
+#[cfg(feature = "std")]
 impl<K, V, S> fmt::Debug for BoundedBTreeMap<K, V, S>
 where
 	BTreeMap<K, V>: fmt::Debug,
