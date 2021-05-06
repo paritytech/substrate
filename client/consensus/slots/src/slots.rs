@@ -133,7 +133,7 @@ where
 			self.inner_delay = match self.inner_delay.take() {
 				None => {
 					// schedule wait.
-					let wait_dur = dbg!(time_until_next_slot(self.slot_duration));
+					let wait_dur = time_until_next_slot(self.slot_duration);
 					Some(Delay::new(wait_dur))
 				}
 				Some(d) => Some(d),
