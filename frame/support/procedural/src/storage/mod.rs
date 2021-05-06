@@ -18,6 +18,7 @@
 //! `decl_storage` input definition and expansion.
 
 mod storage_struct;
+mod storages_info;
 mod parse;
 mod store_trait;
 mod getters;
@@ -35,6 +36,8 @@ use frame_support_procedural_tools::{
 
 /// All information contained in input of decl_storage
 pub struct DeclStorageDef {
+	/// Whether to generate the storage info
+	generate_storage_info: bool,
 	/// Name of the module used to import hidden imports.
 	hidden_crate: Option<syn::Ident>,
 	/// Visibility of store trait.
@@ -69,6 +72,8 @@ impl syn::parse::Parse for DeclStorageDef {
 
 /// Extended version of `DeclStorageDef` with useful precomputed value.
 pub struct DeclStorageDefExt {
+	/// Whether to generate the storage info
+	generate_storage_info: bool,
 	/// Name of the module used to import hidden imports.
 	hidden_crate: Option<syn::Ident>,
 	/// Visibility of store trait.
@@ -144,6 +149,7 @@ impl From<DeclStorageDef> for DeclStorageDefExt {
 		);
 
 		Self {
+			generate_storage_info: def.generate_storage_info,
 			hidden_crate: def.hidden_crate,
 			visibility: def.visibility,
 			store_trait: def.store_trait,
@@ -184,6 +190,8 @@ pub struct StorageLineDef {
 	getter: Option<syn::Ident>,
 	/// The name of the field to be used in genesis config if any.
 	config: Option<syn::Ident>,
+	/// The given max values with `max_values` attribute, or a none if not specified.
+	max_values: Option<syn::Expr>,
 	/// The build function of the storage if any.
 	build: Option<syn::Expr>,
 	/// Default value of genesis config field and also for storage when no value available.
@@ -201,6 +209,8 @@ pub struct StorageLineDefExt {
 	getter: Option<syn::Ident>,
 	/// The name of the field to be used in genesis config if any.
 	config: Option<syn::Ident>,
+	/// The given max values with `max_values` attribute, or a none if not specified.
+	max_values: Option<syn::Expr>,
 	/// The build function of the storage if any.
 	build: Option<syn::Expr>,
 	/// Default value of genesis config field and also for storage when no value available.
@@ -311,6 +321,7 @@ impl StorageLineDefExt {
 			name: storage_def.name,
 			getter: storage_def.getter,
 			config: storage_def.config,
+			max_values: storage_def.max_values,
 			build: storage_def.build,
 			default_value: storage_def.default_value,
 			storage_type: storage_def.storage_type,
@@ -414,6 +425,7 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 	let instance_trait = instance_trait::decl_and_impl(&scrate, &def_ext);
 	let genesis_config = genesis_config::genesis_config_and_build_storage(&scrate, &def_ext);
 	let storage_struct = storage_struct::decl_and_impl(&scrate, &def_ext);
+	let storages_info = storages_info::impl_storages_info(&scrate, &def_ext);
 
 	quote!(
 		use #scrate::{
@@ -432,5 +444,6 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 		#instance_trait
 		#genesis_config
 		#storage_struct
+		#storages_info
 	).into()
 }

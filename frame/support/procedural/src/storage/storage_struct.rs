@@ -207,9 +207,107 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 			}
 		};
 
+		let max_values = if let Some(max_values) = &line.max_values {
+			quote::quote!({
+				let max_values: u32 = (|| #max_values)();
+				Some(max_values)
+			})
+		} else {
+			quote::quote!(None)
+		};
+
+		let storage_info_impl = if def.generate_storage_info {
+			match &line.storage_type {
+				StorageLineTypeDef::Simple(_) => {
+					quote!(
+						impl<#impl_trait> #scrate::traits::StorageInfoTrait for #storage_struct
+						#optional_storage_where_clause
+						{
+							fn storage_info() -> #scrate::traits::StorageInfo {
+								use #scrate::sp_runtime::SaturatedConversion;
+
+								let max_size = <
+									#value_type as #scrate::traits::MaxEncodedLen
+								>::max_encoded_len()
+									.saturated_into();
+								#scrate::traits::StorageInfo {
+									prefix: <
+										#storage_struct as #scrate::#storage_generator_trait
+									>::storage_value_final_key(),
+									max_values: Some(1),
+									max_size: Some(max_size),
+								}
+							}
+						}
+					)
+				},
+				StorageLineTypeDef::Map(map) => {
+					let key = &map.key;
+					quote!(
+						impl<#impl_trait> #scrate::traits::StorageInfoTrait for #storage_struct
+						#optional_storage_where_clause
+						{
+							fn storage_info() -> #scrate::traits::StorageInfo {
+								use #scrate::sp_runtime::SaturatedConversion;
+								let max_size = <
+									#value_type as #scrate::traits::MaxEncodedLen
+								>::max_encoded_len()
+									.saturating_add(
+										<#key as #scrate::traits::MaxEncodedLen>::max_encoded_len()
+									)
+									.saturated_into();
+								#scrate::traits::StorageInfo {
+									prefix: <
+										#storage_struct
+										as #scrate::storage::StoragePrefixedMap<#value_type>
+									>::final_prefix(),
+									max_values: #max_values,
+									max_size: Some(max_size),
+								}
+							}
+						}
+					)
+				},
+				StorageLineTypeDef::DoubleMap(map) => {
+					let key1 = &map.key1;
+					let key2 = &map.key2;
+					quote!(
+						impl<#impl_trait> #scrate::traits::StorageInfoTrait for #storage_struct
+						#optional_storage_where_clause
+						{
+							fn storage_info() -> #scrate::traits::StorageInfo {
+								use #scrate::sp_runtime::SaturatedConversion;
+								let max_size = <
+									#value_type as #scrate::traits::MaxEncodedLen
+								>::max_encoded_len()
+									.saturating_add(
+										<#key1 as #scrate::traits::MaxEncodedLen>::max_encoded_len()
+									)
+									.saturating_add(
+										<#key2 as #scrate::traits::MaxEncodedLen>::max_encoded_len()
+									)
+									.saturated_into();
+								#scrate::traits::StorageInfo {
+									prefix: <
+										#storage_struct
+										as #scrate::storage::StoragePrefixedMap<#value_type>
+									>::final_prefix(),
+									max_values: #max_values,
+									max_size: Some(max_size),
+								}
+							}
+						}
+					)
+				}
+			}
+		} else {
+			Default::default()
+		};
+
 		impls.extend(quote!(
 			#struct_decl
 			#struct_impl
+			#storage_info_impl
 		))
 	}
 

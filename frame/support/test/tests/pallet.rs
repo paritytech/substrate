@@ -19,6 +19,7 @@ use frame_support::{
 	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
 	traits::{
 		GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade, GetPalletVersion, OnGenesis,
+		MaxEncodedLen,
 	},
 	dispatch::{UnfilteredDispatchable, Parameter},
 	storage::unhashed,
@@ -47,10 +48,10 @@ impl From<SomeType6> for u64 { fn from(_t: SomeType6) -> Self { 0u64 } }
 pub struct SomeType7;
 impl From<SomeType7> for u64 { fn from(_t: SomeType7) -> Self { 0u64 } }
 
-pub trait SomeAssociation1 { type _1: Parameter; }
+pub trait SomeAssociation1 { type _1: Parameter + MaxEncodedLen; }
 impl SomeAssociation1 for u64 { type _1 = u64; }
 
-pub trait SomeAssociation2 { type _2: Parameter; }
+pub trait SomeAssociation2 { type _2: Parameter + MaxEncodedLen; }
 impl SomeAssociation2 for u64 { type _2 = u64; }
 
 #[frame_support::pallet]
@@ -100,6 +101,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::generate_storages_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -209,13 +211,15 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, u8, u16, ValueQuery, MyDefault<T>>;
 
 	#[pallet::storage]
-	pub type Map2<T> = StorageMap<_, Twox64Concat, u16, u32>;
+	pub type Map2<T> = StorageMap<_, Twox64Concat, u16, u32, OptionQuery, GetDefault, ConstU32<3>>;
 
 	#[pallet::storage]
 	pub type DoubleMap<T> = StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
 
 	#[pallet::storage]
-	pub type DoubleMap2<T> = StorageDoubleMap<_, Twox64Concat, u16, Blake2_128Concat, u32, u64>;
+	pub type DoubleMap2<T> = StorageDoubleMap<
+		_, Twox64Concat, u16, Blake2_128Concat, u32, u64, OptionQuery, GetDefault, ConstU32<5>,
+	>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_value)]
@@ -225,7 +229,8 @@ pub mod pallet {
 	#[cfg(feature = "conditional-storage")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_map)]
-	pub type ConditionalMap<T> = StorageMap<_, Twox64Concat, u16, u32>;
+	pub type ConditionalMap<T> =
+		StorageMap<_, Twox64Concat, u16, u32, OptionQuery, GetDefault, ConstU32<12>>;
 
 	#[cfg(feature = "conditional-storage")]
 	#[pallet::storage]
@@ -533,7 +538,7 @@ fn pallet_expand_deposit_event() {
 #[test]
 fn storage_expand() {
 	use frame_support::pallet_prelude::*;
-	use frame_support::StoragePrefixedMap;
+	use frame_support::storage::StoragePrefixedMap;
 
 	fn twox_64_concat(d: &[u8]) -> Vec<u8> {
 		let mut v = twox_64(d).to_vec();
@@ -880,4 +885,80 @@ fn test_pallet_info_access() {
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 2);
+}
+
+#[test]
+fn test_storages_info() {
+	use frame_support::{
+		StorageHasher,
+		traits::{StoragesInfo, StorageInfo},
+		pallet_prelude::*,
+	};
+
+	let prefix = |pallet_name, storage_name| {
+		let mut res = [0u8; 32];
+		res[0..16].copy_from_slice(&Twox128::hash(pallet_name));
+		res[16..32].copy_from_slice(&Twox128::hash(storage_name));
+		res
+	};
+
+	assert_eq!(
+		Example::storages_info(),
+		vec![
+			StorageInfo {
+				prefix: prefix(b"Example", b"ValueWhereClause"),
+				max_values: Some(1),
+				max_size: Some(8),
+			},
+			StorageInfo {
+				prefix: prefix(b"Example", b"Value"),
+				max_values: Some(1),
+				max_size: Some(4),
+			},
+			StorageInfo {
+				prefix: prefix(b"Example", b"Map"),
+				max_values: None,
+				max_size: Some(3),
+			},
+			StorageInfo {
+				prefix: prefix(b"Example", b"Map2"),
+				max_values: Some(3),
+				max_size: Some(6),
+			},
+			StorageInfo {
+				prefix: prefix(b"Example", b"DoubleMap"),
+				max_values: None,
+				max_size: Some(7),
+			},
+			StorageInfo {
+				prefix: prefix(b"Example", b"DoubleMap2"),
+				max_values: Some(5),
+				max_size: Some(14),
+			},
+			#[cfg(feature = "conditional-storage")]
+			{
+				StorageInfo {
+					prefix: prefix(b"Example", b"ConditionalValue"),
+					max_values: Some(1),
+					max_size: Some(4),
+				}
+			},
+			#[cfg(feature = "conditional-storage")]
+			{
+				StorageInfo {
+					prefix: prefix(b"Example", b"ConditionalMap"),
+					max_values: Some(12),
+					max_size: Some(6),
+				}
+			},
+			#[cfg(feature = "conditional-storage")]
+			{
+				StorageInfo {
+					prefix: prefix(b"Example", b"ConditionalDoubleMap"),
+					max_values: None,
+					max_size: Some(7),
+				}
+			},
+		],
+	);
 }
