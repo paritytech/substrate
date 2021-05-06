@@ -21,7 +21,10 @@ use sp_std::{
 	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, fmt, marker::PhantomData,
 	ops::Deref,
 };
-use crate::traits::{Get, MaxEncodedLen};
+use crate::{
+	storage::StorageDecodeLength,
+	traits::{Get, MaxEncodedLen},
+};
 use codec::{Encode, Decode};
 
 /// A bounded map based on a B-Tree.
@@ -297,4 +300,20 @@ where
 	fn try_from(value: BTreeMap<K, V>) -> Result<Self, Self::Error> {
 		(value.len() <= Self::bound()).then(move || BoundedBTreeMap(value, PhantomData)).ok_or(())
 	}
+}
+
+impl<K, V, S> codec::DecodeLength for BoundedBTreeMap<K, V, S> {
+	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
+		// `BoundedBTreeMap<K, V, S>` is stored just a `BTreeMap<K, V>`, which is stored as a
+		// `Compact<u32>` with its length followed by an iteration of its items. We can just use
+		// the underlying implementation.
+		<BTreeMap<K, V> as codec::DecodeLength>::len(self_encoded)
+	}
+}
+
+impl<K, V, S> StorageDecodeLength for BoundedBTreeMap<K, V, S> {}
+
+impl<K, V, S> codec::EncodeLike<BTreeMap<K, V>> for BoundedBTreeMap<K, V, S> where
+	BTreeMap<K, V>: Encode
+{
 }

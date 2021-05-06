@@ -818,6 +818,7 @@ mod private {
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
 	impl<T: BoundedVecValue, S: Get<u32>> Sealed for BoundedVec<T, S> {}
+	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 }
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
