@@ -254,15 +254,6 @@
 			"website": "https://jupiter.patract.io"
 		},
 		{
-			"prefix": 27,
-			"network": "patract",
-			"displayName": "Patract",
-			"symbols": ["pDOT", "pKSM"],
-			"decimals": [10, 12],
-			"standardAccount": "*25519",
-			"website": "https://patract.network"
-		},
-		{
 			"prefix": 28,
 			"network": "subsocial",
 			"displayName": "Subsocial",
