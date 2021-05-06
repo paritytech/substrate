@@ -541,6 +541,13 @@ pub struct NonDefaultSetConfig {
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// >           by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
+	/// If the remote reports that it doesn't support the protocol indicated in the
+	/// `notifications_protocol` field, then each of these fallback names will be tried one by
+	/// one.
+	///
+	/// If a fallback is used, it will be reported in
+	/// [`crate::Event::NotificationStreamOpened::negotiated_fallback`].
+	pub fallback_names: Vec<Cow<'static, str>>,
 	/// Maximum allowed size of single notifications.
 	pub max_notification_size: u64,
 	/// Base configuration.
@@ -553,6 +560,7 @@ impl NonDefaultSetConfig {
 		NonDefaultSetConfig {
 			notifications_protocol,
 			max_notification_size,
+			fallback_names: Vec::new(),
 			set_config: SetConfig {
 				in_peers: 0,
 				out_peers: 0,
