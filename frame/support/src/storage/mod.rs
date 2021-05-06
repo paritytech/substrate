@@ -29,6 +29,7 @@ pub use sp_runtime::TransactionOutcome;
 
 pub mod unhashed;
 pub mod hashed;
+pub mod bounded_btree_map;
 pub mod bounded_vec;
 pub mod child;
 #[doc(hidden)]
