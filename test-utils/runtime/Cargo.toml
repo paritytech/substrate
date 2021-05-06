@@ -28,7 +28,6 @@ sp-runtime-interface = { path = "../../primitives/runtime-interface", default-fe
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "3.0.0", default-features = false, path = "../../frame/support" }
 sp-version = { version = "3.0.0", default-features = false, path = "../../primitives/version" }
-sp-version-proc-macro = { version = "3.0.0", path = "../../primitives/version/proc-macro" }
 sp-session = { version = "3.0.0", default-features = false, path = "../../primitives/session" }
 sp-api = { version = "3.0.0", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }

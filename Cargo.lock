@@ -4350,7 +4350,6 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
- "sp-version-proc-macro",
  "static_assertions",
  "substrate-wasm-builder",
 ]
@@ -4425,7 +4424,6 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
- "sp-version-proc-macro",
  "substrate-wasm-builder",
 ]
 
@@ -9293,6 +9291,7 @@ dependencies = [
  "serde",
  "sp-runtime",
  "sp-std",
+ "sp-version-proc-macro",
 ]
 
 [[package]]
@@ -9600,7 +9599,6 @@ dependencies = [
  "sp-transaction-pool",
  "sp-trie",
  "sp-version",
- "sp-version-proc-macro",
  "substrate-test-runtime-client",
  "substrate-wasm-builder",
  "trie-db",
