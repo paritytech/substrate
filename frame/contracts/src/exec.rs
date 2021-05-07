@@ -853,8 +853,8 @@ where
 			}
 			if let CachedContract::Cached(contract) = frame.contract_info {
 				// optimization: Predecessor is the same contract.
-				// We can just copy the contract into the predecesor without a storage write.
-				// This is possible between there is no other contract in-between that could
+				// We can just copy the contract into the predecessor without a storage write.
+				// This is possible when there is no other contract in-between that could
 				// trigger a rollback.
 				if prev.account_id == *account_id {
 					prev.contract_info = CachedContract::Cached(contract);
@@ -865,7 +865,7 @@ where
 				// stale cache we find. This triggers a reload from storage on next use. We skip(1)
 				// because that case is already handled by the optimization above. Only the first
 				// cache needs to be invalidated because that one will invalidate the next cache
-				// once persisted.
+				// when it is popped from the stack.
 				<ContractInfoOf<T>>::insert(account_id, ContractInfo::Alive(contract));
 				if let Some(c) = self.frames_mut().skip(1).find(|f| f.account_id == *account_id) {
 					c.contract_info = CachedContract::Invalidated;
