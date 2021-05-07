@@ -249,7 +249,7 @@ where
 		Self { new_heads, all_heads, finalized_heads, client, marker: PhantomData }
 	}
 
-	/// Spawns a event loop that listens for event and sends them out the subscribers.
+	/// Spawns a event loop that listens for events and sends them out to the subscribers.
 	// TODO: better impl.
 	pub fn spawn_subscriptions(mut self) {
 		std::thread::spawn(move || {
