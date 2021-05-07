@@ -80,7 +80,7 @@ where
 	/// let mut set = BTreeSet::new();
 	/// set.insert("foo");
 	/// set.insert("bar");
-	/// let bounded_map = unsafe {BoundedBTreeSet::<_, Size>::force_from(set, "demo")};
+	/// let bounded_set = unsafe {BoundedBTreeSet::<_, Size>::force_from(set, "demo")};
 	/// ```
 	pub unsafe fn force_from<Scope>(set: BTreeSet<T>, scope: Scope) -> Self
 	where
@@ -89,7 +89,7 @@ where
 		if set.len() > Self::bound() {
 			log::warn!(
 				target: crate::LOG_TARGET,
-				"length of a bounded btreemap in scope {} is not respected.",
+				"length of a bounded btreeset in scope {} is not respected.",
 				scope.into().unwrap_or("UNKNOWN"),
 			);
 		}
@@ -302,8 +302,7 @@ impl<T, S> StorageDecodeLength for BoundedBTreeSet<T, S> {}
 
 impl<T, S> codec::EncodeLike<BTreeSet<T>> for BoundedBTreeSet<T, S> where
 	BTreeSet<T>: Encode
-{
-}
+{}
 
 #[cfg(test)]
 pub mod test {
