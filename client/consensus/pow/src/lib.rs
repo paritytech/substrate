@@ -23,8 +23,8 @@
 //! with other necessary client references to `import_queue` to setup
 //! the queue.
 //!
-//! This library also comes with an async miner worker, which can be
-//! started via the `start_miner_worker` function. It returns a worker
+//! This library also comes with an async mining worker, which can be
+//! started via the `start_mining_worker` function. It returns a worker
 //! handle together with a future. The future must be pulled. Through
 //! the worker handle, you can pull the metadata needed to start the
 //! mining process via `MiningWorker::metadata`, and then do the actual
