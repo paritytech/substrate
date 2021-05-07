@@ -39,8 +39,8 @@ extern crate alloc;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv"; // address params: no salt, symbol: CERE, endowement: 1000
-pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
+pub const METRICS_CONTRACT_ADDR: &str = "5HmH6PJVkbfNJRyERkypfqBZJxG7VWngWmCL2EL3pYSxDzEZ"; // address params: no salt, symbol: CERE, endowement: 1000
+pub const METRICS_CONTRACT_ID: [u8; 32] = [252, 30, 222, 17, 5, 82, 222, 151, 90, 207, 249, 104, 93, 14, 175, 29, 153, 40, 13, 74, 53, 189, 65, 197, 232, 37, 105, 94, 250, 96, 106, 147];
 pub const BLOCK_INTERVAL: u32 = 10;
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
@@ -95,8 +95,8 @@ struct MetricInfo {
 	appPubKey: Vec<u8>,
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	partitionId: Vec<u8>,
-	bytes: u32,
-	requests: u32,
+	bytes: u128,
+	requests: u128,
 }
 
 impl MetricInfo {
@@ -302,10 +302,11 @@ impl<T: Trait> Module<T> {
 
 					let mut test_call_param = CallData::new();
 					test_call_param.push_arg(&REPORT_METRICS_SELECTOR);
-					test_call_param.push_arg(&[0x01; 128]);
-					test_call_param.push_arg(&[0x01; 128]);
-					test_call_param.push_arg(&[0x01; 128]);
-					test_call_param.push_arg(&[0x01; 128]);
+					test_call_param.push_arg(&one_metric.appPubKey);
+					test_call_param.push_arg(&10u64);
+					test_call_param.push_arg(&one_metric.bytes);
+					test_call_param.push_arg(&one_metric.requests);
+					debug::info!("test_call_param.params(): {:?}", test_call_param.params());
 
 					pallet_contracts::Call::call(
 						T::ContractId::get(),
