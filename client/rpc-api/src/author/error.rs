@@ -42,7 +42,7 @@ pub enum Error {
 	/// Verification error
 	#[display(fmt="Extrinsic verification error: {}", _0)]
 	#[from(ignore)]
-	Verification(Box<dyn std::error::Error + Send>),
+	Verification(Box<dyn std::error::Error + Send + Sync>),
 	/// Incorrect extrinsic format.
 	#[display(fmt="Invalid extrinsic format: {}", _0)]
 	BadFormat(codec::Error),

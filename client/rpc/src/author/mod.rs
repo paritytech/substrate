@@ -123,8 +123,8 @@ impl<P, Client> Author<P, Client>
 				session_keys.to_vec(),
 			).map_err(|e| RpseeCallError::Failed(Box::new(e)))?
 			// TODO: this should be a RpseeCallError::Failed(Box::new(Error::InvalidSessionKeys))) but something is making it not-`Sync`
-			// .ok_or_else(|| RpseeCallError::Failed(Box::new(Error::InvalidSessionKeys)))?;
-			.ok_or_else(|| RpseeCallError::InvalidParams)?;
+			.ok_or_else(|| RpseeCallError::Failed(Box::new(Error::InvalidSessionKeys)))?;
+			// .ok_or_else(|| RpseeCallError::InvalidParams)?;
 
 			Ok(SyncCryptoStore::has_keys(&*author.keystore, &keys))
 		});
