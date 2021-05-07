@@ -284,8 +284,6 @@ fn call_codec() {
 #[test]
 fn test_metadata() {
 	use frame_support::metadata::*;
-	use scale_info::interner::UntrackedSymbol;
-	use std::marker::PhantomData;
 
 	let pallets = vec![
 		PalletMetadata {
