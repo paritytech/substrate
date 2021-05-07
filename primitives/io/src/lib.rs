@@ -38,7 +38,7 @@ use tracing;
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{CallInWasmExt, TaskExecutorExt, RuntimeSpawnExt},
+	traits::{TaskExecutorExt, RuntimeSpawnExt},
 	offchain::{OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
 	storage::ChildInfo,
@@ -472,46 +472,23 @@ pub trait Misc {
 	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
 		use sp_core::traits::ReadRuntimeVersionExt;
 
-		let uncompressed_wasm = match sp_maybe_compressed_blob::decompress(
-			wasm,
-			sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
-		) {
-			Ok(v) => v,
+		let mut ext = sp_state_machine::BasicExternalities::default();
+
+		match self
+			.extension::<ReadRuntimeVersionExt>()
+			.expect("No `ReadRuntimeVersionExt` associated for the current context!")
+			.read_runtime_version(wasm, &mut ext)
+		{
+			Ok(v) => Some(v),
 			Err(err) => {
 				log::debug!(
 					target: LOG_TARGET,
-					"version cannot be read due to decompression failure: {}",
+					"cannot read version from the given runtime: {}",
 					err,
 				);
-				return None;
-			}
-		};
-
-		if let Some(read_version_ext) = self.extension::<ReadRuntimeVersionExt>() {
-			if let Ok(Some(opaque_version)) =
-				read_version_ext.read_runtime_version(&uncompressed_wasm)
-			{
-				return Some(opaque_version);
+				None
 			}
 		}
-
-		let mut ext = sp_state_machine::BasicExternalities::default();
-
-		self.extension::<CallInWasmExt>()
-			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(
-				&uncompressed_wasm,
-				None,
-				"Core_version",
-				&[],
-				&mut ext,
-				// If a runtime upgrade introduces new host functions that are not provided by
-				// the node, we should not fail at instantiation. Otherwise nodes that are
-				// updated could run this successfully and it could lead to a storage root
-				// mismatch when importing this block.
-				sp_core::traits::MissingHostFunctions::Allow,
-			)
-			.ok()
 	}
 }
 

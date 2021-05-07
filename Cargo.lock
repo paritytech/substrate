@@ -7352,7 +7352,6 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-io",
- "sp-maybe-compressed-blob",
  "sp-panic-handler",
  "sp-runtime",
  "sp-runtime-interface",
@@ -7380,6 +7379,7 @@ dependencies = [
  "pwasm-utils 0.14.0",
  "sp-allocator",
  "sp-core",
+ "sp-maybe-compressed-blob",
  "sp-serializer",
  "sp-wasm-interface",
  "thiserror",
@@ -9063,6 +9063,7 @@ name = "sp-runtime-interface-test"
 version = "2.0.0"
 dependencies = [
  "sc-executor",
+ "sc-executor-common",
  "sp-core",
  "sp-io",
  "sp-runtime",

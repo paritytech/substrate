@@ -418,10 +418,7 @@ fn create_versioned_wasm_runtime(
 ) -> Result<VersionedRuntime, WasmError> {
 	// The incoming code may be actually compressed. We decompress it here and then work with
 	// the uncompressed code from now on.
-	use sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT;
-	let code = sp_maybe_compressed_blob::decompress(code, CODE_BLOB_BOMB_LIMIT)
-		.map_err(|e| WasmError::Other(format!("Decompression error: {:?}", e)))?;
-	let blob = sc_executor_common::runtime_blob::RuntimeBlob::new(&code)?;
+	let blob = sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(&code)?;
 
 	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary pertaining
 	// to runtime version. We do it before consuming the runtime blob for creating the runtime.
