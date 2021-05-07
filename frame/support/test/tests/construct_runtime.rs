@@ -281,345 +281,230 @@ fn call_codec() {
 	assert_eq!(Call::Module1_9(module1::Call::fail()).encode()[0], 13);
 }
 
-// #[test]
-// fn test_metadata() {
-// 	use frame_metadata::*;
-// 	let expected_metadata: RuntimeMetadataLastVersion = RuntimeMetadataLastVersion {
-// 		modules: DecodeDifferent::Encode(&[
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("System"),
-// 				storage: None,
-// 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-// 					name: DecodeDifferent::Encode("noop"),
-// 					arguments: DecodeDifferent::Encode(&[]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				event: Some(DecodeDifferent::Encode(FnEncode(|| &[
-// 					EventMetadata {
-// 						name: DecodeDifferent::Encode("ExtrinsicSuccess"),
-// 						arguments: DecodeDifferent::Encode(&[]),
-// 						documentation: DecodeDifferent::Encode(&[]),
-// 					},
-// 					EventMetadata {
-// 						name: DecodeDifferent::Encode("ExtrinsicFailed"),
-// 						arguments: DecodeDifferent::Encode(&[]),
-// 						documentation: DecodeDifferent::Encode(&[]),
-// 					},
-// 					EventMetadata {
-// 						name: DecodeDifferent::Encode("Ignore"),
-// 						arguments: DecodeDifferent::Encode(&["BlockNumber"]),
-// 						documentation: DecodeDifferent::Encode(&[]),
-// 					},
-// 				]))),
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 30,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module1_1"),
-// 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-// 					prefix: DecodeDifferent::Encode("Instance1Module"),
-// 					entries: DecodeDifferent::Encode(&[]),
-// 				}))),
-// 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[
-// 					FunctionMetadata {
-// 						name: DecodeDifferent::Encode("fail"),
-// 						arguments: DecodeDifferent::Encode(&[]),
-// 						documentation: DecodeDifferent::Encode(&[]),
-// 					},
-// 				]))),
-// 				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-// 					name: DecodeDifferent::Encode("A"),
-// 					arguments: DecodeDifferent::Encode(&["AccountId"]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 31,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module2"),
-// 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-// 					prefix: DecodeDifferent::Encode("Module"),
-// 					entries: DecodeDifferent::Encode(&[]),
-// 				}))),
-// 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[
-// 					FunctionMetadata {
-// 						name: DecodeDifferent::Encode("fail"),
-// 						arguments: DecodeDifferent::Encode(&[]),
-// 						documentation: DecodeDifferent::Encode(&[]),
-// 					},
-// 				]))),
-// 				event: Some(DecodeDifferent::Encode(FnEncode(|| &[
-// 					EventMetadata {
-// 						name: DecodeDifferent::Encode("A"),
-// 						arguments: DecodeDifferent::Encode(&[]),
-// 						documentation: DecodeDifferent::Encode(&[]),
-// 					},
-// 				]))),
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 32,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module1_2"),
-// 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-// 					prefix: DecodeDifferent::Encode("Instance2Module"),
-// 					entries: DecodeDifferent::Encode(&[]),
-// 				}))),
-// 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-// 					name: DecodeDifferent::Encode("fail"),
-// 					arguments: DecodeDifferent::Encode(&[]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-// 					name: DecodeDifferent::Encode("A"),
-// 					arguments: DecodeDifferent::Encode(&["AccountId"]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 33,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module1_3"),
-// 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-// 					prefix: DecodeDifferent::Encode("Instance3Module"),
-// 					entries: DecodeDifferent::Encode(&[]),
-// 				}))),
-// 				calls: None,
-// 				event: None,
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 6,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module1_4"),
-// 				storage: None,
-// 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-// 					name: DecodeDifferent::Encode("fail"),
-// 					arguments: DecodeDifferent::Encode(&[]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				event: None,
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 3,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module1_5"),
-// 				storage: None,
-// 				calls: None,
-// 				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-// 					name: DecodeDifferent::Encode("A"),
-// 					arguments: DecodeDifferent::Encode(&["AccountId"]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 4,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module1_6"),
-// 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-// 					prefix: DecodeDifferent::Encode("Instance6Module"),
-// 					entries: DecodeDifferent::Encode(&[]),
-// 				}))),
-// 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-// 					name: DecodeDifferent::Encode("fail"),
-// 					arguments: DecodeDifferent::Encode(&[]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-// 					name: DecodeDifferent::Encode("A"),
-// 					arguments: DecodeDifferent::Encode(&["AccountId"]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 1,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module1_7"),
-// 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-// 					prefix: DecodeDifferent::Encode("Instance7Module"),
-// 					entries: DecodeDifferent::Encode(&[]),
-// 				}))),
-// 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-// 					name: DecodeDifferent::Encode("fail"),
-// 					arguments: DecodeDifferent::Encode(&[]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-// 					name: DecodeDifferent::Encode("A"),
-// 					arguments: DecodeDifferent::Encode(&["AccountId"]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 2,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module1_8"),
-// 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-// 					prefix: DecodeDifferent::Encode("Instance8Module"),
-// 					entries: DecodeDifferent::Encode(&[]),
-// 				}))),
-// 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-// 					name: DecodeDifferent::Encode("fail"),
-// 					arguments: DecodeDifferent::Encode(&[]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-// 					name: DecodeDifferent::Encode("A"),
-// 					arguments: DecodeDifferent::Encode(&["AccountId"]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 12,
-// 			},
-// 			PalletMetadata {
-// 				name: DecodeDifferent::Encode("Module1_9"),
-// 				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
-// 					prefix: DecodeDifferent::Encode("Instance9Module"),
-// 					entries: DecodeDifferent::Encode(&[]),
-// 				}))),
-// 				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-// 					name: DecodeDifferent::Encode("fail"),
-// 					arguments: DecodeDifferent::Encode(&[]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-// 					name: DecodeDifferent::Encode("A"),
-// 					arguments: DecodeDifferent::Encode(&["AccountId"]),
-// 					documentation: DecodeDifferent::Encode(&[]),
-// 				}]))),
-// 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				index: 13,
-// 			},
-// 		]),
-// 		extrinsic: ExtrinsicMetadata {
-// 			version: 4,
-// 			signed_extensions: vec![DecodeDifferent::Encode("UnitSignedExtension")],
-// 		},
-// 	};
-// 	pretty_assertions::assert_eq!(Runtime::metadata().1, RuntimeMetadata::V12(expected_metadata));
-// }
-
-// todo: [AJ] update test below with v13 metadata from above
 #[test]
 fn test_metadata() {
 	use frame_support::metadata::*;
-	let modules = vec![
+	use scale_info::interner::UntrackedSymbol;
+	use std::marker::PhantomData;
+
+	let pallets = vec![
 		PalletMetadata {
 			name: "System",
 			storage: None,
-			calls: None,
-			event: None,
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<system::Call<Runtime>>(),
+				calls: vec![FunctionMetadata {
+					name: "noop",
+					arguments: vec![],
+					documentation: vec![],
+				}],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<system::Event<Runtime>>(),
+			}),
 			constants: vec![],
 			error: None,
-			index: 0
+			index: 30,
 		},
 		PalletMetadata {
 			name: "Module1_1",
-			storage: None,
-			calls: None,
-			event: None,
+			storage: Some(StorageMetadata {
+				prefix: "Instance1Module",
+				entries: vec![],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance1>>(),
+				calls: vec![FunctionMetadata {
+					name: "fail",
+					arguments: vec![],
+					documentation: vec![],
+				}],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance1>>(),
+			}),
 			constants: vec![],
 			error: None,
-			index: 1
+			index: 31,
 		},
 		PalletMetadata {
 			name: "Module2",
-			storage: None,
-			calls: None,
-			event: None,
+			storage: Some(StorageMetadata {
+				prefix: "Module",
+				entries: vec![],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<module2::Call<Runtime>>(),
+				calls: vec![FunctionMetadata {
+					name: "fail",
+					arguments: vec![],
+					documentation: vec![],
+				}],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<module2::Event>(),
+			}),
 			constants: vec![],
 			error: None,
-			index: 2
+			index: 32,
 		},
 		PalletMetadata {
 			name: "Module1_2",
-			storage: None,
-			calls: None,
-			event: None,
+			storage: Some(StorageMetadata {
+				prefix: "Instance2Module",
+				entries: vec![],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance2>>(),
+				calls: vec![FunctionMetadata {
+					name: "fail",
+					arguments: vec![],
+					documentation: vec![],
+				}],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance2>>(),
+			}),
 			constants: vec![],
 			error: None,
-			index: 3
+			index: 33,
 		},
 		PalletMetadata {
 			name: "Module1_3",
-			storage: None,
+			storage: Some(StorageMetadata {
+				prefix: "Instance3Module",
+				entries: vec![],
+			}),
 			calls: None,
 			event: None,
 			constants: vec![],
 			error: None,
-			index: 4
+			index: 6,
 		},
 		PalletMetadata {
 			name: "Module1_4",
 			storage: None,
-			calls: None,
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance4>>(),
+				calls: vec![FunctionMetadata {
+					name: "fail",
+					arguments: vec![],
+					documentation: vec![],
+				}],
+			}),
 			event: None,
 			constants: vec![],
 			error: None,
-			index: 5
+			index: 3,
 		},
 		PalletMetadata {
 			name: "Module1_5",
 			storage: None,
 			calls: None,
-			event: None,
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance5>>(),
+			}),
 			constants: vec![],
 			error: None,
-			index: 6
+			index: 4,
 		},
 		PalletMetadata {
 			name: "Module1_6",
-			storage: None,
-			calls: None,
-			event: None,
+			storage: Some(StorageMetadata {
+				prefix: "Instance6Module",
+				entries: vec![],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance6>>(),
+				calls: vec![FunctionMetadata {
+					name: "fail",
+					arguments: vec![],
+					documentation: vec![],
+				}],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance6>>(),
+			}),
 			constants: vec![],
 			error: None,
-			index: 7
+			index: 1,
 		},
 		PalletMetadata {
 			name: "Module1_7",
-			storage: None,
-			calls: None,
-			event: None,
+			storage: Some(StorageMetadata {
+				prefix: "Instance7Module",
+				entries: vec![],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance7>>(),
+				calls: vec![FunctionMetadata {
+					name: "fail",
+					arguments: vec![],
+					documentation: vec![],
+				}],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance7>>(),
+			}),
 			constants: vec![],
 			error: None,
-			index: 8
+			index: 2,
 		},
 		PalletMetadata {
 			name: "Module1_8",
-			storage: None,
-			calls: None,
-			event: None,
+			storage: Some(StorageMetadata {
+				prefix: "Instance8Module",
+				entries: vec![],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance8>>(),
+				calls: vec![FunctionMetadata {
+					name: "fail",
+					arguments: vec![],
+					documentation: vec![],
+				}],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance8>>(),
+			}),
 			constants: vec![],
 			error: None,
-			index: 9
+			index: 12,
 		},
 		PalletMetadata {
 			name: "Module1_9",
-			storage: None,
-			calls: None,
-			event: None,
+			storage: Some(StorageMetadata {
+				prefix: "Instance9Module",
+				entries: vec![],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance9>>(),
+				calls: vec![FunctionMetadata {
+					name: "fail",
+					arguments: vec![],
+					documentation: vec![],
+				}],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance9>>(),
+			}),
 			constants: vec![],
 			error: None,
-			index: 10
-		}
+			index: 13,
+		},
 	];
+
 	let extrinsic = ExtrinsicMetadata {
 		ty: scale_info::meta_type::<UncheckedExtrinsic>(),
-		version: 0,
-		signed_extensions: vec![]
+		version: 4,
+		signed_extensions: vec![
+			SignedExtensionMetadata { identifier: "UnitSignedExtension", ty: scale_info::meta_type::<()>() }
+		]
 	};
-	let expected_metadata = RuntimeMetadataLastVersion::new(modules, extrinsic);
-	pretty_assertions::assert_eq!(Runtime::metadata().1, RuntimeMetadata::V13(expected_metadata));
+
+	let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
+	let actual_metadata = Runtime::metadata();
+	pretty_assertions::assert_eq!(actual_metadata, expected_metadata);
 }
 
 #[test]
