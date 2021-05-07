@@ -556,13 +556,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 }
 
 fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: u64) -> Arc<dyn WasmModule> {
-	let raw =
-		sp_maybe_compressed_blob::decompress(
-			&wasm_binary_unwrap()[..],
-			sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
-		)
-		.expect("failed to uncompress the test runtime");
-	let blob = RuntimeBlob::new(&raw)
+	let blob = RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..])
 		.expect("failed to create a runtime blob out of test runtime");
 
 	crate::wasm_runtime::create_wasm_runtime_with_code(
