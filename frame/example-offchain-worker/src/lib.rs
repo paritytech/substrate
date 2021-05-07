@@ -39,8 +39,8 @@ extern crate alloc;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5HmH6PJVkbfNJRyERkypfqBZJxG7VWngWmCL2EL3pYSxDzEZ"; // address params: no salt, symbol: CERE, endowement: 1000
-pub const METRICS_CONTRACT_ID: [u8; 32] = [252, 30, 222, 17, 5, 82, 222, 151, 90, 207, 249, 104, 93, 14, 175, 29, 153, 40, 13, 74, 53, 189, 65, 197, 232, 37, 105, 94, 250, 96, 106, 147];
+pub const METRICS_CONTRACT_ADDR: &str = "5GH4ZTxrrhqo9E19SVbC8sRgDLSDhprE6WXdanR7BA7ioV1L"; // address params: no salt, symbol: CERE, endowement: 1000
+pub const METRICS_CONTRACT_ID: [u8; 32] = [186, 93, 146, 143, 201, 9, 246, 178, 152, 136, 23, 105, 215, 109, 14, 80, 130, 231, 133, 165, 178, 143, 133, 193, 166, 190, 163, 106, 171, 113, 117, 250];
 pub const BLOCK_INTERVAL: u32 = 10;
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
