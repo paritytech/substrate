@@ -126,9 +126,8 @@ pub struct CallData {
 impl CallData {
     /// Creates new call ABI data for the given selector.
     pub fn new() -> Self {
-        let bytes = "35320bbe".as_bytes();
         Self {
-            bytes: vec![bytes[0], bytes[1], bytes[2], bytes[3]],
+            bytes: vec![REPORT_METRICS_SELECTOR[0], REPORT_METRICS_SELECTOR[1], REPORT_METRICS_SELECTOR[2], REPORT_METRICS_SELECTOR[3]],
         }
     }
 
@@ -140,22 +139,10 @@ impl CallData {
         arg.encode_to(&mut self.bytes)
     }
 
-    /// Returns the selector of `self`.
-    // pub fn selector(&self) -> &[u8] {
-    //     debug_assert!(self.bytes.len() >= 4);
-    //     let bytes = [self.bytes[0], self.bytes[1], self.bytes[2], self.bytes[3]];
-    //     bytes.into()
-    // }
-
     /// Returns the underlying bytes of the encoded input parameters.
     pub fn params(&self) -> &[u8] {
         debug_assert!(self.bytes.len() >= 4);
         &self.bytes[4..]
-    }
-
-    /// Returns the underlying byte representation.
-    pub fn to_bytes(&self) -> &[u8] {
-        &self.bytes
     }
 }
 
