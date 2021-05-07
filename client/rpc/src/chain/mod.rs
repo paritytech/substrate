@@ -45,7 +45,7 @@ use sc_client_api::BlockBackend;
 
 /// Blockchain backend API
 #[async_trait::async_trait]
-pub trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
+trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	where
 		Block: BlockT + 'static,
 		Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
@@ -227,8 +227,7 @@ fn rpc_err(err: StateError) -> JsonRpseeCallError {
 }
 
 /// Possible subscriptions for the chain RPC API.
-pub struct ChainSubSinks<Block, Client>
-{
+pub struct ChainSubSinks<Block, Client> {
 	new_heads: SubscriptionSink,
 	all_heads: SubscriptionSink,
 	finalized_heads: SubscriptionSink,
