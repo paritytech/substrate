@@ -19,17 +19,16 @@
 //! or a double map.
 
 use sp_std::prelude::*;
-use sp_std::{convert::TryFrom, marker::PhantomData};
+use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
 use codec::{FullCodec, Encode, EncodeLike, Decode};
-use core::{ops::{Index, IndexMut}, slice::SliceIndex};
+use core::{
+	ops::{Deref, Index, IndexMut},
+	slice::SliceIndex,
+};
 use crate::{
 	traits::{Get, MaxEncodedLen},
 	storage::{generator, StorageDecodeLength, StorageValue, StorageMap, StorageDoubleMap},
 };
-
-/// Marker trait for types `T` that can be stored in storage as `BoundedVec<T, _>`.
-pub trait BoundedVecValue: FullCodec + Clone + sp_std::fmt::Debug {}
-impl<T: FullCodec + Clone + sp_std::fmt::Debug> BoundedVecValue for T {}
 
 /// A bounded vector.
 ///
@@ -38,28 +37,53 @@ impl<T: FullCodec + Clone + sp_std::fmt::Debug> BoundedVecValue for T {}
 ///
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
-#[derive(Encode, Decode, crate::DefaultNoBound, crate::CloneNoBound, crate::DebugNoBound)]
-pub struct BoundedVec<T: BoundedVecValue, S: Get<u32>>(Vec<T>, PhantomData<S>);
+#[derive(Encode, Decode)]
+pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
-// NOTE: we could also implement this as:
-// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<BoundedVec<T, S2>> for BoundedVec<T, S1>
-// to allow comparison of bounded vectors with different bounds.
-impl<T: PartialEq + BoundedVecValue, S: Get<u32>> PartialEq for BoundedVec<T, S> {
-	fn eq(&self, rhs: &Self) -> bool {
-		self.0 == rhs.0
-	}
-}
-impl<T: Eq + PartialEq + BoundedVecValue, S: Get<u32>> Eq for BoundedVec<T, S> {}
-
-impl<T: BoundedVecValue, S: Get<u32>> BoundedVec<T, S> {
-	/// Get the bound of the type in `usize`.
-	pub fn bound() -> usize {
-		S::get() as usize
-	}
-
+impl<T, S> BoundedVec<T, S> {
 	/// Create `Self` from `t` without any checks.
 	unsafe fn unchecked_from(t: Vec<T>) -> Self {
 		Self(t, Default::default())
+	}
+
+	/// Consume self, and return the inner `Vec`. Henceforth, the `Vec<_>` can be altered in an
+	/// arbitrary way. At some point, if the reverse conversion is required, `TryFrom<Vec<_>>` can
+	/// be used.
+	///
+	/// This is useful for cases if you need access to an internal API of the inner `Vec<_>` which
+	/// is not provided by the wrapper `BoundedVec`.
+	pub fn into_inner(self) -> Vec<T> {
+		self.0
+	}
+
+	/// Exactly the same semantics as [`Vec::remove`].
+	///
+	/// # Panics
+	///
+	/// Panics if `index` is out of bounds.
+	pub fn remove(&mut self, index: usize) {
+		self.0.remove(index);
+	}
+
+	/// Exactly the same semantics as [`Vec::swap_remove`].
+	///
+	/// # Panics
+	///
+	/// Panics if `index` is out of bounds.
+	pub fn swap_remove(&mut self, index: usize) {
+		self.0.swap_remove(index);
+	}
+
+	/// Exactly the same semantics as [`Vec::retain`].
+	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
+		self.0.retain(f)
+	}
+}
+
+impl<T, S: Get<u32>> BoundedVec<T, S> {
+	/// Get the bound of the type in `usize`.
+	pub fn bound() -> usize {
+		S::get() as usize
 	}
 
 	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
@@ -75,17 +99,6 @@ impl<T: BoundedVecValue, S: Get<u32>> BoundedVec<T, S> {
 		}
 
 		Self::unchecked_from(t)
-	}
-
-	/// Consume self, and return the inner `Vec`. Henceforth, the `Vec<_>` can be altered in an
-	/// arbitrary way. At some point, if the reverse conversion is required, `TryFrom<Vec<_>>` can
-	/// be used.
-	///
-	/// This is useful for cases if you need access to an internal API of the inner `Vec<_>` which
-	/// is not provided by the wrapper `BoundedVec`.
-	pub fn into_inner(self) -> Vec<T> {
-		debug_assert!(self.0.len() <= Self::bound());
-		self.0
 	}
 
 	/// Consumes self and mutates self via the given `mutate` function.
@@ -129,37 +142,42 @@ impl<T: BoundedVecValue, S: Get<u32>> BoundedVec<T, S> {
 			Err(())
 		}
 	}
+}
 
-	/// Exactly the same semantics as [`Vec::remove`].
-	///
-	/// # Panics
-	///
-	/// Panics if `index` is out of bounds.
-	pub fn remove(&mut self, index: usize) {
-		self.0.remove(index);
-	}
-
-	/// Exactly the same semantics as [`Vec::swap_remove`].
-	///
-	/// # Panics
-	///
-	/// Panics if `index` is out of bounds.
-	pub fn swap_remove(&mut self, index: usize) {
-		self.0.swap_remove(index);
-	}
-
-	/// Exactly the same semantics as [`Vec::retain`].
-	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
-		self.0.retain(f)
+impl<T, S> Default for BoundedVec<T, S> {
+	fn default() -> Self {
+		// the bound cannot be below 0, which is satisfied by an empty vector
+		unsafe { Self::unchecked_from(Vec::default()) }
 	}
 }
 
-impl<T: BoundedVecValue, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
+#[cfg(feature = "std")]
+impl<T, S> fmt::Debug for BoundedVec<T, S>
+where
+	T: fmt::Debug,
+	S: Get<u32>,
+{
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_tuple("BoundedVec").field(&self.0).field(&Self::bound()).finish()
+	}
+}
+
+impl<T, S> Clone for BoundedVec<T, S>
+where
+	T: Clone,
+{
+	fn clone(&self) -> Self {
+		// bound is retained
+		unsafe { Self::unchecked_from(self.0.clone()) }
+	}
+}
+
+impl<T, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 	type Error = ();
 	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
 		if t.len() <= Self::bound() {
 			// explicit check just above
-			Ok(unsafe {Self::unchecked_from(t)})
+			Ok(unsafe { Self::unchecked_from(t) })
 		} else {
 			Err(())
 		}
@@ -167,26 +185,26 @@ impl<T: BoundedVecValue, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 }
 
 // It is okay to give a non-mutable reference of the inner vec to anyone.
-impl<T: BoundedVecValue, S: Get<u32>> AsRef<Vec<T>> for BoundedVec<T, S> {
+impl<T, S> AsRef<Vec<T>> for BoundedVec<T, S> {
 	fn as_ref(&self) -> &Vec<T> {
 		&self.0
 	}
 }
 
-impl<T: BoundedVecValue, S: Get<u32>> AsRef<[T]> for BoundedVec<T, S> {
+impl<T, S> AsRef<[T]> for BoundedVec<T, S> {
 	fn as_ref(&self) -> &[T] {
 		&self.0
 	}
 }
 
-impl<T: BoundedVecValue, S: Get<u32>> AsMut<[T]> for BoundedVec<T, S> {
+impl<T, S> AsMut<[T]> for BoundedVec<T, S> {
 	fn as_mut(&mut self) -> &mut [T] {
 		&mut self.0
 	}
 }
 
 // will allow for immutable all operations of `Vec<T>` on `BoundedVec<T>`.
-impl<T: BoundedVecValue, S: Get<u32>> sp_std::ops::Deref for BoundedVec<T, S> {
+impl<T, S> Deref for BoundedVec<T, S> {
 	type Target = Vec<T>;
 
 	fn deref(&self) -> &Self::Target {
@@ -195,7 +213,10 @@ impl<T: BoundedVecValue, S: Get<u32>> sp_std::ops::Deref for BoundedVec<T, S> {
 }
 
 // Allows for indexing similar to a normal `Vec`. Can panic if out of bound.
-impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> Index<I> for BoundedVec<T, S> {
+impl<T, S, I> Index<I> for BoundedVec<T, S>
+where
+	I: SliceIndex<[T]>,
+{
 	type Output = I::Output;
 
 	#[inline]
@@ -204,14 +225,17 @@ impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> Index<I> for BoundedVe
 	}
 }
 
-impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> IndexMut<I> for BoundedVec<T, S> {
+impl<T, S, I> IndexMut<I> for BoundedVec<T, S>
+where
+	I: SliceIndex<[T]>,
+{
 	#[inline]
 	fn index_mut(&mut self, index: I) -> &mut Self::Output {
 		self.0.index_mut(index)
 	}
 }
 
-impl<T: BoundedVecValue, S: Get<u32>> sp_std::iter::IntoIterator for BoundedVec<T, S> {
+impl<T, S> sp_std::iter::IntoIterator for BoundedVec<T, S> {
 	type Item = T;
 	type IntoIter = sp_std::vec::IntoIter<T>;
 	fn into_iter(self) -> Self::IntoIter {
@@ -219,7 +243,7 @@ impl<T: BoundedVecValue, S: Get<u32>> sp_std::iter::IntoIterator for BoundedVec<
 	}
 }
 
-impl<T: BoundedVecValue, S: Get<u32>> codec::DecodeLength for BoundedVec<T, S> {
+impl<T, S> codec::DecodeLength for BoundedVec<T, S> {
 	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
 		// `BoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
 		// `Compact` form, and same implementation as `Vec<T>` can be used.
@@ -227,16 +251,30 @@ impl<T: BoundedVecValue, S: Get<u32>> codec::DecodeLength for BoundedVec<T, S> {
 	}
 }
 
-impl<T: BoundedVecValue + PartialEq, S: Get<u32>> PartialEq<Vec<T>> for BoundedVec<T, S> {
+// NOTE: we could also implement this as:
+// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<BoundedVec<T, S2>> for BoundedVec<T, S1>
+// to allow comparison of bounded vectors with different bounds.
+impl<T, S> PartialEq for BoundedVec<T, S>
+where
+	T: PartialEq,
+{
+	fn eq(&self, rhs: &Self) -> bool {
+		self.0 == rhs.0
+	}
+}
+
+impl<T: PartialEq, S: Get<u32>> PartialEq<Vec<T>> for BoundedVec<T, S> {
 	fn eq(&self, other: &Vec<T>) -> bool {
 		&self.0 == other
 	}
 }
 
-impl<T: BoundedVecValue, S: Get<u32>> StorageDecodeLength for BoundedVec<T, S> {}
+impl<T, S> Eq for BoundedVec<T, S> where T: Eq {}
+
+impl<T, S> StorageDecodeLength for BoundedVec<T, S> {}
 
 /// Storage value that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
-pub trait TryAppendValue<T: BoundedVecValue, S: Get<u32>> {
+pub trait TryAppendValue<T: Encode, S: Get<u32>> {
 	/// Try and append the `item` into the storage item.
 	///
 	/// This might fail if bounds are not respected.
@@ -244,7 +282,7 @@ pub trait TryAppendValue<T: BoundedVecValue, S: Get<u32>> {
 }
 
 /// Storage map that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
-pub trait TryAppendMap<K: FullCodec, T: BoundedVecValue, S: Get<u32>> {
+pub trait TryAppendMap<K: FullCodec, T: Encode, S: Get<u32>> {
 	/// Try and append the `item` into the storage map at the given `key`.
 	///
 	/// This might fail if bounds are not respected.
@@ -255,7 +293,7 @@ pub trait TryAppendMap<K: FullCodec, T: BoundedVecValue, S: Get<u32>> {
 }
 
 /// Storage double map that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
-pub trait TryAppendDoubleMap<K1: FullCodec, K2: FullCodec, T: BoundedVecValue, S: Get<u32>> {
+pub trait TryAppendDoubleMap<K1: FullCodec, K2: FullCodec, T: Encode, S: Get<u32>> {
 	/// Try and append the `item` into the storage double map at the given `key`.
 	///
 	/// This might fail if bounds are not respected.
@@ -270,8 +308,12 @@ pub trait TryAppendDoubleMap<K1: FullCodec, K2: FullCodec, T: BoundedVecValue, S
 	) -> Result<(), ()>;
 }
 
-impl<T: BoundedVecValue, S: Get<u32>, StorageValueT: generator::StorageValue<BoundedVec<T, S>>>
-	TryAppendValue<T, S> for StorageValueT
+impl<T, S, StorageValueT> TryAppendValue<T, S> for StorageValueT
+where
+	BoundedVec<T, S>: FullCodec,
+	T: Encode,
+	S: Get<u32>,
+	StorageValueT: generator::StorageValue<BoundedVec<T, S>>,
 {
 	fn try_append<LikeT: EncodeLike<T>>(item: LikeT) -> Result<(), ()> {
 		let bound = BoundedVec::<T, S>::bound();
@@ -288,12 +330,13 @@ impl<T: BoundedVecValue, S: Get<u32>, StorageValueT: generator::StorageValue<Bou
 	}
 }
 
-impl<
-		K: FullCodec,
-		T: BoundedVecValue,
-		S: Get<u32>,
-		StorageMapT: generator::StorageMap<K, BoundedVec<T, S>>,
-	> TryAppendMap<K, T, S> for StorageMapT
+impl<K, T, S, StorageMapT> TryAppendMap<K, T, S> for StorageMapT
+where
+	K: FullCodec,
+	BoundedVec<T, S>: FullCodec,
+	T: Encode,
+	S: Get<u32>,
+	StorageMapT: generator::StorageMap<K, BoundedVec<T, S>>,
 {
 	fn try_append<LikeK: EncodeLike<K> + Clone, LikeT: EncodeLike<T>>(
 		key: LikeK,
@@ -311,13 +354,14 @@ impl<
 	}
 }
 
-impl<
-		K1: FullCodec,
-		K2: FullCodec,
-		T: BoundedVecValue,
-		S: Get<u32>,
-		StorageDoubleMapT: generator::StorageDoubleMap<K1, K2, BoundedVec<T, S>>,
-	> TryAppendDoubleMap<K1, K2, T, S> for StorageDoubleMapT
+impl<K1, K2, T, S, StorageDoubleMapT> TryAppendDoubleMap<K1, K2, T, S> for StorageDoubleMapT
+where
+	K1: FullCodec,
+	K2: FullCodec,
+	BoundedVec<T, S>: FullCodec,
+	T: Encode,
+	S: Get<u32>,
+	StorageDoubleMapT: generator::StorageDoubleMap<K1, K2, BoundedVec<T, S>>,
 {
 	fn try_append<
 		LikeK1: EncodeLike<K1> + Clone,
@@ -342,7 +386,7 @@ impl<
 
 impl<T, S> MaxEncodedLen for BoundedVec<T, S>
 where
-	T: BoundedVecValue + MaxEncodedLen,
+	T: MaxEncodedLen,
 	S: Get<u32>,
 	BoundedVec<T, S>: Encode,
 {
@@ -350,7 +394,8 @@ where
 		// BoundedVec<T, S> encodes like Vec<T> which encodes like [T], which is a compact u32
 		// plus each item in the slice:
 		// https://substrate.dev/rustdocs/v3.0.0/src/parity_scale_codec/codec.rs.html#798-808
-		codec::Compact(S::get()).encoded_size()
+		codec::Compact(S::get())
+			.encoded_size()
 			.saturating_add(Self::bound().saturating_mul(T::max_encoded_len()))
 	}
 }
@@ -427,12 +472,13 @@ pub mod test {
 			// append to a non-existing
 			assert!(FooMap::get(2).is_none());
 			assert_ok!(FooMap::try_append(2, 4));
-			assert_eq!(FooMap::get(2).unwrap(), unsafe {BoundedVec::<u32, Seven>::unchecked_from(vec![4])});
+			assert_eq!(FooMap::get(2).unwrap(), unsafe {
+				BoundedVec::<u32, Seven>::unchecked_from(vec![4])
+			});
 			assert_ok!(FooMap::try_append(2, 5));
-			assert_eq!(
-				FooMap::get(2).unwrap(),
-				unsafe {BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])}
-			);
+			assert_eq!(FooMap::get(2).unwrap(), unsafe {
+				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])
+			});
 		});
 
 		TestExternalities::default().execute_with(|| {
@@ -449,15 +495,13 @@ pub mod test {
 			// append to a non-existing
 			assert!(FooDoubleMap::get(2, 1).is_none());
 			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
-			assert_eq!(
-				FooDoubleMap::get(2, 1).unwrap(),
-				unsafe {BoundedVec::<u32, Seven>::unchecked_from(vec![4])}
-			);
+			assert_eq!(FooDoubleMap::get(2, 1).unwrap(), unsafe {
+				BoundedVec::<u32, Seven>::unchecked_from(vec![4])
+			});
 			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
-			assert_eq!(
-				FooDoubleMap::get(2, 1).unwrap(),
-				unsafe {BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])}
-			);
+			assert_eq!(FooDoubleMap::get(2, 1).unwrap(), unsafe {
+				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])
+			});
 		});
 	}
 

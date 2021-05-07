@@ -20,10 +20,7 @@
 use sp_core::storage::ChildInfo;
 use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
-use crate::{
-	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
-	traits::Get,
-};
+use crate::hash::{Twox128, StorageHasher, ReversibleStorageHasher};
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
 
@@ -811,13 +808,13 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 /// outside of this crate.
 mod private {
 	use super::*;
-	use bounded_vec::{BoundedVecValue, BoundedVec};
+	use bounded_vec::BoundedVec;
 
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
-	impl<T: BoundedVecValue, S: Get<u32>> Sealed for BoundedVec<T, S> {}
+	impl<T, S> Sealed for BoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 }
 
