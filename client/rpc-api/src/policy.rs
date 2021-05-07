@@ -22,6 +22,7 @@
 //! RPC when accessed externally.
 
 use jsonrpc_core as rpc;
+use jsonrpsee_types::error as rpsee;
 
 /// Signifies whether a potentially unsafe RPC should be denied.
 #[derive(Clone, Copy, Debug)]
@@ -58,5 +59,11 @@ impl std::error::Error for UnsafeRpcError {}
 impl From<UnsafeRpcError> for rpc::Error {
 	fn from(_: UnsafeRpcError) -> rpc::Error {
 		rpc::Error::method_not_found()
+	}
+}
+
+impl From<UnsafeRpcError> for rpsee::CallError {
+	fn from(e: UnsafeRpcError) -> rpsee::CallError {
+		rpsee::CallError::Failed(Box::new(e))
 	}
 }

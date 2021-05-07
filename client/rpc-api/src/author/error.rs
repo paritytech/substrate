@@ -34,7 +34,8 @@ pub enum Error {
 	/// Client error.
 	#[display(fmt="Client error: {}", _0)]
 	#[from(ignore)]
-	Client(Box<dyn std::error::Error + Send>),
+	// TODO: is it ok to make this `Sync`? (doesn't fix my problem but maybe it fixes something else...)
+	Client(Box<dyn std::error::Error + Send + Sync>),
 	/// Transaction pool error,
 	#[display(fmt="Transaction pool error: {}", _0)]
 	Pool(sp_transaction_pool::error::Error),

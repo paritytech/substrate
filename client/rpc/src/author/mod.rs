@@ -32,7 +32,7 @@ use futures::future::{ready, FutureExt, TryFutureExt};
 use sc_rpc_api::DenyUnsafe;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
+use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as RpseeCallError};
 use codec::{Encode, Decode};
 use sp_core::Bytes;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
@@ -101,16 +101,33 @@ impl<P, Client> Author<P, Client>
 			let ext: Bytes = params.one()?;
 			let xt = match Decode::decode(&mut &ext[..]) {
 				Ok(xt) => xt,
-				Err(err) => return Err(JsonRpseeCallError::Failed(err.into())),
+				Err(err) => return Err(RpseeCallError::Failed(err.into())),
 			};
 			let best_block_hash = author.client.info().best_hash;
 			let fut = author.pool.submit_one(&generic::BlockId::hash(best_block_hash), TX_SOURCE, xt);
 
 			futures::executor::block_on(fut)
 				.map_err(|e| e.into_pool_error()
-					.map(|e| JsonRpseeCallError::Failed(Box::new(e)))
-					.unwrap_or_else(|e| JsonRpseeCallError::Failed(Box::new(e))))
+					.map(|e| RpseeCallError::Failed(Box::new(e)))
+					.unwrap_or_else(|e| RpseeCallError::Failed(Box::new(e))))
 		})?;
+
+		rpc_module.register_method("author_hasSessionKeys", |params, author| {
+			log::info!("author_hasSessionKeys [{:?}]", params);
+			author.deny_unsafe.check_if_safe()?;
+
+			let session_keys: Bytes = params.one()?;
+			let best_block_hash = author.client.info().best_hash;
+			let keys = author.client.runtime_api().decode_session_keys(
+				&generic::BlockId::Hash(best_block_hash),
+				session_keys.to_vec(),
+			).map_err(|e| RpseeCallError::Failed(Box::new(e)))?
+			// TODO: this should be a RpseeCallError::Failed(Box::new(Error::InvalidSessionKeys))) but something is making it not-`Sync`
+			// .ok_or_else(|| RpseeCallError::Failed(Box::new(Error::InvalidSessionKeys)))?;
+			.ok_or_else(|| RpseeCallError::InvalidParams)?;
+
+			Ok(SyncCryptoStore::has_keys(&*author.keystore, &keys))
+		});
 
 		Ok(rpc_module.into_module())
 	}
