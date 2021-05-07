@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for transction-stroage pallet.
+//! Tests for transction-storage pallet.
 
 use super::*;
 use crate::mock::*;

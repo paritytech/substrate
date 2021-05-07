@@ -34,7 +34,7 @@ pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs>: Send + Sync {
 	/// Create the inherent data providers at the given `parent` block using the given `extra_args`.
 	async fn create_inherent_data_providers(
 		&self,
-		parent: Block::Header,
+		parent: Block::Hash,
 		extra_args: ExtraArgs,
 	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>>;
 }

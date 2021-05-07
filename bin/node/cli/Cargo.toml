@@ -57,7 +57,6 @@ sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
 sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
-sp-transaction-storage-proof = { version = "3.0.0", path = "../../../primitives/transaction-storage-proof" }
 
 # client dependencies
 sc-client-api = { version = "3.0.0", path = "../../../client/api" }

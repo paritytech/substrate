@@ -135,7 +135,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Index and store data on chain. Minimum data size is 1 bytes, maxmum is `MAX_DATA_SIZE`.
+		/// Index and store data on chain. Minimum data size is 1 bytes, maximum is `MAX_DATA_SIZE`.
 		/// Data will be removed after `STORAGE_PERIOD` blocks, unless `renew` is called.
 		/// # <weight>
 		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.
@@ -173,7 +173,7 @@ pub mod pallet {
 		/// Transaction index is emitted in the `Stored` or `Renewed` event.
 		/// Applies same fees as `store`.
 		/// # <weight>
-		/// - Constant with a single DB read.
+		/// - Constant.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::renew())]
 		pub(super) fn renew(

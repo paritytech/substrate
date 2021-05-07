@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Benchmarks for transction-storage Pallet
+//! Benchmarks for transaction-storage Pallet
 
 #![cfg(feature = "runtime-benchmarks")]
 

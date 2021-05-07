@@ -2067,8 +2067,16 @@ where
 	fn block_indexed_body(
 		&self,
 		number: NumberFor<B>,
-	) ->Result<Option<Vec<Vec<u8>>>, sp_inherents::Error> {
+	) ->Result<Option<Vec<Vec<u8>>>, sp_transaction_storage_proof::Error> {
 		self.backend.blockchain().block_indexed_body(BlockId::number(number))
-			.map_err(|e| sp_inherents::Error::Application(Box::new(e)))
+			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))
+	}
+
+	fn number(
+		&self,
+		hash: B::Hash,
+	) -> Result<Option<NumberFor<B>>, sp_transaction_storage_proof::Error> {
+		self.backend.blockchain().number(hash)
+			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))
 	}
 }

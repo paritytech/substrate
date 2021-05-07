@@ -308,7 +308,7 @@ pub fn new_full_base(
 			env: proposer,
 			block_import,
 			sync_oracle: network.clone(),
-			create_inherent_data_providers: move |parent, number, ()| {
+			create_inherent_data_providers: move |parent, ()| {
 				let client_clone = client_clone.clone();
 				async move {
 					let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
@@ -324,13 +324,7 @@ pub fn new_full_base(
 							slot_duration,
 						);
 
-					let transaction_proof = sp_transaction_storage_proof::registration::new_data_provider(
-						&*client_clone,
-						parent,
-						number
-					);
-
-					Ok((timestamp, slot, uncles, transaction_proof))
+					Ok((timestamp, slot, uncles))
 				}
 			},
 			force_authoring,
@@ -502,7 +496,7 @@ pub fn new_light_base(
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		move |_, _| async move {
+		move |_, ()| async move {
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 			let slot =
