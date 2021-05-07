@@ -434,35 +434,7 @@ pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
 /// and up to `NUMBER_OF_INSTANCE`.
 pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;
 
-/// Derive [`MaxEncodedLen`][frame_support::traits::MaxEncodedLen].
-///
-/// # Examples
-///
-/// ```ignore
-/// # // This example is ignored because testing it properly requires imports which would be
-/// # // circular in this context.
-/// # use codec::Encode;
-/// # use frame_support::MaxEncodedLen;
-/// #[derive(Encode, MaxEncodedLen)]
-/// struct TupleStruct(u8, u32);
-///
-/// assert_eq!(TupleStruct::max_encoded_len(), u8::max_encoded_len() + u32::max_encoded_len());
-/// ```
-///
-/// ```ignore
-/// # // This example is ignored because testing it properly requires imports which would be
-/// # // circular in this context.
-/// # use codec::Encode;
-/// # use frame_support::MaxEncodedLen;
-/// #[derive(Encode, MaxEncodedLen)]
-/// enum GenericEnum<T> {
-/// 	A,
-/// 	B(T),
-/// }
-///
-/// assert_eq!(GenericEnum::<u8>::max_encoded_len(), u8::max_encoded_len() + u8::max_encoded_len());
-/// assert_eq!(GenericEnum::<u128>::max_encoded_len(), u8::max_encoded_len() + u128::max_encoded_len());
-/// ```
+/// Derive `MaxEncodedLen`.
 #[proc_macro_derive(MaxEncodedLen)]
 pub fn derive_max_encoded_len(input: TokenStream) -> TokenStream {
 	max_encoded_len::derive_max_encoded_len(input)
