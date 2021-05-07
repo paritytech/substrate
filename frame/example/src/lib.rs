@@ -598,6 +598,18 @@ pub mod pallet {
 	#[pallet::getter(fn foo)]
 	pub(super) type Foo<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
+	// demo that it is possible to store a map as a value
+	//
+	// Very often, we won't want to do this: we'll see a better access pattern by using a native
+	// `StorageMap`, which can read only a single item at a go. Storing a `BTreeMap` means that,
+	// like a `Vec`, the entire contents need to be read.
+	//
+	// Still, there are special cases for which this could prove useful. The capability is also
+	// necessary in the case of data structures which contain maps.
+	#[pallet::storage]
+	#[pallet::getter(fn demo_map)]
+	pub(super) type DemoMap<T: Config> = StorageValue<_, sp_std::collections::btree_map::BTreeMap<u32, ()>>;
+
 	// The genesis config type.
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
