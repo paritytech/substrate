@@ -265,8 +265,8 @@ pub struct Config {
 	/// protocol (we will only issue catch-up requests to authorities when the
 	/// observer protocol is enabled).
 	pub observer_enabled: bool,
-	/// Whether the node is running as an authority (i.e. running the full GRANDPA protocol).
-	pub is_authority: bool,
+	/// The role of the local node (i.e. authority, full-node or light).
+	pub local_role: Role,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
