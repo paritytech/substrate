@@ -297,16 +297,26 @@ impl<T: Trait> Module<T> {
 		for one_metric in metrics.iter() {
 			// Prepare call params: app_id, day_start_ms, metrics: MetricValue. Reference: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs#L587
 
+
+			const SEC_PER_DAY: u64 = 24 * 3600;
+
+			let now = sp_io::offchain::timestamp();
+			let current_day = now.unix_millis() / SEC_PER_DAY; // take only
+			let day_start_ms: u64 = current_day * SEC_PER_DAY * 1000;
+
 			let results = signer.send_signed_transaction(
 				|_account| {
 
+//					let hex = String::from_utf8_lossy(&one_metric.appPubKey);
+
 					let mut test_call_param = CallData::new();
 					test_call_param.push_arg(&REPORT_METRICS_SELECTOR);
-					test_call_param.push_arg(&one_metric.appPubKey);
-					test_call_param.push_arg(&10u64);
+					test_call_param.push_arg(&hex!("6eb75cc7ab2984a4e703ed0af415195dd51f05b8c662bc52ee302a43792f2322")); // TODO: Fix hardcoded hex value
+					test_call_param.push_arg(&day_start_ms);
 					test_call_param.push_arg(&one_metric.bytes);
 					test_call_param.push_arg(&one_metric.requests);
-					debug::info!("test_call_param.params(): {:?}", test_call_param.params());
+
+					debug::info!("Params: {:?} {:?} {:?} {:?}", one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
 
 					pallet_contracts::Call::call(
 						T::ContractId::get(),
