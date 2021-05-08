@@ -1127,7 +1127,22 @@ impl<Block: BlockT> Inner<Block> {
 				commit_finalized_height: *local_view.last_commit_height().unwrap_or(&Zero::zero()),
 			};
 
-			let peers = self.peers.inner.keys().cloned().collect();
+			let peers = self
+				.peers
+				.inner
+				.iter()
+				.filter_map(|(id, info)| {
+					// light clients don't participate in the full GRANDPA voter protocol
+					// and therefore don't need to be informed about view updates
+					if info.roles.is_light() {
+						None
+					} else {
+						Some(id)
+					}
+				})
+				.cloned()
+				.collect();
+
 			(peers, packet)
 		})
 	}
