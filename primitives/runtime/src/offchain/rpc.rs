@@ -30,22 +30,32 @@ use sp_std::{vec::Vec, str};
 // use crate::offchain::Duration;
 use super::http;
 
-// /// A rpc call error
-// #[derive(Clone, PartialEq, Eq, RuntimeDebug)]
-// pub enum Error {
-// 	ParsingError,
-// 	/// Request had timed out.
-// 	CallError(),
-// }
+/// A rpc call error
+#[derive(Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum Error {
+	Deserializing,
+	Http(http::Error)
+}
 
-// pub type RpcResult = Result<Response, Error>;
+pub type RpcResult = Result<Response, Error>;
+
+#[derive(Deserialize, Default, RuntimeDebug)]
+pub struct RpcError {
+	pub code: i32,
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	pub message: Vec<u8>
+}
 
 #[derive(Deserialize, Default, RuntimeDebug)]
 pub struct Response {
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	pub jsonrpc: Vec<u8>,
+	#[serde(default)]
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	pub result: Vec<u8>,
+	#[serde(default)]
+	// #[serde(deserialize_with = "de_string_to_bytes")]
+	pub error: RpcError,
 	pub id: u32
 }
 
@@ -67,7 +77,7 @@ where
 }
 
 impl<'a> Request<'a> {
-	pub fn send(&self) -> Result<Response, http::Error> {
+	pub fn send(&self) -> RpcResult {
 		let request_body = json!({
 			"jsonrpc": self.jsonrpc,
 			"id": self.id,
@@ -87,27 +97,48 @@ impl<'a> Request<'a> {
 
 		let timeout = sp_io::offchain::timestamp().add(Duration::from_millis(self.timeout));
 
-		let pending = post_request
+		// let pending = post_request
+		// 	.add_header("Content-Type", "application/json;charset=utf-8")
+		// 	.deadline(timeout)
+		// 	.send().map_err(|_| http::Error::IoError);
+
+		let pending = match post_request
 			.add_header("Content-Type", "application/json;charset=utf-8")
 			.deadline(timeout)
-			.send().map_err(|_| http::Error::IoError)?;
+			.send().map_err(|_| http::Error::IoError) {
+				Ok(result) => result,
+				Err(e) => return Err(Error::Http(e)),
+		};
 
-		let response = pending.try_wait(timeout)
-			.map_err(|_| http::Error::DeadlineReached)??;
+		// let response = pending.try_wait(timeout)
+		// 	.map_err(|_| http::Error::DeadlineReached);
+
+		let response = match pending.try_wait(timeout).map_err(|_| http::Error::DeadlineReached) {
+			Ok(result) =>
+				match result {
+					Ok(result_bis) => result_bis,
+					Err(e) => return Err(Error::Http(e)),
+				},
+			Err(e) => return Err(Error::Http(e)),
+		};
+
+		// let b = match response {
+		// 	Err(e) => return Err(Error::Http(e)),
+		// };
 
 		if response.code != 200 {
 			log::warn!("Unexpected status code: {}", response.code);
-			return Err(http::Error::Unknown);
+			return Err(Error::Http(http::Error::Unknown));
 		}
 
 		let response_body_bytes = response.body().collect::<Vec<u8>>();
 
-		let response_body_str = str::from_utf8(&response_body_bytes).map_err(|_| http::Error::Unknown)?;
+		let response_body_str = str::from_utf8(&response_body_bytes).map_err(|_| Error::Deserializing)?;
 
 		log::info!("=================== RESPONSE RAW ================== {:?}", response_body_str);
 
 
-		let rpc_response: Response = serde_json::from_str(&response_body_str).map_err(|_| http::Error::Unknown)?;
+		let rpc_response: Response = serde_json::from_str(&response_body_str).map_err(|_| Error::Deserializing)?;
 
 		Ok(rpc_response)
 	}
