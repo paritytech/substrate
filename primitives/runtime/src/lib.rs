@@ -593,6 +593,12 @@ impl From<ArithmeticError> for &'static str {
 	}
 }
 
+impl From<ArithmeticError> for DispatchError {
+	fn from(e: ArithmeticError) -> DispatchError {
+		Self::Arithmetic(e)
+	}
+}
+
 impl From<&'static str> for DispatchError {
 	fn from(err: &'static str) -> DispatchError {
 		Self::Other(err)
