@@ -14,7 +14,7 @@ use sp_core::{
     testing::KeyStore,
     traits::KeystoreExt,
 };
-use sp_runtime::{RuntimeAppPublic, traits::Hash};
+use sp_runtime::{RuntimeAppPublic, traits::Hash, AccountId32};
 use sp_std::str::FromStr;
 use test_runtime::{
     AccountId, Balances, Contracts, CURRENT_METRICS_CONTRACT_ID, ExampleOffchainWorker, Extrinsic, Origin, System, Test,
@@ -54,7 +54,7 @@ fn test_contract_api() {
 
 #[test]
 fn test_encode_report_metrics() {
-    let call_data = ExampleOffchainWorker::encode_report_metrics(AccountId::from_raw([2; 32]), 3, 4, 5);
+    let call_data = ExampleOffchainWorker::encode_report_metrics(&AccountId32::from([2; 32]), 3, 4, 5);
     assert_eq!(call_data, vec![
         53, 50, 11, 190, // Selector
         2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 32 bytes, app_id

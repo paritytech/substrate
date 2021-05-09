@@ -18,21 +18,18 @@ use frame_support::{
 	debug, decl_module, decl_storage, decl_event,
 };
 use sp_core::crypto::KeyTypeId;
-use sp_runtime::{
-	offchain::{
-		http,
-		Duration,
-		storage::StorageValueRef
-	},
-	traits::StaticLookup,
-	traits::Zero,
-};
+use sp_runtime::{offchain::{
+    http,
+    Duration,
+    storage::StorageValueRef
+}, traits::StaticLookup, traits::Zero, AccountId32};
 use codec::{Encode, Decode};
 use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
 // use lite_json::json::JsonValue;
 use alt_serde::{Deserialize, Deserializer};
 use hex_literal::hex;
+use sp_std::str::FromStr;
 
 #[macro_use]
 extern crate alloc;
@@ -274,9 +271,9 @@ impl<T: Trait> Module<T> {
 
 //                  TODO: make account ID from hex string.
 //					let hex = String::from_utf8_lossy(&one_metric.appPubKey);
-                    let app_id = T::AccountId::default();
+                    let app_id = AccountId32::default();
 
-                    let call_data = Self::encode_report_metrics(app_id, day_start_ms, one_metric.bytes, one_metric.requests);
+                    let call_data = Self::encode_report_metrics(&app_id, day_start_ms, one_metric.bytes, one_metric.requests);
 
 					debug::info!("Params: {:?} {:?} {:?} {:?}", one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
 
@@ -471,7 +468,7 @@ impl<T: Trait> Module<T> {
 	}
 
     fn encode_report_metrics(
-        app_id: T::AccountId,
+        app_id: &AccountId32,
         day_start_ms: u64,
         stored_bytes: u128,
         requests: u128,
