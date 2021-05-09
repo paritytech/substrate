@@ -29,16 +29,28 @@ impl-trait-for-tuples = "0.2.1"
 parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
 either = { version = "1.5", default-features = false }
-# serde_json = "1.0.41"
 serde_json = { version = '1.0.64', default-features = false, features = ['alloc'] }
-# frame-support = { default-features = false, version = '3.0.0', path = "../../frame/support" }
+
+# lazy_static = { version = "1.4.0", optional = true }
+# # # lazy_static = { version = "1.4.0", optional = true }
+# # # lazy_static = "1.4.0"
+# rpc = { package = "jsonrpc-core", version = "15.1.0", default-features = false }
+# futures = { version = "0.3.9", features = ["compat"], default-features = false, optional = true }
+#
 
 [dev-dependencies]
+hex = "0.4"
+sc-rpc = { version = "3.0.0", path = "../../client/rpc", features = ["test-helpers"] }
 rand = "0.7.2"
 sp-state-machine = { version = "0.9.0", path = "../state-machine" }
 sp-api = { version = "3.0.0", path = "../api" }
+# lazy_static = "1.4.0"
+# futures = "0.3.1"
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
+jsonrpc-pubsub = "15.1.0"
+# futures01 = { package = "futures", version = "0.1.29" }
+# lazy_static = "1.4.0"
 
 [features]
 bench = []
@@ -57,4 +69,9 @@ std = [
 	"parity-util-mem/std",
 	"hash256-std-hasher/std",
 	"either/use_std",
+	# "futures/std",
+	# "serde/std",
+	# "jsonrpc-pubsub/std",
+	# "rpc/std",
+	# "lazy_static"
 ]

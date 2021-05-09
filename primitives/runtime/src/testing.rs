@@ -30,6 +30,10 @@ pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
 
+// use rpc::futures::future as future01;
+// use futures::{executor, compat::Future01CompatExt, FutureExt};
+// use lazy_static;
+
 /// A dummy type which can be used instead of regular cryptographic primitives.
 ///
 /// 1. Wraps a `u64` `AccountId` and is able to `IdentifyAccount`.
@@ -353,3 +357,22 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		Ok(self.call.dispatch(maybe_who.into()))
 	}
 }
+
+// lazy_static::lazy_static! {
+// 	static ref EXECUTOR: executor::ThreadPool = executor::ThreadPool::new()
+// 		.expect("Failed to create thread pool executor for tests");
+// }
+
+// type Boxed01Future01 = Box<dyn future01::Future<Item = (), Error = ()> + Send + 'static>;
+
+// /// Executor for use in testing
+// pub struct TaskExecutor;
+// impl future01::Executor<Boxed01Future01> for TaskExecutor {
+// 	fn execute(
+// 		&self,
+// 		future: Boxed01Future01,
+// 	) -> std::result::Result<(), future01::ExecuteError<Boxed01Future01>>{
+// 		EXECUTOR.spawn_ok(future.compat().map(drop));
+// 		Ok(())
+// 	}
+// }

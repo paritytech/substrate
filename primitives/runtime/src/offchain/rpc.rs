@@ -16,38 +16,6 @@
 // limitations under the License.
 
 //! A high-level helpers for making RPC calls from Offchain Workers.
-//!
-//! Example:
-//! ```rust,no_run
-//! fn offchain_worker(block_number: T::BlockNumber) {
-//! 	let request = rpc::Request {
-//! 		jsonrpc: JSONRPC,
-//! 		id: 1,
-//! 		method: "chain_getFinalizedHead",
-//! 		params: Vec::new(),
-//! 		timeout: TIMEOUT_PERIOD,
-//! 		url: RPC_REQUEST_URL
-//! 	};
-//!
-//! 	let rpc_response = request.send();
-//!
-//! 	match rpc_response {
-//! 		Ok(response) => {
-//! 			if !response.result.is_empty() {
-//! 				log::info!("Rpc call result: {:?}", str::from_utf8(&response.result).unwrap());
-//! 			} else {
-//! 				log::error!("Rpc call error: code: {:?}, message: {:?}",
-//! 								response.error.code,
-//! 								str::from_utf8(&response.error.message).unwrap()
-//! 							);
-//! 			}
-//! 		},
-//! 		Err(e) => {
-//! 			log::error!("Rpc call error: {:?}", e);
-//! 		}
-//! 	}
-//! }
-//! ```
 
 use serde::{Deserialize, Deserializer};
 use crate::{RuntimeDebug, offchain::Duration};
@@ -165,5 +133,62 @@ impl<'a> Request<'a> {
 		let rpc_response: Response = serde_json::from_slice(&response_body_bytes).map_err(|_| Error::Deserializing)?;
 
 		Ok(rpc_response)
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use std::sync::Arc;
+	// use sp_core::H256;
+	use substrate_test_runtime_client::{
+		prelude::*,
+		sp_consensus::BlockOrigin,
+		runtime::{H256, Block, Header},
+	};
+	use jsonrpc_pubsub::{manager::SubscriptionManager};
+	// use crate::testing::TaskExecutor;
+	use sc_rpc::{chain::{new_full, ChainApi}, testing::TaskExecutor};
+
+	#[test]
+	fn should_return_rpc_response() {
+		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+
+		let request = Request {
+			jsonrpc: "2.0",
+			id: 1,
+			method: "chain_getFinalizedHead",
+			params: Vec::new(),
+			timeout: 3_000,
+			url: "http://localhost:9933"
+		};
+
+		let rpc_response = request.send();
+
+		match rpc_response {
+			Ok(response) => {
+				if !response.result.is_empty() {
+					// log::info!("Rpc call result: {:?}", str::from_utf8(&response.result).unwrap());
+					let finalized_hash_str = str::from_utf8(&response.result[2..]).unwrap();
+					let finalized_hash = hex::decode(finalized_hash_str).ok().unwrap();
+
+					assert_eq!(api.finalized_head().ok().unwrap(), H256::from_slice(&finalized_hash[0..32]));
+				} else {
+					log::error!("Rpc call error: code: {:?}, message: {:?}",
+									response.error.code,
+									str::from_utf8(&response.error.message).unwrap()
+								);
+				}
+			},
+			Err(e) => {
+				log::error!("Rpc call error: {:?}", e);
+			}
+		}
+
+		// log::debug!("=============== TEST ================= {:?}", api.finalized_head());
+
+		// let finalized_hash = b"01a925bd4e798b3e6e28351cbe02facd5fbdb0bc5e92bd19bf061f4344edac02";
+
 	}
 }
