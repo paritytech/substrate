@@ -79,17 +79,26 @@ First, install [Docker](https://docs.docker.com/get-docker/).
 Create volume for plot and initialize 1 GiB plot (should take a few seconds to a few minutes):
 ```bash
 docker volume create spartan-farmer
-docker run --rm -it --name spartan-farmer --mount source=spartan-farmer,target=/var/spartan subspacelabs/spartan-farmer plot 256000 spartan
+docker run --rm -it \
+  --name spartan-farmer \
+  --mount source=spartan-farmer,target=/var/spartan \
+  subspacelabs/spartan-farmer plot 256000 spartan
 ```
 
 Start a single node development chain:
 ```bash
-docker run --rm --init -it --name node-template-spartan subspacelabs/node-template-spartan --dev --tmp
+docker run --rm --init -it \
+  --name node-template-spartan \
+  subspacelabs/node-template-spartan --dev --tmp
 ```
 
 Once node is running, you can connect farmer to it by running following in a separate terminal:
 ```bash
-docker run --rm --init -it --name spartan-farmer --mount source=spartan-farmer,target=/var/spartan --net container:node-template-spartan subspacelabs/spartan-farmer farm
+docker run --rm --init -it \
+  --name spartan-farmer \
+  --mount source=spartan-farmer,target=/var/spartan \
+  --net container:node-template-spartan \
+  subspacelabs/spartan-farmer farm
 ```
 
 Now you should see block production in the first terminal where node is running.
