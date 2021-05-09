@@ -404,10 +404,10 @@ impl<T: Trait> Module<T> {
 
             let metrics_url_with_partition = format!("{}{}{}", metrics_url_with_key, METRICS_PARAM_PARTITIONID, partition_id_str);
 
-            let metrics_url_with_last_time = format!("{}{}{}", metrics_url_with_partition, METRICS_PARAM_FROM, day_start_ms);
+            let metrics_url_with_last_time = format!("{}{}{}", metrics_url_with_partition, METRICS_PARAM_FROM, day_start_ms / 1000);
 
-            let to_time = sp_io::offchain::timestamp().sub(Duration::from_millis(120_000));
-            let metrics_url_final = format!("{}{}{}", metrics_url_with_last_time, METRICS_PARAM_TO, to_time.unix_millis());
+            let to_time_ms = sp_io::offchain::timestamp().sub(Duration::from_millis(120_000)).unix_millis();
+            let metrics_url_final = format!("{}{}{}", metrics_url_with_last_time, METRICS_PARAM_TO, to_time_ms / 1000);
 
             let fetch_metric_bytes = Self::http_get_request(&metrics_url_final).map_err(|e| {
                 debug::error!("[OCW] fetch_metric_bytes error: {:?}", e);
