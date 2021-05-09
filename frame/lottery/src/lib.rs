@@ -288,12 +288,12 @@ pub mod pallet {
 			T::WeightInfo::buy_ticket()
 				.saturating_add(call.get_dispatch_info().weight)
 		)]
-		pub(crate) fn buy_ticket(origin: OriginFor<T>, call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
+		pub(crate) fn buy_ticket(origin: OriginFor<T>, call: Box<<T as Config>::Call>) -> DispatchResult {
 			let caller = ensure_signed(origin.clone())?;
 			call.clone().dispatch(origin).map_err(|e| e.error)?;
 
 			let _ = Self::do_buy_ticket(&caller, &call);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set calls in storage which can be used to purchase a lottery ticket.
@@ -303,7 +303,7 @@ pub mod pallet {
 		///
 		/// This extrinsic must be called by the Manager origin.
 		#[pallet::weight(T::WeightInfo::set_calls(calls.len() as u32))]
-		pub(crate) fn set_calls(origin: OriginFor<T>, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
+		pub(crate) fn set_calls(origin: OriginFor<T>, calls: Vec<<T as Config>::Call>) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			ensure!(calls.len() <= T::MaxCalls::get() as usize, Error::<T>::TooManyCalls);
 			if calls.is_empty() {
@@ -313,7 +313,7 @@ pub mod pallet {
 				CallIndices::<T>::put(indices);
 			}
 			Self::deposit_event(Event::<T>::CallsUpdated);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Start a lottery using the provided configuration.
@@ -333,7 +333,7 @@ pub mod pallet {
 			length: T::BlockNumber,
 			delay: T::BlockNumber,
 			repeat: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			Lottery::<T>::try_mutate(|lottery| -> DispatchResult {
 				ensure!(lottery.is_none(), Error::<T>::InProgress);
@@ -357,7 +357,7 @@ pub mod pallet {
 				T::Currency::deposit_creating(&lottery_account, T::Currency::minimum_balance());
 			}
 			Self::deposit_event(Event::<T>::LotteryStarted);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// If a lottery is repeating, you can use this to stop the repeat.
@@ -365,14 +365,14 @@ pub mod pallet {
 		///
 		/// This extrinsic must be called by the `ManagerOrigin`.
 		#[pallet::weight(T::WeightInfo::stop_repeat())]
-		pub(crate) fn stop_repeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub(crate) fn stop_repeat(origin: OriginFor<T>) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			Lottery::<T>::mutate(|mut lottery| {
 				if let Some(config) = &mut lottery {
 					config.repeat = false
 				}
 			});
-			Ok(().into())
+			Ok(())
 		}
 	}
 }
