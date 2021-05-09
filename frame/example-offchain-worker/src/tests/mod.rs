@@ -137,21 +137,12 @@ fn should_submit_signed_transaction_on_chain() {
                        include_bytes!("./test_data/ddc_nodes.json"));
 
         // List partitions from a boot node.
-        expect_request("https://TEST_DDC/api/rest/partitions?isMaster=true&active=true",
-                       include_bytes!("./test_data/ddc_partitions.json"));
+        expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?isMaster=true&active=true&from=1608336000&to=1608337114",
+                       include_bytes!("test_data/ddc_metrics_node-0.json"));
 
-        // Get metrics for an app partition on node-0.
-        // The time window is from INIT_DAY_MS to INIT_TIME_MS - 2 minutes.
-        expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830&partitionId=0cb0f451-255b-4a4f-918b-6c34c7047331&from=1608336000&to=1608337114",
-                       include_bytes!("./test_data/ddc_metrics_0c.json"));
-
-        // Get metrics for another app partition on node-0.
-        expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x100ad4097b6e60700a5d5c5294cb6d663090ef5f547e84cc20ec6bcc7a552f13&partitionId=d9fb155d-6e15-44c5-8d71-ff22db7a0193&from=1608336000&to=1608337114",
-                       include_bytes!("./test_data/ddc_metrics_d9.json"));
-
-        // Get metrics for a partition on node-3.
-        expect_request("https://node-3.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830&partitionId=f6cbe4e6-ef3a-4970-b3da-f8ae29cd22bd&from=1608336000&to=1608337114",
-                       include_bytes!("./test_data/ddc_metrics_f6.json"));
+        // List partitions from a boot node.
+        expect_request("https://node-3.ddc.stage.cere.network/api/rest/metrics?isMaster=true&active=true&from=1608336000&to=1608337114",
+                       include_bytes!("test_data/ddc_metrics_node-3.json"));
     }
 
     t.execute_with(|| {
@@ -168,7 +159,7 @@ fn should_submit_signed_transaction_on_chain() {
         eprintln!("Transactions: {:?}\n", transactions);
         assert_eq!(transactions.len(), 2);
 
-        // Check metrics based on ddc_metrics_0c.json and ddc_metrics_f6.json.
+        // Check metrics based on ddc_metrics_node-0.json and ddc_metrics_f6.json.
         let expected_call = ExampleOffchainWorker::encode_report_metrics(
             &AccountId32::from([0; 32]),
             INIT_DAY_MS,
@@ -176,7 +167,7 @@ fn should_submit_signed_transaction_on_chain() {
             2 + 20);
         assert!(transactions[0].ends_with(&expected_call), "Expected a specific call to the report_metrics function");
 
-        // Check metrics based on ddc_metrics_d9.json.
+        // Check metrics based on ddc_metrics_node-3.json.
         let expected_call = ExampleOffchainWorker::encode_report_metrics(
             &AccountId32::from([0; 32]),
             INIT_DAY_MS,

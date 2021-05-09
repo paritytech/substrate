@@ -26,11 +26,13 @@ use sp_runtime::{offchain::{
 use codec::Encode;
 use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
-use alt_serde::{Deserialize, Deserializer};
+use alt_serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use hex_literal::hex;
 
 #[macro_use]
 extern crate alloc;
+
+use alloc::string::String;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
@@ -50,8 +52,8 @@ pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 struct NodeInfo {
     #[serde(deserialize_with = "de_string_to_bytes")]
     id: Vec<u8>,
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    httpAddr: Vec<u8>,
+    //#[serde(deserialize_with = "de_string_to_bytes")]
+    httpAddr: String,
     totalPartitions: u32,
     reservedPartitions: u32,
     availablePartitions: u32,
@@ -120,15 +122,11 @@ pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ddc1");
 
 pub const HTTP_NODES: &str = "/api/rest/nodes";
-pub const HTTP_PARTITIONS: &str = "/api/rest/partitions?isMaster=true&active=true";
-pub const HTTP_METRICS: &str = "/api/rest/metrics?appPubKey=";
-pub const METRICS_PARAM_PARTITIONID: &str = "&partitionId=";
-// partition.id
+pub const HTTP_METRICS: &str = "/api/rest/metrics?isMaster=true&active=true";
 pub const METRICS_PARAM_FROM: &str = "&from=";
-// lastTimestamp
 pub const METRICS_PARAM_TO: &str = "&to=";
-// now() - 2 minutes
-pub const FETCH_TIMEOUT_PERIOD: u64 = 3000; // in milli-seconds
+pub const END_TIME_DELAY_MS: u64 = 120_000;
+pub const HTTP_TIMEOUT_MS: u64 = 30_000; // in milli-seconds
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
 /// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
@@ -210,7 +208,7 @@ impl<T: Trait> Module<T> {
 
         let day_start_ms = Self::get_start_of_day_ms();
 
-        let aggregated_metrics = Self::fetch_app_metrics(day_start_ms)
+        let aggregated_metrics = Self::fetch_all_metrics(day_start_ms)
             .map_err(|err| {
                 debug::error!("[OCW] HTTP error occurred: {:?}", err);
                 "could not fetch metrics"
@@ -302,16 +300,69 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
+    fn fetch_all_metrics(day_start_ms: u64) -> ResultStr<Vec<MetricInfo>> {
+        let a_moment_ago_ms = sp_io::offchain::timestamp().sub(Duration::from_millis(END_TIME_DELAY_MS)).unix_millis();
 
-    /// This function uses the `offchain::http` API to query data
-    /// For get method, input url and returns the JSON response as vector of bytes.
+        let mut aggregated_metrics = MetricsAggregator::default();
+
+        let nodes = Self::fetch_nodes()?;
+
+        for node in &nodes {
+            let metrics_of_node = Self::fetch_node_metrics(
+                &node.httpAddr, day_start_ms, a_moment_ago_ms)?;
+
+            for metrics in &metrics_of_node {
+                aggregated_metrics.add(metrics);
+            }
+        }
+
+        Ok(aggregated_metrics.finish())
+    }
+
+    fn fetch_nodes() -> ResultStr<Vec<NodeInfo>> {
+        let nodes_url = format!(
+            "{}{}",
+            from_utf8(&T::DdcUrl::get()).unwrap(),
+            HTTP_NODES);
+
+        Self::http_get_json(&nodes_url)
+    }
+
+    fn fetch_node_metrics(node_url: &str, day_start_ms: u64, end_ms: u64) -> ResultStr<Vec<MetricInfo>> {
+        let metrics_url = format!(
+            "{}{}{}{}{}{}",
+            node_url,
+            HTTP_METRICS,
+            METRICS_PARAM_FROM, day_start_ms / 1000,
+            METRICS_PARAM_TO, end_ms / 1000);
+
+        Self::http_get_json(&metrics_url)
+    }
+
+    fn http_get_json<OUT: DeserializeOwned>(url: &str) -> ResultStr<OUT>
+    {
+        let body = Self::http_get_request(url)
+            .map_err(|err| {
+                debug::error!("[OCW] Error while getting {}: {:?}", url, err);
+                "HTTP GET error"
+            })?;
+
+        let parsed = serde_json::from_slice(&body)
+            .map_err(|err| {
+                debug::warn!("[OCW] Error while parsing JSON from {}: {:?}", url, err);
+                "HTTP JSON parse error"
+            });
+
+        parsed
+    }
+
     fn http_get_request(http_url: &str) -> Result<Vec<u8>, http::Error> {
         debug::info!("[OCW] Sending request to: {:?}", http_url);
 
         // Initiate an external HTTP GET request. This is using high-level wrappers from `sp_runtime`.
         let request = http::Request::get(http_url);
 
-        let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(FETCH_TIMEOUT_PERIOD));
+        let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(HTTP_TIMEOUT_MS));
 
         let pending = request
             .deadline(deadline)
@@ -328,107 +379,6 @@ impl<T: Trait> Module<T> {
 
         // Next we fully read the response body and collect it to a vector of bytes.
         Ok(response.body().collect::<Vec<u8>>())
-    }
-
-    fn fetch_app_metrics(day_start_ms: u64) -> Result<Vec<MetricInfo>, http::Error> {
-        let mut url = T::DdcUrl::get();
-        url.extend_from_slice(HTTP_NODES.as_bytes());
-        let url = from_utf8(&url).unwrap();
-
-        let fetch_node_list_bytes = Self::http_get_request(url).map_err(|e| {
-            debug::error!("[OCW] fetch_from_node error: {:?}", e);
-            http::Error::Unknown
-        })?;
-
-        let fetch_node_list_str = sp_std::str::from_utf8(&fetch_node_list_bytes).map_err(|_| {
-            debug::warn!("[OCW] fetch_node_list_str: No UTF8 body");
-            http::Error::Unknown
-        })?;
-
-        let node_info: Vec<NodeInfo> = serde_json::from_str(&fetch_node_list_str).map_err(|_| {
-            debug::warn!("[OCW] Parse body to Vec<NodeInfo> error");
-            http::Error::Unknown
-        })?;
-        debug::info!("[OCW] node_info length: {:?}", node_info.len());
-
-        let mut url_partitions = T::DdcUrl::get();
-        url_partitions.extend_from_slice(HTTP_PARTITIONS.as_bytes());
-        let url_partitions = from_utf8(&url_partitions).unwrap();
-
-        let fetch_partition_list_bytes = Self::http_get_request(url_partitions).map_err(|e| {
-            debug::error!("[OCW] fetch_partition_list_bytes error: {:?}", e);
-            http::Error::Unknown
-        })?;
-
-        let fetch_partition_list_str = sp_std::str::from_utf8(&fetch_partition_list_bytes).map_err(|_| {
-            debug::warn!("[OCW] fetch_partition_list_str: No UTF8 body");
-            http::Error::Unknown
-        })?;
-        // debug::info!("fetch_partition_list_str: {}", fetch_partition_list_str);
-
-        // Parse the string of data into serde_json::Value.
-        let partition_info: Vec<PartitionInfo> = serde_json::from_str(&fetch_partition_list_str).map_err(|_| {
-            debug::warn!("[OCW] Parse body to Vec<PartitionInfo> error");
-            http::Error::Unknown
-        })?;
-        debug::info!("[OCW] Partition_info length: {:#?}", partition_info.len());
-
-        let mut aggregated_metrics = MetricsAggregator::default();
-
-        for one_partition in partition_info.iter() {
-            let id_from_partition = sp_std::str::from_utf8(&one_partition.nodeId).unwrap();
-
-            let mut node_info_iter = node_info.iter(); // id is Vec<u8>
-            let equal_index = node_info_iter.position(|node| id_from_partition.eq(sp_std::str::from_utf8(&node.id).unwrap()));
-
-            if equal_index.is_none() {
-                debug::info!("[OCW] Can not found in nodeId {:?} in the topology", sp_std::str::from_utf8(&one_partition.nodeId).unwrap());
-                continue;
-            }
-
-            let metrics_url = sp_std::str::from_utf8(&node_info[equal_index.unwrap()].httpAddr).map_err(|_| {
-                debug::warn!("[OCW] httpAddr");
-                http::Error::Unknown
-            })?;
-
-            let app_pubkey_str = sp_std::str::from_utf8(&one_partition.appPubKey).map_err(|_| {
-                debug::warn!("[OCW] appPubKey error");
-                http::Error::Unknown
-            })?;
-            let metrics_url_with_key = format!("{}{}{}", metrics_url, HTTP_METRICS, app_pubkey_str);
-
-            let partition_id_str = sp_std::str::from_utf8(&one_partition.id).map_err(|_| {
-                debug::warn!("[OCW] partition id error");
-                http::Error::Unknown
-            })?;
-
-            let metrics_url_with_partition = format!("{}{}{}", metrics_url_with_key, METRICS_PARAM_PARTITIONID, partition_id_str);
-
-            let metrics_url_with_last_time = format!("{}{}{}", metrics_url_with_partition, METRICS_PARAM_FROM, day_start_ms / 1000);
-
-            let to_time_ms = sp_io::offchain::timestamp().sub(Duration::from_millis(120_000)).unix_millis();
-            let metrics_url_final = format!("{}{}{}", metrics_url_with_last_time, METRICS_PARAM_TO, to_time_ms / 1000);
-
-            let fetch_metric_bytes = Self::http_get_request(&metrics_url_final).map_err(|e| {
-                debug::error!("[OCW] fetch_metric_bytes error: {:?}", e);
-                http::Error::Unknown
-            })?;
-
-            let fetch_metric_str = sp_std::str::from_utf8(&fetch_metric_bytes).map_err(|_| {
-                debug::warn!("[OCW] fetch_metric_str: No UTF8 body");
-                http::Error::Unknown
-            })?;
-
-            let fetch_metric: Vec<MetricInfo> = serde_json::from_str(&fetch_metric_str).map_err(|_| {
-                debug::warn!("[OCW] Parse body to Vec<NodeInfo> error");
-                http::Error::Unknown
-            })?;
-            debug::info!("[OCW] fetch_metric length: {:?}", fetch_metric.len());
-
-            aggregated_metrics.add(&fetch_metric[0]);
-        }
-
-        Ok(aggregated_metrics.finish())
     }
 
     /// Prepare report_metrics call params.
