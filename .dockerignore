@@ -1,5 +1,6 @@
 doc
 **target*
+.cargo/
 .idea/
 Dockerfile
 .dockerignore

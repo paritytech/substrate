@@ -44,32 +44,32 @@ sudo apt-get install llvm clang gcc make m4
 ```
 
 #### Setup Spartan-Farmer
-
-```bash
-git clone https://github.com/subspace/spartan-farmer.git
-cd spartan-farmer
-cargo +nightly build --release
-cargo +nightly run plot -- 256000 spartan
-```
-This will create a 1 GB plot in the OS-specific user local data directory
+Create 1 GiB plot according to following instructions: https://github.com/subspace/spartan-farmer
 
 #### Install and Run Node
 
-This will run a spartan-client in one terminal and a spartan-farmer in a second terminal. The client will send slot notification challenges to the farmer. If the farmer finds a valid solution it will reply, and the client will produce a new block.
+This will run a node-template-spartan in one terminal and a spartan-farmer farming in a second terminal.
+The node will send slot notification challenges to the farmer.
+If the farmer finds a valid solution it will reply, and the node will produce a new block.
 
 ```bash
 # Install Node
 git clone https://github.com/subspace/substrate.git
 cd substrate
 
-# Build and run Node  (first terminal)
-cargo run --bin node-template-spartan -- --dev --tmp
+# Build and run Node (first terminal)
+cargo +nightly run --bin node-template-spartan -- --dev --tmp
 
 # wait for the client to start before continuing...
 
 # Run Farmer (second terminal)
 cd /back/to/spartan-farmer
-RUST_LOG=debug cargo run farm
+cargo +nightly run farm
+```
+
+NOTE: Above commands require nightly compiler for now, make sure to install it if you don't have one yet:
+```
+rustup toolchain install nightly
 ```
 
 ### Run with Docker
@@ -77,17 +77,23 @@ RUST_LOG=debug cargo run farm
 First, install [Docker](https://docs.docker.com/get-docker/) and
 [Docker Compose](https://docs.docker.com/compose/install/).
 
-Then run the following commands to start a single node development chain with a farmer.
-
+Create volume for plot and initialize 1 GiB plot (should take a few seconds to a few minutes):
 ```bash
-git clone https://github.com/subspace/substrate.git
-cd substrate/bin/node-template-spartan
-docker-compose up
+docker volume create spartan-farmer
+docker run --rm -it --mount source=spartan-farmer,target=/var/spartan subspacelabs/spartan-farmer plot 256000 spartan
 ```
 
-It will take a while to build the docker images and plot before the node begins producing blocks. Please be patient :sweat_smile:
+Start a single node development chain:
+```bash
+docker run --rm -it --name node-template-spartan subspacelabs/node-template-spartan --dev --tmp
+```
 
-We suggest only using Docker on a Linux system, as it takes a very, very long time to build on OSX.
+Once node is running, you can connect farmer to it by running following in a separate terminal:
+```bash
+docker run --rm -it --mount source=spartan-farmer,target=/var/spartan --net container:node-template-spartan subspacelabs/spartan-farmer farm
+```
+
+Now you should see block production in the first terminal where node is running.
 
 ### Run Tests
 
