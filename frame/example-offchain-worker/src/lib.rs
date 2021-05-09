@@ -118,41 +118,6 @@ pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 	Ok(s.as_bytes().to_vec())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CallData {
-    bytes: Vec<u8>,
-}
-
-impl CallData {
-    /// Creates new call ABI data for the given selector.
-    pub fn new() -> Self {
-        Self {
-            bytes: vec![REPORT_METRICS_SELECTOR[0], REPORT_METRICS_SELECTOR[1], REPORT_METRICS_SELECTOR[2], REPORT_METRICS_SELECTOR[3]],
-        }
-    }
-
-    /// Pushes the given argument onto the call ABI data in encoded form.
-    pub fn push_arg<A>(&mut self, arg: &A)
-    where
-        A: codec::Encode,
-    {
-        arg.encode_to(&mut self.bytes)
-    }
-
-    /// Returns the underlying bytes of the encoded input parameters.
-    pub fn params(&self) -> &[u8] {
-        debug_assert!(self.bytes.len() >= 4);
-        &self.bytes[4..]
-    }
-}
-
-impl codec::Encode for CallData {
-
-    fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
-        dest.write(self.bytes.as_slice());
-    }
-}
-
 /// Defines application identifier for crypto keys of this module.
 ///
 /// Every module that deals with signatures needs to declare its unique identifier for
@@ -307,14 +272,11 @@ impl<T: Trait> Module<T> {
 			let results = signer.send_signed_transaction(
 				|_account| {
 
+//                  TODO: make account ID from hex string.
 //					let hex = String::from_utf8_lossy(&one_metric.appPubKey);
+                    let app_id = T::AccountId::default();
 
-					let mut test_call_param = CallData::new();
-					test_call_param.push_arg(&REPORT_METRICS_SELECTOR);
-					test_call_param.push_arg(&hex!("6eb75cc7ab2984a4e703ed0af415195dd51f05b8c662bc52ee302a43792f2322")); // TODO: Fix hardcoded hex value
-					test_call_param.push_arg(&day_start_ms);
-					test_call_param.push_arg(&one_metric.bytes);
-					test_call_param.push_arg(&one_metric.requests);
+                    let call_data = Self::encode_report_metrics(app_id, day_start_ms, one_metric.bytes, one_metric.requests);
 
 					debug::info!("Params: {:?} {:?} {:?} {:?}", one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
 
@@ -322,7 +284,7 @@ impl<T: Trait> Module<T> {
 						T::ContractId::get(),
 						0u32.into(),
 						100_000_000_000,
-						test_call_param.params().to_vec()
+						call_data,
 					)
 				}
 			);
