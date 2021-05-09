@@ -508,11 +508,19 @@ impl<T: Trait> Module<T> {
 		Ok(agreated_result)
 	}
 
-	// fn parse_topology(topology_str: &str) -> Result<(), http::Error> {
-	// 	let val = lite_json::parse_json(topology_str).ok();
-
-	// 	Ok(())
-
+    fn encode_report_metrics(
+        app_id: T::AccountId,
+        day_start_ms: u64,
+        stored_bytes: u128,
+        requests: u128,
+    ) -> Vec<u8> {
+        let mut call_data = REPORT_METRICS_SELECTOR.to_vec();
+        app_id.encode_to(&mut call_data);
+        day_start_ms.encode_to(&mut call_data);
+        stored_bytes.encode_to(&mut call_data);
+        requests.encode_to(&mut call_data);
+        call_data
+    }
 }
 
 
