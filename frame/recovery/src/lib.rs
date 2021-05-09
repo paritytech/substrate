@@ -397,12 +397,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			lost: T::AccountId,
 			rescuer: T::AccountId,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			// Create the recovery storage item.
 			<Proxy<T>>::insert(&rescuer, &lost);
 			Self::deposit_event(Event::<T>::AccountRecovered(lost, rescuer));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Create a recovery configuration for your account. This makes your account recoverable.
@@ -438,7 +438,7 @@ pub mod pallet {
 			friends: Vec<T::AccountId>,
 			threshold: u16,
 			delay_period: T::BlockNumber
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check account is not already set up for recovery
 			ensure!(!<Recoverable<T>>::contains_key(&who), Error::<T>::AlreadyRecoverable);
@@ -469,7 +469,7 @@ pub mod pallet {
 			<Recoverable<T>>::insert(&who, recovery_config);
 
 			Self::deposit_event(Event::<T>::RecoveryCreated(who));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Initiate the process for recovering a recoverable account.
@@ -495,7 +495,7 @@ pub mod pallet {
 		/// Total Complexity: O(F + X)
 		/// # </weight>
 		#[pallet::weight(100_000_000)]
-		pub(crate) fn initiate_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResultWithPostInfo {
+		pub(crate) fn initiate_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check that the account is recoverable
 			ensure!(<Recoverable<T>>::contains_key(&account), Error::<T>::NotRecoverable);
@@ -513,7 +513,7 @@ pub mod pallet {
 			// Create the active recovery storage item
 			<ActiveRecoveries<T>>::insert(&account, &who, recovery_status);
 			Self::deposit_event(Event::<T>::RecoveryInitiated(account, who));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Allow a "friend" of a recoverable account to vouch for an active recovery
@@ -546,7 +546,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			lost: T::AccountId,
 			rescuer: T::AccountId
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account.
 			let recovery_config = Self::recovery_config(&lost).ok_or(Error::<T>::NotRecoverable)?;
@@ -562,7 +562,7 @@ pub mod pallet {
 			// Update storage with the latest details
 			<ActiveRecoveries<T>>::insert(&lost, &rescuer, active_recovery);
 			Self::deposit_event(Event::<T>::RecoveryVouched(lost, rescuer, who));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Allow a successful rescuer to claim their recovered account.
@@ -586,7 +586,7 @@ pub mod pallet {
 		/// Total Complexity: O(F + V)
 		/// # </weight>
 		#[pallet::weight(100_000_000)]
-		pub(crate) fn claim_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResultWithPostInfo {
+		pub(crate) fn claim_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account
 			let recovery_config = Self::recovery_config(&account).ok_or(Error::<T>::NotRecoverable)?;
@@ -608,7 +608,7 @@ pub mod pallet {
 			// Create the recovery storage item
 			Proxy::<T>::insert(&who, &account);
 			Self::deposit_event(Event::<T>::AccountRecovered(account, who));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// As the controller of a recoverable account, close an active recovery
@@ -632,7 +632,7 @@ pub mod pallet {
 		/// Total Complexity: O(V + X)
 		/// # </weight>
 		#[pallet::weight(30_000_000)]
-		pub(crate) fn close_recovery(origin: OriginFor<T>, rescuer: T::AccountId) -> DispatchResultWithPostInfo {
+		pub(crate) fn close_recovery(origin: OriginFor<T>, rescuer: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Take the active recovery process started by the rescuer for this account.
 			let active_recovery = <ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
@@ -641,7 +641,7 @@ pub mod pallet {
 			let res = T::Currency::repatriate_reserved(&rescuer, &who, active_recovery.deposit, BalanceStatus::Free);
 			debug_assert!(res.is_ok());
 			Self::deposit_event(Event::<T>::RecoveryClosed(who, rescuer));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove the recovery process for your account. Recovered accounts are still accessible.
@@ -666,7 +666,7 @@ pub mod pallet {
 		/// Total Complexity: O(F + X)
 		/// # </weight>
 		#[pallet::weight(30_000_000)]
-		pub(crate) fn remove_recovery(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub(crate) fn remove_recovery(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check there are no active recoveries
 			let mut active_recoveries = <ActiveRecoveries<T>>::iter_prefix_values(&who);
@@ -677,7 +677,7 @@ pub mod pallet {
 			// Unreserve the initial deposit for the recovery configuration.
 			T::Currency::unreserve(&who, recovery_config.deposit);
 			Self::deposit_event(Event::<T>::RecoveryRemoved(who));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Cancel the ability to use `as_recovered` for `account`.
@@ -692,13 +692,13 @@ pub mod pallet {
 		/// - One storage mutation to check account is recovered by `who`. O(1)
 		/// # </weight>
 		#[pallet::weight(0)]
-		pub(crate) fn cancel_recovered(origin: OriginFor<T>, account: T::AccountId) -> DispatchResultWithPostInfo {
+		pub(crate) fn cancel_recovered(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::proxy(&who) == Some(account), Error::<T>::NotAllowed);
 			Proxy::<T>::remove(&who);
 			frame_system::Pallet::<T>::dec_consumers(&who);
-			Ok(().into())
+			Ok(())
 		}
 	}
 }
