@@ -74,8 +74,7 @@ rustup toolchain install nightly
 
 ### Run with Docker
 
-First, install [Docker](https://docs.docker.com/get-docker/) and
-[Docker Compose](https://docs.docker.com/compose/install/).
+First, install [Docker](https://docs.docker.com/get-docker/).
 
 Create volume for plot and initialize 1 GiB plot (should take a few seconds to a few minutes):
 ```bash
