@@ -5,7 +5,7 @@ use frame_system::Trait as FST;
 use pallet_contracts::{self as contracts, ContractAddressFor, Trait as CT};
 use pallet_contracts::Gas;
 use sp_core::{
-    offchain::{OffchainExt, testing, TransactionPoolExt},
+    offchain::{OffchainExt, testing, TransactionPoolExt, Timestamp as OCWTimestamp},
     testing::KeyStore,
     traits::KeystoreExt,
 };
@@ -67,6 +67,10 @@ fn build_ext() -> sp_io::TestExternalities {
     build_ext_for_contracts()
 }
 
+// Some day, and some time during that day.
+const INIT_DAY_MS: u64 = 51 * 365 * 24 * 3_600 * 1_000;
+const INIT_TIME_MS: u64 = INIT_DAY_MS + 1234 * 1000;
+
 // Taken from pallet_contracts::tests::ExtBuilder
 fn build_ext_for_contracts() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::default()
@@ -86,8 +90,7 @@ fn build_ext_for_contracts() -> sp_io::TestExternalities {
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| {
         System::set_block_number(1);
-        // TODO: Set OCW timestamp too.
-        Timestamp::set_timestamp(100 * 24 * 3_600_000);
+        Timestamp::set_timestamp(INIT_TIME_MS);
     });
     ext
 }
@@ -117,6 +120,8 @@ fn should_submit_signed_transaction_on_chain() {
     {
         let mut state = offchain_state.write();
 
+        state.timestamp = OCWTimestamp::from_unix_millis(INIT_TIME_MS);
+
         let mut expect_request = |url: &str, response: &[u8]| {
             state.expect_request(testing::PendingRequest {
                 method: "GET".into(),
@@ -136,15 +141,16 @@ fn should_submit_signed_transaction_on_chain() {
                        include_bytes!("./test_data/ddc_partitions.json"));
 
         // Get metrics for an app partition on node-0.
-        expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830&partitionId=0cb0f451-255b-4a4f-918b-6c34c7047331&from=0&to=0",
+        // The time window is from INIT_DAY_MS to INIT_TIME_MS - 2 minutes.
+        expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830&partitionId=0cb0f451-255b-4a4f-918b-6c34c7047331&from=1608336000&to=1608337114",
                        include_bytes!("./test_data/ddc_metrics_0c.json"));
 
         // Get metrics for another app partition on node-0.
-        expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x100ad4097b6e60700a5d5c5294cb6d663090ef5f547e84cc20ec6bcc7a552f13&partitionId=d9fb155d-6e15-44c5-8d71-ff22db7a0193&from=0&to=0",
+        expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x100ad4097b6e60700a5d5c5294cb6d663090ef5f547e84cc20ec6bcc7a552f13&partitionId=d9fb155d-6e15-44c5-8d71-ff22db7a0193&from=1608336000&to=1608337114",
                        include_bytes!("./test_data/ddc_metrics_d9.json"));
 
         // Get metrics for a partition on node-3.
-        expect_request("https://node-3.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830&partitionId=f6cbe4e6-ef3a-4970-b3da-f8ae29cd22bd&from=0&to=0",
+        expect_request("https://node-3.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830&partitionId=f6cbe4e6-ef3a-4970-b3da-f8ae29cd22bd&from=1608336000&to=1608337114",
                        include_bytes!("./test_data/ddc_metrics_f6.json"));
     }
 
@@ -165,7 +171,7 @@ fn should_submit_signed_transaction_on_chain() {
         // Check metrics based on ddc_metrics_0c.json and ddc_metrics_f6.json.
         let expected_call = ExampleOffchainWorker::encode_report_metrics(
             &AccountId32::from([0; 32]),
-            0,
+            INIT_DAY_MS,
             1 + 10,
             2 + 20);
         assert!(transactions[0].ends_with(&expected_call), "Expected a specific call to the report_metrics function");
@@ -173,7 +179,7 @@ fn should_submit_signed_transaction_on_chain() {
         // Check metrics based on ddc_metrics_d9.json.
         let expected_call = ExampleOffchainWorker::encode_report_metrics(
             &AccountId32::from([0; 32]),
-            0,
+            INIT_DAY_MS,
             100,
             200);
         assert!(transactions[1].ends_with(&expected_call), "Expected a specific call to the report_metrics function");
