@@ -386,7 +386,8 @@ impl<T: Trait> Module<T> {
         })?;
         debug::info!("Partition_info length: {:#?}", partition_info.len());
 
-        let mut agreated_result: Vec<MetricInfo> = Vec::new();
+        let mut aggregated_metrics = MetricsAggregator::default();
+
         for one_partition in partition_info.iter() {
             let id_from_partition = sp_std::str::from_utf8(&one_partition.nodeId).unwrap();
 
@@ -444,29 +445,10 @@ impl<T: Trait> Module<T> {
             })?;
             debug::info!("fetch_metric length: {:?}", fetch_metric.len());
 
-            // for one_metric in fetch_metric.iter() {
-            // let mut agreated_temp = agreated_result.iter();
-            let pubkey_from_metric = sp_std::str::from_utf8(&fetch_metric[0].appPubKey).unwrap();
-            let existing_pubkey_index = agreated_result.iter().position(|one_result_obj| pubkey_from_metric.eq(sp_std::str::from_utf8(&one_result_obj.appPubKey).unwrap()));
-
-            if existing_pubkey_index.is_none() {
-                // Pust data to result
-                let mut new_metric_obj = MetricInfo::new();
-                new_metric_obj.appPubKey = fetch_metric[0].appPubKey.clone();
-                new_metric_obj.requests = fetch_metric[0].requests;
-                new_metric_obj.bytes = fetch_metric[0].bytes;
-
-                agreated_result.push(new_metric_obj);
-            } else {
-                // Agreate request and byte
-                agreated_result[existing_pubkey_index.unwrap()].requests += fetch_metric[0].requests;
-                agreated_result[existing_pubkey_index.unwrap()].bytes += fetch_metric[0].bytes;
-            }
-            // debug::info!("Metric item. App: {:?}, bytes: {:?}, requests: {:?}", sp_std::str::from_utf8(&one_metric.appPubKey).unwrap(), one_metric.bytes, one_metric.requests);
-            // }
+            aggregated_metrics.add(&fetch_metric[0]);
         }
 
-        Ok(agreated_result)
+        Ok(aggregated_metrics.finish())
     }
 
     /// Prepare report_metrics call params.
@@ -483,6 +465,33 @@ impl<T: Trait> Module<T> {
         stored_bytes.encode_to(&mut call_data);
         requests.encode_to(&mut call_data);
         call_data
+    }
+}
+
+#[derive(Default)]
+struct MetricsAggregator(Vec<MetricInfo>);
+
+impl MetricsAggregator {
+    fn add(&mut self, metrics: &MetricInfo) {
+        let pubkey_from_metric = sp_std::str::from_utf8(&metrics.appPubKey).unwrap();
+        let existing_pubkey_index = self.0.iter().position(|one_result_obj| pubkey_from_metric.eq(sp_std::str::from_utf8(&one_result_obj.appPubKey).unwrap()));
+
+        if existing_pubkey_index.is_none() {
+            // New app.
+            let mut new_metric_obj = MetricInfo::new();
+            new_metric_obj.appPubKey = metrics.appPubKey.clone();
+            new_metric_obj.requests = metrics.requests;
+            new_metric_obj.bytes = metrics.bytes;
+            self.0.push(new_metric_obj);
+        } else {
+            // Add to metrics of an existing app.
+            self.0[existing_pubkey_index.unwrap()].requests += metrics.requests;
+            self.0[existing_pubkey_index.unwrap()].bytes += metrics.bytes;
+        }
+    }
+
+    fn finish(self) -> Vec<MetricInfo> {
+        self.0
     }
 }
 
