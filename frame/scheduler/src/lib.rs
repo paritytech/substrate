@@ -167,7 +167,7 @@ pub mod pallet {
 
 	/// Items to be executed, indexed by the block number that they should be executed on.
 	#[pallet::storage]
-	pub(super) type Agenda<T: Config> = StorageMap<
+	pub type Agenda<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::BlockNumber,
@@ -206,6 +206,23 @@ pub mod pallet {
 		/// Reschedule failed because it does not change scheduled time.
 		RescheduleNoChange,
 	}
+
+	#[pallet::genesis_config]
+ 	pub struct GenesisConfig;
+
+ 	#[cfg(feature = "std")]
+ 	impl Default for GenesisConfig {
+ 		fn default() -> Self{
+			 Self
+		 }
+ 	}
+
+ 	#[pallet::genesis_build]
+ 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+ 		fn build(&self) {
+			StorageVersion::<T>::put(Releases::V2);
+ 		}
+ 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
