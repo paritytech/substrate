@@ -392,7 +392,7 @@ pub mod pallet {
 		/// - One storage write O(1)
 		/// - One event
 		/// # </weight>
-		#[pallet::weight(0)]
+		#[pallet::weight(30_000_000)]
 		pub(crate) fn set_recovered(
 			origin: OriginFor<T>,
 			lost: T::AccountId,
@@ -691,7 +691,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - One storage mutation to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[pallet::weight(0)]
+		#[pallet::weight(30_000_000)]
 		pub(crate) fn cancel_recovered(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
