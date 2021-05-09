@@ -510,6 +510,15 @@ fn instance_expand() {
 }
 
 #[test]
+fn trait_store_expand() {
+	TestExternalities::default().execute_with(|| {
+		<pallet::Pallet<Runtime> as pallet::Store>::Value::get();
+		<pallet::Pallet<Runtime> as pallet::Store>::Map::get(1);
+		<pallet::Pallet<Runtime> as pallet::Store>::DoubleMap::get(1, 2);
+	})
+}
+
+#[test]
 fn pallet_expand_deposit_event() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);

@@ -1541,7 +1541,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
-					remote, protocol, notifications_sink, role
+					remote, protocol, negotiated_fallback, notifications_sink, role
 				})) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.notifications_streams_opened_total
@@ -1554,6 +1554,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.event_streams.send(Event::NotificationStreamOpened {
 						remote,
 						protocol,
+						negotiated_fallback,
 						role,
 					});
 				},

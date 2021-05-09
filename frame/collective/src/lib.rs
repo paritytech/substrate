@@ -24,9 +24,9 @@
 //! calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
 //!
 //! A "prime" member may be set to help determine the default vote behavior based on chain
-//! config. If `PreimDefaultVote` is used, the prime vote acts as the default vote in case of any
+//! config. If `PrimeDefaultVote` is used, the prime vote acts as the default vote in case of any
 //! abstentions after the voting period. If `MoreThanMajorityThenPrimeDefaultVote` is used, then
-//! abstentations will first follow the majority of the collective voting, and then the prime
+//! abstentions will first follow the majority of the collective voting, and then the prime
 //! member.
 //!
 //! Voting happens through motions comprising a proposal (i.e. a curried dispatchable) plus a
@@ -105,7 +105,7 @@ impl DefaultVote for PrimeDefaultVote {
 }
 
 /// First see if yes vote are over majority of the whole collective. If so, set the default vote
-/// as yes. Otherwise, use the prime meber's vote as the default vote.
+/// as yes. Otherwise, use the prime member's vote as the default vote.
 pub struct MoreThanMajorityThenPrimeDefaultVote;
 
 impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {

@@ -770,6 +770,13 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		Ok((Zero::zero(), HashSet::new()))
 	}
 
+	fn remove_leaf_block(
+		&self,
+		_hash: &Block::Hash,
+	) -> sp_blockchain::Result<()> {
+		Ok(())
+	}
+
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
