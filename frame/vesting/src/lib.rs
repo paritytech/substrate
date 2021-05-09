@@ -224,7 +224,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vest_locked(MaxLocksOf::<T>::get())
 			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get()))
 		)]
-		pub fn vest(origin: OriginFor<T>) -> DispatchResult {
+		pub(crate) fn vest(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
 		}
@@ -247,7 +247,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get())
 			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get()))
 		)]
-		pub fn vest_other(origin: OriginFor<T>, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		pub(crate) fn vest_other(
+			origin: OriginFor<T>,
+			target: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
 		}

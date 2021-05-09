@@ -391,13 +391,13 @@ pub mod pallet {
 			heartbeat.validators_len as u32,
 			heartbeat.network_state.external_addresses.len() as u32,
 		))]
-		pub fn heartbeat(
+		pub(crate) fn heartbeat(
 			origin: OriginFor<T>,
 			heartbeat: Heartbeat<T::BlockNumber>,
 			// since signature verification is done in `validate_unsigned`
 			// we can skip doing it here again.
 			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_none(origin)?;
 
 			let current_session = T::ValidatorSet::session_index();
@@ -417,7 +417,7 @@ pub mod pallet {
 					&network_state
 				);
 
-				Ok(().into())
+				Ok(())
 			} else if exists {
 				Err(Error::<T>::DuplicatedHeartbeat)?
 			} else {

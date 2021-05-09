@@ -148,7 +148,7 @@ pub mod pallet {
 			};
 			(dispatch_weight, dispatch_class)
 		})]
-		pub fn batch(
+		pub(crate) fn batch(
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
@@ -202,7 +202,7 @@ pub mod pallet {
 				dispatch_info.class,
 			)
 		})]
-		pub fn as_derivative(
+		pub(crate) fn as_derivative(
 			origin: OriginFor<T>,
 			index: u16,
 			call: Box<<T as Config>::Call>,
@@ -255,7 +255,7 @@ pub mod pallet {
 			(dispatch_weight, dispatch_class)
 		})]
 		#[transactional]
-		pub fn batch_all(
+		pub(crate) fn batch_all(
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
