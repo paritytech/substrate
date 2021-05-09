@@ -257,14 +257,11 @@ impl<T: Trait> Module<T> {
 		}
 
 		for one_metric in metrics.iter() {
-			// Prepare call params: app_id, day_start_ms, metrics: MetricValue. Reference: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs#L587
+			const MS_PER_DAY: u64 = 24 * 3600 * 1000;
 
-
-			const SEC_PER_DAY: u64 = 24 * 3600;
-
+			// Take the start of the current day.
 			let now = sp_io::offchain::timestamp();
-			let current_day = now.unix_millis() / SEC_PER_DAY; // take only
-			let day_start_ms: u64 = current_day * SEC_PER_DAY * 1000;
+			let day_start_ms: u64 = (now.unix_millis() / MS_PER_DAY) * MS_PER_DAY;
 
 			let results = signer.send_signed_transaction(
 				|_account| {
@@ -467,6 +464,8 @@ impl<T: Trait> Module<T> {
 		Ok(agreated_result)
 	}
 
+    /// Prepare report_metrics call params.
+    /// Must match the contract function here: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs
     fn encode_report_metrics(
         app_id: &AccountId32,
         day_start_ms: u64,
