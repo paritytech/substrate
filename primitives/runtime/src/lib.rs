@@ -933,6 +933,15 @@ mod tests {
 			Module { index: 2, error: 1, message: None },
 			ConsumerRemaining,
 			NoProviders,
+			Token(TokenError::NoFunds),
+			Token(TokenError::WouldDie),
+			Token(TokenError::BelowMinimum),
+			Token(TokenError::CannotCreate),
+			Token(TokenError::UnknownAsset),
+			Token(TokenError::Frozen),
+			Arithmetic(ArithmeticError::Overflow),
+			Arithmetic(ArithmeticError::Underflow),
+			Arithmetic(ArithmeticError::DivisionByZero),
 		];
 		for (i, variant) in variants.iter().enumerate() {
 			for (j, other_variant) in variants.iter().enumerate() {
