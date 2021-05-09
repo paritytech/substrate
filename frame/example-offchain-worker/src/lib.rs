@@ -22,14 +22,12 @@ use sp_runtime::{offchain::{
     http,
     Duration,
     storage::StorageValueRef,
-}, traits::StaticLookup, traits::Zero, AccountId32};
-use codec::{Encode, Decode};
+}, traits::StaticLookup, AccountId32};
+use codec::Encode;
 use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
-// use lite_json::json::JsonValue;
 use alt_serde::{Deserialize, Deserializer};
 use hex_literal::hex;
-use sp_std::str::FromStr;
 
 #[macro_use]
 extern crate alloc;
@@ -43,13 +41,11 @@ pub const BLOCK_INTERVAL: u32 = 10;
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 
-// use serde_json::{Value};
 
 // Specifying serde path as `alt_serde`
 // ref: https://serde.rs/container-attrs.html#crate
+#[derive(Deserialize, Default, Debug)]
 #[serde(crate = "alt_serde")]
-#[derive(Deserialize, Encode, Decode, Default)]
-#[derive(Debug)]
 #[allow(non_snake_case)]
 struct NodeInfo {
     #[serde(deserialize_with = "de_string_to_bytes")]
@@ -64,9 +60,8 @@ struct NodeInfo {
     deleted: bool,
 }
 
+#[derive(Deserialize, Default, Debug)]
 #[serde(crate = "alt_serde")]
-#[derive(Deserialize, Encode, Decode, Default)]
-#[derive(Debug)]
 #[allow(non_snake_case)]
 struct PartitionInfo {
     #[serde(deserialize_with = "de_string_to_bytes")]
@@ -84,9 +79,8 @@ struct PartitionInfo {
     replicaIndex: u32,
 }
 
+#[derive(Deserialize, Default, Debug)]
 #[serde(crate = "alt_serde")]
-#[derive(Deserialize, Encode, Decode, Default)]
-#[derive(Debug)]
 #[allow(non_snake_case)]
 struct MetricInfo {
     #[serde(deserialize_with = "de_string_to_bytes")]
@@ -325,20 +319,6 @@ impl<T: Trait> Module<T> {
 
         // Next we fully read the response body and collect it to a vector of bytes.
         Ok(response.body().collect::<Vec<u8>>())
-    }
-
-    /// This function uses the `offchain::http` API to query the remote github information,
-    ///   and returns the JSON response as vector of bytes.
-    fn fetch_from_node(one_node: &NodeInfo) -> Result<Vec<u8>, http::Error> {
-        let node_url = sp_std::str::from_utf8(&one_node.httpAddr).unwrap();
-
-        let response_data = Self::http_get_request(node_url).map_err(|e| {
-            debug::error!("fetch_from_node error: {:?}", e);
-            http::Error::Unknown
-        })?;
-
-        // Next we fully read the response body and collect it to a vector of bytes.
-        Ok(response_data)
     }
 
     fn fetch_app_metrics(_block_number: T::BlockNumber) -> Result<Vec<MetricInfo>, http::Error> {

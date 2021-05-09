@@ -1,9 +1,4 @@
-use codec::Decode;
-
 use frame_support::{
-    assert_err_ignore_postinfo, assert_ok,
-    dispatch::DispatchErrorWithPostInfo,
-    impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
     traits::{Currency, OffchainWorker},
 };
 use frame_system::Trait as FST;
@@ -17,7 +12,7 @@ use sp_core::{
 use sp_runtime::{RuntimeAppPublic, traits::Hash, AccountId32};
 use sp_std::str::FromStr;
 use test_runtime::{
-    AccountId, Balances, Contracts, CURRENT_METRICS_CONTRACT_ID, ExampleOffchainWorker, Extrinsic, Origin, System, Test,
+    AccountId, Balances, Contracts, CURRENT_METRICS_CONTRACT_ID, ExampleOffchainWorker, Origin, System, Test,
 };
 
 use crate::{METRICS_CONTRACT_ADDR, METRICS_CONTRACT_ID, REPORT_METRICS_SELECTOR};
