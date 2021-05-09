@@ -1,0 +1,13 @@
+error[E0277]: the trait bound `NotEncode: WrapperTypeEncode` is not satisfied
+  --> $DIR/not_encode.rs:3:10
+   |
+3  | #[derive(MaxEncodedLen)]
+   |          ^^^^^^^^^^^^^ the trait `WrapperTypeEncode` is not implemented for `NotEncode`
+   |
+  ::: $WORKSPACE/frame/support/src/traits/max_encoded_len.rs
+   |
+   | pub trait MaxEncodedLen: Encode {
+   |                          ------ required by this bound in `MaxEncodedLen`
+   |
+   = note: required because of the requirements on the impl of `frame_support::dispatch::Encode` for `NotEncode`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)

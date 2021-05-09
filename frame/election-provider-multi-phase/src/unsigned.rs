@@ -17,22 +17,44 @@
 
 //! The unsigned phase implementation.
 
-use crate::*;
-use frame_support::dispatch::DispatchResult;
-use frame_system::offchain::SubmitTransaction;
-use sp_npos_elections::{
-	seq_phragmen, CompactSolution, ElectionResult, assignment_ratio_to_staked_normalized,
-	assignment_staked_to_ratio_normalized,
+use crate::{
+	helpers, Call, CompactAccuracyOf, CompactOf, Config,
+	ElectionCompute, Error, FeasibilityError, Pallet, RawSolution, ReadySolution, RoundSnapshot,
+	SolutionOrSnapshotSize, Weight, WeightInfo,
 };
-use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
-use sp_std::cmp::Ordering;
+use codec::{Encode, Decode};
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
+use frame_system::offchain::SubmitTransaction;
+use sp_arithmetic::Perbill;
+use sp_npos_elections::{
+	CompactSolution, ElectionResult, ElectionScore, assignment_ratio_to_staked_normalized,
+	assignment_staked_to_ratio_normalized, is_score_better, seq_phragmen,
+};
+use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput, SaturatedConversion};
+use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec};
 
 /// Storage key used to store the persistent offchain worker status.
-pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
+pub(crate) const OFFCHAIN_LOCK: &[u8] = b"parity/multi-phase-unsigned-election";
 
-/// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
-/// within a window of 5 blocks.
-pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
+/// Storage key used to cache the solution `call`.
+pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-election/call";
+
+/// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
+/// voted.
+pub type Voter<T> = (
+	<T as frame_system::Config>::AccountId,
+	sp_npos_elections::VoteWeight,
+	Vec<<T as frame_system::Config>::AccountId>,
+);
+
+/// The relative distribution of a voter's stake among the winning targets.
+pub type Assignment<T> = sp_npos_elections::Assignment<
+	<T as frame_system::Config>::AccountId,
+	CompactAccuracyOf<T>,
+>;
+
+/// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular runtime `T`.
+pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<CompactOf<T>>;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum MinerError {
@@ -46,6 +68,16 @@ pub enum MinerError {
 	PreDispatchChecksFailed,
 	/// The solution generated from the miner is not feasible.
 	Feasibility(FeasibilityError),
+	/// Something went wrong fetching the lock.
+	Lock(&'static str),
+	/// Cannot restore a solution that was not stored.
+	NoStoredSolution,
+	/// Cached solution does not match the current round.
+	SolutionOutOfDate,
+	/// Cached solution is not a `submit_unsigned` call.
+	SolutionCallInvalid,
+	/// Failed to store a solution.
+	FailedToStoreSolution,
 	/// There are no more voters to remove to trim the solution.
 	NoMoreVoters,
 }
@@ -62,25 +94,142 @@ impl From<FeasibilityError> for MinerError {
 	}
 }
 
+/// Save a given call into OCW storage.
+fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
+	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
+		Ok(Ok(_)) => Ok(()),
+		Ok(Err(_)) => Err(MinerError::FailedToStoreSolution),
+		Err(_) => {
+			// this branch should be unreachable according to the definition of `StorageValueRef::mutate`:
+			// that function should only ever `Err` if the closure we pass it return an error.
+			// however, for safety in case the definition changes, we do not optimize the branch away
+			// or panic.
+			Err(MinerError::FailedToStoreSolution)
+		},
+	}
+}
+
+/// Get a saved solution from OCW storage if it exists.
+fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
+	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL)
+		.get()
+		.flatten()
+		.ok_or(MinerError::NoStoredSolution)
+}
+
+/// Clear a saved solution from OCW storage.
+pub(super) fn kill_ocw_solution<T: Config>() {
+	let mut storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+	storage.clear();
+}
+
+/// `true` when OCW storage contains a solution
+///
+/// More precise than `restore_solution::<T>().is_ok()`; that invocation will return `false`
+/// if a solution exists but cannot be decoded, whereas this just checks whether an item is present.
+#[cfg(test)]
+fn ocw_solution_exists<T: Config>() -> bool {
+	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get::<Call<T>>().is_some()
+}
+
 impl<T: Config> Pallet<T> {
-	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
-	pub fn mine_check_and_submit() -> Result<(), MinerError> {
+	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
+	/// if our call's score is greater than that of the cached solution.
+	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError> {
+		log!(
+			debug,
+			"OCW attempting to restore or compute an unsigned solution for the current election"
+		);
+
+		let call = restore_solution::<T>()
+			.and_then(|call| {
+				// ensure the cached call is still current before submitting
+				if let Call::submit_unsigned(solution, _) = &call {
+					// prevent errors arising from state changes in a forkful chain
+					Self::basic_checks(solution, "restored")?;
+					Ok(call)
+				} else {
+					Err(MinerError::SolutionCallInvalid)
+				}
+			})
+			.or_else::<MinerError, _>(|_| {
+				// if not present or cache invalidated, regenerate
+				let (call, _) = Self::mine_checked_call()?;
+				save_solution(&call)?;
+				Ok(call)
+			})?;
+
+		// the runtime will catch it and reject the transaction if the phase is wrong, but it's
+		// cheap and easy to check it here to ease the workload on the runtime, so:
+		if !Self::current_phase().is_unsigned_open() {
+			// don't bother submitting; it's not an error, we're just too late.
+			return Ok(());
+		}
+
+		// in case submission fails for any reason, `submit_call` kills the stored solution
+		Self::submit_call(call)
+	}
+
+	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
+	pub fn mine_check_save_submit() -> Result<(), MinerError> {
+		log!(
+			debug,
+			"OCW attempting to compute an unsigned solution for the current election"
+		);
+
+		let (call, _) = Self::mine_checked_call()?;
+		save_solution(&call)?;
+		Self::submit_call(call)
+	}
+
+	/// Mine a new solution as a call. Performs all checks.
+	fn mine_checked_call() -> Result<(Call<T>, ElectionScore), MinerError> {
 		let iters = Self::get_balancing_iters();
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
-		let score = raw_solution.score.clone();
 
-		let call: <T as frame_system::offchain::SendTransactionTypes<Call<T>>>::OverarchingCall =
-			Call::submit_unsigned(raw_solution, witness).into();
+		let score = raw_solution.score.clone();
+		let call: Call<T> = Call::submit_unsigned(raw_solution, witness).into();
+
 		log!(
-			info,
-			"mined a solution with score {:?} and size {}",
+			debug,
+			"OCW mined a solution with score {:?} and size {}",
 			score,
 			call.using_encoded(|b| b.len())
 		);
 
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-			.map_err(|_| MinerError::PoolSubmissionFailed)
+		Ok((call, score))
+	}
+
+	fn submit_call(call: Call<T>) -> Result<(), MinerError> {
+		log!(
+			debug,
+			"OCW submitting a solution as an unsigned transaction",
+		);
+
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+			.map_err(|_| {
+				kill_ocw_solution::<T>();
+				MinerError::PoolSubmissionFailed
+			})
+	}
+
+	// perform basic checks of a solution's validity
+	//
+	// Performance: note that it internally clones the provided solution.
+	fn basic_checks(raw_solution: &RawSolution<CompactOf<T>>, solution_type: &str) -> Result<(), MinerError> {
+		Self::unsigned_pre_dispatch_checks(raw_solution).map_err(|err| {
+			log!(warn, "pre-dispatch checks fialed for {} solution: {:?}", solution_type, err);
+			MinerError::PreDispatchChecksFailed
+		})?;
+
+		Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(|err| {
+			log!(warn, "feasibility check failed for {} solution: {:?}", solution_type, err);
+			err
+		})?;
+
+		Ok(())
 	}
 
 	/// Mine a new npos solution, with all the relevant checks to make sure that it will be accepted
@@ -88,26 +237,12 @@ impl<T: Config> Pallet<T> {
 	///
 	/// If you want an unchecked solution, use [`Pallet::mine_solution`].
 	/// If you want a checked solution and submit it at the same time, use
-	/// [`Pallet::mine_check_and_submit`].
+	/// [`Pallet::mine_check_save_submit`].
 	pub fn mine_and_check(
 		iters: usize,
 	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
 		let (raw_solution, witness) = Self::mine_solution(iters)?;
-
-		// ensure that this will pass the pre-dispatch checks
-		Self::unsigned_pre_dispatch_checks(&raw_solution).map_err(|e| {
-			log!(warn, "pre-dispatch-checks failed for mined solution: {:?}", e);
-			MinerError::PreDispatchChecksFailed
-		})?;
-
-		// ensure that this is a feasible solution
-		let _ = Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(
-			|e| {
-				log!(warn, "feasibility-check failed for mined solution: {:?}", e);
-				MinerError::from(e)
-			},
-		)?;
-
+		Self::basic_checks(&raw_solution, "mined")?;
 		Ok((raw_solution, witness))
 	}
 
@@ -144,7 +279,7 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
-		// closures.
+		// now make some helper closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
 		let voter_index = helpers::voter_index_fn::<T>(&cache);
 		let target_index = helpers::target_index_fn::<T>(&targets);
@@ -152,40 +287,70 @@ impl<T: Config> Pallet<T> {
 		let target_at = helpers::target_at_fn::<T>(&targets);
 		let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
 
+		// Compute the size of a compact solution comprised of the selected arguments.
+		//
+		// This function completes in `O(edges)`; it's expensive, but linear.
+		let encoded_size_of = |assignments: &[IndexAssignmentOf<T>]| {
+			CompactOf::<T>::try_from(assignments).map(|compact| compact.encoded_size())
+		};
+
 		let ElectionResult { assignments, winners } = election_result;
 
-		// convert to staked and reduce.
-		let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
-			.map_err::<MinerError, _>(Into::into)?;
-		sp_npos_elections::reduce(&mut staked);
+		// Reduce (requires round-trip to staked form)
+		let sorted_assignments = {
+			// convert to staked and reduce.
+			let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
-		// convert back to ration and make compact.
-		let ratio = assignment_staked_to_ratio_normalized(staked)?;
-		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
+			// we reduce before sorting in order to ensure that the reduction process doesn't
+			// accidentally change the sort order
+			sp_npos_elections::reduce(&mut staked);
 
+			// Sort the assignments by reversed voter stake. This ensures that we can efficiently
+			// truncate the list.
+			staked.sort_by_key(
+				|sp_npos_elections::StakedAssignment::<T::AccountId> { who, .. }| {
+					// though staked assignments are expressed in terms of absolute stake, we'd
+					// still need to iterate over all votes in order to actually compute the total
+					// stake. it should be faster to look it up from the cache.
+					let stake = cache
+						.get(who)
+						.map(|idx| {
+							let (_, stake, _) = voters[*idx];
+							stake
+						})
+						.unwrap_or_default();
+					sp_std::cmp::Reverse(stake)
+				},
+			);
+
+			// convert back.
+			assignment_staked_to_ratio_normalized(staked)?
+		};
+
+		// convert to `IndexAssignment`. This improves the runtime complexity of repeatedly
+		// converting to `Compact`.
+		let mut index_assignments = sorted_assignments
+			.into_iter()
+			.map(|assignment| IndexAssignmentOf::<T>::new(&assignment, &voter_index, &target_index))
+			.collect::<Result<Vec<_>, _>>()?;
+
+		// trim assignments list for weight and length.
 		let size =
 			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
-		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
+		Self::trim_assignments_weight(
 			desired_targets,
 			size,
 			T::MinerMaxWeight::get(),
+			&mut index_assignments,
 		);
-
-		log!(
-			debug,
-			"initial solution voters = {}, snapshot = {:?}, maximum_allowed(capped) = {}",
-			compact.voter_count(),
-			size,
-			maximum_allowed_voters,
-		);
-
-		// trim length and weight
-		let compact = Self::trim_compact_weight(maximum_allowed_voters, compact, &voter_index)?;
-		let compact = Self::trim_compact_length(
+		Self::trim_assignments_length(
 			T::MinerMaxLength::get(),
-			compact,
-			&voter_index,
+			&mut index_assignments,
+			&encoded_size_of,
 		)?;
+
+		// now make compact.
+		let compact = CompactOf::<T>::try_from(&index_assignments)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -212,15 +377,14 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Greedily reduce the size of the a solution to fit into the block, w.r.t. weight.
+	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
 	///
 	/// The weight of the solution is foremost a function of the number of voters (i.e.
-	/// `compact.len()`). Aside from this, the other components of the weight are invariant. The
+	/// `assignments.len()`). Aside from this, the other components of the weight are invariant. The
 	/// number of winners shall not be changed (otherwise the solution is invalid) and the
 	/// `ElectionSize` is merely a representation of the total number of stakers.
 	///
-	/// Thus, we reside to stripping away some voters. This means only changing the `compact`
-	/// struct.
+	/// Thus, we reside to stripping away some voters from the `assignments`.
 	///
 	/// Note that the solution is already computed, and the winners are elected based on the merit
 	/// of the entire stake in the system. Nonetheless, some of the voters will be removed further
@@ -228,50 +392,24 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
 	/// much or remove a winner, then the solution must be discarded **after** this step.
-	pub fn trim_compact_weight<FN>(
-		maximum_allowed_voters: u32,
-		mut compact: CompactOf<T>,
-		voter_index: FN,
-	) -> Result<CompactOf<T>, MinerError>
-	where
-		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
-	{
-		match compact.voter_count().checked_sub(maximum_allowed_voters as usize) {
-			Some(to_remove) if to_remove > 0 => {
-				// grab all voters and sort them by least stake.
-				let RoundSnapshot { voters, .. } =
-					Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
-				let mut voters_sorted = voters
-					.into_iter()
-					.map(|(who, stake, _)| (who.clone(), stake))
-					.collect::<Vec<_>>();
-				voters_sorted.sort_by_key(|(_, y)| *y);
-
-				// start removing from the least stake. Iterate until we know enough have been
-				// removed.
-				let mut removed = 0;
-				for (maybe_index, _stake) in
-					voters_sorted.iter().map(|(who, stake)| (voter_index(&who), stake))
-				{
-					let index = maybe_index.ok_or(MinerError::SnapshotUnAvailable)?;
-					if compact.remove_voter(index) {
-						removed += 1
-					}
-
-					if removed >= to_remove {
-						break;
-					}
-				}
-
-				log!(debug, "removed {} voter to meet the max weight limit.", to_remove);
-				Ok(compact)
-			}
-			_ => {
-				// nada, return as-is
-				log!(debug, "didn't remove any voter for weight limits.");
-				Ok(compact)
-			}
-		}
+	fn trim_assignments_weight(
+		desired_targets: u32,
+		size: SolutionOrSnapshotSize,
+		max_weight: Weight,
+		assignments: &mut Vec<IndexAssignmentOf<T>>,
+	) {
+		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
+			desired_targets,
+			size,
+			max_weight,
+		);
+		let removing: usize = assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
+		log!(
+			debug,
+			"from {} assignments, truncating to {} for weight, removing {}",
+			assignments.len(), maximum_allowed_voters, removing,
+		);
+		assignments.truncate(maximum_allowed_voters as usize);
 	}
 
 	/// Greedily reduce the size of the solution to fit into the block w.r.t length.
@@ -283,39 +421,67 @@ impl<T: Config> Pallet<T> {
 	/// the total stake in the system. Nevertheless, some of the voters may be removed here.
 	///
 	/// Sometimes, removing a voter can cause a validator to also be implicitly removed, if
-	/// that voter was the only backer of that winner. In such cases, this solution is invalid, which
-	/// will be caught prior to submission.
+	/// that voter was the only backer of that winner. In such cases, this solution is invalid,
+	/// which will be caught prior to submission.
 	///
 	/// The score must be computed **after** this step. If this step reduces the score too much,
 	/// then the solution must be discarded.
-	pub fn trim_compact_length(
+	pub(crate) fn trim_assignments_length(
 		max_allowed_length: u32,
-		mut compact: CompactOf<T>,
-		voter_index: impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>>,
-	) -> Result<CompactOf<T>, MinerError> {
-		// short-circuit to avoid getting the voters if possible
-		// this involves a redundant encoding, but that should hopefully be relatively cheap
-		if (compact.encoded_size().saturated_into::<u32>()) <= max_allowed_length {
-			return Ok(compact);
+		assignments: &mut Vec<IndexAssignmentOf<T>>,
+		encoded_size_of: impl Fn(&[IndexAssignmentOf<T>]) -> Result<usize, sp_npos_elections::Error>,
+	) -> Result<(), MinerError> {
+		// Perform a binary search for the max subset of which can fit into the allowed
+		// length. Having discovered that, we can truncate efficiently.
+		let max_allowed_length: usize = max_allowed_length.saturated_into();
+		let mut high = assignments.len();
+		let mut low = 0;
+
+		// not much we can do if assignments are already empty.
+		if high == low {
+			return Ok(());
 		}
 
-		// grab all voters and sort them by least stake.
-		let RoundSnapshot { voters, .. } =
-			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
-		let mut voters_sorted = voters
-			.into_iter()
-			.map(|(who, stake, _)| (who.clone(), stake))
-			.collect::<Vec<_>>();
-		voters_sorted.sort_by_key(|(_, y)| *y);
-		voters_sorted.reverse();
-
-		while compact.encoded_size() > max_allowed_length.saturated_into() {
-			let (smallest_stake_voter, _) = voters_sorted.pop().ok_or(MinerError::NoMoreVoters)?;
-			let index = voter_index(&smallest_stake_voter).ok_or(MinerError::SnapshotUnAvailable)?;
-			compact.remove_voter(index);
+		while high - low > 1 {
+			let test = (high + low) / 2;
+			if encoded_size_of(&assignments[..test])? <= max_allowed_length {
+				low = test;
+			} else {
+				high = test;
+			}
 		}
+		let maximum_allowed_voters =
+			if low < assignments.len() && encoded_size_of(&assignments[..low + 1])? <= max_allowed_length {
+				low + 1
+			} else {
+				low
+			};
 
-		Ok(compact)
+		// ensure our post-conditions are correct
+		debug_assert!(
+			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap() <= max_allowed_length
+		);
+		debug_assert!(if maximum_allowed_voters < assignments.len() {
+			encoded_size_of(&assignments[..maximum_allowed_voters + 1]).unwrap()
+				> max_allowed_length
+		} else {
+			true
+		});
+
+		// NOTE: before this point, every access was immutable.
+		// after this point, we never error.
+		// check before edit.
+
+		log!(
+			debug,
+			"from {} assignments, truncating to {} for length, removing {}",
+			assignments.len(),
+			maximum_allowed_voters,
+			assignments.len().saturating_sub(maximum_allowed_voters),
+		);
+		assignments.truncate(maximum_allowed_voters);
+
+		Ok(())
 	}
 
 	/// Find the maximum `len` that a compact can have in order to fit into the block weight.
@@ -396,12 +562,14 @@ impl<T: Config> Pallet<T> {
 	/// not.
 	///
 	/// This essentially makes sure that we don't run on previous blocks in case of a re-org, and we
-	/// don't run twice within a window of length [`OFFCHAIN_REPEAT`].
+	/// don't run twice within a window of length `threshold`.
 	///
 	/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
-	pub(crate) fn try_acquire_offchain_lock(now: T::BlockNumber) -> Result<(), &'static str> {
-		let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
-		let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
+	pub(crate) fn try_acquire_offchain_lock(
+		now: T::BlockNumber,
+	) -> Result<(), MinerError> {
+		let threshold = T::OffchainRepeat::get();
+		let storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
 
 		let mutate_stat =
 			storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
@@ -425,9 +593,9 @@ impl<T: Config> Pallet<T> {
 			// all good
 			Ok(Ok(_)) => Ok(()),
 			// failed to write.
-			Ok(Err(_)) => Err("failed to write to offchain db."),
+			Ok(Err(_)) => Err(MinerError::Lock("failed to write to offchain db.")),
 			// fork etc.
-			Err(why) => Err(why),
+			Err(why) => Err(MinerError::Lock(why)),
 		}
 	}
 
@@ -443,6 +611,9 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
 		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::PreDispatchEarlySubmission);
+
+		// ensure round is current
+		ensure!(Self::round() == solution.round, Error::<T>::OcwCallWrongEra);
 
 		// ensure correct number of winners.
 		ensure!(
@@ -468,7 +639,8 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod max_weight {
 	#![allow(unused_variables)]
-	use super::{mock::*, *};
+	use super::*;
+	use crate::mock::MultiPhase;
 
 	struct TestWeight;
 	impl crate::weights::WeightInfo for TestWeight {
@@ -552,15 +724,21 @@ mod max_weight {
 
 #[cfg(test)]
 mod tests {
-	use super::{
-		mock::{Origin, *},
-		Call, *,
+	use super::*;
+	use crate::{
+		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
+		TransactionValidityError,
+		mock::{
+			Call as OuterCall, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin, Runtime,
+			TestCompact, TrimHelpers, roll_to, roll_to_with_ocw, trim_helpers, witness,
+		},
 	};
-	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
-	use helpers::voter_index_fn_linear;
-	use mock::Call as OuterCall;
-	use frame_election_provider_support::Assignment;
+	use frame_benchmarking::Zero;
+	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
+	use sp_npos_elections::IndexAssignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
+
+	type Assignment = crate::unsigned::Assignment<Runtime>;
 
 	#[test]
 	fn validate_unsigned_retracts_wrong_phase() {
@@ -798,7 +976,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			assert_eq!(
-				MultiPhase::mine_check_and_submit().unwrap_err(),
+				MultiPhase::mine_check_save_submit().unwrap_err(),
 				MinerError::PreDispatchChecksFailed,
 			);
 		})
@@ -877,6 +1055,8 @@ mod tests {
 	fn ocw_check_prevent_duplicate() {
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
+			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
+
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
@@ -884,21 +1064,15 @@ mod tests {
 			assert!(MultiPhase::try_acquire_offchain_lock(25).is_ok());
 
 			// next block: rejected.
-			assert_noop!(MultiPhase::try_acquire_offchain_lock(26), "recently executed.");
+			assert_noop!(MultiPhase::try_acquire_offchain_lock(26), MinerError::Lock("recently executed."));
 
 			// allowed after `OFFCHAIN_REPEAT`
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT).into()).is_ok());
+			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat).into()).is_ok());
 
 			// a fork like situation: re-execute last 3.
-			assert_noop!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 3).into()), "fork."
-			);
-			assert_noop!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 2).into()), "fork."
-			);
-			assert_noop!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 1).into()), "fork."
-			);
+			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 3).into()).is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 2).into()).is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 1).into()).is_err());
 		})
 	}
 
@@ -911,19 +1085,131 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
 
 			MultiPhase::offchain_worker(24);
 			assert!(pool.read().transactions.len().is_zero());
 			storage.clear();
 
+			// creates, caches, submits without expecting previous cache value
+			MultiPhase::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 1);
+			// assume that the tx has been processed
+			pool.try_write().unwrap().transactions.clear();
+
+			// locked, but also, has previously cached.
 			MultiPhase::offchain_worker(26);
+			assert!(pool.read().transactions.len().is_zero());
+		})
+	}
+
+	#[test]
+	fn ocw_clears_cache_after_election() {
+		let (mut ext, _pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
+			// we must clear the offchain storage to ensure the offchain execution check doesn't get
+			// in the way.
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			storage.clear();
+
+			assert!(!ocw_solution_exists::<Runtime>(), "no solution should be present before we mine one");
+
+			// creates and cache a solution
+			MultiPhase::offchain_worker(25);
+			assert!(ocw_solution_exists::<Runtime>(), "a solution must be cached after running the worker");
+
+			// after an election, the solution must be cleared
+			// we don't actually care about the result of the election
+			roll_to(26);
+			let _ = MultiPhase::do_elect();
+			MultiPhase::offchain_worker(26);
+			assert!(!ocw_solution_exists::<Runtime>(), "elections must clear the ocw cache");
+		})
+	}
+
+	#[test]
+	fn ocw_resubmits_after_offchain_repeat() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			const BLOCK: u64 = 25;
+			let block_plus = |delta: i32| ((BLOCK as i32) + delta) as u64;
+			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
+
+			roll_to(BLOCK);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, BLOCK)));
+
+			// we must clear the offchain storage to ensure the offchain execution check doesn't get
+			// in the way.
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+
+			MultiPhase::offchain_worker(block_plus(-1));
 			assert!(pool.read().transactions.len().is_zero());
 			storage.clear();
 
-			// submits!
-			MultiPhase::offchain_worker(25);
-			assert!(!pool.read().transactions.len().is_zero());
+			// creates, caches, submits without expecting previous cache value
+			MultiPhase::offchain_worker(BLOCK);
+			assert_eq!(pool.read().transactions.len(), 1);
+			let tx_cache = pool.read().transactions[0].clone();
+			// assume that the tx has been processed
+			pool.try_write().unwrap().transactions.clear();
+
+			// attempts to resubmit the tx after the threshold has expired
+			// note that we have to add 1: the semantics forbid resubmission at
+			// BLOCK + offchain_repeat
+			MultiPhase::offchain_worker(block_plus(1 + offchain_repeat as i32));
+			assert_eq!(pool.read().transactions.len(), 1);
+
+			// resubmitted tx is identical to first submission
+			let tx = &pool.read().transactions[0];
+			assert_eq!(&tx_cache, tx);
+		})
+	}
+
+	#[test]
+	fn ocw_regenerates_and_resubmits_after_offchain_repeat() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			const BLOCK: u64 = 25;
+			let block_plus = |delta: i32| ((BLOCK as i32) + delta) as u64;
+			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
+
+			roll_to(BLOCK);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, BLOCK)));
+
+			// we must clear the offchain storage to ensure the offchain execution check doesn't get
+			// in the way.
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+
+			MultiPhase::offchain_worker(block_plus(-1));
+			assert!(pool.read().transactions.len().is_zero());
+			storage.clear();
+
+			// creates, caches, submits without expecting previous cache value
+			MultiPhase::offchain_worker(BLOCK);
+			assert_eq!(pool.read().transactions.len(), 1);
+			let tx_cache = pool.read().transactions[0].clone();
+			// assume that the tx has been processed
+			pool.try_write().unwrap().transactions.clear();
+
+			// remove the cached submitted tx
+			// this ensures that when the resubmit window rolls around, we're ready to regenerate
+			// from scratch if necessary
+			let mut call_cache = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+			assert!(matches!(call_cache.get::<Call<Runtime>>(), Some(Some(_call))));
+			call_cache.clear();
+
+			// attempts to resubmit the tx after the threshold has expired
+			// note that we have to add 1: the semantics forbid resubmission at
+			// BLOCK + offchain_repeat
+			MultiPhase::offchain_worker(block_plus(1 + offchain_repeat as i32));
+			assert_eq!(pool.read().transactions.len(), 1);
+
+			// resubmitted tx is identical to first submission
+			let tx = &pool.read().transactions[0];
+			assert_eq!(&tx_cache, tx);
 		})
 	}
 
@@ -938,95 +1224,168 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned(_, _))));
+			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned(..))));
 		})
 	}
 
 	#[test]
-	fn trim_compact_length_does_not_modify_when_short_enough() {
-		let mut ext = ExtBuilder::default().build();
+	fn ocw_solution_must_have_correct_round() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
+			roll_to_with_ocw(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			// OCW must have submitted now
+			// now, before we check the call, update the round
+			<crate::Round<Runtime>>::mutate(|round| *round += 1);
+
+			let encoded = pool.read().transactions[0].clone();
+			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
+			let call = match extrinsic.call {
+				OuterCall::MultiPhase(call @ Call::submit_unsigned(..)) => call,
+				_ => panic!("bad call: unexpected submission"),
+			};
+
+			// Custom(3) maps to PreDispatchChecksFailed
+			let pre_dispatch_check_error = TransactionValidityError::Invalid(InvalidTransaction::Custom(3));
+			assert_eq!(
+				<MultiPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
+					.unwrap_err(),
+				pre_dispatch_check_error,
+			);
+			assert_eq!(
+				<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				pre_dispatch_check_error,
+			);
+		})
+	}
+
+	#[test]
+	fn trim_assignments_length_does_not_modify_when_short_enough() {
+		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
 
 			// given
-			let RoundSnapshot { voters, ..} = MultiPhase::snapshot().unwrap();
-			let RawSolution { mut compact, .. } = raw_solution();
-			let encoded_len = compact.encode().len() as u32;
+			let TrimHelpers {
+				mut assignments,
+				encoded_size_of,
+				..
+			} = trim_helpers();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
+			let encoded_len = compact.encoded_size() as u32;
 			let compact_clone = compact.clone();
 
 			// when
-			assert!(encoded_len < <Runtime as Config>::MinerMaxLength::get());
+			MultiPhase::trim_assignments_length(encoded_len, &mut assignments, encoded_size_of).unwrap();
 
 			// then
-			compact = MultiPhase::trim_compact_length(
-				encoded_len,
-				compact,
-				voter_index_fn_linear::<Runtime>(&voters),
-			).unwrap();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
 			assert_eq!(compact, compact_clone);
 		});
 	}
 
 	#[test]
-	fn trim_compact_length_modifies_when_too_long() {
-		let mut ext = ExtBuilder::default().build();
-		ext.execute_with(|| {
+	fn trim_assignments_length_modifies_when_too_long() {
+		ExtBuilder::default().build().execute_with(|| {
 			roll_to(25);
 
-			let RoundSnapshot { voters, ..} =
-				MultiPhase::snapshot().unwrap();
-
-			let RawSolution { mut compact, .. } = raw_solution();
-			let encoded_len = compact.encoded_size() as u32;
+			// given
+			let TrimHelpers {
+				mut assignments,
+				encoded_size_of,
+				..
+			} = trim_helpers();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
+			let encoded_len = compact.encoded_size();
 			let compact_clone = compact.clone();
 
-			compact = MultiPhase::trim_compact_length(
-				encoded_len - 1,
-				compact,
-				voter_index_fn_linear::<Runtime>(&voters),
-			).unwrap();
+			// when
+			MultiPhase::trim_assignments_length(encoded_len as u32 - 1, &mut assignments, encoded_size_of).unwrap();
 
+			// then
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
 			assert_ne!(compact, compact_clone);
-			assert!((compact.encoded_size() as u32) < encoded_len);
+			assert!(compact.encoded_size() < encoded_len);
 		});
 	}
 
 	#[test]
-	fn trim_compact_length_trims_lowest_stake() {
-		let mut ext = ExtBuilder::default().build();
-		ext.execute_with(|| {
+	fn trim_assignments_length_trims_lowest_stake() {
+		ExtBuilder::default().build().execute_with(|| {
 			roll_to(25);
 
-			let RoundSnapshot { voters, ..} =
-				MultiPhase::snapshot().unwrap();
-
-			let RawSolution { mut compact, .. } = raw_solution();
+			// given
+			let TrimHelpers {
+				voters,
+				mut assignments,
+				encoded_size_of,
+				voter_index,
+			} = trim_helpers();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
 			let encoded_len = compact.encoded_size() as u32;
-			let voter_count = compact.voter_count();
+			let count = assignments.len();
 			let min_stake_voter = voters.iter()
 				.map(|(id, weight, _)| (weight, id))
 				.min()
-				.map(|(_, id)| id)
+				.and_then(|(_, id)| voter_index(id))
 				.unwrap();
 
+			// when
+			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments, encoded_size_of).unwrap();
 
-			compact = MultiPhase::trim_compact_length(
-				encoded_len - 1,
-				compact,
-				voter_index_fn_linear::<Runtime>(&voters),
-			).unwrap();
-
-			assert_eq!(compact.voter_count(), voter_count - 1, "we must have removed exactly 1 voter");
-
-			let assignments = compact.into_assignment(
-				|voter| Some(voter as AccountId),
-				|target| Some(target as AccountId),
-			).unwrap();
+			// then
+			assert_eq!(assignments.len(), count - 1, "we must have removed exactly one assignment");
 			assert!(
 				assignments.iter()
-					.all(|Assignment{ who, ..}| who != min_stake_voter),
+					.all(|IndexAssignment{ who, ..}| *who != min_stake_voter),
 				"min_stake_voter must no longer be in the set of voters",
 			);
+		});
+	}
+
+	#[test]
+	fn trim_assignments_length_wont_panic() {
+		// we shan't panic if assignments are initially empty.
+		ExtBuilder::default().build_and_execute(|| {
+			let encoded_size_of = Box::new(|assignments: &[IndexAssignmentOf<Runtime>]| {
+				CompactOf::<Runtime>::try_from(assignments).map(|compact| compact.encoded_size())
+			});
+
+			let mut assignments = vec![];
+
+			// since we have 16 fields, we need to store the length fields of 16 vecs, thus 16 bytes
+			// minimum.
+			let min_compact_size = encoded_size_of(&assignments).unwrap();
+			assert_eq!(min_compact_size, CompactOf::<Runtime>::LIMIT);
+
+			// all of this should not panic.
+			MultiPhase::trim_assignments_length(0, &mut assignments, encoded_size_of.clone())
+				.unwrap();
+			MultiPhase::trim_assignments_length(1, &mut assignments, encoded_size_of.clone())
+				.unwrap();
+			MultiPhase::trim_assignments_length(
+				min_compact_size as u32,
+				&mut assignments,
+				encoded_size_of,
+			)
+			.unwrap();
+		});
+
+		// or when we trim it to zero.
+		ExtBuilder::default().build_and_execute(|| {
+			// we need snapshot for `trim_helpers` to work.
+			roll_to(25);
+			let TrimHelpers { mut assignments, encoded_size_of, .. } = trim_helpers();
+			assert!(assignments.len() > 0);
+
+			// trim to min compact size.
+			let min_compact_size = CompactOf::<Runtime>::LIMIT as u32;
+			MultiPhase::trim_assignments_length(
+				min_compact_size,
+				&mut assignments,
+				encoded_size_of,
+			)
+			.unwrap();
+			assert_eq!(assignments.len(), 0);
 		});
 	}
 
@@ -1035,8 +1394,7 @@ mod tests {
 	// we know that higher-level functions will all also have short-enough solutions.
 	#[test]
 	fn mine_solution_solutions_always_within_acceptable_length() {
-		let mut ext = ExtBuilder::default().build();
-		ext.execute_with(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
 
 			// how long would the default solution be?

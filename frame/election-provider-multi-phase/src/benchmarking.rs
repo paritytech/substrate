@@ -18,15 +18,16 @@
 //! Two phase election pallet benchmarking.
 
 use super::*;
-use crate::Pallet as MultiPhase;
+use crate::{Pallet as MultiPhase, unsigned::IndexAssignmentOf};
 use frame_benchmarking::impl_benchmark_test_suite;
 use frame_support::{assert_ok, traits::OnInitialize};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use frame_election_provider_support::Assignment;
-use sp_arithmetic::traits::One;
+use sp_arithmetic::{per_things::Percent, traits::One};
+use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
-use sp_std::convert::TryInto;
+use sp_std::convert::{TryFrom, TryInto};
 
 const SEED: u32 = 999;
 
@@ -135,7 +136,7 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<_>>();
 
 	let compact =
-		<CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
+		<CompactOf<T>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
 	let score = compact.clone().score(&winners, stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
 
@@ -252,6 +253,69 @@ frame_benchmarking::benchmarks! {
 		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
+	}
+
+	#[extra]
+	trim_assignments_length {
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot.
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
+		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// a subset of `v` component.
+		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		// number of desired targets. Must be a subset of `t` component.
+		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		// Subtract this percentage from the actual encoded size
+		let f in 0 .. 95;
+
+		// Compute a random solution, then work backwards to get the lists of voters, targets, and assignments
+		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
+		let RawSolution { compact, .. } = solution_with_size::<T>(witness, a, d);
+		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().unwrap();
+		let voter_at = helpers::voter_at_fn::<T>(&voters);
+		let target_at = helpers::target_at_fn::<T>(&targets);
+		let mut assignments = compact.into_assignment(voter_at, target_at).unwrap();
+
+		// make a voter cache and some helper functions for access
+		let cache = helpers::generate_voter_cache::<T>(&voters);
+		let voter_index = helpers::voter_index_fn::<T>(&cache);
+		let target_index = helpers::target_index_fn::<T>(&targets);
+
+		// sort assignments by decreasing voter stake
+		assignments.sort_by_key(|crate::unsigned::Assignment::<T> { who, .. }| {
+			let stake = cache.get(&who).map(|idx| {
+				let (_, stake, _) = voters[*idx];
+				stake
+			}).unwrap_or_default();
+			sp_std::cmp::Reverse(stake)
+		});
+
+		let mut index_assignments = assignments
+			.into_iter()
+			.map(|assignment| IndexAssignment::new(&assignment, &voter_index, &target_index))
+			.collect::<Result<Vec<_>, _>>()
+			.unwrap();
+
+		let encoded_size_of = |assignments: &[IndexAssignmentOf<T>]| {
+			CompactOf::<T>::try_from(assignments).map(|compact| compact.encoded_size())
+		};
+
+		let desired_size = Percent::from_percent(100 - f.saturated_into::<u8>())
+			.mul_ceil(encoded_size_of(index_assignments.as_slice()).unwrap());
+		log!(trace, "desired_size = {}", desired_size);
+	}: {
+		MultiPhase::<T>::trim_assignments_length(
+			desired_size.saturated_into(),
+			&mut index_assignments,
+			&encoded_size_of,
+		).unwrap();
+	} verify {
+		let compact = CompactOf::<T>::try_from(index_assignments.as_slice()).unwrap();
+		let encoding = compact.encode();
+		log!(trace, "encoded size prediction = {}", encoded_size_of(index_assignments.as_slice()).unwrap());
+		log!(trace, "actual encoded size = {}", encoding.len());
+		assert!(encoding.len() <= desired_size);
 	}
 
 	// This is checking a valid solution. The worse case is indeed a valid solution.

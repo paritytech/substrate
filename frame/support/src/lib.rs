@@ -1229,8 +1229,8 @@ pub mod tests {
 pub mod pallet_prelude {
 	pub use sp_std::marker::PhantomData;
 	#[cfg(feature = "std")]
-	pub use frame_support::traits::GenesisBuild;
-	pub use frame_support::{
+	pub use crate::traits::GenesisBuild;
+	pub use crate::{
 		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
 		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
@@ -1238,9 +1238,10 @@ pub mod pallet_prelude {
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
 		storage::types::{StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery},
+		storage::bounded_vec::BoundedVec,
 	};
 	pub use codec::{Encode, Decode};
-	pub use sp_inherents::{InherentData, InherentIdentifier, ProvideInherent};
+	pub use crate::inherent::{InherentData, InherentIdentifier, ProvideInherent};
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{

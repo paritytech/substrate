@@ -29,7 +29,7 @@ use sp_core::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 };
 use frame_support::{dispatch, assert_noop};
-use sp_runtime::{testing::UintAuthorityId, transaction_validity::TransactionValidityError};
+use sp_runtime::{testing::UintAuthorityId, transaction_validity::{TransactionValidityError, InvalidTransaction}};
 
 #[test]
 fn test_unresponsiveness_slash_fraction() {
@@ -114,7 +114,7 @@ fn heartbeat(
 	authority_index: u32,
 	id: UintAuthorityId,
 	validators: Vec<u64>,
-) -> dispatch::DispatchResult {
+) -> dispatch::DispatchResultWithPostInfo {
 	use frame_support::unsigned::ValidateUnsigned;
 
 	let heartbeat = Heartbeat {
