@@ -18,29 +18,26 @@ use frame_support::{
 	debug, decl_module, decl_storage, decl_event,
 };
 use sp_core::crypto::KeyTypeId;
-use sp_runtime::{
-	offchain::{
-		http,
-		Duration,
-		storage::StorageValueRef
-	},
-	traits::StaticLookup,
-	traits::Zero,
-};
+use sp_runtime::{offchain::{
+    http,
+    Duration,
+    storage::StorageValueRef
+}, traits::StaticLookup, traits::Zero, AccountId32};
 use codec::{Encode, Decode};
 use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
 // use lite_json::json::JsonValue;
 use alt_serde::{Deserialize, Deserializer};
 use hex_literal::hex;
+use sp_std::str::FromStr;
 
 #[macro_use]
 extern crate alloc;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv";
-pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
+pub const METRICS_CONTRACT_ADDR: &str = "5GH4ZTxrrhqo9E19SVbC8sRgDLSDhprE6WXdanR7BA7ioV1L"; // address params: no salt, symbol: CERE, endowement: 1000
+pub const METRICS_CONTRACT_ID: [u8; 32] = [186, 93, 146, 143, 201, 9, 246, 178, 152, 136, 23, 105, 215, 109, 14, 80, 130, 231, 133, 165, 178, 143, 133, 193, 166, 190, 163, 106, 171, 113, 117, 250];
 pub const BLOCK_INTERVAL: u32 = 10;
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
@@ -95,8 +92,8 @@ struct MetricInfo {
 	appPubKey: Vec<u8>,
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	partitionId: Vec<u8>,
-	bytes: u32,
-	requests: u32,
+	bytes: u128,
+	requests: u128,
 }
 
 impl MetricInfo {
@@ -117,7 +114,6 @@ pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 	let s: &str = Deserialize::deserialize(de)?;
 	Ok(s.as_bytes().to_vec())
 }
-
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -196,18 +192,20 @@ decl_module! {
 				return; // Skip the execution for this block
 			}
 
-			let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
+			let aggregated_metrics = Self::fetch_app_metrics(block_number);
 
 			// TODO: abort on error.
-			if let Err(e) = res {
+			if let Err(ref e) = aggregated_metrics {
 				debug::error!("Some error occurred: {:?}", e);
 			}
 
-			debug::info!("[OCW] About to send mock transaction");
-			let sc_res = Self::send_to_sc_mock();
+			if let Ok(aggregated_metrics) = aggregated_metrics {
+				debug::info!("[OCW] About to send mock transaction");
+				let sc_res = Self::send_metrics_to_sc(aggregated_metrics);
 
-			if let Err(e) = sc_res {
-				debug::error!("Some error occurred: {:?}", e);
+				if let Err(e) = sc_res {
+					debug::error!("Some error occurred: {:?}", e);
+				}
 			}
 
             debug::info!("[OCW] Finishing!");
@@ -250,64 +248,52 @@ impl<T: Trait> Module<T> {
 	}
 
 
-	fn send_to_sc_mock() -> Result<(), &'static str> {
-
-		debug::info!("[OCW] Getting signer");
+	fn send_metrics_to_sc(metrics: Vec<MetricInfo>) -> Result<(), &'static str> {
 		let signer = Signer::<T::CST, T::AuthorityId>::any_account();
-		debug::info!("[OCW] Checking signer");
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC."
 			)?
 		}
 
-		debug::info!("[OCW] Continue, signer exists!");
+		for one_metric in metrics.iter() {
+			const MS_PER_DAY: u64 = 24 * 3600 * 1000;
 
-		// Using `send_signed_transaction` associated type we create and submit a transaction
-		// representing the call, we've just created.
-		// Submit signed will return a vector of results for all accounts that were found in the
-		// local keystore with expected `KEY_TYPE`.
-		let results = signer.send_signed_transaction(
-			|_account| {
-				let mut call_data = REPORT_METRICS_SELECTOR.to_vec();
-				call_data.extend_from_slice(&[
-					1,
-					2,
-					3,
-					4,
-				]);
+			// Take the start of the current day.
+			let now = sp_io::offchain::timestamp();
+			let day_start_ms: u64 = (now.unix_millis() / MS_PER_DAY) * MS_PER_DAY;
 
-				pallet_contracts::Call::call(
-					T::ContractId::get(),
-					0u32.into(),
-					10_000_000_000,
-					call_data
-				)
-			}
-		);
+			let results = signer.send_signed_transaction(
+				|_account| {
 
-		for (_acc, res) in &results {
-			match res {
-				Ok(()) => debug::info!("Submitted TX to SC!"),
-				Err(e) => debug::error!("Some error occured: {:?}", e),
+//                  TODO: make account ID from hex string.
+//					let hex = String::from_utf8_lossy(&one_metric.appPubKey);
+                    let app_id = AccountId32::default();
+
+                    let call_data = Self::encode_report_metrics(&app_id, day_start_ms, one_metric.bytes, one_metric.requests);
+
+					debug::info!("Params: {:?} {:?} {:?} {:?}", one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
+
+					pallet_contracts::Call::call(
+						T::ContractId::get(),
+						0u32.into(),
+						100_000_000_000,
+						call_data,
+					)
+				}
+			);
+
+			for (_acc, res) in &results {
+				match res {
+					Ok(()) => debug::info!("Submitted TX to SC!"),
+					Err(e) => debug::error!("Some error occured: {:?}", e),
+				}
 			}
 		}
 
 		Ok(())
 	}
 
-
-	fn fetch_ddc_data_and_send_to_sc(_block_number: T::BlockNumber) -> Result<(), http::Error> {
-		let topology = Self::fetch_ddc_network_topology().map_err(|_| "Failed to fetch topology");
-
-		debug::info!("Network topology: {:?}", topology);
-
-		Ok(())
-	}
-
-//	fn get_nodes_data(topology: Vec<u32>) -> Result<u32, http::Error> {
-//		debug::warn("Topology: {}", topology)
-//	}
 
 	/// This function uses the `offchain::http` API to query data
 	/// For get method, input url and returns the JSON response as vector of bytes.
@@ -350,7 +336,7 @@ impl<T: Trait> Module<T> {
 		Ok(response_data)
 	}
 
-	fn fetch_ddc_network_topology() -> Result<(), http::Error> {
+	fn fetch_app_metrics(_block_number: T::BlockNumber) -> Result<Vec<MetricInfo>, http::Error> {
 		let mut url = T::DdcUrl::get();
 		url.extend_from_slice(HTTP_NODES.as_bytes());
 		let url = from_utf8(&url).unwrap();
@@ -475,13 +461,13 @@ impl<T: Trait> Module<T> {
 			// }
 		}
 	
-		debug::info!("Metric. agreated_result: {:?}", agreated_result);
-
-		Ok(())
+		Ok(agreated_result)
 	}
 
+    /// Prepare report_metrics call params.
+    /// Must match the contract function here: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs
     fn encode_report_metrics(
-        app_id: T::AccountId,
+        app_id: &AccountId32,
         day_start_ms: u64,
         stored_bytes: u128,
         requests: u128,
