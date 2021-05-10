@@ -15,7 +15,6 @@ use sp_runtime::{
     traits::{BlakeTwo256, Convert, Extrinsic as ExtrinsicT, IdentityLookup, Verify},
     Perbill,
 };
-use sp_std::str::FromStr;
 use std::cell::RefCell;
 
 pub type AccountId = sp_core::sr25519::Public;
@@ -150,8 +149,7 @@ parameter_types! {
 
 // Contracts for Test Runtime.
 
-use contracts::{BalanceOf, ContractAddressFor, SimpleAddressDeterminer, TrieId, TrieIdFromParentCounter, TrieIdGenerator};
-use frame_support::StorageValue;
+use contracts::{BalanceOf, SimpleAddressDeterminer, TrieIdFromParentCounter};
 
 impl contracts::Trait for Test {
     type Time = Timestamp;
