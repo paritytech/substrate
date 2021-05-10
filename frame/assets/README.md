@@ -71,6 +71,7 @@ Import the Assets module and types and derive your runtime's configuration trait
 use pallet_assets as assets;
 use frame_support::{decl_module, dispatch, ensure};
 use frame_system::ensure_signed;
+use sp_runtime::ArithmeticError;
 
 pub trait Config: assets::Config { }
 
@@ -84,7 +85,7 @@ decl_module! {
 			const COUNT_AIRDROP_RECIPIENTS: u64 = 2;
 			const TOKENS_FIXED_SUPPLY: u64 = 100;
 
-			ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), "Divide by zero error.");
+			ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), ArithmeticError::DivisionByZero);
 
 			let asset_id = Self::next_asset_id();
 

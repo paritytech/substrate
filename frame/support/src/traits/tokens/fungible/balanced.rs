@@ -20,7 +20,7 @@
 
 use super::*;
 use sp_std::marker::PhantomData;
-use sp_runtime::{TokenError, traits::{CheckedAdd, Zero}};
+use sp_runtime::{TokenError, ArithmeticError, traits::{CheckedAdd, Zero}};
 use super::super::Imbalance as ImbalanceT;
 use crate::traits::misc::{SameOrOther, TryDrop};
 use crate::dispatch::{DispatchResult, DispatchError};
@@ -221,7 +221,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		-> Result<Self::Balance, DispatchError>
 	{
 		let old_balance = Self::balance(who);
-		let new_balance = old_balance.checked_add(&amount).ok_or(TokenError::Overflow)?;
+		let new_balance = old_balance.checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
 		if new_balance < Self::minimum_balance() {
 			Err(TokenError::BelowMinimum)?
 		}

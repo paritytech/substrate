@@ -249,9 +249,6 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	B
 > where
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
-	// Rust bug: https://github.com/rust-lang/rust/issues/24159
-	<B as sc_client_api::backend::Backend<substrate_test_runtime::Block>>::State:
-		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
 	fn genesis_init_mut(&mut self) -> &mut GenesisParameters {
 		Self::genesis_init_mut(self)
