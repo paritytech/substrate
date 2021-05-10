@@ -198,7 +198,6 @@ pub mod pallet {
 
 	/// Event of atomic swap pallet.
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId", PendingSwap<T> = "PendingSwap")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Swap created. \[account, proof, swap\]

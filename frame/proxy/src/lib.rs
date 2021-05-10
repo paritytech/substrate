@@ -513,7 +513,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId", T::ProxyType = "ProxyType", CallHashOf<T> = "Hash")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config>
 	{

@@ -531,11 +531,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(
-		<T as frame_system::Config>::AccountId = "AccountId",
-		BalanceOf<T> = "Balance",
-		Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T>)> = "Vec<(AccountId, Balance)>",
-	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new term with \[new_members\]. This indicates that enough candidates existed to run

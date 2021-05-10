@@ -288,7 +288,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AuthorityId = "AuthorityId", Vec<IdentificationTuple<T>> = "Vec<IdentificationTuple>")]
 	pub enum Event<T: Config> {
 		/// A new heartbeat was received from `AuthorityId` \[authority_id\]
 		HeartbeatReceived(T::AuthorityId),

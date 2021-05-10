@@ -1495,7 +1495,6 @@ pub mod pallet_prelude {
 /// Item is defined as:
 /// ```ignore
 /// #[pallet::event]
-/// #[pallet::metadata($SomeType = "$Metadata", $SomeOtherType = "$Metadata", ..)] // Optional
 /// #[pallet::generate_deposit($visibility fn deposit_event)] // Optional
 /// pub enum Event<$some_generic> $optional_where_clause {
 /// 	/// Some doc
@@ -1509,23 +1508,6 @@ pub mod pallet_prelude {
 /// Each field must implement `Clone`, `Eq`, `PartialEq`, `Encode`, `Decode`, and `Debug` (on std
 /// only).
 /// For ease of use, bound the trait `Member` available in frame_support::pallet_prelude.
-///
-/// Variant documentations and field types are put into metadata.
-/// The attribute `#[pallet::metadata(..)]` allows to specify the metadata to put for some types.
-///
-/// The metadata of a type is defined by:
-/// * if matching a type in `#[pallet::metadata(..)]`, then the corresponding metadata.
-/// * otherwise the type stringified.
-///
-/// E.g.:
-/// ```ignore
-/// #[pallet::event]
-/// #[pallet::metadata(u32 = "SpecialU32")]
-/// pub enum Event<T: Config> {
-/// 	Proposed(u32, T::AccountId),
-/// }
-/// ```
-/// will write in event variant metadata `"SpecialU32"` and `"T::AccountId"`.
 ///
 /// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generate a helper
 /// function on `Pallet` to deposit event.
@@ -1851,8 +1833,6 @@ pub mod pallet_prelude {
 /// 	//
 /// 	// The macro generates event metadata, and derive Clone, Debug, Eq, PartialEq and Codec
 /// 	#[pallet::event]
-/// 	// Additional argument to specify the metadata to use for given type.
-/// 	#[pallet::metadata(BalanceOf<T> = "Balance", u32 = "Other")]
 /// 	// Generate a funciton on Pallet to deposit an event.
 /// 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 /// 	pub enum Event<T: Config> {
@@ -2014,7 +1994,6 @@ pub mod pallet_prelude {
 /// 	}
 ///
 /// 	#[pallet::event]
-/// 	#[pallet::metadata(BalanceOf<T> = "Balance", u32 = "Other")]
 /// 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 /// 	pub enum Event<T: Config<I>, I: 'static = ()> {
 /// 		/// doc comment put in metadata
@@ -2161,7 +2140,6 @@ pub mod pallet_prelude {
 /// 7. **migrate event**:
 /// 	rewrite as a simple enum under with the attribute `#[pallet::event]`,
 /// 	use `#[pallet::generate_deposit($vis fn deposit_event)]` to generate deposit_event,
-/// 	use `#[pallet::metadata(...)]` to configure the metadata for types in order not to break them.
 /// 8. **migrate error**: rewrite it with attribute `#[pallet::error]`.
 /// 9. **migrate storage**:
 /// 	decl_storage provide an upgrade template (see 3.). All storages, genesis config, genesis

@@ -21,7 +21,6 @@ use quote::ToTokens;
 
 /// List of additional token to be used for parsing.
 mod keyword {
-	syn::custom_keyword!(metadata);
 	syn::custom_keyword!(Event);
 	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(generate_deposit);
@@ -46,17 +45,12 @@ pub struct EventDef {
 	pub attr_span: proc_macro2::Span,
 }
 
-/// Attribute for Event: defines metadata name to use.
+/// Attribute for a pallet's Event.
 ///
 /// Syntax is:
-/// * `#[pallet::metadata(SomeType = MetadataName, ...)]`
 /// * `#[pallet::generate_deposit($vis fn deposit_event)]`
 enum PalletEventAttr {
-	Metadata {
-		metadata: Vec<(syn::Type, String)>,
-		// Span of the attribute
-		span: proc_macro2::Span,
-	},
+	// todo: [AJ] could make this just a struct now it is a single variant
 	DepositEvent {
 		fn_vis: syn::Visibility,
 		// Span for the keyword deposit_event
@@ -69,20 +63,9 @@ enum PalletEventAttr {
 impl PalletEventAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Metadata { span, .. } => *span,
 			Self::DepositEvent { span, .. } => *span,
 		}
 	}
-}
-
-/// Parse for syntax `$Type = "$SomeString"`.
-fn parse_event_metadata_element(
-	input: syn::parse::ParseStream
-) -> syn::Result<(syn::Type, String)> {
-	let typ = input.parse::<syn::Type>()?;
-	input.parse::<syn::Token![=]>()?;
-	let ident = input.parse::<syn::LitStr>()?;
-	Ok((typ, ident.value()))
 }
 
 impl syn::parse::Parse for PalletEventAttr {
@@ -94,19 +77,7 @@ impl syn::parse::Parse for PalletEventAttr {
 		content.parse::<syn::Token![::]>()?;
 
 		let lookahead = content.lookahead1();
-		if lookahead.peek(keyword::metadata) {
-			let span = content.parse::<keyword::metadata>()?.span();
-			let metadata_content;
-			syn::parenthesized!(metadata_content in content);
-
-			let metadata = metadata_content
-				.parse_terminated::<_, syn::Token![,]>(parse_event_metadata_element)?
-				.into_pairs()
-				.map(syn::punctuated::Pair::into_value)
-				.collect();
-
-			Ok(PalletEventAttr::Metadata { metadata, span })
-		} else if lookahead.peek(keyword::generate_deposit) {
+		if lookahead.peek(keyword::generate_deposit) {
 			let span = content.parse::<keyword::generate_deposit>()?.span();
 
 			let generate_content;
@@ -124,19 +95,14 @@ impl syn::parse::Parse for PalletEventAttr {
 }
 
 struct PalletEventAttrInfo {
-	// todo: [AJ] this is unused now because of TypeInfo derive for Error, consider removing if compatible with downstream clients
-	metadata: Option<Vec<(syn::Type, String)>>,
 	deposit_event: Option<(syn::Visibility, proc_macro2::Span)>,
 }
 
 impl PalletEventAttrInfo {
 	fn from_attrs(attrs: Vec<PalletEventAttr>) -> syn::Result<Self> {
-		let mut metadata = None;
 		let mut deposit_event = None;
 		for attr in attrs {
 			match attr {
-				PalletEventAttr::Metadata { metadata: m, .. } if metadata.is_none() =>
-					metadata = Some(m),
 				PalletEventAttr::DepositEvent { fn_vis, fn_span, .. } if deposit_event.is_none() =>
 					deposit_event = Some((fn_vis, fn_span)),
 				attr => {
@@ -145,7 +111,7 @@ impl PalletEventAttrInfo {
 			}
 		}
 
-		Ok(PalletEventAttrInfo { metadata, deposit_event })
+		Ok(PalletEventAttrInfo { deposit_event })
 	}
 }
 

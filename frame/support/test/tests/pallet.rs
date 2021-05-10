@@ -186,7 +186,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(BalanceOf<T> = "Balance", u32 = "Other")]
 	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event<T: Config> where T::AccountId: SomeAssociation1 + From<SomeType1>{
 		/// doc comment put in metadata

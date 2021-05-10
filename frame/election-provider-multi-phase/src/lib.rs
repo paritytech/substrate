@@ -792,7 +792,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(<T as frame_system::Config>::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
