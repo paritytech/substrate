@@ -154,7 +154,7 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	DispatchResult, DispatchError, RuntimeDebug,
+	DispatchResult, DispatchError, ArithmeticError, RuntimeDebug,
 	traits::{Zero, Hash, Dispatchable, Saturating, Bounded},
 };
 use codec::{Encode, Decode, Input};
@@ -510,10 +510,6 @@ decl_error! {
 		NoPermission,
 		/// The account is already delegating.
 		AlreadyDelegating,
-		/// An unexpected integer overflow occurred.
-		Overflow,
-		/// An unexpected integer underflow occurred.
-		Underflow,
 		/// Too high a balance was provided that the account cannot afford.
 		InsufficientFunds,
 		/// The account is not currently delegating.
@@ -1252,7 +1248,7 @@ impl<T: Config> Module<T> {
 				match votes.binary_search_by_key(&ref_index, |i| i.0) {
 					Ok(i) => {
 						// Shouldn't be possible to fail, but we handle it gracefully.
-						status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
+						status.tally.remove(votes[i].1).ok_or(ArithmeticError::Underflow)?;
 						if let Some(approve) = votes[i].1.as_standard() {
 							status.tally.reduce(approve, *delegations);
 						}
@@ -1264,7 +1260,7 @@ impl<T: Config> Module<T> {
 					}
 				}
 				// Shouldn't be possible to fail, but we handle it gracefully.
-				status.tally.add(vote).ok_or(Error::<T>::Overflow)?;
+				status.tally.add(vote).ok_or(ArithmeticError::Overflow)?;
 				if let Some(approve) = vote.as_standard() {
 					status.tally.increase(approve, *delegations);
 				}
@@ -1300,7 +1296,7 @@ impl<T: Config> Module<T> {
 					Some(ReferendumInfo::Ongoing(mut status)) => {
 						ensure!(matches!(scope, UnvoteScope::Any), Error::<T>::NoPermission);
 						// Shouldn't be possible to fail, but we handle it gracefully.
-						status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
+						status.tally.remove(votes[i].1).ok_or(ArithmeticError::Underflow)?;
 						if let Some(approve) = votes[i].1.as_standard() {
 							status.tally.reduce(approve, *delegations);
 						}
