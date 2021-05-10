@@ -52,6 +52,18 @@ fn test_contract_api() {
     assert_eq!(REPORT_METRICS_SELECTOR.to_vec(), selector);
 }
 
+#[test]
+fn test_encode_report_metrics() {
+    let call_data = ExampleOffchainWorker::encode_report_metrics(AccountId::from_raw([2; 32]), 3, 4, 5);
+    assert_eq!(call_data, vec![
+        53, 50, 11, 190, // Selector
+        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 32 bytes, app_id
+        3, 0, 0, 0, 0, 0, 0, 0, // 8 bytes, day_start_ms
+        4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, stored_bytes
+        5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, requests
+    ]);
+}
+
 fn build_ext() -> sp_io::TestExternalities {
     build_ext_for_contracts()
 }
