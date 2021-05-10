@@ -20,6 +20,7 @@
 
 use crate::errors;
 use jsonrpc_core as rpc;
+use jsonrpsee_types::error::CallError;
 use sp_runtime::transaction_validity::InvalidTransaction;
 
 /// Author RPC Result type.
@@ -34,7 +35,6 @@ pub enum Error {
 	/// Client error.
 	#[display(fmt="Client error: {}", _0)]
 	#[from(ignore)]
-	// TODO: is it ok to make this `Sync`? (doesn't fix my problem but maybe it fixes something else...)
 	Client(Box<dyn std::error::Error + Send + Sync>),
 	/// Transaction pool error,
 	#[display(fmt="Transaction pool error: {}", _0)]
@@ -181,5 +181,11 @@ impl From<Error> for rpc::Error {
 			Error::UnsafeRpcCalled(e) => e.into(),
 			e => errors::internal(e),
 		}
+	}
+}
+
+impl From<Error> for CallError {
+	fn from(e: Error) -> Self {
+		Self::Failed(Box::new(e))
 	}
 }

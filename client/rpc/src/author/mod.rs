@@ -122,12 +122,20 @@ impl<P, Client> Author<P, Client>
 				&generic::BlockId::Hash(best_block_hash),
 				session_keys.to_vec(),
 			).map_err(|e| RpseeCallError::Failed(Box::new(e)))?
-			// TODO: this should be a RpseeCallError::Failed(Box::new(Error::InvalidSessionKeys))) but something is making it not-`Sync`
-			.ok_or_else(|| RpseeCallError::Failed(Box::new(Error::InvalidSessionKeys)))?;
-			// .ok_or_else(|| RpseeCallError::InvalidParams)?;
+			.ok_or_else(|| Error::InvalidSessionKeys)?;
 
 			Ok(SyncCryptoStore::has_keys(&*author.keystore, &keys))
-		});
+		})?;
+
+		rpc_module.register_method("author_insertKey", |params, author| {
+			log::info!("author_insertKey [{:?}]", params);
+			author.deny_unsafe.check_if_safe()?;
+			let (key_type, suri, public): (String, String, Bytes) = params.parse()?;
+			let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
+			SyncCryptoStore::insert_unknown(&*author.keystore, key_type, &suri, &public[..])
+				.map_err(|_| Error::KeyStoreUnavailable)?;
+			Ok(())
+		})?;
 
 		Ok(rpc_module.into_module())
 	}
