@@ -150,41 +150,112 @@ mod test {
 	// use crate::testing::TaskExecutor;
 	use sc_rpc::{chain::{new_full, ChainApi}, testing::TaskExecutor};
 
+	use sp_io::TestExternalities;
+	use sp_core::offchain::{
+		OffchainWorkerExt,
+		testing,
+	};
+
 	#[test]
 	fn should_return_rpc_response() {
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
-		let request = Request {
-			jsonrpc: "2.0",
-			id: 1,
-			method: "chain_getFinalizedHead",
-			params: Vec::new(),
-			timeout: 3_000,
-			url: "http://localhost:9933"
-		};
+		let (offchain, state) = testing::TestOffchainExt::new();
+		let mut t = TestExternalities::default();
+		t.register_extension(OffchainWorkerExt::new(offchain));
 
-		let rpc_response = request.send();
+		// const RPC_REQUEST_URL: &str = "http://localhost:9933";
+		const RPC_REQUEST_URL: &str = "http://localhost:9933";
+		const TIMEOUT_PERIOD: u64 = 3_000;
+		// const JSONRPC: &str = "2.0";
+		const RPC_METHOD: &str = "chain_getFinalizedHead";
+		const EXPECTED_RESULT: &[u8] = b"0x3141e6406e195803b0f367c4c6aacc0673a5432f3ec010afae602ff09998123b";
 
-		match rpc_response {
-			Ok(response) => {
-				if !response.result.is_empty() {
-					// log::info!("Rpc call result: {:?}", str::from_utf8(&response.result).unwrap());
-					let finalized_hash_str = str::from_utf8(&response.result[2..]).unwrap();
-					let finalized_hash = hex::decode(finalized_hash_str).ok().unwrap();
+		let request_body = json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": RPC_METHOD,
+			"params": Vec::<&str>::new()
+		});
 
-					assert_eq!(api.finalized_head().ok().unwrap(), H256::from_slice(&finalized_hash[0..32]));
-				} else {
-					log::error!("Rpc call error: code: {:?}, message: {:?}",
-									response.error.code,
-									str::from_utf8(&response.error.message).unwrap()
-								);
-				}
-			},
-			Err(e) => {
-				log::error!("Rpc call error: {:?}", e);
-			}
+		let mut body: Vec<&[u8]> = Vec::new();
+		let request_body_slice: &[u8] = &(serde_json::to_vec(&request_body).unwrap())[..];
+
+		{
+			let mut state = state.write();
+
+			state.expect_request(testing::PendingRequest {
+				method: "POST".into(),
+				uri: RPC_REQUEST_URL.into(),
+				body: request_body_slice.to_vec(),
+				headers: vec![("Content-Type".to_string(), "application/json;charset=utf-8".to_string())],
+				response: Some(br#"{"jsonrpc":"2.0","result":"0x3141e6406e195803b0f367c4c6aacc0673a5432f3ec010afae602ff09998123b","id":1}"#.to_vec()),
+				sent: true,
+				..Default::default()
+			});
 		}
+
+		t.execute_with(|| {
+
+
+			// let pending = http::Request::default()
+			// 	.method(http::Method::Post)
+			// 	.url("http://localhost:1234")
+			// 	.body(vec![request_body_slice])
+			// 	.send()
+			// 	.unwrap();
+
+			// state.write().fulfill_pending_request(
+			// 	1,
+			// 	testing::PendingRequest {
+			// 		method: "POST".into(),
+			// 		uri: RPC_REQUEST_URL.into(),
+			// 		body: request_body_slice.to_vec(),
+			// 		sent: true,
+			// 		..Default::default()
+			// 	},
+			// 	request_body_slice.to_vec(),
+			// 	None,
+			// );
+
+			let request = Request {
+				jsonrpc: "2.0",
+				id: 1,
+				method: RPC_METHOD,
+				params: Vec::new(),
+				timeout: TIMEOUT_PERIOD,
+				url: RPC_REQUEST_URL
+			};
+
+			let rpc_response = request.send();
+
+			match rpc_response {
+				Ok(response) => {
+					if !response.result.is_empty() {
+						// log::info!("Rpc call result: {:?}", str::from_utf8(&response.result).unwrap());
+						let finalized_hash_str = str::from_utf8(&response.result[2..]).unwrap();
+						let finalized_hash = hex::decode(finalized_hash_str).ok().unwrap();
+
+						let expected_finalized_hash_str = str::from_utf8(&EXPECTED_RESULT[2..]).unwrap();
+						let expected_finalized_hash = hex::decode(expected_finalized_hash_str).ok().unwrap();
+
+						assert_eq!(
+							H256::from_slice(&expected_finalized_hash[0..32]),
+							H256::from_slice(&finalized_hash[0..32])
+						);
+					} else {
+						log::error!("Rpc call error: code: {:?}, message: {:?}",
+										response.error.code,
+										str::from_utf8(&response.error.message).unwrap()
+									);
+					}
+				},
+				Err(e) => {
+					log::error!("Rpc call error: {:?}", e);
+				}
+			}
+		})
 
 		// log::debug!("=============== TEST ================= {:?}", api.finalized_head());
 
