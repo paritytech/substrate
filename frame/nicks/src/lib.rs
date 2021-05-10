@@ -141,7 +141,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(50_000_000)]
-		pub(super) fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub(super) fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
@@ -158,7 +158,7 @@ pub mod pallet {
 			};
 
 			<NameOf<T>>::insert(&sender, (name, deposit));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Clear an account's name and return the deposit. Fails if the account was not named.
@@ -172,7 +172,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(70_000_000)]
-		pub(super) fn clear_name(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub(super) fn clear_name(origin: OriginFor<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			let deposit = <NameOf<T>>::take(&sender).ok_or(Error::<T>::Unnamed)?.1;
@@ -181,7 +181,7 @@ pub mod pallet {
 			debug_assert!(err_amount.is_zero());
 
 			Self::deposit_event(Event::<T>::NameCleared(sender, deposit));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove an account's name and take charge of the deposit.
@@ -201,7 +201,7 @@ pub mod pallet {
 		pub(super) fn kill_name(
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			// Figure out who we're meant to be clearing.
@@ -212,7 +212,7 @@ pub mod pallet {
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit.clone()).0);
 
 			Self::deposit_event(Event::<T>::NameKilled(target, deposit));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set a third-party account's name with no deposit.
@@ -232,7 +232,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source,
 			name: Vec<u8>
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			let target = T::Lookup::lookup(target)?;
@@ -240,7 +240,7 @@ pub mod pallet {
 			<NameOf<T>>::insert(&target, (name, deposit));
 
 			Self::deposit_event(Event::<T>::NameForced(target));
-			Ok(().into())
+			Ok(())
 		}
 	}
 }
