@@ -19,7 +19,6 @@
 //! Blockchain API backend for full nodes.
 
 use std::sync::Arc;
-use jsonrpc_pubsub::manager::SubscriptionManager;
 
 use sc_client_api::{BlockchainEvents, BlockBackend};
 use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
@@ -32,18 +31,15 @@ use sp_blockchain::HeaderBackend;
 pub struct FullChain<Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
-	/// Current subscriptions.
-	subscriptions: SubscriptionManager,
 	/// phantom member to pin the block type
 	_phantom: PhantomData<Block>,
 }
 
 impl<Block: BlockT, Client> FullChain<Block, Client> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client>, subscriptions: SubscriptionManager) -> Self {
+	pub fn new(client: Arc<Client>) -> Self {
 		Self {
 			client,
-			subscriptions,
 			_phantom: PhantomData,
 		}
 	}
@@ -56,10 +52,6 @@ impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> whe
 {
 	fn client(&self) -> &Arc<Client> {
 		&self.client
-	}
-
-	fn subscriptions(&self) -> &SubscriptionManager {
-		&self.subscriptions
 	}
 
 	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, StateError> {

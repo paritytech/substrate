@@ -207,25 +207,27 @@ impl<T: ChainInfo> Node<T> {
 			.spawn("manual-seal", authorship_future);
 
 		network_starter.start_network();
-		let rpc_handler = rpc_handlers.io_handler();
-		let initial_number = client.info().best_number;
-
-		Ok(Self {
-			rpc_handler,
-			_task_manager: Some(task_manager),
-			_runtime: tokio_runtime,
-			client,
-			pool: transaction_pool,
-			backend,
-			log_stream,
-			manual_seal_command_sink: command_sink,
-			initial_block_number: initial_number,
-		})
+		todo!();
+		// let rpc_handler = rpc_handlers.io_handler();
+		// let initial_number = client.info().best_number;
+		//
+		// Ok(Self {
+		//	rpc_handler,
+		//	task_manager: Some(task_manager),
+		//	_runtime: tokio_runtime,
+		//	client,
+		//	pool: transaction_pool,
+		//	backend,
+		//	log_stream,
+		//	manual_seal_command_sink: command_sink,
+		//	initial_block_number: initial_number,
+		// })
 	}
 
 	/// Returns a reference to the rpc handlers.
 	pub fn rpc_handler(&self) -> Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
-		self.rpc_handler.clone()
+		todo!();
+		// self.rpc_handler.clone()
 	}
 
 	/// Return a reference to the Client

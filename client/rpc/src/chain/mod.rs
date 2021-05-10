@@ -25,16 +25,14 @@ mod chain_light;
 mod tests;
 
 use std::sync::Arc;
-use futures::{future, StreamExt, TryStreamExt};
-use log::warn;
-use rpc::{
-	Result as RpcResult,
-	futures::{stream, Future, Sink, Stream},
-};
+use std::marker::PhantomData;
 
+use futures::{
+	future::{self, Either},
+	StreamExt
+};
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
-use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_ws_server::{RpcModule, RpcContextModule, SubscriptionSink};
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
@@ -57,9 +55,6 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 {
 	/// Get client reference.
 	fn client(&self) -> &Arc<Client>;
-
-	/// Get subscriptions reference.
-	fn subscriptions(&self) -> &SubscriptionManager;
 
 	/// Tries to unwrap passed block hash, or uses best block hash otherwise.
 	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
@@ -106,105 +101,24 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	fn finalized_head(&self) -> Result<Block::Hash, StateError> {
 		Ok(self.client().info().finalized_hash)
 	}
-
-	/// All new head subscription
-	fn subscribe_all_heads(
-		&self,
-		_metadata: crate::Metadata,
-		subscriber: Subscriber<Block::Header>,
-	) {
-		subscribe_headers(
-			self.client(),
-			self.subscriptions(),
-			subscriber,
-			|| self.client().info().best_hash,
-			|| self.client().import_notification_stream()
-				.map(|notification| Ok::<_, ()>(notification.header))
-				.compat(),
-		)
-	}
-
-	/// Unsubscribe from all head subscription.
-	fn unsubscribe_all_heads(
-		&self,
-		_metadata: Option<crate::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		Ok(self.subscriptions().cancel(id))
-	}
-
-	/// New best head subscription
-	fn subscribe_new_heads(
-		&self,
-		_metadata: crate::Metadata,
-		subscriber: Subscriber<Block::Header>,
-	) {
-		subscribe_headers(
-			self.client(),
-			self.subscriptions(),
-			subscriber,
-			|| self.client().info().best_hash,
-			|| self.client().import_notification_stream()
-				.filter(|notification| future::ready(notification.is_new_best))
-				.map(|notification| Ok::<_, ()>(notification.header))
-				.compat(),
-		)
-	}
-
-	/// Unsubscribe from new best head subscription.
-	fn unsubscribe_new_heads(
-		&self,
-		_metadata: Option<crate::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		Ok(self.subscriptions().cancel(id))
-	}
-
-	/// Finalized head subscription
-	fn subscribe_finalized_heads(
-		&self,
-		_metadata: crate::Metadata,
-		subscriber: Subscriber<Block::Header>,
-	) {
-		subscribe_headers(
-			self.client(),
-			self.subscriptions(),
-			subscriber,
-			|| self.client().info().finalized_hash,
-			|| self.client().finality_notification_stream()
-				.map(|notification| Ok::<_, ()>(notification.header))
-				.compat(),
-		)
-	}
-
-	/// Unsubscribe from finalized head subscription.
-	fn unsubscribe_finalized_heads(
-		&self,
-		_metadata: Option<crate::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		Ok(self.subscriptions().cancel(id))
-	}
 }
 
 /// Create new state API that works on full node.
 pub fn new_full<Block: BlockT, Client>(
 	client: Arc<Client>,
-	subscriptions: SubscriptionManager,
 ) -> Chain<Block, Client>
 	where
 		Block: BlockT + 'static,
 		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	Chain {
-		backend: Box::new(self::chain_full::FullChain::new(client, subscriptions)),
+		backend: Box::new(self::chain_full::FullChain::new(client)),
 	}
 }
 
 /// Create new state API that works on light node.
 pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
-	subscriptions: SubscriptionManager,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 ) -> Chain<Block, Client>
@@ -216,7 +130,6 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 	Chain {
 		backend: Box::new(self::chain_light::LightChain::new(
 			client,
-			subscriptions,
 			remote_blockchain,
 			fetcher,
 		)),
@@ -233,10 +146,11 @@ where
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 {
 	/// Convert a [`Chain`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
-	pub fn into_rpc_module(self) -> Result<RpcModule, JsonRpseeError> {
-		let mut rpc_module = RpcContextModule::new(self);
+	pub fn into_rpc_module(self) -> Result<(RpcModule, ChainSubSinks<Block, Client>), JsonRpseeError> {
+		let client = self.backend.client().clone();
+		let mut ctx_module = RpcContextModule::new(self);
 
-		rpc_module.register_method("chain_getHeader", |params, chain| {
+		ctx_module.register_method("chain_getHeader", |params, chain| {
 			log::info!("chain_getBlock [{:?}]", params);
 			// TODO: make is possible to register async methods on jsonrpsee servers.
 			//https://github.com/paritytech/jsonrpsee/issues/291
@@ -246,7 +160,7 @@ where
 			futures::executor::block_on(chain.header(Some(hash))).map_err(rpc_err)
 		})?;
 
-		rpc_module.register_method("chain_getBlock", |params, chain| {
+		ctx_module.register_method("chain_getBlock", |params, chain| {
 			log::info!("chain_getBlock [{:?}]", params);
 			// TODO: make is possible to register async methods on jsonrpsee servers.
 			//https://github.com/paritytech/jsonrpsee/issues/291
@@ -256,27 +170,27 @@ where
 			futures::executor::block_on(chain.block(Some(hash))).map_err(rpc_err)
 		})?;
 
-		rpc_module.register_method("chain_getBlockHash", |params, chain| {
+		ctx_module.register_method("chain_getBlockHash", |params, chain| {
 			log::info!("chain_getBlockHash [{:?}]", params);
 			let hash = params.one()?;
 			chain.block_hash(hash).map_err(rpc_err)
 		})?;
 
-		rpc_module.register_method("chain_getFinalizedHead", |_, chain| {
+		ctx_module.register_method("chain_getFinalizedHead", |_, chain| {
 			log::info!("chain_getFinalizedHead []");
 			chain.finalized_head().map_err(rpc_err)
 		})?;
 
-		// TODO(jsonrpsee): register subscriptions on RpcContextModule
-		// or should they be registrered elsewhere?!
-		// let mut all_heads_sub = server.register_subscription("chain_subscribeallheads", "chain_subscribeallheads").unwrap();
-		// let mut new_heads_sub = server.register_subscription("chain_subscribeNewHeads", "chain_unsubscribeAllHeads").unwrap();
-		// let mut finalized_head_sub = server.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads").unwrap();
-		//
-		//	std::thread::spawn(move || loop {
-		//		subscription.send(&"hello my friend").unwrap();
-		//  });
-		Ok(rpc_module.into_module())
+		let mut rpc_module = ctx_module.into_module();
+
+		let all_heads = rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads").unwrap();
+		let new_heads = rpc_module.register_subscription("chain_subscribeNewHeads", "chain_unsubscribeNewHeads").unwrap();
+		let finalized_heads = rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads").unwrap();
+		// TODO: wrap the different sinks in a new-type error prone with three params with
+		// the same type.
+		let subs = ChainSubSinks::new(new_heads, all_heads, finalized_heads, client);
+
+		Ok((rpc_module, subs))
 	}
 
 	/// TODO: document this
@@ -311,50 +225,66 @@ where
 	}
 }
 
-/// Subscribe to new headers.
-fn subscribe_headers<Block, Client, F, G, S, ERR>(
-	client: &Arc<Client>,
-	subscriptions: &SubscriptionManager,
-	subscriber: Subscriber<Block::Header>,
-	best_block_hash: G,
-	stream: F,
-) where
-	Block: BlockT + 'static,
-	Client: HeaderBackend<Block> + 'static,
-	F: FnOnce() -> S,
-	G: FnOnce() -> Block::Hash,
-	ERR: ::std::fmt::Debug,
-	S: Stream<Item=Block::Header, Error=ERR> + Send + 'static,
-{
-	subscriptions.add(subscriber, |sink| {
-		// send current head right at the start.
-		let header = client.header(BlockId::Hash(best_block_hash()))
-			.map_err(client_err)
-			.and_then(|header| {
-				header.ok_or_else(|| "Best header missing.".to_owned().into())
-			})
-			.map_err(Into::into);
-
-		// send further subscriptions
-		let stream = stream()
-			.map(|res| Ok(res))
-			.map_err(|e| warn!("Block notification stream error: {:?}", e));
-
-		sink
-			.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-			.send_all(
-				stream::iter_result(vec![Ok(header)])
-					.chain(stream)
-			)
-			// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
-			.map(|_| ())
-	});
-}
-
 fn client_err(err: sp_blockchain::Error) -> StateError {
 	StateError::Client(Box::new(err))
 }
 
 fn rpc_err(err: StateError) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(err))
+}
+
+/// Possible subscriptions for the chain RPC API.
+pub struct ChainSubSinks<Block, Client> {
+	new_heads: SubscriptionSink,
+	all_heads: SubscriptionSink,
+	finalized_heads: SubscriptionSink,
+	client: Arc<Client>,
+	marker: PhantomData<Block>,
+}
+
+impl<Block: BlockT, Client> ChainSubSinks<Block, Client>
+where
+	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+{
+	/// Create new Chain subscription that needs to be spawned.
+	pub fn new(
+		new_heads: SubscriptionSink,
+		all_heads: SubscriptionSink,
+		finalized_heads: SubscriptionSink,
+		client: Arc<Client>
+	) -> Self {
+		Self { new_heads, all_heads, finalized_heads, client, marker: PhantomData }
+	}
+
+	/// Start subscribe to chain events.
+	pub async fn subscribe(mut self) {
+		// Send current head at the start.
+		let best_head = self.client.header(BlockId::Hash(self.client.info().best_hash)).expect("header is known; qed");
+		let finalized_header = self.client.header(BlockId::Hash(self.client.info().finalized_hash)).expect("header is known; qed");
+		let _ = self.all_heads.send(&best_head);
+		let _ = self.new_heads.send(&best_head);
+		let _ = self.finalized_heads.send(&finalized_header);
+
+		let mut import_stream = self.client.import_notification_stream();
+		let mut finality_stream = self.client.finality_notification_stream();
+
+		loop {
+			let import_next = import_stream.next();
+			let finality_next = finality_stream.next();
+			futures::pin_mut!(import_next, finality_next);
+
+			match future::select(import_next, finality_next).await {
+				Either::Left((Some(import), _)) => {
+					let _ = self.all_heads.send(&import.header);
+					let _ = self.new_heads.send(&import.header);
+				}
+				Either::Right((Some(finality), _)) => {
+					let _ = self.finalized_heads.send(&finality.header);
+				}
+				// Silently just terminate the task; should not happen because the
+				// chain streams should be alive as long as the node runs.
+				_ => return,
+			}
+		}
+	}
 }

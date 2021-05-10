@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, MallocSizeOfWasm, RpcHandlers, NetworkStatusSinks,
+	error::Error, MallocSizeOfWasm, NetworkStatusSinks,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
@@ -32,7 +32,6 @@ use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator, Chain},
 	import_queue::ImportQueue,
 };
-use jsonrpc_pubsub::manager::SubscriptionManager;
 use futures::{
 	FutureExt, StreamExt,
 	future::ready,
@@ -547,7 +546,7 @@ pub fn build_offchain_workers<TBl, TCl>(
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-) -> Result<RpcHandlers, Error>
+) -> Result<(), Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
@@ -644,17 +643,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		)
 	);
 
-	// RPC
-	let gen_handler = |
-		deny_unsafe: sc_rpc::DenyUnsafe,
-		rpc_middleware: sc_rpc_server::RpcMiddleware
-	| gen_handler(
-		deny_unsafe, rpc_middleware, &config, task_manager.spawn_handle(),
-		client.clone(), transaction_pool.clone(), keystore.clone(),
-		on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
-		backend.offchain_storage(), system_rpc_tx.clone()
-	);
-
 	// jsonrpsee RPC
 	let gen_rpc_module = |deny_unsafe: sc_rpc::DenyUnsafe| {
 		gen_rpc_module(
@@ -668,12 +656,13 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	};
 
 	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
-	let rpc = start_rpc_servers(&config, gen_handler, gen_rpc_module, rpc_metrics.clone())?;
+	// TODO: use handle here and let the service spawn the server.
+	let _rpc = start_rpc_servers(&config, gen_rpc_module, rpc_metrics.clone())?;
 	// This is used internally, so don't restrict access to unsafe RPC
-	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
-		sc_rpc::DenyUnsafe::No,
-		sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser")
-	).into()));
+	// let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
+	//     sc_rpc::DenyUnsafe::No,
+	//     sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser")
+	// ).into()));
 
 	// Spawn informant task
 	spawn_handle.spawn("informant", sc_informant::build(
@@ -683,9 +672,9 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.informant_output_format,
 	));
 
-	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
+	// task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
 
-	Ok(rpc_handlers)
+	Ok(())
 }
 
 async fn transaction_notifications<TBl, TExPool>(
@@ -764,150 +753,28 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 			sp_api::Metadata<TBl>,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
+
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
-	let subscriptions = SubscriptionManager::new(Arc::new(task_executor.clone()));
-
-	let (chain, _state, _child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
-		(remote_blockchain, on_demand) {
-		// Light clients
-		let chain = sc_rpc::chain::new_light(
-			client.clone(),
-			subscriptions.clone(),
-			remote_blockchain.clone(),
-			on_demand.clone(),
-		);
-		let (state, child_state) = sc_rpc::state::new_light(
-			client.clone(),
-			subscriptions.clone(),
-			remote_blockchain.clone(),
-			on_demand,
-			deny_unsafe,
-		);
-		(chain, state, child_state)
-
-	} else {
-		// Full nodes
-		let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
-		let (state, child_state) = sc_rpc::state::new_full(
-			client.clone(),
-			subscriptions.clone(),
-			deny_unsafe,
-		);
-		(chain, state, child_state)
-	};
-
-
+	let chain = sc_rpc::chain::new_full(client.clone());
 	let author = sc_rpc::author::Author::new(
 		client,
 		transaction_pool,
-		subscriptions,
 		keystore,
 		deny_unsafe,
 	);
+	// TODO(niklasad1): add remaining RPC API's here
 
-	let mut modules = Vec::new();
-	// TODO: get rid of this uglyness.
-    modules.push(chain.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?"));
-	modules.push(author.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?"));
+	let mut rpc_api = Vec::new();
+	// TODO: get rid of expect!.
+	let (chain_rpc, chain_subs) = chain.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?");
+	let author_rpc = author.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?");
 
-	modules
-}
+	rpc_api.push(chain_rpc);
+	rpc_api.push(author_rpc);
 
-fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
-	deny_unsafe: sc_rpc::DenyUnsafe,
-	rpc_middleware: sc_rpc_server::RpcMiddleware,
-	config: &Configuration,
-	spawn_handle: SpawnTaskHandle,
-	client: Arc<TCl>,
-	transaction_pool: Arc<TExPool>,
-	keystore: SyncCryptoStorePtr,
-	on_demand: Option<Arc<OnDemand<TBl>>>,
-	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
-	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
-	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
-	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>
-) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
-	where
-		TBl: BlockT,
-		TCl: ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + HeaderBackend<TBl> +
-		HeaderMetadata<TBl, Error=sp_blockchain::Error> + ExecutorProvider<TBl> +
-		CallApiAt<TBl> + ProofProvider<TBl> +
-		StorageProvider<TBl, TBackend> + BlockBackend<TBl> + Send + Sync + 'static,
-		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
-		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
-		TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-		<TCl as ProvideRuntimeApi<TBl>>::Api:
-			sp_session::SessionKeys<TBl> +
-			sp_api::Metadata<TBl>,
-{
-	use sc_rpc::{chain, state, author, system, offchain};
+	task_executor.execute_new(Box::pin(chain_subs.subscribe()));
 
-	let system_info = sc_rpc::system::SystemInfo {
-		chain_name: config.chain_spec.name().into(),
-		impl_name: config.impl_name.clone(),
-		impl_version: config.impl_version.clone(),
-		properties: config.chain_spec.properties(),
-		chain_type: config.chain_spec.chain_type(),
-	};
-
-	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
-	let subscriptions = SubscriptionManager::new(Arc::new(task_executor.clone()));
-
-	let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
-		(remote_blockchain, on_demand) {
-		// Light clients
-		let chain = sc_rpc::chain::new_light(
-			client.clone(),
-			subscriptions.clone(),
-			remote_blockchain.clone(),
-			on_demand.clone(),
-		);
-		let (state, child_state) = sc_rpc::state::new_light(
-			client.clone(),
-			subscriptions.clone(),
-			remote_blockchain.clone(),
-			on_demand,
-			deny_unsafe,
-		);
-		(chain, state, child_state)
-
-	} else {
-		// Full nodes
-		let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
-		let (state, child_state) = sc_rpc::state::new_full(
-			client.clone(),
-			subscriptions.clone(),
-			deny_unsafe,
-		);
-		(chain, state, child_state)
-	};
-
-	let author = sc_rpc::author::Author::new(
-		client,
-		transaction_pool,
-		subscriptions,
-		keystore,
-		deny_unsafe,
-	);
-	let system = system::System::new(system_info, system_rpc_tx, deny_unsafe);
-
-	let maybe_offchain_rpc = offchain_storage.map(|storage| {
-		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe);
-		offchain::OffchainApi::to_delegate(offchain)
-	});
-
-	sc_rpc_server::rpc_handler(
-		(
-			state::StateApi::to_delegate(state),
-			state::ChildStateApi::to_delegate(child_state),
-			// chain::ChainApi::to_delegate(chain),
-			maybe_offchain_rpc,
-			author::AuthorApi::to_delegate(author),
-			system::SystemApi::to_delegate(system),
-			rpc_extensions_builder.build(deny_unsafe, task_executor),
-		),
-		rpc_middleware
-	)
+	rpc_api
 }
 
 /// Parameters to pass into `build_network`.

@@ -19,7 +19,6 @@
 //! Blockchain API backend for light nodes.
 
 use std::sync::Arc;
-use jsonrpc_pubsub::manager::SubscriptionManager;
 
 use sc_client_api::light::{Fetcher, RemoteBodyRequest, RemoteBlockchain};
 use sp_runtime::{
@@ -36,8 +35,6 @@ use sc_client_api::BlockchainEvents;
 pub struct LightChain<Block: BlockT, Client, F> {
 	/// Substrate client.
 	client: Arc<Client>,
-	/// Current subscriptions.
-	subscriptions: SubscriptionManager,
 	/// Remote blockchain reference
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	/// Remote fetcher reference.
@@ -48,13 +45,11 @@ impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
 	/// Create new Chain API RPC handler.
 	pub fn new(
 		client: Arc<Client>,
-		subscriptions: SubscriptionManager,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
 	) -> Self {
 		Self {
 			client,
-			subscriptions,
 			remote_blockchain,
 			fetcher,
 		}
@@ -69,10 +64,6 @@ impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client,
 {
 	fn client(&self) -> &Arc<Client> {
 		&self.client
-	}
-
-	fn subscriptions(&self) -> &SubscriptionManager {
-		&self.subscriptions
 	}
 
 	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, StateError> {

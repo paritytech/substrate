@@ -48,8 +48,14 @@ impl SubscriptionTaskExecutor {
 	pub fn new(spawn: impl SpawnNamed + 'static) -> Self {
 		Self(Arc::new(spawn))
 	}
+
+	/// Execute task on executor.
+	pub fn execute_new(&self, fut: futures::future::BoxFuture<'static, ()>) {
+		let _ = self.0.spawn("substrate-rpc-subscriber", fut);
+	}
 }
 
+// TODO(niklasad1): remove, kept for now to make it compile ^^
 impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SubscriptionTaskExecutor {
 	fn execute(
 		&self,

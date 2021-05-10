@@ -388,12 +388,9 @@ mod waiting {
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
-	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
-	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	R: FnMut(sc_rpc::DenyUnsafe) -> Vec<jsonrpsee_ws_server::RpcModule>,
 >(
 	config: &Configuration,
-	mut gen_handler: H,
 	mut gen_rpc_module: R,
 	rpc_metrics: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -444,38 +441,7 @@ fn start_rpc_servers<
 			_ => sc_rpc::DenyUnsafe::Yes
 		}
 	}
-
-	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
-			&*path, gen_handler(
-				sc_rpc::DenyUnsafe::No,
-				sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc")
-			)
-		)),
-		maybe_start_server(
-			config.rpc_http,
-			|address| sc_rpc_server::start_http(
-				address,
-				config.rpc_cors.as_ref(),
-				gen_handler(
-					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http")
-				),
-			),
-		)?.map(|s| waiting::HttpServer(Some(s))),
-		maybe_start_server(
-			config.rpc_ws,
-			|address| sc_rpc_server::start_ws(
-				address,
-				config.rpc_ws_max_connections,
-				config.rpc_cors.as_ref(),
-				gen_handler(
-					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws")
-				),
-			),
-		)?.map(|s| waiting::WsServer(Some(s))),
-	)))
+	Ok(Box::new(()))
 }
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
