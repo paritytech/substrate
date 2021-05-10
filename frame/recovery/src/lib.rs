@@ -202,6 +202,7 @@ pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 pub mod pallet {
 	use frame_support::{ensure, Parameter, pallet_prelude::*, traits::Get};
 	use frame_system::{pallet_prelude::*, ensure_signed, ensure_root};
+	use sp_runtime::ArithmeticError;
 	use super::*;
 
 	#[pallet::pallet]
@@ -301,8 +302,6 @@ pub mod pallet {
 		Threshold,
 		/// There are still active recovery attempts that need to be closed
 		StillActive,
-		/// There was an overflow in a calculation
-		Overflow,
 		/// This account is already set up for recovery
 		AlreadyProxy,
 		/// Some internal state is broken.
@@ -452,10 +451,10 @@ pub mod pallet {
 			// Total deposit is base fee + number of friends * factor fee
 			let friend_deposit = T::FriendDepositFactor::get()
 				.checked_mul(&friends.len().saturated_into())
-				.ok_or(Error::<T>::Overflow)?;
+				.ok_or(ArithmeticError::Overflow)?;
 			let total_deposit = T::ConfigDepositBase::get()
 				.checked_add(&friend_deposit)
-				.ok_or(Error::<T>::Overflow)?;
+				.ok_or(ArithmeticError::Overflow)?;
 			// Reserve the deposit
 			T::Currency::reserve(&who, total_deposit)?;
 			// Create the recovery configuration
@@ -597,7 +596,7 @@ pub mod pallet {
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
 			let recoverable_block_number = active_recovery.created
 				.checked_add(&recovery_config.delay_period)
-				.ok_or(Error::<T>::Overflow)?;
+				.ok_or(ArithmeticError::Overflow)?;
 			ensure!(recoverable_block_number <= current_block_number, Error::<T>::DelayPeriod);
 			// Make sure the threshold is met
 			ensure!(
