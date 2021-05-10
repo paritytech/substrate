@@ -101,10 +101,9 @@ impl RuntimeBlob {
 	pub fn custom_section_contents(&self, section_name: &str) -> Option<&[u8]> {
 		self.raw_module
 			.custom_sections()
-			.filter(|cs| cs.name() == section_name)
-			.next()
+			.find(|cs| cs.name() == section_name)
 			.map(|cs| cs.payload())
-	}
+		}
 
 	/// Consumes this runtime blob and serializes it.
 	pub fn serialize(self) -> Vec<u8> {
