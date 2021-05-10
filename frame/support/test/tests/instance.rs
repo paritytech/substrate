@@ -401,8 +401,8 @@ fn expected_metadata() -> StorageMetadata {
 			{
 				name: "Value",
 				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
-				default: vec![0],
+				ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+				default: vec![0, 0, 0, 0],
 				documentation: vec![],
 			},
 			StorageEntryMetadata {
@@ -414,7 +414,7 @@ fn expected_metadata() -> StorageMetadata {
 					value: scale_info::meta_type::<u64>(),
 					unused: false,
 				},
-				default: vec![0],
+				default: [0u8; 8].to_vec(),
 				documentation: vec![],
 			},
 			StorageEntryMetadata {
@@ -427,7 +427,7 @@ fn expected_metadata() -> StorageMetadata {
 					key2: scale_info::meta_type::<u64>(),
 					value: scale_info::meta_type::<u64>(),
 				},
-				default: vec![],
+				default: [0u8; 8].to_vec(),
 				documentation: vec![],
 			},
 		]
