@@ -27,7 +27,10 @@ mod tests;
 use std::sync::Arc;
 use std::marker::PhantomData;
 
-use futures::StreamExt;
+use futures::{
+	future::{self, Either},
+	StreamExt
+};
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpsee_ws_server::{RpcModule, RpcContextModule, SubscriptionSink};
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
@@ -249,28 +252,35 @@ where
 		Self { new_heads, all_heads, finalized_heads, client, marker: PhantomData }
 	}
 
-	/// Spawns a event loop that listens for event and sends them out the subscribers.
-	// TODO: better impl.
-	pub fn spawn_subscriptions(mut self) {
-		std::thread::spawn(move || {
-			// Send current head at the start.
-			let best_head = self.client.header(BlockId::Hash(self.client.info().best_hash)).expect("header is known; qed");
-			let finalized_header = self.client.header(BlockId::Hash(self.client.info().finalized_hash)).expect("header is known; qed");
-			let _ = self.all_heads.send(&best_head);
-			let _ = self.new_heads.send(&best_head);
-			let _ = self.finalized_heads.send(&finalized_header);
+	/// Start subscribe to chain events.
+	pub async fn subscribe(mut self) {
+		// Send current head at the start.
+		let best_head = self.client.header(BlockId::Hash(self.client.info().best_hash)).expect("header is known; qed");
+		let finalized_header = self.client.header(BlockId::Hash(self.client.info().finalized_hash)).expect("header is known; qed");
+		let _ = self.all_heads.send(&best_head);
+		let _ = self.new_heads.send(&best_head);
+		let _ = self.finalized_heads.send(&finalized_header);
 
-			// TODO: this is just an example; we should use select or spawn these tasks
-			// on the subscription task executor
-			loop {
-				let import =
-					futures::executor::block_on(self.client.import_notification_stream().next()).unwrap();
-				let _ = self.all_heads.send(&import.header);
-				let _ = self.new_heads.send(&import.header);
-				let finality =
-					futures::executor::block_on(self.client.finality_notification_stream().next()).unwrap();
-				let _ = self.finalized_heads.send(&finality.header);
+		let mut import_stream = self.client.import_notification_stream();
+		let mut finality_stream = self.client.finality_notification_stream();
+
+		loop {
+			let import_next = import_stream.next();
+			let finality_next = finality_stream.next();
+			futures::pin_mut!(import_next, finality_next);
+
+			match future::select(import_next, finality_next).await {
+				Either::Left((Some(import), _)) => {
+					let _ = self.all_heads.send(&import.header);
+					let _ = self.new_heads.send(&import.header);
+				}
+				Either::Right((Some(finality), _)) => {
+					let _ = self.finalized_heads.send(&finality.header);
+				}
+				// Silently just terminate the task; should not happen because the
+				// chain streams should be alive as long as the node runs.
+				_ => return,
 			}
-		});
+		}
 	}
 }

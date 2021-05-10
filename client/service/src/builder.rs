@@ -754,7 +754,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
 
-	let _task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
+	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
 	let chain = sc_rpc::chain::new_full(client.clone());
 	// TODO(niklasad1): add remaining RPC API's here
 
@@ -764,7 +764,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	let (chain_rpc, chain_subs) = chain.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?");
 	modules.push(chain_rpc);
 
-	chain_subs.spawn_subscriptions();
+	task_executor.execute_new(Box::pin(chain_subs.subscribe()));
 
 	modules
 }
