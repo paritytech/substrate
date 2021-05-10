@@ -145,8 +145,8 @@ use sp_runtime::{
 		StoredMapError,
 	}
 };
-use codec::{Encode, Decode, HasCompact};
-use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
+use codec::HasCompact;
+use frame_support::pallet_prelude::*;
 use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
 use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
 use frame_system::Config as SystemConfig;
@@ -156,10 +156,6 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{
-		dispatch::DispatchResult,
-		pallet_prelude::*,
-	};
 	use frame_system::pallet_prelude::*;
 	use super::*;
 

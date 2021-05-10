@@ -603,7 +603,7 @@ fn force_asset_status_should_work(){
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 50));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 150));
 
-		//force asset status to change min_balance > balance 
+		//force asset status to change min_balance > balance
 		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 100, true, false));
 		assert_eq!(Assets::balance(0, 1), 50);
 
@@ -630,5 +630,23 @@ fn force_asset_status_should_work(){
 		assert_eq!(Assets::balance(0, 1), 200);
 		assert_eq!(Assets::balance(0, 2), 0);
 		assert_eq!(Assets::total_supply(0), 200);
+	});
+}
+
+#[test]
+fn balance_conversion_should_work() {
+	frame_support::parameter_types! {
+		pub const ED: u32 = 5;
+	}
+	new_test_ext().execute_with(|| {
+		let id = 42;
+		assert_ok!(Assets::force_create(Origin::root(), id, 1, true, 10));
+		let not_sufficient_id = 23;
+		assert_ok!(Assets::force_create(Origin::root(), not_sufficient_id, 1, false, 10));
+
+		assert_eq!(BalanceToAssetBalance::<Test, u32, ED>::to_asset_balance(100, 1234), Err(ConversionError::AssetMissing));
+		assert_eq!(BalanceToAssetBalance::<Test, u32, ED>::to_asset_balance(100, not_sufficient_id), Err(ConversionError::AssetNotSufficient));
+		// 10 / 5 == 2 -> the conversion should double the value
+		assert_eq!(BalanceToAssetBalance::<Test, u32, ED>::to_asset_balance(100, id), Ok(100 * 2));
 	});
 }

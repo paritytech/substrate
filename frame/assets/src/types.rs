@@ -19,6 +19,8 @@
 
 use super::*;
 
+use sp_runtime::{FixedPointNumber, FixedPointOperand, FixedU128, traits::One};
+
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
@@ -182,6 +184,42 @@ impl From<TransferFlags> for DebitFlags {
 		Self {
 			keep_alive: f.keep_alive,
 			best_effort: f.best_effort,
+		}
+	}
+}
+
+/// Possible errors when converting between external and asset balances.
+#[derive(Eq, PartialEq, Copy, Clone, RuntimeDebug, Encode, Decode)]
+pub enum ConversionError {
+	/// The asset is not present in storage.
+	AssetMissing,
+	/// The asset is not sufficient and thus does not have a reliable `min_balance` so it cannot be converted.
+	AssetNotSufficient,
+}
+
+/// Converts a balance value into an asset balance based on the ratio between the existential
+/// deposit and the minimum asset balance.
+pub struct BalanceToAssetBalance<T, Balance, ED>(PhantomData<(T, Balance, ED)>);
+impl<T: Config, Balance, ED> BalanceToAssetBalance<T, Balance, ED>
+where
+	Balance: Into<<T as Config>::Balance> + FixedPointOperand + Ord + One,
+	<T as Config>::Balance: FixedPointOperand,
+	ED: Get<Balance>,
+{
+	/// Convert the given balance value into an asset balance based on the ratio between the existential
+	/// deposit and the minimum asset balance.
+	///
+	/// Will return `Err` if the asset is not found or not sufficient.
+	pub fn to_asset_balance(balance: Balance, asset_id: <T as Config>::AssetId) -> Result<<T as Config>::Balance, ConversionError> {
+		// make sure we don't divide by zero
+		let ed = ED::get().max(One::one());
+		let asset = Asset::<T>::get(asset_id).ok_or(ConversionError::AssetMissing)?;
+		if asset.is_sufficient {
+			// balance * min_balance / existential_deposit
+			Ok(FixedU128::saturating_from_rational(asset.min_balance, ed.into())
+				.saturating_mul_int(balance.into()))
+		} else {
+			Err(ConversionError::AssetNotSufficient)
 		}
 	}
 }
