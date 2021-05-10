@@ -1879,6 +1879,7 @@ dependencies = [
  "rustversion",
  "scale-info",
  "serde",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",

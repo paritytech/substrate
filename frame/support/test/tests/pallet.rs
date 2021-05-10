@@ -24,10 +24,6 @@ use frame_support::{
 	storage::unhashed,
 	scale_info,
 };
-use scale_info::{
-	form::PortableForm,
-	IntoPortable,
-};
 use sp_runtime::DispatchError;
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
@@ -641,207 +637,374 @@ fn metadata() {
 	use frame_support::metadata::*;
 	use codec::{Decode, Encode};
 
-	let expected_pallet_metadata = PalletMetadata {
-		index: 1,
-		name: "Example",
-		storage: Some(StorageMetadata {
-			prefix: "Example",
-			entries: vec![
-				StorageEntryMetadata {
-					name: "ValueWhereClause",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
-					default: vec![0],
-					documentation: vec![],
-				},
-				StorageEntryMetadata {
-					name: "Value",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
-					default: vec![0],
-					documentation: vec![],
-				},
-				StorageEntryMetadata {
-					name: "Map",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						key: scale_info::meta_type::<u8>(),
-						value: scale_info::meta_type::<u16>(),
-						hasher: StorageHasher::Blake2_128Concat,
-						unused: false,
+	let pallets = vec![
+		PalletMetadata {
+			index: 0,
+			name: "System",
+			storage: None,
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<frame_system::Call<Runtime>>(),
+				calls: vec![
+					FunctionMetadata {
+						name: "fill_block",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "_ratio",
+								ty: scale_info::meta_type::<sp_arithmetic::per_things::Perbill>()
+							}
+						],
+						documentation: vec![
+							" A dispatch that will fill the block weight up to the given ratio.a"
+						]
 					},
-					default: vec![4, 0],
-					documentation: vec![],
-				},
-				StorageEntryMetadata {
-					name: "Map2",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						key: scale_info::meta_type::<u16>(),
-						value: scale_info::meta_type::<u32>(),
-						hasher: StorageHasher::Twox64Concat,
-						unused: false,
+					FunctionMetadata {
+						name: "remark",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "_remark",
+								ty: scale_info::meta_type::<Vec<u8>>(),
+							}],
+							documentation: vec![]
 					},
-					default: vec![0],
-					documentation: vec![],
-				},
-				StorageEntryMetadata {
-					name: "DoubleMap",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						value: scale_info::meta_type::<u32>(),
-						key1: scale_info::meta_type::<u8>(),
-						key2: scale_info::meta_type::<u16>(),
-						hasher: StorageHasher::Blake2_128Concat,
-						key2_hasher: StorageHasher::Twox64Concat,
+					FunctionMetadata {
+						name: "set_heap_pages",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "pages",
+								ty: scale_info::meta_type::<u64>(),
+							}
+						],
+						documentation: vec![]
 					},
-					default: vec![0],
-					documentation: vec![],
-				},
-				StorageEntryMetadata {
-					name: "DoubleMap2",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						value: scale_info::meta_type::<u64>(),
-						key1: scale_info::meta_type::<u16>(),
-						key2: scale_info::meta_type::<u32>(),
-						hasher: StorageHasher::Twox64Concat,
-						key2_hasher: StorageHasher::Blake2_128Concat,
+					FunctionMetadata {
+						name: "set_code",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "code",
+								ty: scale_info::meta_type::<Vec<u8>>(),
+							}
+						],
+						documentation: vec![]
 					},
-					default: vec![0],
-					documentation: vec![],
-				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
-					name: "ConditionalValue",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
-					default: vec![0],
-					documentation: vec![],
-				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
-					name: "ConditionalMap",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						key: scale_info::meta_type::<u16>(),
-						value: scale_info::meta_type::<u32>(),
-						hasher: StorageHasher::Twox64Concat,
-						unused: false,
+					FunctionMetadata {
+						name: "set_code_without_checks",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "code",
+								ty: scale_info::meta_type::<Vec<u8>>(),
+							}
+						],
+						documentation: vec![]
 					},
-					default: vec![0],
+					FunctionMetadata {
+						name: "set_changes_trie_config",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "changes_trie_config",
+								ty: scale_info::meta_type::<Option<sp_core::ChangesTrieConfiguration>>(),
+							}
+						],
+						documentation: vec![]					},
+					FunctionMetadata {
+						name: "set_storage",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "items",
+								ty: scale_info::meta_type::<Vec<frame_system::KeyValue>>(),
+							}
+						],
+						documentation: vec![]					},
+					FunctionMetadata { name: "kill_storage",
+						arguments: vec![
+							FunctionArgumentMetadata { name: "keys", ty: scale_info::meta_type::<Vec<frame_system::Key>>() }
+						],
+						documentation: vec![]					},
+					FunctionMetadata {
+						name: "kill_prefix",
+						arguments: vec![
+							FunctionArgumentMetadata { name: "prefix", ty: scale_info::meta_type::<frame_system::Key>() },
+							FunctionArgumentMetadata {
+								name: "_subkeys",
+								ty: scale_info::meta_type::<u32>()
+							}
+						],
+						documentation: vec![]					},
+					FunctionMetadata {
+						name: "remark_with_event",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "remark",
+								ty: scale_info::meta_type::<Vec<u8>>(),
+							}
+						],
+						documentation: vec![]					}
+				]
+			}),
+			event: Some(PalletEventMetadata { ty: scale_info::meta_type::<frame_system::Event<Runtime>>() }),
+			constants: vec![
+				PalletConstantMetadata {
+					name: "BlockWeights",
+					ty: scale_info::meta_type::<frame_system::limits::BlockWeights>(),
+					value: vec![],
+					documentation: vec![]
+				},
+				PalletConstantMetadata {
+					name: "BlockLength",
+					ty: scale_info::meta_type::<frame_system::limits::BlockLength>(),
+					value: vec![],
 					documentation: vec![],
 				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
-					name: "ConditionalDoubleMap",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						value: scale_info::meta_type::<u32>(),
-						key1: scale_info::meta_type::<u8>(),
-						key2: scale_info::meta_type::<u16>(),
-						hasher: StorageHasher::Blake2_128Concat,
-						key2_hasher: StorageHasher::Twox64Concat,
-					},
-					default: vec![0],
+				PalletConstantMetadata {
+					name: "BlockHashCount",
+					ty: scale_info::meta_type::<u32>(),
+					value: vec![],
 					documentation: vec![],
+				},
+				PalletConstantMetadata {
+					name: "DbWeight",
+					ty: scale_info::meta_type::<u32>(), // todo
+					value: vec![],
+					documentation: vec![],
+				},
+				PalletConstantMetadata {
+					name: "Version",
+					ty: scale_info::meta_type::<u32>(), // todo
+					value: vec![],
+					documentation: vec![],
+				},
+				PalletConstantMetadata {
+					name: "SS58Prefix",
+					ty: scale_info::meta_type::<u32>(), // todo
+					value: vec![],
+					documentation: vec![]
+				}
+			],
+			error: Some(PalletErrorMetadata { ty: scale_info::meta_type::<frame_system::Error<Runtime>>() }),
+		},
+		PalletMetadata {
+			index: 1,
+			name: "Example",
+			storage: Some(StorageMetadata {
+				prefix: "Example",
+				entries: vec![
+					StorageEntryMetadata {
+						name: "ValueWhereClause",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
+						default: vec![0],
+						documentation: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Value",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						default: vec![0],
+						documentation: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Map",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Map {
+							key: scale_info::meta_type::<u8>(),
+							value: scale_info::meta_type::<u16>(),
+							hasher: StorageHasher::Blake2_128Concat,
+							unused: false,
+						},
+						default: vec![4, 0],
+						documentation: vec![],
+					},
+					StorageEntryMetadata {
+						name: "Map2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: scale_info::meta_type::<u16>(),
+							value: scale_info::meta_type::<u32>(),
+							hasher: StorageHasher::Twox64Concat,
+							unused: false,
+						},
+						default: vec![0],
+						documentation: vec![],
+					},
+					StorageEntryMetadata {
+						name: "DoubleMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::DoubleMap {
+							value: scale_info::meta_type::<u32>(),
+							key1: scale_info::meta_type::<u8>(),
+							key2: scale_info::meta_type::<u16>(),
+							hasher: StorageHasher::Blake2_128Concat,
+							key2_hasher: StorageHasher::Twox64Concat,
+						},
+						default: vec![0],
+						documentation: vec![],
+					},
+					StorageEntryMetadata {
+						name: "DoubleMap2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::DoubleMap {
+							value: scale_info::meta_type::<u64>(),
+							key1: scale_info::meta_type::<u16>(),
+							key2: scale_info::meta_type::<u32>(),
+							hasher: StorageHasher::Twox64Concat,
+							key2_hasher: StorageHasher::Blake2_128Concat,
+						},
+						default: vec![0],
+						documentation: vec![],
+					},
+					#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+						name: "ConditionalValue",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						default: vec![0],
+						documentation: vec![],
+					},
+					#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+						name: "ConditionalMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: scale_info::meta_type::<u16>(),
+							value: scale_info::meta_type::<u32>(),
+							hasher: StorageHasher::Twox64Concat,
+							unused: false,
+						},
+						default: vec![0],
+						documentation: vec![],
+					},
+					#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+						name: "ConditionalDoubleMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::DoubleMap {
+							value: scale_info::meta_type::<u32>(),
+							key1: scale_info::meta_type::<u8>(),
+							key2: scale_info::meta_type::<u16>(),
+							hasher: StorageHasher::Blake2_128Concat,
+							key2_hasher: StorageHasher::Twox64Concat,
+						},
+						default: vec![0],
+						documentation: vec![],
+					},
+				],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<pallet::Call<Runtime>>(),
+				calls: vec![
+					FunctionMetadata {
+						name: "foo",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "_foo",
+								ty: scale_info::meta_type::<codec::Compact<u32>>(),
+							},
+							FunctionArgumentMetadata {
+								name: "_bar",
+								ty: scale_info::meta_type::<u32>(),
+							}
+						],
+						documentation: vec![
+							" Doc comment put in metadata",
+						],
+					},
+					FunctionMetadata {
+						name: "foo_transactional",
+						arguments: vec![
+							FunctionArgumentMetadata {
+								name: "foo",
+								ty: scale_info::meta_type::<codec::Compact<u32>>(),
+							}
+						],
+						documentation: vec![
+							" Doc comment put in metadata",
+						],
+					},
+					FunctionMetadata {
+						name: "foo_no_post_info",
+						arguments: vec![],
+						documentation: vec![],
+					},
+				]
+			}),
+			event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet::Event<Runtime>>() }),
+			constants: vec![
+				PalletConstantMetadata {
+					name: "MyGetParam",
+					ty: scale_info::meta_type::<u32>(),
+					value: vec![10, 0, 0, 0],
+					documentation: vec![
+						" Some comment",
+						" Some comment",
+					],
+				},
+				PalletConstantMetadata {
+					name: "MyGetParam2",
+					ty: scale_info::meta_type::<u32>(),
+					value: vec![11, 0, 0, 0],
+					documentation: vec![
+						" Some comment",
+						" Some comment",
+					],
+				},
+				PalletConstantMetadata {
+					name: "MyGetParam3",
+					ty: scale_info::meta_type::<u64>(),
+					value: vec![12, 0, 0, 0, 0, 0, 0, 0],
+					documentation: vec![],
+				},
+				PalletConstantMetadata {
+					name: "some_extra",
+					ty: scale_info::meta_type::<u32>(),
+					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
+					documentation: vec![
+						" Some doc",
+						" Some doc",
+					],
+				},
+				PalletConstantMetadata {
+					name: "some_extra_extra",
+					ty: scale_info::meta_type::<u32>(),
+					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
+					documentation: vec![
+						" Some doc",
+					],
 				},
 			],
-		}),
-		calls: Some(PalletCallMetadata {
-			ty: scale_info::meta_type::<pallet::Call<Runtime>>(),
-			calls: vec![
-				FunctionMetadata {
-					name: "foo",
-					arguments: vec![
-						FunctionArgumentMetadata {
-							name: "_foo",
-							ty: scale_info::meta_type::<codec::Compact<u32>>(),
-						},
-						FunctionArgumentMetadata {
-							name: "_bar",
-							ty: scale_info::meta_type::<u32>(),
-						}
-					],
-					documentation: vec![
-						" Doc comment put in metadata",
-					],
-				},
-				FunctionMetadata {
-					name: "foo_transactional",
-					arguments: vec![
-						FunctionArgumentMetadata {
-							name: "foo",
-							ty: scale_info::meta_type::<codec::Compact<u32>>(),
-						}
-					],
-					documentation: vec![
-						" Doc comment put in metadata",
-					],
-				},
-				FunctionMetadata {
-					name: "foo_no_post_info",
-					arguments: vec![],
-					documentation: vec![],
-				},
-			]
-		}),
-		event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet::Event<Runtime>>() }),
-		constants: vec![
-			PalletConstantMetadata {
-				name: "MyGetParam",
-				ty: scale_info::meta_type::<u32>(),
-				value: vec![10, 0, 0, 0],
-				documentation: vec![
-					" Some comment",
-					" Some comment",
-				],
-			},
-			PalletConstantMetadata {
-				name: "MyGetParam2",
-				ty: scale_info::meta_type::<u32>(),
-				value: vec![11, 0, 0, 0],
-				documentation: vec![
-					" Some comment",
-					" Some comment",
-				],
-			},
-			PalletConstantMetadata {
-				name: "MyGetParam3",
-				ty: scale_info::meta_type::<u64>(),
-				value: vec![12, 0, 0, 0, 0, 0, 0, 0],
-				documentation: vec![],
-			},
-			PalletConstantMetadata {
-				name: "some_extra",
-				ty: scale_info::meta_type::<u32>(),
-				value: vec![100, 0, 0, 0, 0, 0, 0, 0],
-				documentation: vec![
-					" Some doc",
-					" Some doc",
-				],
-			},
-			PalletConstantMetadata {
-				name: "some_extra_extra",
-				ty: scale_info::meta_type::<u32>(),
-				value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-				documentation: vec![
-					" Some doc",
-				],
-			},
-		],
-		error: Some(PalletErrorMetadata { ty: scale_info::meta_type::<pallet::Error<Runtime>>() }),
+			error: Some(PalletErrorMetadata { ty: scale_info::meta_type::<pallet::Error<Runtime>>() }),
+		}
+	];
+
+	let extrinsic = ExtrinsicMetadata {
+		ty: scale_info::meta_type::<UncheckedExtrinsic>(),
+		version: 4,
+		signed_extensions: vec![
+			SignedExtensionMetadata { identifier: "UnitSignedExtension", ty: scale_info::meta_type::<()>() }
+		]
 	};
 
-	let metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V13(metadata) => metadata,
+	let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
+	// match actual_metadata.1 {
+	// 	RuntimeMetadata::V13(ref metadata) => {
+	// 		println!("{:?}", metadata.pallets);
+	// 	},
+	// 	_ => panic!("metadata has been bump, test needs to be updated"),
+	// };
+	let expected_metadata = match expected_metadata.1 {
+		RuntimeMetadata::V13(metadata) => {
+			metadata
+		},
 		_ => panic!("metadata has been bump, test needs to be updated"),
 	};
 
-	let pallet_metadata = PalletMetadata::<PortableForm>::decode(
-		&mut &metadata.pallets[1].encode()[..]
-	).unwrap();
+	let actual_metadata = match Runtime::metadata().1 {
+		RuntimeMetadata::V13(metadata) => {
+			metadata
+		},
+		_ => panic!("metadata has been bump, test needs to be updated"),
+	};
 
-	let mut registry = scale_info::Registry::new();
-	let expected_pallet_metadata = expected_pallet_metadata.into_portable(&mut registry);
-	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
+	// let _ = vec![
+	// 	PalletMetadata { name: "Example2", storage: Some(StorageMetadata { prefix: "Example2", entries: [] }), calls: Some(PalletCallMetadata { ty: UntrackedSymbol { id: 43, marker: PhantomData }, calls: [] }), event: Some(PalletEventMetadata { ty: UntrackedSymbol { id: 44, marker: PhantomData } }), constants: [], error: None, index: 2 }
+	// ];
+
+	pretty_assertions::assert_eq!(actual_metadata.pallets[1], expected_metadata.pallets[1]);
 }
 
 #[test]
