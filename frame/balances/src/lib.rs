@@ -171,7 +171,7 @@ use frame_support::{
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
 use sp_runtime::{
-	RuntimeDebug, DispatchResult, DispatchError,
+	RuntimeDebug, DispatchResult, DispatchError, ArithmeticError,
 	traits::{
 		Zero, AtLeast32BitUnsigned, StaticLookup, CheckedAdd, CheckedSub,
 		MaybeSerializeDeserialize, Saturating, Bounded, StoredMapError,
@@ -402,8 +402,6 @@ pub mod pallet {
 		VestingBalance,
 		/// Account liquidity restrictions prevent withdrawal
 		LiquidityRestrictions,
-		/// Got an overflow after adding
-		Overflow,
 		/// Balance too low to send value
 		InsufficientBalance,
 		/// Value too low to create account due to existential deposit
@@ -909,10 +907,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						match status {
 							Status::Free => to_account.free = to_account.free
 								.checked_add(&actual)
-								.ok_or(Error::<T, I>::Overflow)?,
+								.ok_or(ArithmeticError::Overflow)?,
 							Status::Reserved => to_account.reserved = to_account.reserved
 								.checked_add(&actual)
-								.ok_or(Error::<T, I>::Overflow)?,
+								.ok_or(ArithmeticError::Overflow)?,
 						}
 						from_account.reserved -= actual;
 						Ok(actual)
@@ -1332,7 +1330,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 
 						// NOTE: total stake being stored in the same type means that this could never overflow
 						// but better to be safe than sorry.
-						to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+						to_account.free = to_account.free.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
 
 						let ed = T::ExistentialDeposit::get();
 						ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
@@ -1431,7 +1429,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 
 		Self::try_mutate_account(who, |account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
 			ensure!(!is_new, Error::<T, I>::DeadAccount);
-			account.free = account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+			account.free = account.free.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
 			Ok(PositiveImbalance::new(value))
 		})
 	}
@@ -1554,7 +1552,7 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 
 		Self::try_mutate_account(who, |account, _| -> DispatchResult {
 			account.free = account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
-			account.reserved = account.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+			account.reserved = account.reserved.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
 			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReasons::RESERVE, account.free)
 		})?;
 
