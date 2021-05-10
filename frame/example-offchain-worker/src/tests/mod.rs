@@ -54,13 +54,17 @@ fn test_contract_api() {
 
 #[test]
 fn test_encode_report_metrics() {
-    let call_data = ExampleOffchainWorker::encode_report_metrics(&AccountId32::from([2; 32]), 3, 4, 5);
+    let call_data = ExampleOffchainWorker::encode_report_metrics(
+        &AccountId32::from([2; 32]),
+        3 + (4 << 8),
+        5 + (6 << 16),
+        7 + (8 << 24));
     assert_eq!(call_data, vec![
         53, 50, 11, 190, // Selector
         2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // 32 bytes, app_id
-        3, 0, 0, 0, 0, 0, 0, 0, // 8 bytes, day_start_ms
-        4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, stored_bytes
-        5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, requests
+        3, 4, 0, 0, 0, 0, 0, 0, // 8 bytes, day_start_ms
+        5, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, stored_bytes
+        7, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, requests
     ]);
 }
 
@@ -112,44 +116,37 @@ fn should_submit_signed_transaction_on_chain() {
     t.register_extension(OffchainExt::new(offchain));
 
     {
-        let nodes = include_bytes!("./test_data/ddc_nodes.json");
-        let metrics = include_bytes!("./test_data/ddc_metrics.json");
-
         let mut state = offchain_state.write();
 
-        // List nodes from a boot node.
-        state.expect_request(testing::PendingRequest {
-            method: "GET".into(),
-            uri: "https://TEST_DDC/api/rest/nodes".into(),
-            response: Some(nodes.to_vec()),
-            sent: true,
-            ..Default::default()
-        });
+        let mut expect_request = |url: &str, response: &[u8]| {
+            state.expect_request(testing::PendingRequest {
+                method: "GET".into(),
+                uri: url.to_string(),
+                response: Some(response.to_vec()),
+                sent: true,
+                ..Default::default()
+            });
+        };
 
-        // Get metrics from each node given in ddc_nodes.json.
-        state.expect_request(testing::PendingRequest {
-            method: "GET".into(),
-            uri: "https://node-0.ddc.stage.cere.network/api/rest/metrics".into(),
-            response: Some(metrics.to_vec()),
-            sent: true,
-            ..Default::default()
-        });
-        state.expect_request(testing::PendingRequest {
-            method: "GET".into(),
-            uri: "https://node-3.ddc.stage.cere.network/api/rest/metrics".into(),
-            response: Some(metrics.to_vec()),
-            sent: true,
-            ..Default::default()
-        });
-        /*
-        state.expect_request(testing::PendingRequest {
-            method: "GET".into(),
-            uri: "https://node-0.ddc.stage.cere.network/api/rest/partitions".into(),
-            response: Some(include_bytes!("./test_data/ddc_partitions.json").to_vec()),
-            sent: true,
-            ..Default::default()
-        });
-        */
+        // List nodes from a boot node.
+        expect_request("https://TEST_DDC/api/rest/nodes",
+                       include_bytes!("./test_data/ddc_nodes.json"));
+
+        // List partitions from a boot node.
+        expect_request("https://TEST_DDC/api/rest/partitions?isMaster=true&active=true",
+                       include_bytes!("./test_data/ddc_partitions.json"));
+
+        // Get metrics for an app partition on node-0.
+        expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830&partitionId=0cb0f451-255b-4a4f-918b-6c34c7047331&from=0&to=0",
+                       include_bytes!("./test_data/ddc_metrics_0c.json"));
+
+        // Get metrics for another app partition on node-0.
+        expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x100ad4097b6e60700a5d5c5294cb6d663090ef5f547e84cc20ec6bcc7a552f13&partitionId=d9fb155d-6e15-44c5-8d71-ff22db7a0193&from=0&to=0",
+                       include_bytes!("./test_data/ddc_metrics_d9.json"));
+
+        // Get metrics for a partition on node-3.
+        expect_request("https://node-3.ddc.stage.cere.network/api/rest/metrics?appPubKey=0x00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830&partitionId=f6cbe4e6-ef3a-4970-b3da-f8ae29cd22bd&from=0&to=0",
+                       include_bytes!("./test_data/ddc_metrics_f6.json"));
     }
 
     t.execute_with(|| {
@@ -164,12 +161,23 @@ fn should_submit_signed_transaction_on_chain() {
         // Get the transaction from the worker.
         let transactions = pool_state.read().transactions.clone();
         eprintln!("Transactions: {:?}\n", transactions);
-        assert_eq!(transactions.len(), 1);
+        assert_eq!(transactions.len(), 2);
 
-        // TODO: update expected_call based on the content of the test_data files.
-        let mut expected_call = REPORT_METRICS_SELECTOR.to_vec();
-        expected_call.extend_from_slice(&[1, 2, 3, 4, ]);
-        assert!(transactions.last().unwrap().ends_with(&expected_call), "Expected a specific call to the report_metrics function");
+        // Check metrics based on ddc_metrics_0c.json and ddc_metrics_f6.json.
+        let expected_call = ExampleOffchainWorker::encode_report_metrics(
+            &AccountId32::from([0; 32]),
+            0,
+            1 + 10,
+            2 + 20);
+        assert!(transactions[0].ends_with(&expected_call), "Expected a specific call to the report_metrics function");
+
+        // Check metrics based on ddc_metrics_d9.json.
+        let expected_call = ExampleOffchainWorker::encode_report_metrics(
+            &AccountId32::from([0; 32]),
+            0,
+            100,
+            200);
+        assert!(transactions[1].ends_with(&expected_call), "Expected a specific call to the report_metrics function");
     });
 }
 
