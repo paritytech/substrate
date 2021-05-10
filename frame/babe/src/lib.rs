@@ -354,7 +354,7 @@ pub mod pallet {
 		#[pallet::weight(<T as Config>::WeightInfo::report_equivocation(
 			key_owner_proof.validator_count(),
 		))]
-		pub(crate) fn report_equivocation(
+		pub fn report_equivocation(
 			origin: OriginFor<T>,
 			equivocation_proof: EquivocationProof<T::Header>,
 			key_owner_proof: T::KeyOwnerProof,
@@ -379,7 +379,7 @@ pub mod pallet {
 		#[pallet::weight(<T as Config>::WeightInfo::report_equivocation(
 			key_owner_proof.validator_count(),
 		))]
-		pub(crate) fn report_equivocation_unsigned(
+		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
 			equivocation_proof: EquivocationProof<T::Header>,
 			key_owner_proof: T::KeyOwnerProof,
@@ -398,7 +398,7 @@ pub mod pallet {
 		/// Multiple calls to this method will replace any existing planned config change that had
 		/// not been enacted yet.
 		#[pallet::weight(<T as Config>::WeightInfo::plan_config_change())]
-		pub(crate) fn plan_config_change(
+		pub fn plan_config_change(
 			origin: OriginFor<T>,
 			config: NextConfigDescriptor,
 		) -> DispatchResult {

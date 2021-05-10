@@ -391,7 +391,7 @@ pub mod pallet {
 			heartbeat.validators_len as u32,
 			heartbeat.network_state.external_addresses.len() as u32,
 		))]
-		pub(crate) fn heartbeat(
+		pub fn heartbeat(
 			origin: OriginFor<T>,
 			heartbeat: Heartbeat<T::BlockNumber>,
 			// since signature verification is done in `validate_unsigned`
