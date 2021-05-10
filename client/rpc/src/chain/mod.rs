@@ -193,14 +193,17 @@ where
 		Ok((rpc_module, subs))
 	}
 
+	/// TODO: document this
 	pub async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, StateError> {
 		self.backend.header(hash).await
 	}
 
+	/// TODO: document this
 	pub async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, StateError> {
 		self.backend.block(hash).await
 	}
 
+	/// TODO: document this
 	pub fn block_hash(
 		&self,
 		number: Option<ListOrValue<NumberOrHex>>,
@@ -216,6 +219,7 @@ where
 		}
 	}
 
+	/// TODO: document this
 	pub fn finalized_head(&self) -> Result<Block::Hash, StateError> {
 		self.backend.finalized_head()
 	}
