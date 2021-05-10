@@ -23,7 +23,7 @@ use crate::{
 	storage::{
 		StorageAppend, StorageDecodeLength,
 		bounded_vec::BoundedVec,
-		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
+		types::{OptionQuery, StorageEntryMetadata, QueryKindTrait},
 	},
 	traits::{GetDefault, StorageInstance, Get},
 };

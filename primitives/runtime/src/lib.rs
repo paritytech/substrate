@@ -568,7 +568,7 @@ impl From<TokenError> for DispatchError {
 }
 
 /// Arithmetic errors.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ArithmeticError {
 	/// Underflow.
