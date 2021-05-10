@@ -756,17 +756,25 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
 	let chain = sc_rpc::chain::new_full(client.clone());
+	let author = sc_rpc::author::Author::new(
+		client,
+		transaction_pool,
+		keystore,
+		deny_unsafe,
+	);
 	// TODO(niklasad1): add remaining RPC API's here
 
-	// NOTE(niklasad1): this is an `Vec` to add other modules in the future.
-	let mut modules = Vec::new();
-	// TODO: get rid of this uglyness.
+	let mut rpc_api = Vec::new();
+	// TODO: get rid of expect!.
 	let (chain_rpc, chain_subs) = chain.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?");
-	modules.push(chain_rpc);
+	let author_rpc = author.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?");
+
+	rpc_api.push(chain_rpc);
+	rpc_api.push(author_rpc);
 
 	task_executor.execute_new(Box::pin(chain_subs.subscribe()));
 
-	modules
+	rpc_api
 }
 
 /// Parameters to pass into `build_network`.
