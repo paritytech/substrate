@@ -635,7 +635,6 @@ fn pallet_on_genesis() {
 #[test]
 fn metadata() {
 	use frame_support::metadata::*;
-	use codec::{Decode, Encode};
 
 	let pallets = vec![
 		PalletMetadata {
