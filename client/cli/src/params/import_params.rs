@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arg_enums::{
-	ExecutionStrategy, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+	ExecutionStrategy, WasmExecutionMethod, SandboxExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
 	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR,
 	DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
 };
@@ -55,6 +55,16 @@ pub struct ImportParams {
 		default_value = "Interpreted"
 	)]
 	pub wasm_method: WasmExecutionMethod,
+
+	/// Method for executing Wasm in a sandbox environment
+	#[structopt(
+		long = "sandbox-execution",
+		value_name = "METHOD",
+		possible_values = &SandboxExecutionMethod::variants(),
+		case_insensitive = true,
+		default_value = "Interpreted"
+	)]
+	pub sandbox_method: SandboxExecutionMethod,
 
 	/// Specify the path where local WASM runtimes are stored.
 	///
