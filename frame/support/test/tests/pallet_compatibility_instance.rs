@@ -276,23 +276,78 @@ mod test {
 	use super::pallet;
 	use super::pallet_old;
 	use codec::{Decode, Encode};
+	use scale_info::form::PortableForm;
 
 	#[test]
 	fn metadata() {
 		let metadata = Runtime::metadata();
-		let pallets = match metadata.1 {
-			frame_support::metadata::RuntimeMetadata::V13(frame_support::metadata::RuntimeMetadataLastVersion {
-				pallets: p,
-				..
-			}) => p,
+		let (pallets, types) = match metadata.1 {
+			frame_support::metadata::RuntimeMetadata::V13(metadata) =>
+				(metadata.pallets, metadata.types),
 			_ => unreachable!(),
 		};
+
+		let assert_meta_types = |ty_id1, ty_id2| {
+			let ty1 = types.resolve(ty_id1).map(|ty| ty.type_def());
+			let ty2 = types.resolve(ty_id2).map(|ty| ty.type_def());
+			pretty_assertions::assert_eq!(ty1, ty2);
+		};
+
+		let get_enum_variants = |ty_id| {
+			match types.resolve(ty_id).map(|ty| ty.type_def()) {
+				Some(ty) => {
+					match ty {
+						scale_info::TypeDef::Variant(var) => {
+							var.variants()
+						}
+						_ => panic!("Expected variant type")
+					}
+				}
+				_ => panic!("No type found")
+			}
+		};
+
+		let assert_enum_variants = |vs1: &[scale_info::Variant<PortableForm>], vs2: &[scale_info::Variant<PortableForm>]| {
+			assert_eq!(vs1.len(), vs2.len());
+			for i in 0..vs1.len() {
+				let v1 = &vs2[i];
+				let v2 = &vs2[i];
+				assert_eq!(v1.fields().len(), v2.fields().len());
+				for f in 0..v1.fields().len() {
+					let f1 = &v1.fields()[f];
+					let f2 = &v2.fields()[f];
+					pretty_assertions::assert_eq!(f1.name(), f2.name());
+					pretty_assertions::assert_eq!(f1.ty(), f2.ty());
+				}
+			}
+		};
+		
 		for i in vec![1, 3, 5].into_iter() {
-			pretty_assertions::assert_eq!(pallets[i].storage, pallets[i+1].storage);
-			pretty_assertions::assert_eq!(pallets[i].calls, pallets[i+1].calls);
-			pretty_assertions::assert_eq!(pallets[i].event, pallets[i+1].event);
-			pretty_assertions::assert_eq!(pallets[i].constants, pallets[i+1].constants);
-			pretty_assertions::assert_eq!(pallets[i].error, pallets[i+1].error);
+			pretty_assertions::assert_eq!(pallets[i].storage, pallets[i + 1].storage);
+
+			let calls1 = pallets[i].calls.as_ref().unwrap();
+			let calls2 = pallets[i + 1].calls.as_ref().unwrap();
+			pretty_assertions::assert_eq!(calls1.calls, calls2.calls);
+			assert_meta_types(calls1.ty.id(), calls2.ty.id());
+
+			// event: check variants and fields but ignore the type name which will be different
+			let event1_variants = get_enum_variants(pallets[i].event.as_ref().unwrap().ty.id());
+			let event2_variants = get_enum_variants(pallets[i + 1].event.as_ref().unwrap().ty.id());
+			assert_enum_variants(event1_variants, event2_variants);
+
+			let err1 = get_enum_variants(pallets[i].error.as_ref().unwrap().ty.id())
+				.iter()
+				.filter(|v| v.name() == "__Ignore")
+				.cloned()
+				.collect::<Vec<_>>();
+			let err2 = get_enum_variants(pallets[i + 1].error.as_ref().unwrap().ty.id())
+				.iter()
+				.filter(|v| v.name() == "__Ignore")
+				.cloned()
+				.collect::<Vec<_>>();
+			assert_enum_variants(&err1, &err2);
+
+			pretty_assertions::assert_eq!(pallets[i].constants, pallets[i + 1].constants);
 		}
 	}
 

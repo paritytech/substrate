@@ -261,11 +261,7 @@ mod test {
 	use super::pallet;
 	use super::pallet_old;
 	use codec::{Decode, Encode};
-	use frame_support::traits::Len;
-	use scale_info::{
-		form::PortableForm,
-		Variant,
-	};
+	use scale_info::form::PortableForm;
 
 	#[test]
 	fn metadata() {
