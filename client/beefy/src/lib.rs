@@ -26,7 +26,6 @@ use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppPublic;
 use sp_blockchain::HeaderBackend;
-use sp_consensus::SyncOracle as SyncOracleT;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
 
@@ -78,18 +77,34 @@ where
 	// empty
 }
 
+/// BEEFY gadget initialization parameters.
+pub struct BeefyParams<B, P, BE, C, N>
+where
+	B: Block,
+	P: sp_core::Pair,
+	P::Signature: Clone + Codec + Debug + PartialEq + TryFrom<Vec<u8>>,
+{
+	/// BEEFY client
+	pub client: Arc<C>,
+	/// Client Backend
+	pub backend: Arc<BE>,
+	/// Local key store
+	pub key_store: Option<SyncCryptoStorePtr>,
+	/// Gossip network
+	pub network: N,
+	/// BEEFY signed commitment sender
+	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
+	/// Minimal delta between blocks, BEEFY should vote for
+	pub min_block_delta: u32,
+	/// Prometheus metric registry
+	pub prometheus_registry: Option<Registry>,
+}
+
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
-	client: Arc<C>,
-	key_store: Option<SyncCryptoStorePtr>,
-	network: N,
-	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
-	_sync_oracle: SO,
-	min_block_delta: u32,
-	prometheus_registry: Option<Registry>,
-) where
+pub async fn start_beefy_gadget<B, P, BE, C, N>(beefy_params: BeefyParams<B, P, BE, C, N>)
+where
 	B: Block,
 	P: sp_core::Pair,
 	P::Public: AppPublic + Codec,
@@ -98,8 +113,17 @@ pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 	C: Client<B, BE, P>,
 	C::Api: BeefyApi<B, P::Public>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
-	SO: SyncOracleT + Send + 'static,
 {
+	let BeefyParams {
+		client,
+		backend,
+		key_store,
+		network,
+		signed_commitment_sender,
+		min_block_delta,
+		prometheus_registry,
+	} = beefy_params;
+
 	let gossip_validator = Arc::new(gossip::BeefyGossipValidator::new());
 	let gossip_engine = GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
 
@@ -117,15 +141,18 @@ pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 			}
 		});
 
-	let worker = worker::BeefyWorker::<_, _, BE, P>::new(
-		client.clone(),
+	let worker_params = worker::WorkerParams {
+		client,
+		backend,
 		key_store,
 		signed_commitment_sender,
 		gossip_engine,
 		gossip_validator,
 		min_block_delta,
 		metrics,
-	);
+	};
+
+	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
 
 	worker.run().await
 }

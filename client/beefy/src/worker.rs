@@ -42,8 +42,8 @@ use sp_runtime::{
 };
 
 use beefy_primitives::{
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, VoteMessage, BEEFY_ENGINE_ID,
-	GENESIS_AUTHORITY_SET_ID, KEY_TYPE,
+	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, VersionedCommitment, VoteMessage,
+	BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID, KEY_TYPE,
 };
 
 use crate::{
@@ -53,6 +53,22 @@ use crate::{
 	metrics::Metrics,
 	notification, round, Client,
 };
+
+pub(crate) struct WorkerParams<B, P, BE, C>
+where
+	B: Block,
+	P: sp_core::Pair,
+	P::Signature: Clone + Codec + Debug + PartialEq + TryFrom<Vec<u8>>,
+{
+	pub client: Arc<C>,
+	pub backend: Arc<BE>,
+	pub key_store: Option<SyncCryptoStorePtr>,
+	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
+	pub gossip_engine: GossipEngine<B>,
+	pub gossip_validator: Arc<BeefyGossipValidator<B, P>>,
+	pub min_block_delta: u32,
+	pub metrics: Option<Metrics>,
+}
 
 /// A BEEFY worker plays the BEEFY protocol
 pub(crate) struct BeefyWorker<B, C, BE, P>
@@ -65,6 +81,7 @@ where
 	C: Client<B, BE, P>,
 {
 	client: Arc<C>,
+	backend: Arc<BE>,
 	key_store: Option<SyncCryptoStorePtr>,
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
@@ -101,17 +118,21 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(
-		client: Arc<C>,
-		key_store: Option<SyncCryptoStorePtr>,
-		signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
-		gossip_engine: GossipEngine<B>,
-		gossip_validator: Arc<BeefyGossipValidator<B, P>>,
-		min_block_delta: u32,
-		metrics: Option<Metrics>,
-	) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, P, BE, C>) -> Self {
+		let WorkerParams {
+			client,
+			backend,
+			key_store,
+			signed_commitment_sender,
+			gossip_engine,
+			gossip_validator,
+			min_block_delta,
+			metrics,
+		} = worker_params;
+
 		BeefyWorker {
 			client: client.clone(),
+			backend,
 			key_store,
 			signed_commitment_sender,
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
@@ -312,6 +333,22 @@ where
 				metric_set!(self, beefy_round_concluded, round.1);
 
 				debug!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
+
+				if self
+					.backend
+					.append_justification(
+						BlockId::Number(round.1),
+						(
+							BEEFY_ENGINE_ID,
+							VersionedCommitment::V1(signed_commitment.clone()).encode(),
+						),
+					)
+					.is_err()
+				{
+					// this is a warning for now, because until the round lifecycle is improved, we will
+					// conclude certain rounds multiple times.
+					warn!(target: "beefy", "🥩 Failed to append justification: {:?}", signed_commitment);
+				}
 
 				self.signed_commitment_sender.notify(signed_commitment);
 				self.best_beefy_block = Some(round.1);
