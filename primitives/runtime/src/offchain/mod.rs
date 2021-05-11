@@ -23,6 +23,3 @@ pub mod storage_lock;
 pub mod rpc;
 
 pub use sp_core::offchain::*;
-
-// #[cfg(any(test, feature = "test-helpers"))]
-// pub use super::testing;
