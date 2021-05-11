@@ -32,7 +32,7 @@ Follow these steps to get started with the Spartan Node Template :hammer_and_wre
 
 #### Install Rust
 
-First, complete the [basic Rust setup instructions](./doc/rust-setup.md).
+First, complete the [basic Rust setup instructions](./docs/rust-setup.md).
 
 #### Install Dependencies
 If you have not previously installed the `gmp_mpfr_sys` crate, follow these [instructions](https://docs.rs/gmp-mpfr-sys/1.3.0/gmp_mpfr_sys/index.html#building-on-gnulinux).
