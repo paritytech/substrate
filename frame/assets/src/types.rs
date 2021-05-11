@@ -19,7 +19,8 @@
 
 use super::*;
 
-use sp_runtime::{FixedPointNumber, FixedPointOperand, FixedU128, traits::One};
+use sp_runtime::{FixedPointNumber, FixedPointOperand, FixedU128};
+use sp_runtime::traits::Convert;
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
@@ -191,6 +192,8 @@ impl From<TransferFlags> for DebitFlags {
 /// Possible errors when converting between external and asset balances.
 #[derive(Eq, PartialEq, Copy, Clone, RuntimeDebug, Encode, Decode)]
 pub enum ConversionError {
+	/// The external minimum balance must not be zero.
+	MinBalanceZero,
 	/// The asset is not present in storage.
 	AssetMissing,
 	/// The asset is not sufficient and thus does not have a reliable `min_balance` so it cannot be converted.
@@ -199,27 +202,29 @@ pub enum ConversionError {
 
 /// Converts a balance value into an asset balance based on the ratio between the existential
 /// deposit and the minimum asset balance.
-pub struct BalanceToAssetBalance<T, Balance, ED>(PhantomData<(T, Balance, ED)>);
-impl<T: Config, Balance, ED> BalanceToAssetBalance<T, Balance, ED>
+pub struct BalanceToAssetBalance<T, CUR, CON>(PhantomData<(T, CUR, CON)>);
+impl<T: Config, CUR, CON> BalanceToAssetBalance<T, CUR, CON>
 where
-	Balance: Into<<T as Config>::Balance> + FixedPointOperand + Ord + One,
-	<T as Config>::Balance: FixedPointOperand,
-	ED: Get<Balance>,
+	CUR: Currency<<T as frame_system::Config>::AccountId>,
+	CON: Convert<<CUR as Currency<<T as frame_system::Config>::AccountId>>::Balance, <T as Config>::Balance>,
+	<CUR as Currency<<T as frame_system::Config>::AccountId>>::Balance: FixedPointOperand + Zero,
+	<T as Config>::Balance: FixedPointOperand + Zero,
 {
 	/// Convert the given balance value into an asset balance based on the ratio between the existential
 	/// deposit and the minimum asset balance.
 	///
-	/// Will return `Err` if the asset is not found or not sufficient.
-	pub fn to_asset_balance(balance: Balance, asset_id: <T as Config>::AssetId) -> Result<<T as Config>::Balance, ConversionError> {
-		// make sure we don't divide by zero
-		let ed = ED::get().max(One::one());
+	/// Will return `Err` if the asset is not found, not sufficient or the external minimum balance is zero.
+	pub fn to_asset_balance(balance: <CUR as Currency<<T as frame_system::Config>::AccountId>>::Balance, asset_id: <T as Config>::AssetId) -> Result<<T as Config>::Balance, ConversionError> {
 		let asset = Asset::<T>::get(asset_id).ok_or(ConversionError::AssetMissing)?;
-		if asset.is_sufficient {
-			// balance * min_balance / existential_deposit
-			Ok(FixedU128::saturating_from_rational(asset.min_balance, ed.into())
-				.saturating_mul_int(balance.into()))
-		} else {
-			Err(ConversionError::AssetNotSufficient)
-		}
+		// only sufficient assets have a min balance with reliable value
+		ensure!(asset.is_sufficient, ConversionError::AssetNotSufficient);
+		let min_balance = CON::convert(<CUR as Currency<<T as frame_system::Config>::AccountId>>::minimum_balance());
+		// make sure we don't divide by zero
+		debug_assert!(!min_balance.is_zero(), "the minimum balance should not be zero");
+		ensure!(!min_balance.is_zero(), ConversionError::MinBalanceZero);
+		let balance = CON::convert(balance);
+		// balance * asset.min_balance / min_balance
+		Ok(FixedU128::saturating_from_rational(asset.min_balance, min_balance)
+			.saturating_mul_int(balance))
 	}
 }
