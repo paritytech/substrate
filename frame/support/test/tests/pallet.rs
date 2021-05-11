@@ -762,19 +762,19 @@ fn metadata() {
 				},
 				PalletConstantMetadata {
 					name: "DbWeight",
-					ty: scale_info::meta_type::<u32>(), // todo
+					ty: scale_info::meta_type::<frame_support::weights::RuntimeDbWeight>(),
 					value: vec![],
 					documentation: vec![],
 				},
 				PalletConstantMetadata {
 					name: "Version",
-					ty: scale_info::meta_type::<u32>(), // todo
+					ty: scale_info::meta_type::<sp_version::RuntimeVersion>(),
 					value: vec![],
 					documentation: vec![],
 				},
 				PalletConstantMetadata {
 					name: "SS58Prefix",
-					ty: scale_info::meta_type::<u32>(), // todo
+					ty: scale_info::meta_type::<u8>(),
 					value: vec![],
 					documentation: vec![]
 				}
@@ -951,7 +951,7 @@ fn metadata() {
 				},
 				PalletConstantMetadata {
 					name: "some_extra",
-					ty: scale_info::meta_type::<u32>(),
+					ty: scale_info::meta_type::<u64>(),
 					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
 					documentation: vec![
 						" Some doc",
@@ -960,7 +960,7 @@ fn metadata() {
 				},
 				PalletConstantMetadata {
 					name: "some_extra_extra",
-					ty: scale_info::meta_type::<u32>(),
+					ty: scale_info::meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					documentation: vec![
 						" Some doc",
@@ -968,7 +968,7 @@ fn metadata() {
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: scale_info::meta_type::<pallet::Error<Runtime>>() }),
-		}
+		},
 	];
 
 	let extrinsic = ExtrinsicMetadata {
@@ -980,29 +980,19 @@ fn metadata() {
 	};
 
 	let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
-	// match actual_metadata.1 {
-	// 	RuntimeMetadata::V13(ref metadata) => {
-	// 		println!("{:?}", metadata.pallets);
-	// 	},
-	// 	_ => panic!("metadata has been bump, test needs to be updated"),
-	// };
 	let expected_metadata = match expected_metadata.1 {
 		RuntimeMetadata::V13(metadata) => {
 			metadata
 		},
-		_ => panic!("metadata has been bump, test needs to be updated"),
+		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
 	let actual_metadata = match Runtime::metadata().1 {
 		RuntimeMetadata::V13(metadata) => {
 			metadata
 		},
-		_ => panic!("metadata has been bump, test needs to be updated"),
+		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
-
-	// let _ = vec![
-	// 	PalletMetadata { name: "Example2", storage: Some(StorageMetadata { prefix: "Example2", entries: [] }), calls: Some(PalletCallMetadata { ty: UntrackedSymbol { id: 43, marker: PhantomData }, calls: [] }), event: Some(PalletEventMetadata { ty: UntrackedSymbol { id: 44, marker: PhantomData } }), constants: [], error: None, index: 2 }
-	// ];
 
 	pretty_assertions::assert_eq!(actual_metadata.pallets[1], expected_metadata.pallets[1]);
 }
