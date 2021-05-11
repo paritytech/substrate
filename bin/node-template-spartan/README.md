@@ -28,6 +28,47 @@ Based on a fork of Substrate Node Template.
 
 Follow these steps to get started with the Spartan Node Template :hammer_and_wrench:
 
+Note that this repo is for running a spartan-client. In order to run a full node which participates in consensus and produces blocks you must also run a [spartan-farmer](https://github.com/subspace/spartan-farmer/tree/w3f-spartan-ms-1.1) and that farmer must have first created a disk-based plot. For clarity we provide instructions for both repos in the docker guide below. For building and running the farmer in development mode from source, refer to the instructions in the [readme](https://github.com/subspace/spartan-farmer/tree/w3f-spartan-ms-1.1#install-and-run-manually). 
+
+### Run with Docker
+
+**Note:** These instructions assume you run the farmer in one terminal and the client in a second terminal.
+
+First, install [Docker](https://docs.docker.com/get-docker/).
+
+#### Initialize Farmer (Terminal 1)
+
+Create volume for plot and initialize 1 GiB plot (should take a thirty seconds to a few minutes):
+```bash
+docker volume create spartan-farmer
+docker run --rm -it \
+  --name spartan-farmer \
+  --mount source=spartan-farmer,target=/var/spartan \
+  subspacelabs/spartan-farmer plot 256000 spartan
+```
+
+#### Run the Client (Terminal 2)
+
+Start a single node development chain:
+```bash
+docker run --rm --init -it \
+  --name node-template-spartan \
+  subspacelabs/node-template-spartan --dev --tmp
+```
+
+#### Run the Farmer (Terminal 1)
+
+Once node is running, you can connect farmer to it by running following in a separate terminal:
+```bash
+docker run --rm --init -it \
+  --name spartan-farmer \
+  --mount source=spartan-farmer,target=/var/spartan \
+  --net container:node-template-spartan \
+  subspacelabs/spartan-farmer farm
+```
+
+Now you should see block production in the first terminal where node is running.
+
 ### Run In Development Mode
 
 #### Install Rust
@@ -44,7 +85,7 @@ sudo apt-get install llvm clang gcc make m4
 ```
 
 #### Setup Spartan-Farmer
-Create 1 GiB plot according to following instructions: https://github.com/subspace/spartan-farmer
+Create 1 GiB plot according to following [instructions](https://github.com/subspace/spartan-farmer/tree/w3f-spartan-ms-1.1#install-and-run-manually)
 
 #### Install and Run Node
 
@@ -71,37 +112,6 @@ NOTE: Above commands require nightly compiler for now, make sure to install it i
 ```
 rustup toolchain install nightly
 ```
-
-### Run with Docker
-
-First, install [Docker](https://docs.docker.com/get-docker/).
-
-Create volume for plot and initialize 1 GiB plot (should take a few seconds to a few minutes):
-```bash
-docker volume create spartan-farmer
-docker run --rm -it \
-  --name spartan-farmer \
-  --mount source=spartan-farmer,target=/var/spartan \
-  subspacelabs/spartan-farmer plot 256000 spartan
-```
-
-Start a single node development chain:
-```bash
-docker run --rm --init -it \
-  --name node-template-spartan \
-  subspacelabs/node-template-spartan --dev --tmp
-```
-
-Once node is running, you can connect farmer to it by running following in a separate terminal:
-```bash
-docker run --rm --init -it \
-  --name spartan-farmer \
-  --mount source=spartan-farmer,target=/var/spartan \
-  --net container:node-template-spartan \
-  subspacelabs/spartan-farmer farm
-```
-
-Now you should see block production in the first terminal where node is running.
 
 ### Run Tests
 
