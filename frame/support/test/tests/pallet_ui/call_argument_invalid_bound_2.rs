@@ -5,7 +5,8 @@ mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Bar;
+		// todo: [AJ] should we rather modify the stderr to expect the missing trait bound error?
+		type Bar: scale_info::TypeInfo;
 	}
 
 	#[pallet::pallet]
