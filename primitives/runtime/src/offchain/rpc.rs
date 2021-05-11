@@ -191,7 +191,8 @@ mod test {
 		t.register_extension(OffchainWorkerExt::new(offchain));
 
 		const RPC_METHOD: &'static str = "chain_getFinalizedHead";
-		const RESPONSE: &[u8] = br#"{"jsonrpc":"2.0","result":"0x3141e6406e195803b0f367c4c6aacc0673a5432f3ec010afae602ff09998123b","id":1}"#;
+		const RESPONSE: &[u8] =
+			br#"{"jsonrpc":"2.0","result":"0x3141e6406e195803b0f367c4c6aacc0673a5432f3ec010afae602ff09998123b","id":1}"#;
 		const EXPECTED_RESULT: &[u8] = b"0x3141e6406e195803b0f367c4c6aacc0673a5432f3ec010afae602ff09998123b";
 
 		let request_body = json!({
