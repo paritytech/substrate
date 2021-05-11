@@ -17,6 +17,7 @@ use test_runtime::{
 
 use crate::{METRICS_CONTRACT_ADDR, METRICS_CONTRACT_ID, REPORT_METRICS_SELECTOR};
 use sp_core::bytes::from_hex;
+use hex_literal::hex;
 
 mod test_runtime;
 
@@ -159,17 +160,19 @@ fn should_submit_signed_transaction_on_chain() {
         eprintln!("Transactions: {:?}\n", transactions);
         assert_eq!(transactions.len(), 2);
 
-        // Check metrics based on ddc_metrics_node-0.json and ddc_metrics_f6.json.
+        // Check metrics of an app based on ddc_metrics_node-0.json and ddc_metrics_node-3.json.
+        let app_id = AccountId32::from(hex!("00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830"));
         let expected_call = ExampleOffchainWorker::encode_report_metrics(
-            &AccountId32::from([0; 32]),
+            &app_id,
             INIT_DAY_MS,
             1 + 10,
             2 + 20);
         assert!(transactions[0].ends_with(&expected_call), "Expected a specific call to the report_metrics function");
 
-        // Check metrics based on ddc_metrics_node-3.json.
+        // Check metrics of the second app.
+        let app_id = AccountId32::from(hex!("100ad4097b6e60700a5d5c5294cb6d663090ef5f547e84cc20ec6bcc7a552f13"));
         let expected_call = ExampleOffchainWorker::encode_report_metrics(
-            &AccountId32::from([0; 32]),
+            &app_id,
             INIT_DAY_MS,
             100,
             200);

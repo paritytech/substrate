@@ -52,7 +52,6 @@ pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 struct NodeInfo {
     #[serde(deserialize_with = "de_string_to_bytes")]
     id: Vec<u8>,
-    //#[serde(deserialize_with = "de_string_to_bytes")]
     httpAddr: String,
     totalPartitions: u32,
     reservedPartitions: u32,
@@ -85,8 +84,7 @@ struct PartitionInfo {
 #[serde(crate = "alt_serde")]
 #[allow(non_snake_case)]
 struct MetricInfo {
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    appPubKey: Vec<u8>,
+    appPubKey: String,
     #[serde(deserialize_with = "de_string_to_bytes")]
     partitionId: Vec<u8>,
     bytes: u128,
@@ -271,13 +269,11 @@ impl<T: Trait> Module<T> {
         metrics: Vec<MetricInfo>,
     ) -> ResultStr<()> {
         for one_metric in metrics.iter() {
+            let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
+
             let results = signer.send_signed_transaction(
                 |account| {
                     debug::info!("[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?})", account.id, one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
-
-//                  TODO: make account ID from hex string.
-//					let hex = String::from_utf8_lossy(&one_metric.appPubKey);
-                    let app_id = AccountId32::default();
 
                     let call_data = Self::encode_report_metrics(&app_id, day_start_ms, one_metric.bytes, one_metric.requests);
 
@@ -396,6 +392,17 @@ impl<T: Trait> Module<T> {
         requests.encode_to(&mut call_data);
         call_data
     }
+
+    fn account_id_from_hex(id_hex: &str) -> ResultStr<AccountId32> {
+        let id_hex = id_hex.trim_start_matches("0x");
+        if id_hex.len() != 64 {
+            return Err("Wrong length of hex-encoded account ID, expected 64");
+        }
+        let mut bytes = [0u8; 32];
+        hex::decode_to_slice(id_hex, &mut bytes)
+            .map_err(|_| "invalid hex address.")?;
+        Ok(AccountId32::from(bytes))
+    }
 }
 
 #[derive(Default)]
@@ -403,8 +410,8 @@ struct MetricsAggregator(Vec<MetricInfo>);
 
 impl MetricsAggregator {
     fn add(&mut self, metrics: &MetricInfo) {
-        let pubkey_from_metric = sp_std::str::from_utf8(&metrics.appPubKey).unwrap();
-        let existing_pubkey_index = self.0.iter().position(|one_result_obj| pubkey_from_metric.eq(sp_std::str::from_utf8(&one_result_obj.appPubKey).unwrap()));
+        let existing_pubkey_index = self.0.iter().position(|one_result_obj|
+            metrics.appPubKey == one_result_obj.appPubKey);
 
         if existing_pubkey_index.is_none() {
             // New app.
