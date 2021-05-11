@@ -7639,6 +7639,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-network-fuzzer"
+version = "0.1.0"
+dependencies = [
+ "honggfuzz",
+]
+
+[[package]]
 name = "sc-network-gossip"
 version = "0.9.0"
 dependencies = [
