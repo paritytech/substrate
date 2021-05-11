@@ -86,6 +86,59 @@ impl<P, Client> Author<P, Client>
 	pub fn into_rpc_module(self) -> std::result::Result<RpcModule, JsonRpseeError> {
 		let mut ctx_module = RpcContextModule::new(self);
 
+		ctx_module.register_method("author_insertKey", |params, author| {
+			log::info!("author_insertKey [{:?}]", params);
+			author.deny_unsafe.check_if_safe()?;
+			let (key_type, suri, public): (String, String, Bytes) = params.parse()?;
+			let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
+			SyncCryptoStore::insert_unknown(
+				&*author.keystore,
+				key_type, &suri,
+				&public[..]
+			)
+			.map_err(|_| Error::KeyStoreUnavailable)?;
+			Ok(())
+		})?;
+
+		ctx_module.register_method::<_, Bytes>("author_rotateKeys", |params, author| {
+			log::info!("author_rotateKeys [{:?}]", params);
+			author.deny_unsafe.check_if_safe()?;
+
+			let best_block_hash = author.client.info().best_hash;
+			author.client.runtime_api().generate_session_keys(
+				&generic::BlockId::Hash(best_block_hash),
+				None,
+			)
+			.map(Into::into)
+			.map_err(|api_err| Error::Client(Box::new(api_err)).into())
+		})?;
+
+		ctx_module.register_method("author_hasSessionKeys", |params, author| {
+			log::info!("author_hasSessionKeys [{:?}]", params);
+			author.deny_unsafe.check_if_safe()?;
+
+			let session_keys: Bytes = params.one()?;
+			let best_block_hash = author.client.info().best_hash;
+			let keys = author.client.runtime_api().decode_session_keys(
+				&generic::BlockId::Hash(best_block_hash),
+				session_keys.to_vec(),
+			).map_err(|e| RpseeCallError::Failed(Box::new(e)))?
+			.ok_or_else(|| Error::InvalidSessionKeys)?;
+
+			Ok(SyncCryptoStore::has_keys(&*author.keystore, &keys))
+		})?;
+
+		ctx_module.register_method("author_hasKey", |params, author| {
+			log::info!("author_hasKey [{:?}]", params);
+			author.deny_unsafe.check_if_safe()?;
+
+			// TODO: this compiles, but I don't know how it could actually work...?
+			// let (public_key, key_type)  = params.parse::<(Vec<u8>, KeyTypeId)>()?;
+			let (public_key, key_type)  = params.parse::<(Vec<u8>, String)>()?;
+			let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
+			Ok(SyncCryptoStore::has_keys(&*author.keystore, &[(public_key, key_type)]))
+		})?;
+
 		ctx_module.register_method::<_, TxHash<P>>("author_submitExtrinsic", |params, author| {
 			log::info!("author_submitExtrinsic [{:?}]", params);
 			// TODO: make is possible to register async methods on jsonrpsee servers.
@@ -106,29 +159,33 @@ impl<P, Client> Author<P, Client>
 					.unwrap_or_else(|e| RpseeCallError::Failed(Box::new(e))))
 		})?;
 
-		ctx_module.register_method("author_hasSessionKeys", |params, author| {
-			log::info!("author_hasSessionKeys [{:?}]", params);
-			author.deny_unsafe.check_if_safe()?;
-
-			let session_keys: Bytes = params.one()?;
-			let best_block_hash = author.client.info().best_hash;
-			let keys = author.client.runtime_api().decode_session_keys(
-				&generic::BlockId::Hash(best_block_hash),
-				session_keys.to_vec(),
-			).map_err(|e| RpseeCallError::Failed(Box::new(e)))?
-			.ok_or_else(|| Error::InvalidSessionKeys)?;
-
-			Ok(SyncCryptoStore::has_keys(&*author.keystore, &keys))
+		ctx_module.register_method::<_, Vec<Bytes>>("author_pendingExtrinsics", |_, author| {
+			log::info!("author_pendingExtrinsics");
+			Ok(author.pool.ready().map(|tx| tx.data().encode().into()).collect())
 		})?;
 
-		ctx_module.register_method("author_insertKey", |params, author| {
-			log::info!("author_insertKey [{:?}]", params);
+		ctx_module.register_method::<_, Vec<TxHash<P>>>("author_removeExtrinsic", |params, author| {
+			log::info!("author_removeExtrinsic [{:?}]", params);
 			author.deny_unsafe.check_if_safe()?;
-			let (key_type, suri, public): (String, String, Bytes) = params.parse()?;
-			let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-			SyncCryptoStore::insert_unknown(&*author.keystore, key_type, &suri, &public[..])
-				.map_err(|_| Error::KeyStoreUnavailable)?;
-			Ok(())
+
+			let bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>> = params.parse()?;
+			let hashes = bytes_or_hash.into_iter()
+				.map(|x| match x {
+					hash::ExtrinsicOrHash::Hash(h) => Ok(h),
+					hash::ExtrinsicOrHash::Extrinsic(bytes) => {
+						let xt = Decode::decode(&mut &bytes[..])?;
+						Ok(author.pool.hash_of(&xt))
+					}
+				})
+				.collect::<Result<Vec<_>>>()?;
+
+			Ok(
+				author.pool
+					.remove_invalid(&hashes)
+					.into_iter()
+					.map(|tx| tx.hash().clone())
+					.collect()
+			)
 		})?;
 
 		Ok(ctx_module.into_module())
