@@ -323,7 +323,7 @@ pub trait Ext: sealing::Sealed {
 	/// This is a no-op if debug message recording is disabled which is always the case
 	/// when the code is executing on-chain.
 	///
-	/// Returns `true` if debug message recording is disabled. Otherwise `false` is returned.
+	/// Returns `true` if debug message recording is enabled. Otherwise `false` is returned.
 	fn append_debug_buffer(&mut self, msg: &str) -> bool;
 }
 
