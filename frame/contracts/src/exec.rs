@@ -17,7 +17,7 @@
 
 use crate::{
 	CodeHash, Event, Config, Pallet as Contracts,
-	BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::Storage,
+	BalanceOf, ContractInfo, gas::GasMeter, rent::{Rent, RentStatus}, storage::Storage,
 	Error, ContractInfoOf, Schedule, AliveContractInfo, AccountCounter,
 };
 use sp_core::crypto::UncheckedFrom;
@@ -312,6 +312,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Information needed for rent calculations.
 	fn rent_params(&self) -> &RentParams<Self::T>;
+
+	/// Information about the required deposit and resulting rent.
+	fn rent_status(&mut self, at_refcount: u32) -> RentStatus<Self::T>;
 
 	/// Get a mutable reference to the nested gas meter.
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T>;
@@ -1238,6 +1241,20 @@ where
 
 	fn rent_params(&self) -> &RentParams<Self::T> {
 		&self.top_frame().rent_params
+	}
+
+	fn rent_status(&mut self, at_refcount: u32) -> RentStatus<Self::T> {
+		let frame = self.top_frame_mut();
+		let balance = T::Currency::free_balance(&frame.account_id);
+		let code_size = frame.rent_params.code_size;
+		let refcount = frame.rent_params.code_refcount;
+		<Rent<T, E>>::rent_status(
+			&balance,
+			&frame.contract_info(),
+			code_size,
+			refcount,
+			at_refcount,
+		)
 	}
 
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
@@ -2188,6 +2205,48 @@ mod tests {
 				&mut gas_meter,
 				&schedule,
 				subsistence * 50,
+				vec![],
+				None,
+			).unwrap();
+		});
+	}
+
+	#[test]
+	fn rent_status_works() {
+		let code_hash = MockLoader::insert(Call, |ctx, _| {
+			assert_eq!(ctx.ext.rent_status(0), RentStatus {
+				max_deposit: 80000,
+				current_deposit: 80000,
+				custom_refcount_deposit: None,
+				max_rent: 32,
+				current_rent: 32,
+				custom_refcount_rent: None,
+				_reserved: None,
+			});
+			assert_eq!(ctx.ext.rent_status(1), RentStatus {
+				max_deposit: 80000,
+				current_deposit: 80000,
+				custom_refcount_deposit: Some(80000),
+				max_rent: 32,
+				current_rent: 32,
+				custom_refcount_rent: Some(32),
+				_reserved: None,
+			});
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, subsistence * 10);
+			place_contract(&BOB, code_hash);
+			MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&schedule,
+				0,
 				vec![],
 				None,
 			).unwrap();

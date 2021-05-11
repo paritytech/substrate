@@ -535,6 +535,32 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
+	seal_rent_status {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let pages = code::max_pages::<T>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				name: "seal_rent_status",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: None,
+			}],
+			data_segments: vec![DataSegment {
+				offset: 0,
+				value: (pages * 64 * 1024 - 4).to_le_bytes().to_vec(),
+			}],
+			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
+				Instruction::I32Const(1),
+				Instruction::I32Const(4),
+				Instruction::I32Const(0),
+				Instruction::Call(0),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+
 	seal_weight_to_fee {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let pages = code::max_pages::<T>();

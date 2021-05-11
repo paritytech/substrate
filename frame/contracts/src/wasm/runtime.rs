@@ -222,6 +222,8 @@ pub enum RuntimeCosts {
 	CopyIn(u32),
 	/// Weight of calling `seal_rent_params`.
 	RentParams,
+	/// Weight of calling `seal_rent_status`.
+	RentStatus,
 }
 
 impl RuntimeCosts {
@@ -291,6 +293,7 @@ impl RuntimeCosts {
 			ChainExtension(amount) => amount,
 			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
 			RentParams => s.rent_params,
+			RentStatus => s.rent_status,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -1583,6 +1586,26 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeCosts::RentParams)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.rent_params().encode(), false, already_charged
+		)?)
+	},
+
+	// Stores the rent status into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as [`crate::rent::RentStatus`].
+	//
+	// # Parameters
+	//
+	// - `at_refcount`: The refcount assumed for the returned `custom_refcount_*` fields
+	[seal0] seal_rent_status(ctx, at_refcount: u32, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::RentStatus)?;
+		let rent_status = ctx.ext.rent_status(at_refcount).encode();
+		Ok(ctx.write_sandbox_output(
+			out_ptr, out_len_ptr, &rent_status, false, already_charged
 		)?)
 	},
 );

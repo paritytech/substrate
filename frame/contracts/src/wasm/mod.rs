@@ -247,6 +247,7 @@ mod tests {
 			RentParams, ExecError, ErrorOrigin,
 		},
 		gas::GasMeter,
+		rent::RentStatus,
 		tests::{Test, Call, ALICE, BOB},
 	};
 	use std::collections::HashMap;
@@ -451,6 +452,9 @@ mod tests {
 		}
 		fn rent_params(&self) -> &RentParams<Self::T> {
 			&self.rent_params
+		}
+		fn rent_status(&mut self, _at_refcount: u32) -> RentStatus<Self::T> {
+			Default::default()
 		}
 		fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
@@ -1856,6 +1860,48 @@ mod tests {
 		).unwrap();
 		let rent_params = Bytes(<RentParams<Test>>::default().encode());
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_params });
+	}
+
+	const CODE_RENT_STATUS: &str = r#"
+(module
+	(import "seal0" "seal_rent_status" (func $seal_rent_status (param i32 i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0, 4) buffer size = 128 bytes
+	(data (i32.const 0) "\80")
+
+	;; [4; inf) buffer where the result is copied
+
+	(func (export "call")
+		;; Load the rent params into memory
+		(call $seal_rent_status
+			(i32.const 1)		;; at_refcount
+			(i32.const 4)		;; Pointer to the output buffer
+			(i32.const 0)		;; Pointer to the size of the buffer
+		)
+
+		;; Return the contents of the buffer
+		(call $seal_return
+			(i32.const 0)				;; return flags
+			(i32.const 4)				;; buffer pointer
+			(i32.load (i32.const 0))	;; buffer size
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn rent_status_work() {
+		let output = execute(
+			CODE_RENT_STATUS,
+			vec![],
+			MockExt::default(),
+		).unwrap();
+		let rent_status = Bytes(<RentStatus<Test>>::default().encode());
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_status });
 	}
 
 	const CODE_DEBUG_MESSAGE: &str = r#"

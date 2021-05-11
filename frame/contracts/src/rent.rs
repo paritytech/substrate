@@ -35,6 +35,49 @@ use sp_runtime::{
 	traits::{Bounded, CheckedDiv, CheckedMul, SaturatedConversion, Saturating, Zero},
 };
 
+/// Information about the required deposit and resulting rent.
+///
+/// The easiest way to guarantee that a contract stays alive is to assert that
+/// `max_rent == 0` at the **end** of a contract's execution.
+///
+/// # Note
+///
+/// The `current_*` fields do **not** consider changes to the code's refcount made during
+/// the currently running call.
+#[derive(codec::Encode)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
+pub struct RentStatus<T: Config> {
+	/// Required deposit assuming that this contract is the only user of its code.
+	pub max_deposit: BalanceOf<T>,
+	/// Required deposit assuming the code's current refcount.
+	pub current_deposit: BalanceOf<T>,
+	/// Required deposit assuming the specified refcount (None if 0 is supplied).
+	pub custom_refcount_deposit: Option<BalanceOf<T>>,
+	/// Rent that is payed assuming that the contract is the only user of its code.
+	pub max_rent: BalanceOf<T>,
+	/// Rent that is payed given the code's current refcount.
+	pub current_rent: BalanceOf<T>,
+	/// Rent that is payed assuming the specified refcount (None is 0 is supplied).
+	pub custom_refcount_rent: Option<BalanceOf<T>>,
+	/// Reserved for backwards compatible changes to this data structure.
+	pub _reserved: Option<()>,
+}
+
+/// We cannot derive `Default` because `T` does not necessarily implement `Default`.
+impl<T: Config> Default for RentStatus<T> {
+	fn default() -> Self {
+		Self {
+			max_deposit: Default::default(),
+			current_deposit: Default::default(),
+			custom_refcount_deposit: Default::default(),
+			max_rent: Default::default(),
+			current_rent: Default::default(),
+			custom_refcount_rent: Default::default(),
+			_reserved: Default::default(),
+		}
+	}
+}
+
 pub struct Rent<T, E>(sp_std::marker::PhantomData<(T, E)>);
 
 impl<T, E> Rent<T, E>
@@ -160,7 +203,7 @@ where
 		// Compute how much would the fee per block be with the *updated* balance.
 		let total_balance = T::Currency::total_balance(account);
 		let free_balance = T::Currency::free_balance(account);
-		let fee_per_block = Self::compute_fee_per_block(
+		let fee_per_block = Self::fee_per_block(
 			&free_balance, &alive_contract_info, code_size,
 		);
 		if fee_per_block.is_zero() {
@@ -281,24 +324,67 @@ where
 		Ok((caller_code_len, tombstone_code_len))
 	}
 
-	/// Returns a fee charged per block from the contract.
-	///
-	/// This function accounts for the storage rent deposit. I.e. if the contract possesses enough funds
-	/// then the fee can drop to zero.
-	fn compute_fee_per_block(
+	/// Create a new `RentStatus` struct for pass through to a requesting contract.
+	pub fn rent_status(
 		free_balance: &BalanceOf<T>,
+		contract: &AliveContractInfo<T>,
+		aggregated_code_size: u32,
+		current_refcount: u32,
+		at_refcount: u32,
+	) -> RentStatus<T> {
+		let calc_share = |refcount: u32| {
+			aggregated_code_size.checked_div(refcount).unwrap_or(0)
+		};
+		let max_share = calc_share(1);
+		let current_share = calc_share(current_refcount);
+		let custom_share = calc_share(at_refcount);
+		RentStatus {
+			max_deposit: Self::required_deposit(contract, max_share),
+			current_deposit: Self::required_deposit(contract, current_share),
+			custom_refcount_deposit:
+				if at_refcount > 0 {
+					Some(Self::required_deposit(contract, custom_share))
+				} else {
+					None
+				},
+			max_rent: Self::fee_per_block(free_balance, contract, max_share),
+			current_rent: Self::fee_per_block(free_balance, contract, current_share),
+			custom_refcount_rent:
+				if at_refcount > 0 {
+					Some(Self::fee_per_block(free_balance, contract, custom_share))
+				} else {
+					None
+				},
+			_reserved: None,
+		}
+	}
+
+	/// Returns how much deposit is required to not pay rent.
+	fn required_deposit(
 		contract: &AliveContractInfo<T>,
 		code_size_share: u32,
 	) -> BalanceOf<T> {
-		let uncovered_by_balance = T::DepositPerStorageByte::get()
+		T::DepositPerStorageByte::get()
 			.saturating_mul(contract.storage_size.saturating_add(code_size_share).into())
 			.saturating_add(
 				T::DepositPerStorageItem::get()
 					.saturating_mul(contract.pair_count.into())
 			)
 			.saturating_add(T::DepositPerContract::get())
+	}
+
+	/// Returns a fee charged per block from the contract.
+	///
+	/// This function accounts for the storage rent deposit. I.e. if the contract
+	/// possesses enough funds then the fee can drop to zero.
+	fn fee_per_block(
+		free_balance: &BalanceOf<T>,
+		contract: &AliveContractInfo<T>,
+		code_size_share: u32,
+	) -> BalanceOf<T> {
+		let missing_deposit = Self::required_deposit(contract, code_size_share)
 			.saturating_sub(*free_balance);
-		T::RentFraction::get().mul_ceil(uncovered_by_balance)
+		T::RentFraction::get().mul_ceil(missing_deposit)
 	}
 
 	/// Returns amount of funds available to consume by rent mechanism.
@@ -354,7 +440,7 @@ where
 		let free_balance = T::Currency::free_balance(account);
 
 		// An amount of funds to charge per block for storage taken up by the contract.
-		let fee_per_block = Self::compute_fee_per_block(&free_balance, contract, code_size);
+		let fee_per_block = Self::fee_per_block(&free_balance, contract, code_size);
 		if fee_per_block.is_zero() {
 			// The rent deposit offset reduced the fee to 0. This means that the contract
 			// gets the rent for free.
