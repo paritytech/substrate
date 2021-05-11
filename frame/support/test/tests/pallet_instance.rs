@@ -23,10 +23,6 @@ use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	storage::unhashed,
 };
-use scale_info::{
-	form::PortableForm,
-	IntoPortable,
-};
 use sp_runtime::DispatchError;
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
@@ -556,9 +552,152 @@ fn pallet_on_genesis() {
 #[test]
 fn metadata() {
 	use frame_support::metadata::*;
-	use codec::{Decode, Encode};
 
-	let expected_pallet_metadata = PalletMetadata {
+	let system_pallet_metadata = PalletMetadata {
+		index: 0,
+		name: "System",
+		storage: None,
+		calls: Some(PalletCallMetadata {
+			ty: scale_info::meta_type::<frame_system::Call<Runtime>>(),
+			calls: vec![
+				FunctionMetadata {
+					name: "fill_block",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "_ratio",
+							ty: scale_info::meta_type::<sp_arithmetic::per_things::Perbill>()
+						}
+					],
+					documentation: vec![
+						" A dispatch that will fill the block weight up to the given ratio.a"
+					]
+				},
+				FunctionMetadata {
+					name: "remark",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "_remark",
+							ty: scale_info::meta_type::<Vec<u8>>(),
+						}],
+					documentation: vec![]
+				},
+				FunctionMetadata {
+					name: "set_heap_pages",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "pages",
+							ty: scale_info::meta_type::<u64>(),
+						}
+					],
+					documentation: vec![]
+				},
+				FunctionMetadata {
+					name: "set_code",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "code",
+							ty: scale_info::meta_type::<Vec<u8>>(),
+						}
+					],
+					documentation: vec![]
+				},
+				FunctionMetadata {
+					name: "set_code_without_checks",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "code",
+							ty: scale_info::meta_type::<Vec<u8>>(),
+						}
+					],
+					documentation: vec![]
+				},
+				FunctionMetadata {
+					name: "set_changes_trie_config",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "changes_trie_config",
+							ty: scale_info::meta_type::<Option<sp_core::ChangesTrieConfiguration>>(),
+						}
+					],
+					documentation: vec![]					},
+				FunctionMetadata {
+					name: "set_storage",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "items",
+							ty: scale_info::meta_type::<Vec<frame_system::KeyValue>>(),
+						}
+					],
+					documentation: vec![]					},
+				FunctionMetadata { name: "kill_storage",
+					arguments: vec![
+						FunctionArgumentMetadata { name: "keys", ty: scale_info::meta_type::<Vec<frame_system::Key>>() }
+					],
+					documentation: vec![]					},
+				FunctionMetadata {
+					name: "kill_prefix",
+					arguments: vec![
+						FunctionArgumentMetadata { name: "prefix", ty: scale_info::meta_type::<frame_system::Key>() },
+						FunctionArgumentMetadata {
+							name: "_subkeys",
+							ty: scale_info::meta_type::<u32>()
+						}
+					],
+					documentation: vec![]					},
+				FunctionMetadata {
+					name: "remark_with_event",
+					arguments: vec![
+						FunctionArgumentMetadata {
+							name: "remark",
+							ty: scale_info::meta_type::<Vec<u8>>(),
+						}
+					],
+					documentation: vec![]					}
+			]
+		}),
+		event: Some(PalletEventMetadata { ty: scale_info::meta_type::<frame_system::Event<Runtime>>() }),
+		constants: vec![
+			PalletConstantMetadata {
+				name: "BlockWeights",
+				ty: scale_info::meta_type::<frame_system::limits::BlockWeights>(),
+				value: vec![],
+				documentation: vec![]
+			},
+			PalletConstantMetadata {
+				name: "BlockLength",
+				ty: scale_info::meta_type::<frame_system::limits::BlockLength>(),
+				value: vec![],
+				documentation: vec![],
+			},
+			PalletConstantMetadata {
+				name: "BlockHashCount",
+				ty: scale_info::meta_type::<u32>(),
+				value: vec![],
+				documentation: vec![],
+			},
+			PalletConstantMetadata {
+				name: "DbWeight",
+				ty: scale_info::meta_type::<frame_support::weights::RuntimeDbWeight>(),
+				value: vec![],
+				documentation: vec![],
+			},
+			PalletConstantMetadata {
+				name: "Version",
+				ty: scale_info::meta_type::<sp_version::RuntimeVersion>(),
+				value: vec![],
+				documentation: vec![],
+			},
+			PalletConstantMetadata {
+				name: "SS58Prefix",
+				ty: scale_info::meta_type::<u8>(),
+				value: vec![],
+				documentation: vec![]
+			}
+		],
+		error: Some(PalletErrorMetadata { ty: scale_info::meta_type::<frame_system::Error<Runtime>>() }),
+	};
+
+	let example_pallet_metadata = PalletMetadata {
 		index: 1,
 		name: "Example",
 		storage: Some(StorageMetadata {
@@ -664,36 +803,65 @@ fn metadata() {
 		error: Some(PalletErrorMetadata { ty: scale_info::meta_type::<pallet::Error<Runtime>>() }),
 	};
 
-	let mut expected_pallet_instance1_metadata = expected_pallet_metadata.clone();
-	expected_pallet_instance1_metadata.name = "Instance1Example";
-	expected_pallet_instance1_metadata.index = 2;
-	match expected_pallet_instance1_metadata.storage {
+	let mut example_pallet_instance1_metadata = example_pallet_metadata.clone();
+	example_pallet_instance1_metadata.name = "Instance1Example";
+	example_pallet_instance1_metadata.index = 2;
+	match example_pallet_instance1_metadata.calls {
+		Some(ref mut calls_meta) => {
+			calls_meta.ty = scale_info::meta_type::<pallet::Call<Runtime, pallet::Instance1>>();
+		},
+		_ => unreachable!(),
+	}
+	match example_pallet_instance1_metadata.event {
+		Some(ref mut event_meta) => {
+			event_meta.ty = scale_info::meta_type::<pallet::Event<Runtime, pallet::Instance1>>();
+		},
+		_ => unreachable!(),
+	}
+	match example_pallet_instance1_metadata.error {
+		Some(ref mut error_meta) => {
+			error_meta.ty = scale_info::meta_type::<pallet::Error<Runtime, pallet::Instance1>>();
+		},
+		_ => unreachable!(),
+	}
+	match example_pallet_instance1_metadata.storage {
 		Some(ref mut storage_meta) => {
 			storage_meta.prefix = "Instance1Example";
 		},
 		_ => unreachable!(),
 	}
 
+	let pallets = vec![
+		system_pallet_metadata,
+		example_pallet_metadata,
+		example_pallet_instance1_metadata,
+	];
 
-	let metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V13(metadata) => metadata,
-		_ => panic!("metadata has been bump, test needs to be updated"),
+	let extrinsic = ExtrinsicMetadata {
+		ty: scale_info::meta_type::<UncheckedExtrinsic>(),
+		version: 4,
+		signed_extensions: vec![
+			SignedExtensionMetadata { identifier: "UnitSignedExtension", ty: scale_info::meta_type::<()>() }
+		]
 	};
 
-	let pallet_metadata = PalletMetadata::<PortableForm>::decode(
-		&mut &metadata.pallets[1].encode()[..]
-	).unwrap();
-	let pallet_instance1_metadata =
-		PalletMetadata::decode(&mut &metadata.pallets[2].encode()[..]).unwrap();
+	let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
+	let expected_metadata = match expected_metadata.1 {
+		RuntimeMetadata::V13(metadata) => {
+			metadata
+		},
+		_ => panic!("metadata has been bumped, test needs to be updated"),
+	};
 
-	let mut registry = scale_info::Registry::new();
-	let expected_pallet_metadata = expected_pallet_metadata.into_portable(&mut registry);
+	let actual_metadata = match Runtime::metadata().1 {
+		RuntimeMetadata::V13(metadata) => {
+			metadata
+		},
+		_ => panic!("metadata has been bumped, test needs to be updated"),
+	};
 
-	let mut registry = scale_info::Registry::new();
-	let expected_pallet_instance1_metadata = expected_pallet_instance1_metadata.into_portable(&mut registry);
-
-	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
-	pretty_assertions::assert_eq!(pallet_instance1_metadata, expected_pallet_instance1_metadata);
+	pretty_assertions::assert_eq!(actual_metadata.pallets[1], expected_metadata.pallets[1]);
+	pretty_assertions::assert_eq!(actual_metadata.pallets[2], expected_metadata.pallets[2]);
 }
 
 #[test]
