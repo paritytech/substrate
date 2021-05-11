@@ -95,6 +95,16 @@ impl<TBlockNumber, TPayload, TSignature> SignedCommitment<TBlockNumber, TPayload
 	}
 }
 
+/// A [SignedCommitment] with a version number. This variant will be appended
+/// to the block justifications for the block for which the signed commitment
+/// has been generated.
+#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
+pub enum VersionedCommitment<N, P, S> {
+	#[codec(index = 1)]
+	/// Current active version
+	V1(SignedCommitment<N, P, S>),
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -102,6 +112,7 @@ mod tests {
 
 	type TestCommitment = Commitment<u128, String>;
 	type TestSignedCommitment = SignedCommitment<u128, String, Vec<u8>>;
+	type TestVersionedCommitment = VersionedCommitment<u128, String, Vec<u8>>;
 
 	#[test]
 	fn commitment_encode_decode() {
@@ -194,5 +205,30 @@ mod tests {
 		assert!(c < b);
 		assert!(c < d);
 		assert!(b < d);
+	}
+
+	#[test]
+	fn versioned_commitment_encode_decode() {
+		let commitment: TestCommitment = Commitment {
+			payload: "Hello World!".into(),
+			block_number: 5,
+			validator_set_id: 0,
+		};
+
+		let signed = SignedCommitment {
+			commitment,
+			signatures: vec![None, None, Some(vec![1, 2, 3, 4]), Some(vec![5, 6, 7, 8])],
+		};
+
+		let versioned = TestVersionedCommitment::V1(signed.clone());
+
+		let encoded = codec::Encode::encode(&versioned);
+
+		assert_eq!(1, encoded[0]);
+		assert_eq!(encoded[1..], codec::Encode::encode(&signed));
+
+		let decoded = TestVersionedCommitment::decode(&mut &*encoded);
+
+		assert_eq!(decoded, Ok(versioned));
 	}
 }
