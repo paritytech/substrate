@@ -21,7 +21,7 @@
 
 use super::{Call, Event, *};
 use crate::mock::*;
-use codec::{Decode, Encode};
+use codec::Encode;
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok, assert_noop,
