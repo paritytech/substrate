@@ -22,7 +22,7 @@ use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
 	storage::{
 		StorageAppend, StorageDecodeLength, StoragePrefixedMap,
-		bounded_vec::{BoundedVec, BoundedVecValue},
+		bounded_vec::BoundedVec,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
 	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
@@ -105,9 +105,9 @@ where
 	Hasher: crate::hash::StorageHasher,
 	Key: FullCodec,
 	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
-	OnEmpty: Get<QueryKind::Query> + 'static,
+	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
-	VecValue: BoundedVecValue,
+	VecValue: FullCodec,
 	VecBound: Get<u32>,
 {
 	/// Try and append the given item to the map in the storage.

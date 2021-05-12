@@ -18,11 +18,11 @@
 //! Storage map type. Implements StorageDoubleMap, StorageIterableDoubleMap,
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
+use codec::{Decode, Encode, EncodeLike, FullCodec};
 use crate::{
 	storage::{
 		StorageAppend, StorageDecodeLength, StoragePrefixedMap,
-		bounded_vec::{BoundedVec, BoundedVecValue},
+		bounded_vec::BoundedVec,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
 	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
@@ -136,7 +136,7 @@ impl<Prefix, Hasher1, Key1, Hasher2, Key2, QueryKind, OnEmpty, MaxValues, VecVal
 	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
-	VecValue: BoundedVecValue,
+	VecValue: FullCodec,
 	VecBound: Get<u32>,
 {
 	/// Try and append the given item to the double map in the storage.

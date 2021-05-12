@@ -1051,7 +1051,7 @@ pub trait Offchain {
 
 /// Wasm only interface that provides functions for calling into the allocator.
 #[runtime_interface(wasm_only)]
-trait Allocator {
+pub trait Allocator {
 	/// Malloc the given number of bytes and return the pointer to the allocated memory location.
 	fn malloc(&mut self, size: u32) -> Pointer<u8> {
 		self.allocate_memory(size).expect("Failed to allocate memory")

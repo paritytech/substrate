@@ -362,12 +362,24 @@ impl<B: BlockT> Protocol<B> {
 				genesis_hash,
 			).encode();
 
+			let sync_protocol_config = notifications::ProtocolConfig {
+				name: block_announces_protocol,
+				fallback_names: Vec::new(),
+				handshake: block_announces_handshake,
+				max_notification_size: MAX_BLOCK_ANNOUNCE_SIZE,
+			};
+
 			Notifications::new(
 				peerset,
-				iter::once((block_announces_protocol, block_announces_handshake, MAX_BLOCK_ANNOUNCE_SIZE))
+				iter::once(sync_protocol_config)
 					.chain(network_config.extra_sets.iter()
 						.zip(notifications_protocols_handshakes)
-						.map(|(s, hs)| (s.notifications_protocol.clone(), hs, s.max_notification_size))
+						.map(|(s, hs)| notifications::ProtocolConfig {
+							name: s.notifications_protocol.clone(),
+							fallback_names: s.fallback_names.clone(),
+							handshake: hs,
+							max_notification_size: s.max_notification_size,
+						})
 					),
 			)
 		};
@@ -1154,6 +1166,8 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	NotificationStreamOpened {
 		remote: PeerId,
 		protocol: Cow<'static, str>,
+		/// See [`crate::Event::NotificationStreamOpened::negotiated_fallback`].
+		negotiated_fallback: Option<Cow<'static, str>>,
 		roles: Roles,
 		notifications_sink: NotificationsSink
 	},
@@ -1346,9 +1360,13 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		};
 
 		let outcome = match event {
-			NotificationsOut::CustomProtocolOpen { peer_id, set_id, received_handshake, notifications_sink, .. } => {
+			NotificationsOut::CustomProtocolOpen {
+				peer_id, set_id, received_handshake, notifications_sink, negotiated_fallback
+			} => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
+					debug_assert!(negotiated_fallback.is_none());
+
 					// `received_handshake` can be either a `Status` message if received from the
 					// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
 					// announces substream.
@@ -1408,6 +1426,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							CustomMessageOutcome::NotificationStreamOpened {
 								remote: peer_id,
 								protocol: self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone(),
+								negotiated_fallback,
 								roles,
 								notifications_sink,
 							},
@@ -1419,6 +1438,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							CustomMessageOutcome::NotificationStreamOpened {
 								remote: peer_id,
 								protocol: self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone(),
+								negotiated_fallback,
 								roles: peer.info.roles,
 								notifications_sink,
 							}

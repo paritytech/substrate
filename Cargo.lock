@@ -4799,6 +4799,7 @@ dependencies = [
  "rand 0.8.3",
  "rand_pcg 0.3.0",
  "serde",
+ "smallvec 1.6.1",
  "sp-core",
  "sp-io",
  "sp-runtime",
