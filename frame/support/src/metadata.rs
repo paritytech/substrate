@@ -239,411 +239,373 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 	};
 }
 
-// todo: [AJ] restore metadata tests
-// #[cfg(test)]
-// // Do not complain about unused `dispatch` and `dispatch_aux`.
-// #[allow(dead_code)]
-// mod tests {
-// 	use super::*;
-// 	use frame_metadata::{
-// 		EventMetadata, StorageEntryModifier, StorageEntryType, FunctionMetadata, StorageEntryMetadata,
-// 		ModuleMetadata, RuntimeMetadataPrefixed, DefaultByte, PalletConstantMetadata, DefaultByteGetter,
-// 		ErrorMetadata, ExtrinsicMetadata,
-// 	};
-// 	use codec::{Encode, Decode};
-// 	use crate::traits::Get;
-// 	use sp_runtime::transaction_validity::TransactionValidityError;
-//
-// 	#[derive(Clone, Eq, Debug, PartialEq, Encode, Decode)]
-// 	struct TestExtension;
-// 	impl sp_runtime::traits::SignedExtension for TestExtension {
-// 		type AccountId = u32;
-// 		type Call = ();
-// 		type AdditionalSigned = u32;
-// 		type Pre = ();
-// 		const IDENTIFIER: &'static str = "testextension";
-// 		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-// 			Ok(1)
-// 		}
-// 	}
-//
-// 	#[derive(Clone, Eq, Debug, PartialEq, Encode, Decode)]
-// 	struct TestExtension2;
-// 	impl sp_runtime::traits::SignedExtension for TestExtension2 {
-// 		type AccountId = u32;
-// 		type Call = ();
-// 		type AdditionalSigned = u32;
-// 		type Pre = ();
-// 		const IDENTIFIER: &'static str = "testextension2";
-// 		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-// 			Ok(1)
-// 		}
-// 	}
-//
-// 	struct TestExtrinsic;
-//
-// 	impl sp_runtime::traits::ExtrinsicMetadata for TestExtrinsic {
-// 		const VERSION: u8 = 1;
-// 		type SignedExtensions = (TestExtension, TestExtension2);
-// 	}
-//
-// 	mod system {
-// 		use super::*;
-//
-// 		pub trait Config: 'static {
-// 			type BaseCallFilter;
-// 			const ASSOCIATED_CONST: u64 = 500;
-// 			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
-// 				+ From<RawOrigin<Self::AccountId>>;
-// 			type AccountId: From<u32> + Encode;
-// 			type BlockNumber: From<u32> + Encode;
-// 			type SomeValue: Get<u32>;
-// 			type PalletInfo: crate::traits::PalletInfo;
-// 			type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
-// 			type Call;
-// 		}
-//
-// 		decl_module! {
-// 			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
-// 				/// Hi, I am a comment.
-// 				const BlockNumber: T::BlockNumber = 100.into();
-// 				const GetType: T::AccountId = T::SomeValue::get().into();
-// 				const ASSOCIATED_CONST: u64 = T::ASSOCIATED_CONST.into();
-// 			}
-// 		}
-//
-// 		decl_event!(
-// 			pub enum Event {
-// 				SystemEvent,
-// 			}
-// 		);
-//
-// 		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
-// 		pub enum RawOrigin<AccountId> {
-// 			Root,
-// 			Signed(AccountId),
-// 			None,
-// 		}
-//
-// 		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-// 			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-// 				match s {
-// 					Some(who) => RawOrigin::Signed(who),
-// 					None => RawOrigin::None,
-// 				}
-// 			}
-// 		}
-//
-// 		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
-// 	}
-//
-// 	mod event_module {
-// 		use crate::dispatch::DispatchResult;
-// 		use super::system;
-//
-// 		pub trait Config: system::Config {
-// 			type Balance;
-// 		}
-//
-// 		decl_event!(
-// 			pub enum Event<T> where <T as Config>::Balance
-// 			{
-// 				/// Hi, I am a comment.
-// 				TestEvent(Balance),
-// 			}
-// 		);
-//
-// 		decl_module! {
-// 			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {
-// 				type Error = Error<T>;
-//
-// 				#[weight = 0]
-// 				fn aux_0(_origin) -> DispatchResult { unreachable!() }
-// 			}
-// 		}
-//
-// 		crate::decl_error! {
-// 			pub enum Error for Module<T: Config> {
-// 				/// Some user input error
-// 				UserInputError,
-// 				/// Something bad happened
-// 				/// this could be due to many reasons
-// 				BadThingHappened,
-// 			}
-// 		}
-// 	}
-//
-// 	mod event_module2 {
-// 		use super::system;
-//
-// 		pub trait Config: system::Config {
-// 			type Balance;
-// 		}
-//
-// 		decl_event!(
-// 			pub enum Event<T> where <T as Config>::Balance
-// 			{
-// 				TestEvent(Balance),
-// 			}
-// 		);
-//
-// 		decl_module! {
-// 			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
-// 		}
-//
-// 		crate::decl_storage! {
-// 			trait Store for Module<T: Config> as TestStorage {
-// 				StorageMethod : Option<u32>;
-// 			}
-// 			add_extra_genesis {
-// 				build(|_| {});
-// 			}
-// 		}
-// 	}
-//
-// 	type EventModule = event_module::Module<TestRuntime>;
-// 	type EventModule2 = event_module2::Module<TestRuntime>;
-//
-// 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-// 	pub struct TestRuntime;
-//
-// 	impl crate::traits::PalletInfo for TestRuntime {
-// 		fn index<P: 'static>() -> Option<usize> {
-// 			let type_id = sp_std::any::TypeId::of::<P>();
-// 			if type_id == sp_std::any::TypeId::of::<system::Pallet<TestRuntime>>() {
-// 				return Some(0)
-// 			}
-// 			if type_id == sp_std::any::TypeId::of::<EventModule>() {
-// 				return Some(1)
-// 			}
-// 			if type_id == sp_std::any::TypeId::of::<EventModule2>() {
-// 				return Some(2)
-// 			}
-//
-// 			None
-// 		}
-// 		fn name<P: 'static>() -> Option<&'static str> {
-// 			let type_id = sp_std::any::TypeId::of::<P>();
-// 			if type_id == sp_std::any::TypeId::of::<system::Pallet<TestRuntime>>() {
-// 				return Some("System")
-// 			}
-// 			if type_id == sp_std::any::TypeId::of::<EventModule>() {
-// 				return Some("EventModule")
-// 			}
-// 			if type_id == sp_std::any::TypeId::of::<EventModule2>() {
-// 				return Some("EventModule2")
-// 			}
-//
-// 			None
-// 		}
-// 	}
-//
-// 	impl_outer_event! {
-// 		pub enum TestEvent for TestRuntime {
-// 			system,
-// 			event_module<T>,
-// 			event_module2<T>,
-// 		}
-// 	}
-//
-// 	impl_outer_origin! {
-// 		pub enum Origin for TestRuntime where system = system {}
-// 	}
-//
-// 	impl_outer_dispatch! {
-// 		pub enum Call for TestRuntime where origin: Origin {
-// 			event_module::EventModule,
-// 			event_module2::EventModule2,
-// 		}
-// 	}
-//
-// 	impl event_module::Config for TestRuntime {
-// 		type Balance = u32;
-// 	}
-//
-// 	impl event_module2::Config for TestRuntime {
-// 		type Balance = u32;
-// 	}
-//
-// 	crate::parameter_types! {
-// 		pub const SystemValue: u32 = 600;
-// 	}
-//
-// 	impl system::Config for TestRuntime {
-// 		type BaseCallFilter = ();
-// 		type Origin = Origin;
-// 		type AccountId = u32;
-// 		type BlockNumber = u32;
-// 		type SomeValue = SystemValue;
-// 		type PalletInfo = Self;
-// 		type DbWeight = ();
-// 		type Call = Call;
-// 	}
-//
-// 	impl_runtime_metadata!(
-// 		for TestRuntime with pallets where Extrinsic = TestExtrinsic
-// 			system::Pallet as System { index 0 } with Event,
-// 			event_module::Module as Module { index 1 } with Event Call,
-// 			event_module2::Module as Module2 { index 2 } with Event Storage Call,
-// 	);
-//
-// 	struct ConstantBlockNumberByteGetter;
-// 	impl DefaultByte for ConstantBlockNumberByteGetter {
-// 		fn default_byte(&self) -> Vec<u8> {
-// 			100u32.encode()
-// 		}
-// 	}
-//
-// 	struct ConstantGetTypeByteGetter;
-// 	impl DefaultByte for ConstantGetTypeByteGetter {
-// 		fn default_byte(&self) -> Vec<u8> {
-// 			SystemValue::get().encode()
-// 		}
-// 	}
-//
-// 	struct ConstantAssociatedConstByteGetter;
-// 	impl DefaultByte for ConstantAssociatedConstByteGetter {
-// 		fn default_byte(&self) -> Vec<u8> {
-// 			<TestRuntime as system::Config>::ASSOCIATED_CONST.encode()
-// 		}
-// 	}
-//
-// 	#[test]
-// 	fn runtime_metadata() {
-// 		let expected_metadata: RuntimeMetadataLastVersion = RuntimeMetadataLastVersion {
-// 			modules: DecodeDifferent::Encode(&[
-// 				ModuleMetadata {
-// 					name: DecodeDifferent::Encode("System"),
-// 					index: 0,
-// 					storage: None,
-// 					calls: None,
-// 					event: Some(DecodeDifferent::Encode(
-// 						FnEncode(||&[
-// 							EventMetadata {
-// 								name: DecodeDifferent::Encode("SystemEvent"),
-// 								arguments: DecodeDifferent::Encode(&[]),
-// 								documentation: DecodeDifferent::Encode(&[])
-// 							}
-// 						])
-// 					)),
-// 					constants: DecodeDifferent::Encode(
-// 						FnEncode(|| &[
-// 							PalletConstantMetadata {
-// 								name: DecodeDifferent::Encode("BlockNumber"),
-// 								ty: DecodeDifferent::Encode("T::BlockNumber"),
-// 								value: DecodeDifferent::Encode(
-// 									DefaultByteGetter(&ConstantBlockNumberByteGetter)
-// 								),
-// 								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."]),
-// 							},
-// 							PalletConstantMetadata {
-// 								name: DecodeDifferent::Encode("GetType"),
-// 								ty: DecodeDifferent::Encode("T::AccountId"),
-// 								value: DecodeDifferent::Encode(
-// 									DefaultByteGetter(&ConstantGetTypeByteGetter)
-// 								),
-// 								documentation: DecodeDifferent::Encode(&[]),
-// 							},
-// 							PalletConstantMetadata {
-// 								name: DecodeDifferent::Encode("ASSOCIATED_CONST"),
-// 								ty: DecodeDifferent::Encode("u64"),
-// 								value: DecodeDifferent::Encode(
-// 									DefaultByteGetter(&ConstantAssociatedConstByteGetter)
-// 								),
-// 								documentation: DecodeDifferent::Encode(&[]),
-// 							}
-// 						])
-// 					),
-// 					errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				},
-// 				ModuleMetadata {
-// 					name: DecodeDifferent::Encode("Module"),
-// 					index: 1,
-// 					storage: None,
-// 					calls: Some(
-// 						DecodeDifferent::Encode(FnEncode(|| &[
-// 							FunctionMetadata {
-// 								name: DecodeDifferent::Encode("aux_0"),
-// 								arguments: DecodeDifferent::Encode(&[]),
-// 								documentation: DecodeDifferent::Encode(&[]),
-// 							}
-// 						]))),
-// 					event: Some(DecodeDifferent::Encode(
-// 						FnEncode(||&[
-// 							EventMetadata {
-// 								name: DecodeDifferent::Encode("TestEvent"),
-// 								arguments: DecodeDifferent::Encode(&["Balance"]),
-// 								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
-// 							}
-// 						])
-// 					)),
-// 					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 					errors: DecodeDifferent::Encode(FnEncode(|| &[
-// 						ErrorMetadata {
-// 							name: DecodeDifferent::Encode("UserInputError"),
-// 							documentation: DecodeDifferent::Encode(&[" Some user input error"]),
-// 						},
-// 						ErrorMetadata {
-// 							name: DecodeDifferent::Encode("BadThingHappened"),
-// 							documentation: DecodeDifferent::Encode(&[
-// 								" Something bad happened",
-// 								" this could be due to many reasons",
-// 							]),
-// 						},
-// 					])),
-// 				},
-// 				ModuleMetadata {
-// 					name: DecodeDifferent::Encode("Module2"),
-// 					index: 2,
-// 					storage: Some(DecodeDifferent::Encode(
-// 						FnEncode(|| StorageMetadata {
-// 							prefix: DecodeDifferent::Encode("TestStorage"),
-// 							entries: DecodeDifferent::Encode(
-// 								&[
-// 									StorageEntryMetadata {
-// 										name: DecodeDifferent::Encode("StorageMethod"),
-// 										modifier: StorageEntryModifier::Optional,
-// 										ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-// 										default: DecodeDifferent::Encode(
-// 											DefaultByteGetter(
-// 												&event_module2::__GetByteStructStorageMethod(
-// 													std::marker::PhantomData::<TestRuntime>
-// 												)
-// 											)
-// 										),
-// 										documentation: DecodeDifferent::Encode(&[]),
-// 									}
-// 								]
-// 							)
-// 						}),
-// 					)),
-// 					calls: Some(DecodeDifferent::Encode(FnEncode(|| &[]))),
-// 					event: Some(DecodeDifferent::Encode(
-// 						FnEncode(||&[
-// 							EventMetadata {
-// 								name: DecodeDifferent::Encode("TestEvent"),
-// 								arguments: DecodeDifferent::Encode(&["Balance"]),
-// 								documentation: DecodeDifferent::Encode(&[])
-// 							}
-// 						])
-// 					)),
-// 					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 					errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-// 				},
-// 			]),
-// 			extrinsic: ExtrinsicMetadata {
-// 				version: 1,
-// 				signed_extensions: vec![
-// 					DecodeDifferent::Encode("testextension"),
-// 					DecodeDifferent::Encode("testextension2"),
-// 				],
-// 			}
-// 		};
-//
-// 		let metadata_encoded = TestRuntime::metadata().encode();
-// 		let metadata_decoded = RuntimeMetadataPrefixed::decode(&mut &metadata_encoded[..]);
-// 		let expected_metadata: RuntimeMetadataPrefixed = expected_metadata.into();
-//
-// 		pretty_assertions::assert_eq!(expected_metadata, metadata_decoded.unwrap());
-// 	}
-// }
+#[cfg(test)]
+// Do not complain about unused `dispatch` and `dispatch_aux`.
+#[allow(dead_code)]
+mod tests {
+	use super::*;
+	use codec::{Encode, Decode};
+	use crate::traits::Get;
+	use sp_runtime::transaction_validity::TransactionValidityError;
+
+	#[derive(Clone, Eq, Debug, PartialEq, Encode, Decode, scale_info::TypeInfo)]
+	struct TestExtension;
+	impl sp_runtime::traits::SignedExtension for TestExtension {
+		type AccountId = u32;
+		type Call = ();
+		type AdditionalSigned = u32;
+		type Pre = ();
+		const IDENTIFIER: &'static str = "testextension";
+		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+			Ok(1)
+		}
+	}
+
+	#[derive(Clone, Eq, Debug, PartialEq, Encode, Decode, scale_info::TypeInfo)]
+	struct TestExtension2;
+	impl sp_runtime::traits::SignedExtension for TestExtension2 {
+		type AccountId = u32;
+		type Call = ();
+		type AdditionalSigned = u32;
+		type Pre = ();
+		const IDENTIFIER: &'static str = "testextension2";
+		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+			Ok(1)
+		}
+	}
+
+	#[derive(scale_info::TypeInfo)]
+	struct TestExtrinsic;
+
+	impl sp_runtime::traits::ExtrinsicMetadata for TestExtrinsic {
+		const VERSION: u8 = 1;
+		type SignedExtensions = (TestExtension, TestExtension2);
+	}
+
+	mod system {
+		use super::*;
+
+		pub trait Config: scale_info::TypeInfo + 'static {
+			type BaseCallFilter;
+			const ASSOCIATED_CONST: u64 = 500;
+			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+				+ From<RawOrigin<Self::AccountId>>;
+			type AccountId: From<u32> + Encode + scale_info::TypeInfo;
+			type BlockNumber: From<u32> + Encode + scale_info::TypeInfo;
+			type SomeValue: Get<u32>;
+			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
+			type Call;
+		}
+
+		decl_module! {
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
+				/// Hi, I am a comment.
+				const BlockNumber: T::BlockNumber = 100.into();
+				const GetType: T::AccountId = T::SomeValue::get().into();
+				const ASSOCIATED_CONST: u64 = T::ASSOCIATED_CONST.into();
+			}
+		}
+
+		decl_event!(
+			pub enum Event {
+				SystemEvent,
+			}
+		);
+
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
+		pub enum RawOrigin<AccountId> {
+			Root,
+			Signed(AccountId),
+			None,
+		}
+
+		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+				match s {
+					Some(who) => RawOrigin::Signed(who),
+					None => RawOrigin::None,
+				}
+			}
+		}
+
+		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+	}
+
+	mod event_module {
+		use crate::dispatch::DispatchResult;
+		use super::system;
+
+		pub trait Config: system::Config {
+			type Balance;
+		}
+
+		decl_event!(
+			pub enum Event<T> where <T as Config>::Balance
+			{
+				/// Hi, I am a comment.
+				TestEvent(Balance),
+			}
+		);
+
+		decl_module! {
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {
+				type Error = Error<T>;
+
+				#[weight = 0]
+				fn aux_0(_origin) -> DispatchResult { unreachable!() }
+			}
+		}
+
+		crate::decl_error! {
+			pub enum Error for Module<T: Config> {
+				/// Some user input error
+				UserInputError,
+				/// Something bad happened
+				/// this could be due to many reasons
+				BadThingHappened,
+			}
+		}
+	}
+
+	mod event_module2 {
+		use super::system;
+
+		pub trait Config: system::Config {
+			type Balance;
+		}
+
+		decl_event!(
+			pub enum Event<T> where <T as Config>::Balance
+			{
+				TestEvent(Balance),
+			}
+		);
+
+		decl_module! {
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
+		}
+
+		crate::decl_storage! {
+			trait Store for Module<T: Config> as TestStorage {
+				StorageMethod : Option<u32>;
+			}
+			add_extra_genesis {
+				build(|_| {});
+			}
+		}
+	}
+
+	type EventModule = event_module::Module<TestRuntime>;
+	type EventModule2 = event_module2::Module<TestRuntime>;
+
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, scale_info::TypeInfo)]
+	pub struct TestRuntime;
+
+	impl crate::traits::PalletInfo for TestRuntime {
+		fn index<P: 'static>() -> Option<usize> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<system::Pallet<TestRuntime>>() {
+				return Some(0)
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule>() {
+				return Some(1)
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule2>() {
+				return Some(2)
+			}
+
+			None
+		}
+		fn name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<system::Pallet<TestRuntime>>() {
+				return Some("System")
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule>() {
+				return Some("EventModule")
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule2>() {
+				return Some("EventModule2")
+			}
+
+			None
+		}
+	}
+
+	impl_outer_event! {
+		pub enum TestEvent for TestRuntime {
+			system,
+			event_module<T>,
+			event_module2<T>,
+		}
+	}
+
+	impl_outer_origin! {
+		pub enum Origin for TestRuntime where system = system {}
+	}
+
+	impl_outer_dispatch! {
+		pub enum Call for TestRuntime where origin: Origin {
+			event_module::EventModule,
+			event_module2::EventModule2,
+		}
+	}
+
+	impl event_module::Config for TestRuntime {
+		type Balance = u32;
+	}
+
+	impl event_module2::Config for TestRuntime {
+		type Balance = u32;
+	}
+
+	crate::parameter_types! {
+		pub const SystemValue: u32 = 600;
+	}
+
+	#[test]
+	fn runtime_metadata() {
+		let pallets = vec![
+			PalletMetadata {
+				name: "System",
+				index: 0,
+				storage: None,
+				calls: None,
+				event: Some(
+					PalletEventMetadata {
+						ty: scale_info::meta_type::<system::Event>(),
+					},
+				),
+				constants: vec![
+					PalletConstantMetadata {
+						name: "BlockNumber",
+						ty: scale_info::meta_type::<u32>(),
+						value: vec![100, 0, 0, 0],
+						documentation: vec![
+							" Hi, I am a comment.",
+						],
+					},
+					PalletConstantMetadata {
+						name: "GetType",
+						ty: scale_info::meta_type::<u32>(),
+						value: vec![88, 2, 0, 0],
+						documentation: vec![],
+					},
+					PalletConstantMetadata {
+						name: "ASSOCIATED_CONST",
+						ty: scale_info::meta_type::<u64>(),
+						value: vec![244, 1, 0, 0, 0, 0, 0, 0],
+						documentation: vec![],
+					},
+				],
+				error: None,
+			},
+			PalletMetadata {
+				name: "Module",
+				index: 1,
+				storage: None,
+				calls: Some(
+					PalletCallMetadata {
+						ty: scale_info::meta_type::<event_module::Call<TestRuntime>>(),
+						calls: vec![
+							FunctionMetadata {
+								name: "aux_0",
+								arguments: vec![],
+								documentation: vec![],
+							},
+						],
+					},
+				),
+				event: Some(
+					PalletEventMetadata {
+						ty: scale_info::meta_type::<event_module::Event<TestRuntime>>(),
+					},
+				),
+				constants: vec![],
+				error: Some(
+					PalletErrorMetadata {
+						ty: scale_info::meta_type::<event_module::Error<TestRuntime>>(),
+					},
+				),
+			},
+			PalletMetadata {
+				name: "Module2",
+				storage: Some(
+					StorageMetadata {
+						prefix: "TestStorage",
+						entries: vec![
+							StorageEntryMetadata {
+								name: "StorageMethod",
+								modifier: StorageEntryModifier::Optional,
+								ty: StorageEntryType::Plain(
+									scale_info::meta_type::<u32>(),
+								),
+								default: vec![0],
+								documentation: vec![],
+							},
+						],
+					},
+				),
+				calls: Some(
+					PalletCallMetadata {
+						ty: scale_info::meta_type::<event_module2::Call<TestRuntime>>(),
+						calls: vec![],
+					},
+				),
+				event: Some(
+					PalletEventMetadata {
+						ty: scale_info::meta_type::<event_module2::Event<TestRuntime>>(),
+					},
+				),
+				constants: vec![],
+				error: None,
+				index: 2,
+			},
+		];
+		let extrinsic = ExtrinsicMetadata {
+			ty: scale_info::meta_type::<TestExtrinsic>(),
+			version: 1,
+			signed_extensions: vec![
+				SignedExtensionMetadata { identifier: "testextension", ty: scale_info::meta_type::<TestExtension>() },
+				SignedExtensionMetadata { identifier: "testextension2", ty: scale_info::meta_type::<TestExtension2>() },
+			]
+		};
+
+		let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
+		let expected_metadata = match expected_metadata.1 {
+			RuntimeMetadata::V13(metadata) => {
+				metadata
+			},
+			_ => panic!("metadata has been bumped, test needs to be updated"),
+		};
+
+		let actual_metadata = match TestRuntime::metadata().1 {
+			RuntimeMetadata::V13(metadata) => {
+				metadata
+			},
+			_ => panic!("metadata has been bumped, test needs to be updated"),
+		};
+
+		pretty_assertions::assert_eq!(actual_metadata.pallets, expected_metadata.pallets);
+		pretty_assertions::assert_eq!(actual_metadata.extrinsic, expected_metadata.extrinsic);
+	}
+
+	impl system::Config for TestRuntime {
+		type BaseCallFilter = ();
+		type Origin = Origin;
+		type AccountId = u32;
+		type BlockNumber = u32;
+		type SomeValue = SystemValue;
+		type PalletInfo = Self;
+		type DbWeight = ();
+		type Call = Call;
+	}
+
+	impl_runtime_metadata!(
+		for TestRuntime with pallets where Extrinsic = TestExtrinsic
+			system::Pallet as System { index 0 } with Event,
+			event_module::Module as Module { index 1 } with Event Call,
+			event_module2::Module as Module2 { index 2 } with Event Storage Call,
+	);
+}
