@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Config, Weight, Pallet, Schedule};
+use crate::{Config, Weight, Pallet};
 use frame_support::{
-	storage::StorageValue,
-	traits::{GetPalletVersion, PalletVersion, Get},
+	storage::migration,
+	traits::{GetPalletVersion, PalletVersion, PalletInfoAccess, Get},
 };
 
 pub fn migrate<T: Config>() -> Weight {
@@ -27,22 +27,14 @@ pub fn migrate<T: Config>() -> Weight {
 	match <Pallet<T>>::storage_version() {
 		Some(version) if version == PalletVersion::new(3, 0, 0) => {
 			weight = weight.saturating_add(T::DbWeight::get().writes(1));
-			v3_0_0::CurrentSchedule::<T>::kill();
+			migration::remove_storage_prefix(
+				<Pallet<T>>::name().as_bytes(),
+				b"CurrentSchedule",
+				b"",
+			);
 		}
 		_ => (),
 	}
 
 	weight
-}
-
-mod v3_0_0 {
-	use super::*;
-
-	struct Pallet<T: Config>(sp_std::marker::PhantomData<T>);
-
-	frame_support::decl_storage! {
-		trait Store for Pallet<T: Config> as Contracts {
-			pub CurrentSchedule: Schedule<T>;
-		}
-	}
 }
