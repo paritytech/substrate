@@ -42,13 +42,14 @@ use std::{
 
 use parking_lot::Mutex;
 use threadpool::ThreadPool;
-use sp_api::{ApiExt, ProvideRuntimeApi};
-use futures::future::Future;
-use log::{debug, warn};
+use sp_api::{ApiExt, ApiRef, ProvideRuntimeApi};
+use futures::{
+	future::{self, Either, Future},
+	prelude::*,
+};
 use sc_network::{ExHashT, NetworkService, NetworkStateInfo, PeerId};
 use sp_core::{offchain, ExecutionContext, traits::SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
-use futures::{prelude::*, future::ready};
 
 mod api;
 
@@ -109,6 +110,30 @@ impl<Client, Block: traits::Block> fmt::Debug for OffchainWorkers<
 	}
 }
 
+fn ocw_api_version<A, Block>(at: &BlockId<Block>, runtime: ApiRef<A>) -> u32 where
+	Block: traits::Block,
+	A: ApiExt<Block>,
+{
+	let has_api = |version| runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(at, |v| v == version);
+
+	if let Ok(true) = has_api(3) {
+		return 3;
+	}
+
+	if let Ok(true) = has_api(2) {
+		return 2;
+	}
+
+	match has_api(1) {
+		Ok(true) => 1,
+		err => {
+			let help = "Consider turning off offchain workers if they are not part of your runtime.";
+			log::error!("Unsupported Offchain Worker API version: {:?}. {}.", err, help);
+			0
+		}
+	}
+}
+
 impl<Client, Block> OffchainWorkers<
 	Client,
 	Block,
@@ -117,7 +142,48 @@ impl<Client, Block> OffchainWorkers<
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
 {
-	/// Start the offchain workers after given block.
+	/// Start the offchain workers at block finality.
+	#[must_use]
+	pub fn on_block_finalized(
+		&self,
+		header: &Block::Header,
+		network_provider: Arc<dyn NetworkProvider + Send + Sync>,
+		is_validator: bool,
+	) -> impl Future<Output = ()> {
+		let runtime = self.client.runtime_api();
+		let at = BlockId::hash(header.hash());
+		let version = ocw_api_version(&at, runtime);
+		if version < 3 {
+			log::debug!(
+				"Skipping running finality offchain workers, because they are not supported by current runtime. Version: {} < 3", version
+			);
+			return Either::Right(future::ready(()));
+		}
+		log::debug!("Checking finality offchain workers at {:?}: version: {:?}", at, version);
+		let (api, runner) = api::AsyncApi::new(
+			network_provider,
+			is_validator,
+			self.shared_client.clone(),
+		);
+		log::debug!("Spawning finality offchain workers at {:?}", at);
+		let header = header.clone();
+		let client = self.client.clone();
+		self.spawn_worker(move || {
+			let runtime = client.runtime_api();
+			let api = Box::new(api);
+			log::debug!("Running finality offchain workers at {:?}", at);
+			let context = ExecutionContext::OffchainCall(Some(
+					(api, offchain::Capabilities::all())
+			));
+			let run = runtime.offchain_worker_with_context(&at, context, &header, true);
+			if let Err(e) =	run {
+				log::error!("Error running finality offchain workers at {:?}: {:?}", at, e);
+			}
+		});
+		Either::Left(runner.process())
+	}
+
+	/// Start the offchain workers at block import.
 	#[must_use]
 	pub fn on_block_imported(
 		&self,
@@ -127,54 +193,47 @@ impl<Client, Block> OffchainWorkers<
 	) -> impl Future<Output = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::hash(header.hash());
-		let has_api_v1 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(
-			&at, |v| v == 1
+		let version = ocw_api_version(&at, runtime);
+		log::debug!("Checking offchain workers at {:?}: version:{}", at, version);
+		if version == 0 {
+			return Either::Right(future::ready(()));
+		}
+
+		let (api, runner) = api::AsyncApi::new(
+			network_provider,
+			is_validator,
+			self.shared_client.clone(),
 		);
-		let has_api_v2 = runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(
-			&at, |v| v == 2
-		);
-		let version = match (has_api_v1, has_api_v2) {
-			(_, Ok(true)) => 2,
-			(Ok(true), _) => 1,
-			err => {
-				let help = "Consider turning off offchain workers if they are not part of your runtime.";
-				log::error!("Unsupported Offchain Worker API version: {:?}. {}.", err, help);
-				0
-			}
-		};
-		debug!("Checking offchain workers at {:?}: version:{}", at, version);
-		if version > 0 {
-			let (api, runner) = api::AsyncApi::new(
-				network_provider,
-				is_validator,
-				self.shared_client.clone(),
-			);
-			debug!("Spawning offchain workers at {:?}", at);
-			let header = header.clone();
-			let client = self.client.clone();
-			self.spawn_worker(move || {
-				let runtime = client.runtime_api();
-				let api = Box::new(api);
-				debug!("Running offchain workers at {:?}", at);
-				let context = ExecutionContext::OffchainCall(Some(
-					(api, offchain::Capabilities::all())
-				));
-				let run = if version == 2 {
-					runtime.offchain_worker_with_context(&at, context, &header)
-				} else {
+		log::debug!("Spawning offchain workers at {:?}", at);
+		let header = header.clone();
+		let client = self.client.clone();
+		self.spawn_worker(move || {
+			let runtime = client.runtime_api();
+			let api = Box::new(api);
+			log::debug!("Running offchain workers at {:?}", at);
+			let context = ExecutionContext::OffchainCall(Some(
+				(api, offchain::Capabilities::all())
+			));
+			let run = match version {
+				3 => {
+					runtime.offchain_worker_with_context(&at, context, &header, false)
+				}
+				2 => {
+					#[allow(deprecated)]
+					runtime.offchain_worker_before_version_3_with_context(&at, context, &header)
+				}
+				_ => {
 					#[allow(deprecated)]
 					runtime.offchain_worker_before_version_2_with_context(
 						&at, context, *header.number()
 					)
-				};
-				if let Err(e) =	run {
-					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
 				}
-			});
-			futures::future::Either::Left(runner.process())
-		} else {
-			futures::future::Either::Right(futures::future::ready(()))
-		}
+			};
+			if let Err(e) =	run {
+				log::error!("Error running offchain workers at {:?}: {:?}", at, e);
+			}
+		});
+		Either::Left(runner.process())
 	}
 
 	/// Spawns a new offchain worker.
@@ -202,9 +261,25 @@ pub async fn notification_future<Client, Block, Spawner>(
 		Block: traits::Block,
 		Client: ProvideRuntimeApi<Block> + sc_client_api::BlockchainEvents<Block> + Send + Sync + 'static,
 		Client::Api: OffchainWorkerApi<Block>,
-		Spawner: SpawnNamed
+		Spawner: SpawnNamed + Clone,
 {
-	client.import_notification_stream().for_each(move |n| {
+	let spawner1 = spawner.clone();
+	let offchain1 = offchain.clone();
+	let network_provider1 = network_provider.clone();
+	let finality = client.finality_notification_stream().for_each(move |n| {
+		spawner1.spawn(
+			"offchain-on-finality",
+			offchain1.on_block_finalized(
+				&n.header,
+				network_provider1.clone(),
+				is_validator,
+			).boxed(),
+		);
+
+		future::ready(())
+	});
+
+	let import = client.import_notification_stream().for_each(move |n| {
 		if n.is_new_best {
 			spawner.spawn(
 				"offchain-on-block",
@@ -222,8 +297,10 @@ pub async fn notification_future<Client, Block, Spawner>(
 			)
 		}
 
-		ready(())
-	}).await;
+		future::ready(())
+	});
+
+	future::join(finality, import).await;
 }
 
 #[cfg(test)]
