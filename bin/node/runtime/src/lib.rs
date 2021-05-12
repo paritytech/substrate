@@ -1019,7 +1019,7 @@ impl pallet_mmr::Config for Runtime {
 
 parameter_types! {
 	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
-	pub const MaxCalls: usize = 10;
+	pub const MaxCalls: u32 = 10;
 	pub const MaxGenerateRandom: u32 = 10;
 }
 
