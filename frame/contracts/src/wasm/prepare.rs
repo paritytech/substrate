@@ -433,7 +433,7 @@ fn do_preparation<C: ImportSatisfyCheck, T: Config>(
 		schedule,
 	)?;
 	Ok(PrefabWasmModule {
-		schedule_version: schedule.instruction_weights.version,
+		instruction_weights_version: schedule.instruction_weights.version,
 		initial,
 		maximum,
 		_reserved: None,
@@ -499,7 +499,7 @@ pub mod benchmarking {
 		let contract_module = ContractModule::new(&original_code, schedule)?;
 		let memory_limits = get_memory_limits(contract_module.scan_imports::<()>(&[])?, schedule)?;
 		Ok(PrefabWasmModule {
-			schedule_version: schedule.instruction_weights.version,
+			instruction_weights_version: schedule.instruction_weights.version,
 			initial: memory_limits.0,
 			maximum: memory_limits.1,
 			_reserved: None,

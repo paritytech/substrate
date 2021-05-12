@@ -45,16 +45,16 @@ pub use tests::MockExt;
 /// # Note
 ///
 /// This data structure is mostly immutable once created and stored. The exceptions that
-/// can be changed by calling a contract are `refcount`, `schedule_version` and `code`.
+/// can be changed by calling a contract are `refcount`, `instruction_weights_version` and `code`.
 /// `refcount` can change when a contract instantiates a new contract or self terminates.
-/// `schedule_version` and `code` when a contract with an outdated instrumention is called.
-/// Therefore one must be careful when holding any in-memory representation of this type while
-/// calling into a contract as those fields can get out of date.
+/// `instruction_weights_version` and `code` when a contract with an outdated instrumention is
+/// called. Therefore one must be careful when holding any in-memory representation of this
+/// type while calling into a contract as those fields can get out of date.
 #[derive(Clone, Encode, Decode)]
 pub struct PrefabWasmModule<T: Config> {
-	/// Version of the schedule with which the code was instrumented.
+	/// Version of the instruction weights with which the code was instrumented.
 	#[codec(compact)]
-	schedule_version: u32,
+	instruction_weights_version: u32,
 	/// Initial memory size of a contract's sandbox.
 	#[codec(compact)]
 	initial: u32,
@@ -141,10 +141,10 @@ where
 		self.refcount
 	}
 
-	/// Decrement schedule_version by 1. Panics if it is already 0.
+	/// Decrement instruction_weights_version by 1. Panics if it is already 0.
 	#[cfg(test)]
 	pub fn decrement_version(&mut self) {
-		self.schedule_version = self.schedule_version.checked_sub(1).unwrap();
+		self.instruction_weights_version = self.instruction_weights_version.checked_sub(1).unwrap();
 	}
 }
 
