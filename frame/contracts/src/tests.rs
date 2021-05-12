@@ -2900,6 +2900,7 @@ fn debug_message_logging_disabled() {
 			GAS_LIMIT,
 			vec![],
 		));
+		assert!(result.debug_message.is_empty());
 	});
 }
 
