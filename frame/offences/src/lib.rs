@@ -30,7 +30,7 @@ use sp_std::prelude::*;
 use frame_support::weights::Weight;
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
-    offence::{Kind, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
+	offence::{Kind, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
 	SessionIndex
 };
 use codec::{Decode, Encode};
@@ -112,6 +112,7 @@ pub mod pallet {
 		Twox64Concat,
 		Kind,
 		Vec<u8>, // (O::TimeSlot, ReportIdOf<T>)
+		ValueQuery,
 	>;
 
 	/// Events type.
@@ -265,7 +266,7 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	fn load(time_slot: &O::TimeSlot) -> Self {
 		let opaque_time_slot = time_slot.encode();
 
-		let same_kind_reports = ReportsByKindIndex::<T>::get(&O::ID).unwrap_or_default();
+		let same_kind_reports = ReportsByKindIndex::<T>::get(&O::ID);
 		let same_kind_reports =
 			Vec::<(O::TimeSlot, ReportIdOf<T>)>::decode(&mut &same_kind_reports[..])
 				.unwrap_or_default();
