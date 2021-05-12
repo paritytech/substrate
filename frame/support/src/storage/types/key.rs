@@ -53,6 +53,7 @@ pub trait KeyGenerator {
 
 /// A trait containing methods that are only implemented on the Key struct instead of the entire tuple.
 pub trait KeyGeneratorInner: KeyGenerator {
+	/// Hash a given `encoded` byte slice using the `KeyGenerator`'s associated `StorageHasher`.
 	fn final_hash(encoded: &[u8]) -> Vec<u8>;
 }
 
