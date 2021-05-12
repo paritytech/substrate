@@ -877,6 +877,7 @@ where
 
 		// Pop the current frame from the stack and return it in case it needs to interact
 		// with duplicates that might exist on the stack.
+		// A `None` means that we are returning from the `first_frame`.
 		let frame = self.frames.pop();
 
 		if let Some(frame) = frame {
@@ -908,6 +909,13 @@ where
 				}
 			}
 		} else {
+			if let Some(message) = &self.debug_message {
+				log::trace!(
+					target: "runtime::contracts",
+					"Debug Message: {}",
+					core::str::from_utf8(message).unwrap_or("<Invalid UTF8>"),
+				);
+			}
 			// Write back to the root gas meter.
 			self.gas_meter.absorb_nested(mem::take(&mut self.first_frame.nested_meter));
 			// Only gas counter changes are persisted in case of a failure.
