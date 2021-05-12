@@ -128,22 +128,6 @@ fn cannot_schedule_change_when_one_pending() {
 }
 
 #[test]
-fn new_decodes_from_old() {
-	let old = OldStoredPendingChange {
-		scheduled_at: 5u32,
-		delay: 100u32,
-		next_authorities: to_authorities(vec![(1, 5), (2, 10), (3, 2)]),
-	};
-
-	let encoded = old.encode();
-	let new = StoredPendingChange::<u32>::decode(&mut &encoded[..]).unwrap();
-	assert!(new.forced.is_none());
-	assert_eq!(new.scheduled_at, old.scheduled_at);
-	assert_eq!(new.delay, old.delay);
-	assert_eq!(new.next_authorities, old.next_authorities);
-}
-
-#[test]
 fn dispatch_forced_change() {
 	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		initialize_block(1, Default::default());
