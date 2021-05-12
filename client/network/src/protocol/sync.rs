@@ -1543,21 +1543,23 @@ impl<B: BlockT> ChainSync<B> {
 			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
-		trace!(
-			target: "sync",
-			"Added sync target for block announced from {}: {} {:?}",
-			who,
-			hash,
-			announce.summary(),
-		);
-		self.fork_targets
-			.entry(hash.clone())
-			.or_insert_with(|| ForkTarget {
-				number,
-				parent_hash: Some(*announce.header.parent_hash()),
-				peers: Default::default(),
-			})
-			.peers.insert(who.clone());
+		if self.status().state == SyncState::Idle {
+			trace!(
+				target: "sync",
+				"Added sync target for block announced from {}: {} {:?}",
+				who,
+				hash,
+				announce.summary(),
+			);
+			self.fork_targets
+				.entry(hash.clone())
+				.or_insert_with(|| ForkTarget {
+					number,
+					parent_hash: Some(*announce.header.parent_hash()),
+					peers: Default::default(),
+				})
+				.peers.insert(who.clone());
+		}
 
 		PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 	}
@@ -1570,6 +1572,10 @@ impl<B: BlockT> ChainSync<B> {
 		self.peers.remove(who);
 		self.extra_justifications.peer_disconnected(who);
 		self.pending_requests.set_all();
+		self.fork_targets.retain(|_, target| {
+			target.peers.remove(who);
+			!target.peers.is_empty()
+		});
 		let blocks: Vec<_> = self.blocks
 			.drain(self.best_queued_number + One::one())
 			.into_iter()
