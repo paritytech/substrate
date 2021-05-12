@@ -33,14 +33,14 @@ use sp_consensus::{
 use sp_blockchain::HeaderBackend;
 use std::collections::HashMap;
 use std::time::Duration;
-use sp_inherents::InherentDataProviders;
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 
 /// max duration for creating a proposal in secs
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: txpool::ChainApi> {
+pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: txpool::ChainApi, CIDP> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -62,12 +62,12 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P:
 	pub consensus_data_provider: Option<&'a dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>,
 	/// block import object
 	pub block_import: &'a mut BI,
-	/// inherent data provider
-	pub inherent_data_provider: &'a InherentDataProviders,
+	/// Something that can create the inherent data providers.
+	pub create_inherent_data_providers: &'a CIDP,
 }
 
 /// seals a new block with the given params
-pub async fn seal_block<B, BI, SC, C, E, P>(
+pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 	SealBlockParams {
 		create_empty,
 		finalize,
@@ -77,11 +77,10 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		select_chain,
 		block_import,
 		env,
-		inherent_data_provider,
+		create_inherent_data_providers,
 		consensus_data_provider: digest_provider,
 		mut sender,
-		..
-	}: SealBlockParams<'_, B, BI, SC, C, E, P>
+	}: SealBlockParams<'_, B, BI, SC, C, E, P, CIDP>
 )
 	where
 		B: BlockT,
@@ -93,6 +92,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		P: txpool::ChainApi<Block=B>,
 		SC: SelectChain<B>,
 		TransactionFor<C, B>: 'static,
+		CIDP: CreateInherentDataProviders<B, ()>,
 {
 	let future = async {
 		if pool.validated_pool().status().ready == 0 && !create_empty {
@@ -109,19 +109,29 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 			None => select_chain.best_chain()?
 		};
 
+		let inherent_data_providers =
+			create_inherent_data_providers
+				.create_inherent_data_providers(
+					parent.hash(),
+					(),
+				)
+				.await
+				.map_err(|e| Error::Other(e))?;
+
+		let inherent_data = inherent_data_providers.create_inherent_data()?;
+
 		let proposer = env.init(&parent)
 			.map_err(|err| Error::StringError(format!("{:?}", err))).await?;
-		let id = inherent_data_provider.create_inherent_data()?;
-		let inherents_len = id.len();
+		let inherents_len = inherent_data.len();
 
 		let digest = if let Some(digest_provider) = digest_provider {
-			digest_provider.create_digest(&parent, &id)?
+			digest_provider.create_digest(&parent, &inherent_data)?
 		} else {
 			Default::default()
 		};
 
 		let proposal = proposer.propose(
-			id.clone(),
+			inherent_data.clone(),
 			digest,
 			Duration::from_secs(MAX_PROPOSAL_DURATION),
 			None,
@@ -139,7 +149,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		params.storage_changes = Some(proposal.storage_changes);
 
 		if let Some(digest_provider) = digest_provider {
-			digest_provider.append_block_import(&parent, &mut params, &id)?;
+			digest_provider.append_block_import(&parent, &mut params, &inherent_data)?;
 		}
 
 		match block_import.import_block(params, HashMap::new()).await? {

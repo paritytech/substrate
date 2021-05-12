@@ -26,7 +26,6 @@ use crate::{
 		EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
 		ReversibleKeyGenerator, TupleToEncodedIter,
 	},
-	traits::Get,
 };
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
@@ -34,6 +33,8 @@ pub use types::Key;
 
 pub mod unhashed;
 pub mod hashed;
+pub mod bounded_btree_map;
+pub mod bounded_btree_set;
 pub mod bounded_vec;
 pub mod child;
 #[doc(hidden)]
@@ -963,13 +964,15 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 /// outside of this crate.
 mod private {
 	use super::*;
-	use bounded_vec::{BoundedVecValue, BoundedVec};
+	use bounded_vec::BoundedVec;
 
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
-	impl<T: BoundedVecValue, S: Get<u32>> Sealed for BoundedVec<T, S> {}
+	impl<T, S> Sealed for BoundedVec<T, S> {}
+	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
+	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
 }
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
