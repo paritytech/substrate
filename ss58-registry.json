@@ -470,6 +470,15 @@
 			"website": "https://crust.network"
 		},
 		{
+			"prefix": 67,
+			"network": "equilibrium",
+			"displayName": "Equilibrium Network",
+			"symbols": ["Unknown", "USD", "EQ", "ETH", "BTC", "EOS", "DOT", "CRV"],
+			"decimals": [0,9,9,9,9,9,9,9],
+			"standardAccount": "*25519",
+			"website": "https://equilibrium.io"
+    },
+    {
 			"prefix": 69,
 			"network": "sora",
 			"displayName": "SORA Network",

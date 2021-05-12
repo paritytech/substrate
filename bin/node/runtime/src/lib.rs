@@ -105,6 +105,7 @@ pub fn wasm_binary_unwrap() -> &'static [u8] {
 }
 
 /// Runtime version.
+#[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
@@ -782,7 +783,6 @@ parameter_types! {
 	pub RentFraction: Perbill = Perbill::from_rational(1u32, 30 * DAYS);
 	pub const SurchargeReward: Balance = 150 * MILLICENTS;
 	pub const SignedClaimHandicap: u32 = 2;
-	pub const MaxDepth: u32 = 32;
 	pub const MaxValueSize: u32 = 16 * 1024;
 	// The lazy deletion runs inside on_initialize.
 	pub DeletionWeightLimit: Weight = AVERAGE_ON_INITIALIZE_RATIO *
@@ -809,7 +809,7 @@ impl pallet_contracts::Config for Runtime {
 	type DepositPerStorageItem = DepositPerStorageItem;
 	type RentFraction = RentFraction;
 	type SurchargeReward = SurchargeReward;
-	type MaxDepth = MaxDepth;
+	type CallStack = [pallet_contracts::Frame<Self>; 31];
 	type MaxValueSize = MaxValueSize;
 	type WeightPrice = pallet_transaction_payment::Module<Self>;
 	type WeightInfo = pallet_contracts::weights::SubstrateWeight<Self>;
@@ -1020,7 +1020,7 @@ impl pallet_mmr::Config for Runtime {
 
 parameter_types! {
 	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
-	pub const MaxCalls: usize = 10;
+	pub const MaxCalls: u32 = 10;
 	pub const MaxGenerateRandom: u32 = 10;
 }
 
