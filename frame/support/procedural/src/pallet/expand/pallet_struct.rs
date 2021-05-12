@@ -134,7 +134,6 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		Default::default()
 	};
 
-
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
 		#module_error_metadata
 

@@ -134,7 +134,7 @@ impl<Prefix, Hasher1, Key1, Hasher2, Key2, QueryKind, OnEmpty, MaxValues, VecVal
 	Key1: FullCodec,
 	Key2: FullCodec,
 	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 	VecValue: FullCodec,
 	VecBound: Get<u32>,
@@ -172,7 +172,7 @@ where
 	Key2: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
@@ -402,7 +402,7 @@ where
 	Key2: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
 	/// Enumerate all elements in the map with first key `k1` in no particular order.
@@ -468,7 +468,7 @@ where
 	Key2: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
@@ -490,7 +490,7 @@ where
 	Key2: FullCodec + MaxEncodedLen,
 	Value: FullCodec + MaxEncodedLen,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
 	fn storage_info() -> StorageInfo {

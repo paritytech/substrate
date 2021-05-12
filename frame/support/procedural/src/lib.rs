@@ -237,11 +237,20 @@ use proc_macro::TokenStream;
 /// add_extra_genesis {
 /// 	config(phantom): std::marker::PhantomData<I>,
 /// }
-/// ...
+/// ```
 ///
 /// This adds a field to your `GenesisConfig` with the name `phantom` that you can initialize with
 /// `Default::default()`.
 ///
+/// ## PoV information
+///
+/// To implement the trait `StorageInfoTrait` for storages an additional attribute can be used
+/// `generate_storage_info`:
+/// ```nocompile
+/// decl_storage! { generate_storage_info
+/// 	trait Store for ...
+/// }
+/// ```
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
