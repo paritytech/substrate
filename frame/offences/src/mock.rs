@@ -31,7 +31,7 @@ use sp_runtime::testing::Header;
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256};
 use sp_core::H256;
 use frame_support::{
-	parameter_types, StorageMap, StorageDoubleMap,
+	parameter_types,
 	weights::{Weight, constants::{WEIGHT_PER_SECOND, RocksDbWeight}},
 };
 use crate as offences;
