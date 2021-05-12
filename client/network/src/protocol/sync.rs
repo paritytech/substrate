@@ -2578,4 +2578,37 @@ mod test {
 			&peer_id1,
 		);
 	}
+
+	#[test]
+	fn removes_target_fork_on_disconnect() {
+		sp_tracing::try_init_simple();
+		let mut client = Arc::new(TestClientBuilder::new().build());
+		let blocks = (0..3)
+			.map(|_| build_block(&mut client, None, false))
+			.collect::<Vec<_>>();
+
+		let info = client.info();
+
+		let mut sync = ChainSync::new(
+			Roles::AUTHORITY,
+			client.clone(),
+			&info,
+			Box::new(DefaultBlockAnnounceValidator),
+			1,
+		);
+
+		let peer_id1 = PeerId::random();
+		let common_block = blocks[1].clone();
+		// Connect the node we will sync from
+		sync.new_peer(peer_id1.clone(), common_block.hash(), *common_block.header().number()).unwrap();
+
+		// Create a "new" header and announce it
+		let mut header = blocks[0].header().clone();
+		header.number = 4;
+		send_block_announce(header, &peer_id1, &mut sync);
+		assert!(sync.fork_targets.len() == 1);
+
+		sync.peer_disconnected(&peer_id1);
+		assert!(sync.fork_targets.len() == 0);
+	}
 }
