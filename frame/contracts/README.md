@@ -63,6 +63,22 @@ Contracts can emit messages to the client when called as RPC through the `seal_d
 API. This is exposed in ink! via
 [`ink_env::debug_println()`](https://docs.rs/ink_env/latest/ink_env/fn.debug_println.html).
 
+Those messages are gathered into an internal buffer and send to the RPC client.
 It is up the the individual client if and how those messages are presented to the user.
+
+This buffer is also printed as a debug message. In order to see these messages on the node
+console the log level for the `runtime::contracts` target needs to be raised to at least
+the `debug` level. However, those messages are easy to overlook because of the noise generated
+by block production. A good starting point for observing them on the console is:
+
+```bash
+cargo run --release -- --dev --tmp -lerror,runtime::contracts=debug
+```
+
+This raises the log level of `runtime::contracts` to `debug` and all other targets
+to `error` in order to prevent them from spamming the console.
+
+`--dev`: Use a dev chain spec
+`--tmp`: Use temporary storage for chain data (the chain state is deleted on exit)
 
 License: Apache-2.0

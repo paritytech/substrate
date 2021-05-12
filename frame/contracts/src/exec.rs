@@ -910,7 +910,7 @@ where
 			}
 		} else {
 			if let Some(message) = &self.debug_message {
-				log::trace!(
+				log::debug!(
 					target: "runtime::contracts",
 					"Debug Message: {}",
 					core::str::from_utf8(message).unwrap_or("<Invalid UTF8>"),
