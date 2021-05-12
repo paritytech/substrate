@@ -69,11 +69,6 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 			StorageLineTypeDef::NMap(map) => {
 				let keygen = map.to_keygen_struct(&def.hidden_crate);
 				let value = &map.value;
-				let key_arg = if map.keys.len() == 1 {
-					quote!((key,))
-				} else {
-					quote!(key)
-				};
 				quote!{
 					pub fn #get_fn<KArg>(key: KArg) -> #value
 					where
@@ -82,7 +77,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 						>
 							+ #scrate::storage::types::TupleToEncodedIter,
 					{
-						<#storage_struct as #scrate::#storage_trait>::get(#key_arg)
+						<#storage_struct as #scrate::#storage_trait>::get(key)
 					}
 				}
 			}

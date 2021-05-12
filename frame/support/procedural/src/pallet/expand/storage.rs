@@ -256,17 +256,12 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						}
 					)
 				},
-				Metadata::NMap { keys, keygen, value, .. } => {
+				Metadata::NMap { keygen, value, .. } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
 						QueryKind::ValueQuery => quote::quote!(#value),
-					};
-					let key_arg = if keys.len() == 1 {
-						quote::quote!((key,))
-					} else {
-						quote::quote!(key)
 					};
 					quote::quote_spanned!(storage.attr_span =>
 						#(#cfg_attrs)*
@@ -282,7 +277,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 								<
 									#full_ident as
 									#frame_support::storage::StorageNMap<#keygen, #value>
-								>::get(#key_arg)
+								>::get(key)
 							}
 						}
 					)

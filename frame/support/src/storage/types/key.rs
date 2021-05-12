@@ -137,6 +137,9 @@ macro_rules! impl_encode_like_tuples {
 			impl<$($elem: Encode,)+ $([<$elem $elem>]: Encode + EncodeLike<$elem>,)+>
 				EncodeLikeTuple<($($elem,)+)> for
 				($([<$elem $elem>],)+) {}
+			impl<$($elem: Encode,)+ $([<$elem $elem>]: Encode + EncodeLike<$elem>,)+>
+				EncodeLikeTuple<($($elem,)+)> for
+				&($([<$elem $elem>],)+) {}
 		}
 	};
 }
@@ -171,13 +174,18 @@ impl<A: Encode> TupleToEncodedIter for (A,) {
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(2, 18)]
-#[tuple_types_no_default_trait_bound]
+#[tuple_types_custom_trait_bound(Encode)]
 impl TupleToEncodedIter for Tuple {
-	for_tuples!( where #(Tuple: Encode),* );
 	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
 		[for_tuples!( #(self.Tuple.encode()),* )]
 			.to_vec()
 			.into_iter()
+	}
+}
+
+impl<T: TupleToEncodedIter> TupleToEncodedIter for &T {
+	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
+		(*self).to_encoded_iter()
 	}
 }
 

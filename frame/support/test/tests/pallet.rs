@@ -218,9 +218,11 @@ pub mod pallet {
 	pub type DoubleMap2<T> = StorageDoubleMap<_, Twox64Concat, u16, Blake2_128Concat, u32, u64>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn nmap)]
 	pub type NMap<T> = StorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn nmap2)]
 	pub type NMap2<T> = StorageNMap<
 		_,
 		(
