@@ -124,14 +124,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn last_event() -> Event {
-	system::Pallet::<Test>::events().pop().map(|e| e.event).expect("Event expected")
-}
-
-fn expect_event<E: Into<Event>>(e: E) {
-	assert_eq!(last_event(), e.into());
-}
-
 fn now() -> Timepoint<u64> {
 	Multisig::timepoint()
 }
@@ -433,7 +425,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 		assert_ok!(Multisig::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), data.clone(), false, call_weight));
 
 		let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
-		expect_event(RawEvent::MultisigExecuted(3, now(), multi, hash, Err(err)));
+		System::assert_last_event(RawEvent::MultisigExecuted(3, now(), multi, hash, Err(err)).into());
 	});
 }
 

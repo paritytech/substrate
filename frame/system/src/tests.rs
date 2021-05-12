@@ -375,6 +375,17 @@ fn deposit_event_topics() {
 }
 
 #[test]
+fn event_util_functions_should_work() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		System::deposit_event(SysEvent::CodeUpdated);
+
+		System::assert_has_event(SysEvent::CodeUpdated.into());
+		System::assert_last_event(SysEvent::CodeUpdated.into());
+	});
+}
+
+#[test]
 fn prunes_block_hash_mappings() {
 	new_test_ext().execute_with(|| {
 		// simulate import of 15 blocks
