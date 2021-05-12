@@ -43,6 +43,10 @@ pub struct ContractResult<T> {
 	/// The contained bytes are valid UTF-8. This is not declared as `String` because
 	/// this type is not allowed within the runtime.
 	///
+	/// Clients should not make any assumptions about the format of the buffer.
+	/// They should just display it as-is. It is **not** only a collection of log lines
+	/// provided by a contract but a formatted buffer with different sections.
+	///
 	/// # Note
 	///
 	/// The debug message is never generated during on-chain execution. It is reserved for
