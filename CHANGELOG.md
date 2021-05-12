@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Reverted ChainBridge's runtime changes
+- Use nightly-2021-05-07
 
 ## [2.2.0] - 2021-04-16
 
