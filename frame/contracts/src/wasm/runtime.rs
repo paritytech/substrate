@@ -71,7 +71,7 @@ pub enum ReturnCode {
 	/// The contract that was called is either no contract at all (a plain account)
 	/// or is a tombstone.
 	NotCallable = 8,
-	/// The call to `seal_debug_message` had to effect because debug message
+	/// The call to `seal_debug_message` had no effect because debug message
 	/// recording was disabled.
 	LoggingDisabled = 9,
 }
