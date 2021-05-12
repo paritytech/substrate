@@ -47,13 +47,13 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Perquintill, Percent, ApplyExtrinsicResult, MultiSignature,
+	Permill, Perbill, Perquintill, Percent, ApplyExtrinsicResult,
 	impl_opaque_keys, generic, create_runtime_str, ModuleId, FixedPointNumber,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
 use sp_runtime::traits::{
-	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion, IdentifyAccount, IdentityLookup, Verify,
+	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
 	ConvertInto, OpaqueKeys, NumberFor, Saturating,
 };
 use sp_version::RuntimeVersion;
@@ -106,8 +106,6 @@ pub fn wasm_binary_unwrap() -> &'static [u8] {
 						production chains. Please rebuild with the flag disabled.")
 }
 
-pub type AccountIdBr = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
-
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
@@ -117,7 +115,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 260,
+	spec_version: 261,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -174,8 +172,8 @@ impl frame_system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
 	type Hashing = BlakeTwo256;
-	type AccountId = AccountIdBr;
-	type Lookup = IdentityLookup<AccountIdBr>;
+	type AccountId = AccountId;
+	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
@@ -743,8 +741,7 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			.using_encoded(|payload| {
 				C::sign(payload, public)
 			})?;
-		let address = sp_runtime::AccountId32::from(account); // Indices::unlookup(account);
-		// let rAddress = sp_runtime::AccountId32::from(account);
+		let address = Indices::unlookup(account);
 		let (call, extra, _) = raw_payload.deconstruct();
 		Some((call, (address, signature.into(), extra)))
 	}
@@ -1016,7 +1013,7 @@ construct_runtime!(
 );
 
 /// The address format for describing accounts.
-pub type Address = AccountIdBr;
+pub type Address = <Indices as StaticLookup>::Source;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 /// Block type as expected by this runtime.
@@ -1040,11 +1037,11 @@ pub type SignedExtra = (
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, MultiSignature, SignedExtra>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
 /// The payload being signed in transactions.
 pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 /// Extrinsic type that has already been checked.
-pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountIdBr, Call, SignedExtra>;
+pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllModules>;
 
@@ -1189,8 +1186,8 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountIdBr, Index> for Runtime {
-		fn account_nonce(account: AccountIdBr) -> Index {
+	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+		fn account_nonce(account: AccountId) -> Index {
 			System::account_nonce(account)
 		}
 	}

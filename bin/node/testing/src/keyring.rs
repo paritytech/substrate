@@ -93,9 +93,8 @@ pub fn sign(xt: CheckedExtrinsic, spec_version: u32, tx_version: u32, genesis_ha
 					key.sign(b)
 				}
 			}).into();
-			let address = sp_runtime::AccountId32::from(signed);
 			UncheckedExtrinsic {
-				signature: Some((address, signature, extra)),
+				signature: Some((pallet_indices::address::Address::Id(signed), signature, extra)),
 				function: payload.0,
 			}
 		}
