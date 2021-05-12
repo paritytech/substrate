@@ -20,12 +20,13 @@
 
 use crate::system::helpers::Health;
 use jsonrpc_core as rpc;
+use serde::Serialize;
 
 /// System RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// System RPC errors.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, derive_more::From, Serialize)]
 pub enum Error {
 	/// Provided block range couldn't be resolved to a list of blocks.
 	#[display(fmt = "Node is not fully functional: {}", _0)]

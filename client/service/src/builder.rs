@@ -648,10 +648,13 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		gen_rpc_module(
 			deny_unsafe,
 			task_manager.spawn_handle(),
-			client.clone(), on_demand.clone(),
+			client.clone(),
+			on_demand.clone(),
 			remote_blockchain.clone(),
 			transaction_pool.clone(),
 			keystore.clone(),
+			system_rpc_tx.clone(),
+			&config
 		)
 	};
 
@@ -740,6 +743,8 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	transaction_pool: Arc<TExPool>,
 	keystore: SyncCryptoStorePtr,
+	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+	config: &Configuration,
 ) -> Vec<RpcModule>
 	where
 		TBl: BlockT,
@@ -754,24 +759,37 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
 
+	let system_info = sc_rpc::system::SystemInfo {
+		chain_name: config.chain_spec.name().into(),
+		impl_name: config.impl_name.clone(),
+		impl_version: config.impl_version.clone(),
+		properties: config.chain_spec.properties(),
+		chain_type: config.chain_spec.chain_type(),
+	};
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
-	let chain = sc_rpc::chain::new_full(client.clone());
-	let author = sc_rpc::author::Author::new(
+
+	// Chain RPC APIs.
+	let (chain_rpc, chain_subs) = sc_rpc::chain::new_full(client.clone())
+		.into_rpc_module()
+		.expect("Infallible; qed");
+	let author_rpc = sc_rpc::author::Author::new(
 		client,
 		transaction_pool,
 		keystore,
 		deny_unsafe,
-	);
+	).into_rpc_module().expect("Infallible; qed");
+	let system_rpc = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe)
+		.into_rpc_module().expect("Infallible; qed");
+
 	// TODO(niklasad1): add remaining RPC API's here
 
 	let mut rpc_api = Vec::new();
-	// TODO: get rid of expect!.
-	let (chain_rpc, chain_subs) = chain.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?");
-	let author_rpc = author.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?");
 
 	rpc_api.push(chain_rpc);
 	rpc_api.push(author_rpc);
+	rpc_api.push(system_rpc);
 
+	// Spawn subscription tasks.
 	task_executor.execute_new(Box::pin(chain_subs.subscribe()));
 
 	rpc_api

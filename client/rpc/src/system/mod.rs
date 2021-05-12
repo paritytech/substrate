@@ -21,27 +21,19 @@
 #[cfg(test)]
 mod tests;
 
-use futures::{future::BoxFuture, FutureExt, TryFutureExt};
-use futures::{channel::oneshot, compat::Compat};
-use sc_rpc_api::{DenyUnsafe, Receiver};
+use futures::channel::oneshot;
+use sc_rpc_api::DenyUnsafe;
 use sc_tracing::logging;
 use sp_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{self, Header as HeaderT};
+use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 
 use self::error::Result;
 
 pub use sc_rpc_api::system::*;
 pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole, SyncState};
 pub use self::gen_client::Client as SystemClient;
-
-/// Early exit for RPCs that require `--rpc-methods=Unsafe` to be enabled
-macro_rules! bail_if_unsafe {
-	($value: expr) => {
-		if let Err(err) = $value.check_if_safe() {
-			return async move { Err(err.into()) }.boxed().compat();
-		}
-	};
-}
 
 /// System API implementation
 pub struct System<B: traits::Block> {
@@ -91,131 +83,105 @@ impl<B: traits::Block> System<B> {
 			deny_unsafe,
 		}
 	}
-}
 
-impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for System<B> {
-	fn system_name(&self) -> Result<String> {
-		Ok(self.info.impl_name.clone())
-	}
+	/// Convert to a RPC Module.
+	pub fn into_rpc_module(self) -> std::result::Result<RpcModule, JsonRpseeError> {
+		let mut ctx_module = RpcContextModule::new(self);
 
-	fn system_version(&self) -> Result<String> {
-		Ok(self.info.impl_version.clone())
-	}
+		ctx_module.register_method("system_name", |_, system| {
+			Ok(system.info.impl_name.clone())
+		})?;
 
-	fn system_chain(&self) -> Result<String> {
-		Ok(self.info.chain_name.clone())
-	}
+		ctx_module.register_method("system_version", |_, system| {
+			Ok(system.info.impl_version.clone())
+		})?;
 
-	fn system_type(&self) -> Result<sp_chain_spec::ChainType> {
-		Ok(self.info.chain_type.clone())
-	}
+		ctx_module.register_method("system_chain", |_, system| {
+			Ok(system.info.chain_name.clone())
+		})?;
 
-	fn system_properties(&self) -> Result<sp_chain_spec::Properties> {
-		Ok(self.info.properties.clone())
-	}
+		ctx_module.register_method("system_type", |_, system| {
+			Ok(system.info.chain_type.clone())
+		})?;
 
-	fn system_health(&self) -> Receiver<Health> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::Health(tx));
-		Receiver(Compat::new(rx))
-	}
+		ctx_module.register_method("system_properties", |_, system| {
+			Ok(system.info.chain_type.clone())
+		})?;
 
-	fn system_local_peer_id(&self) -> Receiver<String> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::LocalPeerId(tx));
-		Receiver(Compat::new(rx))
-	}
+		ctx_module.register_method("system_health", |_, system| {
+			let (tx, rx) = oneshot::channel();
+			let _ = system.send_back.unbounded_send(Request::Health(tx));
+			futures::executor::block_on(rx).map_err(|e| JsonRpseeCallError::Failed(Box::new(e)))
+		})?;
 
-	fn system_local_listen_addresses(&self) -> Receiver<Vec<String>> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::LocalListenAddresses(tx));
-		Receiver(Compat::new(rx))
-	}
+		ctx_module.register_method("system_local_peer_id", |_, system| {
+			let (tx, rx) = oneshot::channel();
+			let _ = system.send_back.unbounded_send(Request::LocalPeerId(tx));
+			futures::executor::block_on(rx).map_err(|e| JsonRpseeCallError::Failed(Box::new(e)))
+		})?;
 
-	fn system_peers(&self)
-		-> Compat<BoxFuture<'static, rpc::Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>>>
-	{
-		bail_if_unsafe!(self.deny_unsafe);
+		ctx_module.register_method("system_local_listen_addresses", |_, system| {
+			let (tx, rx) = oneshot::channel();
+			let _ = system.send_back.unbounded_send(Request::LocalListenAddresses(tx));
+			futures::executor::block_on(rx).map_err(|e| JsonRpseeCallError::Failed(Box::new(e)))
+		})?;
 
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::Peers(tx));
+		ctx_module.register_method("system_peers", |_, system| {
+			system.deny_unsafe.check_if_safe()?;
 
-		async move {
-			rx.await.map_err(|_| rpc::Error::internal_error())
-		}.boxed().compat()
-	}
+			let (tx, rx) = oneshot::channel();
+			let _ = system.send_back.unbounded_send(Request::Peers(tx));
+			futures::executor::block_on(rx).map_err(|e| JsonRpseeCallError::Failed(Box::new(e)))
+		})?;
 
-	fn system_network_state(&self)
-		-> Compat<BoxFuture<'static, rpc::Result<rpc::Value>>>
-	{
-		bail_if_unsafe!(self.deny_unsafe);
+		ctx_module.register_method("system_network_state", |_, system| {
+			system.deny_unsafe.check_if_safe()?;
 
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
+			let (tx, rx) = oneshot::channel();
+			let _ = system.send_back.unbounded_send(Request::NetworkState(tx));
+			futures::executor::block_on(rx).map_err(|e| JsonRpseeCallError::Failed(Box::new(e)))
+		})?;
 
-		async move {
-			rx.await.map_err(|_| rpc::Error::internal_error())
-		}.boxed().compat()
-	}
+		ctx_module.register_method("system_add_reserved_peer", |param, system| {
+			system.deny_unsafe.check_if_safe()?;
 
-	fn system_add_reserved_peer(&self, peer: String)
-		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
-	{
-		bail_if_unsafe!(self.deny_unsafe);
+			let peer = param.one().map_err(|_| JsonRpseeCallError::InvalidParams)?;
+			let (tx, rx) = oneshot::channel();
+			let _ = system.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
+			futures::executor::block_on(rx).map_err(|e| JsonRpseeCallError::Failed(Box::new(e)))
+		})?;
 
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NetworkAddReservedPeer(peer, tx));
-		async move {
-			match rx.await {
-				Ok(Ok(())) => Ok(()),
-				Ok(Err(e)) => Err(rpc::Error::from(e)),
-				Err(_) => Err(rpc::Error::internal_error()),
-			}
-		}.boxed().compat()
-	}
+		ctx_module.register_method("system_reserved_peers", |_, system| {
+			let (tx, rx) = oneshot::channel();
+			let _ = system.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
+			futures::executor::block_on(rx).map_err(|e| JsonRpseeCallError::Failed(Box::new(e)))
+		})?;
 
-	fn system_remove_reserved_peer(&self, peer: String)
-		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
-	{
-		bail_if_unsafe!(self.deny_unsafe);
+		ctx_module.register_method("system_node_roles", |_, system| {
+			let (tx, rx) = oneshot::channel();
+			let _ = system.send_back.unbounded_send(Request::NodeRoles(tx));
+			futures::executor::block_on(rx).map_err(|e| JsonRpseeCallError::Failed(Box::new(e)))
+		})?;
 
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
-		async move {
-			match rx.await {
-				Ok(Ok(())) => Ok(()),
-				Ok(Err(e)) => Err(rpc::Error::from(e)),
-				Err(_) => Err(rpc::Error::internal_error()),
-			}
-		}.boxed().compat()
-	}
+		ctx_module.register_method("system_sync_state", |_, system| {
+			let (tx, rx) = oneshot::channel();
+			let _ = system.send_back.unbounded_send(Request::SyncState(tx));
+			futures::executor::block_on(rx).map_err(|e| JsonRpseeCallError::Failed(Box::new(e)))
+		})?;
 
-	fn system_reserved_peers(&self) -> Receiver<Vec<String>> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NetworkReservedPeers(tx));
-		Receiver(Compat::new(rx))
-	}
+		ctx_module.register_method("system_add_log_filter", |param, system| {
+			system.deny_unsafe.check_if_safe()?;
 
-	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::NodeRoles(tx));
-		Receiver(Compat::new(rx))
-	}
+			let directives = param.one().map_err(|_| JsonRpseeCallError::InvalidParams)?;
+			logging::add_directives(directives);
+			logging::reload_filter().map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
+		})?;
 
-	fn system_sync_state(&self) -> Receiver<SyncState<<B::Header as HeaderT>::Number>> {
-		let (tx, rx) = oneshot::channel();
-		let _ = self.send_back.unbounded_send(Request::SyncState(tx));
-		Receiver(Compat::new(rx))
-	}
+		ctx_module.register_method("system_reset_log_filter", |_, system| {
+			system.deny_unsafe.check_if_safe()?;
+			logging::reset_log_filter().map_err(|e| JsonRpseeCallError::Failed(anyhow::anyhow!("{:?}", e).into()))
+		})?;
 
-	fn system_add_log_filter(&self, directives: String) -> std::result::Result<(), rpc::Error> {
-		self.deny_unsafe.check_if_safe()?;
-		logging::add_directives(&directives);
-		logging::reload_filter().map_err(|_e| rpc::Error::internal_error())
-	}
-
-	fn system_reset_log_filter(&self)-> std::result::Result<(), rpc::Error> {
-		self.deny_unsafe.check_if_safe()?;
-		logging::reset_log_filter().map_err(|_e| rpc::Error::internal_error())
+		Ok(ctx_module.into_module())
 	}
 }

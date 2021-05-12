@@ -7820,6 +7820,7 @@ dependencies = [
 name = "sc-rpc"
 version = "3.0.0"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "async-trait",
  "futures 0.1.31",
