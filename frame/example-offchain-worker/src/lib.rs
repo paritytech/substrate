@@ -197,7 +197,12 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
     fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
-        let signer = Self::get_signer()?;
+        let signer = Self::get_signer();
+
+		if let Err(e) = signer {
+			debug::warn!("{:?}", e);
+			return Ok(());
+		}
 
         let should_proceed = Self::check_if_should_proceed(block_number);
         if should_proceed == false {
@@ -212,7 +217,7 @@ impl<T: Trait> Module<T> {
                 "could not fetch metrics"
             })?;
 
-        Self::send_metrics_to_sc(signer, day_start_ms, aggregated_metrics)
+        Self::send_metrics_to_sc(signer.unwrap(), day_start_ms, aggregated_metrics)
             .map_err(|err| {
                 debug::error!("[OCW] Contract error occurred: {:?}", err);
                 "could not submit report_metrics TX"
