@@ -35,6 +35,51 @@ pub use sp_std;
 #[cfg(feature = "std")]
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 
+/// An attribute that accepts a version declaration of a runtime and generates a custom wasm section
+/// with the equivalent contents.
+///
+/// The custom section allows to read the version of the runtime without having to execute any code.
+/// Instead, the generated custom section can be relatively easily parsed from the wasm binary. The
+/// identifier of the custom section is "runtime_version".
+///
+/// A shortcoming of this macro is that it is unable to embed information regarding supported APIs.
+/// This is supported by the `construct_runtime!` macro.
+///
+/// This macro accepts a const item like the following:
+///
+/// ```rust
+/// use sp_version::{create_runtime_str, RuntimeVersion};
+///
+/// #[sp_version::runtime_version]
+/// pub const VERSION: RuntimeVersion = RuntimeVersion {
+/// 	spec_name: create_runtime_str!("test"),
+/// 	impl_name: create_runtime_str!("test"),
+/// 	authoring_version: 10,
+/// 	spec_version: 265,
+/// 	impl_version: 1,
+/// 	apis: RUNTIME_API_VERSIONS,
+/// 	transaction_version: 2,
+/// };
+///
+/// # const RUNTIME_API_VERSIONS: sp_version::ApisVec = sp_version::create_apis_vec!([]);
+/// ```
+///
+/// It will pass it through and add code required for emitting a custom section. The information that
+/// will go into the custom section is parsed from the item declaration. Due to that, the macro is
+/// somewhat rigid in terms of the code it accepts. There are the following considerations:
+///
+/// - The `spec_name` and `impl_name` must be set by a macro-like expression. The name of the macro
+///   doesn't matter though.
+///
+/// - `authoring_version`, `spec_version`, `impl_version` and `transaction_version` must be set
+///   by a literal. Literal must be an integer. No other expressions are allowed there. In particular,
+///   you can't supply a constant variable.
+///
+/// - `apis` doesn't have any specific constraints. This is because this information doesn't get into
+///   the custom section and is not parsed.
+///
+pub use sp_version_proc_macro::runtime_version;
+
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
 
