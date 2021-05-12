@@ -36,9 +36,9 @@ use alloc::string::String;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5GH4ZTxrrhqo9E19SVbC8sRgDLSDhprE6WXdanR7BA7ioV1L";
+pub const METRICS_CONTRACT_ADDR: &str = "5EFhuVjnUTH4fkvapxyXqkfmANQWFVGZtmkHd4GaWmhgrCLS";
 // address params: no salt, symbol: CERE, endowement: 1000
-pub const METRICS_CONTRACT_ID: [u8; 32] = [186, 93, 146, 143, 201, 9, 246, 178, 152, 136, 23, 105, 215, 109, 14, 80, 130, 231, 133, 165, 178, 143, 133, 193, 166, 190, 163, 106, 171, 113, 117, 250];
+pub const METRICS_CONTRACT_ID: [u8; 32] = [96, 220, 84, 153, 65, 96, 13, 180, 40, 98, 142, 110, 218, 127, 9, 17, 182, 152, 78, 174, 24, 37, 26, 27, 128, 215, 170, 18, 3, 3, 69, 60];
 pub const BLOCK_INTERVAL: u32 = 10;
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
@@ -192,6 +192,8 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as ExampleOffchainWorker {
+        ConfigInfo get(fn something): Option<[u8; 32]>;
+        // ContractId get(fn setcontractid): <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::Source;
 	}
 }
 
@@ -219,6 +221,10 @@ impl<T: Trait> Module<T> {
             })?;
 
         Ok(())
+    }
+
+    pub fn set_constart_address(value: [u8; 32]) {
+        ConfigInfo::put(value);
     }
 
     fn check_if_should_proceed(block_number: T::BlockNumber) -> bool {
@@ -268,6 +274,22 @@ impl<T: Trait> Module<T> {
         day_start_ms: u64,
         metrics: Vec<MetricInfo>,
     ) -> ResultStr<()> {
+
+        // Have value in config
+
+        // Get from persistent
+        let sc_address_store = StorageValueRef::persistent(b"example-offchain-worker::sc_address");
+        if let Some(Some(sc_address)) = sc_address_store.get::<[u8; 32]>() {
+            debug::info!("------------- [OCW] sc_address {:?}:", sc_address);
+
+            // Set to config
+            Self::set_constart_address(sc_address);
+            return Ok(());
+        }
+
+        // Get value in config
+        debug::info!("------------- [OCW] internal store {:?}:", ConfigInfo::get());
+
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
 
