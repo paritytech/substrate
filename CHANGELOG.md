@@ -22,6 +22,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 -
+
+## [2.2.1]
+
+### Added
+
+-
+
+### Removed
+
+-
+
+### Changed
+
+-
+
+### Fixed
+
+- Reverted ChainBridge's runtime changes
+
 ## [2.2.0] - 2021-04-16
 
 ### Added

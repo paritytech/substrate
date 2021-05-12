@@ -255,7 +255,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 					BlockType::RandomTransfersKeepAlive => {
 						Call::Balances(
 							BalancesCall::transfer_keep_alive(
-								sp_runtime::AccountId32::from(receiver),
+								pallet_indices::address::Address::Id(receiver),
 								node_runtime::ExistentialDeposit::get() + 1,
 							)
 						)
@@ -263,7 +263,7 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 					BlockType::RandomTransfersReaping => {
 						Call::Balances(
 							BalancesCall::transfer(
-								sp_runtime::AccountId32::from(receiver),
+								pallet_indices::address::Address::Id(receiver),
 								// Transfer so that ending balance would be 1 less than existential deposit
 								// so that we kill the sender account.
 								100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
@@ -523,7 +523,7 @@ impl BenchKeyring {
 					}
 				}).into();
 				UncheckedExtrinsic {
-					signature: Some((sp_runtime::AccountId32::from(signed), signature, extra)),
+					signature: Some((pallet_indices::address::Address::Id(signed), signature, extra)),
 					function: payload.0,
 				}
 			}
