@@ -18,7 +18,6 @@
 use crate::pallet::Def;
 use crate::pallet::parse::storage::{Metadata, QueryKind};
 use frame_support_procedural_tools::clean_type_string;
-use syn::spanned::Spanned;
 
 /// Generate the prefix_ident related the the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
@@ -131,17 +130,10 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						}
 					)
 				},
-				Metadata::NMap { keys, hashers, value, .. } => {
+				Metadata::NMap { keys, value, .. } => {
 					let keys = keys
 						.iter()
 						.map(|key| clean_type_string(&quote::quote!(#key).to_string()))
-						.collect::<Vec<_>>();
-					let hashers = hashers
-						.iter()
-						.map(|hasher| syn::Ident::new(
-							&clean_type_string(&quote::quote!(#hasher).to_string()),
-							hasher.span(),
-						))
 						.collect::<Vec<_>>();
 					let value = clean_type_string(&quote::quote!(#value).to_string());
 					quote::quote_spanned!(storage.attr_span =>
@@ -149,9 +141,9 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							keys: #frame_support::metadata::DecodeDifferent::Encode(&[
 								#( #keys, )*
 							]),
-							hashers: #frame_support::metadata::DecodeDifferent::Encode(&[
-								#( #frame_support::metadata::StorageHasher::#hashers, )*
-							]),
+							hashers: #frame_support::metadata::DecodeDifferent::Encode(
+								<#full_ident as #metadata_trait>::HASHERS,
+							),
 							value: #frame_support::metadata::DecodeDifferent::Encode(#value),
 						}
 					)

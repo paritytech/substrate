@@ -352,6 +352,7 @@ pub trait StorageNMapMetadata {
 	const MODIFIER: StorageEntryModifier;
 	const NAME: &'static str;
 	const DEFAULT: DefaultByteGetter;
+	const HASHERS: &'static [frame_metadata::StorageHasher];
 }
 
 impl<Prefix, Key, Value, QueryKind, OnEmpty> StorageNMapMetadata
@@ -368,6 +369,7 @@ where
 	const DEFAULT: DefaultByteGetter = DefaultByteGetter(
 		&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData),
 	);
+	const HASHERS: &'static [frame_metadata::StorageHasher] = Key::HASHER_METADATA;
 }
 
 #[cfg(test)]

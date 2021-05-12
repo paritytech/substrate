@@ -40,6 +40,8 @@ pub trait KeyGenerator {
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
 
+	const HASHER_METADATA: &'static [frame_metadata::StorageHasher];
+
 	/// Given a `key` tuple, calculate the final key by encoding each element individuallly and
 	/// hashing them using the corresponding hasher in the `KeyGenerator`.
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
@@ -53,6 +55,8 @@ pub trait KeyGenerator {
 
 /// A trait containing methods that are only implemented on the Key struct instead of the entire tuple.
 pub trait KeyGeneratorInner: KeyGenerator {
+	type Hasher: StorageHasher;
+
 	/// Hash a given `encoded` byte slice using the `KeyGenerator`'s associated `StorageHasher`.
 	fn final_hash(encoded: &[u8]) -> Vec<u8>;
 }
@@ -62,6 +66,8 @@ impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 	type KArg = (K,);
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 	type HArg = (Self::HashFn,);
+
+	const HASHER_METADATA: &'static [frame_metadata::StorageHasher] = &[H::METADATA];
 
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		H::hash(
@@ -86,6 +92,8 @@ impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 }
 
 impl<H: StorageHasher, K: FullCodec> KeyGeneratorInner for Key<H, K> {
+	type Hasher = H;
+
 	fn final_hash(encoded: &[u8]) -> Vec<u8> {
 		H::hash(encoded).as_ref().to_vec()
 	}
@@ -98,6 +106,10 @@ impl KeyGenerator for Tuple {
 	for_tuples!( type KArg = ( #(Tuple::Key),* ); );
 	for_tuples!( type HArg = ( #(Tuple::HashFn),* ); );
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
+
+	const HASHER_METADATA: &'static [frame_metadata::StorageHasher] = &[
+		for_tuples!( #(Tuple::Hasher::METADATA),* )
+	];
 
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		let mut final_key = Vec::new();
@@ -191,15 +203,15 @@ impl<T: TupleToEncodedIter> TupleToEncodedIter for &T {
 
 /// A trait that indicates the hashers for the keys generated are all reversible.
 pub trait ReversibleKeyGenerator: KeyGenerator {
-	type Hasher;
+	type ReversibleHasher;
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error>;
 }
 
 impl<H: ReversibleStorageHasher, K: FullCodec> ReversibleKeyGenerator for Key<H, K> {
-	type Hasher = H;
+	type ReversibleHasher = H;
 
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error> {
-		let mut current_key_material = Self::Hasher::reverse(key_material);
+		let mut current_key_material = Self::ReversibleHasher::reverse(key_material);
 		let key = K::decode(&mut current_key_material)?;
 		Ok((key, current_key_material))
 	}
@@ -208,7 +220,7 @@ impl<H: ReversibleStorageHasher, K: FullCodec> ReversibleKeyGenerator for Key<H,
 #[impl_trait_for_tuples::impl_for_tuples(2, 18)]
 #[tuple_types_custom_trait_bound(ReversibleKeyGenerator + KeyGeneratorInner)]
 impl ReversibleKeyGenerator for Tuple {
-	for_tuples!( type Hasher = ( #(Tuple::Hasher),* ); );
+	for_tuples!( type ReversibleHasher = ( #(Tuple::ReversibleHasher),* ); );
 
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error> {
 		let mut current_key_material = key_material;

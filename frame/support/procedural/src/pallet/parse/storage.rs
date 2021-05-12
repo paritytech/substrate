@@ -60,7 +60,6 @@ pub enum Metadata {
 	},
 	NMap {
 		keys: Vec<syn::Type>,
-		hashers: Vec<syn::Type>,
 		keygen: syn::GenericArgument,
 		value: syn::GenericArgument,
 	},
@@ -121,33 +120,30 @@ fn retrieve_arg(
 	}
 }
 
-/// Parse the 2nd type argument to `StorageNMap` and return its keys and hashers.
-fn collect_keys_and_hashers(
-	keygen: &syn::GenericArgument,
-) -> syn::Result<(Vec<syn::Type>, Vec<syn::Type>)> {
+/// Parse the 2nd type argument to `StorageNMap` and return its keys.
+fn collect_keys(keygen: &syn::GenericArgument) -> syn::Result<Vec<syn::Type>> {
 	if let syn::GenericArgument::Type(syn::Type::Tuple(tup)) = keygen {
 		tup
 			.elems
 			.iter()
-			.try_fold((vec![], vec![]), |mut acc, ty| {
-				let (key, hasher) = extract_key_and_hasher(ty)?;
+			.try_fold(vec![], |mut acc, ty| {
+				let key = extract_key(ty)?;
 
-				acc.0.push(key);
-				acc.1.push(hasher);
+				acc.push(key);
 				Ok(acc)
 			})
 	} else if let syn::GenericArgument::Type(ty) = keygen {
-		let (key, hasher) = extract_key_and_hasher(ty)?;
+		let key = extract_key(ty)?;
 
-		Ok((vec![key], vec![hasher]))
+		Ok(vec![key])
 	} else {
 		let msg = format!("Invalid pallet::storage, expected tuple of Key structs or Key struct");
 		Err(syn::Error::new(keygen.span(), msg))
 	}
 }
 
-/// In `Key<H, K>`, extract H and K and return (K, H).
-fn extract_key_and_hasher(ty: &syn::Type) -> syn::Result<(syn::Type, syn::Type)> {
+/// In `Key<H, K>`, extract K and return it.
+fn extract_key(ty: &syn::Type) -> syn::Result<syn::Type> {
 	let typ = if let syn::Type::Path(typ) = ty {
 		typ
 	} else {
@@ -177,13 +173,6 @@ fn extract_key_and_hasher(ty: &syn::Type) -> syn::Result<(syn::Type, syn::Type)>
 		return Err(syn::Error::new(ty_params.span(), msg));
 	}
 
-	let hasher = match &ty_params.args[0] {
-		syn::GenericArgument::Type(hasher_ty) => hasher_ty.clone(),
-		_ => {
-			let msg = format!("Invalid pallet::storage, expected type");
-			return Err(syn::Error::new(ty_params.args[0].span(), msg));
-		}
-	};
 	let key = match &ty_params.args[1] {
 		syn::GenericArgument::Type(key_ty) => key_ty.clone(),
 		_ => {
@@ -192,7 +181,7 @@ fn extract_key_and_hasher(ty: &syn::Type) -> syn::Result<(syn::Type, syn::Type)>
 		}
 	};
 
-	Ok((key, hasher))
+	Ok(key)
 }
 
 impl StorageDef {
@@ -260,10 +249,9 @@ impl StorageDef {
 			"StorageNMap" => {
 				query_kind = retrieve_arg(&typ.path.segments[0], 3);
 				let keygen = retrieve_arg(&typ.path.segments[0], 1)?;
-				let (keys, hashers) = collect_keys_and_hashers(&keygen)?;
+				let keys = collect_keys(&keygen)?;
 				Metadata::NMap {
 					keys,
-					hashers,
 					keygen,
 					value: retrieve_arg(&typ.path.segments[0], 2)?,
 				}
