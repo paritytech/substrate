@@ -768,26 +768,29 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	};
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
 
-	// Chain RPC APIs.
+	// RPC APIs.
+	// TODO(niklasad1): add remaining RPC API's here
 	let (chain_rpc, chain_subs) = sc_rpc::chain::new_full(client.clone())
 		.into_rpc_module()
 		.expect("Infallible; qed");
-	let author_rpc = sc_rpc::author::Author::new(
-		client,
-		transaction_pool,
-		keystore,
-		deny_unsafe,
-	).into_rpc_module().expect("Infallible; qed");
+	let author_rpc = sc_rpc::author::Author::new(client.clone(), transaction_pool, keystore, deny_unsafe)
+		.into_rpc_module()
+		.expect("Infallible; qed");
 	let system_rpc = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe)
-		.into_rpc_module().expect("Infallible; qed");
+		.into_rpc_module()
+		.expect("Infallible; qed");
+	let (state, child_state) = sc_rpc::state::new_full(client.clone(), deny_unsafe);
 
-	// TODO(niklasad1): add remaining RPC API's here
+	let state_rpc = state.into_rpc_module().expect("Infallible; qed");
+	let child_state_rpc = child_state.into_rpc_module().expect("Infallible; qed");
 
 	let mut rpc_api = Vec::new();
 
 	rpc_api.push(chain_rpc);
 	rpc_api.push(author_rpc);
 	rpc_api.push(system_rpc);
+	rpc_api.push(state_rpc);
+	rpc_api.push(child_state_rpc);
 
 	// Spawn subscription tasks.
 	task_executor.execute_new(Box::pin(chain_subs.subscribe()));
