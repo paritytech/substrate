@@ -72,9 +72,9 @@ trait SharedRequests<Hash, V>: Clone + Send + Sync {
 	///
 	/// Returns true if requests has been issued.
 	fn listen_request(
-			&self,
-			block: Hash,
-			sender: Sender<Result<V, ()>>,
+		&self,
+		block: Hash,
+		sender: Sender<Result<V, ()>>,
 	) -> bool;
 
 	/// Returns (and forgets) all listeners for given request.
@@ -517,7 +517,7 @@ fn maybe_share_remote_request<Block: BlockT, Requests, V, IssueRequest, IssueReq
 
 	// if that isn't the first request - just listen for existing request' response
 	if !need_issue_request {
-			return Either::Right(receiver.then(|r| ready(r.unwrap_or(Err(())))));
+		return Either::Right(receiver.then(|r| ready(r.unwrap_or(Err(())))));
 	}
 
 	// that is the first request - issue remote request + notify all listeners on
