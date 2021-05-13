@@ -28,7 +28,7 @@ use sp_blockchain::{
 	HeaderBackend
 };
 use sp_core::{
-	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet,
+	Bytes, storage::{StorageKey, StorageData, StorageChangeSet,
 	ChildInfo, ChildType, PrefixedStorageKey},
 };
 use sp_version::RuntimeVersion;
@@ -42,7 +42,8 @@ use super::{StateBackend, ChildStateBackend, error::{Error, Result}, client_err}
 use std::marker::PhantomData;
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, StorageProvider, ExecutorProvider,
-	ProofProvider
+	ProofProvider,
+	notifications::StorageEventStream,
 };
 
 /// Ranges to query in state_queryStorage.
@@ -229,6 +230,19 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		+ Send + Sync + 'static,
 	Client::Api: Metadata<Block>,
 {
+
+	fn storage_changes_notification_stream(
+		&self,
+		filter_keys: Option<&[StorageKey]>,
+		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
+	) -> Option<StorageEventStream<Block::Hash>> {
+		self.client.storage_changes_notification_stream(filter_keys, child_filter_keys).ok()
+	}
+
+	fn client(&self) -> &Arc<Client> {
+		&self.client
+	}
+
 	async fn call(
 		&self,
 		block: Option<Block::Hash>,

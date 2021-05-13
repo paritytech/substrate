@@ -42,6 +42,7 @@ use sc_client_api::{
 		RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest,
 		RemoteBlockchain, Fetcher, future_header,
 	},
+	notifications::StorageEventStream
 };
 use sp_core::{
 	Bytes, OpaqueMetadata,
@@ -163,6 +164,18 @@ where
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	F: Fetcher<Block> + 'static
 {
+	fn storage_changes_notification_stream(
+		&self,
+		filter_keys: Option<&[StorageKey]>,
+		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>
+	) -> Option<StorageEventStream<Block::Hash>> {
+		None
+	}
+
+	fn client(&self) -> &Arc<Client> {
+		&self.client
+	}
+
 	async fn call(
 		&self,
 		block: Option<Block::Hash>,

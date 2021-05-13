@@ -25,15 +25,17 @@ mod state_light;
 mod tests;
 
 use std::sync::Arc;
+
+use futures::StreamExt;
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_ws_server::{RpcModule, RpcContextModule, SubscriptionSink};
 
 use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
-use sp_core::{Bytes, storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
+use sc_client_api::notifications::StorageEventStream;
+use sp_core::{Bytes, storage::{well_known_keys, StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
 use sp_runtime::traits::Block as BlockT;
-
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use self::error::Error;
@@ -54,6 +56,18 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
 {
+
+	/// Get reference the client
+	// TODO(niklasad1): leaky abstraction, remove if possible.
+	fn client(&self) -> &Arc<Client>;
+
+	/// Wrapper such that the subscriptions can fetch the storage stream
+	fn storage_changes_notification_stream(
+		&self,
+		filter_keys: Option<&[StorageKey]>,
+		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>
+	) -> Option<StorageEventStream<Block::Hash>>;
+
 	/// Call runtime method at given block.
 	async fn call(
 		&self,
@@ -163,10 +177,10 @@ pub fn new_full<BE, Block: BlockT, Client>(
 			+ BlockBackend<Block> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
 		Client::Api: Metadata<Block>,
 {
-	let child_backend = Box::new(
+	let child_backend = Arc::new(
 		self::state_full::FullState::new(client.clone())
 	);
-	let backend = Box::new(self::state_full::FullState::new(client));
+	let backend = Arc::new(self::state_full::FullState::new(client));
 	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
@@ -186,34 +200,35 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 			+ Send + Sync + 'static,
 		F: Send + Sync + 'static,
 {
-	let child_backend = Box::new(self::state_light::LightState::new(
-			client.clone(),
-			remote_blockchain.clone(),
-			fetcher.clone(),
+	let child_backend = Arc::new(self::state_light::LightState::new(
+		client.clone(),
+		remote_blockchain.clone(),
+		fetcher.clone(),
 	));
 
-	let backend = Box::new(self::state_light::LightState::new(
-			client,
-			remote_blockchain,
-			fetcher,
+	let backend = Arc::new(self::state_light::LightState::new(
+		client,
+		remote_blockchain,
+		fetcher,
 	));
 	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// State API with subscriptions support.
 pub struct State<Block, Client> {
-	backend: Box<dyn StateBackend<Block, Client>>,
+	backend: Arc<dyn StateBackend<Block, Client>>,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
 
 impl<Block, Client> State<Block, Client>
-	where
-		Block: BlockT + 'static,
-		Client: Send + Sync + 'static,
+where
+	Block: BlockT + 'static,
+	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static
 {
 	/// Convert this to a RPC module.
-	pub fn into_rpc_module(self) -> Result<RpcModule, JsonRpseeError> {
+	pub fn into_rpc_module(self) -> Result<(RpcModule, StateSubscription<Block, Client>), JsonRpseeError> {
+		let backend = self.backend.clone();
 		let mut ctx_module = RpcContextModule::new(self);
 
 		ctx_module.register_method("state_call", |params, state| {
@@ -307,10 +322,21 @@ impl<Block, Client> State<Block, Client>
 				.map_err(|e| to_jsonrpsee_call_error(e))
 		})?;
 
+		let mut rpc_module = ctx_module.into_module();
 
-		// TODO: add subscriptions.
+		let runtime_sub = rpc_module.register_subscription(
+			"state_subscribeRuntimeVersion",
+			"state_unsubscribeRuntimeVersion"
+		)?;
 
-		Ok(ctx_module.into_module())
+		let storage_sub = rpc_module.register_subscription(
+			"state_subscribeStorage",
+			"state_unsubscribeStorage"
+		)?;
+
+		let state_sub = StateSubscription::new(backend, runtime_sub, storage_sub);
+
+		Ok((rpc_module, state_sub))
 	}
 }
 
@@ -361,7 +387,7 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 
 /// Child state API with subscriptions support.
 pub struct ChildState<Block, Client> {
-	backend: Box<dyn ChildStateBackend<Block, Client>>,
+	backend: Arc<dyn ChildStateBackend<Block, Client>>,
 }
 
 impl<Block, Client> ChildState<Block, Client>
@@ -400,6 +426,63 @@ impl<Block, Client> ChildState<Block, Client>
 		Ok(ctx_module.into_module())
 	}
 }
+
+pub struct StateSubscription<Block, Client> {
+	backend: Arc<dyn StateBackend<Block, Client>>,
+	runtime: SubscriptionSink,
+	storage: SubscriptionSink,
+}
+
+impl<Block, Client> StateSubscription<Block, Client>
+where
+	Block: BlockT + 'static,
+	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+{
+	/// Create a new state subscription.
+	pub fn new(
+		backend: Arc<dyn StateBackend<Block, Client>>,
+		runtime: SubscriptionSink,
+		storage: SubscriptionSink
+	) -> Self {
+		Self { backend, runtime, storage }
+	}
+
+	/// Start subscribe.
+	pub async fn subscribe(mut self) {
+		let mut runtime_stream = self.backend.storage_changes_notification_stream(
+			Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
+			None,
+		).unwrap();
+
+		// TODO(niklasad1): storage subscription depends on input from
+		// the JSONRPC request when the subscription is initiated by the client
+		// which is not supported yet.
+		//
+		// let key = self.storage.params();
+		// let stream = match self.backend.storage_changes_notification_stream(
+		//	 keys.as_ref().map(|x| &**x),
+		//	 None
+		// )
+		//
+
+		let mut last_version = self.backend.runtime_version(None).await.unwrap();
+
+		loop {
+			// TODO(niklasad1): I have no idea why we can't fetch
+			// the changes from the StorageChangesSet instead of querying the client
+			// but probably easier to do like this ^^
+			let _notif = runtime_stream.next().await;
+			let best_hash = self.backend.client().info().best_hash;
+			let version = self.backend.runtime_version(Some(best_hash)).await.unwrap();
+
+			if version != last_version {
+				let _ = self.runtime.send(&version);
+				last_version = version;
+			}
+		}
+	}
+}
+
 
 fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
