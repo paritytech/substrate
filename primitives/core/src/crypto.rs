@@ -1178,6 +1178,8 @@ pub mod key_types {
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
 	/// Key type for equivocation reporting, built-in. Identified as `fish`.
 	pub const REPORTING: KeyTypeId = KeyTypeId(*b"fish");
+	/// Key type for BEEFY
+	pub const BEEFY: KeyTypeId = KeyTypeId(*b"beef");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
