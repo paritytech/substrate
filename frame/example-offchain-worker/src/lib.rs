@@ -271,6 +271,10 @@ impl<T: Trait> Module<T> {
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
 
+			if one_metric.bytes == 0 && one_metric.requests == 0 {
+				continue;
+			}
+
             let results = signer.send_signed_transaction(
                 |account| {
                     debug::info!("[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?})", account.id, one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
