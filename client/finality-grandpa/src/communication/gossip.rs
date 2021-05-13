@@ -1682,6 +1682,7 @@ pub(super) struct PeerReport {
 mod tests {
 	use super::*;
 	use super::environment::SharedVoterSetState;
+	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
 	use sc_network_test::Block;
 	use sp_core::{crypto::Public, H256};
@@ -1693,7 +1694,7 @@ mod tests {
 			justification_period: 256,
 			keystore: None,
 			name: None,
-			is_authority: true,
+			local_role: Role::Authority,
 			observer_enabled: true,
 			telemetry: None,
 		}
@@ -2218,7 +2219,7 @@ mod tests {
 
 			// if the observer protocol is enabled and we are not an authority,
 			// then we don't issue any catch-up requests.
-			c.is_authority = false;
+			c.local_role = Role::Full;
 			c.observer_enabled = true;
 
 			c
@@ -2512,15 +2513,10 @@ mod tests {
 	fn non_authorities_never_gossip_messages_on_first_round_duration() {
 		let mut config = config();
 		config.gossip_duration = Duration::from_secs(300); // Set to high value to prevent test race
-		config.is_authority = false;
+		config.local_role = Role::Full;
 		let round_duration = config.gossip_duration * ROUND_DURATION;
 
-		let (val, _) = GossipValidator::<Block>::new(
-			config,
-			voter_set_state(),
-			None,
-			None,
-		);
+		let (val, _) = GossipValidator::<Block>::new(config, voter_set_state(), None, None);
 
 		// the validator start at set id 0
 		val.note_set(SetId(0), Vec::new(), |_, _| {});
