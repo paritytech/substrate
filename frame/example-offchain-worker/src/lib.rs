@@ -279,16 +279,17 @@ impl<T: Trait> Module<T> {
 
         // Get from persistent
         let sc_address_store = StorageValueRef::persistent(b"example-offchain-worker::sc_address");
-        if let Some(Some(sc_address)) = sc_address_store.get::<[u8; 32]>() {
-            debug::info!("------------- [OCW] sc_address {:?}:", sc_address);
+        let sc_address = sc_address_store.get::<[u8; 32]>().unwrap();
+        debug::info!("------------- [OCW] sc_address {:?}:", sc_address.unwrap());
 
-            // Set to config
-            Self::set_constart_address(sc_address);
-            return Ok(());
-        }
+        // Set to config
+        Self::set_constart_address(sc_address.unwrap());
 
         // Get value in config
-        debug::info!("------------- [OCW] internal store {:?}:", ConfigInfo::get());
+        debug::info!("------------- [OCW] internal store {:?}:", ConfigInfo::get().unwrap());
+
+        let acc_id_temp = T::AccountId::from_raw(ConfigInfo::get().unwrap());
+        let contract_id: <<<T as Trait>::CT as frame_system::Trait>::Lookup as StaticLookup>::Source = <<T as Trait>::CT as frame_system::Trait>::Lookup::unlookup(acc_id_temp);
 
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
@@ -300,7 +301,7 @@ impl<T: Trait> Module<T> {
                     let call_data = Self::encode_report_metrics(&app_id, day_start_ms, one_metric.bytes, one_metric.requests);
 
                     pallet_contracts::Call::call(
-                        T::ContractId::get(),
+                        contract_id,
                         0u32.into(),
                         100_000_000_000,
                         call_data,
@@ -465,7 +466,7 @@ decl_event!(
 
 
 pub trait Trait: frame_system::Trait {
-    type ContractId: Get<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>;
+    // type ContractId: Get<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>;
     type DdcUrl: Get<Vec<u8>>;
 
     type CT: pallet_contracts::Trait;
