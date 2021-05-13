@@ -18,39 +18,39 @@
 //! A high-level helpers for making RPC calls from Offchain Workers.
 //!
 //! Example:
-//! ```rust,no_run
-//! use sp_runtime::offchain::rpc::{Request, Error};
-//! use sp_runtime::offchain::http;
-//! use sp_std::{vec::Vec, str};
-//!
-//! let request = Request {
-//! 	jsonrpc: "2.0",
-//! 	id: 1,
-//! 	method: "chain_getFinalizedHead",
-//! 	params: Vec::new(),
-//! 	timeout: 3_000,
-//! 	url: "http://localhost:9933"
-//! };
-//!
-//! let rpc_response = request.send();
-//!
-//! match rpc_response {
-//! 	Ok(response) => {
-//! 		if !response.result.is_empty() {
-//! 			log::info!("Rpc call result: {:?}", str::from_utf8(&response.result).unwrap());
-//! 		} else {
-//! 			log::error!("Rpc call error: code: {:?}, message: {:?}",
-//! 							response.error.code,
-//! 							str::from_utf8(&response.error.message).unwrap()
-//! 						);
-//! 		}
-//! 	},
-//! 	Err(e) => {
-//! 		log::error!("Rpc call error: {:?}", e);
-//! 		assert_eq!(Error::Http(http::Error::DeadlineReached), e);
-//! 	}
-//! }
-//! ```
+// ! ```rust,no_run
+// ! use sp_runtime::offchain::rpc::{Request, Error};
+// ! use sp_runtime::offchain::http;
+// ! use sp_std::{vec::Vec, str};
+// !
+// ! let request = Request {
+// ! 	jsonrpc: "2.0",
+// ! 	id: 1,
+// ! 	method: "chain_getFinalizedHead",
+// ! 	params: Vec::new(),
+// ! 	timeout: 3_000,
+// ! 	url: "http://localhost:9933"
+// ! };
+// !
+// ! let rpc_response = request.send();
+// !
+// ! match rpc_response {
+// ! 	Ok(response) => {
+// ! 		if !response.result.is_empty() {
+// ! 			log::info!("Rpc call result: {:?}", str::from_utf8(&response.result).unwrap());
+// ! 		} else {
+// ! 			log::error!("Rpc call error: code: {:?}, message: {:?}",
+// ! 							response.error.code,
+// ! 							str::from_utf8(&response.error.message).unwrap()
+// ! 						);
+// ! 		}
+// ! 	},
+// ! 	Err(e) => {
+// ! 		log::error!("Rpc call error: {:?}", e);
+// ! 		assert_eq!(Error::Http(http::Error::DeadlineReached), e);
+// ! 	}
+// ! }
+// ! ```
 
 use serde::{Deserialize, Deserializer};
 use crate::{RuntimeDebug, offchain::Duration};
@@ -76,8 +76,13 @@ pub struct RpcError {
 	/// error code
 	pub code: i32,
 	/// error message
+	#[serde(default)]
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	pub message: Vec<u8>,
+	/// error data
+	#[serde(default)]
+	#[serde(deserialize_with = "de_option_string_to_bytes")]
+	pub data: Option<Vec<u8>>,
 }
 
 /// A rpc call response
@@ -88,11 +93,11 @@ pub struct Response {
 	pub jsonrpc: Vec<u8>,
 	/// rpc response result
 	#[serde(default)]
-	#[serde(deserialize_with = "de_string_to_bytes")]
-	pub result: Vec<u8>,
+	#[serde(deserialize_with = "de_option_string_to_bytes")]
+	pub result: Option<Vec<u8>>,
 	/// rpc response error struct
 	#[serde(default)]
-	pub error: RpcError,
+	pub error: Option<RpcError>,
 	/// rpc response id
 	pub id: u32,
 }
@@ -111,6 +116,18 @@ pub struct Request<'a> {
 	pub timeout: u64,
 	/// rpc request url
 	pub url: &'a str,
+}
+
+fn de_option_string_to_bytes<'de, D>(de: D) -> Result<Option<Vec<u8>>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let s: Option<&str> = Deserialize::deserialize(de)?;
+
+	match s {
+		Some(value) => Ok(Some(value.as_bytes().to_vec())),
+		None => Ok(None),
+	}
 }
 
 fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -232,8 +249,8 @@ mod test {
 			};
 
 			let response = request.send().unwrap();
-
-			let finalized_hash_str = str::from_utf8(&response.result[2..]).unwrap();
+			let result = response.result.unwrap();
+			let finalized_hash_str = str::from_utf8(&result[2..]).unwrap();
 			let finalized_hash = hex::decode(finalized_hash_str).ok().unwrap();
 
 			let expected_finalized_hash_str = str::from_utf8(&EXPECTED_RESULT[2..]).unwrap();
@@ -293,10 +310,9 @@ mod test {
 				url: RPC_REQUEST_URL
 			};
 
-			let response = request.send().unwrap();
-
-			assert_eq!(EXPECTED_ERROR_CODE, response.error.code);
-			assert_eq!(EXPECTED_ERROR_MESSAGE, &response.error.message[..]);
+			let error = request.send().unwrap().error.unwrap();
+			assert_eq!(EXPECTED_ERROR_CODE, error.code);
+			assert_eq!(EXPECTED_ERROR_MESSAGE, &error.message[..]);
 		})
 	}
 
