@@ -149,8 +149,8 @@ fn extract_key(ty: &syn::Type) -> syn::Result<syn::Type> {
 		let msg = "Invalid pallet::storage, expected type path with at least one segment";
 		syn::Error::new(typ.path.span(), msg)
 	})?;
-	if key_struct.ident != "Key" {
-		let msg = "Invalid pallet::storage, expected Key struct";
+	if key_struct.ident != "Key" && key_struct.ident != "NMapKey" {
+		let msg = "Invalid pallet::storage, expected Key or NMapKey struct";
 		return Err(syn::Error::new(key_struct.ident.span(), msg));
 	}
 

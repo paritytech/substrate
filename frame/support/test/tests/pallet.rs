@@ -226,8 +226,8 @@ pub mod pallet {
 	pub type NMap2<T> = StorageNMap<
 		_,
 		(
-			storage::Key<Twox64Concat, u16>,
-			storage::Key<Blake2_128Concat, u32>,
+			NMapKey<Twox64Concat, u16>,
+			NMapKey<Blake2_128Concat, u32>,
 		),
 		u64,
 	>;

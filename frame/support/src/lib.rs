@@ -1237,7 +1237,10 @@ pub mod pallet_prelude {
 		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
-		storage::types::{StorageValue, StorageMap, StorageDoubleMap, StorageNMap, ValueQuery, OptionQuery},
+		storage::types::{
+			Key as NMapKey, StorageDoubleMap, StorageMap, StorageNMap, StorageValue, ValueQuery,
+			OptionQuery,
+		},
 		storage::bounded_vec::BoundedVec,
 	};
 	pub use codec::{Encode, Decode};
