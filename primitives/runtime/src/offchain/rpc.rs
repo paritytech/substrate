@@ -103,6 +103,7 @@ pub struct Response {
 }
 
 /// A rpc call request
+#[derive(RuntimeDebug)]
 pub struct Request<'a> {
 	/// rpc request jsonrpc
 	pub jsonrpc: &'a str,
@@ -116,6 +117,19 @@ pub struct Request<'a> {
 	pub timeout: u64,
 	/// rpc request url
 	pub url: &'a str,
+}
+
+impl<'a> Default for Request<'a> {
+	fn default() -> Self {
+		Request {
+			jsonrpc: "2.0",
+			id: 1,
+			method: "chain_getFinalizedHead",
+			params: Vec::new(),
+			timeout: 3_000,
+			url: "http://localhost:9933"
+		}
+	}
 }
 
 fn de_option_string_to_bytes<'de, D>(de: D) -> Result<Option<Vec<u8>>, D::Error>
@@ -240,12 +254,7 @@ mod test {
 
 		t.execute_with(|| {
 			let request = Request {
-				jsonrpc: "2.0",
-				id: 1,
-				method: RPC_METHOD,
-				params: Vec::new(),
-				timeout: TIMEOUT_PERIOD,
-				url: RPC_REQUEST_URL
+				..Default::default()
 			};
 
 			let response = request.send().unwrap();
@@ -302,12 +311,8 @@ mod test {
 
 		t.execute_with(|| {
 			let request = Request {
-				jsonrpc: "2.0",
-				id: 1,
 				method: RPC_METHOD,
-				params: Vec::new(),
-				timeout: TIMEOUT_PERIOD,
-				url: RPC_REQUEST_URL
+				..Default::default()
 			};
 
 			let error = request.send().unwrap().error.unwrap();
@@ -353,12 +358,8 @@ mod test {
 
 		t.execute_with(|| {
 			let request = Request {
-				jsonrpc: "2.0",
-				id: 1,
 				method: RPC_METHOD,
-				params: Vec::new(),
-				timeout: TIMEOUT_PERIOD,
-				url: RPC_REQUEST_URL
+				..Default::default()
 			};
 
 			let response = request.send().unwrap_err();
