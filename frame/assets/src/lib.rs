@@ -140,14 +140,15 @@ pub use types::*;
 
 use sp_std::{prelude::*, borrow::Borrow, convert::TryInto};
 use sp_runtime::{
-	RuntimeDebug, TokenError, ArithmeticError, traits::{
+	TokenError, ArithmeticError,
+	traits::{
 		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded,
 		StoredMapError,
 	}
 };
-use codec::{Encode, Decode, HasCompact};
+use codec::HasCompact;
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
-use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap, MaxEncodedLen};
+use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
 use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
 use frame_system::Config as SystemConfig;
 
