@@ -421,8 +421,6 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		);
 	}
 
-	network_starter.start_network();
-
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		remote_blockchain: Some(backend.remote_blockchain()),
 		transaction_pool,
@@ -439,5 +437,6 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		telemetry: telemetry.as_mut(),
 	})?;
 
+	network_starter.start_network();
 	Ok(task_manager)
 }

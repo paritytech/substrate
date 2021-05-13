@@ -550,8 +550,6 @@ pub fn new_light_base(
 		);
 	}
 
-	network_starter.start_network();
-
 	if config.offchain_worker.enabled {
 		sc_service::build_offchain_workers(
 			&config,
@@ -584,6 +582,7 @@ pub fn new_light_base(
 			telemetry: telemetry.as_mut(),
 		})?;
 
+	network_starter.start_network();
 	Ok((
 		task_manager,
 		rpc_handlers,
