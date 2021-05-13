@@ -193,7 +193,7 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The balance of an account.
 		type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
-			MaybeSerializeDeserialize + Debug;
+			MaybeSerializeDeserialize + Debug + MaxEncodedLen;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
