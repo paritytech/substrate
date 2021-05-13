@@ -37,6 +37,26 @@ impl std::fmt::Display for BenchmarkParameter {
 	}
 }
 
+/// Information returned from runtime to client queried by CLI
+#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+pub enum BenchmarkData {
+	/// Information to list available benchmarks
+	AvailableBenchmarks(Vec<BenchmarkInfo>),
+	/// Benchmark info along with executed benchmark results
+	ExecutedBenchmarks(Vec<BenchmarkBatch>),
+}
+
+/// Contains
+#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+pub struct BenchmarkInfo {
+	/// The pallet's name
+	pub pallet: Vec<u8>,
+	/// The instance of this pallet available for benchmarking.
+	pub instance: Vec<u8>,
+	/// Available benchmark
+	pub benchmark: Vec<Vec<u8>>,
+}
+
 /// The results of a single of benchmark.
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BenchmarkBatch {
@@ -92,7 +112,7 @@ sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
 		/// Dispatch the given benchmark.
-		fn dispatch_benchmark(config: BenchmarkConfig) -> Result<Vec<BenchmarkBatch>, sp_runtime::RuntimeString>;
+		fn dispatch_benchmark(config: BenchmarkConfig) -> Result< BenchmarkData, sp_runtime::RuntimeString>;
 	}
 }
 

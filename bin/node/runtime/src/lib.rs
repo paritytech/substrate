@@ -1450,8 +1450,10 @@ impl_runtime_apis! {
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
-		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
-			use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
+		) -> Result<frame_benchmarking::BenchmarkData, sp_runtime::RuntimeString> {
+			use frame_benchmarking::{BenchmarkData::{AvailableBenchmarks, ExecutedBenchmarks},
+				Benchmarking, BenchmarkBatch, BenchmarkInfo, list_benchmark, add_benchmark, execute_benchmark, TrackedStorageKey
+			};
 			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency
 			// issues. To get around that, we separated the Session benchmarks into its own crate,
 			// which is why we need these two lines below.
@@ -1478,10 +1480,18 @@ impl_runtime_apis! {
 				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95ecffd7b6c0f78751baa9d281e0bfa3a6d6f646c70792f74727372790000000000000000000000000000000000000000").to_vec().into(),
 			];
 
+			let mut info = Vec::<BenchmarkInfo>::new();
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
+			add_benchmark!(params, info, batches, pallet_assets, Assets);
+			if config.list {
+				Ok(AvailableBenchmarks(info))
+			} else {
+				if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
+				Ok(ExecutedBenchmarks(batches))
+			}
 
-			add_benchmark!(params, batches, pallet_assets, Assets);
+			/*
 			add_benchmark!(params, batches, pallet_babe, Babe);
 			add_benchmark!(params, batches, pallet_balances, Balances);
 			add_benchmark!(params, batches, pallet_bounties, Bounties);
@@ -1512,7 +1522,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_vesting, Vesting);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
-			Ok(batches)
+			Ok(batches)*/
 		}
 	}
 }

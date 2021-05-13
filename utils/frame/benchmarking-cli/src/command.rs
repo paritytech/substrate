@@ -18,7 +18,7 @@
 use std::sync::Arc;
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
+use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkData, BenchmarkData::{AvailableBenchmarks, ExecutedBenchmarks}, BenchmarkInfo, BenchmarkSelector};
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
@@ -125,9 +125,130 @@ impl BenchmarkCmd {
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-		let results = <std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
+		let results = <std::result::Result<BenchmarkData, String> as Decode>::decode(&mut &result[..])
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
+		match results {
+			Ok(data) => {
+				match data {
+					AvailableBenchmarks(benchmark_info) => {
+						print_benchmarks(benchmark_info);
+					},
+					ExecutedBenchmarks(benchmark_batches) => {
+						output_batches(self, benchmark_batches)?;
+					},
+				}
+			}
+			Err(error) => eprintln!("Error: {}", error),
+		}
+		Ok(())
+	}
+}
+
+
+/// Prints information on pallets and their available benchmarks
+fn print_benchmarks(benchmark_info: Vec<BenchmarkInfo>) {
+	for info in benchmark_info {
+		println!(
+			"\npallet name: {}   instance name: {}\n",
+			String::from_utf8(info.pallet).expect("Encoded from String qed"),
+			String::from_utf8(info.instance).expect("Encoded from String qed"),
+		);
+		println!("benchmarks:\n");
+		for bench in info.benchmark {
+			println!("	{}", String::from_utf8(bench).expect("Encoded from String qed"));
+		}
+	}
+}
+
+/// Outputs
+fn output_batches(cmd: &BenchmarkCmd, batches: Vec<BenchmarkBatch>) -> std::result::Result<(), std::io::Error> {
+	if let Some(output_path) = &cmd.output {
+		crate::writer::write_results(&batches, output_path, cmd)?;
+	}
+
+	for batch in batches.into_iter() {
+		// Print benchmark metadata
+		println!(
+			"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
+			String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
+			String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
+			cmd.lowest_range_values,
+			cmd.highest_range_values,
+			cmd.steps,
+			cmd.repeat,
+		);
+
+		// Skip raw data + analysis if there are no results
+		if batch.results.is_empty() { continue }
+
+		if cmd.raw_data {
+			// Print the table header
+			batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
+
+			print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes\n");
+			// Print the values
+			batch.results.iter().for_each(|result| {
+				let parameters = &result.components;
+				parameters.iter().for_each(|param| print!("{:?},", param.1));
+				// Print extrinsic time and storage root time
+				print!("{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
+					result.extrinsic_time,
+					result.storage_root_time,
+					result.reads,
+					result.repeat_reads,
+					result.writes,
+					result.repeat_writes,
+					result.proof_size,
+				);
+			});
+
+			println!();
+		}
+
+		// Conduct analysis.
+		if !cmd.no_median_slopes {
+			println!("Median Slopes Analysis\n========");
+			if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+				println!("-- Extrinsic Time --\n{}", analysis);
+			}
+			if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads) {
+				println!("Reads = {:?}", analysis);
+			}
+			if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes) {
+				println!("Writes = {:?}", analysis);
+			}
+		}
+		if !cmd.no_min_squares {
+			println!("Min Squares Analysis\n========");
+			if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+				println!("-- Extrinsic Time --\n{}", analysis);
+			}
+			if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads) {
+				println!("Reads = {:?}", analysis);
+			}
+			if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes) {
+				println!("Writes = {:?}", analysis);
+			}
+		}
+	}
+	Ok(())
+}
+
+impl CliConfiguration for BenchmarkCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn chain_id(&self, _is_dev: bool) -> Result<String> {
+		Ok(match self.shared_params.chain {
+			Some(ref chain) => chain.clone(),
+			None => "dev".into(),
+		})
+	}
+}
+
+		/*
 		match results {
 			Ok(batches) => {
 				if let Some(output_path) = &self.output {
@@ -138,7 +259,7 @@ impl BenchmarkCmd {
 					// Print benchmark metadata
 					println!(
 						"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
-						String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
+						String::from_utf8(batch.info.pallet).expect("Encoded from String; qed"),
 						String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
 						self.lowest_range_values,
 						self.highest_range_values,
@@ -202,20 +323,4 @@ impl BenchmarkCmd {
 			},
 			Err(error) => eprintln!("Error: {}", error),
 		}
-
-		Ok(())
-	}
-}
-
-impl CliConfiguration for BenchmarkCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
-
-	fn chain_id(&self, _is_dev: bool) -> Result<String> {
-		Ok(match self.shared_params.chain {
-			Some(ref chain) => chain.clone(),
-			None => "dev".into(),
-		})
-	}
-}
+		*/

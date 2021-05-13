@@ -1315,7 +1315,50 @@ pub fn show_benchmark_debug_info(
 
 #[macro_export]
 macro_rules! add_benchmark {
-	( $params:ident, $batches:ident, $name:path, $( $location:tt )* ) => (
+	( $params:ident, $info:ident, $batches:ident, $name:path,  $( $location:tt )* ) => (
+		let (config, whitelist) = $params;
+		if config.list {
+			list_benchmark!($params, $info, $name, $( $location )*);
+		} else {
+			execute_benchmark!($params, $batches, $name, $( $location )*);
+		}
+	)
+}
+
+/// Builds list of available benchmarks
+#[macro_export]
+macro_rules! list_benchmark {
+	( $params:ident, $info:ident, $name:path,  $( $location:tt )* ) => (
+		let (config, whitelist) = $params;
+		let $crate::BenchmarkConfig {
+			pallet,
+			benchmark,
+			lowest_range_values,
+			highest_range_values,
+			steps,
+			repeat,
+			verify,
+			extra,
+			list,
+		} = config;
+		let name_string = stringify!($name).as_bytes();
+		let instance_string = stringify!( $( $location )* ).as_bytes();
+		let mut available_benchmark = Vec::new();
+		for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
+			available_benchmark.push(benchmark.to_vec());
+		}
+		$info.push($crate::BenchmarkInfo {
+				pallet: name_string.to_vec(),
+				instance: instance_string.to_vec(),
+				benchmark: available_benchmark,
+		});
+	)
+}
+
+
+#[macro_export]
+macro_rules! execute_benchmark {
+	( $params:ident, $batches:ident, $name:path, $( $location:tt )*) => (
 		let name_string = stringify!($name).as_bytes();
 		let instance_string = stringify!( $( $location )* ).as_bytes();
 		let (config, whitelist) = $params;
@@ -1330,18 +1373,7 @@ macro_rules! add_benchmark {
 			extra,
 			list,
 		} = config;
-
-		if *list {
-			for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
-				$batches.push($crate::BenchmarkBatch {
-					pallet: name_string.to_vec(),
-					instance: instance_string.to_vec(),
-					benchmark: benchmark.to_vec(),
-					results: Default::default(),
-				});
-			}
-		}
-		else if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
+		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks(*extra).into_iter() {
 					$batches.push($crate::BenchmarkBatch {
