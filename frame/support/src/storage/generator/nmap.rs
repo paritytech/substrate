@@ -15,6 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Generator for `StorageNMap` used by `decl_storage` and storage types.
+//!
+//! By default each key value is stored at:
+//! ```nocompile
+//! Twox128(pallet_prefix) ++ Twox128(storage_prefix)
+//!     ++ Hasher1(encode(key1)) ++ Hasher2(encode(key2)) ++ ... ++ HasherN(encode(keyN))
+//! ```
+//!
+//! # Warning
+//!
+//! If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
+//! `blake2_256` must be used.  Otherwise, other values in storage with the same prefix can
+//! be compromised.
+
 use crate::{
 	hash::{StorageHasher, Twox128},
 	storage::{
