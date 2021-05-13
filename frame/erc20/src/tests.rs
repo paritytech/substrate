@@ -48,31 +48,31 @@ fn transfer_hash() {
     })
 }
 
-// #[test]
-// fn transfer_native() {
-//     new_test_ext().execute_with(|| {
-//         let dest_chain = 0;
-//         let resource_id = NativeTokenId::get();
-//         let amount: u64 = 100;
-//         let recipient = vec![99];
+/* #[test]
+fn transfer_native() {
+    new_test_ext().execute_with(|| {
+        let dest_chain = 0;
+        let resource_id = NativeTokenId::get();
+        let amount: u64 = 100;
+        let recipient = vec![99];
 
-//         assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
-//         assert_ok!(Example::transfer_native(
-//             Origin::signed(RELAYER_A),
-//             amount.clone(),
-//             recipient.clone(),
-//             dest_chain,
-//         ));
+        assert_ok!(Bridge::whitelist_chain(Origin::root(), dest_chain.clone()));
+        assert_ok!(Example::transfer_native(
+            Origin::signed(RELAYER_A),
+            amount.clone(),
+            recipient.clone(),
+            dest_chain,
+        ));
 
-//         expect_event(bridge::RawEvent::FungibleTransfer(
-//             dest_chain,
-//             1,
-//             resource_id,
-//             amount.into(),
-//             recipient,
-//         ));
-//     })
-// }
+        expect_event(bridge::RawEvent::FungibleTransfer(
+            dest_chain,
+            1,
+            resource_id,
+            amount.into(),
+            recipient,
+        ));
+    })
+} */
 
 #[test]
 fn transfer_erc721() {
