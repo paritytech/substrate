@@ -51,6 +51,7 @@ use sp_runtime::{
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
+mod accountable_safety;
 mod equivocation;
 mod default_weights;
 pub mod migrations;
@@ -62,6 +63,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
+pub use accountable_safety::{AccountableSafetyHandler, AccountableSafety};
 pub use equivocation::{
 	EquivocationHandler, GrandpaEquivocationOffence, GrandpaOffence, GrandpaTimeSlot,
 	HandleEquivocation,
@@ -115,6 +117,9 @@ pub mod pallet {
 
 		/// Weights for this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The accountable safety subsystem
+		type AccountableSafety: AccountableSafety;
 	}
 
 	#[pallet::hooks]
@@ -180,6 +185,9 @@ pub mod pallet {
 				},
 				_ => {},
 			}
+
+			// Update the accountable safety state machine
+			T::AccountableSafety::update();
 		}
 	}
 
@@ -244,6 +252,28 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			Ok(Self::on_stalled(delay, best_finalized_block_number).into())
+		}
+
+		/// Trigger the accountable safety protocol
+		#[pallet::weight(T::WeightInfo::start_accountable_safety_protocol())]
+		fn start_accountable_safety_protocol_unsigned(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+			todo!();
+		}
+
+		/// Submit response to a query in the accountable safety protocol. Can be either a set of
+		/// prevotes or a set of precommits.
+		#[pallet::weight(T::WeightInfo::add_response())]
+		fn add_response_signed(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			todo!();
+		}
+
+		/// Submit response to a prevote query in the accountable safety protocol
+		#[pallet::weight(T::WeightInfo::add_prevote_response())]
+		fn add_prevote_response_signed(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			todo!();
 		}
 	}
 
@@ -346,6 +376,10 @@ pub mod pallet {
 pub trait WeightInfo {
 	fn report_equivocation(validator_count: u32) -> Weight;
 	fn note_stalled() -> Weight;
+
+	fn start_accountable_safety_protocol() -> Weight;
+	fn add_response() -> Weight;
+	fn add_prevote_response() -> Weight;
 }
 
 /// A stored pending change.
@@ -590,6 +624,22 @@ impl<T: Config> Pallet<T> {
 		// failed. until then, we can't meaningfully guard against
 		// `next == last` the way that normal session changes do.
 		<Stalled<T>>::put((further_wait, median));
+	}
+
+	pub fn start_accountable_safety_protocol() {
+		T::AccountableSafety::start_accountable_safety_protocol()
+	}
+
+	pub fn accountable_safety_state() -> Option<()> {
+		T::AccountableSafety::state()
+	}
+
+	pub fn add_response() {
+		T::AccountableSafety::add_response()
+	}
+
+	pub fn add_prevote_response() {
+		T::AccountableSafety::add_prevote_response()
 	}
 }
 

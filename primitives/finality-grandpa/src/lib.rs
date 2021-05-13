@@ -534,5 +534,19 @@ sp_api::decl_runtime_apis! {
 			set_id: SetId,
 			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
+
+		/// Initiate the accountable safety protocol. This will be called when mutually inconsistent
+		/// finalized blocks are detected.
+		fn submit_start_accountable_safety_protocol_extrinsic();
+
+		/// Get the current state of the accountable safety protocol instance(s). This is used by
+		/// the accountable safety worker to determine e.g if it needs to submit any query replies.
+		fn accountable_safety_state() -> Option<()>;
+
+		/// Submit a response to a query where the reply can be either prevotes or precommits
+		fn submit_accountable_safety_response_extrinsic();
+
+		/// Submit a response to a query which specifically calls for prevotes.
+		fn submit_accountable_safety_prevote_response_extrinsic();
 	}
 }

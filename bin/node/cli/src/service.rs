@@ -408,6 +408,11 @@ pub fn new_full_base(
 			"grandpa-voter",
 			grandpa::run_grandpa_voter(grandpa_config)?
 		);
+
+		task_manager.spawn_handle().spawn(
+			"grandpa-accountable-safety-worker",
+			grandpa::run_grandpa_accountable_safety_worker(client.clone())
+		);
 	}
 
 	network_starter.start_network();

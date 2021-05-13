@@ -854,6 +854,22 @@ cfg_if! {
 				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}
+
+				fn submit_start_accountable_safety_protocol_extrinsic() {
+					todo!();
+				}
+
+				fn accountable_safety_state() -> Option<()> {
+					todo!();
+				}
+
+				fn submit_accountable_safety_response_extrinsic() {
+					todo!();
+				}
+
+				fn submit_accountable_safety_prevote_response_extrinsic() {
+					todo!();
+				}
 			}
 
 			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {

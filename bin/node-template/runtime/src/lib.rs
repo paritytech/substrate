@@ -223,6 +223,8 @@ impl pallet_grandpa::Config for Runtime {
 	type HandleEquivocation = ();
 
 	type WeightInfo = ();
+
+	type AccountableSafety = ();
 }
 
 parameter_types! {
@@ -431,6 +433,16 @@ impl_runtime_apis! {
 			// with no values).
 			None
 		}
+
+		fn submit_start_accountable_safety_protocol_extrinsic() {}
+
+		fn accountable_safety_state() -> Option<()> {
+			None
+		}
+
+		fn submit_accountable_safety_response_extrinsic() {}
+
+		fn submit_accountable_safety_prevote_response_extrinsic() {}
 	}
 
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {

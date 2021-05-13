@@ -924,6 +924,9 @@ impl pallet_grandpa::Config for Runtime {
 		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
+
+	type AccountableSafety =
+		pallet_grandpa::AccountableSafetyHandler;
 }
 
 parameter_types! {
@@ -1274,6 +1277,22 @@ impl_runtime_apis! {
 			Historical::prove((fg_primitives::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
 				.map(fg_primitives::OpaqueKeyOwnershipProof::new)
+		}
+
+		fn submit_start_accountable_safety_protocol_extrinsic() {
+			Grandpa::start_accountable_safety_protocol()
+		}
+
+		fn accountable_safety_state() -> Option<()> {
+			Grandpa::accountable_safety_state()
+		}
+
+		fn submit_accountable_safety_response_extrinsic() {
+			Grandpa::add_response()
+		}
+
+		fn submit_accountable_safety_prevote_response_extrinsic() {
+			Grandpa::add_prevote_response()
 		}
 	}
 

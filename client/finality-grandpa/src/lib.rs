@@ -109,6 +109,7 @@ macro_rules! afg_log {
 	};
 }
 
+mod accountable_safety;
 mod authorities;
 mod aux_schema;
 mod communication;
@@ -121,6 +122,7 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
+pub use accountable_safety::run_grandpa_accountable_safety_worker;
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use aux_schema::best_justification;
 pub use finality_proof::{FinalityProof, FinalityProofError, FinalityProofProvider};
