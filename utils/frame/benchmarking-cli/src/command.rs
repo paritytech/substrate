@@ -18,7 +18,10 @@
 use std::sync::Arc;
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkData, BenchmarkData::{AvailableBenchmarks, ExecutedBenchmarks}, BenchmarkInfo, BenchmarkSelector};
+use frame_benchmarking::{Analysis, BenchmarkBatch,
+	BenchmarkData, BenchmarkData::{AvailableBenchmarks, ExecutedBenchmarks},
+	 BenchmarkInfo, BenchmarkSelector
+};
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
