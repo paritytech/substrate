@@ -180,7 +180,7 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 	};
 
 	let store_metadata = quote!(
-		#scrate::metadata::StorageMetadata {
+		#scrate::metadata::PalletStorageMetadata {
 			prefix: #prefix,
 			entries: #scrate::scale_info::prelude::vec![ #entries ],
 		}
@@ -195,7 +195,7 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 
 		impl#module_impl #module_struct #where_clause {
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #scrate::metadata::StorageMetadata {
+			pub fn storage_metadata() -> #scrate::metadata::PalletStorageMetadata {
 				#store_metadata
 			}
 		}

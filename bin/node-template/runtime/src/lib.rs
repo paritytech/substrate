@@ -345,8 +345,7 @@ impl_runtime_apis! {
 
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
-			use codec::Encode as _;
-			OpaqueMetadata::new(Runtime::metadata().encode())
+			OpaqueMetadata::new(Runtime::metadata().into())
 		}
 	}
 

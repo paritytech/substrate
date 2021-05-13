@@ -18,10 +18,9 @@
 pub use frame_metadata::{
     v13::{
         PalletErrorMetadata, PalletEventMetadata, ExtrinsicMetadata, FunctionArgumentMetadata,
-        FunctionMetadata, PalletCallMetadata, PalletMetadata, PalletConstantMetadata,
+        FunctionMetadata, PalletCallMetadata, PalletMetadata, PalletConstantMetadata, PalletStorageMetadata,
         RuntimeMetadataLastVersion, SignedExtensionMetadata,
-        StorageEntryMetadata, StorageEntryModifier, StorageEntryType, StorageHasher,
-        StorageMetadata, TypeSpec,
+        StorageEntryMetadata, StorageEntryModifier, StorageEntryType, StorageHasher, TypeSpec,
     },
 	RuntimeMetadata, RuntimeMetadataPrefixed,
 };
