@@ -768,7 +768,7 @@ pub mod tests {
 	use super::*;
 	use codec::{Codec, EncodeLike};
 	use crate::metadata::{
-		StorageEntryMetadata, StorageMetadata, StorageEntryType, StorageEntryModifier,
+		StorageEntryMetadata, PalletStorageMetadata, StorageEntryType, StorageEntryModifier,
 		StorageHasher,
 	};
 	use sp_std::result;
@@ -1087,8 +1087,8 @@ pub mod tests {
 		});
 	}
 
-	fn expected_metadata() -> StorageMetadata {
-		StorageMetadata {
+	fn expected_metadata() -> PalletStorageMetadata {
+		PalletStorageMetadata {
 			prefix: "Test",
 			entries: vec![
 				StorageEntryMetadata {

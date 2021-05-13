@@ -531,7 +531,7 @@ mod tests {
 			PalletMetadata {
 				name: "Module2",
 				storage: Some(
-					StorageMetadata {
+					PalletStorageMetadata {
 						prefix: "TestStorage",
 						entries: vec![
 							StorageEntryMetadata {

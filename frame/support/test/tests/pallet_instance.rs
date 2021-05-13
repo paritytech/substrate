@@ -700,7 +700,7 @@ fn metadata() {
 	let example_pallet_metadata = PalletMetadata {
 		index: 1,
 		name: "Example",
-		storage: Some(StorageMetadata {
+		storage: Some(PalletStorageMetadata {
 			prefix: "Example",
 			entries: vec![
 				StorageEntryMetadata {

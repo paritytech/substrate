@@ -89,8 +89,8 @@ mod tests {
 
 	impl Config for TraitImpl {}
 
-	fn expected_metadata() -> StorageMetadata {
-		StorageMetadata {
+	fn expected_metadata() -> PalletStorageMetadata {
+		PalletStorageMetadata {
 			prefix: "TestStorage",
 			entries: vec![
 				StorageEntryMetadata {

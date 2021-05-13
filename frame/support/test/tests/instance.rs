@@ -22,7 +22,7 @@ use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Verify}};
 use frame_support::{
 	Parameter, traits::Get, parameter_types,
 	metadata::{
-		StorageMetadata, StorageEntryModifier, StorageEntryType,
+		PalletStorageMetadata, StorageEntryModifier, StorageEntryType,
 		StorageEntryMetadata, StorageHasher,
 	},
 	StorageValue, StorageMap, StorageDoubleMap,
@@ -393,8 +393,8 @@ fn storage_with_instance_basic_operation() {
 	});
 }
 
-fn expected_metadata() -> StorageMetadata {
-	StorageMetadata {
+fn expected_metadata() -> PalletStorageMetadata {
+	PalletStorageMetadata {
 		prefix: "Instance2Module2",
 		entries: vec![
 			StorageEntryMetadata

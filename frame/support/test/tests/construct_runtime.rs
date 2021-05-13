@@ -306,7 +306,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_1",
-			storage: Some(StorageMetadata {
+			storage: Some(PalletStorageMetadata {
 				prefix: "Instance1Module",
 				entries: vec![],
 			}),
@@ -327,7 +327,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module2",
-			storage: Some(StorageMetadata {
+			storage: Some(PalletStorageMetadata {
 				prefix: "Module",
 				entries: vec![],
 			}),
@@ -348,7 +348,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_2",
-			storage: Some(StorageMetadata {
+			storage: Some(PalletStorageMetadata {
 				prefix: "Instance2Module",
 				entries: vec![],
 			}),
@@ -369,7 +369,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_3",
-			storage: Some(StorageMetadata {
+			storage: Some(PalletStorageMetadata {
 				prefix: "Instance3Module",
 				entries: vec![],
 			}),
@@ -408,7 +408,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_6",
-			storage: Some(StorageMetadata {
+			storage: Some(PalletStorageMetadata {
 				prefix: "Instance6Module",
 				entries: vec![],
 			}),
@@ -429,7 +429,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_7",
-			storage: Some(StorageMetadata {
+			storage: Some(PalletStorageMetadata {
 				prefix: "Instance7Module",
 				entries: vec![],
 			}),
@@ -450,7 +450,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_8",
-			storage: Some(StorageMetadata {
+			storage: Some(PalletStorageMetadata {
 				prefix: "Instance8Module",
 				entries: vec![],
 			}),
@@ -471,7 +471,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_9",
-			storage: Some(StorageMetadata {
+			storage: Some(PalletStorageMetadata {
 				prefix: "Instance9Module",
 				entries: vec![],
 			}),
