@@ -46,14 +46,14 @@ pub enum BenchmarkData {
 	ExecutedBenchmarks(Vec<BenchmarkBatch>),
 }
 
-/// Contains
+/// Contains information on available benchmarks
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BenchmarkInfo {
-	/// The pallet's name
+	/// The pallet's encoded name
 	pub pallet: Vec<u8>,
-	/// The instance of this pallet available for benchmarking.
+	/// The encoded instance of this pallet available for benchmarking.
 	pub instance: Vec<u8>,
-	/// Available benchmark
+	/// Vec of encoded available benchmarks
 	pub benchmark: Vec<Vec<u8>>,
 }
 
