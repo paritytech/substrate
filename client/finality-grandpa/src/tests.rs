@@ -25,7 +25,7 @@ use sc_network_test::{
 	Block, BlockImportAdapter, Hash, PassThroughVerifier, Peer, PeersClient, PeersFullClient,
 	TestClient, TestNetFactory, FullPeerConfig,
 };
-use sc_network::config::ProtocolConfig;
+use sc_network::config::{ProtocolConfig, Role};
 use parking_lot::{RwLock, Mutex};
 use futures_timer::Delay;
 use futures::executor::block_on;
