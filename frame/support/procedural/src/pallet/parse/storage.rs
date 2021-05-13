@@ -126,16 +126,10 @@ fn collect_keys(keygen: &syn::GenericArgument) -> syn::Result<Vec<syn::Type>> {
 		tup
 			.elems
 			.iter()
-			.try_fold(vec![], |mut acc, ty| {
-				let key = extract_key(ty)?;
-
-				acc.push(key);
-				Ok(acc)
-			})
+			.map(extract_key)
+			.collect::<syn::Result<Vec<_>>>()
 	} else if let syn::GenericArgument::Type(ty) = keygen {
-		let key = extract_key(ty)?;
-
-		Ok(vec![key])
+		Ok(vec![extract_key(ty)?])
 	} else {
 		let msg = format!("Invalid pallet::storage, expected tuple of Key structs or Key struct");
 		Err(syn::Error::new(keygen.span(), msg))
@@ -147,23 +141,23 @@ fn extract_key(ty: &syn::Type) -> syn::Result<syn::Type> {
 	let typ = if let syn::Type::Path(typ) = ty {
 		typ
 	} else {
-		let msg = format!("Invalid pallet::storage, expected type path");
+		let msg = "Invalid pallet::storage, expected type path";
 		return Err(syn::Error::new(ty.span(), msg));
 	};
 
 	let key_struct = typ.path.segments.last().ok_or_else(|| {
-		let msg = format!("Invalid pallet::storage, expected type path with at least one segment");
+		let msg = "Invalid pallet::storage, expected type path with at least one segment";
 		syn::Error::new(typ.path.span(), msg)
 	})?;
 	if key_struct.ident != "Key" {
-		let msg = format!("Invalid pallet::storage, expected Key struct");
+		let msg = "Invalid pallet::storage, expected Key struct";
 		return Err(syn::Error::new(key_struct.ident.span(), msg));
 	}
 
 	let ty_params = if let syn::PathArguments::AngleBracketed(args) = &key_struct.arguments {
 		args
 	} else {
-		let msg = format!("Invalid pallet::storage, expected angle bracketed arguments");
+		let msg = "Invalid pallet::storage, expected angle bracketed arguments";
 		return Err(syn::Error::new(key_struct.arguments.span(), msg));
 	};
 
@@ -176,7 +170,7 @@ fn extract_key(ty: &syn::Type) -> syn::Result<syn::Type> {
 	let key = match &ty_params.args[1] {
 		syn::GenericArgument::Type(key_ty) => key_ty.clone(),
 		_ => {
-			let msg = format!("Invalid pallet::storage, expected type");
+			let msg = "Invalid pallet::storage, expected type";
 			return Err(syn::Error::new(ty_params.args[1].span(), msg));
 		}
 	};

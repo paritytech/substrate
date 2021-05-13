@@ -179,13 +179,7 @@ pub trait TupleToEncodedIter {
 	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>>;
 }
 
-impl<A: Encode> TupleToEncodedIter for (A,) {
-	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
-		vec![self.0.encode()].into_iter()
-	}
-}
-
-#[impl_trait_for_tuples::impl_for_tuples(2, 18)]
+#[impl_trait_for_tuples::impl_for_tuples(1, 18)]
 #[tuple_types_custom_trait_bound(Encode)]
 impl TupleToEncodedIter for Tuple {
 	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {

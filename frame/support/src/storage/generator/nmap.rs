@@ -35,7 +35,7 @@ use sp_std::prelude::*;
 ///
 /// By default each key value is stored at:
 /// ```nocompile
-/// Twox128(module_prefix) ++ Twox128(storage_prefix)
+/// Twox128(pallet_prefix) ++ Twox128(storage_prefix)
 ///     ++ Hasher1(encode(key1)) ++ Hasher2(encode(key2)) ++ ... ++ HasherN(encode(keyN))
 /// ```
 ///
