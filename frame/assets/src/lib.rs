@@ -503,7 +503,7 @@ pub mod pallet {
 					details.deposit.saturating_add(metadata.deposit),
 				);
 
-				Approvals::<T, I>::remove_prefix((id,));
+				Approvals::<T, I>::remove_prefix((&id,));
 				Self::deposit_event(Event::Destroyed(id));
 
 				// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
