@@ -24,7 +24,7 @@ use parse::{PalletDeclaration, PalletPart, PalletPath, RuntimeDefinition, WhereS
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Ident, Result, TypePath};
+use syn::{Ident, Result};
 use std::collections::HashMap;
 
 /// The fixed name of the system pallet.
@@ -155,7 +155,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let pallet_to_index = decl_pallet_runtime_setup(&pallets, &scrate);
 
 	let dispatch = decl_outer_dispatch(&name, pallets.iter(), &scrate);
-	let metadata = expand::expand_runtime_metadata(&name, pallets.iter(), &scrate, &unchecked_extrinsic);
+	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
 	let outer_config = decl_outer_config(&name, pallets.iter(), &scrate);
 	let inherent = decl_outer_inherent(
 		&name,

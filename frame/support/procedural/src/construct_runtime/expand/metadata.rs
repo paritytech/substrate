@@ -20,13 +20,14 @@ use crate::construct_runtime::Pallet;
 use syn::{Ident, TypePath};
 use quote::{format_ident, quote};
 
-pub fn expand_runtime_metadata<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream,
+pub fn expand_runtime_metadata(
+	runtime: &Ident,
+	pallet_declarations: &[Pallet],
+	scrate: &TokenStream,
 	extrinsic: &TypePath,
 ) -> TokenStream {
 	let modules = pallet_declarations
+		.iter()
 		.filter_map(|pallet_declaration| {
 			pallet_declaration.find_part("Pallet").map(|_| {
 				let filtered_names: Vec<_> = pallet_declaration
