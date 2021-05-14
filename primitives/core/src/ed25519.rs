@@ -522,7 +522,7 @@ impl TraitPair for Pair {
 			Err(_) => return false
 		};
 
-		matches!(public_key.verify(message.as_ref(), &sig), Ok(_))
+		public_key.verify(message.as_ref(), &sig).is_ok()
 	}
 
 	/// Return a vec filled with raw data.
