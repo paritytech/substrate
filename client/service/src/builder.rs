@@ -654,7 +654,8 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 			transaction_pool.clone(),
 			keystore.clone(),
 			system_rpc_tx.clone(),
-			&config
+			&config,
+			backend.offchain_storage()
 		)
 	};
 
@@ -745,6 +746,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	keystore: SyncCryptoStorePtr,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
+	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 ) -> Vec<RpcModule>
 	where
 		TBl: BlockT,
@@ -787,6 +789,14 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	let child_state_rpc = child_state.into_rpc_module().expect("Infallible; qed");
 
 	let mut rpc_api = Vec::new();
+
+	let maybe_offchain_rpc = offchain_storage.map(|storage| {
+		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe)
+			.into_rpc_module()
+			.expect("Infaillible; qed");
+
+		rpc_api.push(offchain);
+	});
 
 	rpc_api.push(chain_rpc);
 	rpc_api.push(author_rpc);
