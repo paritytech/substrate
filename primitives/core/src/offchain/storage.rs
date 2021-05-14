@@ -29,12 +29,13 @@ pub struct InMemOffchainStorage {
 
 impl InMemOffchainStorage {
 	/// Consume the offchain storage and iterate over all key value pairs.
+	#[allow(clippy::should_implement_trait)]
 	pub fn into_iter(self) -> impl Iterator<Item=(Vec<u8>,Vec<u8>)> {
 		self.storage.into_iter()
 	}
 
 	/// Iterate over all key value pairs by reference.
-	pub fn iter<'a>(&'a self) -> impl Iterator<Item=(&'a Vec<u8>,&'a Vec<u8>)> {
+	pub fn iter(&self) -> impl Iterator<Item=(&Vec<u8>,&Vec<u8>)> {
 		self.storage.iter()
 	}
 

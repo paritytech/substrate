@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(deprecated)]
 
 
 #[macro_use]
@@ -32,16 +33,18 @@ fn get_key(key_size: u32) -> Vec<u8> {
 	let mut rnd = rnd.iter().cycle();
 
 	(0..key_size)
-		.map(|_| rnd.next().unwrap().clone())
+		.map(|_| *rnd.next().unwrap())
 		.collect()
 }
 
+#[allow(clippy::clone_on_copy, clippy::ptr_arg)]
 fn bench_blake2_128(b: &mut Bencher, key: &Vec<u8>) {
 	b.iter(|| {
 		let _a = blake2_128(black_box(key));
 	});
 }
 
+#[allow(clippy::clone_on_copy, clippy::ptr_arg)]
 fn bench_twox_128(b: &mut Bencher, key: &Vec<u8>) {
 	b.iter(|| {
 		let _a = twox_128(black_box(key));
