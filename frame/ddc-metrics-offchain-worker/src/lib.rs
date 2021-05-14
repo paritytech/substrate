@@ -36,9 +36,9 @@ use alloc::string::String;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5CBDU7AXzUcbR2saazoAEzKoZZQCjYGDNhHJJwp7aVv99XS7";
+pub const METRICS_CONTRACT_ADDR: &str = "5FcsKCzd1Mg5PBFGG9w1jGeqK6ySeXuokVfs568zd645Lx52";
 // address params: no salt, symbol: CERE, endowement: 1000
-pub const METRICS_CONTRACT_ID: [u8; 32] = [4, 247, 38, 230, 181, 229, 227, 165, 46, 194, 162, 155, 227, 62, 90, 178, 36, 243, 37, 206, 197, 162, 205, 148, 27, 31, 221, 123, 184, 78, 65, 2];
+pub const METRICS_CONTRACT_ID: [u8; 32] = [157, 60, 99, 235, 4, 227, 196, 36, 53, 157, 166, 42, 173, 146, 5, 160, 138, 173, 226, 4, 43, 49, 180, 69, 67, 153, 7, 108, 178, 81, 41, 33];
 pub const BLOCK_INTERVAL: u32 = 200; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
