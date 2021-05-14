@@ -1,6 +1,6 @@
 // Offchain worker for DDC metrics.
 //
-// Inspired from https://github.com/paritytech/substrate/tree/master/frame/example-offchain-worker
+// Inspired from https://github.com/paritytech/substrate/tree/master/frame/ddc-metrics-offchain-worker
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -199,7 +199,15 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
     fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
-        let signer = Self::get_signer()?;
+        let signer = Self::get_signer();
+
+		let signer = match Self::get_signer() {
+			Err(e) => {
+				debug::warn!("{:?}", e);
+				return Ok(());
+			}
+			Ok(signer) => signer,
+		};
 
         let should_proceed = Self::check_if_should_proceed(block_number);
         if should_proceed == false {
@@ -228,7 +236,7 @@ impl<T: Trait> Module<T> {
     }
 
     fn check_if_should_proceed(block_number: T::BlockNumber) -> bool {
-        let s_next_at = StorageValueRef::persistent(b"example-offchain-worker::next-at"); // TODO: Rename after OCW renamed
+        let s_next_at = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::next-at"); // TODO: Rename after OCW renamed
 
         match s_next_at.mutate(
             |current_next_at| {
@@ -264,7 +272,7 @@ impl<T: Trait> Module<T> {
     fn get_signer() -> ResultStr<Signer::<T::CST, T::AuthorityId>> {
         let signer = Signer::<_, _>::any_account();
         if !signer.can_sign() {
-            return Err("No local accounts available. Consider adding one via `author_insertKey` RPC.");
+            return Err("[OCW] No local accounts available. Consider adding one via `author_insertKey` RPC.");
         }
         Ok(signer)
     }
@@ -293,6 +301,10 @@ impl<T: Trait> Module<T> {
 
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
+
+			if one_metric.bytes == 0 && one_metric.requests == 0 {
+				continue;
+			}
 
             let results = signer.send_signed_transaction(
                 |account| {
