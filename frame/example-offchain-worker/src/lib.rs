@@ -36,9 +36,9 @@ use alloc::string::String;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5GH4ZTxrrhqo9E19SVbC8sRgDLSDhprE6WXdanR7BA7ioV1L";
+pub const METRICS_CONTRACT_ADDR: &str = "5CBDU7AXzUcbR2saazoAEzKoZZQCjYGDNhHJJwp7aVv99XS7";
 // address params: no salt, symbol: CERE, endowement: 1000
-pub const METRICS_CONTRACT_ID: [u8; 32] = [186, 93, 146, 143, 201, 9, 246, 178, 152, 136, 23, 105, 215, 109, 14, 80, 130, 231, 133, 165, 178, 143, 133, 193, 166, 190, 163, 106, 171, 113, 117, 250];
+pub const METRICS_CONTRACT_ID: [u8; 32] = [4, 247, 38, 230, 181, 229, 227, 165, 46, 194, 162, 155, 227, 62, 90, 178, 36, 243, 37, 206, 197, 162, 205, 148, 27, 31, 221, 123, 184, 78, 65, 2];
 pub const BLOCK_INTERVAL: u32 = 200; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
@@ -197,7 +197,15 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
     fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
-        let signer = Self::get_signer()?;
+        let signer = Self::get_signer();
+
+		let signer = match Self::get_signer() {
+			Err(e) => {
+				debug::warn!("{:?}", e);
+				return Ok(());
+			}
+			Ok(signer) => signer,
+		};
 
         let should_proceed = Self::check_if_should_proceed(block_number);
         if should_proceed == false {
@@ -258,7 +266,7 @@ impl<T: Trait> Module<T> {
     fn get_signer() -> ResultStr<Signer::<T::CST, T::AuthorityId>> {
         let signer = Signer::<_, _>::any_account();
         if !signer.can_sign() {
-            return Err("No local accounts available. Consider adding one via `author_insertKey` RPC.");
+            return Err("[OCW] No local accounts available. Consider adding one via `author_insertKey` RPC.");
         }
         Ok(signer)
     }
