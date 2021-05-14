@@ -137,7 +137,7 @@ pub fn keep_newest<T: Config>(n_to_keep: usize) {
 
 #[cfg(test)]
 mod tests {
-	use super::super::{onchain, Module};
+	use super::super::{onchain, Pallet};
 	use super::*;
 	use crate::mock::{
 		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
@@ -153,9 +153,9 @@ mod tests {
 	};
 
 	use sp_runtime::testing::UintAuthorityId;
-	use frame_support::BasicExternalities;
+	use frame_support::{BasicExternalities, traits::GenesisBuild};
 
-	type Historical = Module<Test>;
+	type Historical = Pallet<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default()
