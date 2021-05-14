@@ -90,6 +90,8 @@ members = [
 	"frame/im-online",
 	"frame/indices",
 	"frame/lottery",
+	"frame/max-encoded-len",
+	"frame/max-encoded-len/derive",
 	"frame/membership",
 	"frame/merkle-mountain-range",
 	"frame/merkle-mountain-range/primitives",
