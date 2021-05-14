@@ -81,7 +81,8 @@ pub mod pallet {
 	pub type StoredRange<T: Config> = StorageValue<_, (SessionIndex, SessionIndex)>;
 
 	#[pallet::storage]
-	pub type CachedObsolete<T: Config> = StorageMap<_, Twox64Concat, SessionIndex, (T::ValidatorId, T::FullIdentification)>;
+	pub type CachedObsolete<T: Config> = StorageMap<_, 
+		Twox64Concat, SessionIndex, (T::ValidatorId, T::FullIdentification)>;
 
 	#[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
@@ -197,7 +198,8 @@ impl<T: Config, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<
 }
 
 /// A tuple of the validator's ID and their full identification.
-pub type IdentificationTuple<T> = (<T as crate::Config>::ValidatorId, <T as Config>::FullIdentification);
+pub type IdentificationTuple<T> = (<T as crate::Config>::ValidatorId, 
+		<T as Config>::FullIdentification);
 
 /// A trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Config> {

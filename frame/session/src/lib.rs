@@ -490,11 +490,13 @@ pub mod pallet {
     					session config keys to generate initial validator set.");
     				self.keys.iter().map(|x| x.1.clone()).collect()
     			});
-    		assert!(!initial_validators_0.is_empty(), "Empty validator set for session 0 in genesis block!");
+    		assert!(!initial_validators_0.is_empty(), 
+				"Empty validator set for session 0 in genesis block!");
 
     		let initial_validators_1 = T::SessionManager::new_session(1)
     			.unwrap_or_else(|| initial_validators_0.clone());
-    		assert!(!initial_validators_1.is_empty(), "Empty validator set for session 1 in genesis block!");
+    		assert!(!initial_validators_1.is_empty(), 
+				"Empty validator set for session 1 in genesis block!");
 
     		let queued_keys: Vec<_> = initial_validators_1
     			.iter()
