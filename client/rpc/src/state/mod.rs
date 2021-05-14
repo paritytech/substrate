@@ -267,8 +267,8 @@ impl<Block, Client> State<Block, Client>
 		})?;
 
 		ctx_module.register_method("state_getMetadata", |params, state| {
-			let block = params.one().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.metadata(block))
+			let maybe_block = params.one().ok();
+			futures::executor::block_on(state.backend.metadata(maybe_block))
 				.map_err(|e| to_jsonrpsee_call_error(e))
 		})?;
 
