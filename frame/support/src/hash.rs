@@ -215,12 +215,14 @@ mod tests {
 
 	#[test]
 	fn max_lengths() {
-		assert_eq!(Twox64Concat::hash(0u32).len() == Twox64Concat::max_len::<u32>);
-		assert_eq!(Twox128::hash(0u32).len() == Twox128::max_len::<u32>);
-		assert_eq!(Twox256::hash(0u32).len() == Twox256::max_len::<u32>);
-		assert_eq!(Blake2_128::hash(0u32).len() == Blake2_128::max_len::<u32>);
-		assert_eq!(Blake2_128Concat::hash(0u32).len() == Blake2_128Concat::max_len::<u32>);
-		assert_eq!(Blake2_256::hash(0u32).len() == Blake2_256::max_len::<u32>);
-		assert_eq!(Identity::hash(0u32).len() == Identity::max_len::<u32>);
+		use codec::Encode;
+		let encoded_0u32 = &0u32.encode()[..];
+		assert_eq!(Twox64Concat::hash(encoded_0u32).len(), Twox64Concat::max_len::<u32>());
+		assert_eq!(Twox128::hash(encoded_0u32).len(), Twox128::max_len::<u32>());
+		assert_eq!(Twox256::hash(encoded_0u32).len(), Twox256::max_len::<u32>());
+		assert_eq!(Blake2_128::hash(encoded_0u32).len(), Blake2_128::max_len::<u32>());
+		assert_eq!(Blake2_128Concat::hash(encoded_0u32).len(), Blake2_128Concat::max_len::<u32>());
+		assert_eq!(Blake2_256::hash(encoded_0u32).len(), Blake2_256::max_len::<u32>());
+		assert_eq!(Identity::hash(encoded_0u32).len(), Identity::max_len::<u32>());
 	}
 }
