@@ -159,9 +159,9 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	ensure,
+	ensure, BoundedVec,
 	traits::{
-		Currency, OnUnbalanced, TryDrop, StoredMap,
+		Currency, OnUnbalanced, TryDrop, StoredMap, MaxEncodedLen,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath,
@@ -218,6 +218,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storages_info]
 	pub struct Pallet<T, I=()>(PhantomData<(T, I)>);
 
 	#[pallet::hooks]
@@ -428,7 +429,9 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::AccountId,
 		AccountData<T::Balance>,
-		ValueQuery
+		ValueQuery,
+		GetDefault,
+		ConstU32<300_000>,
 	>;
 
 	/// Any liquidity locks on some account balances.
@@ -439,8 +442,10 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		Vec<BalanceLock<T::Balance>>,
-		ValueQuery
+		BoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
+		ValueQuery,
+		GetDefault,
+		ConstU32<300_000>,
 	>;
 
 	/// Storage version of the pallet.
@@ -517,7 +522,7 @@ impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
 }
 
 /// Simplified reasons for withdrawing balance.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub enum Reasons {
 	/// Paying system transaction fees.
 	Fee = 0,
@@ -549,7 +554,7 @@ impl BitOr for Reasons {
 
 /// A single lock on a balance. There can be many of these on an account and they "overlap", so the
 /// same balance is frozen by multiple locks.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub struct BalanceLock<Balance> {
 	/// An identifier for this lock. Only one lock may be in existence for each identifier.
 	pub id: LockIdentifier,
@@ -560,7 +565,7 @@ pub struct BalanceLock<Balance> {
 }
 
 /// All balance information for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, MaxEncodedLen)]
 pub struct AccountData<Balance> {
 	/// Non-reserved part of the balance. There may still be restrictions on this, but it is the
 	/// total pool what may in principle be transferred, reserved and used for tipping.
@@ -606,7 +611,7 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 // A value placed in storage that represents the current version of the Balances storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic. This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 enum Releases {
 	V1_0_0,
 	V2_0_0,
@@ -826,48 +831,52 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
-		if locks.len() as u32 > T::MaxLocks::get() {
-			log::warn!(
-				target: "runtime::balances",
-				"Warning: A user has more currency locks than expected. \
-				A runtime configuration adjustment may be needed."
-			);
-		}
-		// No way this can fail since we do not alter the existential balances.
-		let res = Self::mutate_account(who, |b| {
-			b.misc_frozen = Zero::zero();
-			b.fee_frozen = Zero::zero();
-			for l in locks.iter() {
-				if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
-					b.misc_frozen = b.misc_frozen.max(l.amount);
-				}
-				if l.reasons == Reasons::All || l.reasons == Reasons::Fee {
-					b.fee_frozen = b.fee_frozen.max(l.amount);
-				}
-			}
-		});
-		debug_assert!(res.is_ok());
+		unsafe {
+			let bounded_locks = BoundedVec::<_, T::MaxLocks>::force_from(locks.to_vec(), Some("Balances Update Locks"));
 
-		let existed = Locks::<T, I>::contains_key(who);
-		if locks.is_empty() {
-			Locks::<T, I>::remove(who);
-			if existed {
-				// TODO: use Locks::<T, I>::hashed_key
-				// https://github.com/paritytech/substrate/issues/4969
-				system::Pallet::<T>::dec_consumers(who);
+			if locks.len() as u32 > T::MaxLocks::get() {
+				log::warn!(
+					target: "runtime::balances",
+					"Warning: A user has more currency locks than expected. \
+					A runtime configuration adjustment may be needed."
+				);
 			}
-		} else {
-			Locks::<T, I>::insert(who, locks);
-			if !existed {
-				if system::Pallet::<T>::inc_consumers(who).is_err() {
-					// No providers for the locks. This is impossible under normal circumstances
-					// since the funds that are under the lock will themselves be stored in the
-					// account and therefore will need a reference.
-					log::warn!(
-						target: "runtime::balances",
-						"Warning: Attempt to introduce lock consumer reference, yet no providers. \
-						This is unexpected but should be safe."
-					);
+			// No way this can fail since we do not alter the existential balances.
+			let res = Self::mutate_account(who, |b| {
+				b.misc_frozen = Zero::zero();
+				b.fee_frozen = Zero::zero();
+				for l in locks.iter() {
+					if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
+						b.misc_frozen = b.misc_frozen.max(l.amount);
+					}
+					if l.reasons == Reasons::All || l.reasons == Reasons::Fee {
+						b.fee_frozen = b.fee_frozen.max(l.amount);
+					}
+				}
+			});
+			debug_assert!(res.is_ok());
+
+			let existed = Locks::<T, I>::contains_key(who);
+			if locks.is_empty() {
+				Locks::<T, I>::remove(who);
+				if existed {
+					// TODO: use Locks::<T, I>::hashed_key
+					// https://github.com/paritytech/substrate/issues/4969
+					system::Pallet::<T>::dec_consumers(who);
+				}
+			} else {
+				Locks::<T, I>::insert(who, bounded_locks);
+				if !existed {
+					if system::Pallet::<T>::inc_consumers(who).is_err() {
+						// No providers for the locks. This is impossible under normal circumstances
+						// since the funds that are under the lock will themselves be stored in the
+						// account and therefore will need a reference.
+						log::warn!(
+							target: "runtime::balances",
+							"Warning: Attempt to introduce lock consumer reference, yet no providers. \
+							This is unexpected but should be safe."
+						);
+					}
 				}
 			}
 		}
