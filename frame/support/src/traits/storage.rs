@@ -62,15 +62,15 @@ pub struct StorageInfo {
 /// A trait to give information about storages.
 ///
 /// It can be used to calculate PoV worst case size.
-pub trait StoragesInfo {
-	fn storages_info() -> Vec<StorageInfo>;
+pub trait PalletStorageInfo {
+	fn storage_info() -> Vec<StorageInfo>;
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
-impl StoragesInfo for Tuple {
-	fn storages_info() -> Vec<StorageInfo> {
+impl PalletStorageInfo for Tuple {
+	fn storage_info() -> Vec<StorageInfo> {
 		let mut res = vec![];
-		for_tuples!( #( res.extend_from_slice(&Tuple::storages_info()); )* );
+		for_tuples!( #( res.extend_from_slice(&Tuple::storage_info()); )* );
 		res
 	}
 }

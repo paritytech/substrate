@@ -15,13 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of trait `StoragesInfo` on module structure.
+//! Implementation of trait `PalletStorageInfo` on module structure.
 
 use proc_macro2::TokenStream;
 use quote::quote;
 use super::DeclStorageDefExt;
 
-pub fn impl_storages_info(def: &DeclStorageDefExt) -> TokenStream {
+pub fn impl_storage_info(def: &DeclStorageDefExt) -> TokenStream {
 	if !def.generate_storage_info {
 		return Default::default()
 	}
@@ -46,8 +46,8 @@ pub fn impl_storages_info(def: &DeclStorageDefExt) -> TokenStream {
 	let where_clause = &def.where_clause;
 
 	quote!(
-		impl#module_impl #scrate::traits::StoragesInfo for #module_struct #where_clause {
-			fn storages_info() -> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo> {
+		impl#module_impl #scrate::traits::PalletStorageInfo for #module_struct #where_clause {
+			fn storage_info() -> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo> {
 				#scrate::sp_std::vec![
 					#entries
 				]

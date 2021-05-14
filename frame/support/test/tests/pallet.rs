@@ -101,7 +101,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::generate_storages_info]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -976,10 +976,10 @@ fn test_pallet_info_access() {
 }
 
 #[test]
-fn test_storages_info() {
+fn test_storage_info() {
 	use frame_support::{
 		StorageHasher,
-		traits::{StoragesInfo, StorageInfo},
+		traits::{PalletStorageInfo, StorageInfo},
 		pallet_prelude::*,
 	};
 
@@ -991,7 +991,7 @@ fn test_storages_info() {
 	};
 
 	assert_eq!(
-		Example::storages_info(),
+		Example::storage_info(),
 		vec![
 			StorageInfo {
 				prefix: prefix(b"Example", b"ValueWhereClause"),

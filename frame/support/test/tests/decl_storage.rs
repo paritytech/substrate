@@ -394,10 +394,10 @@ mod tests {
 	};
 
 	#[test]
-	fn storages_info() {
+	fn storage_info() {
 		use frame_support::{
 			StorageHasher,
-			traits::{StoragesInfo, StorageInfo},
+			traits::{PalletStorageInfo, StorageInfo},
 			pallet_prelude::*,
 		};
 		let prefix = |pallet_name, storage_name| {
@@ -407,7 +407,7 @@ mod tests {
 			res
 		};
 		pretty_assertions::assert_eq!(
-			<Module<TraitImpl>>::storages_info(),
+			<Module<TraitImpl>>::storage_info(),
 			vec![
 				StorageInfo {
 					prefix: prefix(b"TestStorage", b"U32"),
