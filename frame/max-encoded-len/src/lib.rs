@@ -20,6 +20,7 @@
 use codec::{Compact, Encode};
 use impl_trait_for_tuples::impl_for_tuples;
 use core::{mem, marker::PhantomData};
+use primitive_types::{H160, H256, H512};
 
 #[cfg(feature = "derive")]
 pub use max_encoded_len_derive::MaxEncodedLen;
@@ -47,7 +48,7 @@ macro_rules! impl_primitives {
 	};
 }
 
-impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool);
+impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool, H160, H256, H512);
 
 macro_rules! impl_compact {
 	($( $t:ty => $e:expr; )*) => {

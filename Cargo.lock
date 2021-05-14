@@ -3725,6 +3725,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "max-encoded-len-derive",
  "parity-scale-codec",
+ "primitive-types",
  "rustversion",
  "trybuild",
 ]
@@ -4644,6 +4645,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "max-encoded-len",
  "pallet-balances",
  "parity-scale-codec",
  "sp-core",
@@ -4754,6 +4756,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "max-encoded-len",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "sp-core",
