@@ -1006,32 +1006,32 @@ fn test_storage_info() {
 			StorageInfo {
 				prefix: prefix(b"Example", b"Map"),
 				max_values: None,
-				max_size: Some(3),
+				max_size: Some(3 + 16),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"Map2"),
 				max_values: Some(3),
-				max_size: Some(6),
+				max_size: Some(6 + 8),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"DoubleMap"),
 				max_values: None,
-				max_size: Some(7),
+				max_size: Some(7 + 16 + 8),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"DoubleMap2"),
 				max_values: Some(5),
-				max_size: Some(14),
+				max_size: Some(14 + 8 + 16),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"NMap"),
 				max_values: None,
-				max_size: Some(5),
+				max_size: Some(5 + 16),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"NMap2"),
 				max_values: Some(11),
-				max_size: Some(14),
+				max_size: Some(14 + 8 + 16),
 			},
 			#[cfg(feature = "conditional-storage")]
 			{
@@ -1046,7 +1046,7 @@ fn test_storage_info() {
 				StorageInfo {
 					prefix: prefix(b"Example", b"ConditionalMap"),
 					max_values: Some(12),
-					max_size: Some(6),
+					max_size: Some(6 + 8),
 				}
 			},
 			#[cfg(feature = "conditional-storage")]
@@ -1054,7 +1054,7 @@ fn test_storage_info() {
 				StorageInfo {
 					prefix: prefix(b"Example", b"ConditionalDoubleMap"),
 					max_values: None,
-					max_size: Some(7),
+					max_size: Some(7 + 16 + 8),
 				}
 			},
 			#[cfg(feature = "conditional-storage")]
@@ -1062,7 +1062,7 @@ fn test_storage_info() {
 				StorageInfo {
 					prefix: prefix(b"Example", b"ConditionalNMap"),
 					max_values: None,
-					max_size: Some(7),
+					max_size: Some(7 + 16 + 8),
 				}
 			},
 		],

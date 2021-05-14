@@ -294,12 +294,16 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
 							{
 								use #scrate::sp_runtime::SaturatedConversion;
+								use #scrate::StorageHasher;
+
+								let key_max_size = <
+									Self as #scrate::storage::generator::StorageMap<_, _>
+								>::Hasher::max_len::<#key>();
+
 								let max_size = <
 									#value_type as #scrate::traits::MaxEncodedLen
 								>::max_encoded_len()
-									.saturating_add(
-										<#key as #scrate::traits::MaxEncodedLen>::max_encoded_len()
-									)
+									.saturating_add(key_max_size)
 									.saturated_into();
 
 								#scrate::sp_std::vec![
@@ -327,15 +331,21 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
 							{
 								use #scrate::sp_runtime::SaturatedConversion;
+								use #scrate::StorageHasher;
+
+								let key1_max_size = <
+									Self as #scrate::storage::generator::StorageDoubleMap<_, _, _>
+								>::Hasher1::max_len::<#key1>();
+
+								let key2_max_size = <
+									Self as #scrate::storage::generator::StorageDoubleMap<_, _, _>
+								>::Hasher2::max_len::<#key2>();
+
 								let max_size = <
 									#value_type as #scrate::traits::MaxEncodedLen
 								>::max_encoded_len()
-									.saturating_add(
-										<#key1 as #scrate::traits::MaxEncodedLen>::max_encoded_len()
-									)
-									.saturating_add(
-										<#key2 as #scrate::traits::MaxEncodedLen>::max_encoded_len()
-									)
+									.saturating_add(key1_max_size)
+									.saturating_add(key2_max_size)
 									.saturated_into();
 
 								#scrate::sp_std::vec![
@@ -353,7 +363,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 					)
 				},
 				StorageLineTypeDef::NMap(map) => {
-					let keys = &map.keys;
+					let key = &map.to_keygen_struct(scrate);
 					quote!(
 						impl<#impl_trait> #scrate::traits::StorageInfoTrait for #storage_struct
 						#optional_storage_where_clause
@@ -362,17 +372,15 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
 							{
 								use #scrate::sp_runtime::SaturatedConversion;
+
+								let key_max_size = <
+									#key as #scrate::storage::types::KeyGeneratorMaxEncodedLen
+								>::key_max_encoded_len();
+
 								let max_size = <
 									#value_type as #scrate::traits::MaxEncodedLen
 								>::max_encoded_len()
-									#(
-										.saturating_add(
-											<
-												#keys
-												as #scrate::traits::MaxEncodedLen
-											>::max_encoded_len()
-										)
-									)*
+									.saturating_add(key_max_size)
 									.saturated_into();
 
 								#scrate::sp_std::vec![

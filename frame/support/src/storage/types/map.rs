@@ -371,7 +371,7 @@ where
 				prefix: Self::final_prefix(),
 				max_values: MaxValues::get(),
 				max_size: Some(
-					Key::max_encoded_len()
+					Hasher::max_len::<Key>()
 						.saturating_add(Value::max_encoded_len())
 						.saturated_into(),
 				),

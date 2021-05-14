@@ -53,7 +53,7 @@ pub trait KeyGenerator {
 	) -> Vec<u8>;
 }
 
-/// TODO TODO: the max encoded len of the final key without the hash part (only the concat part)
+/// The maximum length used by the key in storage.
 pub trait KeyGeneratorMaxEncodedLen: KeyGenerator {
 	fn key_max_encoded_len() -> usize;
 }
@@ -98,7 +98,7 @@ impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 
 impl<H: StorageHasher, K: FullCodec + MaxEncodedLen> KeyGeneratorMaxEncodedLen for Key<H, K> {
 	fn key_max_encoded_len() -> usize {
-		K::max_encoded_len()
+		H::max_len::<K>()
 	}
 }
 

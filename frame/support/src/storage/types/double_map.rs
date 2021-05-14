@@ -499,8 +499,8 @@ where
 				prefix: Self::final_prefix(),
 				max_values: MaxValues::get(),
 				max_size: Some(
-					Key1::max_encoded_len()
-						.saturating_add(Key2::max_encoded_len())
+					Hasher1::max_len::<Key1>()
+						.saturating_add(Hasher2::max_len::<Key2>())
 						.saturating_add(Value::max_encoded_len())
 						.saturated_into(),
 				),
