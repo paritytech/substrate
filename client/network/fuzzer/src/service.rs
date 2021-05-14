@@ -208,6 +208,8 @@ enum Action {
 	WriteNotification(SenderNode, ReceiverNode, Vec<u8>),
 	DisconnectPeer(SenderNode, ReceiverNode),
 	ReportPeer(SenderNode, ReceiverNode, ReputationChange),
+	AcceptUnreservedPeers(SenderNode),
+	DenyUnreservedPeers(SenderNode),
 }
 
 fn main() {
@@ -232,6 +234,14 @@ fn main() {
 						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
 						let reputation_change = reputation_change.0;
 						sender.report_peer(receiver.local_peer_id().clone(), reputation_change);
+					},
+					Action::AcceptUnreservedPeers(sender) => {
+						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
+						sender.accept_unreserved_peers();
+					},
+					Action::DenyUnreservedPeers(sender) => {
+						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
+						sender.deny_unreserved_peers();
 					},
 				};
 			}
