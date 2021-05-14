@@ -41,7 +41,7 @@ use sp_runtime::traits::{One, StaticLookup};
 
 const MAX_VALIDATORS: u32 = 1000;
 
-pub struct Pallet<T: Config>(pallet_session::Module<T>);
+pub struct Pallet<T: Config>(pallet_session::Pallet<T>);
 pub trait Config: pallet_session::Config + pallet_session::historical::Config + pallet_staking::Config {}
 
 impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {

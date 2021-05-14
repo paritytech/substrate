@@ -21,7 +21,7 @@ use crate::*;
 use crate as staking;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize, OneSessionHandler},
+	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize, OneSessionHandler, GenesisBuild},
 	weights::constants::RocksDbWeight,
 	IterableStorageMap, StorageDoubleMap, StorageMap, StorageValue,
 };
