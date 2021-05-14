@@ -286,7 +286,7 @@ impl<T: Trait> Module<T> {
         // Have value in config
 
         // Get from persistent
-        let sc_address_store = StorageValueRef::persistent(b"example-offchain-worker::sc_address");
+        let sc_address_store = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::sc_address");
         let sc_address = sc_address_store.get::<[u8; 32]>().unwrap();
         debug::info!("------------- [OCW] sc_address {:?}:", sc_address.unwrap());
 
