@@ -14,6 +14,8 @@ type TestNetworkService = NetworkService<
 	substrate_test_runtime_client::runtime::Hash,
 >;
 
+use arbitrary::Arbitrary;
+
 /// Builds a full node to be used for testing. Returns the node service and its associated events
 /// stream.
 ///
@@ -175,10 +177,45 @@ fn build_nodes_one_proto()
 	(node1, events_stream1, node2, events_stream2)
 }
 
+// Who will trigger an event
+#[derive(Arbitrary)]
+enum SenderNode {
+	A,
+	B,
+}
+
+// A receiver to send events to
+#[derive(Arbitrary)]
+enum ReceiverNode {
+	A,
+	B,
+}
+
+#[derive(Arbitrary)]
+enum Action {
+	WriteNotification(SenderNode, ReceiverNode, Vec<u8>),
+	DisconnectPeer(SenderNode, ReceiverNode),
+}
 
 fn main() {
+	let (a, mut events_stream_a, b, mut events_stream_b) = build_nodes_one_proto();
+
 	loop {
-		fuzz!(|data: (bool)| {
+		fuzz!(|actions: Vec<Action>| {
+			for action in actions {
+				match action {
+					Action::WriteNotification(sender, receiver, data) => {
+						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
+						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
+						sender.write_notification(receiver.local_peer_id().clone(), PROTOCOL_NAME, data);
+					},
+					Action::DisconnectPeer(sender, receiver) => {
+						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
+						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
+						sender.disconnect_peer(receiver.local_peer_id().clone(), PROTOCOL_NAME);
+					},
+				};
+			}
         });
     }
 }

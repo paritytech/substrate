@@ -134,6 +134,9 @@ name = "arbitrary"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "698b65a961a9d730fb45b6b0327e20207810c9f61ee421b082b27ba003f49e2b"
+dependencies = [
+ "derive_arbitrary",
+]
 
 [[package]]
 name = "arrayref"
@@ -1311,6 +1314,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0f83e699727abca3c56e187945f303389590305ab2f0185ea445aa66e8d5f2a"
 dependencies = [
  "data-encoding",
+ "syn",
+]
+
+[[package]]
+name = "derive_arbitrary"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df89dd0d075dea5cc5fdd6d5df6b8a61172a710b3efac1d6bdb9dd8b78f82c1a"
+dependencies = [
+ "proc-macro2",
+ "quote",
  "syn",
 ]
 
@@ -7642,6 +7656,7 @@ dependencies = [
 name = "sc-network-fuzzer"
 version = "0.1.0"
 dependencies = [
+ "arbitrary",
  "async-std",
  "async-trait",
  "futures 0.3.13",
