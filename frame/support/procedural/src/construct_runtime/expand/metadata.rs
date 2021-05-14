@@ -21,7 +21,7 @@ use syn::{Ident, TypePath};
 use quote::{format_ident, quote};
 
 pub fn expand_runtime_metadata<'a>(
-    runtime: &'a Ident,
+	runtime: &'a Ident,
 	pallet_declarations: impl Iterator<Item = &'a Pallet>,
 	scrate: &'a TokenStream,
 	extrinsic: &TypePath,
