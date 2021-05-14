@@ -274,7 +274,7 @@ impl<Block, Client> State<Block, Client>
 
 		ctx_module.register_method("state_getRuntimeVersion", |params, state| {
 			state.deny_unsafe.check_if_safe()?;
-			let at = params.one().map_err(|_| JsonRpseeCallError::InvalidParams)?;
+			let at = params.one().ok();
 			futures::executor::block_on(state.backend.runtime_version(at))
 				.map_err(|e| to_jsonrpsee_call_error(e))
 		})?;

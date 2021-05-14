@@ -156,8 +156,8 @@ where
 			//https://github.com/paritytech/jsonrpsee/issues/291
 			//
 			// NOTE(niklasad1): will block the connection task on the server.
-			let hash = params.one()?;
-			futures::executor::block_on(chain.header(Some(hash))).map_err(rpc_err)
+			let hash = params.one().ok();
+			futures::executor::block_on(chain.header(hash)).map_err(rpc_err)
 		})?;
 
 		ctx_module.register_method("chain_getBlock", |params, chain| {
@@ -166,13 +166,13 @@ where
 			//https://github.com/paritytech/jsonrpsee/issues/291
 			//
 			// NOTE(niklasad1): will block the connection task on the server.
-			let hash = params.one()?;
-			futures::executor::block_on(chain.block(Some(hash))).map_err(rpc_err)
+			let hash = params.one().ok();
+			futures::executor::block_on(chain.block(hash)).map_err(rpc_err)
 		})?;
 
 		ctx_module.register_method("chain_getBlockHash", |params, chain| {
 			log::info!("chain_getBlockHash [{:?}]", params);
-			let hash = params.one()?;
+			let hash = params.one().ok();
 			chain.block_hash(hash).map_err(rpc_err)
 		})?;
 
@@ -199,12 +199,12 @@ where
 	}
 
 	/// TODO: document this
-	pub async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, StateError> {
+	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, StateError> {
 		self.backend.block(hash).await
 	}
 
 	/// TODO: document this
-	pub fn block_hash(
+	fn block_hash(
 		&self,
 		number: Option<ListOrValue<NumberOrHex>>,
 	) -> Result<ListOrValue<Option<Block::Hash>>, StateError> {
@@ -220,7 +220,7 @@ where
 	}
 
 	/// TODO: document this
-	pub fn finalized_head(&self) -> Result<Block::Hash, StateError> {
+	fn finalized_head(&self) -> Result<Block::Hash, StateError> {
 		self.backend.finalized_head()
 	}
 }
