@@ -185,13 +185,15 @@ mod multiplier_tests {
 	fn min_change_per_day() {
 		run_with_system_weight(max(), || {
 			let mut fm = Multiplier::one();
-			// See the example in the doc of `TargetedFeeAdjustment`. are at least 0.234, hence
-			// `fm > 1.234`.
+			// Recalculated considering that there are 14,400 blocks per 24 hour
+			// https://crates.parity.io/pallet_transaction_payment/struct.TargetedFeeAdjustment.html
+			// See the example in the doc of `TargetedFeeAdjustment`. are at least 0.117, hence
+			// `fm > 1.117`.
 			for _ in 0..DAYS {
 				let next = runtime_multiplier_update(fm);
 				fm = next;
 			}
-			assert!(fm > Multiplier::saturating_from_rational(1234, 1000));
+			assert!(fm > Multiplier::saturating_from_rational(1117, 1000));
 		})
 	}
 
