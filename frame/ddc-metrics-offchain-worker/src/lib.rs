@@ -302,9 +302,9 @@ impl<T: Trait> Module<T> {
                     debug::info!("[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?})", account.id, one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
 
                     let call_data = Self::encode_report_metrics(&app_id, day_start_ms, one_metric.bytes, one_metric.requests);
-					let contract_id = T::ContractId::get();
+                    let contract_id = T::ContractId::get();
 
-					debug::info!("Using Contract Address: {:?}", contract_id);
+                    debug::info!("Using Contract Address: {:?}", contract_id);
 
                     pallet_contracts::Call::call(
                         contract_id,
