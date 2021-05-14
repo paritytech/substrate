@@ -1,6 +1,6 @@
 // Offchain worker for DDC metrics.
 //
-// Inspired from https://github.com/paritytech/substrate/tree/master/frame/ddc-metrics-offchain-worker
+// Inspired from https://github.com/paritytech/substrate/tree/master/frame/example-offchain-worker
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -222,7 +222,7 @@ impl<T: Trait> Module<T> {
     }
 
     fn check_if_should_proceed(block_number: T::BlockNumber) -> bool {
-        let s_next_at = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::next-at"); // TODO: Rename after OCW renamed
+        let s_next_at = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::next-at");
 
         match s_next_at.mutate(
             |current_next_at| {
