@@ -125,6 +125,7 @@ members = [
 	"frame/transaction-payment/rpc/runtime-api",
 	"frame/treasury",
 	"frame/tips",
+	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
 	"primitives/allocator",
