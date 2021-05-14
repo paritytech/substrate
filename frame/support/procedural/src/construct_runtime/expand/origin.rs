@@ -65,7 +65,7 @@ pub fn expand_outer_origin(
 	let system_path = &system_pallet.pallet;
 	let system_index = system_pallet.index;
 
-    Ok(quote!{
+	Ok(quote!{
 		// WARNING: All instance must hold the filter `frame_system::Config::BaseCallFilter`, except
 		// when caller is system Root. One can use `OriginTrait::reset_filter` to do so.
 		#[derive(Clone)]
