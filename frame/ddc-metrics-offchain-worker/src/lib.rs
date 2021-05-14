@@ -103,17 +103,17 @@ impl MetricInfo {
 }
 
 pub fn get_contract_id() -> [u8; 32] {
-	let sc_address_store = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::sc_address");
+    let sc_address_store = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::sc_address");
 
-	let mut contract_id = METRICS_CONTRACT_ID;
+    let mut contract_id = METRICS_CONTRACT_ID;
 
-	let value = sc_address_store.get::<[u8; 32]>();
+    let value = sc_address_store.get::<[u8; 32]>();
 
-	if !value.is_none() {
-		contract_id = value.unwrap().unwrap();
-	}
+    if !value.is_none() {
+        contract_id = value.unwrap().unwrap();
+    }
 
-	return contract_id;
+    return contract_id;
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -211,15 +211,13 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
     fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
-        let signer = Self::get_signer();
-
-		let signer = match Self::get_signer() {
-			Err(e) => {
-				debug::warn!("{:?}", e);
-				return Ok(());
-			}
-			Ok(signer) => signer,
-		};
+        let signer = match Self::get_signer() {
+            Err(e) => {
+                debug::warn!("{:?}", e);
+                return Ok(());
+            }
+            Ok(signer) => signer,
+        };
 
         let should_proceed = Self::check_if_should_proceed(block_number);
         if should_proceed == false {
@@ -290,24 +288,24 @@ impl<T: Trait> Module<T> {
         day_start_ms: u64,
         metrics: Vec<MetricInfo>,
     ) -> ResultStr<()> {
+        let contract_id = T::ContractId::get();
+        debug::info!("[OCW] Using Contract Address: {:?}", contract_id);
+
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
 
-			if one_metric.bytes == 0 && one_metric.requests == 0 {
-				continue;
-			}
+            if one_metric.bytes == 0 && one_metric.requests == 0 {
+                continue;
+            }
 
             let results = signer.send_signed_transaction(
                 |account| {
                     debug::info!("[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?})", account.id, one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
 
                     let call_data = Self::encode_report_metrics(&app_id, day_start_ms, one_metric.bytes, one_metric.requests);
-                    let contract_id = T::ContractId::get();
-
-                    debug::info!("Using Contract Address: {:?}", contract_id);
 
                     pallet_contracts::Call::call(
-                        contract_id,
+                        contract_id.clone(),
                         0u32.into(),
                         100_000_000_000,
                         call_data,
