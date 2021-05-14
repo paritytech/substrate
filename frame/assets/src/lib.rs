@@ -241,8 +241,10 @@ pub mod pallet {
 		_,
 		(
 			NMapKey<Blake2_128Concat, T::AssetId>,
-			NMapKey<Blake2_128Concat, T::AccountId>,
-			NMapKey<Blake2_128Concat, T::AccountId>,
+			// owner
+			NMapKey<Blake2_128Concat, T::AccountId>, // owner
+			// delegate
+			NMapKey<Blake2_128Concat, T::AccountId>, // delegate
 		),
 		Approval<T::Balance, DepositBalanceOf<T, I>>,
 		OptionQuery,
