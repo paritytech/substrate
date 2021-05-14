@@ -22,23 +22,13 @@
 //! a compiled execution engine.
 
 use crate::error::{Result, Error};
-use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc, sync::{Arc, Mutex}, todo};
+use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
 
-use wasmi::{Externals, ImportResolver, MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages};
-
-use sp_wasm_interface::Value;
-// use wasmtime::Val;
-
-// use crate::sandbox:: wasmtime::instance_wrapper::InstanceWrapper;
-
-// use wasmtime::{Store, Instance, Module, Memory, Table, Val, Func, Extern, Global};
-
-use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
-
-// use wasmer::{imports, wat2wasm, Instance, Module, Store, Value};
-use wasmer_compiler_singlepass::{Singlepass, SinglepassCompiler};
+use wasmi::{Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages};
+use sp_wasm_interface::{Value, FunctionContext, Pointer, WordSize};
+use wasmer_compiler_singlepass::Singlepass;
 
 /// Index of a function inside the supervisor.
 ///
@@ -344,9 +334,12 @@ where
 	f(&mut guest_externals)
 }
 
+/// Module instance in terms of selected backend
 enum BackendInstance {
+	/// Wasmi module instance
 	Wasmi(wasmi::ModuleRef),
-	// Wasmtime(wasmtime::Instance),
+
+	/// Wasmer module instance
 	Wasmer(wasmer::Instance),
 }
 
@@ -387,9 +380,6 @@ impl<FR> SandboxInstance<FR> {
 		// arguments passed to the function
 		args: &[RuntimeValue],
 
-		// supervisor environment provided to the module
-		// supervisor_externals: &mut FE,
-
 		// arbitraty context data of the call
 		state: u32,
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error>
@@ -411,44 +401,6 @@ impl<FR> SandboxInstance<FR> {
 							
 							Ok(wasmi_result)
 						}
-
-						/*BackendInstance::Wasmtime(wasmtime_instance) => {
-							let wasmtime_function = wasmtime_instance
-								.get_func(export_name)
-								.ok_or(wasmi::Error::Function("wasmtime function failed".to_string()))?;
-
-							let args: Vec<Val> = args
-								.iter()
-								.map(|v| match *v {
-									RuntimeValue::I32(val) => Val::I32(val),
-									RuntimeValue::I64(val) => Val::I64(val),
-									RuntimeValue::F32(val) => Val::F32(val.into()),
-									RuntimeValue::F64(val) => Val::F64(val.into()),
-								})
-								.collect();
-
-							let wasmtime_result = wasmtime_function
-								.call(&args)
-								.map_err(|e| wasmi::Error::Function(e.to_string()))?;
-
-							assert!(wasmtime_result.len() < 2, "multiple return types are not supported yet");
-
-							let wasmtime_result = if let Some(wasmtime_value) = wasmtime_result.first() {
-								let wasmtime_value = match *wasmtime_value {
-									Val::I32(val) => RuntimeValue::I32(val),
-									Val::I64(val) => RuntimeValue::I64(val),
-									Val::F32(val) => RuntimeValue::F32(val.into()),
-									Val::F64(val) => RuntimeValue::F64(val.into()),
-									_ => unreachable!(),
-								};
-
-								Some(wasmtime_value)
-							} else {
-								None
-							};
-
-							Ok(wasmtime_result)
-						}*/
 
 						BackendInstance::Wasmer(wasmer_instance) => {
 							let function = wasmer_instance
@@ -509,19 +461,6 @@ impl<FR> SandboxInstance<FR> {
 
 				Some(wasmi_global.into())
 			}
-
-			/*BackendInstance::Wasmtime(wasmtime_instance) => {
-				let wasmtime_global = wasmtime_instance.get_global(name)?.get();
-				let wasmtime_value = match wasmtime_global {
-					Val::I32(val) => Value::I32(val),
-					Val::I64(val) => Value::I64(val),
-					Val::F32(val) => Value::F32(val),
-					Val::F64(val) => Value::F64(val),
-					_ => None?,
-				};
-
-				Some(wasmtime_value)
-			}*/
 
 			BackendInstance::Wasmer(wasmer_instance) => {
 				let global = wasmer_instance.exports.get_global(name).ok()?;
@@ -668,17 +607,17 @@ pub enum SandboxBackend {
 	/// Wasm interpreter
 	Wasmi,
 
-	/// Wasmtime environment
-	// Wasmtime,
-
 	/// Wasmer environment
 	Wasmer,
 }
 
+/// Memory reference in terms of a selected backend
 #[derive(Clone, Debug)]
 pub enum Memory {
+	/// Wasmi memory reference
 	Wasmi(MemoryRef),
-	// Wasmtime(todo),
+
+	/// Wasmer memory refernce
 	Wasmer(wasmer::Memory),
 }
 
@@ -698,14 +637,17 @@ impl Memory {
 	}
 }
 
+/// Wasmer specific context
 struct WasmerBackend {
-	// compiler: Singlepass,
 	store: wasmer::Store,
 }
 
+/// Information specific to a particular execution backend
 enum BackendContext {
+	/// Wasmi specific context
 	Wasmi,
-	// Wasmtime,
+
+	/// Wasmer specific context
 	Wasmer(WasmerBackend),
 }
 
@@ -713,7 +655,6 @@ impl BackendContext {
 	pub fn new(backend: SandboxBackend) -> BackendContext {
 		match backend {
 			SandboxBackend::Wasmi => BackendContext::Wasmi,
-			// SandboxBackend::Wasmtime => todo!(),
 
 			SandboxBackend::Wasmer => {
 				let compiler = Singlepass::default();
@@ -721,7 +662,6 @@ impl BackendContext {
 				BackendContext::Wasmer(
 					WasmerBackend {
 						store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()),
-						// compiler,
 					}
 				)
 			}
@@ -760,9 +700,6 @@ impl<FR> Store<FR> {
 				let ty = wasmer::MemoryType::new(initial, maximum, false);
 				println!("creating wasmer memory {:?}", ty);
 
-				// let bt = backtrace::Backtrace::new();
-				// println!("{:?}", bt);
-
 				Memory::Wasmer(
 					wasmer::Memory::new(&context.store, ty)
 						.map_err(|r| {
@@ -771,8 +708,6 @@ impl<FR> Store<FR> {
 						})?
 				)
 			}
-
-			// BackendContext::Wasmtime => todo!(),
 		};
 
 		let mem_idx = memories.len();
@@ -876,14 +811,15 @@ impl<FR> Store<FR> {
 	/// Instantiate a guest module and return it's index in the store.
 	///
 	/// The guest module's code is specified in `wasm`. Environment that will be available to
-	/// guest module is specified in `guest_env`, `dispatch_thunk` is used as function that
+	/// guest module is specified in `guest_env`. A dispatch thunk is used as function that
 	/// handle calls from guests. `state` is an opaque pointer to caller's arbitrary context
 	/// normally created by `sp_sandbox::Instance` primitive.
+	///
+	/// Note: Due to borrowing constraints dispatch thunk is now propagated using DTH
 	///
 	/// Returns uninitialized sandboxed module instance or an instantiation error.
 	pub fn instantiate<'a, FE, SCH, DTH>(
 		&mut self,
-		// dispatch_thunk: FR,
 		wasm: &[u8],
 		guest_env: GuestEnvironment,
 		state: u32,
@@ -894,7 +830,6 @@ impl<FR> Store<FR> {
 		SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>,
 		DTH: DispatchThunkHolder<DispatchThunk = FR>,
 	{
-		let memories = &mut self.memories;
 		let backend_context = &self.backend_context;
 
 		let sandbox_instance = match backend_context {
@@ -932,137 +867,7 @@ impl<FR> Store<FR> {
 				sandbox_instance
 			}
 
-			/*BackendContext::Wasmtime => {
-				let mut config = wasmtime::Config::new();
-				config.cranelift_opt_level(wasmtime::OptLevel::None);
-				config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
-
-				let wasmtime_engine = wasmtime::Engine::new(&config);
-				let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
-				let wasmtime_module = wasmtime::Module::new(&wasmtime_engine, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-				
-				let module_imports: Vec<_> = wasmtime_module
-					.imports()
-					.filter_map(|import| {
-						if let wasmtime::ExternType::Func(func_ty) = import.ty() {
-							let guest_func_index = if let Some(index) = guest_env.imports.func_by_name(import.module(), import.name()) {
-								index
-							} else {
-								// Missing import
-								return None;
-							};
-
-							let supervisor_func_index = guest_env.guest_to_supervisor_mapping
-								.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
-
-							// let dispatch_thunk = dispatch_thunk.clone();
-							Some(wasmtime::Extern::Func(wasmtime::Func::new(&wasmtime_store, func_ty,
-								move |_caller, params, result| {
-									SCH::with_sandbox_capabilities(|supervisor_externals| {
-										// Serialize arguments into a byte vector.
-										let invoke_args_data = params
-											.iter()
-											.map(|val| match val {
-												Val::I32(val) => Value::I32(*val),
-												Val::I64(val) => Value::I64(*val),
-												Val::F32(val) => Value::F32(*val),
-												Val::F64(val) => Value::F64(*val),
-												_ => unimplemented!()
-											})
-											.collect::<Vec<_>>()
-											.encode();
-
-										// Move serialized arguments inside the memory, invoke dispatch thunk and
-										// then free allocated memory.
-										let invoke_args_len = invoke_args_data.len() as WordSize;
-										let invoke_args_ptr = supervisor_externals
-											.allocate_memory(invoke_args_len)
-											.map_err(|_| wasmtime::Trap::new("Can't allocate memory in supervisor for the arguments"))?;
-
-										let deallocate = |fe: &mut FE, ptr, fail_msg| {
-											fe
-												.deallocate_memory(ptr)
-												.map_err(|_| wasmtime::Trap::new(fail_msg))
-										};
-
-										if supervisor_externals
-											.write_memory(invoke_args_ptr, &invoke_args_data)
-											.is_err()
-										{
-											deallocate(supervisor_externals, invoke_args_ptr, "Failed dealloction after failed write of invoke arguments")?;
-											return Err(wasmtime::Trap::new("Can't write invoke args into memory"));
-										}
-
-										let serialized_result = DTH::with_dispatch_thunk(|dispatch_thunk| {
-											supervisor_externals.invoke(
-												&dispatch_thunk,
-												invoke_args_ptr,
-												invoke_args_len,
-												state,
-												supervisor_func_index,
-											)
-										})
-											.map_err(|e| wasmtime::Trap::new(e.to_string()))?;
-
-										// dispatch_thunk returns pointer to serialized arguments.
-										// Unpack pointer and len of the serialized result data.
-										let (serialized_result_val_ptr, serialized_result_val_len) = {
-											// Cast to u64 to use zero-extension.
-											let v = serialized_result as u64;
-											let ptr = (v as u64 >> 32) as u32;
-											let len = (v & 0xFFFFFFFF) as u32;
-											(Pointer::new(ptr), len)
-										};
-
-										let serialized_result_val = supervisor_externals
-											.read_memory(serialized_result_val_ptr, serialized_result_val_len)
-											.map_err(|_| wasmtime::Trap::new("Can't read the serialized result from dispatch thunk"));
-
-										let deserialized_result = deallocate(supervisor_externals, serialized_result_val_ptr, "Can't deallocate memory for dispatch thunk's result")
-											.and_then(|_| serialized_result_val)
-											.and_then(|serialized_result_val| {
-												deserialize_result(&serialized_result_val)
-													.map_err(|e| wasmtime::Trap::new(e.to_string()))
-											})?;
-
-										if let Some(value) = deserialized_result {
-											result[0] = match value {
-												RuntimeValue::I32(val) => Val::I32(val),
-												RuntimeValue::I64(val) => Val::I64(val),
-												RuntimeValue::F32(val) => Val::F32(val.into()),
-												RuntimeValue::F64(val) => Val::F64(val.into()),
-											}
-										}
-
-										Ok(())
-									})
-								}
-							)))
-						} else {
-							None
-						}
-					})
-					.collect();
-
-				let wasmtime_instance = wasmtime::Instance::new(&wasmtime_store, &wasmtime_module, &module_imports).map_err(|error|
-					if let Ok(_trap) = error.downcast::<wasmtime::Trap>() {
-						InstantiationError::StartTrapped
-					} else {
-						InstantiationError::Instantiation
-					}
-				)?;
-
-				Rc::new(SandboxInstance {
-					backend_instance: BackendInstance::Wasmtime(wasmtime_instance),
-					dispatch_thunk: DTH::with_dispatch_thunk(|dispatch_thunk| dispatch_thunk.clone()),
-					guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
-				})
-			}*/
-
 			BackendContext::Wasmer(context) => {
-				// let compiler = Singlepass::default();
-				// let store = wasmer::Store::new(&wasmer::JIT::new(&compiler).engine());
-
 				println!("Decoding module...");
 				let module = wasmer::Module::new(&context.store, wasm).map_err(|error| {
 					println!("{:?}", error);

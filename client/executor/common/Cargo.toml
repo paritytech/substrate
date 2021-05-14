@@ -23,18 +23,9 @@ sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }
 sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
 sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
-# wasmtime = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
 
 wasmer = "1.0"
 wasmer-compiler-singlepass = "1.0"
-# wasmer = { git = "https://github.com/0x7CFE/wasmer", branch = "frame-info-patch" }
-# wasmer-compiler-singlepass = { git = "https://github.com/0x7CFE/wasmer", branch = "frame-info-patch" }
-#wasmer-engine-jit = { git = "https://github.com/0x7CFE/wasmer", branch = "frame-info-patch" }
-
-#wasmer = "1.0.0-alpha3"
-#wasmer-compiler-singlepass = "1.0.0-alpha3"
-#wasmer-engine-jit = "1.0.0-alpha3"
-#wasmer-runtime = "0.17"
 
 thiserror = "1.0.21"
 
