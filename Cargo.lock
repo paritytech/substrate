@@ -3887,11 +3887,11 @@ dependencies = [
  "pallet-contracts",
  "pallet-contracts-primitives",
  "pallet-contracts-rpc-runtime-api",
+ "pallet-ddc-metrics-offchain-worker",
  "pallet-democracy",
  "pallet-elections-phragmen",
  "pallet-erc20",
  "pallet-erc721",
- "pallet-example-offchain-worker",
  "pallet-finality-tracker",
  "pallet-grandpa",
  "pallet-identity",
@@ -4460,6 +4460,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-ddc-metrics-offchain-worker"
+version = "2.0.1"
+dependencies = [
+ "alt_serde",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "hex-literal",
+ "lite-json",
+ "pallet-balances",
+ "pallet-contracts",
+ "pallet-randomness-collective-flip",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "pretty_assertions",
+ "serde",
+ "serde_json 1.0.44",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-democracy"
 version = "2.0.1"
 dependencies = [
@@ -4582,30 +4606,6 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-example-offchain-worker"
-version = "2.0.1"
-dependencies = [
- "alt_serde",
- "frame-support",
- "frame-system",
- "hex",
- "hex-literal",
- "lite-json",
- "pallet-balances",
- "pallet-contracts",
- "pallet-randomness-collective-flip",
- "pallet-timestamp",
- "parity-scale-codec",
- "pretty_assertions",
- "serde",
- "serde_json 1.0.44",
  "sp-core",
  "sp-io",
  "sp-runtime",
