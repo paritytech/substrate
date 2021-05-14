@@ -210,7 +210,7 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-	fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
+    fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
         let signer = Self::get_signer();
 
 		let signer = match Self::get_signer() {
@@ -472,7 +472,7 @@ decl_event!(
 
 
 pub trait Trait: frame_system::Trait {
-	type ContractId: Get<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>;
+    type ContractId: Get<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>;
     type DdcUrl: Get<Vec<u8>>;
 
     type CT: pallet_contracts::Trait;
