@@ -16,12 +16,13 @@
 // limitations under the License.
 
 use frame_support_procedural_tools::syn_ext as ext;
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use std::collections::HashSet;
 use syn::{
 	parse::{Parse, ParseStream},
+	punctuated::Punctuated,
 	spanned::Spanned,
-	token, Error, Ident, Result, Token,
+	token, Error, Ident, Path, PathArguments, PathSegment, Result, Token,
 };
 
 mod keyword {
@@ -154,7 +155,7 @@ pub struct PalletDeclaration {
 	pub name: Ident,
 	/// Optional fixed index (e.g. `MyPallet ...  = 3,`)
 	pub index: Option<u8>,
-	pub pallet: Ident,
+	pub pallet: PalletPath,
 	pub instance: Option<Ident>,
 	pub pallet_parts: Vec<PalletPart>,
 }
@@ -164,17 +165,16 @@ impl Parse for PalletDeclaration {
 		let name = input.parse()?;
 		let _: Token![:] = input.parse()?;
 		let pallet = input.parse()?;
-		let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
-			let _: Token![::] = input.parse()?;
+		let instance = if input.peek(Token![<]) {
 			let _: Token![<] = input.parse()?;
 			let res = Some(input.parse()?);
 			let _: Token![>] = input.parse()?;
+			let _: Token![::] = input.parse()?;
 			res
 		} else {
 			None
 		};
 
-		let _: Token![::] = input.parse()?;
 		let pallet_parts = parse_pallet_parts(input)?;
 
 		let index = if input.peek(Token![=]) {
@@ -195,6 +195,42 @@ impl Parse for PalletDeclaration {
 		};
 
 		Ok(parsed)
+	}
+}
+
+/// A struct representing a path to a pallet. `PalletPath` is almost identical to the standard
+/// Rust path with a few restrictions:
+/// - No leading colons allowed
+/// - Path segments can only consist of identifers; angle-bracketed or parenthesized segments will
+///   result in a parsing error (except when specifying instances)
+#[derive(Debug, Clone)]
+pub struct PalletPath {
+	pub inner: Path,
+}
+
+impl Parse for PalletPath {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let mut segments = Punctuated::new();
+
+		// Stop when the instance or the pallet part begins
+		while !input.peek(token::Brace) && !input.peek(Token![<]) {
+			let ident = input.parse()?;
+			segments.push(PathSegment { ident, arguments: PathArguments::None });
+			let _: Token![::] = input.parse()?;
+		}
+
+		Ok(Self {
+			inner: Path {
+				leading_colon: None,
+				segments,
+			}
+		})
+	}
+}
+
+impl quote::ToTokens for PalletPath {
+	fn to_tokens(&self, tokens: &mut TokenStream) {
+		self.inner.to_tokens(tokens);
 	}
 }
 
@@ -271,11 +307,6 @@ impl PalletPartKeyword {
 		}
 	}
 
-	/// Returns the name as `Ident`.
-	fn ident(&self) -> Ident {
-		Ident::new(self.name(), self.span())
-	}
-
 	/// Returns `true` if this pallet part is allowed to have generic arguments.
 	fn allows_generic(&self) -> bool {
 		Self::all_generic_arg().iter().any(|n| *n == self.name())
@@ -340,11 +371,6 @@ impl PalletPart {
 	/// The name of this pallet part.
 	pub fn name(&self) -> &'static str {
 		self.keyword.name()
-	}
-
-	/// The name of this pallet part as `Ident`.
-	pub fn ident(&self) -> Ident {
-		self.keyword.ident()
 	}
 }
 
