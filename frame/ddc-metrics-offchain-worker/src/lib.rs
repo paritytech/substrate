@@ -307,7 +307,7 @@ impl<T: Trait> Module<T> {
 					debug::info!("Using Contract Address: {:?}", contract_id);
 
                     pallet_contracts::Call::call(
-						contract_id,
+                        contract_id,
                         0u32.into(),
                         100_000_000_000,
                         call_data,
