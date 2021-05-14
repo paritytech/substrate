@@ -97,7 +97,7 @@ impl<P, Client> Author<P, Client>
 			Ok(())
 		})?;
 
-		ctx_module.register_method::<_, Bytes>("author_rotateKeys", |params, author| {
+		ctx_module.register_method::<Bytes, _>("author_rotateKeys", |params, author| {
 			log::info!("author_rotateKeys [{:?}]", params);
 			author.deny_unsafe.check_if_safe()?;
 
@@ -136,7 +136,7 @@ impl<P, Client> Author<P, Client>
 			Ok(SyncCryptoStore::has_keys(&*author.keystore, &[(public_key, key_type)]))
 		})?;
 
-		ctx_module.register_method::<_, TxHash<P>>("author_submitExtrinsic", |params, author| {
+		ctx_module.register_method::<TxHash<P>, _>("author_submitExtrinsic", |params, author| {
 			log::info!("author_submitExtrinsic [{:?}]", params);
 			// TODO: make is possible to register async methods on jsonrpsee servers.
 			//https://github.com/paritytech/jsonrpsee/issues/291
@@ -156,12 +156,12 @@ impl<P, Client> Author<P, Client>
 					.unwrap_or_else(|e| RpseeCallError::Failed(Box::new(e))))
 		})?;
 
-		ctx_module.register_method::<_, Vec<Bytes>>("author_pendingExtrinsics", |_, author| {
+		ctx_module.register_method::<Vec<Bytes>, _>("author_pendingExtrinsics", |_, author| {
 			log::info!("author_pendingExtrinsics");
 			Ok(author.pool.ready().map(|tx| tx.data().encode().into()).collect())
 		})?;
 
-		ctx_module.register_method::<_, Vec<TxHash<P>>>("author_removeExtrinsic", |params, author| {
+		ctx_module.register_method::<Vec<TxHash<P>>, _>("author_removeExtrinsic", |params, author| {
 			log::info!("author_removeExtrinsic [{:?}]", params);
 			author.deny_unsafe.check_if_safe()?;
 
