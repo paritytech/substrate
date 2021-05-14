@@ -1808,6 +1808,7 @@ dependencies = [
  "frame-system",
  "impl-trait-for-tuples",
  "log",
+ "max-encoded-len",
  "once_cell",
  "parity-scale-codec",
  "parity-util-mem",
