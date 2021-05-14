@@ -199,10 +199,13 @@ impl<T: Trait> Module<T> {
     fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
         let signer = Self::get_signer();
 
-		if let Err(e) = signer {
-			debug::warn!("{:?}", e);
-			return Ok(());
-		}
+		let signer = match Self::get_signer() {
+			Err(e) => {
+				debug::warn!("{:?}", e);
+				return Ok(());
+			}
+			Ok(signer) => signer,
+		};
 
         let should_proceed = Self::check_if_should_proceed(block_number);
         if should_proceed == false {
@@ -217,7 +220,7 @@ impl<T: Trait> Module<T> {
                 "could not fetch metrics"
             })?;
 
-        Self::send_metrics_to_sc(signer.unwrap(), day_start_ms, aggregated_metrics)
+        Self::send_metrics_to_sc(signer, day_start_ms, aggregated_metrics)
             .map_err(|err| {
                 debug::error!("[OCW] Contract error occurred: {:?}", err);
                 "could not submit report_metrics TX"
@@ -263,7 +266,7 @@ impl<T: Trait> Module<T> {
     fn get_signer() -> ResultStr<Signer::<T::CST, T::AuthorityId>> {
         let signer = Signer::<_, _>::any_account();
         if !signer.can_sign() {
-            return Err("No local accounts available. Consider adding one via `author_insertKey` RPC.");
+            return Err("[OCW] No local accounts available. Consider adding one via `author_insertKey` RPC.");
         }
         Ok(signer)
     }
