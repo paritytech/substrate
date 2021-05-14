@@ -224,7 +224,9 @@ parameter_types! {
 	pub MetricsContractId: AccountId = {
 		CURRENT_METRICS_CONTRACT_ID.with(|v| *v.borrow())
 	};
-	pub DdcUrl: Vec<u8> = "https://TEST_DDC".as_bytes().to_vec();
+    pub DdcUrl: Vec<u8> = {
+		crate::get_ddc_url_or_default("https://TEST_DDC")
+	};
     pub const OcwBlockInterval: u32 = crate::BLOCK_INTERVAL;
 }
 

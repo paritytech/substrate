@@ -36,9 +36,9 @@ use alloc::string::String;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5FcsKCzd1Mg5PBFGG9w1jGeqK6ySeXuokVfs568zd645Lx52";
+pub const METRICS_CONTRACT_ADDR: &str = "5EFhuVjnUTH4fkvapxyXqkfmANQWFVGZtmkHd4GaWmhgrCLS";
 // address params: no salt, symbol: CERE, endowement: 1000
-pub const METRICS_CONTRACT_ID: [u8; 32] = [157, 60, 99, 235, 4, 227, 196, 36, 53, 157, 166, 42, 173, 146, 5, 160, 138, 173, 226, 4, 43, 49, 180, 69, 67, 153, 7, 108, 178, 81, 41, 33];
+pub const METRICS_CONTRACT_ID: [u8; 32] = [96, 220, 84, 153, 65, 96, 13, 180, 40, 98, 142, 110, 218, 127, 9, 17, 182, 152, 78, 174, 24, 37, 26, 27, 128, 215, 170, 18, 3, 3, 69, 60];
 pub const BLOCK_INTERVAL: u32 = 200; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
@@ -100,6 +100,38 @@ impl MetricInfo {
             requests: Default::default(),
         }
     }
+}
+
+pub fn get_contract_id() -> [u8; 32] {
+    let sc_address_store = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::sc_address");
+
+    let mut contract_id = METRICS_CONTRACT_ID;
+
+    let value = sc_address_store.get::<[u8; 32]>();
+
+    if !value.is_none() {
+        contract_id = value.unwrap().unwrap();
+    }
+
+    return contract_id;
+}
+
+pub fn get_ddc_url_or_default(default_url: &str) -> Vec<u8> {
+    let store = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::ddc_url");
+    let maybe_value = store.get::<Vec<u8>>();
+
+    let ddc_url = match maybe_value {
+        None => default_url.as_bytes().to_vec(),
+
+        Some(Some(url)) => url,
+
+        Some(None) => {
+            debug::error!("[OCW] Error decoding DDC URL from local storage");
+            "INVALID_DDC_URL".as_bytes().to_vec()
+        }
+    };
+
+    ddc_url
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -197,15 +229,13 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
     fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
-        let signer = Self::get_signer();
-
-		let signer = match Self::get_signer() {
-			Err(e) => {
-				debug::warn!("{:?}", e);
-				return Ok(());
-			}
-			Ok(signer) => signer,
-		};
+        let signer = match Self::get_signer() {
+            Err(e) => {
+                debug::warn!("{:?}", e);
+                return Ok(());
+            }
+            Ok(signer) => signer,
+        };
 
         let should_proceed = Self::check_if_should_proceed(block_number);
         if should_proceed == false {
@@ -276,12 +306,15 @@ impl<T: Trait> Module<T> {
         day_start_ms: u64,
         metrics: Vec<MetricInfo>,
     ) -> ResultStr<()> {
+        let contract_id = T::ContractId::get();
+        debug::info!("[OCW] Using Contract Address: {:?}", contract_id);
+
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
 
-			if one_metric.bytes == 0 && one_metric.requests == 0 {
-				continue;
-			}
+            if one_metric.bytes == 0 && one_metric.requests == 0 {
+                continue;
+            }
 
             let results = signer.send_signed_transaction(
                 |account| {
@@ -290,7 +323,7 @@ impl<T: Trait> Module<T> {
                     let call_data = Self::encode_report_metrics(&app_id, day_start_ms, one_metric.bytes, one_metric.requests);
 
                     pallet_contracts::Call::call(
-                        T::ContractId::get(),
+                        contract_id.clone(),
                         0u32.into(),
                         100_000_000_000,
                         call_data,
