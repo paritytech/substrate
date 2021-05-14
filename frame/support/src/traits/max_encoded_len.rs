@@ -18,6 +18,7 @@
 use codec::{Compact, Encode};
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_std::{mem, marker::PhantomData};
+use sp_core::{H160, H256, H512};
 
 /// Items implementing `MaxEncodedLen` have a statically known maximum encoded size.
 ///
@@ -42,7 +43,7 @@ macro_rules! impl_primitives {
 	};
 }
 
-impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool);
+impl_primitives!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, bool, H160, H256, H512);
 
 macro_rules! impl_compact {
 	($( $t:ty => $e:expr; )*) => {
