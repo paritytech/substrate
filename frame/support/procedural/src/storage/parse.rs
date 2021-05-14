@@ -203,7 +203,7 @@ struct DeclStorageMaxValues {
 	pub max_values_keyword: keyword::max_values,
 	pub expr: ext::Parens<syn::Expr>,
 }
-impl_parse_for_opt!(DeclStorageMaxValues=> keyword::max_values);
+impl_parse_for_opt!(DeclStorageMaxValues => keyword::max_values);
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageBuild {
