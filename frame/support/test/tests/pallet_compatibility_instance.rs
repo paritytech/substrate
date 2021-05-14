@@ -321,7 +321,7 @@ mod test {
 				}
 			}
 		};
-		
+
 		for i in vec![1, 3, 5].into_iter() {
 			pretty_assertions::assert_eq!(pallets[i].storage, pallets[i + 1].storage);
 

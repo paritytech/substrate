@@ -1543,21 +1543,23 @@ impl<B: BlockT> ChainSync<B> {
 			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
-		trace!(
-			target: "sync",
-			"Added sync target for block announced from {}: {} {:?}",
-			who,
-			hash,
-			announce.summary(),
-		);
-		self.fork_targets
-			.entry(hash.clone())
-			.or_insert_with(|| ForkTarget {
-				number,
-				parent_hash: Some(*announce.header.parent_hash()),
-				peers: Default::default(),
-			})
-			.peers.insert(who.clone());
+		if self.status().state == SyncState::Idle {
+			trace!(
+				target: "sync",
+				"Added sync target for block announced from {}: {} {:?}",
+				who,
+				hash,
+				announce.summary(),
+			);
+			self.fork_targets
+				.entry(hash.clone())
+				.or_insert_with(|| ForkTarget {
+					number,
+					parent_hash: Some(*announce.header.parent_hash()),
+					peers: Default::default(),
+				})
+				.peers.insert(who.clone());
+		}
 
 		PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 	}
@@ -1570,6 +1572,10 @@ impl<B: BlockT> ChainSync<B> {
 		self.peers.remove(who);
 		self.extra_justifications.peer_disconnected(who);
 		self.pending_requests.set_all();
+		self.fork_targets.retain(|_, target| {
+			target.peers.remove(who);
+			!target.peers.is_empty()
+		});
 		let blocks: Vec<_> = self.blocks
 			.drain(self.best_queued_number + One::one())
 			.into_iter()
@@ -2571,5 +2577,38 @@ mod test {
 			1,
 			&peer_id1,
 		);
+	}
+
+	#[test]
+	fn removes_target_fork_on_disconnect() {
+		sp_tracing::try_init_simple();
+		let mut client = Arc::new(TestClientBuilder::new().build());
+		let blocks = (0..3)
+			.map(|_| build_block(&mut client, None, false))
+			.collect::<Vec<_>>();
+
+		let info = client.info();
+
+		let mut sync = ChainSync::new(
+			Roles::AUTHORITY,
+			client.clone(),
+			&info,
+			Box::new(DefaultBlockAnnounceValidator),
+			1,
+		);
+
+		let peer_id1 = PeerId::random();
+		let common_block = blocks[1].clone();
+		// Connect the node we will sync from
+		sync.new_peer(peer_id1.clone(), common_block.hash(), *common_block.header().number()).unwrap();
+
+		// Create a "new" header and announce it
+		let mut header = blocks[0].header().clone();
+		header.number = 4;
+		send_block_announce(header, &peer_id1, &mut sync);
+		assert!(sync.fork_targets.len() == 1);
+
+		sync.peer_disconnected(&peer_id1);
+		assert!(sync.fork_targets.len() == 0);
 	}
 }

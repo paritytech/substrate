@@ -1765,7 +1765,7 @@ impl NetworkBehaviour for Notifications {
 							*c == connection && matches!(s, ConnectionState::Opening))
 						{
 							if !any_open {
-								trace!(target: "sub-libp2p", "External API <= Open({:?})", source);
+								trace!(target: "sub-libp2p", "External API <= Open({}, {:?})", source, set_id);
 								let event = NotificationsOut::CustomProtocolOpen {
 									peer_id: source,
 									set_id,

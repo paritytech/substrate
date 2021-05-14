@@ -22,13 +22,20 @@ use crate::metadata::{StorageEntryType, StorageEntryModifier};
 use codec::FullCodec;
 use sp_std::prelude::*;
 
-mod value;
-mod map;
 mod double_map;
+mod key;
+mod map;
+mod nmap;
+mod value;
 
-pub use value::StorageValue;
-pub use map::StorageMap;
-pub use double_map::StorageDoubleMap;
+pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
+pub use key::{
+	EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator,
+	ReversibleKeyGenerator, TupleToEncodedIter,
+};
+pub use map::{StorageMap, StorageMapMetadata};
+pub use nmap::{StorageNMap, StorageNMapMetadata};
+pub use value::{StorageValue, StorageValueMetadata};
 
 /// Trait implementing how the storage optional value is converted into the queried type.
 ///
