@@ -29,7 +29,7 @@ use crate::{
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_std::vec::Vec;
+use sp_std::prelude::*;
 
 /// A type that allow to store values for `(key1, key2)` couple. Similar to `StorageMap` but allow
 /// to iterate and remove value associated to first key.
@@ -493,17 +493,19 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	fn storage_info() -> StorageInfo {
-		StorageInfo {
-			prefix: Self::final_prefix(),
-			max_values: MaxValues::get(),
-			max_size: Some(
-				Key1::max_encoded_len()
-					.saturating_add(Key2::max_encoded_len())
-					.saturating_add(Value::max_encoded_len())
-					.saturated_into(),
-			),
-		}
+	fn storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::final_prefix(),
+				max_values: MaxValues::get(),
+				max_size: Some(
+					Key1::max_encoded_len()
+						.saturating_add(Key2::max_encoded_len())
+						.saturating_add(Value::max_encoded_len())
+						.saturated_into(),
+				),
+			}
+		]
 	}
 }
 

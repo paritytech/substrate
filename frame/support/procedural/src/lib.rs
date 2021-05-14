@@ -157,7 +157,7 @@ use proc_macro::TokenStream;
 /// Will include the item in `GenesisConfig`.
 /// * \[optional\] `build(#closure)`: Closure called with storage overlays.
 /// * \[optional\] `max_values(#expr)`: `expr` is an expression returning a `u32`. It is used to
-/// implement `PalletStorageInfo`. Note this attribute is not available for storage value as the maximum
+/// implement `StorageInfoTrait`. Note this attribute is not available for storage value as the maximum
 /// number of values is 1.
 /// * `#type`: Storage type.
 /// * \[optional\] `#default`: Value returned when none.

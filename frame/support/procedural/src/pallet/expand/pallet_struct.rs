@@ -24,7 +24,7 @@ use crate::pallet::{Def, expand::merge_where_clauses, parse::helper::get_doc_lit
 /// * declare Module type alias for construct_runtime
 /// * replace the first field type of `struct Pallet` with `PhantomData` if it is `_`
 /// * implementation of `PalletInfoAccess` information
-/// * implementation of `PalletStorageInfo` on Pallet
+/// * implementation of `StorageInfoTrait` on Pallet
 pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
@@ -109,24 +109,27 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>();
 
 		quote::quote_spanned!(storage_info_span =>
-			impl<#type_impl_gen> #frame_support::traits::PalletStorageInfo
+			impl<#type_impl_gen> #frame_support::traits::StorageInfoTrait
 				for #pallet_ident<#type_use_gen>
 				#storages_where_clauses
 			{
 				fn storage_info()
 					-> #frame_support::sp_std::vec::Vec<#frame_support::traits::StorageInfo>
 				{
-					#frame_support::sp_std::vec![
-						#(
-							#(#storage_cfg_attrs)*
-							{
-								<
-									#storage_names<#type_use_gen>
-									as #frame_support::traits::StorageInfoTrait
-								>::storage_info()
-							},
-						)*
-					]
+					let mut res = #frame_support::sp_std::vec![];
+
+					#(
+						#(#storage_cfg_attrs)*
+						{
+							let mut storage_info = <
+								#storage_names<#type_use_gen>
+								as #frame_support::traits::StorageInfoTrait
+							>::storage_info();
+							res.append(&mut storage_info);
+						}
+					)*
+
+					res
 				}
 			}
 		)

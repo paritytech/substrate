@@ -979,7 +979,7 @@ fn test_pallet_info_access() {
 fn test_storage_info() {
 	use frame_support::{
 		StorageHasher,
-		traits::{PalletStorageInfo, StorageInfo},
+		traits::{StorageInfoTrait, StorageInfo},
 		pallet_prelude::*,
 	};
 

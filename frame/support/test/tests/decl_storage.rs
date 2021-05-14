@@ -397,7 +397,7 @@ mod tests {
 	fn storage_info() {
 		use frame_support::{
 			StorageHasher,
-			traits::{PalletStorageInfo, StorageInfo},
+			traits::{StorageInfoTrait, StorageInfo},
 			pallet_prelude::*,
 		};
 		let prefix = |pallet_name, storage_name| {

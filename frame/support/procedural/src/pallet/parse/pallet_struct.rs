@@ -40,7 +40,7 @@ pub struct PalletStructDef {
 	pub store: Option<(syn::Visibility, keyword::Store)>,
 	/// The span of the pallet::pallet attribute.
 	pub attr_span: proc_macro2::Span,
-	/// Whether to specify the storages max encoded len when implementing `PalletStorageInfo`.
+	/// Whether to specify the storages max encoded len when implementing `StorageInfoTrait`.
 	/// Contains the span of the attribute.
 	pub generate_storage_info: Option<proc_macro2::Span>,
 }
@@ -54,14 +54,14 @@ pub enum PalletStructAttr {
 		vis: syn::Visibility,
 		keyword: keyword::Store,
 	},
-	GeneratePalletStorageInfo(proc_macro2::Span),
+	GenerateStorageInfoTrait(proc_macro2::Span),
 }
 
 impl PalletStructAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
 			Self::GenerateStore { span, .. } => *span,
-			Self::GeneratePalletStorageInfo(span) => *span,
+			Self::GenerateStorageInfoTrait(span) => *span,
 		}
 	}
 }
@@ -86,7 +86,7 @@ impl syn::parse::Parse for PalletStructAttr {
 			Ok(Self::GenerateStore { vis, keyword, span })
 		} else if lookahead.peek(keyword::generate_storage_info) {
 			let span = content.parse::<keyword::generate_storage_info>()?.span();
-			Ok(Self::GeneratePalletStorageInfo(span))
+			Ok(Self::GenerateStorageInfoTrait(span))
 		} else {
 			Err(lookahead.error())
 		}
@@ -115,7 +115,7 @@ impl PalletStructDef {
 				PalletStructAttr::GenerateStore { vis, keyword, .. } if store.is_none() => {
 					store = Some((vis, keyword));
 				},
-				PalletStructAttr::GeneratePalletStorageInfo(span) if generate_storage_info.is_none() => {
+				PalletStructAttr::GenerateStorageInfoTrait(span) if generate_storage_info.is_none() => {
 					generate_storage_info = Some(span);
 				},
 				attr => {

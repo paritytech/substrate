@@ -261,20 +261,25 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 						impl<#impl_trait> #scrate::traits::StorageInfoTrait for #storage_struct
 						#optional_storage_where_clause
 						{
-							fn storage_info() -> #scrate::traits::StorageInfo {
+							fn storage_info()
+								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
+							{
 								use #scrate::sp_runtime::SaturatedConversion;
 
 								let max_size = <
 									#value_type as #scrate::traits::MaxEncodedLen
 								>::max_encoded_len()
 									.saturated_into();
-								#scrate::traits::StorageInfo {
-									prefix: <
-										#storage_struct as #scrate::#storage_generator_trait
-									>::storage_value_final_key(),
-									max_values: Some(1),
-									max_size: Some(max_size),
-								}
+
+								#scrate::sp_std::vec![
+									#scrate::traits::StorageInfo {
+										prefix: <
+											#storage_struct as #scrate::#storage_generator_trait
+										>::storage_value_final_key(),
+										max_values: Some(1),
+										max_size: Some(max_size),
+									}
+								]
 							}
 						}
 					)
@@ -285,7 +290,9 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 						impl<#impl_trait> #scrate::traits::StorageInfoTrait for #storage_struct
 						#optional_storage_where_clause
 						{
-							fn storage_info() -> #scrate::traits::StorageInfo {
+							fn storage_info()
+								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
+							{
 								use #scrate::sp_runtime::SaturatedConversion;
 								let max_size = <
 									#value_type as #scrate::traits::MaxEncodedLen
@@ -294,14 +301,17 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										<#key as #scrate::traits::MaxEncodedLen>::max_encoded_len()
 									)
 									.saturated_into();
-								#scrate::traits::StorageInfo {
-									prefix: <
-										#storage_struct
-										as #scrate::storage::StoragePrefixedMap<#value_type>
-									>::final_prefix(),
-									max_values: #max_values,
-									max_size: Some(max_size),
-								}
+
+								#scrate::sp_std::vec![
+									#scrate::traits::StorageInfo {
+										prefix: <
+											#storage_struct
+											as #scrate::storage::StoragePrefixedMap<#value_type>
+										>::final_prefix(),
+										max_values: #max_values,
+										max_size: Some(max_size),
+									}
+								]
 							}
 						}
 					)
@@ -313,7 +323,9 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 						impl<#impl_trait> #scrate::traits::StorageInfoTrait for #storage_struct
 						#optional_storage_where_clause
 						{
-							fn storage_info() -> #scrate::traits::StorageInfo {
+							fn storage_info()
+								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
+							{
 								use #scrate::sp_runtime::SaturatedConversion;
 								let max_size = <
 									#value_type as #scrate::traits::MaxEncodedLen
@@ -325,14 +337,17 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										<#key2 as #scrate::traits::MaxEncodedLen>::max_encoded_len()
 									)
 									.saturated_into();
-								#scrate::traits::StorageInfo {
-									prefix: <
-										#storage_struct
-										as #scrate::storage::StoragePrefixedMap<#value_type>
-									>::final_prefix(),
-									max_values: #max_values,
-									max_size: Some(max_size),
-								}
+
+								#scrate::sp_std::vec![
+									#scrate::traits::StorageInfo {
+										prefix: <
+											#storage_struct
+											as #scrate::storage::StoragePrefixedMap<#value_type>
+										>::final_prefix(),
+										max_values: #max_values,
+										max_size: Some(max_size),
+									}
+								]
 							}
 						}
 					)
@@ -343,7 +358,9 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 						impl<#impl_trait> #scrate::traits::StorageInfoTrait for #storage_struct
 						#optional_storage_where_clause
 						{
-							fn storage_info() -> #scrate::traits::StorageInfo {
+							fn storage_info()
+								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
+							{
 								use #scrate::sp_runtime::SaturatedConversion;
 								let max_size = <
 									#value_type as #scrate::traits::MaxEncodedLen
@@ -357,14 +374,17 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										)
 									)*
 									.saturated_into();
-								#scrate::traits::StorageInfo {
-									prefix: <
-										#storage_struct
-										as #scrate::storage::StoragePrefixedMap<#value_type>
-									>::final_prefix(),
-									max_values: #max_values,
-									max_size: Some(max_size),
-								}
+
+								#scrate::sp_std::vec![
+									#scrate::traits::StorageInfo {
+										prefix: <
+											#storage_struct
+											as #scrate::storage::StoragePrefixedMap<#value_type>
+										>::final_prefix(),
+										max_values: #max_values,
+										max_size: Some(max_size),
+									}
+								]
 							}
 						}
 					)
