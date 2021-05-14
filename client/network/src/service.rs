@@ -1567,11 +1567,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(s) = peers_notifications_sinks.get_mut(&(remote, protocol)) {
 						*s = notifications_sink;
 					} else {
-						debug_assert!(false);
 						log::error!(
 							target: "sub-libp2p",
 							"NotificationStreamReplaced for non-existing substream"
 						);
+						debug_assert!(false);
 					}
 
 					// TODO: Notifications might have been lost as a result of the previous
