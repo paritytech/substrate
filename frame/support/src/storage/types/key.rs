@@ -248,10 +248,11 @@ pub trait HasReversibleKeyPrefix<P>: ReversibleKeyGenerator + HasKeyPrefix<P> {
 macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), ($($prefix:ident),+), ($($suffix:ident),+)) => {
 		paste! {
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher,)+ $( [<KArg $prefix>]: EncodeLike<$prefix> ),+>
-				HasKeyPrefix<($( [<KArg $prefix>] ),+)> for
-				($(Key<[<$keygen $keygen>], $keygen>),+)
-			{
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: StorageHasher,)+
+				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
+			> HasKeyPrefix<($( [<KArg $prefix>] ),+)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
 				type Suffix = ($($suffix),+);
 
 				fn partial_key(prefix: ($( [<KArg $prefix>] ),+)) -> Vec<u8> {
@@ -259,8 +260,11 @@ macro_rules! impl_key_prefix_for {
 				}
 			}
 
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher,)+ $( [<KArg $prefix>]: EncodeLike<$prefix> ),+>
-				HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
+				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
+			> HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
 				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
@@ -271,10 +275,11 @@ macro_rules! impl_key_prefix_for {
 	};
 	(($($keygen:ident),+), $prefix:ident, ($($suffix:ident),+)) => {
 		paste! {
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher,)+ [<KArg $prefix>]: EncodeLike<$prefix>>
-				HasKeyPrefix<( [<KArg $prefix>] ,)> for
-				($(Key<[<$keygen $keygen>], $keygen>),+)
-			{
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: StorageHasher,)+
+				[<KArg $prefix>]: EncodeLike<$prefix>
+			> HasKeyPrefix<( [<KArg $prefix>] ,)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
 				type Suffix = ($($suffix),+);
 
 				fn partial_key(prefix: ( [<KArg $prefix>] ,)) -> Vec<u8> {
@@ -282,8 +287,11 @@ macro_rules! impl_key_prefix_for {
 				}
 			}
 
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher,)+ [<KArg $prefix>]: EncodeLike<$prefix>>
-				HasReversibleKeyPrefix<( [<KArg $prefix>] ,)> for
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
+				[<KArg $prefix>]: EncodeLike<$prefix>
+			> HasReversibleKeyPrefix<( [<KArg $prefix>] ,)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
 				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
@@ -294,10 +302,11 @@ macro_rules! impl_key_prefix_for {
 	};
 	(($($keygen:ident),+), ($($prefix:ident),+), $suffix:ident) => {
 		paste! {
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher,)+ $( [<KArg $prefix>]: EncodeLike<$prefix>),+>
-				HasKeyPrefix<($( [<KArg $prefix>] ),+)> for
-				($(Key<[<$keygen $keygen>], $keygen>),+)
-			{
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: StorageHasher,)+
+				$( [<KArg $prefix>]: EncodeLike<$prefix>),+
+			> HasKeyPrefix<($( [<KArg $prefix>] ),+)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
 				type Suffix = $suffix;
 
 				fn partial_key(prefix: ($( [<KArg $prefix>] ),+)) -> Vec<u8> {
@@ -305,8 +314,11 @@ macro_rules! impl_key_prefix_for {
 				}
 			}
 
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher,)+ $( [<KArg $prefix>]: EncodeLike<$prefix> ),+>
-				HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
+				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
+			> HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
 				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
