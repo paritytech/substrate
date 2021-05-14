@@ -116,6 +116,24 @@ pub fn get_contract_id() -> [u8; 32] {
     return contract_id;
 }
 
+pub fn get_ddc_url_or_default(default_url: &str) -> Vec<u8> {
+    let store = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::ddc_url");
+    let maybe_value = store.get::<Vec<u8>>();
+
+    let ddc_url = match maybe_value {
+        None => default_url.as_bytes().to_vec(),
+
+        Some(Some(url)) => url,
+
+        Some(None) => {
+            debug::error!("[OCW] Error decoding DDC URL from local storage");
+            "INVALID_DDC_URL".as_bytes().to_vec()
+        }
+    };
+
+    ddc_url
+}
+
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
