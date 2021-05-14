@@ -237,13 +237,12 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Approved balance transfers. First balance is the amount approved for transfer. Second
 	/// is the amount of `T::Currency` reserved for storing this.
+	/// First key is the asset ID, second key is the owner and third key is the delegate.
 	pub(super) type Approvals<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
 		(
 			NMapKey<Blake2_128Concat, T::AssetId>,
-			// owner
 			NMapKey<Blake2_128Concat, T::AccountId>, // owner
-			// delegate
 			NMapKey<Blake2_128Concat, T::AccountId>, // delegate
 		),
 		Approval<T::Balance, DepositBalanceOf<T, I>>,
