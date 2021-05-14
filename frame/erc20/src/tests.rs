@@ -48,7 +48,7 @@ fn transfer_hash() {
     })
 }
 
-#[test]
+/* #[test]
 fn transfer_native() {
     new_test_ext().execute_with(|| {
         let dest_chain = 0;
@@ -72,7 +72,7 @@ fn transfer_native() {
             recipient,
         ));
     })
-}
+} */
 
 #[test]
 fn transfer_erc721() {
