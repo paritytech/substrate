@@ -391,7 +391,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 				},
 			}
 		} else {
-			Default::default()
+			TokenStream::default()
 		};
 
 		impls.extend(quote!(
