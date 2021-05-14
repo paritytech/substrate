@@ -39,7 +39,7 @@ use alloc::string::String;
 pub const METRICS_CONTRACT_ADDR: &str = "5GH4ZTxrrhqo9E19SVbC8sRgDLSDhprE6WXdanR7BA7ioV1L";
 // address params: no salt, symbol: CERE, endowement: 1000
 pub const METRICS_CONTRACT_ID: [u8; 32] = [186, 93, 146, 143, 201, 9, 246, 178, 152, 136, 23, 105, 215, 109, 14, 80, 130, 231, 133, 165, 178, 143, 133, 193, 166, 190, 163, 106, 171, 113, 117, 250];
-pub const BLOCK_INTERVAL: u32 = 10;
+pub const BLOCK_INTERVAL: u32 = 200; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 
@@ -270,6 +270,10 @@ impl<T: Trait> Module<T> {
     ) -> ResultStr<()> {
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
+
+			if one_metric.bytes == 0 && one_metric.requests == 0 {
+				continue;
+			}
 
             let results = signer.send_signed_transaction(
                 |account| {
