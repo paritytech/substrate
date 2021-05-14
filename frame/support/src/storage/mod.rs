@@ -961,7 +961,7 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 }
 
 /// Provides `Sealed` trait to prevent implementing trait `StorageAppend` & `StorageDecodeLength`
-/// outside of this crate.
+/// & `EncodeLikeTuple` outside of this crate.
 mod private {
 	use super::*;
 	use bounded_vec::BoundedVec;
@@ -973,6 +973,33 @@ mod private {
 	impl<T, S> Sealed for BoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
+
+	macro_rules! impl_sealed_for_tuple {
+		($($elem:ident),+) => {
+			paste::paste! {
+				impl<$($elem: Encode,)+> Sealed for ($($elem,)+) {}
+				impl<$($elem: Encode,)+> Sealed for &($($elem,)+) {}
+			}
+		};
+	}
+
+	impl_sealed_for_tuple!(A);
+	impl_sealed_for_tuple!(A, B);
+	impl_sealed_for_tuple!(A, B, C);
+	impl_sealed_for_tuple!(A, B, C, D);
+	impl_sealed_for_tuple!(A, B, C, D, E);
+	impl_sealed_for_tuple!(A, B, C, D, E, F);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q, R);
 }
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}

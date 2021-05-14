@@ -139,41 +139,11 @@ impl KeyGenerator for Tuple {
 	}
 }
 
-mod private {
-	pub trait Sealed {}
-
-	macro_rules! impl_sealed {
-		($($elem:ident),+) => {
-			paste::paste! {
-				impl<$($elem,)+> Sealed for ($($elem,)+) {}
-				impl<$($elem,)+> Sealed for &($($elem,)+) {}
-			}
-		};
-	}
-
-	impl_sealed!(A);
-	impl_sealed!(A, B);
-	impl_sealed!(A, B, C);
-	impl_sealed!(A, B, C, D);
-	impl_sealed!(A, B, C, D, E);
-	impl_sealed!(A, B, C, D, E, F);
-	impl_sealed!(A, B, C, D, E, F, G);
-	impl_sealed!(A, B, C, D, E, F, G, H);
-	impl_sealed!(A, B, C, D, E, F, G, H, I);
-	impl_sealed!(A, B, C, D, E, F, G, H, I, J);
-	impl_sealed!(A, B, C, D, E, F, G, H, I, J, K);
-	impl_sealed!(A, B, C, D, E, F, G, H, I, J, K, L);
-	impl_sealed!(A, B, C, D, E, F, G, H, I, J, K, L, M);
-	impl_sealed!(A, B, C, D, E, F, G, H, I, J, K, L, M, O);
-	impl_sealed!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P);
-	impl_sealed!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q);
-	impl_sealed!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q, R);
-}
-
-/// Marker trait to indicate that each element in the tuple encodes like the
-/// corresponding element in another tuple. This trait is sealed and cannot be
-/// implemented by types outside of this crate.
-pub trait EncodeLikeTuple<T>: private::Sealed {}
+/// Marker trait to indicate that each element in the tuple encodes like the corresponding element
+/// in another tuple.
+///
+/// This trait is sealed.
+pub trait EncodeLikeTuple<T>: crate::storage::private::Sealed {}
 
 macro_rules! impl_encode_like_tuples {
 	($($elem:ident),+) => {
