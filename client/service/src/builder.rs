@@ -736,7 +736,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 // Maciej: This is very WIP, mocking the original `gen_handler`. All of the `jsonrpsee`
 // specific logic should be merged back to `gen_handler` down the road.
 fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
-	deny_unsafe: sc_rpc::DenyUnsafe,
+	_deny_unsafe: sc_rpc::DenyUnsafe,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
@@ -758,6 +758,8 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 			sp_api::Metadata<TBl>,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
+	// TODO(niklasad1): expose CORS to jsonrpsee to handle this propely.
+	let deny_unsafe = sc_rpc::DenyUnsafe::No;
 
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),
