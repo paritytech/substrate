@@ -107,21 +107,8 @@ pub trait WeightInfo {
 	fn note_stalled() -> Weight;
 }
 
-/// A stored pending change, old format.
-// TODO: remove shim
-// https://github.com/paritytech/substrate/issues/1614
-#[derive(Encode, Decode)]
-pub struct OldStoredPendingChange<N> {
-	/// The block number this was scheduled at.
-	pub scheduled_at: N,
-	/// The delay in blocks until it will be applied.
-	pub delay: N,
-	/// The next authority set.
-	pub next_authorities: AuthorityList,
-}
-
 /// A stored pending change.
-#[derive(Encode)]
+#[derive(Encode, Decode)]
 pub struct StoredPendingChange<N> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
@@ -132,20 +119,6 @@ pub struct StoredPendingChange<N> {
 	/// If defined it means the change was forced and the given block number
 	/// indicates the median last finalized block when the change was signaled.
 	pub forced: Option<N>,
-}
-
-impl<N: Decode> Decode for StoredPendingChange<N> {
-	fn decode<I: codec::Input>(value: &mut I) -> core::result::Result<Self, codec::Error> {
-		let old = OldStoredPendingChange::decode(value)?;
-		let forced = <Option<N>>::decode(value).unwrap_or(None);
-
-		Ok(StoredPendingChange {
-			scheduled_at: old.scheduled_at,
-			delay: old.delay,
-			next_authorities: old.next_authorities,
-			forced,
-		})
-	}
 }
 
 /// Current state of the GRANDPA authority set. State transitions must happen in

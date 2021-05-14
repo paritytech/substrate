@@ -38,7 +38,7 @@ use tracing;
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{CallInWasmExt, TaskExecutorExt, RuntimeSpawnExt},
+	traits::{TaskExecutorExt, RuntimeSpawnExt},
 	offchain::{OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
 	storage::ChildInfo,
@@ -69,6 +69,8 @@ mod batch_verifier;
 
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
+
+const LOG_TARGET: &str = "runtime::io";
 
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
@@ -432,6 +434,9 @@ pub trait Trie {
 /// Interface that provides miscellaneous functions for communicating between the runtime and the node.
 #[runtime_interface]
 pub trait Misc {
+	// NOTE: We use the target 'runtime' for messages produced by general printing functions, instead
+	// of LOG_TARGET.
+
 	/// Print a number.
 	fn print_num(val: u64) {
 		log::debug!(target: "runtime", "{}", val);
@@ -456,28 +461,34 @@ pub trait Misc {
 	///
 	/// # Performance
 	///
-	/// Calling this function is very expensive and should only be done very occasionally.
-	/// For getting the runtime version, it requires instantiating the wasm blob and calling a
-	/// function in this blob.
+	/// This function may be very expensive to call depending on the wasm binary. It may be
+	/// relatively cheap if the wasm binary contains version information. In that case, uncompression
+	/// of the wasm blob is the dominating factor.
+	///
+	/// If the wasm binary does not have the version information attached, then a legacy mechanism
+	/// may be involved. This means that a runtime call will be performed to query the version.
+	///
+	/// Calling into the runtime may be incredible expensive and should be approached with care.
 	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
-		// Create some dummy externalities, `Core_version` should not write data anyway.
+		use sp_core::traits::ReadRuntimeVersionExt;
+
 		let mut ext = sp_state_machine::BasicExternalities::default();
 
-		self.extension::<CallInWasmExt>()
-			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(
-				wasm,
-				None,
-				"Core_version",
-				&[],
-				&mut ext,
-				// If a runtime upgrade introduces new host functions that are not provided by
-				// the node, we should not fail at instantiation. Otherwise nodes that are
-				// updated could run this successfully and it could lead to a storage root
-				// mismatch when importing this block.
-				sp_core::traits::MissingHostFunctions::Allow,
-			)
-			.ok()
+		match self
+			.extension::<ReadRuntimeVersionExt>()
+			.expect("No `ReadRuntimeVersionExt` associated for the current context!")
+			.read_runtime_version(wasm, &mut ext)
+		{
+			Ok(v) => Some(v),
+			Err(err) => {
+				log::debug!(
+					target: LOG_TARGET,
+					"cannot read version from the given runtime: {}",
+					err,
+				);
+				None
+			}
+		}
 	}
 }
 

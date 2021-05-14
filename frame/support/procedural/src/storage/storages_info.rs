@@ -21,10 +21,12 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use super::DeclStorageDefExt;
 
-pub fn impl_storages_info(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+pub fn impl_storages_info(def: &DeclStorageDefExt) -> TokenStream {
 	if !def.generate_storage_info {
 		return Default::default()
 	}
+
+	let scrate = &def.hidden_crate;
 
 	let mut entries = TokenStream::new();
 
