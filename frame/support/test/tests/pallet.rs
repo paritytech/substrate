@@ -218,6 +218,21 @@ pub mod pallet {
 	pub type DoubleMap2<T> = StorageDoubleMap<_, Twox64Concat, u16, Blake2_128Concat, u32, u64>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn nmap)]
+	pub type NMap<T> = StorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn nmap2)]
+	pub type NMap2<T> = StorageNMap<
+		_,
+		(
+			NMapKey<Twox64Concat, u16>,
+			NMapKey<Blake2_128Concat, u32>,
+		),
+		u64,
+	>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn conditional_value)]
 	#[cfg(feature = "conditional-storage")]
 	pub type ConditionalValue<T> = StorageValue<_, u32>;
@@ -236,6 +251,18 @@ pub mod pallet {
 		u8,
 		Twox64Concat,
 		u16,
+		u32,
+	>;
+
+	#[cfg(feature = "conditional-storage")]
+	#[pallet::storage]
+	#[pallet::getter(fn conditional_nmap)]
+	pub type ConditionalNMap<T> = StorageNMap<
+		_,
+		(
+			storage::Key<Blake2_128Concat, u8>,
+			storage::Key<Twox64Concat, u16>,
+		),
 		u32,
 	>;
 
@@ -578,11 +605,25 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime>>::final_prefix());
 
+		pallet::NMap::<Runtime>::insert((&1,), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"NMap")].concat();
+		k.extend(1u8.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
+		assert_eq!(&k[..32], &<pallet::NMap<Runtime>>::final_prefix());
+
+		pallet::NMap2::<Runtime>::insert((&1, &2), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"NMap2")].concat();
+		k.extend(1u16.using_encoded(twox_64_concat));
+		k.extend(2u32.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
+		assert_eq!(&k[..32], &<pallet::NMap2<Runtime>>::final_prefix());
+
 		#[cfg(feature = "conditional-storage")]
 		{
 			pallet::ConditionalValue::<Runtime>::put(1);
 			pallet::ConditionalMap::<Runtime>::insert(1, 2);
 			pallet::ConditionalDoubleMap::<Runtime>::insert(1, 2, 3);
+			pallet::ConditionalNMap::<Runtime>::insert((1, 2), 3);
 		}
 	})
 }
@@ -708,6 +749,36 @@ fn metadata() {
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("NMap".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec!["u8".to_string()]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Blake2_128Concat,
+						]),
+						value: DecodeDifferent::Decoded("u32".to_string()),
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("NMap2".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec![
+							"u16".to_string(),
+							"u32".to_string(),
+						]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Twox64Concat,
+							StorageHasher::Blake2_128Concat,
+						]),
+						value: DecodeDifferent::Decoded("u64".to_string()),
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
 				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
 					name: DecodeDifferent::Decoded("ConditionalValue".to_string()),
 					modifier: StorageEntryModifier::Optional,
@@ -736,6 +807,20 @@ fn metadata() {
 						key2: DecodeDifferent::Decoded("u16".to_string()),
 						hasher: StorageHasher::Blake2_128Concat,
 						key2_hasher: StorageHasher::Twox64Concat,
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("ConditionalNMap".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec!["u8".to_string(), "u16".to_string()]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Blake2_128Concat,
+							StorageHasher::Twox64Concat,
+						]),
+						value: DecodeDifferent::Decoded("u32".to_string()),
 					},
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
@@ -857,7 +942,7 @@ fn metadata() {
 	};
 
 	let metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V12(metadata) => metadata,
+		RuntimeMetadata::V13(metadata) => metadata,
 		_ => panic!("metadata has been bump, test needs to be updated"),
 	};
 
