@@ -14,7 +14,7 @@ type TestNetworkService = NetworkService<
 	substrate_test_runtime_client::runtime::Hash,
 >;
 
-use arbitrary::Arbitrary;
+use arbitrary::{Arbitrary, Result as ArbitraryResult, Unstructured};
 
 /// Builds a full node to be used for testing. Returns the node service and its associated events
 /// stream.
@@ -177,6 +177,18 @@ fn build_nodes_one_proto()
 	(node1, events_stream1, node2, events_stream2)
 }
 
+struct ReputationChange(sc_network::ReputationChange);
+
+impl<'a> Arbitrary<'a> for ReputationChange {
+    fn arbitrary(u: &mut Unstructured<'a>) -> ArbitraryResult<Self> {
+        let value = u.arbitrary::<i32>()?;
+		let reason = "some_reason";
+		let reputation_change = sc_network::ReputationChange { value, reason };
+
+        Ok(Self(reputation_change))
+    }
+}
+
 // Who will trigger an event
 #[derive(Arbitrary)]
 enum SenderNode {
@@ -195,6 +207,7 @@ enum ReceiverNode {
 enum Action {
 	WriteNotification(SenderNode, ReceiverNode, Vec<u8>),
 	DisconnectPeer(SenderNode, ReceiverNode),
+	ReportPeer(SenderNode, ReceiverNode, ReputationChange),
 }
 
 fn main() {
@@ -213,6 +226,12 @@ fn main() {
 						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
 						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
 						sender.disconnect_peer(receiver.local_peer_id().clone(), PROTOCOL_NAME);
+					},
+					Action::ReportPeer(sender, receiver, reputation_change) => {
+						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
+						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
+						let reputation_change = reputation_change.0;
+						sender.report_peer(receiver.local_peer_id().clone(), reputation_change);
 					},
 				};
 			}
