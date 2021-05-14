@@ -210,6 +210,8 @@ enum Action {
 	ReportPeer(SenderNode, ReceiverNode, ReputationChange),
 	AcceptUnreservedPeers(SenderNode),
 	DenyUnreservedPeers(SenderNode),
+	AddReservedPeer(SenderNode, ReceiverNode),
+	RemoveReservedPeer(SenderNode, ReceiverNode),
 }
 
 fn main() {
@@ -242,6 +244,16 @@ fn main() {
 					Action::DenyUnreservedPeers(sender) => {
 						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
 						sender.deny_unreserved_peers();
+					},
+					Action::AddReservedPeer(sender, receiver) => {
+						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
+						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
+						let _ = sender.add_reserved_peer(receiver.local_peer_id().to_string());
+					},
+					Action::RemoveReservedPeer(sender, receiver) => {
+						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
+						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
+						sender.remove_reserved_peer(receiver.local_peer_id().clone());
 					},
 				};
 			}
