@@ -187,7 +187,7 @@ frame_support::construct_runtime!(
 		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
 		Module2: module2::{Pallet, Call, Storage, Event, Origin},
 		Module1_2: module1::<Instance2>::{Pallet, Call, Storage, Event<T>, Origin<T>},
-		Module3: nested::module3::{Pallet, Storage, Origin},
+		Module3: nested::module3::{Pallet, Call, Storage, Event, Origin},
 		Module1_3: module1::<Instance3>::{Pallet, Storage} = 6,
 		Module1_4: module1::<Instance4>::{Pallet, Call} = 3,
 		Module1_5: module1::<Instance5>::{Pallet, Event<T>},
