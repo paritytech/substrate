@@ -71,7 +71,7 @@ use sp_inherents::{InherentData, CheckInherentsResult};
 use static_assertions::const_assert;
 pub use pallet_cere_ddc;
 pub use pallet_chainbridge;
-pub use pallet_example_offchain_worker;
+pub use pallet_ddc_metrics_offchain_worker;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -946,21 +946,21 @@ impl pallet_erc20::Trait for Runtime {
 
 parameter_types! {
 	pub MetricsContractId: AccountId = {
-		AccountId::from(pallet_example_offchain_worker::METRICS_CONTRACT_ID)
+		AccountId::from(pallet_ddc_metrics_offchain_worker::METRICS_CONTRACT_ID)
 	};
 
-	pub const OcwBlockInterval: u32 = pallet_example_offchain_worker::BLOCK_INTERVAL;
+	pub const OcwBlockInterval: u32 = pallet_ddc_metrics_offchain_worker::BLOCK_INTERVAL;
 	pub DdcUrl: Vec<u8> = "https://node-0.ddc.stage.cere.network".as_bytes().to_vec();
 }
 
-impl pallet_example_offchain_worker::Trait for Runtime {
+impl pallet_ddc_metrics_offchain_worker::Trait for Runtime {
 	type ContractId = MetricsContractId;
 	type BlockInterval = OcwBlockInterval;
 	type DdcUrl = DdcUrl;
 
 	type CT = Self;
 	type CST = Self;
-	type AuthorityId = pallet_example_offchain_worker::crypto::TestAuthId;
+	type AuthorityId = pallet_ddc_metrics_offchain_worker::crypto::TestAuthId;
 
 	type Event = Event;
 	type Call = Call;
@@ -1008,7 +1008,7 @@ construct_runtime!(
 		ChainBridge: pallet_chainbridge::{Module, Call, Storage, Event<T>},
 		Erc721: pallet_erc721::{Module, Call, Storage, Event<T>},
 		Erc20: pallet_erc20::{Module, Call, Event<T>},
-		ExampleOffchainWorker: pallet_example_offchain_worker::{Module, Call, Event<T>},
+		ExampleOffchainWorker: pallet_ddc_metrics_offchain_worker::{Module, Call, Event<T>},
 	}
 );
 

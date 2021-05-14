@@ -1,5 +1,5 @@
 [package]
-name = "pallet-example-offchain-worker"
+name = "pallet-ddc-metrics-offchain-worker"
 version = "2.0.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
