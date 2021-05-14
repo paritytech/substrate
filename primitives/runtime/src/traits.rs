@@ -40,6 +40,7 @@ pub use sp_arithmetic::traits::{
 use sp_application_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
 use crate::DispatchResult;
+use max_encoded_len::MaxEncodedLen;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -386,7 +387,7 @@ impl<T:
 pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq + Hasher<Out = <Self as Hash>::Output> {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
+		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode + MaxEncodedLen;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {

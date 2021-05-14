@@ -32,7 +32,4 @@ std = [
 	"codec/std",
 	"max-encoded-len-derive/std",
 	"primitive-types/std",
-	"primitive-types/serde",
-	"primitive-types/byteorder",
-	"primitive-types/rustc-hex",
 ]
