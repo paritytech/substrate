@@ -1478,8 +1478,6 @@ impl<T: Config> Pallet<T> {
 				a.nonce += T::Index::one();
 			}
 			else {
-				//set nonce to block number if we are initializing the account
-				//need to convert block number into u32 and then convert that into an Index
 				if let Some(b) = TryInto::<u32>::try_into(Self::block_number()).ok() {
 					a.nonce = b.into();
 				} else {
