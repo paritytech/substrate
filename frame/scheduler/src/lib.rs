@@ -211,9 +211,9 @@ pub mod pallet {
 
  	#[cfg(feature = "std")]
  	impl Default for GenesisConfig {
- 		fn default() -> Self{
-			 Self
-		 }
+ 		fn default() -> Self {
+			Self
+		}
  	}
 
  	#[pallet::genesis_build]
