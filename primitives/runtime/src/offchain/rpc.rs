@@ -52,8 +52,7 @@
 // ! }
 // ! ```
 
-use serde::{Deserialize, Deserializer};
-use crate::{RuntimeDebug, offchain::Duration};
+use crate::{RuntimeDebug, offchain::Duration, offchain::Timestamp};
 use serde_json::{json, Value};
 use sp_std::{vec::Vec, str};
 use super::http;
@@ -124,32 +123,50 @@ impl<'a> Default for Request<'a> {
 	}
 }
 
-fn de_option_string_to_bytes<'de, D>(de: D) -> Result<Option<Vec<u8>>, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let s: Option<&str> = Deserialize::deserialize(de)?;
-
-	match s {
-		Some(value) => Ok(Some(value.as_bytes().to_vec())),
-		None => Ok(None),
-	}
-}
-
-fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let s: &str = Deserialize::deserialize(de)?;
-	Ok(s.as_bytes().to_vec())
-}
-
 impl<'a> Request<'a> {
+	/// Create a new Request
+	pub fn new() -> Self {
+		Request::default()
+	}
+
+	/// Change the URL for the Request
+	pub fn url(mut self, url: &'a str) -> Self {
+		self.url = url;
+		self
+	}
+
+	/// Change the Method for the Request
+	pub fn method(mut self, method: &'a str) -> Self {
+		self.method = method;
+		self
+	}
+
+	/// Change the Timeout for the Request
+	pub fn timeout(mut self, timeout: u64) -> Self {
+		self.timeout = timeout;
+		self
+	}
+
+	/// Change the Params for the Request
+	pub fn params(mut self, params: Vec<&'a str>) -> Self {
+		self.params = params;
+		self
+	}
+
 	/// Send the request and return a RPC result.
 	///
 	/// Err is returned in case there is a Http
 	/// or deserializing error.
 	pub fn send(&self) -> RpcResult {
+		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(self.timeout));
+		self.send_with_deadline(deadline)
+	}
+
+	/// Send the request and return a RPC result.
+	/// Deadline is used instead of Timeout
+	/// Err is returned in case there is a Http
+	/// or deserializing error.
+	pub fn send_with_deadline(&self, deadline: Timestamp) -> RpcResult {
 		// Construct http POST body
 		let request_body = json!({
 			"jsonrpc": self.jsonrpc,
@@ -163,17 +180,17 @@ impl<'a> Request<'a> {
 
 		// Send http POST request
 		let post_request = http::Request::post(self.url, body);
-		let timeout = sp_io::offchain::timestamp().add(Duration::from_millis(self.timeout));
+		// let timeout = sp_io::offchain::timestamp().add(Duration::from_millis(self.timeout));
 		let pending = match post_request
 			.add_header("Content-Type", "application/json;charset=utf-8")
-			.deadline(timeout)
+			.deadline(deadline)
 			.send().map_err(|_| http::Error::IoError) {
 				Ok(result) => result,
 				Err(e) => return Err(Error::Http(e)),
 		};
 
 		// Hanlde http response
-		let response = match pending.try_wait(timeout)
+		let response = match pending.try_wait(deadline)
 			.map_err(|_| http::Error::DeadlineReached) {
 				Ok(result) =>
 					match result {
@@ -248,7 +265,6 @@ mod test {
 	use sp_core::{offchain::{OffchainWorkerExt, testing}, H256};
 
 	const RPC_REQUEST_URL: &'static str = "http://localhost:9933";
-	const TIMEOUT_PERIOD: u64 = 3_000;
 
 	#[test]
 	fn should_return_rpc_result() {
@@ -288,10 +304,7 @@ mod test {
 		}
 
 		t.execute_with(|| {
-			let request = Request {
-				..Default::default()
-			};
-
+			let request = Request::new();
 			let response = request.send().unwrap();
 
 			let expected_response = Response {
@@ -343,11 +356,11 @@ mod test {
 		}
 
 		t.execute_with(|| {
-			let request = Request {
-				method: RPC_METHOD,
-				..Default::default()
-			};
-
+			// let request = Request {
+			// 	method: RPC_METHOD,
+			// 	..Default::default()
+			// };
+			let request = Request::new().method(RPC_METHOD);
 			let response = request.send().unwrap();
 
 			let expected_rpc_error = RpcError {
@@ -403,11 +416,7 @@ mod test {
 		}
 
 		t.execute_with(|| {
-			let request = Request {
-				method: RPC_METHOD,
-				..Default::default()
-			};
-
+			let request = Request::new();
 			let response = request.send().unwrap_err();
 
 			assert_eq!(Error::Deserializing, response);
