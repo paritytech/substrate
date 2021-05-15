@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,10 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! `trait MaxEncodedLen` bounds the max encoded length of items.
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use codec::{Compact, Encode};
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_std::{mem, marker::PhantomData};
-use sp_core::{H160, H256, H512};
+use core::{mem, marker::PhantomData};
+use primitive_types::{H160, H256, H512};
+
+#[cfg(feature = "derive")]
+pub use max_encoded_len_derive::MaxEncodedLen;
 
 /// Items implementing `MaxEncodedLen` have a statically known maximum encoded size.
 ///

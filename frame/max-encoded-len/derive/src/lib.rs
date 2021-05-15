@@ -22,7 +22,9 @@ use syn::{
 	parse_quote, spanned::Spanned,
 };
 
-/// impl for `#[derive(MaxEncodedLen)]`
+
+/// Derive `MaxEncodedLen`.
+#[proc_macro_derive(MaxEncodedLen)]
 pub fn derive_max_encoded_len(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input: DeriveInput = match syn::parse(input) {
 		Ok(input) => input,
@@ -53,8 +55,8 @@ pub fn derive_max_encoded_len(input: proc_macro::TokenStream) -> proc_macro::Tok
 }
 
 fn max_encoded_len_trait() -> syn::Result<TraitBound> {
-	let frame_support = generate_crate_access_2018("frame-support")?;
-	Ok(parse_quote!(#frame_support::traits::MaxEncodedLen))
+	let mel = generate_crate_access_2018("max-encoded-len")?;
+	Ok(parse_quote!(#mel::MaxEncodedLen))
 }
 
 // Add a bound `T: MaxEncodedLen` to every type parameter T.
