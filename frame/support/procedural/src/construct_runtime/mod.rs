@@ -139,18 +139,9 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
 
-	let outer_event = decl_outer_event(
-		&name,
-		pallets.iter(),
-		&scrate,
-	)?;
+	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 
-	let outer_origin = expand::expand_outer_origin(
-		&name,
-		&pallets,
-		pallets_token,
-		&scrate,
-	)?;
+	let outer_origin = expand::expand_outer_origin(&name, &pallets, pallets_token, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
 	let pallet_to_index = decl_pallet_runtime_setup(&pallets, &scrate);
 
@@ -312,41 +303,6 @@ fn decl_outer_dispatch<'a>(
 			}
 		}
 	)
-}
-
-fn decl_outer_event<'a>(
-	runtime_name: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> syn::Result<TokenStream2> {
-	let mut pallets_tokens = TokenStream2::new();
-	for pallet_declaration in pallet_declarations {
-		if let Some(pallet_entry) = pallet_declaration.find_part("Event") {
-			let pallet = &pallet_declaration.pallet.inner.segments.last().unwrap();
-			let instance = pallet_declaration.instance.as_ref();
-			let generics = &pallet_entry.generics;
-			if instance.is_some() && generics.params.is_empty() {
-				let msg = format!(
-					"Instantiable pallet with no generic `Event` cannot \
-					 be constructed: pallet `{}` must have generic `Event`",
-					pallet_declaration.name,
-				);
-				return Err(syn::Error::new(pallet_declaration.name.span(), msg));
-			}
-
-			let index = pallet_declaration.index;
-			let tokens = quote!(#[codec(index = #index)] #pallet #instance #generics,);
-			pallets_tokens.extend(tokens);
-		}
-	}
-
-	Ok(quote!(
-		#scrate::impl_outer_event! {
-			pub enum Event for #runtime_name {
-				#pallets_tokens
-			}
-		}
-	))
 }
 
 fn decl_all_pallets<'a>(

@@ -15,8 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
+mod event;
 mod metadata;
 mod origin;
 
+pub use event::expand_outer_event;
 pub use metadata::expand_runtime_metadata;
 pub use origin::expand_outer_origin;
