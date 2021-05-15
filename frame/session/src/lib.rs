@@ -359,95 +359,95 @@ impl<T: Config> ValidatorRegistration<T::ValidatorId> for Pallet<T> {
 
 #[frame_support::pallet]
 pub mod pallet {
-    use super::*;
-    use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::*;
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-    #[pallet::pallet]
-    #[pallet::generate_store(pub(super) trait Store)]
-    pub struct Pallet<T>(_);
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
 
-    /// The pallet's config trait.
-    #[pallet::config]
-    pub trait Config: frame_system::Config {
-        /// The overarching event type.
-        type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
+	/// The pallet's config trait.
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 
-        /// A stable ID for a validator.
-        type ValidatorId: Member + Parameter + MaybeSerializeDeserialize;
+		/// A stable ID for a validator.
+		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize;
 
-        /// A conversion from account ID to validator ID.
-        ///
-        /// Its cost must be at most one storage read.
-        type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
+		/// A conversion from account ID to validator ID.
+		///
+		/// Its cost must be at most one storage read.
+		type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
-        /// Indicator for when to end the session.
-        type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
+		/// Indicator for when to end the session.
+		type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
 
-        /// Something that can predict the next session rotation. This should typically come from the
-        /// same logical unit that provides [`ShouldEndSession`], yet, it gives a best effort estimate.
-        /// It is helpful to implement [`EstimateNextNewSession`].
-        type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
+		/// Something that can predict the next session rotation. This should typically come from the
+		/// same logical unit that provides [`ShouldEndSession`], yet, it gives a best effort estimate.
+		/// It is helpful to implement [`EstimateNextNewSession`].
+		type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
 
-        /// Handler for managing new session.
-        type SessionManager: SessionManager<Self::ValidatorId>;
+		/// Handler for managing new session.
+		type SessionManager: SessionManager<Self::ValidatorId>;
 
-        /// Handler when a session has changed.
-        type SessionHandler: SessionHandler<Self::ValidatorId>;
+		/// Handler when a session has changed.
+		type SessionHandler: SessionHandler<Self::ValidatorId>;
 
-        /// The keys.
-        type Keys: OpaqueKeys + Member + Parameter + Default + MaybeSerializeDeserialize;
+		/// The keys.
+		type Keys: OpaqueKeys + Member + Parameter + Default + MaybeSerializeDeserialize;
 
-        /// The fraction of validators set that is safe to be disabled.
-        ///
-        /// After the threshold is reached `disabled` method starts to return true,
-        /// which in combination with `pallet_staking` forces a new era.
-        type DisabledValidatorsThreshold: Get<Perbill>;
+		/// The fraction of validators set that is safe to be disabled.
+		///
+		/// After the threshold is reached `disabled` method starts to return true,
+		/// which in combination with `pallet_staking` forces a new era.
+		type DisabledValidatorsThreshold: Get<Perbill>;
 
-        /// Weight information for extrinsics in this pallet.
-        type WeightInfo: WeightInfo;
-    }
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
+	}
 
-    /// The current set of validators.
-    #[pallet::storage]
-    #[pallet::getter(fn validators)]
-    pub type Validators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+	/// The current set of validators.
+	#[pallet::storage]
+	#[pallet::getter(fn validators)]
+	pub type Validators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
-    /// Current index of the session.
-    #[pallet::storage]
-    #[pallet::getter(fn current_index)]
-    pub type CurrentIndex<T: Config> = StorageValue<_, SessionIndex, ValueQuery>;
+	/// Current index of the session.
+	#[pallet::storage]
+	#[pallet::getter(fn current_index)]
+	pub type CurrentIndex<T: Config> = StorageValue<_, SessionIndex, ValueQuery>;
 
-    /// True if the underlying economic identities or weighting behind the validators
-    /// has changed in the queued validator set.
-    #[pallet::storage]
-    pub type QueuedChanged<T: Config> = StorageValue<_, bool, ValueQuery>;
+	/// True if the underlying economic identities or weighting behind the validators
+	/// has changed in the queued validator set.
+	#[pallet::storage]
+	pub type QueuedChanged<T: Config> = StorageValue<_, bool, ValueQuery>;
 
-    /// The queued keys for the next session. When the next session begins, these keys
-    /// will be used to determine the validator's session keys.
-    #[pallet::storage]
-    #[pallet::getter(fn queued_keys)]
-    pub type QueuedKeys<T: Config> = StorageValue<_, Vec<(T::ValidatorId, T::Keys)>, ValueQuery>;
+	/// The queued keys for the next session. When the next session begins, these keys
+	/// will be used to determine the validator's session keys.
+	#[pallet::storage]
+	#[pallet::getter(fn queued_keys)]
+	pub type QueuedKeys<T: Config> = StorageValue<_, Vec<(T::ValidatorId, T::Keys)>, ValueQuery>;
 
-    /// Indices of disabled validators.
-    ///
-    /// The set is cleared when `on_session_ending` returns a new set of identities.
-    #[pallet::storage]
-    #[pallet::getter(fn disabled_validators)]
-    pub type DisabledValidators<T: Config> = StorageValue<_, Vec<u32>, ValueQuery>;
+	/// Indices of disabled validators.
+	///
+	/// The set is cleared when `on_session_ending` returns a new set of identities.
+	#[pallet::storage]
+	#[pallet::getter(fn disabled_validators)]
+	pub type DisabledValidators<T: Config> = StorageValue<_, Vec<u32>, ValueQuery>;
 
-    /// The next session keys for a validator.
-    #[pallet::storage]
-    pub type NextKeys<T: Config> = StorageMap<_, Twox64Concat, T::ValidatorId, T::Keys>;
+	/// The next session keys for a validator.
+	#[pallet::storage]
+	pub type NextKeys<T: Config> = StorageMap<_, Twox64Concat, T::ValidatorId, T::Keys>;
 
-    /// The owner of a key. The key is the `KeyTypeId` + the encoded key.
-    #[pallet::storage]
-    pub type KeyOwner<T: Config> =
-        StorageMap<_, Twox64Concat, (KeyTypeId, Vec<u8>), T::ValidatorId>;
+	/// The owner of a key. The key is the `KeyTypeId` + the encoded key.
+	#[pallet::storage]
+	pub type KeyOwner<T: Config> =
+		StorageMap<_, Twox64Concat, (KeyTypeId, Vec<u8>), T::ValidatorId>;
 
-    #[pallet::genesis_config]
+	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub keys : Vec<(T::AccountId, T::ValidatorId, T::Keys)>,
+		pub keys: Vec<(T::AccountId, T::ValidatorId, T::Keys)>,
 	}
 
 	#[cfg(feature = "std")]
@@ -460,105 +460,110 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-            if T::SessionHandler::KEY_TYPE_IDS.len() != T::Keys::key_ids().len() {
-    			panic!("Number of keys in session handler and session keys does not match");
-    		}
+			if T::SessionHandler::KEY_TYPE_IDS.len() != T::Keys::key_ids().len() {
+				panic!("Number of keys in session handler and session keys does not match");
+			}
 
-    		T::SessionHandler::KEY_TYPE_IDS.iter().zip(T::Keys::key_ids()).enumerate()
-    			.for_each(|(i, (sk, kk))| {
-    				if sk != kk {
-    					panic!(
+			T::SessionHandler::KEY_TYPE_IDS
+				.iter()
+				.zip(T::Keys::key_ids())
+				.enumerate()
+				.for_each(|(i, (sk, kk))| {
+					if sk != kk {
+						panic!(
     						"Session handler and session key expect different key type at index: {}",
     						i,
     					);
-    				}
-    			});
+					}
+				});
 
-    		for (account, val, keys) in self.keys.iter().cloned() {
-    			<Pallet<T>>::inner_set_keys(&val, keys)
-    				.expect("genesis config must not contain duplicates; qed");
-    			assert!(
-    				frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
-    				"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
-    				account,
-    			);
-    		}
+			for (account, val, keys) in self.keys.iter().cloned() {
+				<Pallet<T>>::inner_set_keys(&val, keys)
+					.expect("genesis config must not contain duplicates; qed");
+				assert!(
+					frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
+					"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
+					account,
+				);
+			}
 
-    		let initial_validators_0 = T::SessionManager::new_session(0)
-    			.unwrap_or_else(|| {
-    				frame_support::print("No initial validator provided by `SessionManager`, use \
-    					session config keys to generate initial validator set.");
-    				self.keys.iter().map(|x| x.1.clone()).collect()
-    			});
-    		assert!(!initial_validators_0.is_empty(), 
-				"Empty validator set for session 0 in genesis block!");
+			let initial_validators_0 = T::SessionManager::new_session(0).unwrap_or_else(|| {
+				frame_support::print(
+					"No initial validator provided by `SessionManager`, use \
+    					session config keys to generate initial validator set.",
+				);
+				self.keys.iter().map(|x| x.1.clone()).collect()
+			});
+			assert!(
+				!initial_validators_0.is_empty(),
+				"Empty validator set for session 0 in genesis block!"
+			);
 
-    		let initial_validators_1 = T::SessionManager::new_session(1)
-    			.unwrap_or_else(|| initial_validators_0.clone());
-    		assert!(!initial_validators_1.is_empty(), 
-				"Empty validator set for session 1 in genesis block!");
+			let initial_validators_1 =
+				T::SessionManager::new_session(1).unwrap_or_else(|| initial_validators_0.clone());
+			assert!(
+				!initial_validators_1.is_empty(),
+				"Empty validator set for session 1 in genesis block!"
+			);
 
-    		let queued_keys: Vec<_> = initial_validators_1
-    			.iter()
-    			.cloned()
-    			.map(|v| (
-    				v.clone(),
-    				<Pallet<T>>::load_keys(&v).unwrap_or_default(),
-    			))
-    			.collect();
+			let queued_keys: Vec<_> = initial_validators_1
+				.iter()
+				.cloned()
+				.map(|v| (v.clone(), <Pallet<T>>::load_keys(&v).unwrap_or_default()))
+				.collect();
 
-    		// Tell everyone about the genesis session keys
-    		T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
+			// Tell everyone about the genesis session keys
+			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
-    		<Validators<T>>::put(initial_validators_0);
-    		<QueuedKeys<T>>::put(queued_keys);
+			<Validators<T>>::put(initial_validators_0);
+			<QueuedKeys<T>>::put(queued_keys);
 
-    		T::SessionManager::start_session(0);
-	    }
-    }
-
-    /// Events type.
-    #[pallet::event]
-    #[pallet::generate_deposit(pub(super) fn deposit_event)]
-    pub enum Event {
-        /// New session has happened. Note that the argument is the \[session_index\], not the block
-        /// number as the type might suggest.
-        NewSession(SessionIndex),
-    }
-
-    #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Called when a block is initialized. Will rotate session if it is the last
-        /// block of the current session.
-        fn on_initialize(n: T::BlockNumber) -> Weight {
-        	if T::ShouldEndSession::should_end_session(n) {
-        		Self::rotate_session();
-        		T::BlockWeights::get().max_block
-        	} else {
-        		// NOTE: the non-database part of the weight for `should_end_session(n)` is
-        		// included as weight for empty block, the database part is expected to be in
-        		// cache.
-        		0
-        	}
-        }
+			T::SessionManager::start_session(0);
+		}
 	}
 
-    /// Error for the session pallet.
-    #[pallet::error]
-    pub enum Error<T> {
-        /// Invalid ownership proof.
-        InvalidProof,
-        /// No associated validator ID for account.
-        NoAssociatedValidatorId,
-        /// Registered duplicate key.
-        DuplicatedKey,
-        /// No keys are associated with this account.
-        NoKeys,
-        /// Key setting account is not live, so it's impossible to associate keys.
-        NoAccount,
-    }
+	/// Events type.
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event {
+		/// New session has happened. Note that the argument is the \[session_index\], not the block
+		/// number as the type might suggest.
+		NewSession(SessionIndex),
+	}
 
-    #[pallet::call]
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Called when a block is initialized. Will rotate session if it is the last
+		/// block of the current session.
+		fn on_initialize(n: T::BlockNumber) -> Weight {
+			if T::ShouldEndSession::should_end_session(n) {
+				Self::rotate_session();
+				T::BlockWeights::get().max_block
+			} else {
+				// NOTE: the non-database part of the weight for `should_end_session(n)` is
+				// included as weight for empty block, the database part is expected to be in
+				// cache.
+				0
+			}
+		}
+	}
+
+	/// Error for the session pallet.
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Invalid ownership proof.
+		InvalidProof,
+		/// No associated validator ID for account.
+		NoAssociatedValidatorId,
+		/// Registered duplicate key.
+		DuplicatedKey,
+		/// No keys are associated with this account.
+		NoKeys,
+		/// Key setting account is not live, so it's impossible to associate keys.
+		NoAccount,
+	}
+
+	#[pallet::call]
     impl<T: Config> Pallet<T> {
         /// Sets the session key(s) of the function caller to `keys`.
         /// Allows an account to set its session key prior to becoming a validator.

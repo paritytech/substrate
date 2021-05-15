@@ -46,13 +46,13 @@ pub mod onchain;
 
 #[frame_support::pallet]
 pub mod pallet {
-    use super::*;
-    use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::*;
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-    #[pallet::generate_store(pub(super) trait Store)]
-    pub struct Pallet<T>(_);
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
 
 	/// Config necessary for the historical module.
 	#[pallet::config]
@@ -72,27 +72,24 @@ pub mod pallet {
 
 	/// Mapping from historical session indices to session-data root hash and validator count.
 	#[pallet::storage]
-    #[pallet::getter(fn historical_root)]
-	pub type HistoricalSessions<T: Config> = StorageMap<_, 
-		Twox64Concat, SessionIndex, (T::Hash, ValidatorCount)>;
+	#[pallet::getter(fn historical_root)]
+	pub type HistoricalSessions<T: Config> =
+		StorageMap<_, Twox64Concat, SessionIndex, (T::Hash, ValidatorCount)>;
 
 	/// The range of historical sessions we store. [first, last)
 	#[pallet::storage]
 	pub type StoredRange<T: Config> = StorageValue<_, (SessionIndex, SessionIndex)>;
 
 	#[pallet::storage]
-	pub type CachedObsolete<T: Config> = StorageMap<_, 
-		Twox64Concat, SessionIndex, (T::ValidatorId, T::FullIdentification)>;
+	pub type CachedObsolete<T: Config> =
+		StorageMap<_, Twox64Concat, SessionIndex, (T::ValidatorId, T::FullIdentification)>;
 
 	#[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
-
 }
-
-
 
 impl<T: Config> Pallet<T> {
 	/// Prune historical stored session roots up to (but not including)
