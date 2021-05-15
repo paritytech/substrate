@@ -86,14 +86,14 @@ pub type RpcResult = Result<Response, Error>;
 // }
 
 /// A rpc call error field
-#[derive(Default, RuntimeDebug)]
+#[derive(RuntimeDebug)]
 pub struct RpcError {
 	/// error code
 	pub code: i32,
 	/// error message
 	pub message: Vec<u8>,
-	/// error data
-	pub data: Option<Value>,
+	// /// error data
+	// pub data: Option<&Value>,
 }
 
 // /// A rpc call response
@@ -114,16 +114,16 @@ pub struct RpcError {
 // }
 
 /// A rpc call response
-#[derive(RuntimeDebug)]
+#[derive(RuntimeDebug, PartialEq)]
 pub struct Response {
 	/// rpc response jsonrpc
 	pub jsonrpc: Vec<u8>,
-	// /// rpc response result
-	// pub result: Option<Value>,
+	/// rpc response result
+	// pub result: Option<&'a Value>,
 	// /// rpc response error struct
 	// pub error: Option<RpcError>,
-	// /// rpc response id
-	// pub id: u32,
+	/// rpc response id
+	pub id: u32,
 }
 
 /// A rpc call request
@@ -239,18 +239,26 @@ impl<'a> Request<'a> {
 		let response_deserialized: Value = serde_json::from_slice(response_body_bytes)
 			.map_err(|_| Error::Deserializing)?;
 
+		response_deserialized.as_object().ok_or(Error::Deserializing)?;
+
 		let jsonrpc_value = response_deserialized.get("jsonrpc").ok_or(Error::Deserializing)?;
 		let jsonrpc = jsonrpc_value.as_str().ok_or(Error::Deserializing)?;
+
+		let id_value = response_deserialized.get("id").ok_or(Error::Deserializing)?;
+		let id = id_value.as_u64().ok_or(Error::Deserializing)?;
+
+		let result_value = response_deserialized.get("result");
+		// let id = id_value.as_u64().ok_or(Error::Deserializing)?;
 		// let result = response_deserialized["result"].ok_or(Error::Deserializing)?
 
 		let rpc_response = Response {
-			jsonrpc: jsonrpc.as_bytes().to_vec()
-			// result:
+			jsonrpc: jsonrpc.as_bytes().to_vec(),
+			// result: result_value,
 			// /// rpc response error struct
 			// #[serde(default)]
 			// pub error: Option<RpcError>,
 			// /// rpc response id
-			// pub id: u32,
+			id: id as u32,
 		};
 
 		Ok(rpc_response)
@@ -309,8 +317,20 @@ mod test {
 			};
 
 			let response = request.send().unwrap();
-			let result = response.jsonrpc;
-			assert_eq!(result, b"2.0".to_vec());
+
+			let expected_response = Response {
+				jsonrpc: b"2.0".to_vec(),
+				/// rpc response result
+				// result: json!(str::from_utf8(EXPECTED_RESULT).unwrap()),
+				// /// rpc response error struct
+				// pub error: Option<RpcError>,
+				/// rpc response id
+				id: 1,
+			};
+			// let result = response.id;
+			assert_eq!(expected_response, response);
+			// assert_eq!(result, 1);
+
 			// let result = response.result.unwrap();
 			// let finalized_hash_str = str::from_utf8(&result[2..]).unwrap();
 			// let finalized_hash = hex::decode(finalized_hash_str).ok().unwrap();
