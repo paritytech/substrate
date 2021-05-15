@@ -182,6 +182,7 @@ mod multiplier_tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn min_change_per_day() {
 		run_with_system_weight(max(), || {
 			let mut fm = Multiplier::one();
