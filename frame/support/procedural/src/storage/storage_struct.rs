@@ -47,7 +47,8 @@ fn from_query_to_optional_value(is_option: bool) -> TokenStream {
 	}
 }
 
-pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
+	let scrate = &def.hidden_crate;
 	let mut impls = TokenStream::new();
 
 	for line in &def.storage_lines {
@@ -186,6 +187,43 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 						type Hasher1 = #scrate::#hasher1;
 
 						type Hasher2 = #scrate::#hasher2;
+
+						fn module_prefix() -> &'static [u8] {
+							<#instance_or_inherent as #scrate::traits::Instance>::PREFIX.as_bytes()
+						}
+
+						fn storage_prefix() -> &'static [u8] {
+							#storage_name_bstr
+						}
+
+						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
+							#from_optional_value_to_query
+						}
+
+						fn from_query_to_optional_value(v: Self::Query) -> Option<#value_type> {
+							#from_query_to_optional_value
+						}
+					}
+				)
+			},
+			StorageLineTypeDef::NMap(_) => {
+				quote!(
+					impl<#impl_trait> #scrate::storage::StoragePrefixedMap<#value_type>
+						for #storage_struct #optional_storage_where_clause
+					{
+						fn module_prefix() -> &'static [u8] {
+							<#instance_or_inherent as #scrate::traits::Instance>::PREFIX.as_bytes()
+						}
+
+						fn storage_prefix() -> &'static [u8] {
+							#storage_name_bstr
+						}
+					}
+
+					impl<#impl_trait> #scrate::#storage_generator_trait for #storage_struct
+					#optional_storage_where_clause
+					{
+						type Query = #query_type;
 
 						fn module_prefix() -> &'static [u8] {
 							<#instance_or_inherent as #scrate::traits::Instance>::PREFIX.as_bytes()

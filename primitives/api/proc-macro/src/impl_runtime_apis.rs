@@ -633,7 +633,10 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 /// runtime apis.
 fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut result = Vec::with_capacity(impls.len());
+	let mut sections = Vec::with_capacity(impls.len());
 	let mut processed_traits = HashSet::new();
+
+	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 
 	for impl_ in impls {
 		let mut path = extend_with_runtime_decl_path(
@@ -667,12 +670,21 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 			#( #attrs )*
 			(#id, #version)
 		));
-	}
 
-	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+		sections.push(quote!(
+			#( #attrs )*
+			const _: () = {
+				// All sections with the same name are going to be merged by concatenation.
+				#[link_section = "runtime_apis"]
+				static SECTION_CONTENTS: [u8; 12] = #c::serialize_runtime_api_info(#id, #version);
+			};
+		));
+	}
 
 	Ok(quote!(
 		const RUNTIME_API_VERSIONS: #c::ApisVec = #c::create_apis_vec!([ #( #result ),* ]);
+
+		#( #sections )*
 	))
 }
 
