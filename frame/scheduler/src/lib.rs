@@ -519,20 +519,20 @@ impl<T: Config> Pallet<T> {
 	/// Helper to migrate scheduler when the pallet origin type has changed.
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
 		Agenda::<T>::translate::<
- 			Vec<Option<Scheduled<<T as Config>::Call, T::BlockNumber, OldOrigin, T::AccountId>>>, _
- 		>(|_, agenda| Some(
- 			agenda
- 				.into_iter()
- 				.map(|schedule| schedule.map(|schedule| Scheduled {
- 					maybe_id: schedule.maybe_id,
- 					priority: schedule.priority,
- 					call: schedule.call,
- 					maybe_periodic: schedule.maybe_periodic,
- 					origin: schedule.origin.into(),
- 					_phantom: Default::default(),
- 				}))
- 				.collect::<Vec<_>>()
- 		));
+			Vec<Option<Scheduled<<T as Config>::Call, T::BlockNumber, OldOrigin, T::AccountId>>>, _
+		>(|_, agenda| Some(
+			agenda
+				.into_iter()
+				.map(|schedule| schedule.map(|schedule| Scheduled {
+					maybe_id: schedule.maybe_id,
+					priority: schedule.priority,
+					call: schedule.call,
+					maybe_periodic: schedule.maybe_periodic,
+					origin: schedule.origin.into(),
+					_phantom: Default::default(),
+				}))
+				.collect::<Vec<_>>()
+		));
 	}
 
 	fn resolve_time(when: DispatchTime<T::BlockNumber>) -> Result<T::BlockNumber, DispatchError> {
