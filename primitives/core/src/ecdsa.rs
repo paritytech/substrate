@@ -101,7 +101,6 @@ impl Public {
 	/// Create a new instance from the given full public key.
 	///
 	/// This will convert the full public key into the compressed format.
-	#[allow(clippy::result_unit_err)]
 	#[cfg(feature = "std")]
 	pub fn from_full(full: &[u8]) -> Result<Self, ()> {
 		secp256k1::PublicKey::parse_slice(full, None)
