@@ -60,26 +60,42 @@ fn stored_map_works() {
 }
 
 #[test]
+fn inc_account_nonce_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(2);
+		System::inc_account_nonce(&0);
+		//initial call sets nonce to the block number
+		assert_eq!(System::account_nonce(&0), 2);
+		//subsequent calls increment nonce
+		System::inc_account_nonce(&0);
+		assert_eq!(System::account_nonce(&0), 3);
+		System::inc_account_nonce(&0);
+		assert_eq!(System::account_nonce(&0), 4);
+	});
+}
+
+#[test]
 fn provider_ref_handover_to_self_sufficient_ref_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
+		System::set_block_number(2);
 		System::inc_account_nonce(&0);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		// a second reference coming and going doesn't change anything.
 		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Existed);
 		assert_eq!(System::dec_sufficients(&0), DecRefStatus::Exists);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		// a provider reference coming and going doesn't change anything.
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
 		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Exists);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		// decreasing the providers with a self-sufficient present should not delete the account
 		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Existed);
 		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Exists);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		// decreasing the sufficients should delete the account
 		assert_eq!(System::dec_sufficients(&0), DecRefStatus::Reaped);
@@ -91,23 +107,24 @@ fn provider_ref_handover_to_self_sufficient_ref_works() {
 fn self_sufficient_ref_handover_to_provider_ref_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Created);
+		System::set_block_number(2);
 		System::inc_account_nonce(&0);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		// a second reference coming and going doesn't change anything.
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
 		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Exists);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		// a sufficient reference coming and going doesn't change anything.
 		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Existed);
 		assert_eq!(System::dec_sufficients(&0), DecRefStatus::Exists);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		// decreasing the sufficients with a provider present should not delete the account
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
 		assert_eq!(System::dec_sufficients(&0), DecRefStatus::Exists);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		// decreasing the providers should delete the account
 		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Reaped);
@@ -119,6 +136,7 @@ fn self_sufficient_ref_handover_to_provider_ref_works() {
 fn sufficient_cannot_support_consumer() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Created);
+		System::set_block_number(1);
 		System::inc_account_nonce(&0);
 		assert_eq!(System::account_nonce(&0), 1);
 		assert_noop!(System::inc_consumers(&0), IncRefError::NoProviders);
@@ -135,12 +153,13 @@ fn provider_required_to_support_consumer() {
 		assert_noop!(System::inc_consumers(&0), IncRefError::NoProviders);
 
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
+		System::set_block_number(2);
 		System::inc_account_nonce(&0);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
 		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Exists);
-		assert_eq!(System::account_nonce(&0), 1);
+		assert_eq!(System::account_nonce(&0), 2);
 
 		assert_ok!(System::inc_consumers(&0));
 		assert_noop!(System::dec_providers(&0), DecRefError::ConsumerRemaining);
