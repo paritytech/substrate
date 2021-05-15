@@ -831,52 +831,52 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
-		unsafe {
-			let bounded_locks = BoundedVec::<_, T::MaxLocks>::force_from(locks.to_vec(), Some("Balances Update Locks"));
+		let bounded_locks = unsafe {
+			BoundedVec::<_, T::MaxLocks>::force_from(locks.to_vec(), Some("Balances Update Locks"))
+		};
 
-			if locks.len() as u32 > T::MaxLocks::get() {
-				log::warn!(
-					target: "runtime::balances",
-					"Warning: A user has more currency locks than expected. \
-					A runtime configuration adjustment may be needed."
-				);
+		if locks.len() as u32 > T::MaxLocks::get() {
+			log::warn!(
+				target: "runtime::balances",
+				"Warning: A user has more currency locks than expected. \
+				A runtime configuration adjustment may be needed."
+			);
+		}
+		// No way this can fail since we do not alter the existential balances.
+		let res = Self::mutate_account(who, |b| {
+			b.misc_frozen = Zero::zero();
+			b.fee_frozen = Zero::zero();
+			for l in locks.iter() {
+				if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
+					b.misc_frozen = b.misc_frozen.max(l.amount);
+				}
+				if l.reasons == Reasons::All || l.reasons == Reasons::Fee {
+					b.fee_frozen = b.fee_frozen.max(l.amount);
+				}
 			}
-			// No way this can fail since we do not alter the existential balances.
-			let res = Self::mutate_account(who, |b| {
-				b.misc_frozen = Zero::zero();
-				b.fee_frozen = Zero::zero();
-				for l in locks.iter() {
-					if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
-						b.misc_frozen = b.misc_frozen.max(l.amount);
-					}
-					if l.reasons == Reasons::All || l.reasons == Reasons::Fee {
-						b.fee_frozen = b.fee_frozen.max(l.amount);
-					}
-				}
-			});
-			debug_assert!(res.is_ok());
+		});
+		debug_assert!(res.is_ok());
 
-			let existed = Locks::<T, I>::contains_key(who);
-			if locks.is_empty() {
-				Locks::<T, I>::remove(who);
-				if existed {
-					// TODO: use Locks::<T, I>::hashed_key
-					// https://github.com/paritytech/substrate/issues/4969
-					system::Pallet::<T>::dec_consumers(who);
-				}
-			} else {
-				Locks::<T, I>::insert(who, bounded_locks);
-				if !existed {
-					if system::Pallet::<T>::inc_consumers(who).is_err() {
-						// No providers for the locks. This is impossible under normal circumstances
-						// since the funds that are under the lock will themselves be stored in the
-						// account and therefore will need a reference.
-						log::warn!(
-							target: "runtime::balances",
-							"Warning: Attempt to introduce lock consumer reference, yet no providers. \
-							This is unexpected but should be safe."
-						);
-					}
+		let existed = Locks::<T, I>::contains_key(who);
+		if locks.is_empty() {
+			Locks::<T, I>::remove(who);
+			if existed {
+				// TODO: use Locks::<T, I>::hashed_key
+				// https://github.com/paritytech/substrate/issues/4969
+				system::Pallet::<T>::dec_consumers(who);
+			}
+		} else {
+			Locks::<T, I>::insert(who, bounded_locks);
+			if !existed {
+				if system::Pallet::<T>::inc_consumers(who).is_err() {
+					// No providers for the locks. This is impossible under normal circumstances
+					// since the funds that are under the lock will themselves be stored in the
+					// account and therefore will need a reference.
+					log::warn!(
+						target: "runtime::balances",
+						"Warning: Attempt to introduce lock consumer reference, yet no providers. \
+						This is unexpected but should be safe."
+					);
 				}
 			}
 		}

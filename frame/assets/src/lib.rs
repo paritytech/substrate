@@ -909,8 +909,14 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let bounded_name: BoundedVec<u8, T::StringLimit> = name.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
-			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
+			let bounded_name: BoundedVec<u8, T::StringLimit> = name
+				.clone()
+				.try_into()
+				.map_err(|_| Error::<T, I>::BadMetadata)?;
+			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol
+				.clone()
+				.try_into()
+				.map_err(|_| Error::<T, I>::BadMetadata)?;
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(&origin == &d.owner, Error::<T, I>::NoPermission);
