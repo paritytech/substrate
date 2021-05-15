@@ -82,7 +82,6 @@ use sp_runtime::{
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
-use core::convert::TryInto;
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
@@ -1478,12 +1477,7 @@ impl<T: Config> Pallet<T> {
 				a.nonce += T::Index::one();
 			}
 			else {
-				if let Some(b) = TryInto::<u32>::try_into(Self::block_number()).ok() {
-					a.nonce = b.into();
-				} else {
-					let b = Self::block_number().saturated_into::<u32>();
-					a.nonce = b.into(); 
-				}
+				a.nonce = Self::block_number().saturated_into::<u32>().into();
 			}
 		});
 	}
