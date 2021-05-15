@@ -43,7 +43,10 @@ use sp_runtime::{
 use frame_support::{
 		RuntimeDebug, ensure,
 		dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
-		traits::{Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait, IsType, IsSubType, MaxEncodedLen},
+		traits::{
+			Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait,
+			IsType, IsSubType, MaxEncodedLen,
+		},
 		weights::GetDispatchInfo,
 };
 use frame_system::{self as system};
@@ -303,7 +306,9 @@ pub mod pallet {
 				proxy_type: proxy_type.clone(),
 				delay,
 			};
-			let bounded_proxies: BoundedVec<_, T::MaxProxies> = vec![proxy_def].try_into().map_err(|_| Error::<T>::TooMany)?;
+			let bounded_proxies: BoundedVec<_, T::MaxProxies> = vec![proxy_def]
+				.try_into()
+				.map_err(|_| Error::<T>::TooMany)?;
 
 			let deposit = T::ProxyDepositBase::get() + T::ProxyDepositFactor::get();
 			T::Currency::reserve(&who, deposit)?;
