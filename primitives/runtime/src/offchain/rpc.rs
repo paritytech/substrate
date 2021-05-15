@@ -153,6 +153,18 @@ impl<'a> Request<'a> {
 		self
 	}
 
+	/// Change the Jsonrpc for the Request
+	pub fn jsonrpc(mut self, jsonrpc: &'a str) -> Self {
+		self.jsonrpc = jsonrpc;
+		self
+	}
+
+	/// Change the ID for the Request
+	pub fn id(mut self, id: u32) -> Self {
+		self.id = id;
+		self
+	}
+
 	/// Send the request and return a RPC result.
 	///
 	/// Err is returned in case there is a Http
@@ -229,6 +241,10 @@ impl<'a> Request<'a> {
 		let result_value = response_deserialized.get("result");
 		let error_value = response_deserialized.get("error");
 
+		if error_value == None && result_value == None {
+			return Err(Error::Deserializing);
+		}
+
 		let error: Option<RpcError> = match error_value {
 			Some(value) => {
 				let code_value = value.get("code").ok_or(Error::Deserializing)?;
@@ -266,18 +282,18 @@ mod test {
 
 	const RPC_REQUEST_URL: &'static str = "http://localhost:9933";
 
-	// Helper function to assess expected response
+	/// Helper function to assess expected response
 	fn assess_response(
-		body: Value,
-		request: Request,
+		body: &Value,
+		request: &Request,
 		response: &[u8],
-		expected_result: RpcResult
+		expected_result: &RpcResult
 	) {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
 		t.register_extension(OffchainWorkerExt::new(offchain));
 
-		let request_body_slice: &[u8] = &(serde_json::to_vec(&body).unwrap())[..];
+		let request_body_slice: &[u8] = &(serde_json::to_vec(body).unwrap())[..];
 
 		{
 			let mut state = state.write();
@@ -297,8 +313,8 @@ mod test {
 		}
 
 		t.execute_with(|| {
-			let rpc_result = request.send();
-			assert_eq!(expected_result, rpc_result);
+			let rpc_result = (*request).send();
+			assert_eq!(*expected_result, rpc_result);
 		})
 	}
 
@@ -326,13 +342,14 @@ mod test {
 		let expected_result = Ok(expected_response);
 		let request = Request::new();
 
-		assess_response(body, request, RESPONSE, expected_result);
+		assess_response(&body, &request, &RESPONSE, &expected_result);
 	}
 
 	#[test]
 	fn should_return_rpc_error() {
 		const RPC_METHOD: &'static str = "chain_madeUpMethod";
-		const RESPONSE: &[u8] = br#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":1}"#;
+		const RESPONSE: &[u8] =
+			br#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":1}"#;
 		const EXPECTED_ERROR_CODE: i32 = -32601;
 		const EXPECTED_ERROR_MESSAGE: &[u8] = b"Method not found";
 
@@ -359,13 +376,24 @@ mod test {
 		let expected_result = Ok(expected_response);
 		let request = Request::new().method(RPC_METHOD);
 
-		assess_response(body, request, RESPONSE, expected_result);
+		assess_response(&body, &request, RESPONSE, &expected_result);
 	}
 
 	#[test]
 	fn should_return_deserializing_error() {
 		const RPC_METHOD: &'static str = "chain_getFinalizedHead";
-		const RESPONSE: &[u8] = b"unexpected response";
+		const RESPONSES: [&[u8]; 10] = [
+			b"unexpected response", // Not an object
+			br#"{"jsonrpc":2,"result":"0x3141..98123b","id":1}"#, // Invalid jsonrpc
+			br#"{"jsonrpc":"2.0","result":"0x3141..98123b","id":"1"}"#, // Invalid id
+			br#"{"result":"0x3141..98123b","id":"1"}"#, // jsonrpc not present
+			br#"{"jsonrpc":"2.0","result":"0x3141..98123b"}"#, // id not present
+			br#"{"jsonrpc":"2.0","id":1}"#, // Neither result nor error present
+			br#"{"jsonrpc":"2.0","error":{"code":"-32601","message":"Method not found"},"id":1}"#, // Invalid code
+			br#"{"jsonrpc":"2.0","error":{"code":-32601,"message":1},"id":1}"#, // Invalid message
+			br#"{"jsonrpc":"2.0","error":{"message":"message"},"id":1}"#, // code not present
+			br#"{"jsonrpc":"2.0","error":{"code":-32601},"id":1}"#, // message not present
+		];
 
 		let body = json!({
 			"jsonrpc": "2.0",
@@ -378,6 +406,8 @@ mod test {
 		let expected_result = Err(expected_response);
 		let request = Request::new();
 
-		assess_response(body, request, RESPONSE, expected_result);
+		for response in RESPONSES.iter() {
+			assess_response(&body, &request, response, &expected_result);
+		}
 	}
 }
