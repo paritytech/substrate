@@ -94,7 +94,7 @@ pub struct Response {
 }
 
 /// A rpc call request
-#[derive(RuntimeDebug)]
+#[derive(Clone, RuntimeDebug)]
 pub struct Request<'a> {
 	/// rpc request jsonrpc
 	pub jsonrpc: &'a str,
@@ -180,7 +180,7 @@ impl<'a> Request<'a> {
 
 		// Send http POST request
 		let post_request = http::Request::post(self.url, body);
-		// let timeout = sp_io::offchain::timestamp().add(Duration::from_millis(self.timeout));
+
 		let pending = match post_request
 			.add_header("Content-Type", "application/json;charset=utf-8")
 			.deadline(deadline)
@@ -262,29 +262,22 @@ impl<'a> Request<'a> {
 mod test {
 	use super::*;
 	use sp_io::TestExternalities;
-	use sp_core::{offchain::{OffchainWorkerExt, testing}, H256};
+	use sp_core::{offchain::{OffchainWorkerExt, testing}};
 
 	const RPC_REQUEST_URL: &'static str = "http://localhost:9933";
 
-	#[test]
-	fn should_return_rpc_result() {
+	// Helper function to assess expected response
+	fn assess_response(
+		body: Value,
+		request: Request,
+		response: &[u8],
+		expected_result: RpcResult
+	) {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
 		t.register_extension(OffchainWorkerExt::new(offchain));
 
-		const RPC_METHOD: &'static str = "chain_getFinalizedHead";
-		const RESPONSE: &[u8] =
-			br#"{"jsonrpc":"2.0","result":"0x3141e6406e195803b0f367c4c6aacc0673a5432f3ec010afae602ff09998123b","id":1}"#;
-		const EXPECTED_RESULT: &[u8] = b"0x3141e6406e195803b0f367c4c6aacc0673a5432f3ec010afae602ff09998123b";
-
-		let request_body = json!({
-			"jsonrpc": "2.0",
-			"id": 1,
-			"method": RPC_METHOD,
-			"params": Vec::<&str>::new()
-		});
-
-		let request_body_slice: &[u8] = &(serde_json::to_vec(&request_body).unwrap())[..];
+		let request_body_slice: &[u8] = &(serde_json::to_vec(&body).unwrap())[..];
 
 		{
 			let mut state = state.write();
@@ -297,129 +290,94 @@ mod test {
 					"Content-Type".to_string(),
 					"application/json;charset=utf-8".to_string()
 				)],
-				response: Some(RESPONSE.to_vec()),
+				response: Some(response.to_vec()),
 				sent: true,
 				..Default::default()
 			});
 		}
 
 		t.execute_with(|| {
-			let request = Request::new();
-			let response = request.send().unwrap();
-
-			let expected_response = Response {
-				jsonrpc: b"2.0".to_vec(),
-				result: Some(json!(str::from_utf8(EXPECTED_RESULT).unwrap())),
-				error: None,
-				id: 1,
-			};
-
-			assert_eq!(expected_response, response);
+			let rpc_result = request.send();
+			assert_eq!(expected_result, rpc_result);
 		})
 	}
 
 	#[test]
-	fn should_return_rpc_error() {
-		let (offchain, state) = testing::TestOffchainExt::new();
-		let mut t = TestExternalities::default();
-		t.register_extension(OffchainWorkerExt::new(offchain));
+	fn should_return_rpc_result() {
+		const RESPONSE: &[u8] =
+			br#"{"jsonrpc":"2.0","result":"0x3141..98123b","id":1}"#;
+		const EXPECTED_RESULT: &[u8] = b"0x3141..98123b";
+		const RPC_METHOD: &'static str = "chain_getFinalizedHead";
 
+		let body = json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": RPC_METHOD,
+			"params": Vec::<&str>::new()
+		});
+
+		let expected_response = Response {
+			jsonrpc: b"2.0".to_vec(),
+			result: Some(json!(str::from_utf8(EXPECTED_RESULT).unwrap())),
+			error: None,
+			id: 1,
+		};
+
+		let expected_result = Ok(expected_response);
+		let request = Request::new();
+
+		assess_response(body, request, RESPONSE, expected_result);
+	}
+
+	#[test]
+	fn should_return_rpc_error() {
 		const RPC_METHOD: &'static str = "chain_madeUpMethod";
 		const RESPONSE: &[u8] = br#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":1}"#;
 		const EXPECTED_ERROR_CODE: i32 = -32601;
 		const EXPECTED_ERROR_MESSAGE: &[u8] = b"Method not found";
 
-		let request_body = json!({
+		let body = json!({
 			"jsonrpc": "2.0",
 			"id": 1,
 			"method": RPC_METHOD,
 			"params": Vec::<&str>::new()
 		});
 
-		let request_body_slice: &[u8] = &(serde_json::to_vec(&request_body).unwrap())[..];
+		let expected_rpc_error = RpcError {
+			code: EXPECTED_ERROR_CODE,
+			message: EXPECTED_ERROR_MESSAGE.to_vec(),
+			data: None
+		};
 
-		{
-			let mut state = state.write();
+		let expected_response = Response {
+			jsonrpc: b"2.0".to_vec(),
+			result: None,
+			error: Some(expected_rpc_error),
+			id: 1,
+		};
 
-			state.expect_request(testing::PendingRequest {
-				method: "POST".into(),
-				uri: RPC_REQUEST_URL.into(),
-				body: request_body_slice.to_vec(),
-				headers: vec![(
-					"Content-Type".to_string(),
-					"application/json;charset=utf-8".to_string()
-				)],
-				response: Some(RESPONSE.to_vec()),
-				sent: true,
-				..Default::default()
-			});
-		}
+		let expected_result = Ok(expected_response);
+		let request = Request::new().method(RPC_METHOD);
 
-		t.execute_with(|| {
-			// let request = Request {
-			// 	method: RPC_METHOD,
-			// 	..Default::default()
-			// };
-			let request = Request::new().method(RPC_METHOD);
-			let response = request.send().unwrap();
-
-			let expected_rpc_error = RpcError {
-				code: EXPECTED_ERROR_CODE,
-				message: EXPECTED_ERROR_MESSAGE.to_vec(),
-				data: None
-			};
-
-			let expected_response = Response {
-				jsonrpc: b"2.0".to_vec(),
-				result: None,
-				error: Some(expected_rpc_error),
-				id: 1,
-			};
-
-			assert_eq!(expected_response, response);
-		})
+		assess_response(body, request, RESPONSE, expected_result);
 	}
 
 	#[test]
 	fn should_return_deserializing_error() {
-		let (offchain, state) = testing::TestOffchainExt::new();
-		let mut t = TestExternalities::default();
-		t.register_extension(OffchainWorkerExt::new(offchain));
-
 		const RPC_METHOD: &'static str = "chain_getFinalizedHead";
 		const RESPONSE: &[u8] = b"unexpected response";
 
-		let request_body = json!({
+		let body = json!({
 			"jsonrpc": "2.0",
 			"id": 1,
 			"method": RPC_METHOD,
 			"params": Vec::<&str>::new()
 		});
 
-		let request_body_slice: &[u8] = &(serde_json::to_vec(&request_body).unwrap())[..];
+		let expected_response = Error::Deserializing;
+		let expected_result = Err(expected_response);
+		let request = Request::new();
 
-		{
-			let mut state = state.write();
-
-			state.expect_request(testing::PendingRequest {
-				method: "POST".into(),
-				uri: RPC_REQUEST_URL.into(),
-				body: request_body_slice.to_vec(),
-				headers: vec![(
-					"Content-Type".to_string(),
-					"application/json;charset=utf-8".to_string()
-				)],
-				response: Some(RESPONSE.to_vec()),
-				sent: true,
-				..Default::default()
-			});
-		}
-
-		t.execute_with(|| {
-			let request = Request::new();
-			let response = request.send().unwrap_err();
-
-			assert_eq!(Error::Deserializing, response);
-		})
+		assess_response(body, request, RESPONSE, expected_result);
 	}
 }
