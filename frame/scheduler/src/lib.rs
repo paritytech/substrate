@@ -495,20 +495,20 @@ impl<T: Config> Pallet<T> {
 			StorageVersion::<T>::put(Releases::V2);
 
 			Agenda::<T>::translate::<
- 				Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _
- 			>(|_, agenda| Some(
- 				agenda
- 					.into_iter()
- 					.map(|schedule| schedule.map(|schedule| ScheduledV2 {
- 						maybe_id: schedule.maybe_id,
- 						priority: schedule.priority,
- 						call: schedule.call,
- 						maybe_periodic: schedule.maybe_periodic,
- 						origin: system::RawOrigin::Root.into(),
- 						_phantom: Default::default(),
- 					}))
- 					.collect::<Vec<_>>()
- 			));
+				Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _
+			>(|_, agenda| Some(
+				agenda
+					.into_iter()
+					.map(|schedule| schedule.map(|schedule| ScheduledV2 {
+						maybe_id: schedule.maybe_id,
+						priority: schedule.priority,
+						call: schedule.call,
+						maybe_periodic: schedule.maybe_periodic,
+						origin: system::RawOrigin::Root.into(),
+						_phantom: Default::default(),
+					}))
+					.collect::<Vec<_>>()
+			));
 
 			true
 		} else {
