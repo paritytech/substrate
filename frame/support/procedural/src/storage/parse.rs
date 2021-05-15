@@ -521,6 +521,9 @@ fn parse_storage_line_defs(
 					Some(syn::parse_quote!(1u32))
 				}
 			},
+			DeclStorageType::NMap(_) => {
+				unimplemented!("NMap not yet supported for max values")
+			}
 		};
 
 		let span = line.storage_type.span();

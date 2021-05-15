@@ -336,6 +336,9 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 							}
 						}
 					)
+				},
+				StorageLineTypeDef::NMap(_) => {
+					unimplemented!("NMap not yet implemented for storage info")
 				}
 			}
 		} else {
