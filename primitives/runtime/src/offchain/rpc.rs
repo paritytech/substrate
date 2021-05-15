@@ -19,38 +19,29 @@
 //!
 //! Example:
 // ! ```rust,no_run
-// ! use sp_runtime::offchain::rpc::{Request, Error};
-// ! use sp_runtime::offchain::http;
-// ! use sp_std::{vec::Vec, str};
+// ! use sp_runtime::offchain::rpc::Request;
 // !
-// ! let request = Request {
-// ! 	jsonrpc: "2.0",
-// ! 	id: 1,
-// ! 	method: "chain_getFinalizedHead",
-// ! 	params: Vec::new(),
-// ! 	timeout: 3_000,
-// ! 	url: "http://localhost:9933"
-// ! };
+// ! let request = Request::new();
+// ! let rpc_result = request.send();
 // !
-// ! let rpc_response = request.send();
-// !
-// ! match rpc_response {
+// ! match rpc_result {
 // ! 	Ok(response) => {
-// ! 		if !response.result.is_empty() {
-// ! 			log::info!("Rpc call result: {:?}", str::from_utf8(&response.result).unwrap());
+// ! 		if response.result.is_some() {
+// ! 			log::info!("Rpc call result: {:?}", response.result);
 // ! 		} else {
-// ! 			log::error!("Rpc call error: code: {:?}, message: {:?}",
-// ! 							response.error.code,
-// ! 							str::from_utf8(&response.error.message).unwrap()
-// ! 						);
+// ! 			let error = response.error.unwrap();
+// ! 			log::error!(
+// ! 				"Rpc call error: code: {:?}, message: {:?}, data: {:?}",
+// ! 				error.code,
+// ! 				error.message,
+// !                error.data
+// ! 			);
 // ! 		}
 // ! 	},
 // ! 	Err(e) => {
 // ! 		log::error!("Rpc call error: {:?}", e);
-// ! 		assert_eq!(Error::Http(http::Error::DeadlineReached), e);
 // ! 	}
 // ! }
-// ! ```
 
 use crate::{RuntimeDebug, offchain::Duration, offchain::Timestamp};
 use serde_json::{json, Value};
