@@ -176,6 +176,9 @@ pub mod pallet {
 	pub(crate) type Lookup<T: Config> =
 		StorageMap<_, Twox64Concat, Vec<u8>, TaskAddress<T::BlockNumber>>;
 
+	/// Storage version of the pallet.
+	///
+	/// New networks start with last version.
 	#[pallet::storage]
 	pub(crate) type StorageVersion<T> = StorageValue<_, Releases, ValueQuery>;
 
