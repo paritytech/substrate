@@ -323,7 +323,6 @@ pub trait Externalities: Send {
 	fn is_validator(&self) -> bool;
 
 	/// Returns information about the local node's network state.
-	#[allow(clippy::result_unit_err)]
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()>;
 
 	/// Returns current UNIX timestamp (in millis)
@@ -347,7 +346,6 @@ pub trait Externalities: Send {
 	/// - No new request identifier could be allocated.
 	/// - The method or URI contain invalid characters.
 	///
-	#[allow(clippy::result_unit_err)]
 	fn http_request_start(
 		&mut self,
 		method: &str,
@@ -368,7 +366,6 @@ pub trait Externalities: Send {
 	/// An error doesn't poison the request, and you can continue as if the call had never been
 	/// made.
 	///
-	#[allow(clippy::result_unit_err)]
 	fn http_request_add_header(
 		&mut self,
 		request_id: HttpRequestId,
@@ -753,7 +750,6 @@ pub trait TransactionPool {
 	/// Submit transaction.
 	///
 	/// The transaction will end up in the pool and be propagated to others.
-	#[allow(clippy::result_unit_err)]
 	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
 }
 
