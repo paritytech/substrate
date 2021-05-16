@@ -490,8 +490,10 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	#[pallet::metadata(
 		T::AccountId = "AccountId",
+		Vec<T::AccountId> = "Vec<AccountId>",
 		BalanceOf<T> = "Balance",
-		T::BlockNumber = "BlockNumber"
+		T::BlockNumber = "BlockNumber",
+		T::Hash = "Hash",
 	)]
 	pub enum Event<T: Config> {
 		/// A motion has been proposed by a public account. \[proposal_index, deposit\]
