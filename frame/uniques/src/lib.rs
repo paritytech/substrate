@@ -192,21 +192,23 @@ pub mod pallet {
 		OwnerChanged(T::ClassId, T::AccountId),
 		/// The management team changed \[ class, issuer, admin, freezer \]
 		TeamChanged(T::ClassId, T::AccountId, T::AccountId, T::AccountId),
+		/// An `instance` of an asset `class` has been approved by the `owner` for transfer by a
+		/// `delegate`.
+		/// \[ clsss, instance, owner, delegate \]
+		ApprovedTransfer(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
+		/// An approval for a `delegate` account to transfer the `instance` of an asset `class` was
+		/// cancelled by its `owner`.
+		/// \[ clsss, instance, owner, delegate \]
+		ApprovalCancelled(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
+		/// The `instance` of the asset `class` was transferred from `owner` to `destination` by
+		/// the approved `delegate`.
+		/// \[ class, instance, owner, delegate, destination \]
+		TransferredApproved(T::ClassId, T::InstanceId, T::AccountId, T::AccountId, T::AccountId),
 		/*
 		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals, is_frozen\]
 		MetadataSet(T::ClassId, Vec<u8>, Vec<u8>, u8, bool),
 		/// Metadata has been cleared for an asset. \[asset_id\]
 		MetadataCleared(T::ClassId),
-		/// (Additional) funds have been approved for transfer to a destination account.
-		/// \[asset_id, source, delegate, amount\]
-		ApprovedTransfer(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
-		/// An approval for account `delegate` was cancelled by `owner`.
-		/// \[id, owner, delegate\]
-		ApprovalCancelled(T::ClassId, T::AccountId, T::AccountId),
-		/// An `amount` was transferred in its entirety from `owner` to `destination` by
-		/// the approved `delegate`.
-		/// \[id, owner, delegate, destination\]
-		TransferredApproved(T::ClassId, T::InstanceId, T::AccountId, T::AccountId, T::AccountId),
 		/// An asset has had its attributes changed by the `Force` origin.
 		/// \[id\]
 		AssetStatusChanged(T::ClassId),
@@ -229,6 +231,10 @@ pub mod pallet {
 		InUse,
 		/// The asset instance or class is frozen.
 		Frozen,
+		/// The delegate turned out to be different to what was expected.
+		WrongDelegate,
+		/// There is no delegate approved.
+		NoDelegate,
 /*		/// Invalid metadata given.
 		BadMetadata,
 		/// No approval exists that would allow the transfer.
@@ -742,6 +748,164 @@ pub mod pallet {
 				Ok(())
 			})
 		}
+
+		/// Approve an instance to be transferred by a delegated third-party account.
+		///
+		/// Origin must be Signed and must be the owner of the asset `instance`.
+		///
+		/// - `class`: The class of the asset to be approved for transfer.
+		/// - `instance`: The instance of the asset to be approved for transfer.
+		/// - `delegate`: The account to delegate permission to transfer asset.
+		///
+		/// Emits `ApprovedTransfer` on success.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::approve_transfer())]
+		pub(super) fn approve_transfer(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			#[pallet::compact] instance: T::InstanceId,
+			delegate: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let delegate = T::Lookup::lookup(delegate)?;
+
+			let mut details = Asset::<T, I>::get(&class, &instance)
+				.ok_or(Error::<T, I>::Unknown)?;
+			ensure!(details.owner == origin, Error::<T, I>::NoPermission);
+
+			details.approved = Some(delegate);
+			Asset::<T, I>::insert(&class, &instance, &details);
+
+			let delegate = details.approved.expect("set as Some above; qed");
+			Self::deposit_event(Event::ApprovedTransfer(class, instance, origin, delegate));
+
+			Ok(())
+		}
+
+		/// Cancel the prior approval for the transfer of an asset by a delegate.
+		///
+		/// Origin must be Signed and there must be an approval in place between signer and
+		/// `delegate`.
+		///
+		/// - `class`: The class of the asset of whose approval will be cancelled.
+		/// - `instance`: The instance of the asset of whose approval will be cancelled.
+		/// - `maybe_check_delegate`: If `Some` will ensure that the given account is the one to
+		///   which permission of transfer is delegated.
+		///
+		/// Emits `ApprovalCancelled` on success.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::cancel_approval())]
+		pub(super) fn cancel_approval(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			#[pallet::compact] instance: T::InstanceId,
+			maybe_check_delegate: Option<<T::Lookup as StaticLookup>::Source>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let maybe_check_delegate = maybe_check_delegate.map(T::Lookup::lookup).transpose()?;
+
+			let mut details = Asset::<T, I>::get(&class, &instance)
+				.ok_or(Error::<T, I>::Unknown)?;
+			ensure!(details.owner == origin, Error::<T, I>::NoPermission);
+			let old = details.approved.take().ok_or(Error::<T, I>::NoDelegate)?;
+			if let Some(check_delegate) = maybe_check_delegate {
+				ensure!(check_delegate == old, Error::<T, I>::WrongDelegate);
+			}
+
+			Asset::<T, I>::insert(&class, &instance, &details);
+			Self::deposit_event(Event::ApprovalCancelled(class, instance, origin, old));
+
+			Ok(())
+		}
+
+		/// Cancel the prior approval for the transfer of an asset by a delegate.
+		///
+		/// Origin must be either ForceOrigin or Signed origin with the signer being the Admin
+		/// account of the asset `class`.
+		///
+		/// - `class`: The class of the asset of whose approval will be cancelled.
+		/// - `instance`: The instance of the asset of whose approval will be cancelled.
+		/// - `maybe_check_delegate`: If `Some` will ensure that the given account is the one to
+		///   which permission of transfer is delegated.
+		///
+		/// Emits `ApprovalCancelled` on success.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::force_cancel_approval())]
+		pub(super) fn force_cancel_approval(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			#[pallet::compact] instance: T::InstanceId,
+			maybe_check_delegate: Option<<T::Lookup as StaticLookup>::Source>,
+		) -> DispatchResult {
+			T::ForceOrigin::try_origin(origin)
+				.map(|_| ())
+				.or_else(|origin| -> DispatchResult {
+					let origin = ensure_signed(origin)?;
+					let d = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+					ensure!(&origin == &d.admin, Error::<T, I>::NoPermission);
+					Ok(())
+				})?;
+
+			let maybe_check_delegate = maybe_check_delegate.map(T::Lookup::lookup).transpose()?;
+
+			let mut details = Asset::<T, I>::get(&class, &instance)
+				.ok_or(Error::<T, I>::Unknown)?;
+			let old = details.approved.take().ok_or(Error::<T, I>::NoDelegate)?;
+			if let Some(check_delegate) = maybe_check_delegate {
+				ensure!(check_delegate == old, Error::<T, I>::WrongDelegate);
+			}
+
+			Asset::<T, I>::insert(&class, &instance, &details);
+			Self::deposit_event(Event::ApprovalCancelled(class, instance, details.owner, old));
+
+			Ok(())
+		}
+
+		/// Transfer some asset instance from a target account to a destination account by an
+		/// approved delegate.
+		///
+		/// Origin must be Signed and there must be an approval in place by the `owner` to the
+		/// signer.
+		///
+		/// - `class`: The class of the asset to transfer.
+		/// - `instance`: The instance of the asset to transfer.
+		/// - `dest`: The account to which ownership of the asset instance will be transferred.
+		///
+		/// Emits `TransferredApproved` on success.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::transfer_approved())]
+		pub(super) fn transfer_approved(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			#[pallet::compact] instance: T::InstanceId,
+			dest: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+
+			let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(!details.is_frozen, Error::<T, I>::Frozen);
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
+
+			let source = details.owner;
+			details.owner = dest;
+
+			let class_instance = (class, instance);
+			Account::<T, I>::remove(&source, &(class_instance));
+			Account::<T, I>::insert(&details.owner, &(class_instance), ());
+			let (class, instance) = class_instance;
+
+			Asset::<T, I>::insert(&class, &instance, &details);
+
+			Self::deposit_event(Event::TransferredApproved(class, instance, source, origin, details.owner));
+
+			Ok(())
+		}
 /*
 		/// Set the metadata for an asset.
 		///
@@ -956,178 +1120,5 @@ pub mod pallet {
 				Ok(())
 			})
 		}*/
-/*
-		/// Approve an amount of asset for transfer by a delegated third-party account.
-		///
-		/// Origin must be Signed.
-		///
-		/// Ensures that `ApprovalDeposit` worth of `Currency` is reserved from signing account
-		/// for the purpose of holding the approval. If some non-zero amount of assets is already
-		/// approved from signing account to `delegate`, then it is topped up or unreserved to
-		/// meet the right value.
-		///
-		/// NOTE: The signing account does not need to own `amount` of assets at the point of
-		/// making this call.
-		///
-		/// - `class`: The identifier of the asset.
-		/// - `delegate`: The account to delegate permission to transfer asset.
-		/// - `amount`: The amount of asset that may be transferred by `delegate`. If there is
-		/// already an approval in place, then this acts additively.
-		///
-		/// Emits `ApprovedTransfer` on success.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::approve_transfer())]
-		pub(super) fn approve_transfer(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			delegate: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] amount: T::InstanceId,
-		) -> DispatchResult {
-			let owner = ensure_signed(origin)?;
-			let delegate = T::Lookup::lookup(delegate)?;
-
-			let key = ApprovalKey { owner, delegate };
-			Approvals::<T, I>::try_mutate(id, &key, |maybe_approved| -> DispatchResult {
-				let mut approved = maybe_approved.take().unwrap_or_default();
-				let deposit_required = T::ApprovalDeposit::get();
-				if approved.deposit < deposit_required {
-					T::Currency::reserve(&key.owner, deposit_required - approved.deposit)?;
-					approved.deposit = deposit_required;
-				}
-				approved.amount = approved.amount.saturating_add(amount);
-				*maybe_approved = Some(approved);
-				Ok(())
-			})?;
-			Self::deposit_event(Event::ApprovedTransfer(id, key.owner, key.delegate, amount));
-
-			Ok(())
-		}
-
-		/// Cancel all of some asset approved for delegated transfer by a third-party account.
-		///
-		/// Origin must be Signed and there must be an approval in place between signer and
-		/// `delegate`.
-		///
-		/// Unreserves any deposit previously reserved by `approve_transfer` for the approval.
-		///
-		/// - `class`: The identifier of the asset.
-		/// - `delegate`: The account delegated permission to transfer asset.
-		///
-		/// Emits `ApprovalCancelled` on success.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::cancel_approval())]
-		pub(super) fn cancel_approval(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			delegate: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
-			let owner = ensure_signed(origin)?;
-			let delegate = T::Lookup::lookup(delegate)?;
-			let key = ApprovalKey { owner, delegate };
-			let approval = Approvals::<T, I>::take(id, &key).ok_or(Error::<T, I>::Unknown)?;
-			T::Currency::unreserve(&key.owner, approval.deposit);
-
-			Self::deposit_event(Event::ApprovalCancelled(id, key.owner, key.delegate));
-			Ok(())
-		}
-
-		/// Cancel all of some asset approved for delegated transfer by a third-party account.
-		///
-		/// Origin must be either ForceOrigin or Signed origin with the signer being the Admin
-		/// account of the asset `id`.
-		///
-		/// Unreserves any deposit previously reserved by `approve_transfer` for the approval.
-		///
-		/// - `class`: The identifier of the asset.
-		/// - `delegate`: The account delegated permission to transfer asset.
-		///
-		/// Emits `ApprovalCancelled` on success.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::force_cancel_approval())]
-		pub(super) fn force_cancel_approval(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			delegate: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
-			T::ForceOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(|origin| -> DispatchResult {
-					let origin = ensure_signed(origin)?;
-					let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-					ensure!(&origin == &d.admin, Error::<T, I>::NoPermission);
-					Ok(())
-				})?;
-
-			let owner = T::Lookup::lookup(owner)?;
-			let delegate = T::Lookup::lookup(delegate)?;
-
-			let key = ApprovalKey { owner, delegate };
-			let approval = Approvals::<T, I>::take(id, &key).ok_or(Error::<T, I>::Unknown)?;
-			T::Currency::unreserve(&key.owner, approval.deposit);
-
-			Self::deposit_event(Event::ApprovalCancelled(id, key.owner, key.delegate));
-			Ok(())
-		}
-
-		/// Transfer some asset balance from a previously delegated account to some third-party
-		/// account.
-		///
-		/// Origin must be Signed and there must be an approval in place by the `owner` to the
-		/// signer.
-		///
-		/// If the entire amount approved for transfer is transferred, then any deposit previously
-		/// reserved by `approve_transfer` is unreserved.
-		///
-		/// - `class`: The identifier of the asset.
-		/// - `owner`: The account which previously approved for a transfer of at least `amount` and
-		/// from which the asset balance will be withdrawn.
-		/// - `destination`: The account to which the asset balance of `amount` will be transferred.
-		/// - `amount`: The amount of assets to transfer.
-		///
-		/// Emits `TransferredApproved` on success.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::transfer_approved())]
-		pub(super) fn transfer_approved(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			destination: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] amount: T::InstanceId,
-		) -> DispatchResult {
-			let delegate = ensure_signed(origin)?;
-			let owner = T::Lookup::lookup(owner)?;
-			let destination = T::Lookup::lookup(destination)?;
-
-			let key = ApprovalKey { owner, delegate };
-			Approvals::<T, I>::try_mutate_exists(id, &key, |maybe_approved| -> DispatchResult {
-				let mut approved = maybe_approved.take().ok_or(Error::<T, I>::Unapproved)?;
-				let remaining = approved
-					.amount
-					.checked_sub(&amount)
-					.ok_or(Error::<T, I>::Unapproved)?;
-
-				let f = TransferFlags {
-					keep_alive: false,
-					best_effort: false,
-					burn_dust: false
-				};
-				Self::do_transfer(id, &key.owner, &destination, amount, None, f)?;
-
-				if remaining.is_zero() {
-					T::Currency::unreserve(&key.owner, approved.deposit);
-				} else {
-					approved.amount = remaining;
-					*maybe_approved = Some(approved);
-				}
-				Ok(())
-			})?;
-			Ok(())
-		}
- */
 	}
 }

@@ -57,15 +57,15 @@ pub trait WeightInfo {
 	fn thaw_class() -> Weight;
 	fn transfer_ownership() -> Weight;
 	fn set_team() -> Weight;
+	fn approve_transfer() -> Weight;
+	fn transfer_approved() -> Weight;
+	fn cancel_approval() -> Weight;
+	fn force_cancel_approval() -> Weight;
 /*	fn set_metadata(n: u32, s: u32, ) -> Weight;
 	fn clear_metadata() -> Weight;
 	fn force_set_metadata(n: u32, s: u32, ) -> Weight;
 	fn force_clear_metadata() -> Weight;
-	fn force_asset_status() -> Weight;
-	fn approve_transfer() -> Weight;
-	fn transfer_approved() -> Weight;
-	fn cancel_approval() -> Weight;
-	fn force_cancel_approval() -> Weight;*/
+	fn force_asset_status() -> Weight;*/
 }
 
 /// Weights for pallet_assets using the Substrate node and recommended hardware.
@@ -144,6 +144,26 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+	fn approve_transfer() -> Weight {
+		(47_906_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn transfer_approved() -> Weight {
+		(90_338_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	}
+	fn cancel_approval() -> Weight {
+		(48_591_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn force_cancel_approval() -> Weight {
+		(54_879_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
 /*	fn set_metadata(_n: u32, s: u32, ) -> Weight {
 		(53_367_000 as Weight)
 			// Standard Error: 0
@@ -171,26 +191,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn force_asset_status() -> Weight {
 		(23_366_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn approve_transfer() -> Weight {
-		(47_906_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn transfer_approved() -> Weight {
-		(90_338_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(5 as Weight))
-	}
-	fn cancel_approval() -> Weight {
-		(48_591_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn force_cancel_approval() -> Weight {
-		(54_879_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}*/
 }
@@ -270,6 +270,26 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
+	fn approve_transfer() -> Weight {
+		(47_906_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn transfer_approved() -> Weight {
+		(90_338_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	}
+	fn cancel_approval() -> Weight {
+		(48_591_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn force_cancel_approval() -> Weight {
+		(54_879_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
 /*	fn set_metadata(_n: u32, s: u32, ) -> Weight {
 		(53_367_000 as Weight)
 			// Standard Error: 0
@@ -297,26 +317,6 @@ impl WeightInfo for () {
 	fn force_asset_status() -> Weight {
 		(23_366_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn approve_transfer() -> Weight {
-		(47_906_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn transfer_approved() -> Weight {
-		(90_338_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
-	}
-	fn cancel_approval() -> Weight {
-		(48_591_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn force_cancel_approval() -> Weight {
-		(54_879_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}*/
 }
