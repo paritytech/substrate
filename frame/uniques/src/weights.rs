@@ -55,9 +55,9 @@ pub trait WeightInfo {
 	fn thaw() -> Weight;
 	fn freeze_class() -> Weight;
 	fn thaw_class() -> Weight;
-/*	fn transfer_ownership() -> Weight;
+	fn transfer_ownership() -> Weight;
 	fn set_team() -> Weight;
-	fn set_metadata(n: u32, s: u32, ) -> Weight;
+/*	fn set_metadata(n: u32, s: u32, ) -> Weight;
 	fn clear_metadata() -> Weight;
 	fn force_set_metadata(n: u32, s: u32, ) -> Weight;
 	fn force_clear_metadata() -> Weight;
@@ -134,7 +134,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-/*	fn transfer_ownership() -> Weight {
+	fn transfer_ownership() -> Weight {
 		(28_566_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -144,7 +144,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn set_metadata(_n: u32, s: u32, ) -> Weight {
+/*	fn set_metadata(_n: u32, s: u32, ) -> Weight {
 		(53_367_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((8_000 as Weight).saturating_mul(s as Weight))
@@ -260,7 +260,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-/*	fn transfer_ownership() -> Weight {
+	fn transfer_ownership() -> Weight {
 		(28_566_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -270,7 +270,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn set_metadata(_n: u32, s: u32, ) -> Weight {
+/*	fn set_metadata(_n: u32, s: u32, ) -> Weight {
 		(53_367_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((8_000 as Weight).saturating_mul(s as Weight))

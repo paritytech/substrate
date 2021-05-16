@@ -46,7 +46,7 @@ pub use types::*;
 use sp_std::prelude::*;
 use sp_runtime::{RuntimeDebug, ArithmeticError, traits::{Zero, StaticLookup, Saturating}};
 use codec::{Encode, Decode, HasCompact};
-use frame_support::traits::{Currency, ReservableCurrency};
+use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved};
 use frame_system::Config as SystemConfig;
 
 pub use weights::WeightInfo;
@@ -188,11 +188,11 @@ pub mod pallet {
 		ClassFrozen(T::ClassId),
 		/// Some asset `class` was thawed. \[ class \]
 		ClassThawed(T::ClassId),
-		/*
-		/// The management team changed \[asset_id, issuer, admin, freezer\]
-		TeamChanged(T::ClassId, T::AccountId, T::AccountId, T::AccountId),
-		/// The owner changed \[asset_id, owner\]
+		/// The owner changed \[ class, owner \]
 		OwnerChanged(T::ClassId, T::AccountId),
+		/// The management team changed \[ class, issuer, admin, freezer \]
+		TeamChanged(T::ClassId, T::AccountId, T::AccountId, T::AccountId),
+		/*
 		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals, is_frozen\]
 		MetadataSet(T::ClassId, Vec<u8>, Vec<u8>, u8, bool),
 		/// Metadata has been cleared for an asset. \[asset_id\]
@@ -665,10 +665,10 @@ pub mod pallet {
 				Ok(())
 			})
 		}
-/*
-		/// Change the Owner of an asset.
+
+		/// Change the Owner of an asset class.
 		///
-		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+		/// Origin must be Signed and the sender should be the Owner of the asset `class`.
 		///
 		/// - `class`: The identifier of the asset.
 		/// - `owner`: The new Owner of this asset.
@@ -685,14 +685,14 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			Asset::<T, I>::try_mutate(id, |maybe_details| {
+			Class::<T, I>::try_mutate(class, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
 					return Ok(());
 				}
 
-				let metadata_deposit = Metadata::<T, I>::get(id).deposit;
+				let metadata_deposit = ClassMetadataOf::<T, I>::get(class).deposit;
 				let deposit = details.deposit + metadata_deposit;
 
 				// Move the deposit to the new owner.
@@ -700,14 +700,14 @@ pub mod pallet {
 
 				details.owner = owner.clone();
 
-				Self::deposit_event(Event::OwnerChanged(id, owner));
+				Self::deposit_event(Event::OwnerChanged(class, owner));
 				Ok(())
 			})
 		}
 
-		/// Change the Issuer, Admin and Freezer of an asset.
+		/// Change the Issuer, Admin and Freezer of an asset class.
 		///
-		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+		/// Origin must be Signed and the sender should be the Owner of the asset `class`.
 		///
 		/// - `class`: The identifier of the asset to be frozen.
 		/// - `issuer`: The new Issuer of this asset.
@@ -730,7 +730,7 @@ pub mod pallet {
 			let admin = T::Lookup::lookup(admin)?;
 			let freezer = T::Lookup::lookup(freezer)?;
 
-			Asset::<T, I>::try_mutate(id, |maybe_details| {
+			Class::<T, I>::try_mutate(class, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
 
@@ -738,11 +738,11 @@ pub mod pallet {
 				details.admin = admin.clone();
 				details.freezer = freezer.clone();
 
-				Self::deposit_event(Event::TeamChanged(id, issuer, admin, freezer));
+				Self::deposit_event(Event::TeamChanged(class, issuer, admin, freezer));
 				Ok(())
 			})
 		}
-
+/*
 		/// Set the metadata for an asset.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
