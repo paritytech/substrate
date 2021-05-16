@@ -74,8 +74,8 @@ pub use self::hash::{
 	StorageHasher, ReversibleStorageHasher
 };
 pub use self::storage::{
-	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
-	IterableStorageDoubleMap, migration,
+	StorageValue, StorageMap, StorageDoubleMap, StorageNMap, StoragePrefixedMap,
+	IterableStorageMap, IterableStorageDoubleMap, IterableStorageNMap, migration,
 	bounded_vec::{self, BoundedVec},
 };
 pub use self::dispatch::{Parameter, Callable};
@@ -1237,7 +1237,10 @@ pub mod pallet_prelude {
 		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
-		storage::types::{StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery},
+		storage::types::{
+			Key as NMapKey, StorageDoubleMap, StorageMap, StorageNMap, StorageValue, ValueQuery,
+			OptionQuery,
+		},
 		storage::bounded_vec::BoundedVec,
 	};
 	pub use codec::{Encode, Decode};
