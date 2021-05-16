@@ -168,7 +168,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The given member was removed. See the transaction for who.
 		MemberRemoved,
@@ -182,8 +181,6 @@ pub mod pallet {
 		/// A score was attributed to the candidate.
 		/// See the transaction for who.
 		CandidateScored,
-		/// Phantom member, never used.
-		Dummy(sp_std::marker::PhantomData<(T::AccountId, I)>),
 	}
 
 	/// Error for the scored-pool pallet.
