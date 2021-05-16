@@ -15,12 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The unsigned phase implementation.
+//! The unsigned phase, and its miner.
 
 use crate::{
-	helpers, Call, CompactAccuracyOf, CompactOf, Config,
-	ElectionCompute, Error, FeasibilityError, Pallet, RawSolution, ReadySolution, RoundSnapshot,
-	SolutionOrSnapshotSize, Weight, WeightInfo,
+	helpers, Call, CompactAccuracyOf, CompactOf, Config, ElectionCompute, Error, FeasibilityError,
+	Pallet, RawSolution, ReadySolution, RoundSnapshot, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Encode, Decode};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
@@ -33,8 +32,10 @@ use sp_npos_elections::{
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput, SaturatedConversion};
 use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec};
 
-/// Storage key used to store the persistent offchain worker status.
-pub(crate) const OFFCHAIN_LOCK: &[u8] = b"parity/multi-phase-unsigned-election";
+/// Storage key used to store the last block number at which offchain worker ran.
+pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
+/// Storage key used to store the offchain worker running status.
+pub(crate) const OFFCHAIN_RUNNING: &[u8] = b"parity/multi-phase-unsigned-election/running";
 
 /// Storage key used to cache the solution `call`.
 pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-election/call";
@@ -101,10 +102,10 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
 		Ok(Ok(_)) => Ok(()),
 		Ok(Err(_)) => Err(MinerError::FailedToStoreSolution),
 		Err(_) => {
-			// this branch should be unreachable according to the definition of `StorageValueRef::mutate`:
-			// that function should only ever `Err` if the closure we pass it return an error.
-			// however, for safety in case the definition changes, we do not optimize the branch away
-			// or panic.
+			// this branch should be unreachable according to the definition of
+			// `StorageValueRef::mutate`: that function should only ever `Err` if the closure we
+			// pass it return an error. however, for safety in case the definition changes, we do
+			// not optimize the branch away or panic.
 			Err(MinerError::FailedToStoreSolution)
 		},
 	}
@@ -153,11 +154,21 @@ impl<T: Config> Pallet<T> {
 					Err(MinerError::SolutionCallInvalid)
 				}
 			})
-			.or_else::<MinerError, _>(|_| {
-				// if not present or cache invalidated, regenerate
-				let (call, _) = Self::mine_checked_call()?;
-				save_solution(&call)?;
-				Ok(call)
+			.or_else::<MinerError, _>(|error| {
+				match error {
+					MinerError::Feasibility(_) | MinerError::NoStoredSolution => {
+						// if not present or cache invalidated due to feasibility, regenerate.
+						// note that failing `Feasibility` can only mean that the solution was
+						// computed over a snapshot that has changed due to a fork.
+						let (call, _) = Self::mine_checked_call()?;
+						save_solution(&call)?;
+						Ok(call)
+					}
+					_ => {
+						// nothing to do. Return the error as-is.
+						Err(error)
+					}
+				}
 			})?;
 
 		// the runtime will catch it and reject the transaction if the phase is wrong, but it's
@@ -218,16 +229,21 @@ impl<T: Config> Pallet<T> {
 	// perform basic checks of a solution's validity
 	//
 	// Performance: note that it internally clones the provided solution.
-	fn basic_checks(raw_solution: &RawSolution<CompactOf<T>>, solution_type: &str) -> Result<(), MinerError> {
+	fn basic_checks(
+		raw_solution: &RawSolution<CompactOf<T>>,
+		solution_type: &str,
+	) -> Result<(), MinerError> {
 		Self::unsigned_pre_dispatch_checks(raw_solution).map_err(|err| {
-			log!(warn, "pre-dispatch checks fialed for {} solution: {:?}", solution_type, err);
+			log!(warn, "pre-dispatch checks failed for {} solution: {:?}", solution_type, err);
 			MinerError::PreDispatchChecksFailed
 		})?;
 
-		Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(|err| {
+		Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(
+			|err| {
 			log!(warn, "feasibility check failed for {} solution: {:?}", solution_type, err);
 			err
-		})?;
+		},
+		)?;
 
 		Ok(())
 	}
@@ -561,18 +577,19 @@ impl<T: Config> Pallet<T> {
 	/// Checks if an execution of the offchain worker is permitted at the given block number, or
 	/// not.
 	///
-	/// This essentially makes sure that we don't run on previous blocks in case of a re-org, and we
-	/// don't run twice within a window of length `threshold`.
+	/// This makes sure that
+	/// 1. we don't run on previous blocks in case of a re-org
+	/// 2. we don't run twice within a window of length `T::OffchainRepeat`.
 	///
-	/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
-	pub(crate) fn try_acquire_offchain_lock(
-		now: T::BlockNumber,
-	) -> Result<(), MinerError> {
+	/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If `Ok()`
+	/// is returned, `now` is written in storage and will be used in further calls as the baseline.
+	pub(crate) fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError> {
 		let threshold = T::OffchainRepeat::get();
-		let storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+		let last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
-		let mutate_stat =
-			storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
+		// first, make sure that we are okay with the last block threshold.
+		let mutate_stat = last_block.mutate::<_, &'static str, _>(
+			|maybe_head: Option<Option<T::BlockNumber>>| {
 				match maybe_head {
 					Some(Some(head)) if now < head => Err("fork."),
 					Some(Some(head)) if now >= head && now <= head + threshold => {
@@ -587,16 +604,81 @@ impl<T: Config> Pallet<T> {
 						Ok(now)
 					}
 				}
+			},
+		);
+
+		match mutate_stat {
+			// all good
+			Ok(Ok(_)) => Ok(()),
+			// failed to write.
+			Ok(Err(_)) => Err(MinerError::Lock("failed to write to offchain db [repeat].")),
+			// fork etc.
+			Err(why) => Err(MinerError::Lock(why)),
+		}
+	}
+
+	/// Ensure a new offchain worker is not being executed at this point in time, by checking
+	/// `OFFCHAIN_RUNNING` storage.
+	///
+	/// If `OK(_)` is returned, `true` is written to `OFFCHAIN_RUNNING`, which in turn prevents any
+	/// further call to this function to succeed.
+	///
+	/// It is up to the call site, and ABSOLUTELY CRUCIAL to make sure `release_offchain_lock` is
+	/// called appropriately to ensure starvation does not occur.
+	pub(crate) fn ensure_offchain_not_running() -> Result<(), MinerError> {
+		let guard = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
+
+		let mutate_stat =
+			guard.mutate::<_, &'static str, _>(|maybe_running: Option<Option<bool>>| {
+				match maybe_running {
+					Some(Some(running)) if !running => {
+						// no one else is running. Set it, and return Ok.
+						Ok(true)
+					}
+					Some(Some(running)) if running => {
+						// another thread is currently running.
+						Err("still running.")
+					}
+					_ => {
+						// value does not exist.
+						Ok(true)
+					}
+				}
 			});
 
 		match mutate_stat {
 			// all good
 			Ok(Ok(_)) => Ok(()),
 			// failed to write.
-			Ok(Err(_)) => Err(MinerError::Lock("failed to write to offchain db.")),
-			// fork etc.
+			Ok(Err(_)) => Err(MinerError::Lock("failed to write to offchain db [guard].")),
+			// still running etc.
 			Err(why) => Err(MinerError::Lock(why)),
 		}
+	}
+
+	/// Perform all the checks that are needed before we spawn any significant work in the offchain
+	/// worker thread.
+	///
+	/// This tries first `ensure_offchain_not_running` and then `ensure_offchain_repeat_frequency`.
+	pub(crate) fn try_acquire_offchain_lock(now: T::BlockNumber) -> Result<(), MinerError> {
+		Self::ensure_offchain_not_running().and_then(|_| {
+			Self::ensure_offchain_repeat_frequency(now).map_err(|error| {
+				// don't alter the error, just release the lock acquired in
+				// `ensure_offchain_not_running` if we fail this second step.
+				Self::release_offchain_lock();
+				error
+			})
+		})
+	}
+
+	/// Perform the release operation of any locks that where acquired to execute the offchain
+	/// worker thread.
+	pub(crate) fn release_offchain_lock() {
+		let guard = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
+		let _mutate_stats = guard.mutate::<_, &'static str, _>(|_| Ok(false));
+		// TODO: if this ever fails to write, then we will never release the lock. We should look
+		// into when and how this might ever fail.
+		debug_assert!(matches!(_mutate_stats, Ok(Ok(_))));
 	}
 
 	/// Do the basics checks that MUST happen during the validation and pre-dispatch of an unsigned
@@ -731,6 +813,7 @@ mod tests {
 		mock::{
 			Call as OuterCall, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin, Runtime,
 			TestCompact, TrimHelpers, roll_to, roll_to_with_ocw, trim_helpers, witness,
+			BlockNumber,
 		},
 	};
 	use frame_benchmarking::Zero;
@@ -1052,7 +1135,7 @@ mod tests {
 	}
 
 	#[test]
-	fn ocw_check_prevent_duplicate() {
+	fn ocw_lock_prevents_frequent_execution() {
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
@@ -1061,19 +1144,121 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// first execution -- okay.
-			assert!(MultiPhase::try_acquire_offchain_lock(25).is_ok());
+			assert!(MultiPhase::ensure_offchain_repeat_frequency(25).is_ok());
 
 			// next block: rejected.
-			assert_noop!(MultiPhase::try_acquire_offchain_lock(26), MinerError::Lock("recently executed."));
+			assert_noop!(
+				MultiPhase::ensure_offchain_repeat_frequency(26),
+				MinerError::Lock("recently executed.")
+			);
 
 			// allowed after `OFFCHAIN_REPEAT`
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat).into()).is_ok());
+			assert!(
+				MultiPhase::ensure_offchain_repeat_frequency((26 + offchain_repeat).into()).is_ok()
+			);
 
 			// a fork like situation: re-execute last 3.
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 3).into()).is_err());
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 2).into()).is_err());
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 1).into()).is_err());
+			assert!(MultiPhase::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat - 3).into()
+			)
+			.is_err());
+			assert!(MultiPhase::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat - 2).into()
+			)
+			.is_err());
+			assert!(MultiPhase::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat - 1).into()
+			)
+			.is_err());
 		})
+	}
+
+	#[test]
+	fn ocw_lock_prevents_overlapping_execution() {
+		{
+			// first, ensure that a successful execution releases the lock
+			let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+			ext.execute_with(|| {
+				let running = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
+				let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+
+				roll_to(25);
+				assert!(MultiPhase::current_phase().is_unsigned());
+
+				// initially, the running flag is not set.
+				assert!(matches!(running.get::<bool>(), None));
+				assert!(matches!(last_block.get::<BlockNumber>(), None));
+
+				// a successful a-z execution.
+				MultiPhase::offchain_worker(25);
+				assert_eq!(pool.read().transactions.len(), 1);
+
+				// afterwards, it is flipped to false.
+				assert!(matches!(running.get::<bool>(), Some(Some(false))));
+				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
+			});
+		}
+
+		{
+			// ensure that if the running flag is set, a new execution is not allowed.
+			let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
+			ext.execute_with(|| {
+				let running = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
+				let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+
+				roll_to(25);
+				assert!(MultiPhase::current_phase().is_unsigned());
+
+				// artificially set the value, as if another thread is mid-way.
+				running.set(&true);
+				last_block.set(&25);
+
+				assert_eq!(
+					MultiPhase::try_acquire_offchain_lock(25).unwrap_err(),
+					MinerError::Lock("still running.")
+				);
+				assert_eq!(
+					MultiPhase::try_acquire_offchain_lock(26).unwrap_err(),
+					MinerError::Lock("still running.")
+				);
+
+				// failing to acquire running lock should not alter the last-block storage
+				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
+			});
+		}
+
+		{
+			// ensure that if the running lock is free, but frequency fails, the running lock is
+			// released.
+			let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+			ext.execute_with(|| {
+				let running = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
+				let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+
+				roll_to(25);
+				assert!(MultiPhase::current_phase().is_unsigned());
+
+				// initially, nothing is set.
+				assert!(matches!(running.get::<bool>(), None));
+				assert!(matches!(last_block.get::<BlockNumber>(), None));
+
+				// a successful a-z execution.
+				MultiPhase::offchain_worker(25);
+				assert_eq!(pool.read().transactions.len(), 1);
+				assert!(matches!(running.get::<bool>(), Some(Some(false))));
+				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
+
+				// we can't acquire the frequency lock.
+				assert_eq!(
+					MultiPhase::try_acquire_offchain_lock(26).unwrap_err(),
+					MinerError::Lock("recently executed.")
+				);
+
+				// running lock should stay unaffected.
+				assert!(matches!(running.get::<bool>(), Some(Some(false))));
+				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
+			});
+		}
 	}
 
 	#[test]
@@ -1085,7 +1270,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
 			MultiPhase::offchain_worker(24);
 			assert!(pool.read().transactions.len().is_zero());
@@ -1112,7 +1297,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 			storage.clear();
 
 			assert!(!ocw_solution_exists::<Runtime>(), "no solution should be present before we mine one");
@@ -1143,7 +1328,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
 			MultiPhase::offchain_worker(block_plus(-1));
 			assert!(pool.read().transactions.len().is_zero());
@@ -1181,7 +1366,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
 			MultiPhase::offchain_worker(block_plus(-1));
 			assert!(pool.read().transactions.len().is_zero());
