@@ -19,8 +19,7 @@
 
 use crate::{
 	exec::{AccountIdOf, StorageKey},
-	BalanceOf, CodeHash, ContractInfoOf, Config, TrieId,
-	AccountCounter, DeletionQueue, Error,
+	BalanceOf, CodeHash, ContractInfoOf, Config, TrieId, DeletionQueue, Error,
 	weights::WeightInfo,
 };
 use codec::{Codec, Encode, Decode};
@@ -61,7 +60,9 @@ impl<T: Config> ContractInfo<T> {
 			None
 		}
 	}
+
 	/// If contract is alive then return some reference to alive info
+	#[cfg(test)]
 	pub fn as_alive(&self) -> Option<&AliveContractInfo<T>> {
 		if let ContractInfo::Alive(ref alive) = self {
 			Some(alive)
@@ -144,11 +145,6 @@ impl<T: Config> From<AliveContractInfo<T>> for ContractInfo<T> {
 	}
 }
 
-/// An error that means that the account requested either doesn't exist or represents a tombstone
-/// account.
-#[cfg_attr(test, derive(PartialEq, Eq, Debug))]
-pub struct ContractAbsentError;
-
 #[derive(Encode, Decode)]
 pub struct DeletedContract {
 	pair_count: u32,
@@ -177,25 +173,14 @@ where
 	/// This function also updates the bookkeeping info such as: number of total non-empty pairs a
 	/// contract owns, the last block the storage was written to, etc. That's why, in contrast to
 	/// `read`, this function also requires the `account` ID.
-	///
-	/// If the contract specified by the id `account` doesn't exist `Err` is returned.`
-	///
-	/// # Panics
-	///
-	/// Panics iff the `account` specified is not alive and in storage.
 	pub fn write(
-		account: &AccountIdOf<T>,
-		trie_id: &TrieId,
+		block_number: T::BlockNumber,
+		new_info: &mut AliveContractInfo<T>,
 		key: &StorageKey,
 		opt_new_value: Option<Vec<u8>>,
 	) -> DispatchResult {
-		let mut new_info = match <ContractInfoOf<T>>::get(account) {
-			Some(ContractInfo::Alive(alive)) => alive,
-			None | Some(ContractInfo::Tombstone(_)) => panic!("Contract not found"),
-		};
-
 		let hashed_key = blake2_256(key);
-		let child_trie_info = &child_trie_info(&trie_id);
+		let child_trie_info = &child_trie_info(&new_info.trie_id);
 
 		let opt_prev_len = child::len(&child_trie_info, &hashed_key);
 
@@ -225,8 +210,7 @@ where
 			.and_then(|val| val.checked_add(new_value_len))
 			.ok_or_else(|| Error::<T>::StorageExhausted)?;
 
-		new_info.last_write = Some(<frame_system::Pallet<T>>::block_number());
-		<ContractInfoOf<T>>::insert(&account, ContractInfo::Alive(new_info));
+		new_info.last_write = Some(block_number);
 
 		// Finally, perform the change on the storage.
 		match opt_new_value {
@@ -237,65 +221,35 @@ where
 		Ok(())
 	}
 
-	/// Returns the rent allowance set for the contract give by the account id.
-	pub fn rent_allowance(
-		account: &AccountIdOf<T>,
-	) -> Result<BalanceOf<T>, ContractAbsentError>
-	{
-		<ContractInfoOf<T>>::get(account)
-			.and_then(|i| i.as_alive().map(|i| i.rent_allowance))
-			.ok_or(ContractAbsentError)
-	}
-
-	/// Set the rent allowance for the contract given by the account id.
-	///
-	/// Returns `Err` if the contract doesn't exist or is a tombstone.
-	pub fn set_rent_allowance(
-		account: &AccountIdOf<T>,
-		rent_allowance: BalanceOf<T>,
-	) -> Result<(), ContractAbsentError> {
-		<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| match maybe_contract_info {
-			Some(ContractInfo::Alive(ref mut alive_info)) => {
-				alive_info.rent_allowance = rent_allowance;
-				Ok(())
-			}
-			_ => Err(ContractAbsentError),
-		})
-	}
-
 	/// Creates a new contract descriptor in the storage with the given code hash at the given address.
 	///
 	/// Returns `Err` if there is already a contract (or a tombstone) exists at the given address.
-	pub fn place_contract(
+	pub fn new_contract(
 		account: &AccountIdOf<T>,
 		trie_id: TrieId,
 		ch: CodeHash<T>,
 	) -> Result<AliveContractInfo<T>, DispatchError> {
-		<ContractInfoOf<T>>::try_mutate(account, |existing| {
-			if existing.is_some() {
-				return Err(Error::<T>::DuplicateContract.into());
-			}
+		if <ContractInfoOf<T>>::contains_key(account) {
+			return Err(Error::<T>::DuplicateContract.into());
+		}
 
-			let contract = AliveContractInfo::<T> {
-				code_hash: ch,
-				storage_size: 0,
-				trie_id,
-				deduct_block:
-					// We want to charge rent for the first block in advance. Therefore we
-					// treat the contract as if it was created in the last block and then
-					// charge rent for it during instantiation.
-					<frame_system::Pallet<T>>::block_number().saturating_sub(1u32.into()),
-				rent_allowance: <BalanceOf<T>>::max_value(),
-				rent_payed: <BalanceOf<T>>::zero(),
-				pair_count: 0,
-				last_write: None,
-				_reserved: None,
-			};
+		let contract = AliveContractInfo::<T> {
+			code_hash: ch,
+			storage_size: 0,
+			trie_id,
+			deduct_block:
+				// We want to charge rent for the first block in advance. Therefore we
+				// treat the contract as if it was created in the last block and then
+				// charge rent for it during instantiation.
+				<frame_system::Pallet<T>>::block_number().saturating_sub(1u32.into()),
+			rent_allowance: <BalanceOf<T>>::max_value(),
+			rent_payed: <BalanceOf<T>>::zero(),
+			pair_count: 0,
+			last_write: None,
+			_reserved: None,
+		};
 
-			*existing = Some(contract.clone().into());
-
-			Ok(contract)
-		})
+		Ok(contract)
 	}
 
 	/// Push a contract's trie to the deletion queue for lazy removal.
@@ -397,16 +351,9 @@ where
 
 	/// This generator uses inner counter for account id and applies the hash over `AccountId +
 	/// accountid_counter`.
-	pub fn generate_trie_id(account_id: &AccountIdOf<T>) -> TrieId {
-		// Note that skipping a value due to error is not an issue here.
-		// We only need uniqueness, not sequence.
-		let new_seed = <AccountCounter<T>>::mutate(|v| {
-			*v = v.wrapping_add(1);
-			*v
-		});
-
+	pub fn generate_trie_id(account_id: &AccountIdOf<T>, seed: u64) -> TrieId {
 		let buf: Vec<_> = account_id.as_ref().iter()
-			.chain(&new_seed.to_le_bytes())
+			.chain(&seed.to_le_bytes())
 			.cloned()
 			.collect();
 		T::Hashing::hash(&buf).as_ref().into()
@@ -414,11 +361,10 @@ where
 
 	/// Returns the code hash of the contract specified by `account` ID.
 	#[cfg(test)]
-	pub fn code_hash(account: &AccountIdOf<T>) -> Result<CodeHash<T>, ContractAbsentError>
+	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>>
 	{
 		<ContractInfoOf<T>>::get(account)
 			.and_then(|i| i.as_alive().map(|i| i.code_hash))
-			.ok_or(ContractAbsentError)
 	}
 
 	/// Fill up the queue in order to exercise the limits during testing.

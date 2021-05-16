@@ -21,7 +21,7 @@ use sp_std::fmt::Debug;
 use codec::{Encode, Decode, FullCodec};
 use sp_core::RuntimeDebug;
 use sp_arithmetic::traits::{Zero, AtLeast32BitUnsigned};
-use sp_runtime::TokenError;
+use sp_runtime::{DispatchError, ArithmeticError, TokenError};
 
 /// One of a number of consequences of withdrawing a fungible from an account.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -51,7 +51,7 @@ pub enum WithdrawConsequence<Balance> {
 }
 
 impl<Balance: Zero> WithdrawConsequence<Balance> {
-	/// Convert the type into a `Result` with `TokenError` as the error or the additional `Balance`
+	/// Convert the type into a `Result` with `DispatchError` as the error or the additional `Balance`
 	/// by which the account will be reduced.
 	pub fn into_result(self, keep_alive: bool) -> Result<Balance, TokenError> {
 		use WithdrawConsequence::*;
@@ -60,8 +60,8 @@ impl<Balance: Zero> WithdrawConsequence<Balance> {
 			ReducedToZero(result) if !keep_alive => Ok(result),
 			WouldDie | ReducedToZero(_) => Err(TokenError::WouldDie),
 			UnknownAsset => Err(TokenError::UnknownAsset),
-			Underflow => Err(TokenError::Underflow),
-			Overflow => Err(TokenError::Overflow),
+			Underflow => Err(ArithmeticError::Underflow.into()),
+			Overflow => Err(ArithmeticError::Overflow.into()),
 			Frozen => Err(TokenError::Frozen),
 			NoFunds => Err(TokenError::NoFunds),
 		}
@@ -91,13 +91,13 @@ pub enum DepositConsequence {
 
 impl DepositConsequence {
 	/// Convert the type into a `Result` with `TokenError` as the error.
-	pub fn into_result(self) -> Result<(), TokenError> {
+	pub fn into_result(self) -> Result<(), DispatchError> {
 		use DepositConsequence::*;
 		Err(match self {
-			BelowMinimum => TokenError::BelowMinimum,
-			CannotCreate => TokenError::CannotCreate,
-			UnknownAsset => TokenError::UnknownAsset,
-			Overflow => TokenError::Overflow,
+			BelowMinimum => TokenError::BelowMinimum.into(),
+			CannotCreate => TokenError::CannotCreate.into(),
+			UnknownAsset => TokenError::UnknownAsset.into(),
+			Overflow => ArithmeticError::Overflow.into(),
 			Success => return Ok(()),
 		})
 	}

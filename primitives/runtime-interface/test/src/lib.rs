@@ -24,7 +24,7 @@ use sp_runtime_interface_test_wasm::{wasm_binary_unwrap, test_api::HostFunctions
 use sp_runtime_interface_test_wasm_deprecated::wasm_binary_unwrap as wasm_binary_deprecated_unwrap;
 
 use sp_wasm_interface::HostFunctions as HostFunctionsT;
-use sc_executor::CallInWasm;
+use sc_executor_common::runtime_blob::RuntimeBlob;
 
 use std::{collections::HashSet, sync::{Arc, Mutex}};
 
@@ -46,14 +46,15 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 		8,
 		None,
 	);
-	executor.call_in_wasm(
-		binary,
-		None,
-		method,
-		&[],
-		&mut ext_ext,
-		sp_core::traits::MissingHostFunctions::Disallow,
-	).map_err(|e| format!("Failed to execute `{}`: {}", method, e))?;
+	executor
+		.uncached_call(
+			RuntimeBlob::uncompress_if_needed(binary).expect("Failed to parse binary"),
+			&mut ext_ext,
+			false,
+			method,
+			&[],
+		)
+		.map_err(|e| format!("Failed to execute `{}`: {}", method, e))?;
 	Ok(ext)
 }
 
