@@ -117,18 +117,14 @@ pub fn get_contract_id() -> [u8; 32] {
 }
 
 pub fn get_ddc_url_or_default(default_url: &str) -> Vec<u8> {
-    let store = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::ddc_url");
-    let maybe_value = store.get::<Vec<u8>>();
+    use sp_io::offchain::local_storage_get;
+    use sp_core::offchain::StorageKind::PERSISTENT;
+
+    let maybe_value = local_storage_get(PERSISTENT, b"ddc-metrics-offchain-worker::ddc_url");
 
     let ddc_url = match maybe_value {
         None => default_url.as_bytes().to_vec(),
-
-        Some(Some(url)) => url,
-
-        Some(None) => {
-            debug::error!("[OCW] Error decoding DDC URL from local storage");
-            "INVALID_DDC_URL".as_bytes().to_vec()
-        }
+        Some(url) => url,
     };
 
     ddc_url
