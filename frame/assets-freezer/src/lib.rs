@@ -28,7 +28,7 @@ pub mod mock;
 mod tests;
 
 use sp_std::prelude::*;
-use sp_runtime::{TokenError, traits::{Zero, Saturating, CheckedAdd, CheckedSub}};
+use sp_runtime::{TokenError, ArithmeticError, traits::{Zero, Saturating, CheckedAdd, CheckedSub}};
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
 use frame_support::traits::{
 	StoredMap, tokens::{
@@ -276,7 +276,7 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 		let min_balance = <Self as fungibles::Inspect<_>> ::minimum_balance(asset);
 		let dest_balance = <Self as fungibles::Inspect<_>>::balance(asset, dest);
 		ensure!(!on_hold || dest_balance >= min_balance, TokenError::CannotCreate);
-		Self::balance_on_hold(asset, dest).checked_add(&amount).ok_or(TokenError::Overflow)?;
+		Self::balance_on_hold(asset, dest).checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
 
 		Self::decrease_on_hold_ensuring_backed(asset, source, amount)?;
 
