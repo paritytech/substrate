@@ -235,10 +235,10 @@ pub mod pallet {
 		WrongDelegate,
 		/// There is no delegate approved.
 		NoDelegate,
-/*		/// Invalid metadata given.
-		BadMetadata,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
+/*		/// Invalid metadata given.
+		BadMetadata,
 */
 	}
 
@@ -891,6 +891,7 @@ pub mod pallet {
 			ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
+			ensure!(details.approved.as_ref() == Some(&origin), Error::<T, I>::Unapproved);
 
 			let source = details.owner;
 			details.owner = dest;
