@@ -204,14 +204,14 @@ pub mod pallet {
 		/// the approved `delegate`.
 		/// \[ class, instance, owner, delegate, destination \]
 		TransferredApproved(T::ClassId, T::InstanceId, T::AccountId, T::AccountId, T::AccountId),
+		/// An asset `class` has had its attributes changed by the `Force` origin.
+		/// \[ class \]
+		AssetStatusChanged(T::ClassId),
 		/*
 		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals, is_frozen\]
 		MetadataSet(T::ClassId, Vec<u8>, Vec<u8>, u8, bool),
 		/// Metadata has been cleared for an asset. \[asset_id\]
 		MetadataCleared(T::ClassId),
-		/// An asset has had its attributes changed by the `Force` origin.
-		/// \[id\]
-		AssetStatusChanged(T::ClassId),
 		*/
 	}
 
@@ -907,7 +907,58 @@ pub mod pallet {
 
 			Ok(())
 		}
-/*
+
+		/// Alter the attributes of a given asset.
+		///
+		/// Origin must be `ForceOrigin`.
+		///
+		/// - `class`: The identifier of the asset.
+		/// - `owner`: The new Owner of this asset.
+		/// - `issuer`: The new Issuer of this asset.
+		/// - `admin`: The new Admin of this asset.
+		/// - `freezer`: The new Freezer of this asset.
+		/// - `min_balance`: The minimum balance of this new asset that any single account must
+		/// have. If an account's balance is reduced below this, then it collapses to zero.
+		/// - `is_sufficient`: Whether a non-zero balance of this asset is deposit of sufficient
+		/// value to account for the state bloat associated with its balance storage. If set to
+		/// `true`, then non-zero balances may be stored without a `consumer` reference (and thus
+		/// an ED in the Balances pallet or whatever else is used to control user-account state
+		/// growth).
+		/// - `is_frozen`: Whether this asset class is frozen except for permissioned/admin
+		/// instructions.
+		///
+		/// Emits `AssetStatusChanged` with the identity of the asset.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::force_asset_status())]
+		pub(super) fn force_asset_status(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			owner: <T::Lookup as StaticLookup>::Source,
+			issuer: <T::Lookup as StaticLookup>::Source,
+			admin: <T::Lookup as StaticLookup>::Source,
+			freezer: <T::Lookup as StaticLookup>::Source,
+			free_holding: bool,
+			is_frozen: bool,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+
+			Class::<T, I>::try_mutate(class, |maybe_asset| {
+				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
+				asset.owner = T::Lookup::lookup(owner)?;
+				asset.issuer = T::Lookup::lookup(issuer)?;
+				asset.admin = T::Lookup::lookup(admin)?;
+				asset.freezer = T::Lookup::lookup(freezer)?;
+				asset.free_holding = free_holding;
+				asset.is_frozen = is_frozen;
+				*maybe_asset = Some(asset);
+
+				Self::deposit_event(Event::AssetStatusChanged(class));
+				Ok(())
+			})
+		}
+
+		/*
 		/// Set the metadata for an asset.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
@@ -1069,57 +1120,6 @@ pub mod pallet {
 				Ok(())
 			})
 		}
-
-		/// Alter the attributes of a given asset.
-		///
-		/// Origin must be `ForceOrigin`.
-		///
-		/// - `class`: The identifier of the asset.
-		/// - `owner`: The new Owner of this asset.
-		/// - `issuer`: The new Issuer of this asset.
-		/// - `admin`: The new Admin of this asset.
-		/// - `freezer`: The new Freezer of this asset.
-		/// - `min_balance`: The minimum balance of this new asset that any single account must
-		/// have. If an account's balance is reduced below this, then it collapses to zero.
-		/// - `is_sufficient`: Whether a non-zero balance of this asset is deposit of sufficient
-		/// value to account for the state bloat associated with its balance storage. If set to
-		/// `true`, then non-zero balances may be stored without a `consumer` reference (and thus
-		/// an ED in the Balances pallet or whatever else is used to control user-account state
-		/// growth).
-		/// - `is_frozen`: Whether this asset class is frozen except for permissioned/admin
-		/// instructions.
-		///
-		/// Emits `AssetStatusChanged` with the identity of the asset.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::force_asset_status())]
-		pub(super) fn force_asset_status(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] min_balance: T::InstanceId,
-			is_sufficient: bool,
-			is_frozen: bool,
-		) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin)?;
-
-			Asset::<T, I>::try_mutate(id, |maybe_asset| {
-				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
-				asset.owner = T::Lookup::lookup(owner)?;
-				asset.issuer = T::Lookup::lookup(issuer)?;
-				asset.admin = T::Lookup::lookup(admin)?;
-				asset.freezer = T::Lookup::lookup(freezer)?;
-				asset.min_balance = min_balance;
-				asset.is_sufficient = is_sufficient;
-				asset.is_frozen = is_frozen;
-				*maybe_asset = Some(asset);
-
-				Self::deposit_event(Event::AssetStatusChanged(id));
-				Ok(())
-			})
-		}*/
+*/
 	}
 }
