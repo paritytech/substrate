@@ -51,11 +51,11 @@ pub trait WeightInfo {
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
 	fn force_transfer() -> Weight;
-/*	fn freeze() -> Weight;
+	fn freeze() -> Weight;
 	fn thaw() -> Weight;
-	fn freeze_asset() -> Weight;
-	fn thaw_asset() -> Weight;
-	fn transfer_ownership() -> Weight;
+	fn freeze_class() -> Weight;
+	fn thaw_class() -> Weight;
+/*	fn transfer_ownership() -> Weight;
 	fn set_team() -> Weight;
 	fn set_metadata(n: u32, s: u32, ) -> Weight;
 	fn clear_metadata() -> Weight;
@@ -114,7 +114,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
-/*	fn freeze() -> Weight {
+	fn freeze() -> Weight {
 		(34_290_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -124,17 +124,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn freeze_asset() -> Weight {
+	fn freeze_class() -> Weight {
 		(24_373_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn thaw_asset() -> Weight {
+	fn thaw_class() -> Weight {
 		(24_096_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn transfer_ownership() -> Weight {
+/*	fn transfer_ownership() -> Weight {
 		(28_566_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -240,7 +240,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
-/*	fn freeze() -> Weight {
+	fn freeze() -> Weight {
 		(34_290_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -250,17 +250,17 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn freeze_asset() -> Weight {
+	fn freeze_class() -> Weight {
 		(24_373_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn thaw_asset() -> Weight {
+	fn thaw_class() -> Weight {
 		(24_096_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn transfer_ownership() -> Weight {
+/*	fn transfer_ownership() -> Weight {
 		(28_566_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))

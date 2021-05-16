@@ -771,7 +771,7 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
 		///
-		/// - `id`: The identifier of the asset to be frozen.
+		/// - `id`: The identifier of the asset to be thawed.
 		///
 		/// Emits `Thawed`.
 		///

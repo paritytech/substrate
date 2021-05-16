@@ -180,19 +180,19 @@ pub mod pallet {
 		Transferred(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
 		/// Some assets were destroyed. \[class, instance, owner\]
 		Burned(T::ClassId, T::InstanceId, T::AccountId),
+		/// Some account `who` was frozen. \[ class, instance \]
+		Frozen(T::ClassId, T::InstanceId),
+		/// Some account `who` was thawed. \[ class, instance \]
+		Thawed(T::ClassId, T::InstanceId),
+		/// Some asset `class` was frozen. \[ class \]
+		ClassFrozen(T::ClassId),
+		/// Some asset `class` was thawed. \[ class \]
+		ClassThawed(T::ClassId),
 		/*
 		/// The management team changed \[asset_id, issuer, admin, freezer\]
 		TeamChanged(T::ClassId, T::AccountId, T::AccountId, T::AccountId),
 		/// The owner changed \[asset_id, owner\]
 		OwnerChanged(T::ClassId, T::AccountId),
-		/// Some account `who` was frozen. \[asset_id, who\]
-		Frozen(T::ClassId, T::AccountId),
-		/// Some account `who` was thawed. \[asset_id, who\]
-		Thawed(T::ClassId, T::AccountId),
-		/// Some asset `asset_id` was frozen. \[asset_id\]
-		AssetFrozen(T::ClassId),
-		/// Some asset `asset_id` was thawed. \[asset_id\]
-		AssetThawed(T::ClassId),
 		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals, is_frozen\]
 		MetadataSet(T::ClassId, Vec<u8>, Vec<u8>, u8, bool),
 		/// Metadata has been cleared for an asset. \[asset_id\]
@@ -227,10 +227,9 @@ pub mod pallet {
 		BadWitness,
 		/// The asset ID is already taken.
 		InUse,
-/*
-		/// The origin account is frozen.
+		/// The asset instance or class is frozen.
 		Frozen,
-		/// Invalid metadata given.
+/*		/// Invalid metadata given.
 		BadMetadata,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
@@ -475,16 +474,15 @@ pub mod pallet {
 
 		/// Move an asset from the sender account to another.
 		///
-		/// Origin must be Signed.
+		/// Origin must be Signed and the signing account must be the owner of the asset instance..
 		///
 		/// - `class`: The class of the asset to be transferred.
 		/// - `instance`: The instance of the asset to be transferred.
-		/// - `dest`: The account to be credited.
+		/// - `dest`: The account to receive ownership of the asset.
 		///
-		/// Emits `Transferred` with the asset which was transferred.
+		/// Emits `Transferred`.
 		///
 		/// Weight: `O(1)`
-		/// Modes: source == dest.
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub(super) fn transfer(
 			origin: OriginFor<T>,
@@ -495,8 +493,12 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
+
 			let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(details.owner == origin, Error::<T, I>::NoPermission);
+			ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 
 			let class_instance = (class, instance);
 			Account::<T, I>::remove(&origin, &(class_instance));
@@ -514,21 +516,13 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
 		///
-		/// - `class`: The identifier of the asset to have some amount transferred.
-		/// - `source`: The account to be debited.
-		/// - `dest`: The account to be credited.
-		/// - `amount`: The amount by which the `source`'s balance of assets should be reduced and
-		/// `dest`'s balance increased. The amount actually transferred may be slightly greater in
-		/// the case that the transfer would otherwise take the `source` balance above zero but
-		/// below the minimum balance. Must be greater than zero.
+		/// - `class`: The class of the asset to be transferred.
+		/// - `instance`: The instance of the asset to be transferred.
+		/// - `dest`: The account to receive ownership of the asset.
 		///
-		/// Emits `Transferred` with the actual amount transferred. If this takes the source balance
-		/// to below the minimum for the asset, then the amount transferred is increased to take it
-		/// to zero.
+		/// Emits `Transferred`.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Pre-existence of `dest`; Post-existence of `source`; Prior & post zombie-status
-		/// of `source`; Account pre-existence of `dest`.
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub(super) fn force_transfer(
 			origin: OriginFor<T>,
@@ -557,13 +551,13 @@ pub mod pallet {
 
 			Ok(())
 		}
-/*
-		/// Disallow further unprivileged transfers from an account.
+
+		/// Disallow further unprivileged transfer of an asset instance.
 		///
-		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		/// Origin must be Signed and the sender should be the Freezer of the asset `class`.
 		///
-		/// - `class`: The identifier of the asset to be frozen.
-		/// - `who`: The account to be frozen.
+		/// - `class`: The class of the asset to be frozen.
+		/// - `instance`: The instance of the asset to be frozen.
 		///
 		/// Emits `Frozen`.
 		///
@@ -572,30 +566,28 @@ pub mod pallet {
 		pub(super) fn freeze(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
-			who: <T::Lookup as StaticLookup>::Source
+			#[pallet::compact] instance: T::InstanceId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(&origin == &d.freezer, Error::<T, I>::NoPermission);
-			let who = T::Lookup::lookup(who)?;
-			ensure!(
-				Account::<T, I>::contains_key(id, &who),
-				Error::<T, I>::BalanceZero
-			);
+			let mut details = Asset::<T, I>::get(&class, &instance)
+				.ok_or(Error::<T, I>::Unknown)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(class_details.freezer == origin, Error::<T, I>::NoPermission);
 
-			Account::<T, I>::mutate(id, &who, |a| a.is_frozen = true);
+			details.is_frozen = true;
+			Asset::<T, I>::insert(&class, &instance, &details);
 
-			Self::deposit_event(Event::<T, I>::Frozen(id, who));
+			Self::deposit_event(Event::<T, I>::Frozen(class, instance));
 			Ok(())
 		}
 
-		/// Allow unprivileged transfers from an account again.
+		/// Allow unprivileged transfer of an asset instance.
 		///
-		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
+		/// Origin must be Signed and the sender should be the Freezer of the asset `class`.
 		///
-		/// - `class`: The identifier of the asset to be frozen.
-		/// - `who`: The account to be unfrozen.
+		/// - `class`: The class of the asset to be thawed.
+		/// - `instance`: The instance of the asset to be thawed.
 		///
 		/// Emits `Thawed`.
 		///
@@ -603,80 +595,77 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub(super) fn thaw(
 			origin: OriginFor<T>,
-			#[pallet::compact]
-			class: T::ClassId,
-			who: <T::Lookup as StaticLookup>::Source
+			#[pallet::compact] class: T::ClassId,
+			#[pallet::compact] instance: T::InstanceId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(&origin == &details.admin, Error::<T, I>::NoPermission);
-			let who = T::Lookup::lookup(who)?;
-			ensure!(
-				Account::<T, I>::contains_key(id, &who),
-				Error::<T, I>::BalanceZero
-			);
+			let mut details = Asset::<T, I>::get(&class, &instance)
+				.ok_or(Error::<T, I>::Unknown)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(class_details.admin == origin, Error::<T, I>::NoPermission);
 
-			Account::<T, I>::mutate(id, &who, |a| a.is_frozen = false);
+			details.is_frozen = false;
+			Asset::<T, I>::insert(&class, &instance, &details);
 
-			Self::deposit_event(Event::<T, I>::Thawed(id, who));
+			Self::deposit_event(Event::<T, I>::Frozen(class, instance));
 			Ok(())
 		}
 
 		/// Disallow further unprivileged transfers for the asset class.
 		///
-		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		/// Origin must be Signed and the sender should be the Freezer of the asset `class`.
 		///
-		/// - `class`: The identifier of the asset to be frozen.
+		/// - `class`: The asset class to be frozen.
 		///
-		/// Emits `Frozen`.
+		/// Emits `ClassFrozen`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::freeze_asset())]
-		pub(super) fn freeze_asset(
+		#[pallet::weight(T::WeightInfo::freeze_class())]
+		pub(super) fn freeze_class(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			Asset::<T, I>::try_mutate(id, |maybe_details| {
-				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(&origin == &d.freezer, Error::<T, I>::NoPermission);
+			Class::<T, I>::try_mutate(class, |maybe_details| {
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				ensure!(&origin == &details.freezer, Error::<T, I>::NoPermission);
 
-				d.is_frozen = true;
+				details.is_frozen = true;
 
-				Self::deposit_event(Event::<T, I>::AssetFrozen(id));
+				Self::deposit_event(Event::<T, I>::ClassFrozen(class));
 				Ok(())
 			})
 		}
 
 		/// Allow unprivileged transfers for the asset again.
 		///
-		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
+		/// Origin must be Signed and the sender should be the Admin of the asset `class`.
 		///
-		/// - `class`: The identifier of the asset to be frozen.
+		/// - `class`: The class to be thawed.
 		///
-		/// Emits `Thawed`.
+		/// Emits `ClassThawed`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::thaw_asset())]
-		pub(super) fn thaw_asset(
+		#[pallet::weight(T::WeightInfo::thaw_class())]
+		pub(super) fn thaw_class(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			Asset::<T, I>::try_mutate(id, |maybe_details| {
-				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(&origin == &d.admin, Error::<T, I>::NoPermission);
+			Class::<T, I>::try_mutate(class, |maybe_details| {
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				ensure!(&origin == &details.admin, Error::<T, I>::NoPermission);
 
-				d.is_frozen = false;
+				details.is_frozen = false;
 
-				Self::deposit_event(Event::<T, I>::AssetThawed(id));
+				Self::deposit_event(Event::<T, I>::ClassThawed(class));
 				Ok(())
 			})
 		}
-
+/*
 		/// Change the Owner of an asset.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
