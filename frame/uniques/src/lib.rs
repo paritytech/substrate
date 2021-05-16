@@ -509,7 +509,7 @@ pub mod pallet {
 
 			Ok(())
 		}
-/*
+
 		/// Move some assets from one account to another.
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
@@ -533,22 +533,31 @@ pub mod pallet {
 		pub(super) fn force_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
-			source: <T::Lookup as StaticLookup>::Source,
+			#[pallet::compact] instance: T::InstanceId,
 			dest: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] amount: T::InstanceId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			let f = TransferFlags {
-				keep_alive: false,
-				best_effort: false,
-				burn_dust: false
-			};
-			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
-		}
+			let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(class_details.admin == origin, Error::<T, I>::NoPermission);
 
+			let source = details.owner;
+			details.owner = dest;
+
+			let class_instance = (class, instance);
+			Account::<T, I>::remove(&source, &(class_instance));
+			Account::<T, I>::insert(&details.owner, &(class_instance), ());
+			let (class, instance) = class_instance;
+
+			Asset::<T, I>::insert(&class, &instance, &details);
+
+			Self::deposit_event(Event::Transferred(class, instance, source, details.owner));
+
+			Ok(())
+		}
+/*
 		/// Disallow further unprivileged transfers from an account.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.

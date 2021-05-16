@@ -50,9 +50,8 @@ pub trait WeightInfo {
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
-/*	fn transfer_keep_alive() -> Weight;
 	fn force_transfer() -> Weight;
-	fn freeze() -> Weight;
+/*	fn freeze() -> Weight;
 	fn thaw() -> Weight;
 	fn freeze_asset() -> Weight;
 	fn thaw_asset() -> Weight;
@@ -110,17 +109,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
-/*	fn transfer_keep_alive() -> Weight {
-		(57_453_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
-	}
 	fn force_transfer() -> Weight {
 		(70_968_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
-	fn freeze() -> Weight {
+/*	fn freeze() -> Weight {
 		(34_290_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -241,17 +235,12 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
-/*	fn transfer_keep_alive() -> Weight {
-		(57_453_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
-	}
 	fn force_transfer() -> Weight {
 		(70_968_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
-	fn freeze() -> Weight {
+/*	fn freeze() -> Weight {
 		(34_290_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
