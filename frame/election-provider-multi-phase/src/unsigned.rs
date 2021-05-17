@@ -26,7 +26,7 @@ use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
 use sp_npos_elections::{
-	CompactSolution, ElectionResult, ElectionScore, assignment_ratio_to_staked_normalized,
+	CompactSolution, ElectionResult, assignment_ratio_to_staked_normalized,
 	assignment_staked_to_ratio_normalized, is_score_better, seq_phragmen,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput, SaturatedConversion};
@@ -73,8 +73,6 @@ pub enum MinerError {
 	Lock(&'static str),
 	/// Cannot restore a solution that was not stored.
 	NoStoredSolution,
-	/// Cached solution does not match the current round.
-	SolutionOutOfDate,
 	/// Cached solution is not a `submit_unsigned` call.
 	SolutionCallInvalid,
 	/// Failed to store a solution.
@@ -122,8 +120,18 @@ fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
 
 /// Clear a saved solution from OCW storage.
 pub(super) fn kill_ocw_solution<T: Config>() {
+	log!(debug, "clearing offchain call cache storage.");
 	let mut storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 	storage.clear();
+}
+
+/// Clear the offchain repeat storage.
+///
+/// After calling this, the next offchain worker is guaranteed to work, with respect to the
+/// frequency repeat.
+fn clear_offchain_repeat_frequency() -> {
+	let last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+	last_block.clear();
 }
 
 /// `true` when OCW storage contains a solution
@@ -145,9 +153,9 @@ impl<T: Config> Pallet<T> {
 		);
 
 		let call = restore_solution::<T>()
-			.and_then(|call| {
-				// ensure the cached call is still current before submitting
-				if let Call::submit_unsigned(solution, _) = &call {
+		.and_then(|call| {
+			// ensure the cached call is still current before submitting
+			if let Call::submit_unsigned(solution, _) = &call {
 					// prevent errors arising from state changes in a forkful chain
 					Self::basic_checks(solution, "restored")?;
 					Ok(call)
@@ -158,8 +166,8 @@ impl<T: Config> Pallet<T> {
 			.or_else::<MinerError, _>(|error| {
 				log!(debug, "restoring solution failed due to {:?}", error);
 				match error {
-					MinerError::Feasibility(_) | MinerError::NoStoredSolution => {
-						log!(debug, "mining a new solution...");
+					MinerError::NoStoredSolution => {
+						log!(trace, "mining a new solution.");
 						// if not present or cache invalidated due to feasibility, regenerate.
 						// note that failing `Feasibility` can only mean that the solution was
 						// computed over a snapshot that has changed due to a fork.
@@ -167,6 +175,13 @@ impl<T: Config> Pallet<T> {
 						save_solution(&call)?;
 						Ok(call)
 					}
+					MinerError::Feasibility(_) => {
+						log!(trace, "wiping infeasible solution.");
+						// kill the infeasible solution, hopefully in the next runs (whenever they
+						// may be) we mine a new one.
+						kill_ocw_solution::<T>();
+						clear_offchain_repeat_frequency();
+					},
 					_ => {
 						// nothing to do. Return the error as-is.
 						Err(error)
@@ -210,10 +225,7 @@ impl<T: Config> Pallet<T> {
 		log!(debug, "miner submitting a solution as an unsigned transaction");
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
-			.map_err(|_| {
-				kill_ocw_solution::<T>();
-				MinerError::PoolSubmissionFailed
-			})
+			.map_err(|_| MinerError::PoolSubmissionFailed)
 	}
 
 	// perform basic checks of a solution's validity
@@ -662,10 +674,14 @@ impl<T: Config> Pallet<T> {
 	/// Perform the release operation of any locks that where acquired to execute the offchain
 	/// worker thread.
 	pub(crate) fn release_offchain_lock() {
+		log!(debug, "releasing offchain repeat lock.");
 		let guard = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
 		let _mutate_stats = guard.mutate::<_, &'static str, _>(|_| Ok(false));
-		// TODO: if this ever fails to write, then we will never release the lock. We should look
-		// into when and how this might ever fail.
+		// defensive-only: ^^ it can only fail if another offchain thread mutates the
+		// `OFFCHAIN_RUNNING` while the current execution thread is inside `mutate`. The only way to
+		// successfully mutate `OFFCHAIN_RUNNING` is to succeed in in `ensure_offchain_not_running`,
+		// which in turn can never happen until the current mutation succeeds. Thus, this can never
+		// fail, qed;
 		debug_assert!(matches!(_mutate_stats, Ok(Ok(_))));
 	}
 
