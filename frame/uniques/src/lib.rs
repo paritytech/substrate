@@ -428,9 +428,7 @@ pub mod pallet {
 				Asset::<T, I>::insert(&class, &instance, details);
 				Ok(())
 			})?;
-			let class_instance = (class, instance);
-			Account::<T, I>::insert(&beneficiary, &(class, instance), ());
-			let (class, instance) = class_instance;
+			Account::<T, I>::insert(&beneficiary, (&class, &instance), ());
 
 			Self::deposit_event(Event::Issued(class, instance, beneficiary));
 			Ok(())
@@ -471,9 +469,7 @@ pub mod pallet {
 			})?;
 
 			Asset::<T, I>::remove(&class, &instance);
-			let class_instance = (class, instance);
-			Account::<T, I>::remove(&owner, &class_instance);
-			let (class, instance) = class_instance;
+			Account::<T, I>::remove(&owner, (&class, &instance));
 
 			Self::deposit_event(Event::Burned(class, instance, owner));
 			Ok(())
@@ -507,10 +503,8 @@ pub mod pallet {
 			ensure!(details.owner == origin, Error::<T, I>::NoPermission);
 			ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 
-			let class_instance = (class, instance);
-			Account::<T, I>::remove(&origin, &(class_instance));
-			Account::<T, I>::insert(&dest, &(class_instance), ());
-			let (class, instance) = class_instance;
+			Account::<T, I>::remove(&origin, (&class, &instance));
+			Account::<T, I>::insert(&dest, (&class, &instance), ());
 			details.owner = dest;
 			Asset::<T, I>::insert(&class, &instance, &details);
 
@@ -547,10 +541,8 @@ pub mod pallet {
 			let source = details.owner;
 			details.owner = dest;
 
-			let class_instance = (class, instance);
-			Account::<T, I>::remove(&source, &(class_instance));
-			Account::<T, I>::insert(&details.owner, &(class_instance), ());
-			let (class, instance) = class_instance;
+			Account::<T, I>::remove(&source, (&class, &instance));
+			Account::<T, I>::insert(&details.owner, (&class, &instance), ());
 
 			Asset::<T, I>::insert(&class, &instance, &details);
 
@@ -897,10 +889,8 @@ pub mod pallet {
 			let source = details.owner;
 			details.owner = dest;
 
-			let class_instance = (class, instance);
-			Account::<T, I>::remove(&source, &(class_instance));
-			Account::<T, I>::insert(&details.owner, &(class_instance), ());
-			let (class, instance) = class_instance;
+			Account::<T, I>::remove(&source, (&class, &instance));
+			Account::<T, I>::insert(&details.owner, (&class, &instance), ());
 
 			Asset::<T, I>::insert(&class, &instance, &details);
 
