@@ -32,12 +32,6 @@
       "id": "prometheus",
       "name": "Prometheus",
       "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "text",
-      "name": "Text",
-      "version": ""
     }
   ],
   "annotations": {
@@ -74,11 +68,400 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1621243980931,
+  "iteration": 1621244671073,
   "links": [],
   "panels": [
     {
+      "collapsed": false,
       "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 27,
+      "panels": [],
+      "title": "Transport",
+      "type": "row"
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "hiddenSeries": false,
+      "id": 19,
+      "interval": "",
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "maxPerRow": 12,
+      "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeat": "nodename",
+      "repeatDirection": "h",
+      "seriesOverrides": [
+        {
+          "$$hashKey": "object:70",
+          "alias": "established (in)",
+          "color": "#37872D"
+        },
+        {
+          "$$hashKey": "object:71",
+          "alias": "established (out)",
+          "color": "#C4162A"
+        },
+        {
+          "$$hashKey": "object:72",
+          "alias": "pending (out)",
+          "color": "#FF7383"
+        },
+        {
+          "$$hashKey": "object:73",
+          "alias": "closed-recently",
+          "color": "#FADE2A",
+          "steppedLine": true
+        }
+      ],
+      "spaceLength": 10,
+      "stack": true,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "(\n  sum(${metric_namespace}_sub_libp2p_connections_opened_total{direction=\"in\", instance=~\"${nodename}\"}) by (instance) -\n  sum(${metric_namespace}_sub_libp2p_connections_closed_total{direction=\"in\", instance=~\"${nodename}\"}) by (instance)\n)\n\n# Because `closed_total` can be null, this serves as fallback\nor on(instance) sum(${metric_namespace}_sub_libp2p_connections_opened_total{direction=\"in\", instance=~\"${nodename}\"}) by (instance)",
+          "format": "time_series",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "established (in)",
+          "refId": "A"
+        },
+        {
+          "expr": "(\n  sum(${metric_namespace}_sub_libp2p_connections_opened_total{direction=\"out\", instance=~\"${nodename}\"}) by (instance) -\n  sum(${metric_namespace}_sub_libp2p_connections_closed_total{direction=\"out\", instance=~\"${nodename}\"}) by (instance)\n)\n\n# Because `closed_total` can be null, this serves as fallback\nor on(instance) sum(${metric_namespace}_sub_libp2p_connections_opened_total{direction=\"out\", instance=~\"${nodename}\"}) by (instance)",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "legendFormat": "established (out)",
+          "refId": "C"
+        },
+        {
+          "expr": "sum by (instance) (${metric_namespace}_sub_libp2p_pending_connections{instance=~\"${nodename}\"})",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "pending (out)",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}[$__interval]))",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "closed-per-sec",
+          "refId": "D"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Average transport-level (TCP, QUIC, ...) connections",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:100",
+          "format": "short",
+          "label": "Connections",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:101",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "hiddenSeries": false,
+      "id": 189,
+      "interval": "",
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "maxPerRow": 12,
+      "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeat": "nodename",
+      "repeatDirection": "h",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "1 - \n\navg(\n  ${metric_namespace}_sub_libp2p_distinct_peers_connections_opened_total{instance=~\"${nodename}\"} - ${metric_namespace}_sub_libp2p_distinct_peers_connections_closed_total{instance=~\"${nodename}\"}\n) by (instance)\n\n/\n\navg(\r\n  sum(${metric_namespace}_sub_libp2p_connections_opened_total{instance=~\"${nodename}\"}) by (instance) - sum(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}) by (instance)\r\n) by (instance)",
+          "format": "time_series",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Percentage of peers for which we have more than one connection open",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:184",
+          "format": "percentunit",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:185",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "hiddenSeries": false,
+      "id": 39,
+      "interval": "",
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeat": "nodename",
+      "seriesOverrides": [
+        {
+          "$$hashKey": "object:263",
+          "alias": "/.*/",
+          "color": "#FF780A"
+        }
+      ],
+      "spaceLength": 10,
+      "stack": true,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "increase(${metric_namespace}_sub_libp2p_incoming_connections_handshake_errors_total{instance=~\"${nodename}\"}[$__rate_interval])",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        },
+        {
+          "expr": "increase(${metric_namespace}_sub_libp2p_listeners_errors_total{instance=~\"${nodename}\"}[$__rate_interval])",
+          "interval": "",
+          "legendFormat": "pre-handshake",
+          "refId": "B"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Number of incoming connection errors",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:270",
+          "format": "short",
+          "label": "Errors",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:271",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -86,758 +469,299 @@
         },
         "overrides": []
       },
+      "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
-        "h": 1,
+        "h": 6,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 19
       },
-      "id": 308,
+      "hiddenSeries": false,
+      "id": 4,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
       "options": {
-        "content": "",
-        "mode": "markdown"
+        "alertThreshold": true
       },
+      "percentage": false,
       "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
       "repeat": "nodename",
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "$nodename",
-      "type": "text"
-    },
-    {
-      "collapsed": true,
-      "datasource": null,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 1
-      },
-      "id": 27,
-      "panels": [
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "$data_source",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {},
-              "links": []
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 6,
-            "w": 24,
-            "x": 0,
-            "y": 3
-          },
-          "hiddenSeries": false,
-          "id": 19,
+          "expr": "rate(${metric_namespace}_sub_libp2p_network_bytes_total{instance=~\"${nodename}\"}[$__rate_interval])",
           "interval": "",
-          "legend": {
-            "alignAsTable": false,
-            "avg": false,
-            "current": false,
-            "hideEmpty": false,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "maxPerRow": 12,
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.6",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "repeat": "nodename",
-          "repeatDirection": "h",
-          "scopedVars": {
-            "nodename": {
-              "selected": true,
-              "text": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615",
-              "value": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615"
-            }
-          },
-          "seriesOverrides": [
-            {
-              "$$hashKey": "object:70",
-              "alias": "established (in)",
-              "color": "#37872D"
-            },
-            {
-              "$$hashKey": "object:71",
-              "alias": "established (out)",
-              "color": "#C4162A"
-            },
-            {
-              "$$hashKey": "object:72",
-              "alias": "pending (out)",
-              "color": "#FF7383"
-            },
-            {
-              "$$hashKey": "object:73",
-              "alias": "closed-recently",
-              "color": "#FADE2A",
-              "steppedLine": true
-            }
-          ],
-          "spaceLength": 10,
-          "stack": true,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "(\n  sum(${metric_namespace}_sub_libp2p_connections_opened_total{direction=\"in\", instance=~\"${nodename}\"}) by (instance) -\n  sum(${metric_namespace}_sub_libp2p_connections_closed_total{direction=\"in\", instance=~\"${nodename}\"}) by (instance)\n)\n\n# Because `closed_total` can be null, this serves as fallback\nor on(instance) sum(${metric_namespace}_sub_libp2p_connections_opened_total{direction=\"in\", instance=~\"${nodename}\"}) by (instance)",
-              "format": "time_series",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "established (in)",
-              "refId": "A"
-            },
-            {
-              "expr": "(\n  sum(${metric_namespace}_sub_libp2p_connections_opened_total{direction=\"out\", instance=~\"${nodename}\"}) by (instance) -\n  sum(${metric_namespace}_sub_libp2p_connections_closed_total{direction=\"out\", instance=~\"${nodename}\"}) by (instance)\n)\n\n# Because `closed_total` can be null, this serves as fallback\nor on(instance) sum(${metric_namespace}_sub_libp2p_connections_opened_total{direction=\"out\", instance=~\"${nodename}\"}) by (instance)",
-              "hide": false,
-              "instant": false,
-              "interval": "",
-              "legendFormat": "established (out)",
-              "refId": "C"
-            },
-            {
-              "expr": "sum by (instance) (${metric_namespace}_sub_libp2p_pending_connections{instance=~\"${nodename}\"})",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "pending (out)",
-              "refId": "B"
-            },
-            {
-              "expr": "sum(rate(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}[$__interval]))",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "closed-per-sec",
-              "refId": "D"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Average transport-level (TCP, QUIC, ...) connections",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:100",
-              "format": "short",
-              "label": "Connections",
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "$$hashKey": "object:101",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "$data_source",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {},
-              "links": []
-            },
-            "overrides": []
-          },
-          "fill": 0,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 6,
-            "w": 24,
-            "x": 0,
-            "y": 9
-          },
-          "hiddenSeries": false,
-          "id": 189,
-          "interval": "",
-          "legend": {
-            "alignAsTable": false,
-            "avg": false,
-            "current": false,
-            "hideEmpty": false,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "maxPerRow": 12,
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.6",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "repeat": "nodename",
-          "repeatDirection": "h",
-          "scopedVars": {
-            "nodename": {
-              "selected": true,
-              "text": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615",
-              "value": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615"
-            }
-          },
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "1 - \n\navg(\n  ${metric_namespace}_sub_libp2p_distinct_peers_connections_opened_total{instance=~\"${nodename}\"} - ${metric_namespace}_sub_libp2p_distinct_peers_connections_closed_total{instance=~\"${nodename}\"}\n) by (instance)\n\n/\n\navg(\r\n  sum(${metric_namespace}_sub_libp2p_connections_opened_total{instance=~\"${nodename}\"}) by (instance) - sum(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}) by (instance)\r\n) by (instance)",
-              "format": "time_series",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "{{instance}}",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Percentage of peers for which we have more than one connection open",
-          "tooltip": {
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:184",
-              "format": "percentunit",
-              "label": "",
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "$$hashKey": "object:185",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": true,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "$data_source",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {},
-              "links": []
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 6,
-            "w": 24,
-            "x": 0,
-            "y": 15
-          },
-          "hiddenSeries": false,
-          "id": 39,
-          "interval": "",
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": false,
-            "total": false,
-            "values": false
-          },
-          "lines": false,
-          "linewidth": 1,
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.6",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "repeat": "nodename",
-          "scopedVars": {
-            "nodename": {
-              "selected": true,
-              "text": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615",
-              "value": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615"
-            }
-          },
-          "seriesOverrides": [
-            {
-              "$$hashKey": "object:263",
-              "alias": "/.*/",
-              "color": "#FF780A"
-            }
-          ],
-          "spaceLength": 10,
-          "stack": true,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "increase(${metric_namespace}_sub_libp2p_incoming_connections_handshake_errors_total{instance=~\"${nodename}\"}[$__rate_interval])",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "{{reason}}",
-              "refId": "A"
-            },
-            {
-              "expr": "increase(${metric_namespace}_sub_libp2p_listeners_errors_total{instance=~\"${nodename}\"}[$__rate_interval])",
-              "interval": "",
-              "legendFormat": "pre-handshake",
-              "refId": "B"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Number of incoming connection errors",
-          "tooltip": {
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:270",
-              "format": "short",
-              "label": "Errors",
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "$$hashKey": "object:271",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "$data_source",
-          "description": "",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {}
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 6,
-            "w": 24,
-            "x": 0,
-            "y": 21
-          },
-          "hiddenSeries": false,
-          "id": 4,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.6",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "repeat": "nodename",
-          "scopedVars": {
-            "nodename": {
-              "selected": true,
-              "text": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615",
-              "value": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615"
-            }
-          },
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "rate(${metric_namespace}_sub_libp2p_network_bytes_total{instance=~\"${nodename}\"}[$__rate_interval])",
-              "interval": "",
-              "legendFormat": "{{direction}}",
-              "refId": "B"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Network bandwidth",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:352",
-              "format": "binBps",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "$$hashKey": "object:353",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": true,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "$data_source",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {},
-              "links": []
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 7,
-            "w": 24,
-            "x": 0,
-            "y": 27
-          },
-          "hiddenSeries": false,
-          "id": 81,
-          "interval": "",
-          "legend": {
-            "alignAsTable": false,
-            "avg": false,
-            "current": false,
-            "hideEmpty": true,
-            "hideZero": true,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": false,
-          "linewidth": 1,
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.6",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "repeat": "nodename",
-          "repeatDirection": "h",
-          "scopedVars": {
-            "nodename": {
-              "selected": true,
-              "text": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615",
-              "value": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615"
-            }
-          },
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": true,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "increase(${metric_namespace}_sub_libp2p_pending_connections_errors_total{instance=~\"${nodename}\"}[$__rate_interval])",
-              "interval": "",
-              "legendFormat": "{{reason}}",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Dialing attempt errors",
-          "tooltip": {
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:431",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "$$hashKey": "object:432",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "$data_source",
-          "fieldConfig": {
-            "defaults": {
-              "custom": {},
-              "links": []
-            },
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 7,
-            "w": 24,
-            "x": 0,
-            "y": 34
-          },
-          "hiddenSeries": false,
-          "id": 46,
-          "interval": "",
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "maxPerRow": 12,
-          "nullPointMode": "connected",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.3.6",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "repeat": "nodename",
-          "repeatDirection": "h",
-          "scopedVars": {
-            "nodename": {
-              "selected": true,
-              "text": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615",
-              "value": "kusama-validator-ae1-0-int.parity-kusama.parity.io:9615"
-            }
-          },
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": true,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "rate(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}[$__rate_interval])",
-              "interval": "",
-              "legendFormat": "{{reason}} ({{direction}})",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Disconnects/sec",
-          "tooltip": {
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:514",
-              "decimals": null,
-              "format": "cps",
-              "label": "Disconnects",
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "$$hashKey": "object:515",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          "legendFormat": "{{direction}}",
+          "refId": "B"
         }
       ],
-      "title": "Transport",
-      "type": "row"
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Network bandwidth",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:352",
+          "format": "binBps",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:353",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "hiddenSeries": false,
+      "id": 81,
+      "interval": "",
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": true,
+        "hideZero": true,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeat": "nodename",
+      "repeatDirection": "h",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": true,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "increase(${metric_namespace}_sub_libp2p_pending_connections_errors_total{instance=~\"${nodename}\"}[$__rate_interval])",
+          "interval": "",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Dialing attempt errors",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:431",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:432",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "hiddenSeries": false,
+      "id": 46,
+      "interval": "",
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "maxPerRow": 12,
+      "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeat": "nodename",
+      "repeatDirection": "h",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": true,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "rate(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}[$__rate_interval])",
+          "interval": "",
+          "legendFormat": "{{reason}} ({{direction}})",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Disconnects/sec",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:514",
+          "decimals": null,
+          "format": "cps",
+          "label": "Disconnects",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:515",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
     },
     {
       "collapsed": false,
@@ -846,7 +770,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 2
+        "y": 39
       },
       "id": 167,
       "panels": [],
@@ -873,7 +797,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 3
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 101,
@@ -967,7 +891,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 45
       },
       "id": 29,
       "panels": [],
@@ -994,7 +918,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 46
       },
       "hiddenSeries": false,
       "id": 148,
@@ -1094,7 +1018,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 50
       },
       "hiddenSeries": false,
       "id": 448,
@@ -1195,7 +1119,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 54
       },
       "hiddenSeries": false,
       "id": 256,
@@ -1295,7 +1219,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 58
       },
       "hiddenSeries": false,
       "id": 257,
@@ -1383,7 +1307,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 62
       },
       "id": 504,
       "panels": [],
@@ -1410,7 +1334,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 63
       },
       "hiddenSeries": false,
       "id": 151,
@@ -1509,7 +1433,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 67
       },
       "hiddenSeries": false,
       "id": 449,
@@ -1610,7 +1534,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 71
       },
       "hiddenSeries": false,
       "id": 258,
@@ -1709,7 +1633,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 75
       },
       "hiddenSeries": false,
       "id": 259,
@@ -1796,7 +1720,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 79
       },
       "id": 23,
       "panels": [],
@@ -1823,7 +1747,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 80
       },
       "hiddenSeries": false,
       "id": 447,
@@ -1925,7 +1849,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 49
+        "y": 86
       },
       "hiddenSeries": false,
       "id": 486,
@@ -2028,7 +1952,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 55
+        "y": 92
       },
       "hiddenSeries": false,
       "id": 31,
@@ -2142,7 +2066,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 98
       },
       "hiddenSeries": false,
       "id": 37,
@@ -2260,7 +2184,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 67
+        "y": 104
       },
       "hiddenSeries": false,
       "id": 16,
@@ -2359,7 +2283,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 110
       },
       "hiddenSeries": false,
       "id": 21,
@@ -2459,7 +2383,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 116
       },
       "hiddenSeries": false,
       "id": 134,
@@ -2547,7 +2471,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 171
+        "y": 122
       },
       "id": 52,
       "panels": [],
@@ -2573,7 +2497,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 172
+        "y": 123
       },
       "hiddenSeries": false,
       "id": 54,
@@ -2684,7 +2608,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 178
+        "y": 129
       },
       "id": 25,
       "panels": [],
@@ -2706,7 +2630,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 179
+        "y": 130
       },
       "headings": true,
       "id": 423,
@@ -2885,5 +2809,5 @@
   "timezone": "utc",
   "title": "Substrate Networking",
   "uid": "vKVuiD9Zk",
-  "version": 175
+  "version": 176
 }
