@@ -156,41 +156,39 @@ impl<T: Config> Pallet<T> {
 		.and_then(|call| {
 			// ensure the cached call is still current before submitting
 			if let Call::submit_unsigned(solution, _) = &call {
-					// prevent errors arising from state changes in a forkful chain
-					Self::basic_checks(solution, "restored")?;
+				// prevent errors arising from state changes in a forkful chain
+				Self::basic_checks(solution, "restored")?;
+				Ok(call)
+			} else {
+				Err(MinerError::SolutionCallInvalid)
+			}
+		}).or_else::<MinerError, _>(|error| {
+			log!(debug, "restoring solution failed due to {:?}", error);
+			match error {
+				MinerError::NoStoredSolution => {
+					log!(trace, "mining a new solution.");
+					// if not present or cache invalidated due to feasibility, regenerate.
+					// note that failing `Feasibility` can only mean that the solution was
+					// computed over a snapshot that has changed due to a fork.
+					let call = Self::mine_checked_call()?;
+					save_solution(&call)?;
 					Ok(call)
-				} else {
-					Err(MinerError::SolutionCallInvalid)
 				}
-			})
-			.or_else::<MinerError, _>(|error| {
-				log!(debug, "restoring solution failed due to {:?}", error);
-				match error {
-					MinerError::NoStoredSolution => {
-						log!(trace, "mining a new solution.");
-						// if not present or cache invalidated due to feasibility, regenerate.
-						// note that failing `Feasibility` can only mean that the solution was
-						// computed over a snapshot that has changed due to a fork.
-						let call = Self::mine_checked_call()?;
-						save_solution(&call)?;
-						Ok(call)
-					}
-					MinerError::Feasibility(_) => {
-						log!(trace, "wiping infeasible solution.");
-						// kill the infeasible solution, hopefully in the next runs (whenever they
-						// may be) we mine a new one.
-						kill_ocw_solution::<T>();
-						clear_offchain_repeat_frequency();
-						Err(error)
-					},
-					_ => {
-						// nothing to do. Return the error as-is.
-						Err(error)
-					}
+				MinerError::Feasibility(_) => {
+					log!(trace, "wiping infeasible solution.");
+					// kill the infeasible solution, hopefully in the next runs (whenever they
+					// may be) we mine a new one.
+					kill_ocw_solution::<T>();
+					clear_offchain_repeat_frequency();
+					Err(error)
+				},
+				_ => {
+					// nothing to do. Return the error as-is.
+					Err(error)
 				}
-			})?;
+			}
+		})?;
 
-		// in case submission fails for any reason, `submit_call` kills the stored solution
 		Self::submit_call(call)
 	}
 
