@@ -153,7 +153,6 @@ pub mod pallet{
 		Blake2_128Concat,
 		[u8; 32],
 		Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>,
-		OptionQuery
 	>;
 
 	#[pallet::storage]
