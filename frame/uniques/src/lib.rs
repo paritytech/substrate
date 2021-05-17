@@ -207,9 +207,13 @@ pub mod pallet {
 		/// An asset `class` has had its attributes changed by the `Force` origin.
 		/// \[ class \]
 		AssetStatusChanged(T::ClassId),
-		/// New metadata has been set for an asset. \[ asset_id, name, is_frozen \]
-		MetadataSet(T::ClassId, Vec<u8>, bool),
-		/// Metadata has been cleared for an asset. \[ asset_id \]
+		/// New metadata has been set for an asset class. \[ asset_id, name, is_frozen \]
+		ClassMetadataSet(T::ClassId, Vec<u8>, bool),
+		/// Metadata has been cleared for an asset class. \[ asset_id \]
+		ClassMetadataCleared(T::ClassId),
+		/// New metadata has been set for an asset instance. \[ asset_id, name, info, is_frozen \]
+		MetadataSet(T::ClassId, Vec<u8>, Vec<u8>, bool),
+		/// Metadata has been cleared for an asset instance. \[ asset_id \]
 		MetadataCleared(T::ClassId),
 	}
 
@@ -955,19 +959,132 @@ pub mod pallet {
 			})
 		}
 
+		/// Set the metadata for an asset instance.
+		///
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// asset `instance`.
+		///
+		/// Funds of sender are reserved according to the formula:
+		/// `MetadataDepositBase + MetadataDepositPerByte * (name.len + symbol.len)` taking into
+		/// account any already reserved funds.
+		///
+		/// - `class`: The identifier of the asset class whose instance's metadata to clear.
+		/// - `instance`: The identifier of the asset instance whose metadata to clear.
+		/// - `name`: The user visible name of this asset. Limited in length by `StringLimit`.
+		/// - `name`: The general information of this asset. Limited in length by `StringLimit`.
+		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
+		///
+		/// Emits `MetadataSet`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, info.len() as u32))]
+		pub(super) fn set_metadata(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			#[pallet::compact] instance: T::InstanceId,
+			name: Vec<u8>,
+			info: Vec<u8>,
+			is_frozen: bool,
+		) -> DispatchResult {
+			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some))?;
+
+			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
+			ensure!(info.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
+
+			if let Some(check_owner) = &maybe_check_owner {
+				let details = Asset::<T, I>::get(&class, &instance)
+					.ok_or(Error::<T, I>::Unknown)?;
+				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+			}
+
+			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
+				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
+				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
+
+				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
+				let deposit = if let Some(owner) = maybe_check_owner {
+					let deposit = T::MetadataDepositPerByte::get()
+						.saturating_mul((name.len() as u32).into())
+						.saturating_add(T::MetadataDepositBase::get());
+
+					if deposit > old_deposit {
+						T::Currency::reserve(&owner, deposit - old_deposit)?;
+					} else {
+						T::Currency::unreserve(&owner, old_deposit - deposit);
+					}
+					deposit
+				} else {
+					old_deposit
+				};
+
+				*metadata = Some(InstanceMetadata {
+					deposit,
+					name: name.clone(),
+					information: info.clone(),
+					is_frozen,
+				});
+
+				Self::deposit_event(Event::MetadataSet(class, name, info, false));
+				Ok(())
+			})
+		}
+
+		/// Clear the metadata for an asset instance.
+		///
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// asset `instance`.
+		///
+		/// Any deposit is freed for the asset class owner.
+		///
+		/// - `class`: The identifier of the asset class whose instance's metadata to clear.
+		/// - `instance`: The identifier of the asset instance whose metadata to clear.
+		///
+		/// Emits `MetadataCleared`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::clear_metadata())]
+		pub(super) fn clear_metadata(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			#[pallet::compact] instance: T::InstanceId,
+		) -> DispatchResult {
+			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some))?;
+
+			let details = Asset::<T, I>::get(&class, &instance)
+				.ok_or(Error::<T, I>::Unknown)?;
+			if let Some(check_owner) = &maybe_check_owner {
+				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+			}
+
+			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
+				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
+				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
+
+				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
+				T::Currency::unreserve(&details.owner, deposit);
+				Self::deposit_event(Event::MetadataCleared(class));
+				Ok(())
+			})
+		}
+
 		/// Set the metadata for an asset class.
 		///
-		/// Origin must be Signed and the sender should be the Owner of the asset `class`.
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
+		/// the asset `class`.
 		///
 		/// Funds of sender are reserved according to the formula:
 		/// `MetadataDepositBase + MetadataDepositPerByte * (name.len + symbol.len)` taking into
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset to update.
-		/// - `name`: The user friendly name of this asset. Limited in length by `StringLimit`.
+		/// - `name`: The user visible name of this asset. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
 		///
-		/// Emits `MetadataSet`.
+		/// Emits `ClassMetadataSet`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::set_class_metadata(name.len() as u32))]
@@ -989,7 +1106,8 @@ pub mod pallet {
 			}
 
 			ClassMetadataOf::<T, I>::try_mutate_exists(class, |metadata| {
-				ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T, I>::Frozen);
+				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
+				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				let deposit = if let Some(owner) = maybe_check_owner {
@@ -1013,20 +1131,21 @@ pub mod pallet {
 					is_frozen,
 				});
 
-				Self::deposit_event(Event::MetadataSet(class, name, false));
+				Self::deposit_event(Event::ClassMetadataSet(class, name, false));
 				Ok(())
 			})
 		}
 
 		/// Clear the metadata for an asset class.
 		///
-		/// Origin must be Signed and the sender should be the Owner of the asset `class`.
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
+		/// the asset `class`.
 		///
 		/// Any deposit is freed for the asset class owner.
 		///
 		/// - `class`: The identifier of the asset class whose metadata to clear.
 		///
-		/// Emits `MetadataCleared`.
+		/// Emits `ClassMetadataCleared`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_class_metadata())]
@@ -1044,9 +1163,12 @@ pub mod pallet {
 			}
 
 			ClassMetadataOf::<T, I>::try_mutate_exists(class, |metadata| {
+				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
+				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
+
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
 				T::Currency::unreserve(&details.owner, deposit);
-				Self::deposit_event(Event::MetadataCleared(class));
+				Self::deposit_event(Event::ClassMetadataCleared(class));
 				Ok(())
 			})
 		}
