@@ -623,7 +623,7 @@ impl<T: Config> Pallet<T> {
 						// no one else is running. Set it, and return Ok.
 						Ok(true)
 					}
-					Some(Some(running)) if running => {
+					Some(Some(true)) => {
 						// another thread is currently running.
 						Err("still running.")
 					}
