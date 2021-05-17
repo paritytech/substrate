@@ -22,6 +22,7 @@ use sp_core::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
 };
+
 use crate::{
 	{CryptoStore, SyncCryptoStorePtr, Error, SyncCryptoStore},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
@@ -143,6 +144,15 @@ impl CryptoStore for KeyStore {
 		transcript_data: VRFTranscriptData,
 	) -> Result<Option<VRFSignature>, Error> {
 		SyncCryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data)
+	}
+
+	async fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<Vec<u8>>, Error> {
+		SyncCryptoStore::ecdsa_sign_prehashed(self, id, public, msg)
 	}
 }
 
@@ -324,6 +334,18 @@ impl SyncCryptoStore for KeyStore {
 			output: inout.to_output(),
 			proof,
 		}))
+	}
+
+	fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<Vec<u8>>, Error> {
+		use codec::Encode;
+
+		let pair = self.ecdsa_key_pair(id, public);
+		pair.map(|k| k.sign_prehashed(msg).encode()).map(Ok).transpose()
 	}
 }
 

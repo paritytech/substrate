@@ -194,6 +194,20 @@ pub trait CryptoStore: Send + Sync {
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
 	) -> Result<Option<VRFSignature>, Error>;
+
+	/// Sign pre-hashed
+	///
+	/// Signs a pre-hashed message with the private key that matches
+	/// the ECDSA public key passed.
+	///
+	/// Returns the SCALE encoded signature if key is found and supported,
+	/// `None` if the key doesn't exist or an error when something failed.
+	async fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<Vec<u8>>, Error>;
 }
 
 /// Sync version of the CryptoStore
@@ -353,6 +367,20 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
 	) -> Result<Option<VRFSignature>, Error>;
+
+	/// Sign pre-hashed
+	///
+	/// Signs a pre-hashed message with the private key that matches
+	/// the ECDSA public key passed.
+	///
+	/// Returns the SCALE encoded signature if key is found and supported,
+	/// `None` if the key doesn't exist or an error when something failed.
+	fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<Vec<u8>>, Error>;
 }
 
 /// A pointer to a keystore.

@@ -142,6 +142,15 @@ impl CryptoStore for LocalKeystore {
 	) -> std::result::Result<Option<VRFSignature>, TraitError> {
 		SyncCryptoStore::sr25519_vrf_sign(self, key_type, public, transcript_data)
 	}
+
+	async fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
+		SyncCryptoStore::ecdsa_sign_prehashed(self, id, public, msg)
+	}
 }
 
 impl SyncCryptoStore for LocalKeystore {
@@ -300,6 +309,19 @@ impl SyncCryptoStore for LocalKeystore {
 		} else {
 			Ok(None)
 		}
+	}
+
+	fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
+		let pair = self.0.read()
+			.key_pair_by_type::<ecdsa::Pair>(public, id)
+			.map_err(|e| TraitError::from(e))?;
+		
+		pair.map(|k| k.sign_prehashed(msg).encode()).map(Ok).transpose()
 	}
 }
 
