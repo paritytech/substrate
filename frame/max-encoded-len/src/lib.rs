@@ -17,6 +17,8 @@
 
 //! `trait MaxEncodedLen` bounds the max encoded length of items.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use codec::{Compact, Encode};
 use impl_trait_for_tuples::impl_for_tuples;
 use core::{mem, marker::PhantomData};
