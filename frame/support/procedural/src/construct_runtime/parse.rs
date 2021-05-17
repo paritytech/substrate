@@ -228,6 +228,21 @@ impl Parse for PalletPath {
 	}
 }
 
+impl PalletPath {
+	/// Return the snake-cased module name for this path.
+	pub fn mod_name(&self) -> Ident {
+		let mut iter = self.inner.segments.iter();
+		let mut mod_name =
+			iter.next().expect("Path should always have 1 segment; qed").ident.clone();
+
+		for segment in iter {
+			mod_name = quote::format_ident!("{}_{}", mod_name, segment.ident);
+		}
+
+		mod_name
+	}
+}
+
 impl quote::ToTokens for PalletPath {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		self.inner.to_tokens(tokens);

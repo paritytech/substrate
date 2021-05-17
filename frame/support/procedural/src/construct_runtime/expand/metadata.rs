@@ -135,7 +135,7 @@ fn expand_pallet_metadata_events(
 	decl: &Pallet,
 ) -> TokenStream {
 	if filtered_names.contains(&"Event") {
-		let mod_name = &decl.pallet.inner.segments.last().unwrap().ident;
+		let mod_name = decl.pallet.mod_name();
 		let event = if let Some(instance) = decl.instance.as_ref() {
 			format_ident!("__module_events_{}_{}", mod_name, instance)
 		} else {

@@ -257,7 +257,7 @@ fn expand_origin_caller_variant(
 	generics: &Generics,
 ) -> TokenStream {
 	let pallet_is_generic = !generics.params.is_empty();
-	let mod_name = &path.inner.segments.last().unwrap().ident;
+	let mod_name = &path.mod_name();
 
 	match (instance, pallet_is_generic) {
 		(Some(inst), true) => {
@@ -284,11 +284,11 @@ fn expand_origin_pallet_conversions(
 	instance: Option<&Ident>,
 	generics: &Generics,
 ) -> TokenStream {
-	let mod_name = &path.inner.segments.last().unwrap().ident;
-	let variant = if let Some(inst) = &instance {
+	let mod_name = path.mod_name();
+	let variant = if let Some(inst) = instance {
 		format_ident!("{}_{}", mod_name, inst)
 	} else {
-		mod_name.clone()
+		mod_name
 	};
 
 	let pallet_is_generic = !generics.params.is_empty();

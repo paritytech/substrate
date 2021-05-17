@@ -272,7 +272,7 @@ fn origin_codec() {
 	let origin = OriginCaller::module1_Instance2(module1::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 33);
 
-	let origin = OriginCaller::module3(nested::module3::Origin);
+	let origin = OriginCaller::nested_module3(nested::module3::Origin);
 	assert_eq!(origin.encode()[0], 34);
 
 	let origin = OriginCaller::module1_Instance6(module1::Origin(Default::default()));

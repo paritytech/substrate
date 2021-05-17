@@ -99,7 +99,7 @@ fn expand_event_variant(
 	generics: &Generics,
 ) -> TokenStream {
 	let pallet_is_generic = !generics.params.is_empty();
-	let mod_name = &path.inner.segments.last().unwrap().ident;
+	let mod_name = &path.mod_name();
 
 	match (instance, pallet_is_generic) {
 		(Some(inst), true) => {
@@ -125,11 +125,11 @@ fn expand_event_conversion(
 	instance: Option<&Ident>,
 	pallet_event: &TokenStream,
 ) -> TokenStream {
-	let mod_name = &path.inner.segments.last().unwrap().ident;
-	let variant = if let Some(inst) = &instance {
+	let mod_name = path.mod_name();
+	let variant = if let Some(inst) = instance {
 		format_ident!("{}_{}", mod_name, inst)
 	} else {
-		mod_name.clone()
+		mod_name
 	};
 
 	quote!{
@@ -156,7 +156,7 @@ fn expand_event_metadata(
 	path: &PalletPath,
 	pallet_event: &TokenStream,
 ) -> TokenStream {
-	let mod_name = &path.inner.segments.last().unwrap().ident;
+	let mod_name = path.mod_name();
 
 	quote!{(stringify!(#mod_name), #scrate::event::FnEncode(#pallet_event::metadata)),}
 }
@@ -167,7 +167,7 @@ fn expand_pallet_event_fn(
 	instance: Option<&Ident>,
 	pallet_event: &TokenStream,
 ) -> TokenStream {
-	let mod_name = &path.inner.segments.last().unwrap().ident;
+	let mod_name = path.mod_name();
 	let fn_name = if let Some(inst) = instance {
 		format_ident!("__module_events_{}_{}", mod_name, inst)
 	} else {
