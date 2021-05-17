@@ -418,7 +418,7 @@ fn pallet_expand_deposit_event() {
 #[test]
 fn storage_expand() {
 	use frame_support::pallet_prelude::*;
-	use frame_support::StoragePrefixedMap;
+	use frame_support::storage::StoragePrefixedMap;
 
 	fn twox_64_concat(d: &[u8]) -> Vec<u8> {
 		let mut v = twox_64(d).to_vec();

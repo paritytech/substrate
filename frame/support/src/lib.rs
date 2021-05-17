@@ -1234,7 +1234,10 @@ pub mod pallet_prelude {
 		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
 		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
-		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess},
+		traits::{
+			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
+			ConstU32, GetDefault,
+		},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
 		storage::types::{
@@ -1346,6 +1349,17 @@ pub mod pallet_prelude {
 /// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
 /// `<Pallet as Store>::Foo`.
 ///
+/// To generate the full storage info (used for PoV calculation) use the attribute
+/// `#[pallet::set_storage_max_encoded_len]`, e.g.:
+/// ```ignore
+/// #[pallet::pallet]
+/// #[pallet::set_storage_max_encoded_len]
+/// pub struct Pallet<T>(_);
+/// ```
+///
+/// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
+/// and value types must bound [`traits::MaxEncodedLen`].
+///
 /// ### Macro expansion:
 ///
 /// The macro add this attribute to the struct definition:
@@ -1370,7 +1384,14 @@ pub mod pallet_prelude {
 /// given by [`frame_support::traits::PalletInfo`].
 /// (The implementation use the associated type `frame_system::Config::PalletInfo`).
 ///
-/// If attribute generate_store then macro create the trait `Store` and implement it on `Pallet`.
+/// It implements [`traits::StorageInfoTrait`] on `Pallet` which give information about all storages.
+///
+/// If the attribute generate_store is set then the macro creates the trait `Store` and implements
+/// it on `Pallet`.
+///
+/// If the attribute set_storage_max_encoded_len is set then the macro call
+/// [`traits::StorageInfoTrait`] for each storage in the implementation of
+/// [`traits::StorageInfoTrait`] for the pallet.
 ///
 /// # Hooks: `#[pallet::hooks]` mandatory
 ///

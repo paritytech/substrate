@@ -17,7 +17,7 @@
 
 //! Storage key type.
 
-use crate::hash::{ReversibleStorageHasher, StorageHasher};
+use crate::{hash::{ReversibleStorageHasher, StorageHasher}, traits::MaxEncodedLen};
 use codec::{Encode, EncodeLike, FullCodec};
 use paste::paste;
 use sp_std::prelude::*;
@@ -51,6 +51,11 @@ pub trait KeyGenerator {
 		key: &KArg,
 		hash_fns: Self::HArg,
 	) -> Vec<u8>;
+}
+
+/// The maximum length used by the key in storage.
+pub trait KeyGeneratorMaxEncodedLen: KeyGenerator {
+	fn key_max_encoded_len() -> usize;
 }
 
 /// A trait containing methods that are only implemented on the Key struct instead of the entire tuple.
@@ -88,6 +93,12 @@ impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 				.next()
 				.expect("should have at least one element!"),
 		)
+	}
+}
+
+impl<H: StorageHasher, K: FullCodec + MaxEncodedLen> KeyGeneratorMaxEncodedLen for Key<H, K> {
+	fn key_max_encoded_len() -> usize {
+		H::max_len::<K>()
 	}
 }
 
@@ -136,6 +147,20 @@ impl KeyGenerator for Tuple {
 			)*
 		);
 		migrated_key
+	}
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(2, 18)]
+#[tuple_types_custom_trait_bound(KeyGeneratorInner + KeyGeneratorMaxEncodedLen)]
+impl KeyGeneratorMaxEncodedLen for Tuple {
+	fn key_max_encoded_len() -> usize {
+		let mut len = 0usize;
+		for_tuples!(
+			#(
+				len = len.saturating_add(Tuple::key_max_encoded_len());
+			)*
+		);
+		len
 	}
 }
 
