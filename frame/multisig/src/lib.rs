@@ -161,7 +161,6 @@ pub mod pallet{
 		Identity,
 		[u8; 32],
 		(OpaqueCall, T::AccountId, BalanceOf<T>),
-		OptionQuery,
 	>;
 
 	#[pallet::error]
