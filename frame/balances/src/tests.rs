@@ -260,14 +260,13 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					System::set_block_number(2);
 					System::inc_account_nonce(&2);
 					assert_eq!(Balances::total_balance(&2), 256 * 20);
 
 					assert_ok!(Balances::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
 					assert_eq!(Balances::free_balance(2), 255); // "free" account deleted."
 					assert_eq!(Balances::total_balance(&2), 256 * 20); // reserve still exists.
-					assert_eq!(System::account_nonce(&2), 2);
+					assert_eq!(System::account_nonce(&2), 1);
 
 					// account 4 tries to take index 1 for account 5.
 					assert_ok!(Balances::transfer(Some(4).into(), 5, 256 * 1 + 0x69));
@@ -301,9 +300,8 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					System::set_block_number(2);
 					System::inc_account_nonce(&2);
-					assert_eq!(System::account_nonce(&2), 2);
+					assert_eq!(System::account_nonce(&2), 1);
 					assert_eq!(Balances::total_balance(&2), 2000);
 					 // index 1 (account 2) becomes zombie
 					assert_ok!(Balances::transfer(Some(2).into(), 5, 1901));
