@@ -76,6 +76,6 @@ pub trait ChildStateApi<Hash> {
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
-		hash: Option<Hash>
+		hash: Option<Hash>,
 	) -> FutureResult<ReadProof<Hash>>;
 }

@@ -484,7 +484,6 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 		self.backend.storage_size(block, storage_key, key)
 	}
 
-
 }
 
 fn client_err(err: sp_blockchain::Error) -> Error {
