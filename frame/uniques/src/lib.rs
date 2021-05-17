@@ -208,8 +208,8 @@ pub mod pallet {
 		/// An asset `class` has had its attributes changed by the `Force` origin.
 		/// \[ class \]
 		AssetStatusChanged(T::ClassId),
-		/// New metadata has been set for an asset class. \[ asset_id, name, is_frozen \]
-		ClassMetadataSet(T::ClassId, Vec<u8>, bool),
+		/// New metadata has been set for an asset class. \[ asset_id, name, info, is_frozen \]
+		ClassMetadataSet(T::ClassId, Vec<u8>, Vec<u8>, bool),
 		/// Metadata has been cleared for an asset class. \[ asset_id \]
 		ClassMetadataCleared(T::ClassId),
 		/// New metadata has been set for an asset instance. \[ asset_id, name, info, is_frozen \]
@@ -1091,11 +1091,12 @@ pub mod pallet {
 		/// Emits `ClassMetadataSet`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::set_class_metadata(name.len() as u32))]
+		#[pallet::weight(T::WeightInfo::set_class_metadata(name.len() as u32, info.len() as u32))]
 		pub(super) fn set_class_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			name: Vec<u8>,
+			info: Vec<u8>,
 			is_frozen: bool,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
@@ -1132,10 +1133,11 @@ pub mod pallet {
 				*metadata = Some(ClassMetadata {
 					deposit,
 					name: name.clone(),
+					information: info.clone(),
 					is_frozen,
 				});
 
-				Self::deposit_event(Event::ClassMetadataSet(class, name, false));
+				Self::deposit_event(Event::ClassMetadataSet(class, name, info, false));
 				Ok(())
 			})
 		}

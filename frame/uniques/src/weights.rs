@@ -64,7 +64,7 @@ pub trait WeightInfo {
 	fn force_asset_status() -> Weight;
 	fn set_metadata(n: u32, i: u32, ) -> Weight;
 	fn clear_metadata() -> Weight;
-	fn set_class_metadata(n: u32, ) -> Weight;
+	fn set_class_metadata(n: u32, i: u32, ) -> Weight;
 	fn clear_class_metadata() -> Weight;
 }
 
@@ -182,10 +182,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn set_class_metadata(n: u32, ) -> Weight {
+	fn set_class_metadata(n: u32, i: u32, ) -> Weight {
 		(53_367_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((8_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((8_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -309,10 +310,11 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn set_class_metadata(n: u32, ) -> Weight {
+	fn set_class_metadata(n: u32, i: u32, ) -> Weight {
 		(53_367_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((8_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((8_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
