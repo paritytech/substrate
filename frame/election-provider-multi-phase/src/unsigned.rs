@@ -619,7 +619,7 @@ impl<T: Config> Pallet<T> {
 		let mutate_stat =
 			guard.mutate::<_, &'static str, _>(|maybe_running: Option<Option<bool>>| {
 				match maybe_running {
-					Some(Some(running)) if !running => {
+					Some(Some(false)) => {
 						// no one else is running. Set it, and return Ok.
 						Ok(true)
 					}
