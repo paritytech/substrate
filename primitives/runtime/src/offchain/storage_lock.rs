@@ -178,12 +178,10 @@ impl<B: BlockNumberProvider> fmt::Debug for BlockAndTimeDeadline<B>
 	where <B as BlockNumberProvider>::BlockNumber: fmt::Debug
 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(
-			f,
-			"BlockAndTimeDeadline(block_number={:?}, time={:?})",
-			self.block_number,
-			self.timestamp,
-		)
+		f.debug_struct("BlockAndTimeDeadline")
+			.field("block_number", &self.block_number)
+			.field("timestamp", &self.timestamp)
+			.finish()
 	}
 }
 
