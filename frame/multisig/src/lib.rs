@@ -146,7 +146,7 @@ pub mod pallet{
 
 	/// The set of open multisig operations.
 	#[pallet::storage]
-	pub(super) type Multisigs<T: Config> = StorageDoubleMap<
+	pub type Multisigs<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
