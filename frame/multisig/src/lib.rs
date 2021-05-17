@@ -156,7 +156,7 @@ pub mod pallet{
 	>;
 
 	#[pallet::storage]
-	pub(super) type Calls<T: Config> = StorageMap<
+	pub type Calls<T: Config> = StorageMap<
 		_,
 		Identity,
 		[u8; 32],
