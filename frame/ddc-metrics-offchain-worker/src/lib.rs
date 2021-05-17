@@ -15,7 +15,7 @@ use frame_system::{
     }
 };
 use frame_support::{
-    debug, decl_module, decl_storage, decl_event,
+	decl_module, decl_storage, decl_event,
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{offchain::{
@@ -28,6 +28,7 @@ use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
 use alt_serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use hex_literal::hex;
+use log::{info, warn, error};
 
 #[macro_use]
 extern crate alloc;
@@ -126,7 +127,7 @@ pub fn get_ddc_url_or_default(default_url: &str) -> Vec<u8> {
         Some(Some(url)) => url,
 
         Some(None) => {
-            debug::error!("[OCW] Error decoding DDC URL from local storage");
+            error!("[OCW] Error decoding DDC URL from local storage");
             "INVALID_DDC_URL".as_bytes().to_vec()
         }
     };
@@ -215,8 +216,8 @@ decl_module! {
 		fn offchain_worker(block_number: T::BlockNumber) {
             let res = Self::offchain_worker_main(block_number);
             match res {
-                Ok(()) => debug::info!("[OCW] Offchain Worker complete."),
-                Err(err) => debug::error!("[OCW] Error in Offchain Worker: {}", err),
+                Ok(()) => info!("[OCW] Offchain Worker complete."),
+                Err(err) => error!("[OCW] Error in Offchain Worker: {}", err),
             };
 		}
 	}
@@ -231,7 +232,7 @@ impl<T: Trait> Module<T> {
     fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
         let signer = match Self::get_signer() {
             Err(e) => {
-                debug::warn!("{:?}", e);
+                warn!("{:?}", e);
                 return Ok(());
             }
             Ok(signer) => signer,
@@ -246,13 +247,13 @@ impl<T: Trait> Module<T> {
 
         let aggregated_metrics = Self::fetch_all_metrics(day_start_ms)
             .map_err(|err| {
-                debug::error!("[OCW] HTTP error occurred: {:?}", err);
+                error!("[OCW] HTTP error occurred: {:?}", err);
                 "could not fetch metrics"
             })?;
 
         Self::send_metrics_to_sc(signer, day_start_ms, aggregated_metrics)
             .map_err(|err| {
-                debug::error!("[OCW] Contract error occurred: {:?}", err);
+                error!("[OCW] Contract error occurred: {:?}", err);
                 "could not submit report_metrics TX"
             })?;
 
@@ -268,14 +269,14 @@ impl<T: Trait> Module<T> {
 
                 if let Some(current_next_at) = current_next_at {
                     if current_next_at > block_number {
-                        debug::info!("[OCW] Too early to execute. Current: {:?}, next execution at: {:?}", block_number, current_next_at);
+                        info!("[OCW] Too early to execute. Current: {:?}, next execution at: {:?}", block_number, current_next_at);
                         Err("Skipping")
                     } else {
                         // set new value
                         Ok(T::BlockInterval::get() + block_number)
                     }
                 } else {
-                    debug::error!("[OCW] Something went wrong in `check_if_should_proceed`");
+                    error!("[OCW] Something went wrong in `check_if_should_proceed`");
                     Err("Unexpected error")
                 }
             }
@@ -307,7 +308,7 @@ impl<T: Trait> Module<T> {
         metrics: Vec<MetricInfo>,
     ) -> ResultStr<()> {
         let contract_id = T::ContractId::get();
-        debug::info!("[OCW] Using Contract Address: {:?}", contract_id);
+        info!("[OCW] Using Contract Address: {:?}", contract_id);
 
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
@@ -318,7 +319,7 @@ impl<T: Trait> Module<T> {
 
             let results = signer.send_signed_transaction(
                 |account| {
-                    debug::info!("[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?})", account.id, one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
+                    info!("[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?})", account.id, one_metric.appPubKey, day_start_ms, one_metric.bytes, one_metric.requests);
 
                     let call_data = Self::encode_report_metrics(&app_id, day_start_ms, one_metric.bytes, one_metric.requests);
 
@@ -384,13 +385,13 @@ impl<T: Trait> Module<T> {
     {
         let body = Self::http_get_request(url)
             .map_err(|err| {
-                debug::error!("[OCW] Error while getting {}: {:?}", url, err);
+                error!("[OCW] Error while getting {}: {:?}", url, err);
                 "HTTP GET error"
             })?;
 
         let parsed = serde_json::from_slice(&body)
             .map_err(|err| {
-                debug::warn!("[OCW] Error while parsing JSON from {}: {:?}", url, err);
+                warn!("[OCW] Error while parsing JSON from {}: {:?}", url, err);
                 "HTTP JSON parse error"
             });
 
@@ -398,7 +399,7 @@ impl<T: Trait> Module<T> {
     }
 
     fn http_get_request(http_url: &str) -> Result<Vec<u8>, http::Error> {
-        debug::info!("[OCW] Sending request to: {:?}", http_url);
+        info!("[OCW] Sending request to: {:?}", http_url);
 
         // Initiate an external HTTP GET request. This is using high-level wrappers from `sp_runtime`.
         let request = http::Request::get(http_url);
@@ -414,7 +415,7 @@ impl<T: Trait> Module<T> {
             .map_err(|_| http::Error::DeadlineReached)??;
 
         if response.code != 200 {
-            debug::warn!("[OCW] http_get_request unexpected status code: {}", response.code);
+            warn!("[OCW] http_get_request unexpected status code: {}", response.code);
             return Err(http::Error::Unknown);
         }
 
