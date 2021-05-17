@@ -97,6 +97,7 @@ impl From<FeasibilityError> for MinerError {
 
 /// Save a given call into OCW storage.
 fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
+	log!(debug, "saving a call to the offchain storage.");
 	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
 		Ok(Ok(_)) => Ok(()),
@@ -155,12 +156,14 @@ impl<T: Config> Pallet<T> {
 				}
 			})
 			.or_else::<MinerError, _>(|error| {
+				log!(debug, "restoring solution failed due to {:?}", error);
 				match error {
 					MinerError::Feasibility(_) | MinerError::NoStoredSolution => {
+						log!(debug, "mining a new solution...");
 						// if not present or cache invalidated due to feasibility, regenerate.
 						// note that failing `Feasibility` can only mean that the solution was
 						// computed over a snapshot that has changed due to a fork.
-						let (call, _) = Self::mine_checked_call()?;
+						let call = Self::mine_checked_call()?;
 						save_solution(&call)?;
 						Ok(call)
 					}
@@ -171,31 +174,21 @@ impl<T: Config> Pallet<T> {
 				}
 			})?;
 
-		// the runtime will catch it and reject the transaction if the phase is wrong, but it's
-		// cheap and easy to check it here to ease the workload on the runtime, so:
-		if !Self::current_phase().is_unsigned_open() {
-			// don't bother submitting; it's not an error, we're just too late.
-			return Ok(());
-		}
-
 		// in case submission fails for any reason, `submit_call` kills the stored solution
 		Self::submit_call(call)
 	}
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
 	pub fn mine_check_save_submit() -> Result<(), MinerError> {
-		log!(
-			debug,
-			"OCW attempting to compute an unsigned solution for the current election"
-		);
+		log!(debug, "miner attempting to compute an unsigned solution.");
 
-		let (call, _) = Self::mine_checked_call()?;
+		let call = Self::mine_checked_call()?;
 		save_solution(&call)?;
 		Self::submit_call(call)
 	}
 
 	/// Mine a new solution as a call. Performs all checks.
-	fn mine_checked_call() -> Result<(Call<T>, ElectionScore), MinerError> {
+	fn mine_checked_call() -> Result<Call<T>, MinerError> {
 		let iters = Self::get_balancing_iters();
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
@@ -205,19 +198,16 @@ impl<T: Config> Pallet<T> {
 
 		log!(
 			debug,
-			"OCW mined a solution with score {:?} and size {}",
+			"mined a solution with score {:?} and size {}",
 			score,
 			call.using_encoded(|b| b.len())
 		);
 
-		Ok((call, score))
+		Ok(call)
 	}
 
 	fn submit_call(call: Call<T>) -> Result<(), MinerError> {
-		log!(
-			debug,
-			"OCW submitting a solution as an unsigned transaction",
-		);
+		log!(debug, "miner submitting a solution as an unsigned transaction");
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 			.map_err(|_| {
@@ -234,16 +224,14 @@ impl<T: Config> Pallet<T> {
 		solution_type: &str,
 	) -> Result<(), MinerError> {
 		Self::unsigned_pre_dispatch_checks(raw_solution).map_err(|err| {
-			log!(warn, "pre-dispatch checks failed for {} solution: {:?}", solution_type, err);
+			log!(debug, "pre-dispatch checks failed for {} solution: {:?}", solution_type, err);
 			MinerError::PreDispatchChecksFailed
 		})?;
 
-		Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(
-			|err| {
-			log!(warn, "feasibility check failed for {} solution: {:?}", solution_type, err);
+		Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(|err| {
+			log!(debug, "feasibility check failed for {} solution: {:?}", solution_type, err);
 			err
-		},
-		)?;
+		})?;
 
 		Ok(())
 	}

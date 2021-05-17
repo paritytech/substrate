@@ -661,7 +661,7 @@ pub mod pallet {
 						acquired = true;
 						Self::mine_check_save_submit()
 					});
-					log!(debug, "initial OCW output: {:?}", initial_output);
+					log!(debug, "initial offchain thread output: {:?}", initial_output);
 				}
 				Phase::Unsigned((true, opened)) if opened < now => {
 					// try and resubmit the cached solution, and recompute ONLY if it is not
@@ -670,7 +670,7 @@ pub mod pallet {
 						acquired = true;
 						Self::restore_or_compute_then_maybe_submit()
 					});
-					log!(debug, "resubmit OCW output: {:?}", resubmit_output);
+					log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
 				}
 				_ => {}
 			}
