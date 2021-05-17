@@ -1702,3 +1702,4 @@ pub mod pallet_prelude {
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
 }
+
