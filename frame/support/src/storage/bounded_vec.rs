@@ -35,14 +35,14 @@ use crate::{
 /// It has implementations for efficient append and length decoding, as with a normal `Vec<_>`, once
 /// put into storage as a raw value, map or double-map.
 ///
-/// As the name suggests, the length of the queue is always bounded. All internal operations ensure
-/// this bound is respected.
+/// The length of the vec is not strictly bounded. Decoding a vec with more element that the bound
+/// is accepted, and some method allow to bypass the restriction with warnings.
 #[derive(Encode, Decode)]
 pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
 impl<T, S> BoundedVec<T, S> {
 	/// Create `Self` from `t` without any checks.
-	unsafe fn unchecked_from(t: Vec<T>) -> Self {
+	fn unchecked_from(t: Vec<T>) -> Self {
 		Self(t, Default::default())
 	}
 
@@ -89,7 +89,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
 	/// respected. The additional scope can be used to indicate where a potential overflow is
 	/// happening.
-	pub unsafe fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
+	pub fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
 		if t.len() > Self::bound() {
 			log::warn!(
 				target: crate::LOG_TARGET,
