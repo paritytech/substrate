@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3]
+
+### Added
+
+-
+
+### Removed
+
+-
+
+### Changed
+
+- MILLICENTS set to `100_000` to match Network decimals
+- MILLISECS_PER_BLOCK set to `6000`
+- Fees ratio set to 50%/50%
+- Inflation set to `0`
+- Burn set to `0`
+
+### Fixed
+
+-
+
 ## [2.2.2]
 
 ### Added
