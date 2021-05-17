@@ -210,13 +210,6 @@ test-prometheus-alerting-rules:
     - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
     - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml |
         promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
-    - echo SUBSTRATE_MONITORING_RULES=`cat .maintain/monitoring/alerting-rules/alerting-rules.yaml |
-        sed 's/^/  /;1s/^/spec:\n/' | base64 | tr -d '\n'` > substrate-monitoring-rules.env
-  artifacts:
-    reports:
-      dotenv:
-        - substrate-monitoring-rules.env
-
 
 #### stage:                        test
 
