@@ -653,47 +653,24 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
-			let mut acquired = false;
-			match Self::current_phase() {
-				Phase::Unsigned((true, opened)) if opened == now => {
-					// mine a new solution, cache it, and attempt to submit it
-					let initial_output = Self::try_acquire_offchain_lock(now).and_then(|_| {
-						acquired = true;
-						Self::mine_check_save_submit()
-					});
-					log!(debug, "initial offchain thread output: {:?}", initial_output);
-				}
-				Phase::Unsigned((true, opened)) if opened < now => {
-					// try and resubmit the cached solution, and recompute ONLY if it is not
-					// feasible.
-					let resubmit_output = Self::try_acquire_offchain_lock(now).and_then(|_| {
-						acquired = true;
-						Self::restore_or_compute_then_maybe_submit()
-					});
-					log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
-				}
-				_ => {}
-			}
+			use sp_runtime::offchain::storage_lock::{StorageLock, BlockAndTime};
 
-			// after election finalization, clear OCW solution storage
-			if <frame_system::Pallet<T>>::events()
-				.into_iter()
-				.filter_map(|event_record| {
-					let local_event = <T as Config>::Event::from(event_record.event);
-					local_event.try_into().ok()
-				})
-				.find(|event| {
-					matches!(event, Event::ElectionFinalized(_))
-				})
-				.is_some()
-			{
-				unsigned::kill_ocw_solution::<T>();
-			}
+			// create a lock with the maximum deadline of number of blocks in the unsigned phase.
+			// This should only come useful in an **abrupt** termination of execution, otherwise the
+			// guard will be dropped upon successful execution.
+			let mut lock = StorageLock::<'_, BlockAndTime<Self>>::with_block_deadline(
+				unsigned::OFFCHAIN_LOCK,
+				T::UnsignedPhase::get().saturated_into(),
+			);
 
-			// release the offchain lock, if acquired.
-			if acquired {
-				Self::release_offchain_lock();
-			}
+			match lock.try_lock() {
+				Ok(_guard) => {
+					Self::do_synchronized_offchain_worker(now);
+				},
+				Err(deadline) => {
+					log!(debug, "offchain worker lock not released, deadline is {:?}", deadline);
+				}
+			};
 		}
 
 		fn integrity_test() {
@@ -937,7 +914,53 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
+impl<T: Config> sp_runtime::offchain::storage_lock::BlockNumberProvider for Pallet<T> {
+		type BlockNumber = T::BlockNumber;
+		fn current_block_number() -> Self::BlockNumber {
+			<frame_system::Pallet<T>>::block_number()
+		}
+	}
+
 impl<T: Config> Pallet<T> {
+	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
+	/// acquired with success.
+	fn do_synchronized_offchain_worker(now: T::BlockNumber) {
+		log!(trace, "lock for offchain worker acquired.");
+		match Self::current_phase() {
+			Phase::Unsigned((true, opened)) if opened == now => {
+				// mine a new solution, cache it, and attempt to submit it
+				let initial_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
+					Self::mine_check_save_submit()
+				});
+				log!(debug, "initial offchain thread output: {:?}", initial_output);
+			}
+			Phase::Unsigned((true, opened)) if opened < now => {
+				// try and resubmit the cached solution, and recompute ONLY if it is not
+				// feasible.
+				let resubmit_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
+					Self::restore_or_compute_then_maybe_submit()
+				});
+				log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
+			}
+			_ => {}
+		}
+
+		// after election finalization, clear OCW solution storage.
+		if <frame_system::Pallet<T>>::events()
+			.into_iter()
+			.filter_map(|event_record| {
+				let local_event = <T as Config>::Event::from(event_record.event);
+				local_event.try_into().ok()
+			})
+			.find(|event| {
+				matches!(event, Event::ElectionFinalized(_))
+			})
+			.is_some()
+		{
+			unsigned::kill_ocw_solution::<T>();
+		}
+	}
+
 	/// Logic for [`<Pallet as Hooks>::on_initialize`] when signed phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation.

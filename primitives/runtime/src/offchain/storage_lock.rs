@@ -66,6 +66,7 @@ use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
+use sp_std::fmt;
 
 /// Default expiry duration for time based locks in milliseconds.
 const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION: Duration = Duration::from_millis(20_000);
@@ -170,6 +171,19 @@ impl<B: BlockNumberProvider> Default for BlockAndTimeDeadline<B> {
 			block_number: B::current_block_number() + STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS.into(),
 			timestamp: offchain::timestamp().add(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION),
 		}
+	}
+}
+
+impl<B: BlockNumberProvider> fmt::Debug for BlockAndTimeDeadline<B>
+	where <B as BlockNumberProvider>::BlockNumber: fmt::Debug
+{
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			f,
+			"BlockAndTimeDeadline(block_number={:?}, time={:?})",
+			self.block_number,
+			self.timestamp,
+		)
 	}
 }
 

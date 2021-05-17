@@ -35,7 +35,7 @@ use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec};
 /// Storage key used to store the last block number at which offchain worker ran.
 pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
 /// Storage key used to store the offchain worker running status.
-pub(crate) const OFFCHAIN_RUNNING: &[u8] = b"parity/multi-phase-unsigned-election/running";
+pub(crate) const OFFCHAIN_LOCK: &[u8] = b"parity/multi-phase-unsigned-election/lock";
 
 /// Storage key used to cache the solution `call`.
 pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-election/call";
@@ -618,74 +618,6 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Ensure a new offchain worker is not being executed at this point in time, by checking
-	/// `OFFCHAIN_RUNNING` storage.
-	///
-	/// If `OK(_)` is returned, `true` is written to `OFFCHAIN_RUNNING`, which in turn prevents any
-	/// further call to this function to succeed.
-	///
-	/// It is up to the call site, and ABSOLUTELY CRUCIAL to make sure `release_offchain_lock` is
-	/// called appropriately to ensure starvation does not occur.
-	pub(crate) fn ensure_offchain_not_running() -> Result<(), MinerError> {
-		let guard = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
-
-		let mutate_stat =
-			guard.mutate::<_, &'static str, _>(|maybe_running: Option<Option<bool>>| {
-				match maybe_running {
-					Some(Some(false)) => {
-						// no one else is running. Set it, and return Ok.
-						Ok(true)
-					}
-					Some(Some(true)) => {
-						// another thread is currently running.
-						Err("still running.")
-					}
-					_ => {
-						// value does not exist.
-						Ok(true)
-					}
-				}
-			});
-
-		match mutate_stat {
-			// all good
-			Ok(Ok(_)) => Ok(()),
-			// failed to write.
-			Ok(Err(_)) => Err(MinerError::Lock("failed to write to offchain db [guard].")),
-			// still running etc.
-			Err(why) => Err(MinerError::Lock(why)),
-		}
-	}
-
-	/// Perform all the checks that are needed before we spawn any significant work in the offchain
-	/// worker thread.
-	///
-	/// This tries first `ensure_offchain_not_running` and then `ensure_offchain_repeat_frequency`.
-	pub(crate) fn try_acquire_offchain_lock(now: T::BlockNumber) -> Result<(), MinerError> {
-		Self::ensure_offchain_not_running().and_then(|_| {
-			Self::ensure_offchain_repeat_frequency(now).map_err(|error| {
-				// don't alter the error, just release the lock acquired in
-				// `ensure_offchain_not_running` if we fail this second step.
-				Self::release_offchain_lock();
-				error
-			})
-		})
-	}
-
-	/// Perform the release operation of any locks that where acquired to execute the offchain
-	/// worker thread.
-	pub(crate) fn release_offchain_lock() {
-		log!(debug, "releasing offchain repeat lock.");
-		let guard = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
-		let _mutate_stats = guard.mutate::<_, &'static str, _>(|_| Ok(false));
-		// defensive-only: ^^ it can only fail if another offchain thread mutates the
-		// `OFFCHAIN_RUNNING` while the current execution thread is inside `mutate`. The only way to
-		// successfully mutate `OFFCHAIN_RUNNING` is to succeed in in `ensure_offchain_not_running`,
-		// which in turn can never happen until the current mutation succeeds. Thus, this can never
-		// fail, qed;
-		debug_assert!(matches!(_mutate_stats, Ok(Ok(_))));
-	}
-
 	/// Do the basics checks that MUST happen during the validation and pre-dispatch of an unsigned
 	/// transaction.
 	///
@@ -1178,93 +1110,6 @@ mod tests {
 		})
 	}
 
-	#[test]
-	fn ocw_lock_prevents_overlapping_execution() {
-		{
-			// first, ensure that a successful execution releases the lock
-			let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
-			ext.execute_with(|| {
-				let running = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
-				let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
-
-				roll_to(25);
-				assert!(MultiPhase::current_phase().is_unsigned());
-
-				// initially, the running flag is not set.
-				assert!(matches!(running.get::<bool>(), None));
-				assert!(matches!(last_block.get::<BlockNumber>(), None));
-
-				// a successful a-z execution.
-				MultiPhase::offchain_worker(25);
-				assert_eq!(pool.read().transactions.len(), 1);
-
-				// afterwards, it is flipped to false.
-				assert!(matches!(running.get::<bool>(), Some(Some(false))));
-				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
-			});
-		}
-
-		{
-			// ensure that if the running flag is set, a new execution is not allowed.
-			let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
-			ext.execute_with(|| {
-				let running = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
-				let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
-
-				roll_to(25);
-				assert!(MultiPhase::current_phase().is_unsigned());
-
-				// artificially set the value, as if another thread is mid-way.
-				running.set(&true);
-				last_block.set(&25);
-
-				assert_eq!(
-					MultiPhase::try_acquire_offchain_lock(25).unwrap_err(),
-					MinerError::Lock("still running.")
-				);
-				assert_eq!(
-					MultiPhase::try_acquire_offchain_lock(26).unwrap_err(),
-					MinerError::Lock("still running.")
-				);
-
-				// failing to acquire running lock should not alter the last-block storage
-				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
-			});
-		}
-
-		{
-			// ensure that if the running lock is free, but frequency fails, the running lock is
-			// released.
-			let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
-			ext.execute_with(|| {
-				let running = StorageValueRef::persistent(&OFFCHAIN_RUNNING);
-				let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
-
-				roll_to(25);
-				assert!(MultiPhase::current_phase().is_unsigned());
-
-				// initially, nothing is set.
-				assert!(matches!(running.get::<bool>(), None));
-				assert!(matches!(last_block.get::<BlockNumber>(), None));
-
-				// a successful a-z execution.
-				MultiPhase::offchain_worker(25);
-				assert_eq!(pool.read().transactions.len(), 1);
-				assert!(matches!(running.get::<bool>(), Some(Some(false))));
-				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
-
-				// we can't acquire the frequency lock.
-				assert_eq!(
-					MultiPhase::try_acquire_offchain_lock(26).unwrap_err(),
-					MinerError::Lock("recently executed.")
-				);
-
-				// running lock should stay unaffected.
-				assert!(matches!(running.get::<bool>(), Some(Some(false))));
-				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
-			});
-		}
-	}
 
 	#[test]
 	fn ocw_only_runs_when_unsigned_open_now() {
