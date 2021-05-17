@@ -124,14 +124,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn last_event() -> Event {
-	system::Pallet::<Test>::events().pop().map(|e| e.event).expect("Event expected")
-}
-
-fn expect_event<E: Into<Event>>(e: E) {
-	assert_eq!(last_event(), e.into());
-}
-
 fn now() -> Timepoint<u64> {
 	Multisig::timepoint()
 }

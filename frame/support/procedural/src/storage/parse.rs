@@ -29,6 +29,7 @@ mod keyword {
 	syn::custom_keyword!(get);
 	syn::custom_keyword!(map);
 	syn::custom_keyword!(double_map);
+	syn::custom_keyword!(nmap);
 	syn::custom_keyword!(opaque_blake2_256);
 	syn::custom_keyword!(opaque_blake2_128);
 	syn::custom_keyword!(blake2_128_concat);
@@ -199,6 +200,7 @@ impl_parse_for_opt!(DeclStorageBuild => keyword::build);
 enum DeclStorageType {
 	Map(DeclStorageMap),
 	DoubleMap(Box<DeclStorageDoubleMap>),
+	NMap(DeclStorageNMap),
 	Simple(syn::Type),
 }
 
@@ -208,6 +210,8 @@ impl syn::parse::Parse for DeclStorageType {
 			Ok(Self::Map(input.parse()?))
 		} else if input.peek(keyword::double_map) {
 			Ok(Self::DoubleMap(input.parse()?))
+		} else if input.peek(keyword::nmap) {
+			Ok(Self::NMap(input.parse()?))
 		} else {
 			Ok(Self::Simple(input.parse()?))
 		}
@@ -235,7 +239,21 @@ struct DeclStorageDoubleMap {
 	pub value: syn::Type,
 }
 
-#[derive(ToTokens, Debug)]
+#[derive(Parse, ToTokens, Debug)]
+struct DeclStorageKey {
+	pub hasher: Opt<SetHasher>,
+	pub key: syn::Type,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct DeclStorageNMap {
+	pub map_keyword: keyword::nmap,
+	pub storage_keys: ext::PunctuatedTrailing<DeclStorageKey, Token![,]>,
+	pub ass_keyword: Token![=>],
+	pub value: syn::Type,
+}
+
+#[derive(Clone, ToTokens, Debug)]
 enum Hasher {
 	Blake2_256(keyword::opaque_blake2_256),
 	Blake2_128(keyword::opaque_blake2_128),
@@ -291,7 +309,7 @@ impl syn::parse::Parse for Opt<DeclStorageDefault> {
 	}
 }
 
-#[derive(Parse, ToTokens, Debug)]
+#[derive(Clone, Parse, ToTokens, Debug)]
 struct SetHasher {
 	pub hasher_keyword: keyword::hasher,
 	pub inner: ext::Parens<Hasher>,
@@ -494,6 +512,18 @@ fn parse_storage_line_defs(
 					key2: map.key2,
 					value: map.value,
 				})
+			),
+			DeclStorageType::NMap(map) => super::StorageLineTypeDef::NMap(
+				super::NMapDef {
+					hashers: map
+						.storage_keys
+						.inner
+						.iter()
+						.map(|pair| Ok(pair.hasher.inner.clone().ok_or_else(no_hasher_error)?.into()))
+						.collect::<Result<Vec<_>, syn::Error>>()?,
+					keys: map.storage_keys.inner.iter().map(|pair| pair.key.clone()).collect(),
+					value: map.value,
+				}
 			),
 			DeclStorageType::Simple(expr) => super::StorageLineTypeDef::Simple(expr),
 		};
