@@ -147,10 +147,7 @@ impl<T: Config> Pallet<T> {
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
 	/// if our call's score is greater than that of the cached solution.
 	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError> {
-		log!(
-			debug,
-			"OCW attempting to restore or compute an unsigned solution for the current election"
-		);
+		log!(debug,"miner attempting to restore or compute an unsigned solution.");
 
 		let call = restore_solution::<T>()
 		.and_then(|call| {
@@ -1107,6 +1104,62 @@ mod tests {
 		})
 	}
 
+	#[test]
+	fn ocw_lock_prevents_overlapping_execution() {
+		use crate::mock::BlockNumber;
+		use sp_runtime::offchain::storage_lock::{StorageLock, BlockAndTime};
+
+		{
+			// first, ensure that a successful execution releases the lock
+			let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+			ext.execute_with(|| {
+				let guard = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+				let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+
+				roll_to(25);
+				assert!(MultiPhase::current_phase().is_unsigned());
+
+				// initially, the lock is not set.
+				assert!(matches!(guard.get::<bool>(), None));
+
+				// a successful a-z execution.
+				MultiPhase::offchain_worker(25);
+				assert_eq!(pool.read().transactions.len(), 1);
+
+				// afterwards, the lock is not set either..
+				assert!(matches!(guard.get::<bool>(), None));
+				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
+			});
+		}
+
+		{
+			// ensure that if the guard is in hold, a new execution is not allowed.
+			let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+			ext.execute_with(|| {
+				roll_to(25);
+				assert!(MultiPhase::current_phase().is_unsigned());
+
+				// artificially set the value, as if another thread is mid-way.
+				let mut lock = StorageLock::<'_, BlockAndTime<MultiPhase>>::with_block_deadline(
+					OFFCHAIN_LOCK,
+					crate::mock::UnsignedPhase::get().saturated_into(),
+				);
+				let guard = lock.lock();
+
+				// nothing submitted.
+				MultiPhase::offchain_worker(25);
+				assert_eq!(pool.read().transactions.len(), 0);
+				MultiPhase::offchain_worker(26);
+				assert_eq!(pool.read().transactions.len(), 0);
+
+				drop(guard);
+
+				// 🎉 !
+				MultiPhase::offchain_worker(25);
+				assert_eq!(pool.read().transactions.len(), 1);
+			});
+		}
+	}
 
 	#[test]
 	fn ocw_only_runs_when_unsigned_open_now() {
