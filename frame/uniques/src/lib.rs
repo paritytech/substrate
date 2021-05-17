@@ -116,12 +116,13 @@ pub mod pallet {
 	#[pallet::storage]
 	/// The assets held by any given account; set out this way so that assets owned by a single
 	/// account can be enumerated.
-	pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
-		Blake2_128Concat,
-		T::AccountId,
-		Blake2_128Concat,
-		(T::ClassId, T::InstanceId),
+		(
+			NMapKey<Blake2_128Concat, T::AccountId>, // owner
+			NMapKey<Blake2_128Concat, T::ClassId>,
+			NMapKey<Blake2_128Concat, T::InstanceId>,
+		),
 		(),
 		OptionQuery,
 	>;
@@ -379,7 +380,7 @@ pub mod pallet {
 				ensure!(class_details.free_holds == witness.free_holds, Error::<T, I>::BadWitness);
 
 				for (instance, mut details) in Asset::<T, I>::drain_prefix(class) {
-					Account::<T, I>::remove(&details.owner, (class, instance));
+					Account::<T, I>::remove((&details.owner, class, instance));
 					Self::dead_instance(&mut details, &mut class_details);
 				}
 				debug_assert_eq!(class_details.instances, 0);
@@ -428,7 +429,7 @@ pub mod pallet {
 				Asset::<T, I>::insert(&class, &instance, details);
 				Ok(())
 			})?;
-			Account::<T, I>::insert(&beneficiary, (&class, &instance), ());
+			Account::<T, I>::insert((&beneficiary, &class, &instance), ());
 
 			Self::deposit_event(Event::Issued(class, instance, beneficiary));
 			Ok(())
@@ -469,7 +470,7 @@ pub mod pallet {
 			})?;
 
 			Asset::<T, I>::remove(&class, &instance);
-			Account::<T, I>::remove(&owner, (&class, &instance));
+			Account::<T, I>::remove((&owner, &class, &instance));
 
 			Self::deposit_event(Event::Burned(class, instance, owner));
 			Ok(())
@@ -503,8 +504,8 @@ pub mod pallet {
 			ensure!(details.owner == origin, Error::<T, I>::NoPermission);
 			ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 
-			Account::<T, I>::remove(&origin, (&class, &instance));
-			Account::<T, I>::insert(&dest, (&class, &instance), ());
+			Account::<T, I>::remove((&origin, &class, &instance));
+			Account::<T, I>::insert((&dest, &class, &instance), ());
 			details.owner = dest;
 			Asset::<T, I>::insert(&class, &instance, &details);
 
@@ -541,8 +542,8 @@ pub mod pallet {
 			let source = details.owner;
 			details.owner = dest;
 
-			Account::<T, I>::remove(&source, (&class, &instance));
-			Account::<T, I>::insert(&details.owner, (&class, &instance), ());
+			Account::<T, I>::remove((&source, &class, &instance));
+			Account::<T, I>::insert((&details.owner, &class, &instance), ());
 
 			Asset::<T, I>::insert(&class, &instance, &details);
 
@@ -889,8 +890,8 @@ pub mod pallet {
 			let source = details.owner;
 			details.owner = dest;
 
-			Account::<T, I>::remove(&source, (&class, &instance));
-			Account::<T, I>::insert(&details.owner, (&class, &instance), ());
+			Account::<T, I>::remove((&source, &class, &instance));
+			Account::<T, I>::insert((&details.owner, &class, &instance), ());
 
 			Asset::<T, I>::insert(&class, &instance, &details);
 
