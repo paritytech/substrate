@@ -105,7 +105,7 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
 		Err(_) => {
 			// this branch should be unreachable according to the definition of
 			// `StorageValueRef::mutate`: that function should only ever `Err` if the closure we
-			// pass it return an error. however, for safety in case the definition changes, we do
+			// pass it returns an error. however, for safety in case the definition changes, we do
 			// not optimize the branch away or panic.
 			Err(MinerError::FailedToStoreSolution)
 		},
