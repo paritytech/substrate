@@ -101,7 +101,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::generate_storages_info]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -234,6 +234,9 @@ pub mod pallet {
 			NMapKey<Blake2_128Concat, u32>,
 		),
 		u64,
+		OptionQuery,
+		GetDefault,
+		ConstU32<11>,
 	>;
 
 	#[pallet::storage]
@@ -973,10 +976,10 @@ fn test_pallet_info_access() {
 }
 
 #[test]
-fn test_storages_info() {
+fn test_storage_info() {
 	use frame_support::{
 		StorageHasher,
-		traits::{StoragesInfo, StorageInfo},
+		traits::{StorageInfoTrait, StorageInfo},
 		pallet_prelude::*,
 	};
 
@@ -988,7 +991,7 @@ fn test_storages_info() {
 	};
 
 	assert_eq!(
-		Example::storages_info(),
+		Example::storage_info(),
 		vec![
 			StorageInfo {
 				prefix: prefix(b"Example", b"ValueWhereClause"),
@@ -1003,22 +1006,32 @@ fn test_storages_info() {
 			StorageInfo {
 				prefix: prefix(b"Example", b"Map"),
 				max_values: None,
-				max_size: Some(3),
+				max_size: Some(3 + 16),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"Map2"),
 				max_values: Some(3),
-				max_size: Some(6),
+				max_size: Some(6 + 8),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"DoubleMap"),
 				max_values: None,
-				max_size: Some(7),
+				max_size: Some(7 + 16 + 8),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"DoubleMap2"),
 				max_values: Some(5),
-				max_size: Some(14),
+				max_size: Some(14 + 8 + 16),
+			},
+			StorageInfo {
+				prefix: prefix(b"Example", b"NMap"),
+				max_values: None,
+				max_size: Some(5 + 16),
+			},
+			StorageInfo {
+				prefix: prefix(b"Example", b"NMap2"),
+				max_values: Some(11),
+				max_size: Some(14 + 8 + 16),
 			},
 			#[cfg(feature = "conditional-storage")]
 			{
@@ -1033,7 +1046,7 @@ fn test_storages_info() {
 				StorageInfo {
 					prefix: prefix(b"Example", b"ConditionalMap"),
 					max_values: Some(12),
-					max_size: Some(6),
+					max_size: Some(6 + 8),
 				}
 			},
 			#[cfg(feature = "conditional-storage")]
@@ -1041,7 +1054,15 @@ fn test_storages_info() {
 				StorageInfo {
 					prefix: prefix(b"Example", b"ConditionalDoubleMap"),
 					max_values: None,
-					max_size: Some(7),
+					max_size: Some(7 + 16 + 8),
+				}
+			},
+			#[cfg(feature = "conditional-storage")]
+			{
+				StorageInfo {
+					prefix: prefix(b"Example", b"ConditionalNMap"),
+					max_values: None,
+					max_size: Some(7 + 16 + 8),
 				}
 			},
 		],

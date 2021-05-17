@@ -24,7 +24,7 @@ mod keyword {
 	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(Pallet);
 	syn::custom_keyword!(generate_store);
-	syn::custom_keyword!(generate_storages_info);
+	syn::custom_keyword!(generate_storage_info);
 	syn::custom_keyword!(Store);
 }
 
@@ -40,28 +40,28 @@ pub struct PalletStructDef {
 	pub store: Option<(syn::Visibility, keyword::Store)>,
 	/// The span of the pallet::pallet attribute.
 	pub attr_span: proc_macro2::Span,
-	/// Whether to specify the storages max encoded len when implementing `StoragesInfo`.
+	/// Whether to specify the storages max encoded len when implementing `StorageInfoTrait`.
 	/// Contains the span of the attribute.
-	pub generate_storages_info: Option<proc_macro2::Span>,
+	pub generate_storage_info: Option<proc_macro2::Span>,
 }
 
 /// Parse for one variant of:
 /// * `#[pallet::generate_store($vis trait Store)]`
-/// * `#[pallet::generate_storages_info]`
+/// * `#[pallet::generate_storage_info]`
 pub enum PalletStructAttr {
 	GenerateStore {
 		span: proc_macro2::Span,
 		vis: syn::Visibility,
 		keyword: keyword::Store,
 	},
-	GenerateStoragesInfo(proc_macro2::Span),
+	GenerateStorageInfoTrait(proc_macro2::Span),
 }
 
 impl PalletStructAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
 			Self::GenerateStore { span, .. } => *span,
-			Self::GenerateStoragesInfo(span) => *span,
+			Self::GenerateStorageInfoTrait(span) => *span,
 		}
 	}
 }
@@ -84,9 +84,9 @@ impl syn::parse::Parse for PalletStructAttr {
 			generate_content.parse::<syn::Token![trait]>()?;
 			let keyword = generate_content.parse::<keyword::Store>()?;
 			Ok(Self::GenerateStore { vis, keyword, span })
-		} else if lookahead.peek(keyword::generate_storages_info) {
-			let span = content.parse::<keyword::generate_storages_info>()?.span();
-			Ok(Self::GenerateStoragesInfo(span))
+		} else if lookahead.peek(keyword::generate_storage_info) {
+			let span = content.parse::<keyword::generate_storage_info>()?.span();
+			Ok(Self::GenerateStorageInfoTrait(span))
 		} else {
 			Err(lookahead.error())
 		}
@@ -107,7 +107,7 @@ impl PalletStructDef {
 		};
 
 		let mut store = None;
-		let mut generate_storages_info = None;
+		let mut generate_storage_info = None;
 
 		let struct_attrs: Vec<PalletStructAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
 		for attr in struct_attrs {
@@ -115,8 +115,8 @@ impl PalletStructDef {
 				PalletStructAttr::GenerateStore { vis, keyword, .. } if store.is_none() => {
 					store = Some((vis, keyword));
 				},
-				PalletStructAttr::GenerateStoragesInfo(span) if generate_storages_info.is_none() => {
-					generate_storages_info = Some(span);
+				PalletStructAttr::GenerateStorageInfoTrait(span) if generate_storage_info.is_none() => {
+					generate_storage_info = Some(span);
 				},
 				attr => {
 					let msg = "Unexpected duplicated attribute";
@@ -140,6 +140,6 @@ impl PalletStructDef {
 		let mut instances = vec![];
 		instances.push(helper::check_type_def_gen_no_bounds(&item.generics, item.ident.span())?);
 
-		Ok(Self { index, instances, pallet, store, attr_span, generate_storages_info })
+		Ok(Self { index, instances, pallet, store, attr_span, generate_storage_info })
 	}
 }

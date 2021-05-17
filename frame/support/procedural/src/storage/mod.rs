@@ -18,7 +18,7 @@
 //! `decl_storage` input definition and expansion.
 
 mod storage_struct;
-mod storages_info;
+mod storage_info;
 mod parse;
 mod store_trait;
 mod getters;
@@ -480,7 +480,7 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 	let instance_trait = instance_trait::decl_and_impl(&def_ext);
 	let genesis_config = genesis_config::genesis_config_and_build_storage(&def_ext);
 	let storage_struct = storage_struct::decl_and_impl(&def_ext);
-	let storages_info = storages_info::impl_storages_info(&def_ext);
+	let storage_info = storage_info::impl_storage_info(&def_ext);
 
 	quote!(
 		use #scrate::{
@@ -501,6 +501,6 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 		#instance_trait
 		#genesis_config
 		#storage_struct
-		#storages_info
+		#storage_info
 	).into()
 }

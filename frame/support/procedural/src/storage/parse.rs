@@ -203,7 +203,7 @@ struct DeclStorageMaxValues {
 	pub max_values_keyword: keyword::max_values,
 	pub expr: ext::Parens<syn::Expr>,
 }
-impl_parse_for_opt!(DeclStorageMaxValues=> keyword::max_values);
+impl_parse_for_opt!(DeclStorageMaxValues => keyword::max_values);
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageBuild {
@@ -509,7 +509,7 @@ fn parse_storage_line_defs(
 		}
 
 		let max_values = match &line.storage_type {
-			DeclStorageType::Map(_) | DeclStorageType::DoubleMap(_) => {
+			DeclStorageType::Map(_) | DeclStorageType::DoubleMap(_) | DeclStorageType::NMap(_) => {
 				line.max_values.inner.map(|i| i.expr.content)
 			},
 			DeclStorageType::Simple(_) => {

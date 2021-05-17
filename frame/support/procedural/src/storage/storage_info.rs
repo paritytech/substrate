@@ -15,30 +15,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of trait `StoragesInfo` on module structure.
+//! Implementation of trait `StorageInfoTrait` on module structure.
 
 use proc_macro2::TokenStream;
 use quote::quote;
 use super::DeclStorageDefExt;
 
-pub fn impl_storages_info(def: &DeclStorageDefExt) -> TokenStream {
-	let scrate = &def.hidden_crate;
-
+pub fn impl_storage_info(def: &DeclStorageDefExt) -> TokenStream {
 	if !def.generate_storage_info {
 		return Default::default()
 	}
 
-	let mut entries = TokenStream::new();
+	let scrate = &def.hidden_crate;
+
+	let mut res_append_storage = TokenStream::new();
 
 	for line in def.storage_lines.iter() {
 		let storage_struct = &line.storage_struct;
 
-		let entry = quote!(
-			<
+		res_append_storage.extend(quote!(
+			let mut storage_info = <
 				#storage_struct as #scrate::traits::StorageInfoTrait
-			>::storage_info(),
-		);
-		entries.extend(entry);
+			>::storage_info();
+			res.append(&mut storage_info);
+		));
 	}
 
 	let module_struct = &def.module_struct;
@@ -46,11 +46,11 @@ pub fn impl_storages_info(def: &DeclStorageDefExt) -> TokenStream {
 	let where_clause = &def.where_clause;
 
 	quote!(
-		impl#module_impl #scrate::traits::StoragesInfo for #module_struct #where_clause {
-			fn storages_info() -> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo> {
-				#scrate::sp_std::vec![
-					#entries
-				]
+		impl#module_impl #scrate::traits::StorageInfoTrait for #module_struct #where_clause {
+			fn storage_info() -> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo> {
+				let mut res = #scrate::sp_std::vec![];
+				#res_append_storage
+				res
 			}
 		}
 	)

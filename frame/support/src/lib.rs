@@ -1235,7 +1235,7 @@ pub mod pallet_prelude {
 		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
 		traits::{
-			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StoragesInfo,
+			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
 			ConstU32, GetDefault, MaxEncodedLen,
 		},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
@@ -1357,7 +1357,7 @@ pub mod pallet_prelude {
 /// pub struct Pallet<T>(_);
 /// ```
 ///
-/// This require all storage to implement the trait [`traits::StorageMaxEncodedLen`], thus all keys
+/// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
 /// and value types must bound [`traits::MaxEncodedLen`].
 ///
 /// ### Macro expansion:
@@ -1384,13 +1384,14 @@ pub mod pallet_prelude {
 /// given by [`frame_support::traits::PalletInfo`].
 /// (The implementation use the associated type `frame_system::Config::PalletInfo`).
 ///
-/// It implements [`traits::StoragesInfo`] on `Pallet` which give information about all storages.
+/// It implements [`traits::StorageInfoTrait`] on `Pallet` which give information about all storages.
 ///
 /// If the attribute generate_store is set then the macro creates the trait `Store` and implements
 /// it on `Pallet`.
 ///
 /// If the attribute set_storage_max_encoded_len is set then the macro call
-/// [`traits::StorageMaxEncodedLen`] in the implementation of [`StoragesInfo`].
+/// [`traits::StorageInfoTrait`] for each storage in the implementation of
+/// [`traits::StorageInfoTrait`] for the pallet.
 ///
 /// # Hooks: `#[pallet::hooks]` mandatory
 ///

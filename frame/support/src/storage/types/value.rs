@@ -28,6 +28,7 @@ use crate::{
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_std::prelude::*;
 
 /// A type that allow to store a value.
 ///
@@ -222,15 +223,17 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
 {
-	fn storage_info() -> StorageInfo {
-		StorageInfo {
-			prefix: Self::hashed_key(),
-			max_values: Some(1),
-			max_size: Some(
-				Value::max_encoded_len()
-					.saturated_into(),
-			),
-		}
+	fn storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::hashed_key(),
+				max_values: Some(1),
+				max_size: Some(
+					Value::max_encoded_len()
+						.saturated_into(),
+				),
+			}
+		]
 	}
 }
 

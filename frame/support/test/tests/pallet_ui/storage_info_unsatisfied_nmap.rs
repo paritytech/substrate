@@ -1,6 +1,6 @@
 #[frame_support::pallet]
 mod pallet {
-	use frame_support::pallet_prelude::{Hooks, StorageValue};
+	use frame_support::pallet_prelude::{Hooks, StorageNMap, Twox64Concat, NMapKey};
 	use frame_system::pallet_prelude::BlockNumberFor;
 
 	#[pallet::config]
@@ -20,7 +20,7 @@ mod pallet {
 	struct Bar;
 
 	#[pallet::storage]
-	type Foo<T> = StorageValue<_, Bar>;
+	type Foo<T> = StorageNMap<_, NMapKey<Twox64Concat, Bar>, u32>;
 }
 
 fn main() {

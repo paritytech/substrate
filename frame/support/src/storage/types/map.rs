@@ -365,16 +365,18 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	fn storage_info() -> StorageInfo {
-		StorageInfo {
-			prefix: Self::final_prefix(),
-			max_values: MaxValues::get(),
-			max_size: Some(
-				Key::max_encoded_len()
-					.saturating_add(Value::max_encoded_len())
-					.saturated_into(),
-			),
-		}
+	fn storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::final_prefix(),
+				max_values: MaxValues::get(),
+				max_size: Some(
+					Hasher::max_len::<Key>()
+						.saturating_add(Value::max_encoded_len())
+						.saturated_into(),
+				),
+			}
+		]
 	}
 }
 

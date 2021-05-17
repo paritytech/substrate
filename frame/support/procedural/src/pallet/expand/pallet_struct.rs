@@ -24,7 +24,7 @@ use crate::pallet::{Def, expand::merge_where_clauses, parse::helper::get_doc_lit
 /// * declare Module type alias for construct_runtime
 /// * replace the first field type of `struct Pallet` with `PhantomData` if it is `_`
 /// * implementation of `PalletInfoAccess` information
-/// * implementation of `StoragesInfo` on Pallet
+/// * implementation of `StorageInfoTrait` on Pallet
 pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
@@ -102,31 +102,34 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	};
 
-	let storages_info = if let Some(storages_info_span) = def.pallet_struct.generate_storages_info {
+	let storage_info = if let Some(storage_info_span) = def.pallet_struct.generate_storage_info {
 		let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
 		let storage_cfg_attrs = &def.storages.iter()
 			.map(|storage| &storage.cfg_attrs)
 			.collect::<Vec<_>>();
 
-		quote::quote_spanned!(storages_info_span =>
-			impl<#type_impl_gen> #frame_support::traits::StoragesInfo
+		quote::quote_spanned!(storage_info_span =>
+			impl<#type_impl_gen> #frame_support::traits::StorageInfoTrait
 				for #pallet_ident<#type_use_gen>
 				#storages_where_clauses
 			{
-				fn storages_info()
+				fn storage_info()
 					-> #frame_support::sp_std::vec::Vec<#frame_support::traits::StorageInfo>
 				{
-					#frame_support::sp_std::vec![
-						#(
-							#(#storage_cfg_attrs)*
-							{
-								<
-									#storage_names<#type_use_gen>
-									as #frame_support::traits::StorageInfoTrait
-								>::storage_info()
-							},
-						)*
-					]
+					let mut res = #frame_support::sp_std::vec![];
+
+					#(
+						#(#storage_cfg_attrs)*
+						{
+							let mut storage_info = <
+								#storage_names<#type_use_gen>
+								as #frame_support::traits::StorageInfoTrait
+							>::storage_info();
+							res.append(&mut storage_info);
+						}
+					)*
+
+					res
 				}
 			}
 		)
@@ -195,6 +198,6 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
-		#storages_info
+		#storage_info
 	)
 }
