@@ -85,6 +85,7 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, SessionIndex, (T::ValidatorId, T::FullIdentification)>;
 
 	#[pallet::hooks]
+	/// Deprecated.
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	#[pallet::call]
@@ -362,8 +363,8 @@ pub(crate) mod tests {
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
 	};
-	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
-	use frame_support::{BasicExternalities, traits::GenesisBuild};
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize, GenesisBuild};
+	use frame_support::BasicExternalities;
 
 	type Historical = Pallet<Test>;
 

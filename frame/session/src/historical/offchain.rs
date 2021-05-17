@@ -143,7 +143,7 @@ mod tests {
 		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
 	};
 	use codec::Encode;
-	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize, GenesisBuild};
 	use sp_core::crypto::key_types::DUMMY;
 	use sp_core::offchain::{
 		testing::TestOffchainExt,
@@ -153,7 +153,7 @@ mod tests {
 	};
 
 	use sp_runtime::testing::UintAuthorityId;
-	use frame_support::{BasicExternalities, traits::GenesisBuild};
+	use frame_support::BasicExternalities;
 
 	type Historical = Pallet<Test>;
 

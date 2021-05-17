@@ -471,9 +471,9 @@ pub mod pallet {
 				.for_each(|(i, (sk, kk))| {
 					if sk != kk {
 						panic!(
-    						"Session handler and session key expect different key type at index: {}",
-    						i,
-    					);
+							"Session handler and session key expect different key type at index: {}",
+							i,
+						);
 					}
 				});
 
@@ -490,7 +490,7 @@ pub mod pallet {
 			let initial_validators_0 = T::SessionManager::new_session(0).unwrap_or_else(|| {
 				frame_support::print(
 					"No initial validator provided by `SessionManager`, use \
-    					session config keys to generate initial validator set.",
+						session config keys to generate initial validator set.",
 				);
 				self.keys.iter().map(|x| x.1.clone()).collect()
 			});
@@ -564,59 +564,59 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-    impl<T: Config> Pallet<T> {
-        /// Sets the session key(s) of the function caller to `keys`.
-        /// Allows an account to set its session key prior to becoming a validator.
-        /// This doesn't take effect until the next session.
-        ///
-        /// The dispatch origin of this function must be signed.
-        ///
-        /// # <weight>
-        /// - Complexity: `O(1)`
-        ///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
-        /// - DbReads: `origin account`, `T::ValidatorIdOf`, `NextKeys`
-        /// - DbWrites: `origin account`, `NextKeys`
-        /// - DbReads per key id: `KeyOwner`
-        /// - DbWrites per key id: `KeyOwner`
-        /// # </weight>
-        #[pallet::weight(T::WeightInfo::set_keys())]
-        pub fn set_keys(
-            origin: OriginFor<T>,
-            keys: T::Keys,
-            proof: Vec<u8>,
-        ) -> DispatchResult {
-            let who = ensure_signed(origin)?;
+	impl<T: Config> Pallet<T> {
+		/// Sets the session key(s) of the function caller to `keys`.
+		/// Allows an account to set its session key prior to becoming a validator.
+		/// This doesn't take effect until the next session.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// # <weight>
+		/// - Complexity: `O(1)`
+		///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
+		/// - DbReads: `origin account`, `T::ValidatorIdOf`, `NextKeys`
+		/// - DbWrites: `origin account`, `NextKeys`
+		/// - DbReads per key id: `KeyOwner`
+		/// - DbWrites per key id: `KeyOwner`
+		/// # </weight>
+		#[pallet::weight(T::WeightInfo::set_keys())]
+		pub fn set_keys(
+			origin: OriginFor<T>,
+			keys: T::Keys,
+			proof: Vec<u8>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
 
-            ensure!(
-                keys.ownership_proof_is_valid(&proof),
-                Error::<T>::InvalidProof
-            );
+			ensure!(
+				keys.ownership_proof_is_valid(&proof),
+				Error::<T>::InvalidProof
+			);
 
-            Self::do_set_keys(&who, keys)?;
+			Self::do_set_keys(&who, keys)?;
 
-            Ok(())
-        }
-
-        /// Removes any session key(s) of the function caller.
-        /// This doesn't take effect until the next session.
-        ///
-        /// The dispatch origin of this function must be signed.
-        ///
-        /// # <weight>
-        /// - Complexity: `O(1)` in number of key types.
-        ///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
-        /// - DbReads: `T::ValidatorIdOf`, `NextKeys`, `origin account`
-        /// - DbWrites: `NextKeys`, `origin account`
-        /// - DbWrites per key id: `KeyOwnder`
-        /// # </weight>
-        #[pallet::weight(T::WeightInfo::purge_keys())]
-        pub fn purge_keys(origin: OriginFor<T>) -> DispatchResult {
-            let who = ensure_signed(origin)?;
-            Self::do_purge_keys(&who)?;
 			Ok(())
-        }
+		}
 
-    }
+		/// Removes any session key(s) of the function caller.
+		/// This doesn't take effect until the next session.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// # <weight>
+		/// - Complexity: `O(1)` in number of key types.
+		///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
+		/// - DbReads: `T::ValidatorIdOf`, `NextKeys`, `origin account`
+		/// - DbWrites: `NextKeys`, `origin account`
+		/// - DbWrites per key id: `KeyOwnder`
+		/// # </weight>
+		#[pallet::weight(T::WeightInfo::purge_keys())]
+		pub fn purge_keys(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_purge_keys(&who)?;
+			Ok(())
+		}
+
+	}
 }
 
 impl<T: Config> Pallet<T> {
