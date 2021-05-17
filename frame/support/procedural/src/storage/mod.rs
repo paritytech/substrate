@@ -157,9 +157,9 @@ impl From<DeclStorageDef> for DeclStorageDefExt {
 		);
 
 		Self {
-			generate_storage_info: def.generate_storage_info,
 			hidden_crate,
 			hidden_imports,
+			generate_storage_info: def.generate_storage_info,
 			visibility: def.visibility,
 			store_trait: def.store_trait,
 			module_name: def.module_name,
