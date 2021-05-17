@@ -36,14 +36,12 @@ fn get_key(key_size: u32) -> Vec<u8> {
 		.collect()
 }
 
-#[allow(clippy::clone_on_copy, clippy::ptr_arg)]
 fn bench_blake2_128(b: &mut Bencher, key: &Vec<u8>) {
 	b.iter(|| {
 		let _a = blake2_128(black_box(key));
 	});
 }
 
-#[allow(clippy::clone_on_copy, clippy::ptr_arg)]
 fn bench_twox_128(b: &mut Bencher, key: &Vec<u8>) {
 	b.iter(|| {
 		let _a = twox_128(black_box(key));
