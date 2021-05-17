@@ -37,6 +37,9 @@ pub struct ClassDetails<
 	pub(super) freezer: AccountId,
 	/// The balance deposited for this asset. This pays for the data stored here.
 	pub(super) deposit: DepositBalance,
+	/// The total balance deposited for the all metadata associated with this asset (both class and
+	/// instances).
+	pub(super) metadata_deposit: DepositBalance,
 	/// If `true`, then no deposit is needed to hold instances of this class.
 	pub(super) free_holding: bool,
 	/// The total number of outstanding unique instances of this asset class.

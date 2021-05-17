@@ -146,7 +146,7 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::ClassId,
 		ClassMetadata<DepositBalanceOf<T, I>>,
-		ValueQuery,
+		OptionQuery,
 	>;
 
 	#[pallet::storage]
@@ -158,7 +158,7 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::InstanceId,
 		InstanceMetadata<DepositBalanceOf<T, I>>,
-		ValueQuery,
+		OptionQuery,
 	>;
 
 	#[pallet::event]
@@ -255,11 +255,10 @@ pub mod pallet {
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
 		///
-		/// Funds of sender are reserved by `AssetDeposit`.
+		/// `AssetDeposit` funds of sender are reserved.
 		///
 		/// Parameters:
-		/// - `class`: The identifier of the new asset class. This must not be currently in use to
-		/// identify an existing asset.
+		/// - `class`: The identifier of the new asset class. This must not be currently in use.
 		/// - `admin`: The admin of this class of assets. The admin is the initial address of each
 		/// member of the asset class's admin team.
 		///
@@ -288,6 +287,7 @@ pub mod pallet {
 					admin: admin.clone(),
 					freezer: admin.clone(),
 					deposit,
+					metadata_deposit: Zero::zero(),
 					free_holding: false,
 					instances: 0,
 					free_holds: 0,
@@ -306,11 +306,10 @@ pub mod pallet {
 		///
 		/// Unlike `create`, no funds are reserved.
 		///
-		/// - `class`: The identifier of the new asset. This must not be currently in use to identify
-		/// an existing asset.
+		/// - `class`: The identifier of the new asset. This must not be currently in use.
 		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
-		/// over this asset, but may later change and configure the permissions using `transfer_ownership`
-		/// and `set_team`.
+		/// over this asset, but may later change and configure the permissions using
+		/// `transfer_ownership` and `set_team`.
 		///
 		/// Emits `ForceCreated` event when successful.
 		///
@@ -335,6 +334,7 @@ pub mod pallet {
 					admin: owner.clone(),
 					freezer: owner.clone(),
 					deposit: Zero::zero(),
+					metadata_deposit: Zero::zero(),
 					free_holding,
 					instances: 0,
 					free_holds: 0,
@@ -348,16 +348,17 @@ pub mod pallet {
 		/// Destroy a class of fungible assets.
 		///
 		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be the
-		/// owner of the asset `id`.
+		/// owner of the asset `class`.
 		///
-		/// - `class`: The identifier of the asset to be destroyed. This must identify an existing
-		/// asset.
+		/// - `class`: The identifier of the asset class to be destroyed.
+		/// - `witness`: Information on the instances minted in the asset class. This must be
+		/// correct.
 		///
 		/// Emits `Destroyed` event when successful.
 		///
-		/// Weight: `O(c + p + a)` where:
-		/// - `c = (witness.accounts - witness.sufficients)`
-		/// - `s = witness.sufficients`
+		/// Weight: `O(i + f)` where:
+		/// - `i = (witness.instances - witness.free_holds)`
+		/// - `f = witness.free_holds`
 		#[pallet::weight(T::WeightInfo::destroy(
 			witness.instances.saturating_sub(witness.free_holds),
  			witness.free_holds,
@@ -379,17 +380,18 @@ pub mod pallet {
 				ensure!(class_details.instances == witness.instances, Error::<T, I>::BadWitness);
 				ensure!(class_details.free_holds == witness.free_holds, Error::<T, I>::BadWitness);
 
-				for (instance, mut details) in Asset::<T, I>::drain_prefix(class) {
-					Account::<T, I>::remove((&details.owner, class, instance));
+				for (instance, mut details) in Asset::<T, I>::drain_prefix(&class) {
+					Account::<T, I>::remove((&details.owner, &class, &instance));
+					InstanceMetadataOf::<T, I>::remove(&class, &instance);
 					Self::dead_instance(&mut details, &mut class_details);
 				}
 				debug_assert_eq!(class_details.instances, 0);
 				debug_assert_eq!(class_details.free_holds, 0);
 
-				let metadata = ClassMetadataOf::<T, I>::take(&class);
+				ClassMetadataOf::<T, I>::remove(&class);
 				T::Currency::unreserve(
 					&class_details.owner,
-					class_details.deposit.saturating_add(metadata.deposit),
+					class_details.deposit.saturating_add(class_details.metadata_deposit),
 				);
 
 				Self::deposit_event(Event::Destroyed(class));
@@ -401,11 +403,11 @@ pub mod pallet {
 
 		/// Mint an asset instance of a particular class.
 		///
-		/// The origin must be Signed and the sender must be the Issuer of the asset `id`.
+		/// The origin must be Signed and the sender must be the Issuer of the asset `class`.
 		///
 		/// - `class`: The class of the asset to be minted.
 		/// - `instance`: The instance value of the asset to be minted.
-		/// - `beneficiary`: The account to be credited with the minted asset.
+		/// - `beneficiary`: The initial owner of the minted asset.
 		///
 		/// Emits `Issued` event when successful.
 		///
@@ -437,7 +439,7 @@ pub mod pallet {
 
 		/// Destroy a single asset instance.
 		///
-		/// Origin must be Signed and the sender should be the Manager of the asset `id`.
+		/// Origin must be Signed and the sender should be the Admin of the asset `class`.
 		///
 		/// - `class`: The class of the asset to be burned.
 		/// - `instance`: The instance of the asset to be burned.
@@ -466,8 +468,15 @@ pub mod pallet {
 				ensure!(is_permitted, Error::<T, I>::NoPermission);
 				ensure!(check_owner.map_or(true, |o| o == details.owner), Error::<T, I>::WrongOwner);
 				Self::dead_instance(&mut details, class_details);
+				if let Some(metadata) = InstanceMetadataOf::<T, I>::take(&class, &instance) {
+					// Remove instance metadata
+					class_details.metadata_deposit = class_details.metadata_deposit
+						.saturating_sub(metadata.deposit);
+					T::Currency::unreserve(&class_details.owner, metadata.deposit);
+				}
 				Ok(details.owner)
 			})?;
+
 
 			Asset::<T, I>::remove(&class, &instance);
 			Account::<T, I>::remove((&owner, &class, &instance));
@@ -478,7 +487,7 @@ pub mod pallet {
 
 		/// Move an asset from the sender account to another.
 		///
-		/// Origin must be Signed and the signing account must be the owner of the asset instance..
+		/// Origin must be Signed and the signing account must be the owner of the asset `instance`.
 		///
 		/// - `class`: The class of the asset to be transferred.
 		/// - `instance`: The instance of the asset to be transferred.
@@ -516,7 +525,7 @@ pub mod pallet {
 
 		/// Move some assets from one account to another.
 		///
-		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
+		/// Origin must be Signed and the sender should be the Admin of the asset `class`.
 		///
 		/// - `class`: The class of the asset to be transferred.
 		/// - `instance`: The instance of the asset to be transferred.
@@ -582,7 +591,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allow unprivileged transfer of an asset instance.
+		/// Re-allow unprivileged transfer of an asset instance.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `class`.
 		///
@@ -612,7 +621,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Disallow further unprivileged transfers for the asset class.
+		/// Disallow further unprivileged transfers for a whole asset class.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the asset `class`.
 		///
@@ -639,7 +648,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Allow unprivileged transfers for the asset again.
+		/// Re-allow unprivileged transfers for a whole asset class.
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `class`.
 		///
@@ -670,8 +679,8 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `class`.
 		///
-		/// - `class`: The identifier of the asset.
-		/// - `owner`: The new Owner of this asset.
+		/// - `class`: The asset class whose owner should be changed.
+		/// - `owner`: The new Owner of this asset class.
 		///
 		/// Emits `OwnerChanged`.
 		///
@@ -692,8 +701,7 @@ pub mod pallet {
 					return Ok(());
 				}
 
-				let metadata_deposit = ClassMetadataOf::<T, I>::get(class).deposit;
-				let deposit = details.deposit + metadata_deposit;
+				let deposit = details.deposit + details.metadata_deposit;
 
 				// Move the deposit to the new owner.
 				T::Currency::repatriate_reserved(&details.owner, &owner, deposit, Reserved)?;
@@ -709,10 +717,10 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `class`.
 		///
-		/// - `class`: The identifier of the asset to be frozen.
-		/// - `issuer`: The new Issuer of this asset.
-		/// - `admin`: The new Admin of this asset.
-		/// - `freezer`: The new Freezer of this asset.
+		/// - `class`: The asset class whose team should be changed.
+		/// - `issuer`: The new Issuer of this asset class.
+		/// - `admin`: The new Admin of this asset class.
+		/// - `freezer`: The new Freezer of this asset class.
 		///
 		/// Emits `TeamChanged`.
 		///
@@ -747,9 +755,9 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and must be the owner of the asset `instance`.
 		///
-		/// - `class`: The class of the asset to be approved for transfer.
-		/// - `instance`: The instance of the asset to be approved for transfer.
-		/// - `delegate`: The account to delegate permission to transfer asset.
+		/// - `class`: The class of the asset to be approved for delegated transfer.
+		/// - `instance`: The instance of the asset to be approved for delegated transfer.
+		/// - `delegate`: The account to delegate permission to transfer the asset.
 		///
 		/// Emits `ApprovedTransfer` on success.
 		///
@@ -861,8 +869,8 @@ pub mod pallet {
 		/// Transfer some asset instance from a target account to a destination account by an
 		/// approved delegate.
 		///
-		/// Origin must be Signed and there must be an approval in place by the `owner` to the
-		/// signer.
+		/// Origin must be Signed and there must be an approval in place for the signer on this
+		/// asset `instance`.
 		///
 		/// - `class`: The class of the asset to transfer.
 		/// - `instance`: The instance of the asset to transfer.
@@ -909,13 +917,8 @@ pub mod pallet {
 		/// - `issuer`: The new Issuer of this asset.
 		/// - `admin`: The new Admin of this asset.
 		/// - `freezer`: The new Freezer of this asset.
-		/// - `min_balance`: The minimum balance of this new asset that any single account must
-		/// have. If an account's balance is reduced below this, then it collapses to zero.
-		/// - `is_sufficient`: Whether a non-zero balance of this asset is deposit of sufficient
-		/// value to account for the state bloat associated with its balance storage. If set to
-		/// `true`, then non-zero balances may be stored without a `consumer` reference (and thus
-		/// an ED in the Balances pallet or whatever else is used to control user-account state
-		/// growth).
+		/// - `free_holding`: Whether a deposit is taken for holding an instance of this asset
+		///   class.
 		/// - `is_frozen`: Whether this asset class is frozen except for permissioned/admin
 		/// instructions.
 		///
@@ -953,16 +956,16 @@ pub mod pallet {
 		/// Set the metadata for an asset instance.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// asset `instance`.
+		/// asset `class`.
 		///
-		/// Funds of sender are reserved according to the formula:
-		/// `MetadataDepositBase + MetadataDepositPerByte * (name.len + symbol.len)` taking into
+		/// If the origin is Signed, then funds of signer are reserved according to the formula:
+		/// `MetadataDepositBase + MetadataDepositPerByte * (name.len + info.len)` taking into
 		/// account any already reserved funds.
 		///
-		/// - `class`: The identifier of the asset class whose instance's metadata to clear.
-		/// - `instance`: The identifier of the asset instance whose metadata to clear.
+		/// - `class`: The identifier of the asset class whose instance's metadata to set.
+		/// - `instance`: The identifier of the asset instance whose metadata to set.
 		/// - `name`: The user visible name of this asset. Limited in length by `StringLimit`.
-		/// - `name`: The general information of this asset. Limited in length by `StringLimit`.
+		/// - `info`: The general information of this asset. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
 		///
 		/// Emits `MetadataSet`.
@@ -984,10 +987,11 @@ pub mod pallet {
 			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 			ensure!(info.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 
+			let mut class_details = Class::<T, I>::get(&class)
+				.ok_or(Error::<T, I>::Unknown)?;
+
 			if let Some(check_owner) = &maybe_check_owner {
-				let details = Asset::<T, I>::get(&class, &instance)
-					.ok_or(Error::<T, I>::Unknown)?;
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
 
 			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
@@ -995,6 +999,8 @@ pub mod pallet {
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
+				class_details.metadata_deposit = class_details.metadata_deposit
+					.saturating_sub(old_deposit);
 				let deposit = if let Some(owner) = maybe_check_owner {
 					let deposit = T::MetadataDepositPerByte::get()
 						.saturating_mul((name.len() as u32).into())
@@ -1005,10 +1011,13 @@ pub mod pallet {
 					} else {
 						T::Currency::unreserve(&owner, old_deposit - deposit);
 					}
+
 					deposit
 				} else {
 					old_deposit
 				};
+				class_details.metadata_deposit =class_details.metadata_deposit
+					.saturating_add(deposit);
 
 				*metadata = Some(InstanceMetadata {
 					deposit,
@@ -1017,6 +1026,7 @@ pub mod pallet {
 					is_frozen,
 				});
 
+				Class::<T, I>::insert(&class, &class_details);
 				Self::deposit_event(Event::MetadataSet(class, name, info, false));
 				Ok(())
 			})
@@ -1045,10 +1055,10 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let details = Asset::<T, I>::get(&class, &instance)
+			let mut class_details = Class::<T, I>::get(&class)
 				.ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
 
 			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
@@ -1056,7 +1066,10 @@ pub mod pallet {
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
-				T::Currency::unreserve(&details.owner, deposit);
+				T::Currency::unreserve(&class_details.owner, deposit);
+				class_details.metadata_deposit = class_details.metadata_deposit.saturating_sub(deposit);
+
+				Class::<T, I>::insert(&class, &class_details);
 				Self::deposit_event(Event::MetadataCleared(class));
 				Ok(())
 			})
@@ -1067,11 +1080,11 @@ pub mod pallet {
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the asset `class`.
 		///
-		/// Funds of sender are reserved according to the formula:
-		/// `MetadataDepositBase + MetadataDepositPerByte * (name.len + symbol.len)` taking into
+		/// If the origin is `Signed`, then funds of signer are reserved according to the formula:
+		/// `MetadataDepositBase + MetadataDepositPerByte * name.len` taking into
 		/// account any already reserved funds.
 		///
-		/// - `class`: The identifier of the asset to update.
+		/// - `class`: The identifier of the asset whose metadata to update.
 		/// - `name`: The user visible name of this asset. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
 		///
