@@ -129,8 +129,8 @@ pub(super) fn kill_ocw_solution<T: Config>() {
 ///
 /// After calling this, the next offchain worker is guaranteed to work, with respect to the
 /// frequency repeat.
-fn clear_offchain_repeat_frequency() -> {
-	let last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+fn clear_offchain_repeat_frequency() {
+	let mut last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 	last_block.clear();
 }
 
@@ -181,6 +181,7 @@ impl<T: Config> Pallet<T> {
 						// may be) we mine a new one.
 						kill_ocw_solution::<T>();
 						clear_offchain_repeat_frequency();
+						Err(error)
 					},
 					_ => {
 						// nothing to do. Return the error as-is.
