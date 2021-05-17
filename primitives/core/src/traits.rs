@@ -26,7 +26,7 @@ use std::{
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
 /// Code execution engine.
-pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
+pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'static {
 	/// Externalities error type.
 	type Error: Display + Debug + Send + Sync + 'static;
 
@@ -123,53 +123,42 @@ impl std::fmt::Display for CodeNotFound {
 	}
 }
 
-/// `Allow` or `Disallow` missing host functions when instantiating a WASM blob.
-#[derive(Clone, Copy, Debug)]
-pub enum MissingHostFunctions {
-	/// Any missing host function will be replaced by a stub that returns an error when
-	/// being called.
-	Allow,
-	/// Any missing host function will result in an error while instantiating the WASM blob,
-	Disallow,
-}
-
-impl MissingHostFunctions {
-	/// Are missing host functions allowed?
-	pub fn allowed(self) -> bool {
-		matches!(self, Self::Allow)
-	}
-}
-
-/// Something that can call a method in a WASM blob.
-pub trait CallInWasm: Send + Sync {
-	/// Call the given `method` in the given `wasm_blob` using `call_data` (SCALE encoded arguments)
-	/// to decode the arguments for the method.
+/// A trait that allows reading version information from the binary.
+pub trait ReadRuntimeVersion: Send + Sync {
+	/// Reads the runtime version information from the given wasm code.
 	///
-	/// Returns the SCALE encoded return value of the method.
+	/// The version information may be embedded into the wasm binary itself. If it is not present,
+	/// then this function may fallback to the legacy way of reading the version.
 	///
-	/// # Note
+	/// The legacy mechanism involves instantiating the passed wasm runtime and calling `Core_version`
+	/// on it. This is a very expensive operation.
 	///
-	/// If `code_hash` is `Some(_)` the `wasm_code` module and instance will be cached internally,
-	/// otherwise it is thrown away after the call.
-	fn call_in_wasm(
+	/// `ext` is only needed in case the calling into runtime happens. Otherwise it is ignored.
+	///
+	/// Compressed wasm blobs are supported and will be decompressed if needed. If uncompression fails,
+	/// the error is returned.
+	///
+	/// # Errors
+	///
+	/// If the version information present in binary, but is corrupted - returns an error.
+	///
+	/// Otherwise, if there is no version information present, and calling into the runtime takes
+	/// place, then an error would be returned if `Core_version` is not provided.
+	fn read_runtime_version(
 		&self,
 		wasm_code: &[u8],
-		code_hash: Option<Vec<u8>>,
-		method: &str,
-		call_data: &[u8],
 		ext: &mut dyn Externalities,
-		missing_host_functions: MissingHostFunctions,
 	) -> Result<Vec<u8>, String>;
 }
 
 sp_externalities::decl_extension! {
-	/// The call-in-wasm extension to register/retrieve from the externalities.
-	pub struct CallInWasmExt(Box<dyn CallInWasm>);
+	/// An extension that provides functionality to read version information from a given wasm blob.
+	pub struct ReadRuntimeVersionExt(Box<dyn ReadRuntimeVersion>);
 }
 
-impl CallInWasmExt {
-	/// Creates a new instance of `Self`.
-	pub fn new<T: CallInWasm + 'static>(inner: T) -> Self {
+impl ReadRuntimeVersionExt {
+	/// Creates a new instance of the extension given a version determinator instance.
+	pub fn new<T: ReadRuntimeVersion + 'static>(inner: T) -> Self {
 		Self(Box::new(inner))
 	}
 }

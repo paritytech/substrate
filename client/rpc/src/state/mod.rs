@@ -321,6 +321,14 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
 {
+	/// Returns proof of storage for a child key entries at a specific block's state.
+	async fn read_child_proof(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> Result<ReadProof<Block::Hash>, Error>;
+
 	/// Returns the keys with prefix from a child storage,
 	/// leave prefix empty to get all the keys.
 	async fn storage_keys(
@@ -399,6 +407,7 @@ impl<Block, Client> ChildState<Block, Client>
 
 		Ok(ctx_module.into_module())
 	}
+
 }
 
 fn client_err(err: sp_blockchain::Error) -> Error {

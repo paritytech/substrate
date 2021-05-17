@@ -171,14 +171,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn last_event() -> Event {
-	frame_system::Pallet::<Test>::events().pop().map(|e| e.event).expect("Event expected")
-}
-
-fn expect_event<E: Into<Event>>(e: E) {
-	assert_eq!(last_event(), e.into());
-}
-
 #[test]
 fn as_derivative_works() {
 	new_test_ext().execute_with(|| {
@@ -313,7 +305,7 @@ fn batch_with_signed_filters() {
 				Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))
 			]),
 		);
-		expect_event(utility::Event::BatchInterrupted(0, DispatchError::BadOrigin));
+		System::assert_last_event(utility::Event::BatchInterrupted(0, DispatchError::BadOrigin).into());
 	});
 }
 
@@ -387,7 +379,7 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
+		System::assert_last_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")).into());
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
 
@@ -400,7 +392,7 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
+		System::assert_last_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")).into());
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
 		// Partial batch completion
@@ -411,7 +403,7 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
+		System::assert_last_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")).into());
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight

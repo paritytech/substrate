@@ -114,7 +114,7 @@ fn heartbeat(
 	authority_index: u32,
 	id: UintAuthorityId,
 	validators: Vec<u64>,
-) -> dispatch::DispatchResultWithPostInfo {
+) -> dispatch::DispatchResult {
 	use frame_support::unsigned::ValidateUnsigned;
 
 	let heartbeat = Heartbeat {

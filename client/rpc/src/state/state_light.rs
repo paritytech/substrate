@@ -304,6 +304,15 @@ where
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	F: Fetcher<Block> + 'static
 {
+	async fn read_child_proof(
+		&self,
+		_block: Option<Block::Hash>,
+		_storage_key: PrefixedStorageKey,
+		_keys: Vec<StorageKey>,
+	) -> Result<ReadProof<Block::Hash>, Error> {
+		Err(client_err(ClientError::NotAvailableOnLightClient))
+	}
+
 	async fn storage_keys(
 		&self,
 		_block: Option<Block::Hash>,

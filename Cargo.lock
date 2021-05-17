@@ -4873,6 +4873,7 @@ dependencies = [
  "rand 0.8.3",
  "rand_pcg 0.3.0",
  "serde",
+ "smallvec 1.6.1",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -7426,7 +7427,6 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-io",
- "sp-maybe-compressed-blob",
  "sp-panic-handler",
  "sp-runtime",
  "sp-runtime-interface",
@@ -7454,6 +7454,7 @@ dependencies = [
  "pwasm-utils 0.14.0",
  "sp-allocator",
  "sp-core",
+ "sp-maybe-compressed-blob",
  "sp-serializer",
  "sp-wasm-interface",
  "thiserror",
@@ -8963,6 +8964,7 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-keystore",
+ "sp-maybe-compressed-blob",
  "sp-runtime-interface",
  "sp-state-machine",
  "sp-std",
@@ -9143,6 +9145,7 @@ name = "sp-runtime-interface-test"
 version = "2.0.0"
 dependencies = [
  "sc-executor",
+ "sc-executor-common",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -9371,6 +9374,19 @@ dependencies = [
  "serde",
  "sp-runtime",
  "sp-std",
+ "sp-version-proc-macro",
+]
+
+[[package]]
+name = "sp-version-proc-macro"
+version = "3.0.0"
+dependencies = [
+ "parity-scale-codec",
+ "proc-macro-crate 1.0.0",
+ "proc-macro2",
+ "quote",
+ "sp-version",
+ "syn",
 ]
 
 [[package]]
