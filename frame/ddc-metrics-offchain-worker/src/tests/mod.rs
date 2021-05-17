@@ -12,7 +12,7 @@ use sp_core::{
 use sp_runtime::{RuntimeAppPublic, traits::Hash, AccountId32};
 use sp_std::str::FromStr;
 use test_runtime::{
-    AccountId, Balances, Contracts, CURRENT_METRICS_CONTRACT_ID, ExampleOffchainWorker, Origin, System, Timestamp, Test,
+    AccountId, Balances, Contracts, CURRENT_METRICS_CONTRACT_ID, DdcMetricsOffchainWorker, Origin, System, Timestamp, Test,
 };
 
 use crate::{METRICS_CONTRACT_ADDR, METRICS_CONTRACT_ID, REPORT_METRICS_SELECTOR};
@@ -50,7 +50,7 @@ fn test_contract_api() {
 
 #[test]
 fn test_encode_report_metrics() {
-    let call_data = ExampleOffchainWorker::encode_report_metrics(
+    let call_data = DdcMetricsOffchainWorker::encode_report_metrics(
         &AccountId32::from([2; 32]),
         3 + (4 << 8),
         5 + (6 << 16),
@@ -150,7 +150,7 @@ fn should_submit_signed_transaction_on_chain() {
         deploy_contract();
 
         // Trigger the worker.
-        ExampleOffchainWorker::offchain_worker(0);
+		DdcMetricsOffchainWorker::offchain_worker(0);
 
         let events = System::events();
         eprintln!("Events: {:?}\n", events);
@@ -162,7 +162,7 @@ fn should_submit_signed_transaction_on_chain() {
 
         // Check metrics of an app based on ddc_metrics_node-0.json and ddc_metrics_node-3.json.
         let app_id = AccountId32::from(hex!("00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830"));
-        let expected_call = ExampleOffchainWorker::encode_report_metrics(
+        let expected_call = DdcMetricsOffchainWorker::encode_report_metrics(
             &app_id,
             INIT_DAY_MS,
             1 + 10,
@@ -171,7 +171,7 @@ fn should_submit_signed_transaction_on_chain() {
 
         // Check metrics of the second app.
         let app_id = AccountId32::from(hex!("100ad4097b6e60700a5d5c5294cb6d663090ef5f547e84cc20ec6bcc7a552f13"));
-        let expected_call = ExampleOffchainWorker::encode_report_metrics(
+        let expected_call = DdcMetricsOffchainWorker::encode_report_metrics(
             &app_id,
             INIT_DAY_MS,
             100,

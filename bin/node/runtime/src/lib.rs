@@ -115,7 +115,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 263,
+	spec_version: 264,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -1006,7 +1006,7 @@ construct_runtime!(
 		ChainBridge: pallet_chainbridge::{Module, Call, Storage, Event<T>},
 		Erc721: pallet_erc721::{Module, Call, Storage, Event<T>},
 		Erc20: pallet_erc20::{Module, Call, Event<T>},
-		ExampleOffchainWorker: pallet_ddc_metrics_offchain_worker::{Module, Call, Event<T>},
+		DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Module, Call, Event<T>},
 	}
 );
 

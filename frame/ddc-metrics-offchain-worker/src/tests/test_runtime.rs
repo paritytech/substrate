@@ -41,7 +41,7 @@ pub type Contracts = contracts::Module<Test>;
 pub type System = frame_system::Module<Test>;
 pub type Randomness = pallet_randomness_collective_flip::Module<Test>;
 
-pub type ExampleOffchainWorker = Module<Test>;
+pub type DdcMetricsOffchainWorker = Module<Test>;
 
 // Macros based on the names above. Not Rust syntax.
 impl_outer_event! {
@@ -61,7 +61,7 @@ impl_outer_dispatch! {
 	pub enum MetaCall for Test where origin: Origin {
 		balances::Balances,
 		contracts::Contracts,
-		example_offchain_worker::ExampleOffchainWorker,
+		example_offchain_worker::DdcMetricsOffchainWorker,
 	}
 }
 

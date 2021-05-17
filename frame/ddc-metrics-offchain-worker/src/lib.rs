@@ -223,7 +223,7 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as ExampleOffchainWorker {
+	trait Store for Module<T: Trait> as DdcMetricsOffchainWorker {
 	}
 }
 
