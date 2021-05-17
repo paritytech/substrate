@@ -531,6 +531,12 @@ impl Pair {
 			Self::from_seed(&padded_seed)
 		})
 	}
+
+	/// Sign a pre-hashed message
+	pub fn sign_prehashed(&self, message: &[u8; 32]) -> Signature {
+		let message = secp256k1::Message::parse(message);
+		secp256k1::sign(&message, &self.secret).into()
+	}
 }
 
 impl CryptoType for Public {
@@ -552,7 +558,7 @@ impl CryptoType for Pair {
 mod test {
 	use super::*;
 	use hex_literal::hex;
-	use crate::crypto::{DEV_PHRASE, set_default_ss58_version};
+	use crate::{crypto::{DEV_PHRASE, set_default_ss58_version}, keccak_256};
 	use serde_json;
 	use crate::crypto::PublicError;
 
@@ -760,5 +766,29 @@ mod test {
 		assert!(deserialize_signature("\"Not an actual signature.\"").is_err());
 		// Poorly-sized
 		assert!(deserialize_signature("\"abc123\"").is_err());
+	}
+
+	#[test]
+	fn sign_prehashed_works() {
+		let (pair, _, _) = Pair::generate_with_phrase(Some("password"));
+
+		// `msg` shouldn't be mangled
+		let msg = [0u8; 32];
+		let sig1 = pair.sign_prehashed(&msg);
+		let sig2: Signature = secp256k1::sign(&secp256k1::Message::parse(&msg), &pair.secret).into();
+
+		assert_eq!(sig1, sig2);
+
+		// signature is actually different
+		let sig2 = pair.sign(&msg);
+
+		assert_ne!(sig1, sig2);
+
+		// using pre-hashed `msg` works
+		let msg = keccak_256(b"this should be hashed");
+		let sig1 = pair.sign_prehashed(&msg);
+		let sig2: Signature = secp256k1::sign(&secp256k1::Message::parse(&msg), &pair.secret).into();
+
+		assert_eq!(sig1, sig2);		
 	}
 }
