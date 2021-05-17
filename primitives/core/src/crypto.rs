@@ -161,18 +161,12 @@ impl DeriveJunction {
 
 	/// Return `true` if the junction is soft.
 	pub fn is_soft(&self) -> bool {
-		match *self {
-			DeriveJunction::Soft(_) => true,
-			_ => false,
-		}
+		matches!(*self, DeriveJunction::Soft(_))
 	}
 
 	/// Return `true` if the junction is hard.
 	pub fn is_hard(&self) -> bool {
-		match *self {
-			DeriveJunction::Hard(_) => true,
-			_ => false,
-		}
+		matches!(*self, DeriveJunction::Hard(_))
 	}
 }
 
@@ -401,10 +395,7 @@ macro_rules! ss58_address_format {
 
 			/// Whether the address is custom.
 			pub fn is_custom(&self) -> bool {
-				match self {
-					Self::Custom(_) => true,
-					_ => false,
-				}
+				matches!(self, Self::Custom(_))
 			}
 		}
 
