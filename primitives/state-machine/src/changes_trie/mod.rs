@@ -167,9 +167,15 @@ pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a
 impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
 	type Overlay = sp_trie::MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		self.0.get(key, prefix)
+	fn get(&self, key: &H::Out, prefix: Prefix, _parent: Option<&sp_trie::TrieMeta>) -> Result<Option<(DBValue, sp_trie::TrieMeta)>, String> {
+		match self.0.get(key, prefix) {
+			// change trie do not use meta.
+			Ok(Some(v)) => Ok(Some((v, Default::default()))),
+			Ok(None) => Ok(None),
+			Err(e) => Err(e),
+		}
 	}
+	fn access_from(&self, _key: &H::Out) { }
 }
 
 /// Changes trie configuration.

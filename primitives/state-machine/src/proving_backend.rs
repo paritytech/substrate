@@ -24,7 +24,7 @@ use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
-	record_all_keys, StorageProof,
+	record_all_keys, StorageProof, TrieMeta,
 };
 pub use sp_trie::{Recorder, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
@@ -219,14 +219,18 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 {
 	type Overlay = S::Overlay;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(&self, key: &H::Out, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>, String> {
 		if let Some(v) = self.proof_recorder.get(key) {
 			return Ok(v);
 		}
 
-		let backend_value = self.backend.get(key, prefix)?;
+		let backend_value = self.backend.get(key, prefix, parent)?;
 		self.proof_recorder.record(key.clone(), backend_value.clone());
 		Ok(backend_value)
+	}
+
+	fn access_from(&self, _key: &H::Out) {
+		// access_from is mainly for proof recorder, not forwarding it.
 	}
 }
 
