@@ -750,7 +750,6 @@ mod tests {
 		mock::{
 			Call as OuterCall, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin, Runtime,
 			TestCompact, TrimHelpers, roll_to, roll_to_with_ocw, trim_helpers, witness,
-			BlockNumber,
 		},
 	};
 	use frame_benchmarking::Zero;
