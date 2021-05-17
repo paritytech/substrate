@@ -364,7 +364,7 @@ impl Into<Arc<dyn CryptoStore>> for KeyStore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{sr25519, testing::{ED25519, SR25519}};
+	use sp_core::{sr25519, testing::{ED25519, SR25519, ECDSA}};
 	use crate::{SyncCryptoStore, vrf::VRFTranscriptValue};
 
 	#[test]
@@ -437,5 +437,26 @@ mod tests {
 		);
 
 		assert!(result.unwrap().is_some());
+	}
+
+	#[test]
+	fn ecdsa_sign_prehashed_works() {
+		let store = KeyStore::new();
+
+		let suri = "//Alice";
+		let pair = ecdsa::Pair::from_string(suri, None).unwrap();
+
+		let msg = sp_core::keccak_256(b"this should be a hashed message");
+		
+		// no key in key store
+		let res = SyncCryptoStore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
+		assert!(res.is_none());
+
+		// insert key, sign again
+		let res = SyncCryptoStore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
+		assert_eq!((), res);
+
+		let res = SyncCryptoStore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();
+		assert!(res.is_some());		
 	}
 }
