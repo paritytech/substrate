@@ -454,6 +454,6 @@ pub fn derive_max_encoded_len(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn impl_key_prefix_for(input: TokenStream) -> TokenStream {
-	key_prefix::impl_key_prefix_for(input).unwrap_or_else(syn::Error::into_compile_error).into()
+pub fn impl_key_prefix_for_tuples(input: TokenStream) -> TokenStream {
+	key_prefix::impl_key_prefix_for_tuples(input).unwrap_or_else(syn::Error::into_compile_error).into()
 }

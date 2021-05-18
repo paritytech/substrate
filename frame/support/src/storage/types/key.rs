@@ -270,22 +270,4 @@ pub trait HasReversibleKeyPrefix<P>: ReversibleKeyGenerator + HasKeyPrefix<P> {
 	fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error>;
 }
 
-frame_support_procedural::impl_key_prefix_for!(A, B);
-frame_support_procedural::impl_key_prefix_for!(A, B, C);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H, I);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H, I, J);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H, I, J, K);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H, I, J, K, L);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H, I, J, K, L, M);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
-frame_support_procedural::impl_key_prefix_for!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q);
-frame_support_procedural::impl_key_prefix_for!(
-	A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R,
-);
+frame_support_procedural::impl_key_prefix_for_tuples!();
