@@ -1105,7 +1105,7 @@ mod tests {
 
 	#[test]
 	fn ocw_lock_prevents_overlapping_execution() {
-		use crate::mock::BlockNumber;
+		use crate::mock::{System, BlockNumber};
 		use sp_runtime::offchain::storage_lock::{StorageLock, BlockAndTime};
 
 		{
