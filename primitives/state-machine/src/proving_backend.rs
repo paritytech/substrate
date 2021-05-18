@@ -393,13 +393,21 @@ mod tests {
 
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
-		let trie_backend = test_trie();
+		proof_is_empty_until_value_is_read_inner(false);
+		proof_is_empty_until_value_is_read_inner(true);
+	}
+	fn proof_is_empty_until_value_is_read_inner(flagged: bool) {
+		let trie_backend = test_trie(flagged);
 		assert!(test_proving(&trie_backend).extract_proof().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
-		let trie_backend = test_trie();
+		proof_is_non_empty_after_value_is_read_inner(false);
+		proof_is_non_empty_after_value_is_read_inner(true);
+	}
+	fn proof_is_non_empty_after_value_is_read_inner(flagged: bool) {
+		let trie_backend = test_trie(flagged);
 		let backend = test_proving(&trie_backend);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().is_empty());
@@ -417,11 +425,14 @@ mod tests {
 
 	#[test]
 	fn passes_through_backend_calls() {
-		let trie_backend = test_trie();
+		passes_through_backend_calls_inner(false);
+		passes_through_backend_calls_inner(true);
+	}
+	fn passes_through_backend_calls_inner(flagged: bool) {
+		let trie_backend = test_trie(flagged);
 		let proving_backend = test_proving(&trie_backend);
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
-		let flagged = false;
 
 		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty(), flagged);
 		let (proving_root, mut proving_mdb) = proving_backend.storage_root(std::iter::empty(), flagged);
@@ -431,15 +442,20 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked() {
+		proof_recorded_and_checked_inner(false, false);
+		proof_recorded_and_checked_inner(false, true);
+		proof_recorded_and_checked_inner(true, false);
+		proof_recorded_and_checked_inner(true, true);
+	}
+	fn proof_recorded_and_checked_inner(flagged: bool, do_flag: bool) {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let flagged = false; // TODO test with flag
 		let mut in_memory = in_memory.update(vec![(None, contents)], flagged);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty(), flagged).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(::std::iter::empty(), flagged).0;
+		let trie_root = trie.storage_root(::std::iter::empty(), do_flag).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -454,6 +470,10 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
+		proof_recorded_and_checked_with_child_inner(false);
+		proof_recorded_and_checked_with_child_inner(true);
+	}
+	fn proof_recorded_and_checked_with_child_inner(flagged: bool) {
 		let child_info_1 = ChildInfo::new_default(b"sub1");
 		let child_info_2 = ChildInfo::new_default(b"sub2");
 		let child_info_1 = &child_info_1;
@@ -466,7 +486,6 @@ mod tests {
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let flagged = false; // TODO test with flag
 		let mut in_memory = in_memory.update(contents, flagged);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory.full_storage_root(
@@ -525,8 +544,12 @@ mod tests {
 	}
 
 	#[test]
-	fn storage_proof_encoded_size_estimation_works() { // TODO same with flag -> test_trie with flag
-		let trie_backend = test_trie();
+	fn storage_proof_encoded_size_estimation_works() {
+		storage_proof_encoded_size_estimation_works_inner(false);
+		storage_proof_encoded_size_estimation_works_inner(true);
+	}
+	fn storage_proof_encoded_size_estimation_works_inner(flagged: bool) {
+		let trie_backend = test_trie(flagged);
 		let backend = test_proving(&trie_backend);
 
 		let check_estimation = |backend: &ProvingBackend<'_, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>| {

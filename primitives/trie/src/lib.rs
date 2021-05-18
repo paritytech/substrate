@@ -479,14 +479,24 @@ pub fn flag_inner_meta_hasher<L, DB>(
 {
 	{
 		let mut t = TrieDBMut::<L>::from_existing(db, &mut root)?;
-		let flag = true;
-		let key: &[u8]= &[];
-		if !t.flag(key, flag)? {
-			t.insert(key, b"")?;
-			assert!(t.flag(key, flag)?);
-		}
+		flag_meta_hasher(&mut t)?;
 	}
 	Ok(root)
+}
+
+/// Flag inner trie with state metadata to enable hash of value internally.
+pub fn flag_meta_hasher<L>(
+	t: &mut TrieDBMut<L>
+) -> Result<(), Box<TrieError<L>>> where
+	L: TrieConfiguration<Meta = TrieMeta>,
+{
+	let flag = true;
+	let key: &[u8]= &[];
+	if !t.contains(key)? {
+		t.insert(key, b"")?;
+	}
+	assert!(t.flag(key, flag)?);
+	Ok(())
 }
 
 /// Read a value from the trie.

@@ -959,7 +959,11 @@ mod tests {
 
 	#[test]
 	fn execute_works() {
-		let backend = trie_backend::tests::test_trie();
+		execute_works_inner(false);
+		execute_works_inner(true);
+	}
+	fn execute_works_inner(hashed: bool) {
+		let backend = trie_backend::tests::test_trie(hashed);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -986,10 +990,13 @@ mod tests {
 		);
 	}
 
-
 	#[test]
 	fn execute_works_with_native_else_wasm() {
-		let backend = trie_backend::tests::test_trie();
+		execute_works_with_native_else_wasm_inner(false);
+		execute_works_with_native_else_wasm_inner(true);
+	}
+	fn execute_works_with_native_else_wasm_inner(hashed: bool) {
+		let backend = trie_backend::tests::test_trie(hashed);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1015,8 +1022,12 @@ mod tests {
 
 	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
+		dual_execution_strategy_detects_consensus_failure_inner(false);
+		dual_execution_strategy_detects_consensus_failure_inner(true);
+	}
+	fn dual_execution_strategy_detects_consensus_failure_inner(hashed: bool) {
 		let mut consensus_failed = false;
-		let backend = trie_backend::tests::test_trie();
+		let backend = trie_backend::tests::test_trie(hashed);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1051,6 +1062,10 @@ mod tests {
 
 	#[test]
 	fn prove_execution_and_proof_check_works() {
+		prove_execution_and_proof_check_works_inner(true);
+		prove_execution_and_proof_check_works_inner(false);
+	}
+	fn prove_execution_and_proof_check_works_inner(flagged: bool) {
 		let executor = DummyCodeExecutor {
 			change_changes_trie_config: false,
 			native_available: true,
@@ -1059,9 +1074,10 @@ mod tests {
 		};
 
 		// fetch execution proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie();
-		let flagged = false; // TODO try with flagged and trie with test_trie of already flagged
+		let remote_backend = trie_backend::tests::test_trie(flagged);
 		let remote_root = remote_backend.storage_root(std::iter::empty(), flagged).0;
+		let remote_root_2 = remote_backend.storage_root(std::iter::empty(), false).0;
+		assert_eq!(remote_root, remote_root_2);
 		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _, _>(
 			remote_backend,
 			&mut Default::default(),
@@ -1409,11 +1425,14 @@ mod tests {
 
 	#[test]
 	fn prove_read_and_proof_check_works() {
+		prove_read_and_proof_check_works_inner(false);
+		prove_read_and_proof_check_works_inner(true);
+	}
+	fn prove_read_and_proof_check_works_inner(flagged: bool) {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie(); // TODO test with flagged and flagged.
-		let flagged = false;
+		let remote_backend = trie_backend::tests::test_trie(flagged);
 		let remote_root = remote_backend.storage_root(::std::iter::empty(), flagged).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
  		// check proof locally
@@ -1434,7 +1453,7 @@ mod tests {
 		);
 		assert_eq!(local_result2, false);
 		// on child trie
-		let remote_backend = trie_backend::tests::test_trie();
+		let remote_backend = trie_backend::tests::test_trie(flagged);
 		let remote_root = remote_backend.storage_root(::std::iter::empty(), false).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
@@ -1473,7 +1492,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 
 		let mut transaction = {
-			let backend = test_trie();
+			let backend = test_trie(false);
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(
 				&mut overlay,
@@ -1541,7 +1560,7 @@ mod tests {
 			struct DummyExt(u32);
 		}
 
-		let backend = trie_backend::tests::test_trie();
+		let backend = trie_backend::tests::test_trie(false);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 

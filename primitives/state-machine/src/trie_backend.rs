@@ -268,7 +268,7 @@ pub mod tests {
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
 
-	fn test_db() -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
+	fn test_db(hashed_value: bool) -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
 		let child_info = ChildInfo::new_default(CHILD_KEY_1);
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();
@@ -283,6 +283,10 @@ pub mod tests {
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
+			if hashed_value {
+				sp_trie::flag_meta_hasher(&mut trie).expect("flag failed");
+			}
+
 			trie.insert(child_info.prefixed_storage_key().as_slice(), &sub_root[..])
 				.expect("insert failed");
 			trie.insert(b"key", b"value").expect("insert failed");
@@ -296,19 +300,27 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
-		let (mdb, root) = test_db();
+	pub(crate) fn test_trie(hashed_value: bool) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
+		let (mdb, root) = test_db(hashed_value);
 		TrieBackend::new(mdb, root)
 	}
 
 	#[test]
 	fn read_from_storage_returns_some() {
-		assert_eq!(test_trie().storage(b"key").unwrap(), Some(b"value".to_vec()));
+		read_from_storage_returns_some_inner(false);
+		read_from_storage_returns_some_inner(true);
+	}
+	fn read_from_storage_returns_some_inner(flagged: bool) {
+		assert_eq!(test_trie(flagged).storage(b"key").unwrap(), Some(b"value".to_vec()));
 	}
 
 	#[test]
 	fn read_from_child_storage_returns_some() {
-		let test_trie = test_trie();
+		read_from_child_storage_returns_some_inner(false);
+		read_from_child_storage_returns_some_inner(true);
+	}
+	fn read_from_child_storage_returns_some_inner(flagged: bool) {
+		let test_trie = test_trie(flagged);
 		assert_eq!(
 			test_trie.child_storage(&ChildInfo::new_default(CHILD_KEY_1), b"value3").unwrap(),
 			Some(vec![142u8]),
@@ -317,12 +329,20 @@ pub mod tests {
 
 	#[test]
 	fn read_from_storage_returns_none() {
-		assert_eq!(test_trie().storage(b"non-existing-key").unwrap(), None);
+		read_from_storage_returns_none_inner(false);
+		read_from_storage_returns_none_inner(true);
+	}
+	fn read_from_storage_returns_none_inner(flagged: bool) {
+		assert_eq!(test_trie(flagged).storage(b"non-existing-key").unwrap(), None);
 	}
 
 	#[test]
 	fn pairs_are_not_empty_on_non_empty_storage() {
-		assert!(!test_trie().pairs().is_empty());
+		pairs_are_not_empty_on_non_empty_storage_inner(false);
+		pairs_are_not_empty_on_non_empty_storage_inner(true);
+	}
+	fn pairs_are_not_empty_on_non_empty_storage_inner(flagged: bool) {
+		assert!(!test_trie(flagged).pairs().is_empty());
 	}
 
 	#[test]
@@ -335,36 +355,50 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		let flagged = false;
-		assert!(test_trie().storage_root(iter::empty(), flagged).0 != H256::repeat_byte(0));
+		storage_root_is_non_default_inner(false);
+		storage_root_is_non_default_inner(true);
+	}
+	fn storage_root_is_non_default_inner(flagged: bool) {
+		assert!(test_trie(flagged).storage_root(iter::empty(), flagged).0 != H256::repeat_byte(0));
 	}
 
 	#[test]
 	fn storage_root_transaction_is_empty() {
-		let flagged = false;
-		assert!(test_trie().storage_root(iter::empty(), flagged).1.drain().is_empty());
+		storage_root_transaction_is_empty_inner(false);
+		storage_root_transaction_is_empty_inner(true);
+	}
+	fn storage_root_transaction_is_empty_inner(flagged: bool) {
+		assert!(test_trie(flagged).storage_root(iter::empty(), false).1.drain().is_empty());
 	}
 
 	#[test]
 	fn storage_root_flagged_is_not_empty() {
-		let flagged = true;
-		assert!(!test_trie().storage_root(iter::empty(), flagged).1.drain().is_empty());
+		assert!(!test_trie(false).storage_root(iter::empty(), true).1.drain().is_empty());
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
-		// TODO test with flagged `test_trie` (initially only).
-		let (new_root, mut tx) = test_trie().storage_root(
+		storage_root_transaction_is_non_empty_inner(false, false);
+		storage_root_transaction_is_non_empty_inner(false, true);
+		storage_root_transaction_is_non_empty_inner(true, false);
+		storage_root_transaction_is_non_empty_inner(true, true);
+	}
+	fn storage_root_transaction_is_non_empty_inner(flagged: bool, do_flag: bool) {
+		let (new_root, mut tx) = test_trie(flagged).storage_root(
 			iter::once((&b"new-key"[..], Some(&b"new-value"[..]))),
-			false,
+			do_flag,
 		);
 		assert!(!tx.drain().is_empty());
-		assert!(new_root != test_trie().storage_root(iter::empty(), false).0);
+		assert!(new_root != test_trie(false).storage_root(iter::empty(), false).0);
 	}
 
 	#[test]
 	fn prefix_walking_works() {
-		let trie = test_trie();
+		prefix_walking_works_inner(false);
+		prefix_walking_works_inner(true);
+	}
+	fn prefix_walking_works_inner(flagged: bool) {
+		let trie = test_trie(flagged);
 
 		let mut seen = HashSet::new();
 		trie.for_keys_with_prefix(b"value", |key| {
