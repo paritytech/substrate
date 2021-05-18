@@ -38,7 +38,6 @@ impl WasmExecutionMethod {
 		Self::variants()
 			.iter()
 			.cloned()
-			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
 			.collect()
 	}
 }
@@ -49,12 +48,7 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 			WasmExecutionMethod::Interpreted => {
 				sc_service::config::WasmExecutionMethod::Interpreted
 			}
-			#[cfg(feature = "wasmtime")]
 			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
-			#[cfg(not(feature = "wasmtime"))]
-			WasmExecutionMethod::Compiled => panic!(
-				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
-			),
 		}
 	}
 }

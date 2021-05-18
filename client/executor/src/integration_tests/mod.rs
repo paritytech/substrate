@@ -49,7 +49,6 @@ macro_rules! test_wasm_execution {
 			}
 
 			#[test]
-			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled>]() {
 				$method_name(WasmExecutionMethod::Compiled);
 			}
@@ -120,7 +119,6 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 					&format!("{:?}", e),
 					"\"Trap: Trap { kind: Host(Other(\\\"Function `missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
-				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert!(
 					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:missing_external")
 				),
@@ -147,7 +145,6 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 					&format!("{:?}", e),
 					"\"Trap: Trap { kind: Host(Other(\\\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
-				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled => assert!(
 					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:yet_another_missing_external")
 				),

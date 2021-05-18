@@ -18,10 +18,10 @@ name = "node-template"
 [dependencies]
 structopt = "0.3.8"
 
-sc-cli = { version = "0.9.0", path = "../../../client/cli", features = ["wasmtime"] }
+sc-cli = { version = "0.9.0", path = "../../../client/cli" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sc-executor = { version = "0.9.0", path = "../../../client/executor", features = ["wasmtime"] }
-sc-service = { version = "0.9.0", path = "../../../client/service", features = ["wasmtime"] }
+sc-executor = { version = "0.9.0", path = "../../../client/executor" }
+sc-service = { version = "0.9.0", path = "../../../client/service" }
 sc-telemetry = { version = "3.0.0", path = "../../../client/telemetry" }
 sc-keystore = { version = "3.0.0", path = "../../../client/keystore" }
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }

@@ -42,7 +42,6 @@ pub enum WasmExecutionMethod {
 	/// Uses the Wasmi interpreter.
 	Interpreted,
 	/// Uses the Wasmtime compiled runtime.
-	#[cfg(feature = "wasmtime")]
 	Compiled,
 }
 
@@ -318,7 +317,6 @@ pub fn create_wasm_runtime_with_code(
 			)
 			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
 		}
-		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled => {
 			sc_executor_wasmtime::create_runtime(
 				sc_executor_wasmtime::CodeSupplyMode::Verbatim { blob },

@@ -32,7 +32,7 @@ sp-runtime-interface = { version = "3.0.0", path = "../../primitives/runtime-int
 sp-externalities = { version = "0.9.0", path = "../../primitives/externalities" }
 sc-executor-common = { version = "0.9.0", path = "common" }
 sc-executor-wasmi = { version = "0.9.0", path = "wasmi" }
-sc-executor-wasmtime = { version = "0.9.0", path = "wasmtime", optional = true }
+sc-executor-wasmtime = { version = "0.9.0", path = "wasmtime" }
 parking_lot = "0.11.1"
 log = "0.4.8"
 libsecp256k1 = "0.3.4"
@@ -56,9 +56,6 @@ default = [ "std" ]
 # This crate does not have `no_std` support, we just require this for tests
 std = []
 wasm-extern-trace = []
-wasmtime = [
-	"sc-executor-wasmtime",
-]
 wasmi-errno = [
 	"wasmi/errno"
 ]

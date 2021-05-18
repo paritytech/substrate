@@ -32,7 +32,7 @@ pallet-session = { version = "3.0.0", path = "../../../frame/session" }
 pallet-society = { version = "3.0.0", path = "../../../frame/society" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
-sc-executor = { version = "0.9.0", path = "../../../client/executor", features = ["wasmtime"] }
+sc-executor = { version = "0.9.0", path = "../../../client/executor" }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
 frame-system = { version = "3.0.0", path = "../../../frame/system" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }

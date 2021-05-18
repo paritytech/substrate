@@ -49,8 +49,3 @@ rpassword = "5.0.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"
-
-[features]
-wasmtime = [
-	"sc-service/wasmtime",
-]
