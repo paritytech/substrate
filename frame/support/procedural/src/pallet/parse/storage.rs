@@ -174,6 +174,66 @@ enum StorageKind {
 	NMap,
 }
 
+/// Check the generics in the `map` contains the generics in `gen` may contains generics in
+/// `optional_gen`, and doesn't contains any other.
+fn check_generics(
+	map: &HashMap<String, syn::Binding>,
+	mandatory_generics: &[&str],
+	optional_generics: &[&str],
+	storage_type_name: &str,
+	args_span: proc_macro2::Span,
+) -> syn::Result<()> {
+	let mut errors = vec![];
+
+	let expectation = {
+		let mut e = format!(
+			"`{}` expect generics {}and optional generics {}",
+			storage_type_name,
+			mandatory_generics.iter().map(|name| format!("`{}`, ", name)).collect::<String>(),
+			&optional_generics.iter().map(|name| format!("`{}`, ", name)).collect::<String>(),
+		);
+		e.pop();
+		e.pop();
+		e.push_str(".");
+		e
+	};
+
+	for (gen_name, gen_binding) in map {
+		if !mandatory_generics.contains(&gen_name.as_str())
+			&& !optional_generics.contains(&gen_name.as_str())
+		{
+			let msg = format!(
+				"Invalid pallet::storage, Unexpected generic `{}` for `{}`. {}",
+				gen_name,
+				storage_type_name,
+				expectation,
+			);
+			errors.push(syn::Error::new(gen_binding.span(), msg));
+		}
+	}
+
+	for mandatory_generic in mandatory_generics {
+		if !map.contains_key(&mandatory_generic.to_string()) {
+			let msg = format!(
+				"Invalid pallet::storage, cannot find `{}` generic, required for `{}`.",
+				mandatory_generic,
+				storage_type_name
+			);
+			errors.push(syn::Error::new(args_span, msg));
+		}
+	}
+
+	let mut errors = errors.drain(..);
+	if let Some(mut error) = errors.next() {
+		for other_error in errors {
+			error.combine(other_error);
+		}
+		Err(error)
+	} else {
+		Ok(())
+	}
+}
+
 /// Returns `(named generics, metadata, query kind)`
 fn process_named_generics(
 	storage: &StorageKind,
@@ -193,107 +253,103 @@ fn process_named_generics(
 		parsed.insert(arg.ident.to_string(), arg.clone());
 	}
 
-	// Error on unfound mandatory generic
-	let unfound_error = |storage_name: &str, generic_name: &str| {
-		let msg = format!("Invalid `{}`, cannot find `{}` generic", storage_name, generic_name);
-		syn::Error::new(args_span, msg)
-	};
-
-	let unexpected_remainings = |storage_name: &str, unexpected: HashMap<_, syn::Binding>| {
-		if unexpected.len() != 0 {
-			let mut unexpected = unexpected.values();
-			let msg = |gen| {
-				format!(
-					"Invalid pallet::storage, Unexpected generic `{}` for `{}`.",
-					gen, storage_name,
-				)
-			};
-
-			let first = unexpected.next().expect("not empty as checked above");
-
-			let mut error = syn::Error::new(first.ident.span(), msg(first.ident.clone()));
-			for other in unexpected {
-				error.combine(syn::Error::new(other.ident.span(), msg(other.ident.clone())));
-			}
-			Err(error)
-		} else {
-			Ok(())
-		}
-	};
-
 	let generics = match storage {
 		StorageKind::Value => {
-			let generics = StorageGenerics::Value {
+			check_generics(
+				&parsed,
+				&["Value"],
+				&["QueryKind", "OnEmpty"],
+				"StorageValue",
+				args_span,
+			)?;
+
+			StorageGenerics::Value {
 				value: parsed.remove("Value")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageValue", "Value"))?,
+					.expect("checked above as mandatory generic"),
 				query_kind: parsed.remove("QueryKind")
 					.map(|binding| binding.ty),
 				on_empty: parsed.remove("OnEmpty")
 					.map(|binding| binding.ty),
-			};
-			unexpected_remainings("StorageValue", parsed)?;
-			generics
+			}
 		}
 		StorageKind::Map => {
-			let generics = StorageGenerics::Map {
+			check_generics(
+				&parsed,
+				&["Hasher", "Key", "Value"],
+				&["QueryKind", "OnEmpty"],
+				"StorageMap",
+				args_span,
+			)?;
+
+			StorageGenerics::Map {
 				hasher: parsed.remove("Hasher")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageMap", "Hasher"))?,
+					.expect("checked above as mandatory generic"),
 				key: parsed.remove("Key")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageMap", "Key"))?,
+					.expect("checked above as mandatory generic"),
 				value: parsed.remove("Value")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageMap", "Value"))?,
+					.expect("checked above as mandatory generic"),
 				query_kind: parsed.remove("QueryKind")
 					.map(|binding| binding.ty),
 				on_empty: parsed.remove("OnEmpty")
 					.map(|binding| binding.ty),
-			};
-			unexpected_remainings("StorageMap", parsed)?;
-			generics
+			}
 		}
 		StorageKind::DoubleMap => {
-			let generics = StorageGenerics::DoubleMap {
+			check_generics(
+				&parsed,
+				&["Hasher1", "Key1", "Hasher2", "Key2", "Value"],
+				&["QueryKind", "OnEmpty"],
+				"StorageDoubleMap",
+				args_span,
+			)?;
+
+			StorageGenerics::DoubleMap {
 				hasher1: parsed.remove("Hasher1")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageDoubleMap", "Hasher1"))?,
+					.expect("checked above as mandatory generic"),
 				key1: parsed.remove("Key1")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageDoubleMap", "Key1"))?,
+					.expect("checked above as mandatory generic"),
 				hasher2: parsed.remove("Hasher2")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageDoubleMap", "Hasher2"))?,
+					.expect("checked above as mandatory generic"),
 				key2: parsed.remove("Key2")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageDoubleMap", "Key2"))?,
+					.expect("checked above as mandatory generic"),
 				value: parsed.remove("Value")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageDoubleMap", "Value"))?,
+					.expect("checked above as mandatory generic"),
 				query_kind: parsed.remove("QueryKind")
 					.map(|binding| binding.ty),
 				on_empty: parsed.remove("OnEmpty")
 					.map(|binding| binding.ty),
-			};
-			unexpected_remainings("StorageDoubleMap", parsed)?;
-			generics
+			}
 		}
 		StorageKind::NMap => {
-			let generics = StorageGenerics::NMap {
+			check_generics(
+				&parsed,
+				&["Key", "Value"],
+				&["QueryKind", "OnEmpty"],
+				"StorageNMap",
+				args_span,
+			)?;
+
+			StorageGenerics::NMap {
 				keygen: parsed.remove("Key")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageDoubleMap", "Key"))?,
+					.expect("checked above as mandatory generic"),
 				value: parsed.remove("Value")
 					.map(|binding| binding.ty)
-					.ok_or_else(|| unfound_error("StorageDoubleMap", "Value"))?,
+					.expect("checked above as mandatory generic"),
 				query_kind: parsed.remove("QueryKind")
 					.map(|binding| binding.ty),
 				on_empty: parsed.remove("OnEmpty")
 					.map(|binding| binding.ty),
-			};
-			unexpected_remainings("StorageDoubleMap", parsed)?;
-			generics
+			}
 		}
 	};
 
