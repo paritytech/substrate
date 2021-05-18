@@ -234,6 +234,7 @@ fn rpc_err(err: StateError) -> JsonRpseeCallError {
 }
 
 /// Possible subscriptions for the chain RPC API.
+// TODO: need to be `pub`?
 pub struct ChainSubSinks<Block, Client> {
 	new_heads: SubscriptionSink,
 	all_heads: SubscriptionSink,
@@ -257,6 +258,7 @@ where
 	}
 
 	/// Start subscribe to chain events.
+	// Note: Spawned in `gen_rpc_module` in builder.rs
 	pub async fn subscribe(mut self) {
 		// Send current head at the start.
 		let best_head = self.client.header(BlockId::Hash(self.client.info().best_hash)).expect("header is known; qed");
