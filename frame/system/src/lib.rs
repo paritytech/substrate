@@ -1473,14 +1473,10 @@ impl<T: Config> Pallet<T> {
 	/// If an account is new, set the nonce to its block number
 	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
 		Account::<T>::mutate(who, |a| {
-			if a.nonce > T::Index::zero() {
+			if a.nonce > T::Index::zero() || Self::block_number().is_zero() {
 				a.nonce += T::Index::one();
 			} else {
-				if Self::block_number().is_zero() {
-					a.nonce = T::Index::one();
-				} else {
-					a.nonce = Self::block_number().saturated_into::<u32>().into();
-				}
+				a.nonce = Self::block_number().saturated_into::<u32>().into();
 			}
 		});
 	}
@@ -1702,4 +1698,3 @@ pub mod pallet_prelude {
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
 }
-
