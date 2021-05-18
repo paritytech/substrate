@@ -744,11 +744,13 @@ mod tests {
 		mock::{
 			Call as OuterCall, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin, Runtime,
 			TestCompact, TrimHelpers, roll_to, roll_to_with_ocw, trim_helpers, witness,
+			UnsignedPhase, BlockNumber, System,
 		},
 	};
 	use frame_benchmarking::Zero;
 	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
 	use sp_npos_elections::IndexAssignment;
+	use sp_runtime::offchain::storage_lock::{StorageLock, BlockAndTime};
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
 
 	type Assignment = crate::unsigned::Assignment<Runtime>;
@@ -1104,60 +1106,56 @@ mod tests {
 	}
 
 	#[test]
+	fn ocw_lock_released_after_successful_execution() {
+		// first, ensure that a successful execution releases the lock
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			let guard = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+
+			roll_to(25);
+			assert!(MultiPhase::current_phase().is_unsigned());
+
+			// initially, the lock is not set.
+			assert!(guard.get::<bool>().is_none());
+
+			// a successful a-z execution.
+			MultiPhase::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 1);
+
+			// afterwards, the lock is not set either..
+			assert!(guard.get::<bool>().is_none());
+			assert_eq!(last_block.get::<BlockNumber>().unwrap().unwrap(), 25);
+		});
+	}
+
+	#[test]
 	fn ocw_lock_prevents_overlapping_execution() {
-		use crate::mock::{System, BlockNumber};
-		use sp_runtime::offchain::storage_lock::{StorageLock, BlockAndTime};
+		// ensure that if the guard is in hold, a new execution is not allowed.
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
+			assert!(MultiPhase::current_phase().is_unsigned());
 
-		{
-			// first, ensure that a successful execution releases the lock
-			let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
-			ext.execute_with(|| {
-				let guard = StorageValueRef::persistent(&OFFCHAIN_LOCK);
-				let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+			// artificially set the value, as if another thread is mid-way.
+			let mut lock = StorageLock::<BlockAndTime<System>>::with_block_deadline(
+				OFFCHAIN_LOCK,
+				UnsignedPhase::get().saturated_into(),
+			);
+			let guard = lock.lock();
 
-				roll_to(25);
-				assert!(MultiPhase::current_phase().is_unsigned());
+			// nothing submitted.
+			MultiPhase::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 0);
+			MultiPhase::offchain_worker(26);
+			assert_eq!(pool.read().transactions.len(), 0);
 
-				// initially, the lock is not set.
-				assert!(matches!(guard.get::<bool>(), None));
+			drop(guard);
 
-				// a successful a-z execution.
-				MultiPhase::offchain_worker(25);
-				assert_eq!(pool.read().transactions.len(), 1);
-
-				// afterwards, the lock is not set either..
-				assert!(matches!(guard.get::<bool>(), None));
-				assert!(matches!(last_block.get::<BlockNumber>(), Some(Some(25))));
-			});
-		}
-
-		{
-			// ensure that if the guard is in hold, a new execution is not allowed.
-			let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
-			ext.execute_with(|| {
-				roll_to(25);
-				assert!(MultiPhase::current_phase().is_unsigned());
-
-				// artificially set the value, as if another thread is mid-way.
-				let mut lock = StorageLock::<BlockAndTime<System>>::with_block_deadline(
-					OFFCHAIN_LOCK,
-					crate::mock::UnsignedPhase::get().saturated_into(),
-				);
-				let guard = lock.lock();
-
-				// nothing submitted.
-				MultiPhase::offchain_worker(25);
-				assert_eq!(pool.read().transactions.len(), 0);
-				MultiPhase::offchain_worker(26);
-				assert_eq!(pool.read().transactions.len(), 0);
-
-				drop(guard);
-
-				// 🎉 !
-				MultiPhase::offchain_worker(25);
-				assert_eq!(pool.read().transactions.len(), 1);
-			});
-		}
+			// 🎉 !
+			MultiPhase::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 1);
+		});
 	}
 
 	#[test]
