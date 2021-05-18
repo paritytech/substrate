@@ -52,7 +52,7 @@ pub struct ImportParams {
 		value_name = "METHOD",
 		possible_values = &WasmExecutionMethod::enabled_variants(),
 		case_insensitive = true,
-		default_value = "Interpreted"
+		default_value = "Compiled",
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
