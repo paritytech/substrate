@@ -48,7 +48,7 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 			let kargs = prefix_iter.clone().rev().map(|ident| format_ident!("KArg{}", ident)).collect::<Vec<_>>();
 			let prefixes = prefix_iter.clone().rev().collect::<Vec<_>>();
 			let partial_keygen = if suffix_set.len() == current_tuple.len() - 1 {
-				let key = prefix_iter.peek().unwrap();
+				let key = prefix_iter.peek().expect("Next element is guaranteed to not be empty; qed");
 				let hasher = format_ident!("Hasher{}", key);
 
 				quote!(Key<#hasher, #key>)
@@ -59,12 +59,12 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 				quote!((#(Key<#hashers, #keys>),*))
 			};
 			let suffixes = if suffix_set.len() == 1 {
-				suffix_set.iter().next().unwrap().to_token_stream()
+				suffix_set.iter().next().expect("Next element is checked to not be empty; qed").to_token_stream()
 			} else {
 				quote!((#(#suffix_set),*))
 			};
 			let suffix_keygen = if suffix_set.len() == 1 {
-				let key = suffix_set.iter().next().unwrap();
+				let key = suffix_set.iter().next().expect("Next element is checked to not be empty; qed");
 				let hasher = format_ident!("Hasher{}", key);
 
 				quote!(Key<#hasher, #key>)
