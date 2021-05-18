@@ -151,7 +151,7 @@ impl CryptoStore for KeyStore {
 		id: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
-	) -> Result<Option<Vec<u8>>, Error> {
+	) -> Result<Option<ecdsa::Signature>, Error> {
 		SyncCryptoStore::ecdsa_sign_prehashed(self, id, public, msg)
 	}
 }
@@ -341,11 +341,9 @@ impl SyncCryptoStore for KeyStore {
 		id: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
-	) -> Result<Option<Vec<u8>>, Error> {
-		use codec::Encode;
-
+	) -> Result<Option<ecdsa::Signature>, Error> {
 		let pair = self.ecdsa_key_pair(id, public);
-		pair.map(|k| k.sign_prehashed(msg).encode()).map(Ok).transpose()
+		pair.map(|k| k.sign_prehashed(msg)).map(Ok).transpose()
 	}
 }
 

@@ -207,7 +207,7 @@ pub trait CryptoStore: Send + Sync {
 		id: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
-	) -> Result<Option<Vec<u8>>, Error>;
+	) -> Result<Option<ecdsa::Signature>, Error>;
 }
 
 /// Sync version of the CryptoStore
@@ -380,7 +380,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		id: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
-	) -> Result<Option<Vec<u8>>, Error>;
+	) -> Result<Option<ecdsa::Signature>, Error>;
 }
 
 /// A pointer to a keystore.

@@ -148,7 +148,7 @@ impl CryptoStore for LocalKeystore {
 		id: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
-	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
+	) -> std::result::Result<Option<ecdsa::Signature>, TraitError> {
 		SyncCryptoStore::ecdsa_sign_prehashed(self, id, public, msg)
 	}
 }
@@ -316,12 +316,11 @@ impl SyncCryptoStore for LocalKeystore {
 		id: KeyTypeId,
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
-	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
+	) -> std::result::Result<Option<ecdsa::Signature>, TraitError> {
 		let pair = self.0.read()
-			.key_pair_by_type::<ecdsa::Pair>(public, id)
-			.map_err(|e| TraitError::from(e))?;
+			.key_pair_by_type::<ecdsa::Pair>(public, id)?;
 		
-		pair.map(|k| k.sign_prehashed(msg).encode()).map(Ok).transpose()
+		pair.map(|k| k.sign_prehashed(msg)).map(Ok).transpose()
 	}
 }
 
