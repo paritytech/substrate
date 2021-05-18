@@ -174,6 +174,7 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof(&self) -> StorageProof {
+		// TODO serialize meta.
 		let trie_nodes = self.inner.read()
 			.records
 			.iter()
