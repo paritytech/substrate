@@ -38,7 +38,7 @@ pub fn impl_key_prefix_for(input: proc_macro::TokenStream) -> Result<TokenStream
 			Ok(acc)
 		})?;
 	let mut prefix_set_iter = tuple_set.iter().rev().cloned().peekable();
-	let mut suffix_set = BTreeSet::new();
+	let mut suffix_set = Vec::new();
 
 	let mut all_trait_impls = TokenStream::new();
 
@@ -47,22 +47,11 @@ pub fn impl_key_prefix_for(input: proc_macro::TokenStream) -> Result<TokenStream
 			break;
 		}
 
-		suffix_set.insert(next_ident);
-		let hashers1 = tuple_set.iter().map(|ident| format_ident!("Hasher{}", ident));
-		let hashers2 = hashers1.clone();
-		let hashers3 = hashers1.clone();
-		let hashers4 = hashers1.clone();
-		let kargs1 = prefix_set_iter.clone().map(|ident| format_ident!("KArg{}", ident));
-		let kargs2 = kargs1.clone();
-		let kargs3 = kargs1.clone();
-		let kargs4 = kargs1.clone();
-		let kargs5 = kargs1.clone();
-		let all_idents1 = tuple_set.iter();
-		let all_idents2 = all_idents1.clone();
-		let all_idents3 = all_idents1.clone();
-		let all_idents4 = all_idents1.clone();
-		let prefixes1 = prefix_set_iter.clone();
-		let prefixes2 = prefixes1.clone();
+		suffix_set.push(next_ident);
+		let hashers = tuple_set.iter().map(|ident| format_ident!("Hasher{}", ident)).collect::<Vec<_>>();
+		let kargs = prefix_set_iter.clone().map(|ident| format_ident!("KArg{}", ident)).collect::<Vec<_>>();
+		let all_idents = &tuple_set;
+		let prefixes = prefix_set_iter.clone().collect::<Vec<_>>();
 		let partial_keygen = if suffix_set.len() == arity - 1 {
 			let key = prefix_set_iter.peek().unwrap();
 			let hasher = format_ident!("Hasher{}", key);
@@ -86,30 +75,30 @@ pub fn impl_key_prefix_for(input: proc_macro::TokenStream) -> Result<TokenStream
 
 			quote!(Key<#hasher, #key>)
 		} else {
-			let keys = suffix_set.iter();
-			let hashers = keys.clone().map(|ident| format_ident!("Hasher{}", ident));
+			let keys = &suffix_set;
+			let hashers = keys.iter().map(|ident| format_ident!("Hasher{}", ident));
 
 			quote!((#(Key<#hashers, #keys>),*))
 		};
 
 		let trait_impls = quote!{
 			impl<
-				#(#all_idents1: FullCodec,)*
-				#(#hashers1: StorageHasher,)*
-				#(#kargs1: EncodeLike<#prefixes1>),*
-			> HasKeyPrefix<(#(#kargs2,)*)> for (#(Key<#hashers2, #all_idents2>,)*) {
+				#(#all_idents: FullCodec,)*
+				#(#hashers: StorageHasher,)*
+				#(#kargs: EncodeLike<#prefixes>),*
+			> HasKeyPrefix<(#(#kargs,)*)> for (#(Key<#hashers, #all_idents>,)*) {
 				type Suffix = #suffixes;
 
-				fn partial_key(prefix: (#(#kargs3,)*)) -> Vec<u8> {
+				fn partial_key(prefix: (#(#kargs,)*)) -> Vec<u8> {
 					<#partial_keygen>::final_key(prefix)
 				}
 			}
 
 			impl<
-				#(#all_idents3: FullCodec,)*
-				#(#hashers3: ReversibleStorageHasher,)*
-				#(#kargs4: EncodeLike<#prefixes2>),*
-			> HasReversibleKeyPrefix<(#(#kargs5,)*)> for (#(Key<#hashers4, #all_idents4>,)*) {
+				#(#all_idents: FullCodec,)*
+				#(#hashers: ReversibleStorageHasher,)*
+				#(#kargs: EncodeLike<#prefixes>),*
+			> HasReversibleKeyPrefix<(#(#kargs,)*)> for (#(Key<#hashers, #all_idents>,)*) {
 				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
 					<#suffix_keygen>::decode_final_key(key_material).map(|k| k.0)
 				}
