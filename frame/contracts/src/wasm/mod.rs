@@ -1894,7 +1894,7 @@ mod tests {
 "#;
 
 	#[test]
-	fn rent_status_work() {
+	fn rent_status_works() {
 		let output = execute(
 			CODE_RENT_STATUS,
 			vec![],
