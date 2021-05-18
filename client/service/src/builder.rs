@@ -785,12 +785,12 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 		.expect("Infallible; qed");
 	let (state, child_state) = sc_rpc::state::new_full(client.clone(), deny_unsafe);
 
-	let state_rpc = state.into_rpc_module().expect("Infallible; qed");
+	let (state_rpc, state_subs) = state.into_rpc_module().expect("Infallible; qed");
 	let child_state_rpc = child_state.into_rpc_module().expect("Infallible; qed");
 
 	let mut rpc_api = Vec::new();
 
-	let maybe_offchain_rpc = offchain_storage.map(|storage| {
+	offchain_storage.map(|storage| {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe)
 			.into_rpc_module()
 			.expect("Infaillible; qed");
@@ -806,6 +806,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 
 	// Spawn subscription tasks.
 	task_executor.execute_new(Box::pin(chain_subs.subscribe()));
+	task_executor.execute_new(Box::pin(state_subs.subscribe()));
 
 	rpc_api
 }

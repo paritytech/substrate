@@ -26,7 +26,7 @@ mod tests;
 
 use std::sync::Arc;
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_ws_server::{RpcModule, RpcContextModule, SubscriptionSink};
 
 use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
@@ -166,8 +166,8 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	let child_backend = Box::new(
 		self::state_full::FullState::new(client.clone())
 	);
-	let backend = Box::new(self::state_full::FullState::new(client));
-	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
+	let backend = Box::new(self::state_full::FullState::new(client.clone()));
+	(State { backend, client, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// Create new state API that works on light node.
@@ -193,16 +193,20 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	));
 
 	let backend = Box::new(self::state_light::LightState::new(
-			client,
+			client.clone(),
 			remote_blockchain,
 			fetcher,
 	));
-	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
+	(State { backend, client, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// State API with subscriptions support.
 pub struct State<Block, Client> {
 	backend: Box<dyn StateBackend<Block, Client>>,
+	// TODO: this is pretty dumb. the `FullState` struct has a `client` in it, but I don't know how to get a
+	// reference to it. I could impl `ChainBackend` which has a `client()` method, but that's pretty lame. I could
+	// also add a `client()` method to the `StateBackend` trait but that's also terrible.
+	client: Arc<Client>,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
@@ -210,10 +214,14 @@ pub struct State<Block, Client> {
 impl<Block, Client> State<Block, Client>
 	where
 		Block: BlockT + 'static,
-		Client: Send + Sync + 'static,
+		Client: BlockchainEvents<Block> + Send + Sync + 'static,
 {
-	/// Convert this to a RPC module.
-	pub fn into_rpc_module(self) -> Result<RpcModule, JsonRpseeError> {
+	/// Register all RPC methods and return an [`RpcModule`].
+	pub fn into_rpc_module(self) -> Result<(RpcModule, SubscriptionSinks<Block, Client>), JsonRpseeError> {
+		// TODO: this is pretty dumb. the `FullState` struct has a `client` in it, but I don't know how to get a
+		// reference to it. I could impl `ChainBackend` which has a `client()` method, but that's pretty lame. I could
+		// also add a `client()` method to the `StateBackend` trait but that's also terrible.
+		let client = self.client.clone();
 		let mut ctx_module = RpcContextModule::new(self);
 
 		ctx_module.register_method("state_call", |params, state| {
@@ -309,8 +317,44 @@ impl<Block, Client> State<Block, Client>
 
 
 		// TODO: add subscriptions.
+		// TODO: this is a bit awkward, should we have `register_subscription` on `RpcContextModule` too? Or even make `RpcModule` always take a context (it seems to be the common case, at least here in substrate)
+		let mut module = ctx_module.into_module();
 
-		Ok(ctx_module.into_module())
+		// state_runtimeVersion/state_unsubscribeRuntimeVersion
+		// state_storage/state_unsubscribeStorage
+		let runtime_version_subs = module.register_subscription("state_runtimeVersion", "state_unsubscribeRuntimeVersion")?;
+		let storage_subs = module.register_subscription("state_storage", "state_unsubscribeStorage")?;
+		let sinks = SubscriptionSinks::new(vec![runtime_version_subs, storage_subs], client);
+
+
+		Ok((module, sinks))
+	}
+}
+
+use std::marker::PhantomData;
+pub struct SubscriptionSinks<Block, Client> {
+	sinks: Vec<SubscriptionSink>,
+	client: Arc<Client>,
+	marker: PhantomData<Block>,
+}
+
+impl<Block, Client> SubscriptionSinks<Block, Client>
+	where
+		Block: BlockT + 'static,
+		Client: BlockchainEvents<Block> +Send + Sync + 'static,
+{
+	fn new(sinks: Vec<SubscriptionSink>, client: Arc<Client>) -> Self {
+		Self { sinks, client, marker: PhantomData }
+	}
+
+	pub async fn subscribe(mut self) {
+		// TODO: figure out what it is I need here exactly and adjust the types
+		// 1. use client.storage_change_notification_stream to get a stream (from BlockchainEvents trait)
+		// 2. filter out well_known_keys::CODE
+		// 3. get the current runtime version (to start off the stream I presume?) from the backend? `self.runtime_version()`-ish
+		// 4. set up the stream to send values only when there's a new runtime version
+		// 5. send the first version and `.chain` on the stream created above
+
 	}
 }
 

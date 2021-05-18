@@ -84,7 +84,7 @@ impl<B: traits::Block> System<B> {
 		}
 	}
 
-	/// Convert to a RPC Module.
+	/// Register all RPC methods and return an [`RpcModule`].
 	pub fn into_rpc_module(self) -> std::result::Result<RpcModule, JsonRpseeError> {
 		let mut ctx_module = RpcContextModule::new(self);
 

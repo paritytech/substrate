@@ -51,7 +51,7 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 		}
 	}
 
-	/// TODO: docs.
+	/// Register all RPC methods and return an [`RpcModule`].
 	pub fn into_rpc_module(self) -> Result<RpcModule, JsonRpseeError> {
 		let mut ctx = RpcContextModule::new(self);
 
