@@ -492,7 +492,7 @@
 			"network": "polkasmith",
 			"displayName": "PolkaSmith Canary Network",
 			"symbols": ["PKS"],
-			"decimals": [12],
+			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://polkafoundry.com"
 		},
@@ -501,7 +501,7 @@
 			"network": "polkafoundry",
 			"displayName": "PolkaFoundry Network",
 			"symbols": ["PKF"],
-			"decimals": [12],
+			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://polkafoundry.com"
 		},
