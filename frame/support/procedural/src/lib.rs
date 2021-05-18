@@ -29,6 +29,7 @@ mod clone_no_bound;
 mod partial_eq_no_bound;
 mod default_no_bound;
 mod max_encoded_len;
+mod key_prefix;
 
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
@@ -450,4 +451,9 @@ pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;
 #[proc_macro_derive(MaxEncodedLen)]
 pub fn derive_max_encoded_len(input: TokenStream) -> TokenStream {
 	max_encoded_len::derive_max_encoded_len(input)
+}
+
+#[proc_macro]
+pub fn impl_key_prefix_for(input: TokenStream) -> TokenStream {
+	key_prefix::impl_key_prefix_for(input).unwrap_or_else(syn::Error::into_compile_error).into()
 }
