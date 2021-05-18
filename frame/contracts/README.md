@@ -69,7 +69,8 @@ It is up the the individual client if and how those messages are presented to th
 This buffer is also printed as a debug message. In order to see these messages on the node
 console the log level for the `runtime::contracts` target needs to be raised to at least
 the `debug` level. However, those messages are easy to overlook because of the noise generated
-by block production. A good starting point for observing them on the console is:
+by block production. A good starting point for observing them on the console is using this
+command line in the root directory of the substrate repository:
 
 ```bash
 cargo run --release -- --dev --tmp -lerror,runtime::contracts=debug
@@ -80,5 +81,28 @@ to `error` in order to prevent them from spamming the console.
 
 `--dev`: Use a dev chain spec
 `--tmp`: Use temporary storage for chain data (the chain state is deleted on exit)
+
+## Unstable Interfaces
+
+Driven by the desire to have an iterative approach in developing new contract interfaces
+this pallet contains the concept of an unstable interface. Akin to the rust nightly compiler
+it allows us to add new interfaces but mark them as unstable so that contract languages can
+experiment with them and give feedback before we stabilize those.
+
+In order to access interfaces marked as `__unstable__` in `runtime.rs` one need to compile
+this crate with the `unstable-interface` feature enabled. It should be obvious that any
+live runtime should never be compiled with this feature: In addition to be subject to
+change or removal those interfaces do not have proper weights associated with them and
+are therefore considered unsafe.
+
+The substrate runtime exposes this feature as `contracts-unstable-interface`. Example
+commandline for running the substrate node with unstable contracts interfaces:
+
+```bash
+cargo run --release --features contracts-unstable-interface -- --dev
+```
+
+New interfaces are generally added as unstable and might go through several iterations
+before they are promoted to a stable interface.
 
 License: Apache-2.0
