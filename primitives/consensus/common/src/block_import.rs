@@ -111,6 +111,31 @@ pub struct BlockCheckParams<Block: BlockT> {
 	pub import_existing: bool,
 }
 
+/// Precomputed storage.
+pub enum StorageChanges<Block: BlockT, Transaction> {
+	/// Changes coming from block execution.
+	Raw(sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>),
+	/// Whole new state.
+	Import(ImportedState<Block>),
+}
+
+/// Imported state data. A vector of key-value pairs that should form a trie.
+#[derive(PartialEq, Eq, Clone)]
+pub struct ImportedState<B: BlockT> {
+	/// Target block hash.
+	pub block: B::Hash,
+	/// State keys and values.
+	pub state: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+impl<B: BlockT> std::fmt::Debug for ImportedState<B> {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		fmt.debug_struct("ImportedState")
+			.field("block", &self.block)
+			.finish()
+	}
+}
+
 /// Data required to import a Block.
 #[non_exhaustive]
 pub struct BlockImportParams<Block: BlockT, Transaction> {
@@ -137,9 +162,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub body: Option<Vec<Block::Extrinsic>>,
 	/// The changes to the storage to create the state for the block. If this is `Some(_)`,
 	/// the block import will not need to re-execute the block for importing it.
-	pub storage_changes: Option<
-		sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>
-	>,
+	pub storage_changes: Option<StorageChanges<Block, Transaction>>,
 	/// Is this block finalized already?
 	/// `true` implies instant finality.
 	pub finalized: bool,

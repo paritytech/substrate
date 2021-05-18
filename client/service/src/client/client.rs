@@ -75,7 +75,7 @@ use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
-		changes_tries_state_at_block, StorageProvider,
+		changes_tries_state_at_block, StorageProvider, StorageIterProvider,
 		LockImportRun, apply_aux,
 	},
 	client::{
@@ -86,7 +86,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageNotifications, StorageEventStream},
 	KeyIterator, CallExecutor, ExecutorProvider, ProofProvider,
-	cht, UsageProvider
+	cht, UsageProvider, KeyValueIterator,
 };
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
 use sp_blockchain::Error;
@@ -148,6 +148,11 @@ impl<H> PrePostHeader<H> {
 			PrePostHeader::Different(_, h) => h,
 		}
 	}
+}
+
+enum PrepareStorageChangesResult<B: backend::Backend<Block>, Block: BlockT> {
+	Discard(ImportResult),
+	Import(Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>),
 }
 
 /// Create an instance of in-memory client.
@@ -615,6 +620,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		operation: &mut ClientImportOperation<Block, B>,
 		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
+		storage_changes: Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>,
 	) -> sp_blockchain::Result<ImportResult> where
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
@@ -626,7 +632,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			justifications,
 			post_digests,
 			body,
-			storage_changes,
 			finalized,
 			auxiliary,
 			fork_choice,
@@ -853,7 +858,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	fn prepare_block_storage_changes(
 		&self,
 		import_block: &mut BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-	) -> sp_blockchain::Result<Option<ImportResult>>
+	) -> sp_blockchain::Result<PrepareStorageChangesResult<B, Block>>
 		where
 			Self: ProvideRuntimeApi<Block>,
 			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
@@ -862,20 +867,34 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let parent_hash = import_block.header.parent_hash();
 		let at = BlockId::Hash(*parent_hash);
 		let enact_state = match self.block_status(&at)? {
-			BlockStatus::Unknown => return Ok(Some(ImportResult::UnknownParent)),
+			BlockStatus::Unknown => return Ok(PrepareStorageChangesResult::Discard(ImportResult::UnknownParent)),
 			BlockStatus::InChainWithState | BlockStatus::Queued => true,
 			BlockStatus::InChainPruned if import_block.allow_missing_state => false,
-			BlockStatus::InChainPruned => return Ok(Some(ImportResult::MissingState)),
-			BlockStatus::KnownBad => return Ok(Some(ImportResult::KnownBad)),
+			BlockStatus::InChainPruned => return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
+			BlockStatus::KnownBad => return Ok(PrepareStorageChangesResult::Discard(ImportResult::KnownBad)),
 		};
 
-		match (enact_state, &mut import_block.storage_changes, &mut import_block.body) {
+		let storage_changes = import_block.storage_changes.take();
+		let storage_changes = match (enact_state, storage_changes, &import_block.body) {
 			// We have storage changes and should enact the state, so we don't need to do anything
 			// here
-			(true, Some(_), _) => {},
+			(true, Some(sp_consensus::StorageChanges::Raw(changes)), _) => Some(changes),
+			// We have imported state. Convert it to storage changes.
+			(true, Some(sp_consensus::StorageChanges::Import(imported_state)), _) => {
+				let state = self.backend.empty_state()?;
+				let mut overlay = sp_state_machine::OverlayedChanges::default();
+				let cache = Default::default();
+				for (k, v) in imported_state.state {
+					overlay.set_storage(k, Some(v));
+				}
+				let changes = overlay.into_storage_changes(&state, None, parent_hash.clone(), cache)
+					.map_err(sp_blockchain::Error::Storage)?;
+
+				Some(changes)
+			}
 			// We should enact state, but don't have any storage changes, so we need to execute the
 			// block.
-			(true, ref mut storage_changes @ None, Some(ref body)) => {
+			(true, None, Some(ref body)) => {
 				let runtime_api = self.runtime_api();
 				let execution_context = if import_block.origin == BlockOrigin::NetworkInitialSync {
 					ExecutionContext::Syncing
@@ -905,19 +924,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					!= &gen_storage_changes.transaction_storage_root
 				{
 					return Err(Error::InvalidStateRoot)
-				} else {
-					**storage_changes = Some(gen_storage_changes);
 				}
+				Some(gen_storage_changes)
 			},
 			// No block body, no storage changes
-			(true, None, None) => {},
+			(true, None, None) => None,
 			// We should not enact the state, so we set the storage changes to `None`.
-			(false, changes, _) => {
-				changes.take();
-			}
+			(false, _, _) => None,
 		};
 
-		Ok(None)
+		Ok(PrepareStorageChangesResult::Import(storage_changes))
 	}
 
 	fn apply_finality_with_block_hash(
@@ -1527,6 +1543,25 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 	}
 }
 
+impl<B, E, Block, RA> StorageIterProvider<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+	B::State: 'static,
+{
+	fn storage_pairs_iter(
+		&self,
+		id: &BlockId<Block>,
+		start_key: Option<&StorageKey>
+	) -> sp_blockchain::Result<Box<dyn Iterator<Item=(StorageKey, StorageData)>>> {
+		let state = self.state_at(id)?;
+		let start_key = start_key
+			.map(|key| key.0.clone())
+			.unwrap_or_else(Vec::new);
+		Ok(Box::new(KeyValueIterator::<_, Block>::new(state, start_key)))
+	}
+}
+
 impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
@@ -1737,15 +1772,16 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
 		let _enter = span.enter();
 
-		if let Some(res) = self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
+		let storage_changes = match self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
 			warn!("Block prepare storage changes error:\n{:?}", e);
 			ConsensusError::ClientImport(e.to_string())
 		})? {
-			return Ok(res)
-		}
+			PrepareStorageChangesResult::Discard(res) => return Ok(res),
+			PrepareStorageChangesResult::Import(storage_changes) => storage_changes,
+		};
 
 		self.lock_import_and_run(|operation| {
-			self.apply_block(operation, import_block, new_cache)
+			self.apply_block(operation, import_block, new_cache, storage_changes)
 		}).map_err(|e| {
 			warn!("Block import error:\n{:?}", e);
 			ConsensusError::ClientImport(e.to_string()).into()

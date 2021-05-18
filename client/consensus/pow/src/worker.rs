@@ -19,7 +19,8 @@
 use std::{pin::Pin, time::Duration, collections::HashMap, borrow::Cow};
 use sc_client_api::ImportNotifications;
 use sp_runtime::{DigestItem, traits::Block as BlockT, generic::BlockId};
-use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, import_queue::BoxBlockImport};
+use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, StorageChanges,
+	import_queue::BoxBlockImport};
 use futures::{prelude::*, task::{Context, Poll}};
 use futures_timer::Delay;
 use log::*;
@@ -128,7 +129,7 @@ impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(seal);
 			import_block.body = Some(body);
-			import_block.storage_changes = Some(build.proposal.storage_changes);
+			import_block.storage_changes = Some(StorageChanges::Raw(build.proposal.storage_changes));
 
 			let intermediate = PowIntermediate::<Algorithm::Difficulty> {
 				difficulty: Some(build.metadata.difficulty),

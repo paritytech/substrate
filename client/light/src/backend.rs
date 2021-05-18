@@ -238,6 +238,10 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		Ok(GenesisOrUnavailableState::Unavailable)
 	}
 
+	fn empty_state(&self) -> ClientResult<Self::State> {
+		Err(ClientError::NotAvailableOnLightClient)
+	}
+
 	fn revert(
 		&self,
 		_n: NumberFor<Block>,

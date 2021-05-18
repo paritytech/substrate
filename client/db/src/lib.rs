@@ -1187,6 +1187,9 @@ impl<Block: BlockT> Backend<Block> {
 				)?.expect("existence of block with number `new_canonical` \
 					implies existence of blocks with all numbers before it; qed")
 			};
+			if !sc_client_api::Backend::have_state_at(self, &hash, new_canonical.saturated_into()) {
+				return Ok(())
+			}
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
@@ -1213,15 +1216,14 @@ impl<Block: BlockT> Backend<Block> {
 		for (block, justification) in operation.finalized_blocks {
 			let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
 			let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
-
 			meta_updates.push(self.finalize_block_with_transaction(
-				&mut transaction,
-				&block_hash,
-				&block_header,
-				Some(last_finalized_hash),
-				justification,
-				&mut changes_trie_cache_ops,
-				&mut finalization_displaced_leaves,
+					&mut transaction,
+					&block_hash,
+					&block_header,
+					Some(last_finalized_hash),
+					justification,
+					&mut changes_trie_cache_ops,
+					&mut finalization_displaced_leaves,
 			)?);
 			last_finalized_hash = block_hash;
 		}
@@ -1334,7 +1336,8 @@ impl<Block: BlockT> Backend<Block> {
 				let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
 				finalized
 			} else {
-				false
+				let finalized = number.is_zero() || pending_block.leaf_state.is_final();
+				finalized
 			};
 
 			let header = &pending_block.header;
@@ -1487,25 +1490,27 @@ impl<Block: BlockT> Backend<Block> {
 	) -> ClientResult<()> {
 		let f_num = f_header.number().clone();
 
-		if self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true) {
-			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
-			transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
+		let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
+		transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
 
+		if sc_client_api::Backend::have_state_at(self, &f_hash, f_num) &&
+			self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true)
+		{
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
 				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 			apply_state_commit(transaction, commit);
+		}
 
-			if !f_num.is_zero() {
-				let new_changes_trie_cache_ops = self.changes_tries_storage.finalize(
-					transaction,
-					*f_header.parent_hash(),
-					f_hash,
-					f_num,
-					if is_inserted { Some(&f_header) } else { None },
-					changes_trie_cache_ops.take(),
-				)?;
-				*changes_trie_cache_ops = Some(new_changes_trie_cache_ops);
-			}
+		if !f_num.is_zero() {
+			let new_changes_trie_cache_ops = self.changes_tries_storage.finalize(
+				transaction,
+				*f_header.parent_hash(),
+				f_hash,
+				f_num,
+				if is_inserted { Some(&f_header) } else { None },
+				changes_trie_cache_ops.take(),
+			)?;
+			*changes_trie_cache_ops = Some(new_changes_trie_cache_ops);
 		}
 
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
@@ -2118,6 +2123,23 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&*self.import_lock
+	}
+
+	fn empty_state(&self) -> ClientResult<Self::State> {
+		let root = DbGenesisStorage::<Block>::new().0; // Empty trie
+		let db_state = DbState::<Block>::new(self.storage.clone(), root);
+		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
+		let caching_state = CachingState::new(
+			state,
+			self.shared_cache.clone(),
+			None,
+		);
+		Ok(SyncingCachingState::new(
+				caching_state,
+				self.state_usage.clone(),
+				self.blockchain.meta.clone(),
+				self.import_lock.clone(),
+		))
 	}
 }
 

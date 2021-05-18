@@ -146,7 +146,7 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 		params.body = Some(body);
 		params.finalized = finalize;
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		params.storage_changes = Some(proposal.storage_changes);
+		params.storage_changes = Some(sp_consensus::StorageChanges::Raw(proposal.storage_changes));
 
 		if let Some(digest_provider) = digest_provider {
 			digest_provider.append_block_import(&parent, &mut params, &inherent_data)?;

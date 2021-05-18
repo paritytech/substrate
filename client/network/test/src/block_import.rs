@@ -46,6 +46,7 @@ fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>)
 		origin: Some(peer_id.clone()),
 		allow_missing_state: false,
 		import_existing: false,
+		state: None,
 	})
 }
 

@@ -34,7 +34,7 @@ use crate::{
 	error::Error as ConsensusError,
 	block_import::{
 		BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
-		BlockCheckParams,
+		BlockCheckParams, ImportedState,
 	},
 	metrics::Metrics,
 };
@@ -76,6 +76,8 @@ pub struct IncomingBlock<B: BlockT> {
 	pub allow_missing_state: bool,
 	/// Re-validate existing block.
 	pub import_existing: bool,
+	/// Do not compute new state, but rather set it to the given set.
+	pub state: Option<ImportedState<B>>,
 }
 
 /// Type of keys in the blockchain cache that consensus module could use for its needs.

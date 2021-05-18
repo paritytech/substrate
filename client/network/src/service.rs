@@ -196,6 +196,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			protocol::ProtocolConfig {
 				roles: From::from(&params.role),
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
+				sync_mode: params.network_config.sync_mode.clone(),
 			},
 			params.chain.clone(),
 			params.protocol_id.clone(),
@@ -331,7 +332,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 
 			let behaviour = {
-				let bitswap = if params.network_config.ipfs_server { Some(Bitswap::new(client)) } else { None };
+				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -339,6 +340,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					light_client_request_sender,
 					discovery_config,
 					params.block_request_protocol_config,
+					params.state_request_protocol_config,
 					bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,

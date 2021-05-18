@@ -29,6 +29,7 @@ use std::{
 use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::block_request_handler::{self, BlockRequestHandler};
+use sc_network::state_request_handler::{self, StateRequestHandler};
 use sc_network::light_client_requests::{self, handler::LightClientRequestHandler};
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
@@ -769,6 +770,16 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			protocol_config
 		};
 
+		let state_request_protocol_config = {
+			let (handler, protocol_config) = StateRequestHandler::new(
+				&protocol_id,
+				client.clone(),
+				50,
+			);
+			self.spawn_task(handler.run().boxed());
+			protocol_config
+		};
+
 		let light_client_request_protocol_config = {
 			let (handler, protocol_config) = LightClientRequestHandler::new(&protocol_id, client.clone());
 			self.spawn_task(handler.run().boxed());
@@ -789,6 +800,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
 			block_request_protocol_config,
+			state_request_protocol_config,
 			light_client_request_protocol_config,
 		}).unwrap();
 
@@ -862,6 +874,9 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 		let block_request_protocol_config = block_request_handler::generate_protocol_config(
 			&protocol_id,
 		);
+		let state_request_protocol_config = state_request_handler::generate_protocol_config(
+			&protocol_id,
+		);
 
 		let light_client_request_protocol_config =
 			light_client_requests::generate_protocol_config(&protocol_id);
@@ -879,6 +894,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
 			block_request_protocol_config,
+			state_request_protocol_config,
 			light_client_request_protocol_config,
 		}).unwrap();
 

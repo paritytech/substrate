@@ -31,14 +31,16 @@
 
 use codec::Encode;
 use blocks::BlockCollection;
+use state::StateSync;
 use sp_blockchain::{Error as ClientError, Info as BlockchainInfo, HeaderMetadata};
 use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
 };
 use crate::protocol::message::{
-	self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse, Roles,
+	self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
 };
+use crate::schema::v1::{StateResponse, StateRequest};
 use either::Either;
 use extra_requests::ExtraRequests;
 use libp2p::PeerId;
@@ -59,6 +61,7 @@ use futures::{task::Poll, Future, stream::FuturesUnordered, FutureExt, StreamExt
 
 mod blocks;
 mod extra_requests;
+mod state;
 
 /// Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -67,7 +70,7 @@ const MAX_BLOCKS_TO_REQUEST: usize = 128;
 const MAX_IMPORTING_BLOCKS: usize = 2048;
 
 /// Maximum blocks to download ahead of any gap.
-const MAX_DOWNLOAD_AHEAD: u32 = 2048;
+const MAX_DOWNLOAD_AHEAD: u32 = 20480;
 
 /// Maximum blocks to look backwards. The gap is the difference between the highest block and the
 /// common block of a node.
@@ -183,10 +186,10 @@ pub struct ChainSync<B: BlockT> {
 	best_queued_number: NumberFor<B>,
 	/// The best block hash in our queue of blocks to import
 	best_queued_hash: B::Hash,
-	/// The role of this node, e.g. light or full
-	role: Roles,
+	/// Current mode (full/light)
+	mode: SyncMode,
 	/// What block attributes we require for this node, usually derived from
-	/// what role we are, but could be customized
+	/// what mode we are in, but could be customized
 	required_block_attributes: message::BlockAttributes,
 	/// Any extra justification requests.
 	extra_justifications: ExtraRequests<B>,
@@ -209,6 +212,8 @@ pub struct ChainSync<B: BlockT> {
 	>,
 	/// Stats per peer about the number of concurrent block announce validations.
 	block_announce_validation_per_peer_stats: HashMap<PeerId, usize>,
+	/// State sync in progress, if any.
+	state_sync: Option<StateSync<B>>,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -281,6 +286,8 @@ pub enum PeerSyncState<B: BlockT> {
 	DownloadingStale(B::Hash),
 	/// Downloading justification for given block hash.
 	DownloadingJustification(B::Hash),
+	/// Downloading state.
+	DownloadingState,
 }
 
 impl<B: BlockT> PeerSyncState<B> {
@@ -342,6 +349,15 @@ impl<B: BlockT> OnBlockData<B> {
 			None
 		}
 	}
+}
+
+/// Result of [`ChainSync::on_state_data`].
+#[derive(Debug)]
+pub enum OnStateData<B: BlockT> {
+	/// The block and state that should be imported.
+	Import(BlockOrigin, IncomingBlock<B>),
+	/// A new state request needs to be made to the given peer.
+	Request(PeerId, StateRequest)
 }
 
 /// Result of [`ChainSync::poll_block_announce_validation`].
@@ -429,6 +445,20 @@ pub enum OnBlockJustification<B: BlockT> {
 	}
 }
 
+
+/// Operation mode.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SyncMode {
+	// Sync headers only
+	Light,
+	// Sync headers and block bodies
+	Full,
+	// Sync headers and the last finalied state
+	LightState {
+		skip_proofs: bool
+	},
+}
+
 /// Result of [`ChainSync::has_slot_for_block_announce_validation`].
 enum HasSlotForBlockAnnounceValidation {
 	/// Yes, there is a slot for the block announce validation.
@@ -442,7 +472,7 @@ enum HasSlotForBlockAnnounceValidation {
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
 	pub fn new(
-		role: Roles,
+		mode: SyncMode,
 		client: Arc<dyn crate::chain::Client<B>>,
 		info: &BlockchainInfo<B>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
@@ -450,7 +480,7 @@ impl<B: BlockT> ChainSync<B> {
 	) -> Self {
 		let mut required_block_attributes = BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION;
 
-		if role.is_full() {
+		if mode == SyncMode::Full {
 			required_block_attributes |= BlockAttributes::BODY
 		}
 
@@ -461,7 +491,7 @@ impl<B: BlockT> ChainSync<B> {
 			best_queued_hash: info.best_hash,
 			best_queued_number: info.best_number,
 			extra_justifications: ExtraRequests::new("justification"),
-			role,
+			mode,
 			required_block_attributes,
 			queue_blocks: Default::default(),
 			fork_targets: Default::default(),
@@ -471,6 +501,7 @@ impl<B: BlockT> ChainSync<B> {
 			downloaded_blocks: 0,
 			block_announce_validation: Default::default(),
 			block_announce_validation_per_peer_stats: Default::default(),
+			state_sync: None,
 		}
 	}
 
@@ -799,6 +830,24 @@ impl<B: BlockT> ChainSync<B> {
 		Either::Right(iter)
 	}
 
+	/// Get a state request, if any
+	pub fn state_request(&mut self) -> Option<(PeerId, StateRequest)> {
+		if let Some(sync) = &self.state_sync {
+			if self.peers.iter().any(|(_, peer)| peer.state == PeerSyncState::DownloadingState) {
+				// Only one pending state request is allowed.
+				return None;
+			}
+			for (id, peer) in self.peers.iter_mut() {
+				if peer.state.is_available() && peer.common_number <= sync.target_block_num() {
+					peer.state = PeerSyncState::DownloadingState;
+					let request = sync.next_request();
+					return Some((id.clone(), request))
+				}
+			}
+		}
+		None
+	}
+
 	/// Handle a response from the remote to a block request that we made.
 	///
 	/// `request` must be the original request that triggered `response`.
@@ -844,6 +893,7 @@ impl<B: BlockT> ChainSync<B> {
 										origin: block_data.origin,
 										allow_missing_state: true,
 										import_existing: false,
+										state: None,
 									}
 								}).collect()
 						}
@@ -866,6 +916,7 @@ impl<B: BlockT> ChainSync<B> {
 									origin: Some(who.clone()),
 									allow_missing_state: true,
 									import_existing: false,
+									state: None,
 								}
 							}).collect()
 						}
@@ -958,10 +1009,11 @@ impl<B: BlockT> ChainSync<B> {
 								peer.state = PeerSyncState::Available;
 								Vec::new()
 							}
-						}
-
-						| PeerSyncState::Available
-						| PeerSyncState::DownloadingJustification(..) => Vec::new()
+						},
+						PeerSyncState::Available
+						| PeerSyncState::DownloadingJustification(..)
+						| PeerSyncState::DownloadingState
+							=> Vec::new()
 					}
 				} else {
 					// When request.is_none() this is a block announcement. Just accept blocks.
@@ -978,6 +1030,7 @@ impl<B: BlockT> ChainSync<B> {
 							origin: Some(who.clone()),
 							allow_missing_state: true,
 							import_existing: false,
+							state: None,
 						}
 					}).collect()
 				}
@@ -987,6 +1040,57 @@ impl<B: BlockT> ChainSync<B> {
 			};
 
 		Ok(self.validate_and_queue_blocks(new_blocks))
+	}
+
+	/// Handle a response from the remote to a state request that we made.
+	///
+	/// Returns next request if any.
+	pub fn on_state_data(
+		&mut self,
+		who: &PeerId,
+		response: StateResponse,
+	) -> Result<OnStateData<B>, BadPeer> {
+		let import_result = if let Some(sync) = &mut self.state_sync {
+			debug!(
+				target: "sync",
+				"Importing state data from {} with {} values.",
+				who,
+				response.values.len(),
+			);
+			sync.import(response)
+		} else {
+			debug!(target: "sync", "Ignored obsolete state response from {}", who);
+			return Err(BadPeer(who.clone(), rep::NOT_REQUESTED));
+		};
+
+		match import_result {
+			state::ImportResult::Import(hash, header, state) => {
+				let origin = if self.status().state != SyncState::Downloading {
+					BlockOrigin::NetworkBroadcast
+				} else {
+					BlockOrigin::NetworkInitialSync
+				};
+
+				let block = IncomingBlock {
+					hash,
+					header: Some(header),
+					body: None,
+					justifications: None,
+					origin: None,
+					allow_missing_state: false,
+					import_existing: true,
+					state: Some(state),
+				};
+				Ok(OnStateData::Import(origin, block))
+			}
+			state::ImportResult::Continue(request) => {
+				self.state_sync = None;
+				Ok(OnStateData::Request(who.clone(), request))
+			}
+			state::ImportResult::Bad => {
+				Err(BadPeer(who.clone(), rep::BAD_BLOCK))
+			}
+		}
 	}
 
 	fn validate_and_queue_blocks(
@@ -1531,7 +1635,7 @@ impl<B: BlockT> ChainSync<B> {
 			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
-		let requires_additional_data = !self.role.is_light() || !known_parent;
+		let requires_additional_data = self.mode != SyncMode::Light || !known_parent;
 		if !requires_additional_data {
 			trace!(
 				target: "sync",
@@ -1590,6 +1694,7 @@ impl<B: BlockT> ChainSync<B> {
 					origin: block_data.origin,
 					allow_missing_state: true,
 					import_existing: false,
+					state: None,
 				}
 			}).collect();
 		if !blocks.is_empty() {

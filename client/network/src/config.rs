@@ -123,6 +123,15 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// [`crate::light_client_requests::handler::LightClientRequestHandler::new`] allowing
 	/// both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
+
+	/// Request response configuration for the storage request protocol.
+	///
+	/// Can be constructed either via
+	/// [`crate::state_requests::generate_protocol_config`] allowing outgoing but not
+	/// incoming requests, or constructed via
+	/// [`crate::state_requests::handler::StateRequestHandler::new`] allowing
+	/// both outgoing and incoming requests.
+	pub state_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.
@@ -368,6 +377,18 @@ impl From<multiaddr::Error> for ParseErr {
 	}
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Sync operation
+pub enum SyncMode {
+	/// Full block download and verification.
+	Full,
+	/// Download headers and the latest state.
+	Fast {
+		/// Skip storage proof download and verification.
+		skip_proofs: bool
+	},
+}
+
 /// Network service configuration.
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
@@ -395,6 +416,8 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Initial syncing mode.
+	pub sync_mode: SyncMode,
 
 	/// True if Kademlia random discovery should be enabled.
 	///
@@ -457,6 +480,7 @@ impl NetworkConfiguration {
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: 5,
+			sync_mode: SyncMode::Full,
 			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,

@@ -172,6 +172,7 @@ fn import_block_to_queue<TBl, TImpQu>(
 			origin: None,
 			allow_missing_state: false,
 			import_existing: force,
+			state: None,
 		}
 	]);
 }

@@ -762,6 +762,10 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", block)))
 	}
 
+	fn empty_state(&self) -> sp_blockchain::Result<Self::State> {
+		Ok(Self::State::default())
+	}
+
 	fn revert(
 		&self,
 		_n: NumberFor<Block>,

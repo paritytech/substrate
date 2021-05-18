@@ -204,6 +204,26 @@ arg_enum! {
 	}
 }
 
+arg_enum! {
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy)]
+	pub enum SyncMode {
+		Full,
+		Fast,
+		Faster,
+	}
+}
+
+impl Into<sc_network::config::SyncMode> for SyncMode {
+	fn into(self) -> sc_network::config::SyncMode {
+		match self {
+			SyncMode::Full => sc_network::config::SyncMode::Full,
+			SyncMode::Fast => sc_network::config::SyncMode::Fast { skip_proofs: false },
+			SyncMode::Faster => sc_network::config::SyncMode::Fast { skip_proofs: true },
+		}
+	}
+}
+
 /// Default value for the `--execution-syncing` parameter.
 pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
 /// Default value for the `--execution-import-block` parameter.

@@ -41,6 +41,7 @@ use sp_consensus::BlockOrigin;
 use parking_lot::RwLock;
 
 pub use sp_state_machine::Backend as StateBackend;
+pub use sp_consensus::ImportedState;
 use std::marker::PhantomData;
 
 /// Extracts the state backend type for the given backend.
@@ -314,6 +315,42 @@ impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
 	}
 }
 
+/// An `Iterator` that iterates keys and values in a given block.
+pub struct KeyValueIterator<State, Block> {
+	state: State,
+	current_key: Vec<u8>,
+	_phantom: PhantomData<(State, Block)>,
+}
+
+impl<State, Block> KeyValueIterator<State, Block> {
+	/// create a KeyIterator instance
+	pub fn new(state: State, current_key: Vec<u8>) -> Self {
+		Self {
+			state,
+			current_key,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<State, Block> Iterator for KeyValueIterator<State, Block> where
+	Block: BlockT,
+	State: StateBackend<HashFor<Block>>,
+{
+	type Item = (StorageKey, StorageData);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let next_key = self.state
+			.next_storage_key(&self.current_key)
+			.ok()
+			.flatten()?;
+
+		let data = self.state.storage(&next_key).ok().flatten().unwrap_or_default();
+		self.current_key = next_key.clone();
+		Some((StorageKey(next_key), StorageData(data)))
+	}
+}
+
 /// Provides acess to storage primitives
 pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	/// Given a `BlockId` and a key, return the value under the key in that block.
@@ -386,6 +423,22 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key: &StorageKey
 	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>>;
 }
+
+/// Provides acess to storage primitives
+pub trait StorageIterProvider<Block: BlockT> {
+	/// Given a `BlockId` an iterator over all storage values starting with given key.
+	fn storage_pairs_iter(
+		&self,
+		id: &BlockId<Block>,
+		start_key: Option<&StorageKey>,
+	) -> sp_blockchain::Result<Box<dyn Iterator<Item=(StorageKey, StorageData)>>>;
+
+	/// Import state for a block
+	fn import_state(&self, _state: ImportedState<Block>) -> sp_blockchain::Result<()> {
+		Ok(())
+	}
+}
+
 
 /// Client backend.
 ///
@@ -462,6 +515,9 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
+
+	/// Returns an empty state.
+	fn empty_state(&self) -> sp_blockchain::Result<Self::State>;
 
 	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
 	/// revert past any finalized block, this is unsafe and can potentially leave the node in an

@@ -392,7 +392,7 @@ where
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(signature_digest_item);
 			import_block.body = Some(body);
-			import_block.storage_changes = Some(storage_changes);
+			import_block.storage_changes = Some(sp_consensus::StorageChanges::Raw(storage_changes));
 			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 			Ok(import_block)

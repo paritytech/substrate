@@ -68,3 +68,27 @@ message BlockData {
 	bytes justifications = 8; // optional
 }
 
+// Request storage data from a peer.
+message StateRequest {
+	// Block header hash.
+	bytes block = 1;
+	// Start from this key.
+	bytes start = 2; // optional
+}
+
+// Response to `BlockRequest`
+message StateResponse {
+	// State data for the requested sequence.
+	repeated StateEntry values = 1;
+	// True if storage is exhausted
+	bool complete = 2;
+}
+
+// Block data sent in the response.
+message StateEntry {
+	// Storage key
+	bytes key = 1;
+	// Storage value
+	bytes value = 2; 
+}
+
