@@ -658,7 +658,7 @@ pub mod pallet {
 			// create a lock with the maximum deadline of number of blocks in the unsigned phase.
 			// This should only come useful in an **abrupt** termination of execution, otherwise the
 			// guard will be dropped upon successful execution.
-			let mut lock = StorageLock::<'_, BlockAndTime<Self>>::with_block_deadline(
+			let mut lock = StorageLock::<BlockAndTime<frame_system::Pallet::<T>>>::with_block_deadline(
 				unsigned::OFFCHAIN_LOCK,
 				T::UnsignedPhase::get().saturated_into(),
 			);
@@ -914,13 +914,6 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
-impl<T: Config> sp_runtime::offchain::storage_lock::BlockNumberProvider for Pallet<T> {
-		type BlockNumber = T::BlockNumber;
-		fn current_block_number() -> Self::BlockNumber {
-			<frame_system::Pallet<T>>::block_number()
-		}
-	}
-
 impl<T: Config> Pallet<T> {
 	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 	/// acquired with success.
@@ -952,10 +945,9 @@ impl<T: Config> Pallet<T> {
 				let local_event = <T as Config>::Event::from(event_record.event);
 				local_event.try_into().ok()
 			})
-			.find(|event| {
+			.any(|event| {
 				matches!(event, Event::ElectionFinalized(_))
 			})
-			.is_some()
 		{
 			unsigned::kill_ocw_solution::<T>();
 		}

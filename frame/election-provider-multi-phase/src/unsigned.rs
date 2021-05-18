@@ -583,7 +583,6 @@ impl<T: Config> Pallet<T> {
 		let threshold = T::OffchainRepeat::get();
 		let last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
-		// first, make sure that we are okay with the last block threshold.
 		let mutate_stat = last_block.mutate::<_, &'static str, _>(
 			|maybe_head: Option<Option<T::BlockNumber>>| {
 				match maybe_head {
@@ -607,7 +606,7 @@ impl<T: Config> Pallet<T> {
 			// all good
 			Ok(Ok(_)) => Ok(()),
 			// failed to write.
-			Ok(Err(_)) => Err(MinerError::Lock("failed to write to offchain db [repeat].")),
+			Ok(Err(_)) => Err(MinerError::Lock("failed to write to offchain db.")),
 			// fork etc.
 			Err(why) => Err(MinerError::Lock(why)),
 		}
@@ -1140,7 +1139,7 @@ mod tests {
 				assert!(MultiPhase::current_phase().is_unsigned());
 
 				// artificially set the value, as if another thread is mid-way.
-				let mut lock = StorageLock::<'_, BlockAndTime<MultiPhase>>::with_block_deadline(
+				let mut lock = StorageLock::<BlockAndTime<System>>::with_block_deadline(
 					OFFCHAIN_LOCK,
 					crate::mock::UnsignedPhase::get().saturated_into(),
 				);
