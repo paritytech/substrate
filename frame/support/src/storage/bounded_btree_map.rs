@@ -32,8 +32,10 @@ use codec::{Encode, Decode};
 /// B-Trees represent a fundamental compromise between cache-efficiency and actually minimizing
 /// the amount of work performed in a search. See [`BTreeMap`] for more details.
 ///
-/// Unlike a standard `BTreeMap`, there is a static, enforced upper limit to the number of items
-/// in the map. All internal operations ensure this bound is respected.
+/// Unlike a standard `BTreeMap`, there is a mostly enforced upper limit to the number of items
+/// in the map.
+/// The upper limit is not strictly enforced. Decoding a btree map with more element that the bound
+/// is accepted, and some method allow to bypass the restriction with warnings.
 #[derive(Encode, Decode)]
 pub struct BoundedBTreeMap<K, V, S>(BTreeMap<K, V>, PhantomData<S>);
 
@@ -60,7 +62,7 @@ where
 	}
 
 	/// Create `Self` from a primitive `BTreeMap` without any checks.
-	unsafe fn unchecked_from(map: BTreeMap<K, V>) -> Self {
+	fn unchecked_from(map: BTreeMap<K, V>) -> Self {
 		Self(map, Default::default())
 	}
 
@@ -80,9 +82,9 @@ where
 	/// let mut map = BTreeMap::new();
 	/// map.insert("foo", 1);
 	/// map.insert("bar", 2);
-	/// let bounded_map = unsafe {BoundedBTreeMap::<_, _, Size>::force_from(map, "demo")};
+	/// let bounded_map = BoundedBTreeMap::<_, _, Size>::force_from(map, "demo");
 	/// ```
-	pub unsafe fn force_from<Scope>(map: BTreeMap<K, V>, scope: Scope) -> Self
+	pub fn force_from<Scope>(map: BTreeMap<K, V>, scope: Scope) -> Self
 	where
 		Scope: Into<Option<&'static str>>,
 	{

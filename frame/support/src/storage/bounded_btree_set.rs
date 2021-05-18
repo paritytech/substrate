@@ -32,8 +32,10 @@ use codec::{Encode, Decode};
 /// B-Trees represent a fundamental compromise between cache-efficiency and actually minimizing
 /// the amount of work performed in a search. See [`BTreeSet`] for more details.
 ///
-/// Unlike a standard `BTreeSet`, there is a static, enforced upper limit to the number of items
-/// in the set. All internal operations ensure this bound is respected.
+/// Unlike a standard `BTreeSet`, there is a mostly enforced upper limit to the number of items in
+/// the set.
+/// The upper limit is not strictly enforced. Decoding a btree set with more element that the bound
+/// is accepted, and some method allow to bypass the restriction with warnings.
 #[derive(Encode, Decode)]
 pub struct BoundedBTreeSet<T, S>(BTreeSet<T>, PhantomData<S>);
 
@@ -60,7 +62,7 @@ where
 	}
 
 	/// Create `Self` from a primitive `BTreeSet` without any checks.
-	unsafe fn unchecked_from(set: BTreeSet<T>) -> Self {
+	fn unchecked_from(set: BTreeSet<T>) -> Self {
 		Self(set, Default::default())
 	}
 
@@ -80,9 +82,9 @@ where
 	/// let mut set = BTreeSet::new();
 	/// set.insert("foo");
 	/// set.insert("bar");
-	/// let bounded_set = unsafe {BoundedBTreeSet::<_, Size>::force_from(set, "demo")};
+	/// let bounded_set = BoundedBTreeSet::<_, Size>::force_from(set, "demo");
 	/// ```
-	pub unsafe fn force_from<Scope>(set: BTreeSet<T>, scope: Scope) -> Self
+	pub fn force_from<Scope>(set: BTreeSet<T>, scope: Scope) -> Self
 	where
 		Scope: Into<Option<&'static str>>,
 	{

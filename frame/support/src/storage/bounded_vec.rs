@@ -147,7 +147,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 impl<T, S> Default for BoundedVec<T, S> {
 	fn default() -> Self {
 		// the bound cannot be below 0, which is satisfied by an empty vector
-		unsafe { Self::unchecked_from(Vec::default()) }
+		Self::unchecked_from(Vec::default())
 	}
 }
 
@@ -168,7 +168,7 @@ where
 {
 	fn clone(&self) -> Self {
 		// bound is retained
-		unsafe { Self::unchecked_from(self.0.clone()) }
+		Self::unchecked_from(self.0.clone())
 	}
 }
 
@@ -177,7 +177,7 @@ impl<T, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
 		if t.len() <= Self::bound() {
 			// explicit check just above
-			Ok(unsafe { Self::unchecked_from(t) })
+			Ok(Self::unchecked_from(t))
 		} else {
 			Err(())
 		}
@@ -472,13 +472,15 @@ pub mod test {
 			// append to a non-existing
 			assert!(FooMap::get(2).is_none());
 			assert_ok!(FooMap::try_append(2, 4));
-			assert_eq!(FooMap::get(2).unwrap(), unsafe {
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4])
-			});
+			assert_eq!(
+				FooMap::get(2).unwrap(),
+				BoundedVec::<u32, Seven>::unchecked_from(vec![4]),
+			);
 			assert_ok!(FooMap::try_append(2, 5));
-			assert_eq!(FooMap::get(2).unwrap(), unsafe {
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])
-			});
+			assert_eq!(
+				FooMap::get(2).unwrap(),
+				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5]),
+			);
 		});
 
 		TestExternalities::default().execute_with(|| {
@@ -495,13 +497,15 @@ pub mod test {
 			// append to a non-existing
 			assert!(FooDoubleMap::get(2, 1).is_none());
 			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
-			assert_eq!(FooDoubleMap::get(2, 1).unwrap(), unsafe {
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4])
-			});
+			assert_eq!(
+				FooDoubleMap::get(2, 1).unwrap(),
+				BoundedVec::<u32, Seven>::unchecked_from(vec![4]),
+			);
 			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
-			assert_eq!(FooDoubleMap::get(2, 1).unwrap(), unsafe {
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])
-			});
+			assert_eq!(
+				FooDoubleMap::get(2, 1).unwrap(),
+				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5]),
+			);
 		});
 	}
 
