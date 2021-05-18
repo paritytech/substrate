@@ -737,6 +737,10 @@ where
 	fn proof_size(&self) -> Option<u32> {
 		self.backend.proof_size()
 	}
+
+	fn flag_hash_value(&mut self) {
+		self.overlay.set_flag_hash_value()
+	}
 }
 
 /// Implement `Encode` by forwarding the stored raw vec.

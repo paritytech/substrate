@@ -346,7 +346,8 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
-		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
+		let flag = false; // TODO flag_hash_value in Storage
+		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta, flag);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -489,10 +490,11 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		flag_hash_value: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.storage_root(delta),
+				state.storage_root(delta, flag_hash_value),
 			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}

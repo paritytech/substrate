@@ -281,6 +281,7 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
+		// TODO set flag on layout???
 		Layout::<Blake2Hasher>::default().trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
@@ -331,6 +332,11 @@ impl Externalities for BasicExternalities {
 
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in Basic")
+	}
+
+	fn flag_hash_value(&mut self) {
+		unimplemented!("flag_hash_value is not supported in Basic")
+		// TODO consider flag in layout so doable by adding to storage.
 	}
 }
 

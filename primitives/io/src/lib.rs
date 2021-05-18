@@ -211,6 +211,12 @@ pub trait Storage {
 		self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
 	}
+
+	/// Set flag to switch storage state
+	/// to internally hash its values.
+	fn flag_hash_value(&mut self) {
+		self.flag_hash_value();
+	}
 }
 
 /// Interface for accessing the child storage for default child trie,

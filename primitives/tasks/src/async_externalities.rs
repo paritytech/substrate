@@ -189,6 +189,10 @@ impl Externalities for AsyncExternalities {
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in AsyncExternalities")
 	}
+
+	fn flag_hash_value(&mut self) {
+		unimplemented!("flag_hash_value is not supported in AsyncExternalities")
+	}
 }
 
 impl sp_externalities::ExtensionStore for AsyncExternalities {

@@ -45,9 +45,10 @@ where
 	>(
 		&self,
 		changes: T,
+		flag_inner_hash_value: bool,
 	) -> Self {
 		let mut clone = self.clone();
-		clone.insert(changes);
+		clone.insert(changes, flag_inner_hash_value);
 		clone
 	}
 
@@ -57,6 +58,7 @@ where
 	>(
 		&mut self,
 		changes: T,
+		flag_inner_hash_value: bool,
 	) {
 		let (top, child) = changes.into_iter().partition::<Vec<_>, _>(|v| v.0.is_none());
 		let (root, transaction) = self.full_storage_root(
@@ -65,6 +67,7 @@ where
 				.filter_map(|v|
 					v.0.as_ref().map(|c| (c, v.1.iter().map(|(k, v)| (&k[..], v.as_deref()))))
 				),
+			flag_inner_hash_value,
 		);
 
 		self.apply_transaction(root, transaction);
@@ -116,6 +119,7 @@ where
 		let mut backend = new_in_mem();
 		backend.insert(
 			inner.into_iter().map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())),
+			false,
 		);
 		backend
 	}
@@ -178,11 +182,13 @@ mod tests {
 		let storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
+		let flagged = false;
 		let mut storage = storage.update(
 			vec![(
 				Some(child_info.clone()),
 				vec![(b"2".to_vec(), Some(b"3".to_vec()))]
-			)]
+			)],
+			flagged,
 		);
 		let trie_backend = storage.as_trie_backend().unwrap();
 		assert_eq!(trie_backend.child_storage(child_info, b"2").unwrap(),
@@ -195,9 +201,10 @@ mod tests {
 	fn insert_multiple_times_child_data_works() {
 		let mut storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
+		let flagged = false;
 
-		storage.insert(vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])]);
-		storage.insert(vec![(Some(child_info.clone()), vec![(b"1".to_vec(), Some(b"3".to_vec()))])]);
+		storage.insert(vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])], flagged);
+		storage.insert(vec![(Some(child_info.clone()), vec![(b"1".to_vec(), Some(b"3".to_vec()))])], flagged);
 
 		assert_eq!(storage.child_storage(&child_info, &b"2"[..]), Ok(Some(b"3".to_vec())));
 		assert_eq!(storage.child_storage(&child_info, &b"1"[..]), Ok(Some(b"3".to_vec())));

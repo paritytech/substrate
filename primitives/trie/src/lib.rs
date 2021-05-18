@@ -25,7 +25,7 @@ mod node_codec;
 mod storage_proof;
 mod trie_stream;
 
-use sp_std::{boxed::Box, marker::PhantomData, vec::Vec, borrow::Borrow, fmt};
+use sp_std::{boxed::Box, marker::PhantomData, vec, vec::Vec, borrow::Borrow, fmt};
 use hash_db::{Hasher, Prefix};
 //use trie_db::proof::{generate_proof, verify_proof};
 pub use trie_db::proof::VerifyError;
@@ -39,7 +39,7 @@ pub use storage_proof::StorageProof;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration,
-	nibble_ops, TrieDBIterator, Meta,
+	nibble_ops, TrieDBIterator, Meta, NodeChange, node::{NodePlan, ValuePlan},
 };
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
@@ -49,7 +49,146 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX, MetaHasher};
 pub use hash_db::NoMeta;
 
 /// Meta use by trie state.
-pub type TrieMeta = ();
+#[derive(Default, Clone)]
+pub struct TrieMeta {
+	// range of encoded value or hashed value.
+	pub range: Option<core::ops::Range<usize>>,
+	// When `do_value_hash` is true, try to
+	// store this behavior in top node
+	// encoded (need to be part of state).
+	pub recorded_do_value_hash: bool,
+	// Does current encoded contains a hash instead of
+	// a value (information stored in meta for proofs).
+	pub contain_hash: bool,
+	// Flag indicating if value hash can run.
+	// When defined for a node it gets active
+	// for all children node
+	pub do_value_hash: bool,
+	// Record if a value was accessed, this is
+	// set as accessed by defalult, but can be
+	// change on access explicitely: `HashDB::get_with_meta`.
+	// and reset on access explicitely: `HashDB::access_from`.
+	pub unused_value: bool,
+}
+
+impl Meta for TrieMeta {
+	/// Layout do not have content.
+	type MetaInput = ();
+
+	/// When true apply inner hashing of value.
+	type StateMeta = bool;
+
+	fn set_state_meta(&mut self, state_meta: Self::StateMeta) {
+		self.recorded_do_value_hash = state_meta;
+		self.do_value_hash = state_meta;
+	}
+
+	fn has_state_meta(&self) -> bool {
+		self.recorded_do_value_hash
+	}
+
+	fn read_state_meta(&mut self, data: &[u8]) -> Result<usize, &'static str> {
+		let offset = if data[0] == trie_constants::ENCODED_META_ALLOW_HASH {
+			self.recorded_do_value_hash = true;
+			self.do_value_hash = true;
+			1
+		} else {
+			0
+		};
+		Ok(offset)
+	}
+
+	fn write_state_meta(&self) -> Vec<u8> {
+		if self.do_value_hash {
+			// Note that this only works with sp_trie codec that
+			// cannot encode node starting by this byte.
+			[trie_constants::ENCODED_META_ALLOW_HASH].to_vec()
+		} else {
+			Vec::new()
+		}
+	}
+
+	fn meta_for_new(
+		_input: Self::MetaInput,
+		parent: Option<&Self>,
+	) -> Self {
+		let mut result = Self::default();
+		result.do_value_hash = parent.map(|p| p.do_value_hash).unwrap_or_default();
+		result
+	}
+
+	fn meta_for_existing_inline_node(
+		input: Self::MetaInput,
+		parent: Option<&Self>,
+	) -> Self {
+		Self::meta_for_new(input, parent)
+	}
+
+	fn meta_for_empty(
+	) -> Self {
+		Default::default()
+	}
+
+	fn set_value_callback(
+		&mut self,
+		_new_value: Option<&[u8]>,
+		_is_branch: bool,
+		changed: NodeChange,
+	) -> NodeChange {
+		changed
+	}
+
+	fn encoded_value_callback(
+		&mut self,
+		value_plan: ValuePlan,
+	) {
+		let (contain_hash, range) = match value_plan {
+			ValuePlan::Value(range) => (false, range),
+			ValuePlan::HashedValue(range, _size) => (true, range),
+			ValuePlan::NoValue => return,
+		};
+
+		self.range = Some(range);
+		self.contain_hash = contain_hash;
+	}
+
+	fn set_child_callback(
+		&mut self,
+		_child: Option<&Self>,
+		changed: NodeChange,
+		_at: usize,
+	) -> NodeChange {
+		changed
+	}
+
+	fn decoded_callback(
+		&mut self,
+		_node_plan: &NodePlan,
+	) {
+	}
+
+	fn contains_hash_of_value(&self) -> bool {
+		self.contain_hash
+	}
+
+	fn do_value_hash(&self) -> bool {
+		self.unused_value
+	}
+}
+
+impl TrieMeta {
+	/// Was value accessed.
+	pub fn accessed_value(&mut self) -> bool {
+		!self.unused_value
+	}
+
+	/// For proof, this allow setting node as unaccessed until
+	/// a call to `access_from`.
+	pub fn set_accessed_value(&mut self, accessed: bool) {
+		self.unused_value = !accessed;
+	}
+}
+
 /// substrate trie layout
 pub struct Layout<H>(sp_std::marker::PhantomData<H>);
 
@@ -74,6 +213,7 @@ impl<H> Clone for Layout<H> {
 impl<H: Hasher> TrieLayout for Layout<H> {
 	const USE_EXTENSION: bool = false;
 	const ALLOW_EMPTY: bool = true;
+	const USE_META: bool = true;
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
 	type MetaHasher = StateHasher;
@@ -92,31 +232,90 @@ impl<H: Hasher> TrieLayout for Layout<H> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StateHasher;
 
-impl<H, T> MetaHasher<H, T> for StateHasher
+impl<H> MetaHasher<H, DBValue> for StateHasher
 	where
 		H: Hasher,
-		T: for<'a> From<&'a [u8]>,
 {
 	type Meta = TrieMeta;
 
-	fn hash(value: &[u8], _meta: &Self::Meta) -> H::Out {
-		H::hash(value)
+	fn hash(value: &[u8], meta: &Self::Meta) -> H::Out {
+		match &meta {
+			TrieMeta { range: Some(range), contain_hash: false, do_value_hash, .. } => {
+				if *do_value_hash {
+					let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
+					H::hash(value.as_slice())
+				} else {
+					H::hash(value)
+				}
+			},
+			TrieMeta { range: Some(_range), contain_hash: true, .. } => {
+				// value contains a hash of data (already inner_hashed_value).
+				H::hash(value)
+			},
+			_ => {
+				H::hash(value)
+			},
+		}
 	}
 
-	fn stored_value(value: &[u8], _meta: Self::Meta) -> T {
-		value.into()
+	fn stored_value(value: &[u8], mut meta: Self::Meta) -> DBValue {
+		let mut stored = Vec::with_capacity(value.len() + 1);
+		if meta.contain_hash {
+			// already contain hash, just flag it.
+			stored.push(trie_constants::DEAD_HEADER_META_HASHED_VALUE);
+			stored.extend_from_slice(value);
+			return stored;
+		}
+		if meta.unused_value {
+			if let Some(range) = meta.range.as_ref() {
+				if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
+					// Waring this assume that encoded value does not start by this, so it is tightly coupled
+					// with the header type of the codec: only for optimization.
+					stored.push(trie_constants::DEAD_HEADER_META_HASHED_VALUE);
+					let range = meta.range.as_ref().expect("Tested in condition");
+					meta.contain_hash = true; // useless but could be with meta as &mut
+					// store hash instead of value.
+					let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
+					stored.extend_from_slice(value.as_slice());
+					return stored;
+				}
+			}
+		}
+		stored.extend_from_slice(value);
+		stored
 	}
 
-	fn stored_value_owned(value: T, _meta: Self::Meta) -> T {
-		value
+	fn stored_value_owned(value: DBValue, meta: Self::Meta) -> DBValue {
+		<Self as MetaHasher<H, DBValue>>::stored_value(value.as_slice(), meta)
 	}
 
-	fn extract_value<'a>(stored: &'a [u8], _parent_meta: Option<&Self::Meta>) -> (&'a [u8], Self::Meta) {
-		(stored, ())
+	fn extract_value<'a>(mut stored: &'a [u8], parent_meta: Option<&Self::Meta>) -> (&'a [u8], Self::Meta) {
+		let input = &mut stored;
+		let mut contain_hash = false;
+		if input.get(0) == Some(&trie_constants::DEAD_HEADER_META_HASHED_VALUE) {
+			contain_hash = true;
+			*input = &input[1..];
+		}
+		let mut meta = TrieMeta {
+			range: None,
+			unused_value: contain_hash,
+			contain_hash,
+			do_value_hash: false,
+			recorded_do_value_hash: false,
+		};
+		// get recorded_do_value_hash
+		let _offset = meta.read_state_meta(stored)
+			.expect("State meta reading failure.");
+		//let stored = &stored[offset..];
+		meta.do_value_hash = meta.recorded_do_value_hash || parent_meta.map(|m| m.do_value_hash).unwrap_or(false);
+		(stored, meta)
 	}
 
-	fn extract_value_owned(stored: T, _parent_meta: Option<&Self::Meta>) -> (T, Self::Meta) {
-		(stored, ())
+	fn extract_value_owned(mut stored: DBValue, parent_meta: Option<&Self::Meta>) -> (DBValue, Self::Meta) {
+		let len = stored.len();
+		let (v, meta) = <Self as MetaHasher<H, DBValue>>::extract_value(stored.as_slice(), parent_meta);
+		let removed = len - v.len();
+		(stored.split_off(removed), meta)
 	}
 }
 
@@ -267,6 +466,26 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 		}
 	}
 
+	Ok(root)
+}
+
+/// Flag inner trie with state metadata to enable hash of value internally.
+pub fn flag_inner_meta_hasher<L, DB>(
+	db: &mut DB,
+	mut root: TrieHash<L>,
+) -> Result<TrieHash<L>, Box<TrieError<L>>> where
+	L: TrieConfiguration<Meta = TrieMeta>,
+	DB: hash_db::HashDB<L::Hash, trie_db::DBValue, L::Meta>,
+{
+	{
+		let mut t = TrieDBMut::<L>::from_existing(db, &mut root)?;
+		let flag = true;
+		let key: &[u8]= &[];
+		if !t.flag(key, flag)? {
+			t.insert(key, b"")?;
+			assert!(t.flag(key, flag)?);
+		}
+	}
 	Ok(root)
 }
 
@@ -558,9 +777,70 @@ impl<'a, DB, H, T, M> hash_db::AsHashDB<H, T, M> for KeySpacedDBMut<'a, DB, H> w
 	}
 }
 
+/// Representation of node with with inner hash instead of value.
+pub fn inner_hashed_value<H: Hasher>(x: &[u8], range: Option<(usize, usize)>) -> Vec<u8> {
+	if let Some((start, end)) = range {
+		let len = x.len();
+		if start < len && end == len {
+			// terminal inner hash
+			let hash_end = H::hash(&x[start..]);
+			let mut buff = vec![0; x.len() + hash_end.as_ref().len() - (end - start)];
+			buff[..start].copy_from_slice(&x[..start]);
+			buff[start..].copy_from_slice(hash_end.as_ref());
+			return buff;
+		}
+		if start == 0 && end < len {
+			// start inner hash
+			let hash_start = H::hash(&x[..start]);
+			let hash_len = hash_start.as_ref().len();
+			let mut buff = vec![0; x.len() + hash_len - (end - start)];
+			buff[..hash_len].copy_from_slice(hash_start.as_ref());
+			buff[hash_len..].copy_from_slice(&x[end..]);
+			return buff;
+		}
+		if start < len && end < len {
+			// middle inner hash
+			let hash_middle = H::hash(&x[start..end]);
+			let hash_len = hash_middle.as_ref().len();
+			let mut buff = vec![0; x.len() + hash_len - (end - start)];
+			buff[..start].copy_from_slice(&x[..start]);
+			buff[start..start + hash_len].copy_from_slice(hash_middle.as_ref());
+			buff[start + hash_len..].copy_from_slice(&x[end..]);
+			return buff;
+		}
+	}
+	// if anything wrong default to hash
+	x.to_vec()
+}
+
+/// Estimate encoded size of node.
+pub fn estimate_entry_size(entry: &(DBValue, TrieMeta), hash_len: usize) -> usize {
+	use codec::Encode;
+	let mut full_encoded = entry.0.encoded_size();
+	if entry.1.unused_value {
+		if let Some(range) = entry.1.range.as_ref() {
+			let value_size = range.end - range.start;
+			if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
+				full_encoded -= value_size;
+				full_encoded += hash_len;
+				full_encoded += 1;
+			}
+		}
+	}
+
+	full_encoded
+}
+
 /// Constants used into trie simplification codec.
 mod trie_constants {
-	pub const EMPTY_TRIE: u8 = 0;
+	/// Treshold for using hash of value instead of value
+	/// in encoded trie node when flagged.
+	pub const INNER_HASH_TRESHOLD: usize = 33;
+	const FIRST_PREFIX: u8 = 0b_00 << 6;
+	pub const EMPTY_TRIE: u8 = FIRST_PREFIX | 0b_00;
+	pub const ENCODED_META_ALLOW_HASH: u8 = FIRST_PREFIX | 0b_01;
+	/// In proof this header is used when only hashed value is stored.
+	pub const DEAD_HEADER_META_HASHED_VALUE: u8 = FIRST_PREFIX | 0b_00_10;
 	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;

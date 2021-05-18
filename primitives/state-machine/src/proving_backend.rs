@@ -17,7 +17,7 @@
 
 //! Proving state machine backend.
 
-use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};
+use std::{sync::Arc, collections::HashMap};
 use parking_lot::RwLock;
 use codec::{Decode, Codec, Encode};
 use log::debug;
@@ -123,29 +123,38 @@ pub struct ProofRecorder<Hash> {
 	inner: Arc<RwLock<ProofRecorderInner<Hash>>>,
 }
 
-impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
+impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	/// Record the given `key` => `val` combination.
-	pub fn record(&self, key: Hash, val: Option<(DBValue, TrieMeta)>) {
+	pub fn record(&self, key: Hash, mut val: Option<(DBValue, TrieMeta)>, hash_len: usize) {
 		let mut inner = self.inner.write();
-		let encoded_size = if let Entry::Vacant(entry) = inner.records.entry(key) {
-			let encoded_size = val.as_ref().map(Encode::encoded_size).unwrap_or(0);
 
-// TODO with new meta
-// val.as_mut().map(|val| val.1.set_accessed_value(false));
-			entry.insert(val);
-			encoded_size
-		} else {
-			0
-		};
+		let ProofRecorderInner { encoded_size, records } = &mut *inner;
+		records.entry(key).or_insert_with(|| {
+			if let Some(val) = val.as_mut() {
+				val.1.set_accessed_value(false);
+				*encoded_size += sp_trie::estimate_entry_size(val, hash_len);
+			}
+			val
+		});
 
-		inner.encoded_size += encoded_size;
 	}
 
 	/// Record actual trie level value access.
-	pub fn access_from(&self, _key: &Hash) {
-// TODO with new meta
-//		self.inner.write().entry(key[..].to_vec())
-//			.and_modify(|entry| entry.1.set_accessed_value(true));
+	pub fn access_from(&self, key: &Hash, hash_len: usize) {
+		let mut inner = self.inner.write();
+		let ProofRecorderInner { encoded_size, records } = &mut *inner;
+		records.entry(key.clone())
+			.and_modify(|entry| {
+				if let Some(entry) = entry.as_mut() {
+					if !entry.1.accessed_value() {
+						let old_size = sp_trie::estimate_entry_size(entry, hash_len);
+						entry.1.set_accessed_value(true);
+						let new_size = sp_trie::estimate_entry_size(entry, hash_len);
+						*encoded_size += new_size;
+						*encoded_size -= old_size;
+					}
+				}
+			});
 	}
 
 	/// Returns the value at the given `key`.
@@ -234,12 +243,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 		}
 
 		let backend_value = self.backend.get(key, prefix, parent)?;
-		self.proof_recorder.record(key.clone(), backend_value.clone());
+		self.proof_recorder.record(key.clone(), backend_value.clone(), H::LENGTH);
 		Ok(backend_value)
 	}
 
-	fn access_from(&self, _key: &H::Out) {
-		// access_from is mainly for proof recorder, not forwarding it.
+	fn access_from(&self, key: &H::Out) {
+		self.proof_recorder.access_from(key, H::LENGTH);
 	}
 }
 
@@ -329,8 +338,9 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	fn storage_root<'b>(
 		&self,
 		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+		flag_inner_hash_value: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		self.0.storage_root(delta)
+		self.0.storage_root(delta, flag_inner_hash_value)
 	}
 
 	fn child_storage_root<'b>(
@@ -411,9 +421,10 @@ mod tests {
 		let proving_backend = test_proving(&trie_backend);
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
+		let flagged = false;
 
-		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty());
-		let (proving_root, mut proving_mdb) = proving_backend.storage_root(std::iter::empty());
+		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty(), flagged);
+		let (proving_root, mut proving_mdb) = proving_backend.storage_root(std::iter::empty(), flagged);
 		assert_eq!(trie_root, proving_root);
 		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}
@@ -422,12 +433,13 @@ mod tests {
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(vec![(None, contents)]);
-		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
+		let flagged = false; // TODO test with flag
+		let mut in_memory = in_memory.update(vec![(None, contents)], flagged);
+		let in_memory_root = in_memory.storage_root(::std::iter::empty(), flagged).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(::std::iter::empty()).0;
+		let trie_root = trie.storage_root(::std::iter::empty(), flagged).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -454,11 +466,13 @@ mod tests {
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(contents);
+		let flagged = false; // TODO test with flag
+		let mut in_memory = in_memory.update(contents, flagged);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory.full_storage_root(
 			std::iter::empty(),
-			child_storage_keys.iter().map(|k|(k, std::iter::empty()))
+			child_storage_keys.iter().map(|k|(k, std::iter::empty())),
+			flagged,
 		).0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),
@@ -474,7 +488,7 @@ mod tests {
 		));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(std::iter::empty()).0;
+		let trie_root = trie.storage_root(std::iter::empty(), flagged).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(
 			trie.storage(&[i]).unwrap().unwrap(),
@@ -511,7 +525,7 @@ mod tests {
 	}
 
 	#[test]
-	fn storage_proof_encoded_size_estimation_works() {
+	fn storage_proof_encoded_size_estimation_works() { // TODO same with flag -> test_trie with flag
 		let trie_backend = test_trie();
 		let backend = test_proving(&trie_backend);
 

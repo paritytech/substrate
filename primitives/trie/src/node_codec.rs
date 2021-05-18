@@ -87,16 +87,24 @@ impl<'a> Input for ByteSliceInput<'a> {
 #[derive(Default, Clone)]
 pub struct NodeCodec<H>(PhantomData<H>);
 
-impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
-	type Error = Error;
-	type HashOut = H::Out;
-
-	fn hashed_null_node() -> <H as Hasher>::Out {
-		H::hash(<Self as NodeCodecT<M>>::empty_node())
-	}
-
-	fn decode_plan_inner(data: &[u8]) -> sp_std::result::Result<NodePlan, Self::Error> {
+impl<H: Hasher> NodeCodec<H> {
+	fn decode_plan_inner_hashed<M: Meta>(
+		data: &[u8],
+		meta: Option<&mut M>,
+	) -> Result<NodePlan, Error> {
+		let contains_hash = meta.as_ref()
+			.map(|m| m.contains_hash_of_value()).unwrap_or_default();
+		if data.len() < 1 {
+			return Err(Error::BadFormat);
+		}
+		let offset = if let Some(meta) = meta {
+			meta.read_state_meta(data).map_err(|_| Error::BadFormat)?
+		} else {
+			0
+		};
 		let mut input = ByteSliceInput::new(data);
+		let _ = input.take(offset)?;
+
 		match NodeHeader::decode(&mut input)? {
 			NodeHeader::Null => Ok(NodePlan::Empty),
 			NodeHeader::Branch(has_value, nibble_count) => {
@@ -113,7 +121,11 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 				let bitmap = Bitmap::decode(&data[bitmap_range])?;
 				let value = if has_value {
 					let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-					ValuePlan::Value(input.take(count)?)
+					if contains_hash {
+						ValuePlan::HashedValue(input.take(H::LENGTH)?, count)
+					} else {
+						ValuePlan::Value(input.take(count)?)
+					}
 				} else {
 					ValuePlan::NoValue
 				};
@@ -149,12 +161,39 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 				)?;
 				let partial_padding = nibble_ops::number_padding(nibble_count);
 				let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
+				let value = if contains_hash {
+					ValuePlan::HashedValue(input.take(H::LENGTH)?, count)
+				} else {
+					ValuePlan::Value(input.take(count)?)
+				};
+
 				Ok(NodePlan::Leaf {
 					partial: NibbleSlicePlan::new(partial, partial_padding),
-					value: ValuePlan::Value(input.take(count)?),
+					value,
 				})
 			}
 		}
+	}
+}
+
+impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
+	type Error = Error;
+	type HashOut = H::Out;
+
+	fn hashed_null_node() -> <H as Hasher>::Out {
+		H::hash(<Self as NodeCodecT<M>>::empty_node())
+	}
+
+	fn decode_plan(data: &[u8], meta: &mut M) -> Result<NodePlan, Self::Error> {
+		Self::decode_plan_inner_hashed(data, Some(meta)).map(|plan| {
+			meta.decoded_callback(&plan);
+			plan
+		})
+	}
+
+	fn decode_plan_inner(data: &[u8]) -> Result<NodePlan, Self::Error> {
+		let meta: Option<&mut M> = None;
+		Self::decode_plan_inner_hashed(data, meta)
 	}
 
 	fn is_empty_node(data: &[u8]) -> bool {
@@ -166,15 +205,25 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 	}
 
 	fn leaf_node(partial: Partial, value: Value, meta: &mut M) -> Vec<u8> {
-		let mut output = partial_encode(partial, NodeKind::Leaf);
-		if let Value::Value(value) = value {
-			Compact(value.len() as u32).encode_to(&mut output);
-			let start = output.len();
-			output.extend_from_slice(value);
-			let end = output.len();
-			meta.encoded_value_callback(ValuePlan::Value(start..end));
-		} else {
-			unimplemented!("No support for incomplete nodes");
+		let mut output = meta.write_state_meta();
+		output.append(&mut partial_encode(partial, NodeKind::Leaf));
+		match value {
+			Value::Value(value) => {
+				Compact(value.len() as u32).encode_to(&mut output);
+				let start = output.len();
+				output.extend_from_slice(value);
+				let end = output.len();
+				meta.encoded_value_callback(ValuePlan::Value(start..end));
+			},
+			Value::HashedValue(hash, size) => {
+				debug_assert!(hash.len() == H::LENGTH);
+				Compact(size as u32).encode_to(&mut output);
+				let start = output.len();
+				output.extend_from_slice(hash);
+				let end = output.len();
+				meta.encoded_value_callback(ValuePlan::HashedValue(start..end, size));
+			},
+			Value::NoValue => unimplemented!("No support for incomplete nodes"),
 		}
 		output
 	}
@@ -203,11 +252,20 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 		maybe_value: Value,
 		meta: &mut M,
 	) -> Vec<u8> {
-		let mut output = match maybe_value {
-			Value::Value(..) => partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchWithValue),
-			Value::NoValue => partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue),
-			Value::HashedValue(..) => unimplemented!("No support for incomplete nodes"),
-		};
+		let mut output = meta.write_state_meta();
+		output.append(&mut if let Value::NoValue = &maybe_value {
+			partial_from_iterator_encode(
+				partial,
+				number_nibble,
+				NodeKind::BranchNoValue,
+			)
+		} else {
+			partial_from_iterator_encode(
+				partial,
+				number_nibble,
+				NodeKind::BranchWithValue,
+			)
+		});
 		let bitmap_index = output.len();
 		let mut bitmap: [u8; BITMAP_LENGTH] = [0; BITMAP_LENGTH];
 		(0..BITMAP_LENGTH).for_each(|_|output.push(0));
@@ -219,8 +277,15 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 				let end = output.len();
 				meta.encoded_value_callback(ValuePlan::Value(start..end));
 			},
+			Value::HashedValue(hash, size) => {
+				debug_assert!(hash.len() == H::LENGTH);
+				Compact(size as u32).encode_to(&mut output);
+				let start = output.len();
+				output.extend_from_slice(hash);
+				let end = output.len();
+				meta.encoded_value_callback(ValuePlan::HashedValue(start..end, size));
+			},
 			Value::NoValue => (),
-			Value::HashedValue(..) => unimplemented!("No support for incomplete nodes"),
 		}
 		Bitmap::encode(children.map(|maybe_child| match maybe_child.borrow() {
 			Some(ChildReference::Hash(h)) => {

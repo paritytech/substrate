@@ -171,6 +171,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		flag_inner_hash_value: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
@@ -180,7 +181,16 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				self.essence.backend_storage(),
 				&mut write_overlay,
 			);
-
+			if flag_inner_hash_value {
+				root = match sp_trie::flag_inner_meta_hasher::<Layout<H>, _>(&mut eph, root) {
+					Ok(ret) => ret,
+					Err(e) => {
+						warn!(target: "trie", "Failed to flag trie: {}", e);
+						root
+					},
+				}
+			}
+		
 			match delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
@@ -325,21 +335,31 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		assert!(test_trie().storage_root(iter::empty()).0 != H256::repeat_byte(0));
+		let flagged = false;
+		assert!(test_trie().storage_root(iter::empty(), flagged).0 != H256::repeat_byte(0));
 	}
 
 	#[test]
 	fn storage_root_transaction_is_empty() {
-		assert!(test_trie().storage_root(iter::empty()).1.drain().is_empty());
+		let flagged = false;
+		assert!(test_trie().storage_root(iter::empty(), flagged).1.drain().is_empty());
+	}
+
+	#[test]
+	fn storage_root_flagged_is_not_empty() {
+		let flagged = true;
+		assert!(!test_trie().storage_root(iter::empty(), flagged).1.drain().is_empty());
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
+		// TODO test with flagged `test_trie` (initially only).
 		let (new_root, mut tx) = test_trie().storage_root(
 			iter::once((&b"new-key"[..], Some(&b"new-value"[..]))),
+			false,
 		);
 		assert!(!tx.drain().is_empty());
-		assert!(new_root != test_trie().storage_root(iter::empty()).0);
+		assert!(new_root != test_trie().storage_root(iter::empty(), false).0);
 	}
 
 	#[test]

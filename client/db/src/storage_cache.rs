@@ -645,8 +645,9 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		flag_hash_value: bool,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.state.storage_root(delta)
+		self.state.storage_root(delta, flag_hash_value)
 	}
 
 	fn child_storage_root<'a>(
@@ -827,8 +828,9 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		flag_hash_value: bool,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.caching_state().storage_root(delta)
+		self.caching_state().storage_root(delta, flag_hash_value)
 	}
 
 	fn child_storage_root<'a>(
@@ -1196,7 +1198,8 @@ mod tests {
 
 		let shared = new_shared_cache::<Block>(256*1024, (0,1));
 		let mut backend = InMemoryBackend::<BlakeTwo256>::default();
-		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])));
+		let flagged = false;
+		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])), flagged);
 
 		let mut s = CachingState::new(
 			backend.clone(),

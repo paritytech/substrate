@@ -291,6 +291,9 @@ pub trait Externalities: ExtensionStore {
 	fn proof_size(&self) -> Option<u32> {
 		None
 	}
+
+	/// Set flag in inner state to activate hashing of values.
+	fn flag_hash_value(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.

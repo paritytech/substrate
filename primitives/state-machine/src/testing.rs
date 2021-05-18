@@ -139,7 +139,7 @@ where
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
-		self.backend.insert(vec![(None, vec![(k, Some(v))])]);
+		self.backend.insert(vec![(None, vec![(k, Some(v))])], false);
 	}
 
 	/// Registers the given extension for this instance.
@@ -171,7 +171,7 @@ where
 			))
 		}
 
-		self.backend.update(transaction)
+		self.backend.update(transaction, self.overlay.flag_hash_value())
 	}
 
 	/// Commit all pending changes to the underlying backend.

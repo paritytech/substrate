@@ -123,10 +123,12 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
+	/// A flag `flag_inner_hash_value` can be set, it switches inner trie implementation.
 	/// Does not include child storage updates.
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		flag_inner_hash_value: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord;
 
 	/// Calculate the child storage root, with given delta over what is already stored in
@@ -174,6 +176,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			&'a ChildInfo,
 			impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		)>,
+		flag_inner_hash_value: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord + Encode {
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
@@ -195,7 +198,8 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 				child_roots
 					.iter()
 					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
-			)
+			),
+			flag_inner_hash_value,
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
@@ -305,8 +309,9 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	fn storage_root<'b>(
 		&self,
 		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+		flag_inner_hash_value: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		(*self).storage_root(delta)
+		(*self).storage_root(delta, flag_inner_hash_value)
 	}
 
 	fn child_storage_root<'b>(

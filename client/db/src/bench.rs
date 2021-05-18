@@ -58,7 +58,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 			let backend_value = self.db.get(0, &prefixed_key)
 				.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, parent)))
 				.map_err(|e| format!("Database backend error: {:?}", e))?;
-			recorder.record(key.clone(), backend_value.clone());
+			recorder.record(key.clone(), backend_value.clone(), HashFor::<Block>::LENGTH);
 			Ok(backend_value)
 		} else {
 			self.db.get(0, &prefixed_key)
@@ -68,7 +68,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	}
 	fn access_from(&self, key: &Block::Hash) {
 		if let Some(recorder) = &self.proof_recorder {
-			recorder.access_from(key);
+			recorder.access_from(key, HashFor::<Block>::LENGTH);
 		}
 	}
 }
@@ -151,6 +151,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		state.add_whitelist_to_tracker();
 
 		state.reopen()?;
+		let flagged = false; // TODO from genesis Storage
 		let child_delta = genesis.children_default.iter().map(|(_storage_key, child_content)| (
 			&child_content.child_info,
 			child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
@@ -158,6 +159,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 			genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
+			flagged,
 		);
 		state.genesis = transaction.clone().drain();
 		state.genesis_root = root.clone();
@@ -399,8 +401,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		flag_hash_value: bool,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.state.borrow().as_ref().map_or(Default::default(), |s| s.storage_root(delta))
+		self.state.borrow().as_ref().map_or(Default::default(), |s| s.storage_root(delta, flag_hash_value))
 	}
 
 	fn child_storage_root<'a>(

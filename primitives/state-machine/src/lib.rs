@@ -1060,7 +1060,8 @@ mod tests {
 
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
+		let flagged = false; // TODO try with flagged and trie with test_trie of already flagged
+		let remote_root = remote_backend.storage_root(std::iter::empty(), flagged).0;
 		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _, _>(
 			remote_backend,
 			&mut Default::default(),
@@ -1411,8 +1412,9 @@ mod tests {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_backend = trie_backend::tests::test_trie(); // TODO test with flagged and flagged.
+		let flagged = false;
+		let remote_root = remote_backend.storage_root(::std::iter::empty(), flagged).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
  		// check proof locally
 		let local_result1 = read_proof_check::<BlakeTwo256, _>(
@@ -1433,7 +1435,7 @@ mod tests {
 		assert_eq!(local_result2, false);
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(::std::iter::empty(), false).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
 			child_info,
