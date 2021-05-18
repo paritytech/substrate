@@ -1481,8 +1481,6 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-
-
 	/// Note what the extrinsic data of the current extrinsic index is.
 	///
 	/// This is required to be called before applying an extrinsic. The data will used
