@@ -40,7 +40,7 @@ variables:                         &default-vars
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
   # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.11"
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
 default:
@@ -263,7 +263,7 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
-    - 'node-bench-regression-guard --reference artifacts/benches/master-* 
+    - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 cargo-check-subkey:
@@ -704,7 +704,7 @@ trigger-simnet:
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
-  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here, 
+  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here,
   # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   variables:
     TRGR_PROJECT:                  ${CI_PROJECT_NAME}
