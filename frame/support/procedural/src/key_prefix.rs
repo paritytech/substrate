@@ -20,8 +20,7 @@ use quote::{ToTokens, format_ident, quote};
 use std::collections::BTreeSet;
 use syn::{Ident, Result};
 
-const ALL_IDENTS: [&'static str; 18] =
-	["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R"];
+const MAX_IDENTS: char = 'R';
 
 pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<TokenStream> {
 	if !input.is_empty() {
@@ -30,10 +29,9 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 
 	let mut all_trait_impls = TokenStream::new();
 
-	for i in 2..=18 {
-		let current_tuple = ALL_IDENTS[0..i]
-			.iter()
-			.map(|s| Ident::new(s, Span::call_site()))
+	for i in 'C'..=MAX_IDENTS {
+		let current_tuple = ('A'..i)
+			.map(|c| Ident::new(&c.to_string(), Span::call_site()))
 			.collect::<Vec<_>>();
 		let mut prefix_iter = current_tuple.iter().rev().cloned().peekable();
 		let mut suffix_set = BTreeSet::new();
