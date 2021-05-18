@@ -20,6 +20,7 @@
 use crate::hash::{ReversibleStorageHasher, StorageHasher};
 use codec::{Encode, EncodeLike, FullCodec};
 use paste::paste;
+use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
 /// A type used exclusively by storage maps as their key type.
@@ -35,12 +36,12 @@ pub struct Key<Hasher, KeyType>(core::marker::PhantomData<(Hasher, KeyType)>);
 
 /// A trait that contains the current key as an associated type.
 pub trait KeyGenerator {
-	type Key: EncodeLike<Self::Key>;
+	type Key: EncodeLike<Self::Key> + TypeInfo + 'static;
 	type KArg: Encode;
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
 
-	const HASHER_METADATA: &'static [frame_metadata::StorageHasher];
+	const HASHER_METADATA: &'static [crate::metadata::StorageHasher];
 
 	/// Given a `key` tuple, calculate the final key by encoding each element individuallly and
 	/// hashing them using the corresponding hasher in the `KeyGenerator`.
@@ -61,13 +62,13 @@ pub trait KeyGeneratorInner: KeyGenerator {
 	fn final_hash(encoded: &[u8]) -> Vec<u8>;
 }
 
-impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
+impl<H: StorageHasher, K: FullCodec + TypeInfo + 'static> KeyGenerator for Key<H, K> {
 	type Key = K;
 	type KArg = (K,);
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 	type HArg = (Self::HashFn,);
 
-	const HASHER_METADATA: &'static [frame_metadata::StorageHasher] = &[H::METADATA];
+	const HASHER_METADATA: &'static [crate::metadata::StorageHasher] = &[H::METADATA];
 
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		H::hash(
@@ -91,7 +92,7 @@ impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 	}
 }
 
-impl<H: StorageHasher, K: FullCodec> KeyGeneratorInner for Key<H, K> {
+impl<H: StorageHasher, K: FullCodec + TypeInfo + 'static> KeyGeneratorInner for Key<H, K> {
 	type Hasher = H;
 
 	fn final_hash(encoded: &[u8]) -> Vec<u8> {
@@ -107,7 +108,7 @@ impl KeyGenerator for Tuple {
 	for_tuples!( type HArg = ( #(Tuple::HashFn),* ); );
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 
-	const HASHER_METADATA: &'static [frame_metadata::StorageHasher] = &[
+	const HASHER_METADATA: &'static [crate::metadata::StorageHasher] = &[
 		for_tuples!( #(Tuple::Hasher::METADATA),* )
 	];
 
@@ -203,7 +204,7 @@ pub trait ReversibleKeyGenerator: KeyGenerator {
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error>;
 }
 
-impl<H: ReversibleStorageHasher, K: FullCodec> ReversibleKeyGenerator for Key<H, K> {
+impl<H: ReversibleStorageHasher, K: FullCodec + TypeInfo + 'static> ReversibleKeyGenerator for Key<H, K> {
 	type ReversibleHasher = H;
 
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error> {
@@ -248,7 +249,7 @@ pub trait HasReversibleKeyPrefix<P>: ReversibleKeyGenerator + HasKeyPrefix<P> {
 macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), ($($prefix:ident),+), ($($suffix:ident),+)) => {
 		paste! {
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher),+>
+			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: StorageHasher),+>
 				HasKeyPrefix<($($prefix),+)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
@@ -259,7 +260,7 @@ macro_rules! impl_key_prefix_for {
 				}
 			}
 
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
+			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
 				HasReversibleKeyPrefix<($($prefix),+)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
@@ -271,7 +272,7 @@ macro_rules! impl_key_prefix_for {
 	};
 	(($($keygen:ident),+), $prefix:ident, ($($suffix:ident),+)) => {
 		paste! {
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher),+>
+			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: StorageHasher),+>
 				HasKeyPrefix<($prefix,)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
@@ -282,7 +283,7 @@ macro_rules! impl_key_prefix_for {
 				}
 			}
 
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
+			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
 				HasReversibleKeyPrefix<($prefix,)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
@@ -294,7 +295,7 @@ macro_rules! impl_key_prefix_for {
 	};
 	(($($keygen:ident),+), ($($prefix:ident),+), $suffix:ident) => {
 		paste! {
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher),+>
+			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: StorageHasher),+>
 				HasKeyPrefix<($($prefix),+)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
@@ -305,7 +306,7 @@ macro_rules! impl_key_prefix_for {
 				}
 			}
 
-			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
+			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
 				HasReversibleKeyPrefix<($($prefix),+)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
@@ -317,7 +318,7 @@ macro_rules! impl_key_prefix_for {
 	};
 }
 
-impl<A: FullCodec, B: FullCodec, X: StorageHasher, Y: StorageHasher> HasKeyPrefix<(A,)>
+impl<A: FullCodec + TypeInfo + 'static, B: FullCodec + TypeInfo + 'static, X: StorageHasher, Y: StorageHasher> HasKeyPrefix<(A,)>
 	for (Key<X, A>, Key<Y, B>)
 {
 	type Suffix = B;
@@ -327,7 +328,7 @@ impl<A: FullCodec, B: FullCodec, X: StorageHasher, Y: StorageHasher> HasKeyPrefi
 	}
 }
 
-impl<A: FullCodec, B: FullCodec, X: ReversibleStorageHasher, Y: ReversibleStorageHasher>
+impl<A: FullCodec + TypeInfo + 'static, B: FullCodec + TypeInfo + 'static, X: ReversibleStorageHasher, Y: ReversibleStorageHasher>
 	HasReversibleKeyPrefix<(A,)> for (Key<X, A>, Key<Y, B>)
 {
 	fn decode_partial_key(key_material: &[u8]) -> Result<B, codec::Error> {

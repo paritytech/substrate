@@ -1798,8 +1798,8 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata"
-version = "12.0.0"
-source = "git+https://github.com/paritytech/frame-metadata?branch=aj-substrate#f4b1727ec933545f3d34f30f4537c0820671c52c"
+version = "14.0.0"
+source = "git+https://github.com/paritytech/frame-metadata?branch=aj-substrate#fe50b8a581ae13fa575d53aa2d5dd63a5e5b5321"
 dependencies = [
  "cfg-if 1.0.0",
  "parity-scale-codec",
@@ -8178,7 +8178,7 @@ dependencies = [
 [[package]]
 name = "scale-info"
 version = "0.6.0"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#ff42886b35a3c5e960a8b2089bdef5fccd0ee245"
+source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#13e23415b57da3c25a3b4afe8654c649bc11facb"
 dependencies = [
  "cfg-if 1.0.0",
  "derive_more",
@@ -8190,7 +8190,7 @@ dependencies = [
 [[package]]
 name = "scale-info-derive"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#ff42886b35a3c5e960a8b2089bdef5fccd0ee245"
+source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#13e23415b57da3c25a3b4afe8654c649bc11facb"
 dependencies = [
  "proc-macro-crate 1.0.0",
  "proc-macro2",

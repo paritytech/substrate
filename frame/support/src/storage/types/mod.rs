@@ -28,14 +28,14 @@ mod map;
 mod nmap;
 mod value;
 
-pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
+pub use double_map::StorageDoubleMap;
 pub use key::{
 	EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator,
 	ReversibleKeyGenerator, TupleToEncodedIter,
 };
-pub use map::{StorageMap, StorageMapMetadata};
-pub use nmap::{StorageNMap, StorageNMapMetadata};
-pub use value::{StorageValue, StorageValueMetadata};
+pub use map::StorageMap;
+pub use nmap::StorageNMap;
+pub use value::StorageValue;
 
 /// Trait implementing how the storage optional value is converted into the queried type.
 ///

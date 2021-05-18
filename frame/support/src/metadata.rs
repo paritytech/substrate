@@ -16,7 +16,7 @@
 // limitations under the License.
 
 pub use frame_metadata::{
-    v13::{
+    v14::{
         PalletErrorMetadata, PalletEventMetadata, ExtrinsicMetadata, FunctionArgumentMetadata,
         FunctionMetadata, PalletCallMetadata, PalletMetadata, PalletConstantMetadata, PalletStorageMetadata,
         RuntimeMetadataLastVersion, SignedExtensionMetadata,
@@ -573,14 +573,14 @@ mod tests {
 
 		let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
 		let expected_metadata = match expected_metadata.1 {
-			RuntimeMetadata::V13(metadata) => {
+			RuntimeMetadata::V14(metadata) => {
 				metadata
 			},
 			_ => panic!("metadata has been bumped, test needs to be updated"),
 		};
 
 		let actual_metadata = match TestRuntime::metadata().1 {
-			RuntimeMetadata::V13(metadata) => {
+			RuntimeMetadata::V14(metadata) => {
 				metadata
 			},
 			_ => panic!("metadata has been bumped, test needs to be updated"),
