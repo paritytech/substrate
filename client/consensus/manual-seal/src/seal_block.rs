@@ -92,7 +92,7 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 		P: txpool::ChainApi<Block=B>,
 		SC: SelectChain<B>,
 		TransactionFor<C, B>: 'static,
-		CIDP: CreateInherentDataProviders<B, ()>,
+		CIDP: CreateInherentDataProviders<B, Arc<C>>,
 {
 	let future = async {
 		if pool.validated_pool().status().ready == 0 && !create_empty {
@@ -111,10 +111,7 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 
 		let inherent_data_providers =
 			create_inherent_data_providers
-				.create_inherent_data_providers(
-					parent.hash(),
-					(),
-				)
+				.create_inherent_data_providers(parent.hash(), client.clone())
 				.await
 				.map_err(|e| Error::Other(e))?;
 

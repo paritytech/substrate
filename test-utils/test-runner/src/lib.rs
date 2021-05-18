@@ -299,7 +299,7 @@ pub trait ChainInfo: Sized {
 			Box<
 				dyn CreateInherentDataProviders<
 					Self::Block,
-					(),
+					Arc<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>>,
 					InherentDataProviders = Self::InherentDataProviders
 				>
 			>,
