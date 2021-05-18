@@ -256,8 +256,8 @@ impl<'de> Deserialize<'de> for Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
-		Ok(Signature::try_from(signature_hex.as_ref())
-			.map_err(|e| de::Error::custom(format!("{:?}", e)))?)
+		Signature::try_from(signature_hex.as_ref())
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))
 	}
 }
 
@@ -453,7 +453,7 @@ impl TraitPair for Pair {
 		let secret = SecretKey::parse_slice(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
 		let public = PublicKey::from_secret_key(&secret);
-		Ok(Pair{ secret, public })
+		Ok(Pair{ public, secret })
 	}
 
 	/// Derive a child key from a series of given junctions.
@@ -592,7 +592,7 @@ mod test {
 		let message = b"";
 		let signature = hex!("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
 		let signature = Signature::from_raw(signature);
-		assert!(&pair.sign(&message[..]) == &signature);
+		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
@@ -612,7 +612,7 @@ mod test {
 		let message = b"";
 		let signature = hex!("3dde91174bd9359027be59a428b8146513df80a2a3c7eda2194f64de04a69ab97b753169e94db6ffd50921a2668a48b94ca11e3d32c1ff19cfe88890aa7e8f3c00");
 		let signature = Signature::from_raw(signature);
-		assert!(&pair.sign(&message[..]) == &signature);
+		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
@@ -754,7 +754,7 @@ mod test {
 	#[test]
 	fn signature_serialization_doesnt_panic() {
 		fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
-			Ok(serde_json::from_str(text)?)
+			serde_json::from_str(text)
 		}
 		assert!(deserialize_signature("Not valid json.").is_err());
 		assert!(deserialize_signature("\"Not an actual signature.\"").is_err());
