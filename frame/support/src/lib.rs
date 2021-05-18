@@ -1393,7 +1393,7 @@ pub mod pallet_prelude {
 /// [`traits::StorageInfoTrait`] for each storage in the implementation of
 /// [`traits::StorageInfoTrait`] for the pallet.
 ///
-/// # Hooks: `#[pallet::hooks]` mandatory
+/// # Hooks: `#[pallet::hooks]` optional
 ///
 /// Implementation of `Hooks` on `Pallet` allowing to define some specific pallet logic.
 ///

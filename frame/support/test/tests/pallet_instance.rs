@@ -220,9 +220,6 @@ pub mod pallet2 {
 	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
-
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
 
