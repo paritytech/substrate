@@ -17,7 +17,7 @@
 
 //! Storage key type.
 
-use crate::hash::{ReversibleStorageHasher, StorageHasher};
+use crate::{hash::{ReversibleStorageHasher, StorageHasher}, traits::MaxEncodedLen};
 use codec::{Encode, EncodeLike, FullCodec};
 use paste::paste;
 use scale_info::TypeInfo;
@@ -52,6 +52,11 @@ pub trait KeyGenerator {
 		key: &KArg,
 		hash_fns: Self::HArg,
 	) -> Vec<u8>;
+}
+
+/// The maximum length used by the key in storage.
+pub trait KeyGeneratorMaxEncodedLen: KeyGenerator {
+	fn key_max_encoded_len() -> usize;
 }
 
 /// A trait containing methods that are only implemented on the Key struct instead of the entire tuple.
@@ -89,6 +94,12 @@ impl<H: StorageHasher, K: FullCodec + TypeInfo + 'static> KeyGenerator for Key<H
 				.next()
 				.expect("should have at least one element!"),
 		)
+	}
+}
+
+impl<H: StorageHasher, K: FullCodec + MaxEncodedLen + TypeInfo + 'static> KeyGeneratorMaxEncodedLen for Key<H, K> {
+	fn key_max_encoded_len() -> usize {
+		H::max_len::<K>()
 	}
 }
 
@@ -137,6 +148,20 @@ impl KeyGenerator for Tuple {
 			)*
 		);
 		migrated_key
+	}
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(2, 18)]
+#[tuple_types_custom_trait_bound(KeyGeneratorInner + KeyGeneratorMaxEncodedLen)]
+impl KeyGeneratorMaxEncodedLen for Tuple {
+	fn key_max_encoded_len() -> usize {
+		let mut len = 0usize;
+		for_tuples!(
+			#(
+				len = len.saturating_add(Tuple::key_max_encoded_len());
+			)*
+		);
+		len
 	}
 }
 
@@ -249,19 +274,23 @@ pub trait HasReversibleKeyPrefix<P>: ReversibleKeyGenerator + HasKeyPrefix<P> {
 macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), ($($prefix:ident),+), ($($suffix:ident),+)) => {
 		paste! {
-			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: StorageHasher),+>
-				HasKeyPrefix<($($prefix),+)> for
-				($(Key<[<$keygen $keygen>], $keygen>),+)
-			{
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: StorageHasher,)+
+				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
+			> HasKeyPrefix<($( [<KArg $prefix>] ),+)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
 				type Suffix = ($($suffix),+);
 
-				fn partial_key(prefix: ($($prefix),+)) -> Vec<u8> {
+				fn partial_key(prefix: ($( [<KArg $prefix>] ),+)) -> Vec<u8> {
 					<($(Key<[<$prefix $prefix>], $prefix>),+)>::final_key(prefix)
 				}
 			}
 
-			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
-				HasReversibleKeyPrefix<($($prefix),+)> for
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
+				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
+			> HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
 				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
@@ -272,19 +301,23 @@ macro_rules! impl_key_prefix_for {
 	};
 	(($($keygen:ident),+), $prefix:ident, ($($suffix:ident),+)) => {
 		paste! {
-			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: StorageHasher),+>
-				HasKeyPrefix<($prefix,)> for
-				($(Key<[<$keygen $keygen>], $keygen>),+)
-			{
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: StorageHasher,)+
+				[<KArg $prefix>]: EncodeLike<$prefix>
+			> HasKeyPrefix<( [<KArg $prefix>] ,)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
 				type Suffix = ($($suffix),+);
 
-				fn partial_key(prefix: ($prefix,)) -> Vec<u8> {
+				fn partial_key(prefix: ( [<KArg $prefix>] ,)) -> Vec<u8> {
 					<Key<[<$prefix $prefix>], $prefix>>::final_key(prefix)
 				}
 			}
 
-			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
-				HasReversibleKeyPrefix<($prefix,)> for
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
+				[<KArg $prefix>]: EncodeLike<$prefix>
+			> HasReversibleKeyPrefix<( [<KArg $prefix>] ,)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
 				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
@@ -295,19 +328,23 @@ macro_rules! impl_key_prefix_for {
 	};
 	(($($keygen:ident),+), ($($prefix:ident),+), $suffix:ident) => {
 		paste! {
-			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: StorageHasher),+>
-				HasKeyPrefix<($($prefix),+)> for
-				($(Key<[<$keygen $keygen>], $keygen>),+)
-			{
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: StorageHasher,)+
+				$( [<KArg $prefix>]: EncodeLike<$prefix>),+
+			> HasKeyPrefix<($( [<KArg $prefix>] ),+)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
 				type Suffix = $suffix;
 
-				fn partial_key(prefix: ($($prefix),+)) -> Vec<u8> {
+				fn partial_key(prefix: ($( [<KArg $prefix>] ),+)) -> Vec<u8> {
 					<($(Key<[<$prefix $prefix>], $prefix>),+)>::final_key(prefix)
 				}
 			}
 
-			impl<$($keygen: FullCodec + TypeInfo + 'static,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
-				HasReversibleKeyPrefix<($($prefix),+)> for
+			impl<
+				$($keygen: FullCodec,)+
+				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
+				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
+			> HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
 				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
@@ -318,18 +355,28 @@ macro_rules! impl_key_prefix_for {
 	};
 }
 
-impl<A: FullCodec + TypeInfo + 'static, B: FullCodec + TypeInfo + 'static, X: StorageHasher, Y: StorageHasher> HasKeyPrefix<(A,)>
-	for (Key<X, A>, Key<Y, B>)
+impl<A, B, X, Y, KArg> HasKeyPrefix<(KArg,)> for (Key<X, A>, Key<Y, B>)
+where
+	A: FullCodec + TypeInfo + 'static,
+	B: FullCodec + TypeInfo + 'static,
+	X: StorageHasher,
+	Y: StorageHasher,
+	KArg: EncodeLike<A>,
 {
 	type Suffix = B;
 
-	fn partial_key(prefix: (A,)) -> Vec<u8> {
+	fn partial_key(prefix: (KArg,)) -> Vec<u8> {
 		<Key<X, A>>::final_key(prefix)
 	}
 }
 
-impl<A: FullCodec + TypeInfo + 'static, B: FullCodec + TypeInfo + 'static, X: ReversibleStorageHasher, Y: ReversibleStorageHasher>
-	HasReversibleKeyPrefix<(A,)> for (Key<X, A>, Key<Y, B>)
+impl<A, B, X, Y, KArg> HasReversibleKeyPrefix<(KArg,)> for (Key<X, A>, Key<Y, B>)
+where
+	A: FullCodec + TypeInfo + 'static,
+	B: FullCodec + TypeInfo + 'static,
+	X: ReversibleStorageHasher,
+	Y: ReversibleStorageHasher,
+	KArg: EncodeLike<A>,
 {
 	fn decode_partial_key(key_material: &[u8]) -> Result<B, codec::Error> {
 		<Key<Y, B>>::decode_final_key(key_material).map(|k| k.0)

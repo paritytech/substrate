@@ -65,7 +65,7 @@ pub struct Pair(ed25519_dalek::Keypair);
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(ed25519_dalek::Keypair {
-			public: self.0.public.clone(),
+			public: self.0.public,
 			secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes())
 				.expect("key is always the correct size; qed")
 		})
@@ -217,8 +217,8 @@ impl<'de> Deserialize<'de> for Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
-		Ok(Signature::try_from(signature_hex.as_ref())
-			.map_err(|e| de::Error::custom(format!("{:?}", e)))?)
+		Signature::try_from(signature_hex.as_ref())
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))
 	}
 }
 
@@ -522,10 +522,7 @@ impl TraitPair for Pair {
 			Err(_) => return false
 		};
 
-		match public_key.verify(message.as_ref(), &sig) {
-			Ok(_) => true,
-			_ => false,
-		}
+		public_key.verify(message.as_ref(), &sig).is_ok()
 	}
 
 	/// Return a vec filled with raw data.
@@ -546,7 +543,7 @@ impl Pair {
 	#[cfg(feature = "std")]
 	pub fn from_legacy_string(s: &str, password_override: Option<&str>) -> Pair {
 		Self::from_string(s, password_override).unwrap_or_else(|_| {
-			let mut padded_seed: Seed = [' ' as u8; 32];
+			let mut padded_seed: Seed = [b' '; 32];
 			let len = s.len().min(32);
 			padded_seed[..len].copy_from_slice(&s.as_bytes()[..len]);
 			Self::from_seed(&padded_seed)
@@ -609,7 +606,7 @@ mod test {
 		let message = b"";
 		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b");
 		let signature = Signature::from_raw(signature);
-		assert!(&pair.sign(&message[..]) == &signature);
+		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
@@ -626,7 +623,7 @@ mod test {
 		let message = b"";
 		let signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b");
 		let signature = Signature::from_raw(signature);
-		assert!(&pair.sign(&message[..]) == &signature);
+		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
@@ -703,7 +700,7 @@ mod test {
 	#[test]
 	fn signature_serialization_doesnt_panic() {
 		fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
-			Ok(serde_json::from_str(text)?)
+			serde_json::from_str(text)
 		}
 		assert!(deserialize_signature("Not valid json.").is_err());
 		assert!(deserialize_signature("\"Not an actual signature.\"").is_err());

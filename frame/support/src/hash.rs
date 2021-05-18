@@ -21,6 +21,7 @@ use crate::metadata;
 use codec::Codec;
 use sp_std::prelude::Vec;
 use sp_io::hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
+use crate::traits::MaxEncodedLen;
 
 // This trait must be kept coherent with frame-support-procedural HasherKind usage
 pub trait Hashable: Sized {
@@ -60,6 +61,9 @@ pub trait StorageHasher: 'static {
 	const METADATA: metadata::StorageHasher;
 	type Output: AsRef<[u8]>;
 	fn hash(x: &[u8]) -> Self::Output;
+
+	/// The max length of the final hash, for the given key type.
+	fn max_len<K: MaxEncodedLen>() -> usize;
 }
 
 /// Hasher to use to hash keys to insert to storage.
@@ -80,6 +84,9 @@ impl StorageHasher for Identity {
 	fn hash(x: &[u8]) -> Vec<u8> {
 		x.to_vec()
 	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		K::max_encoded_len()
+	}
 }
 impl ReversibleStorageHasher for Identity {
 	fn reverse(x: &[u8]) -> &[u8] {
@@ -98,6 +105,9 @@ impl StorageHasher for Twox64Concat {
 			.chain(x.into_iter())
 			.cloned()
 			.collect::<Vec<_>>()
+	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		K::max_encoded_len().saturating_add(8)
 	}
 }
 impl ReversibleStorageHasher for Twox64Concat {
@@ -122,6 +132,9 @@ impl StorageHasher for Blake2_128Concat {
 			.cloned()
 			.collect::<Vec<_>>()
 	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		K::max_encoded_len().saturating_add(16)
+	}
 }
 impl ReversibleStorageHasher for Blake2_128Concat {
 	fn reverse(x: &[u8]) -> &[u8] {
@@ -141,6 +154,9 @@ impl StorageHasher for Blake2_128 {
 	fn hash(x: &[u8]) -> [u8; 16] {
 		blake2_128(x)
 	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		16
+	}
 }
 
 /// Hash storage keys with blake2 256
@@ -150,6 +166,9 @@ impl StorageHasher for Blake2_256 {
 	type Output = [u8; 32];
 	fn hash(x: &[u8]) -> [u8; 32] {
 		blake2_256(x)
+	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		32
 	}
 }
 
@@ -161,6 +180,9 @@ impl StorageHasher for Twox128 {
 	fn hash(x: &[u8]) -> [u8; 16] {
 		twox_128(x)
 	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		16
+	}
 }
 
 /// Hash storage keys with twox 256
@@ -170,6 +192,9 @@ impl StorageHasher for Twox256 {
 	type Output = [u8; 32];
 	fn hash(x: &[u8]) -> [u8; 32] {
 		twox_256(x)
+	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		32
 	}
 }
 
@@ -187,5 +212,18 @@ mod tests {
 	fn test_blake2_128_concat() {
 		let r = Blake2_128Concat::hash(b"foo");
 		assert_eq!(r.split_at(16), (&blake2_128(b"foo")[..], &b"foo"[..]))
+	}
+
+	#[test]
+	fn max_lengths() {
+		use codec::Encode;
+		let encoded_0u32 = &0u32.encode()[..];
+		assert_eq!(Twox64Concat::hash(encoded_0u32).len(), Twox64Concat::max_len::<u32>());
+		assert_eq!(Twox128::hash(encoded_0u32).len(), Twox128::max_len::<u32>());
+		assert_eq!(Twox256::hash(encoded_0u32).len(), Twox256::max_len::<u32>());
+		assert_eq!(Blake2_128::hash(encoded_0u32).len(), Blake2_128::max_len::<u32>());
+		assert_eq!(Blake2_128Concat::hash(encoded_0u32).len(), Blake2_128Concat::max_len::<u32>());
+		assert_eq!(Blake2_256::hash(encoded_0u32).len(), Blake2_256::max_len::<u32>());
+		assert_eq!(Identity::hash(encoded_0u32).len(), Identity::max_len::<u32>());
 	}
 }

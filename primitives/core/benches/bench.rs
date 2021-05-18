@@ -32,7 +32,7 @@ fn get_key(key_size: u32) -> Vec<u8> {
 	let mut rnd = rnd.iter().cycle();
 
 	(0..key_size)
-		.map(|_| rnd.next().unwrap().clone())
+		.map(|_| *rnd.next().unwrap())
 		.collect()
 }
 
