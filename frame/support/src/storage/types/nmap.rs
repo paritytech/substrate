@@ -30,7 +30,6 @@ use crate::{
 	traits::{Get, GetDefault, StorageInstance, StorageInfo, MaxEncodedLen},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec};
-use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_runtime::SaturatedConversion;
 use sp_std::prelude::*;
 

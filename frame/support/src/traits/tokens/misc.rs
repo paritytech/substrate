@@ -165,5 +165,5 @@ pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq + Debug {}
 impl<T: FullCodec + Copy + Default + Eq + PartialEq + Debug> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
-pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + + scale_info::TypeInfo {}
+pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo {}
 impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo> Balance for T {}

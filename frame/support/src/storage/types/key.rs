@@ -275,7 +275,7 @@ macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), ($($prefix:ident),+), ($($suffix:ident),+)) => {
 		paste! {
 			impl<
-				$($keygen: FullCodec,)+
+				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
 				$( [<$keygen $keygen>]: StorageHasher,)+
 				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
 			> HasKeyPrefix<($( [<KArg $prefix>] ),+)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
@@ -287,7 +287,7 @@ macro_rules! impl_key_prefix_for {
 			}
 
 			impl<
-				$($keygen: FullCodec,)+
+				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
 				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
 				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
 			> HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for
@@ -302,7 +302,7 @@ macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), $prefix:ident, ($($suffix:ident),+)) => {
 		paste! {
 			impl<
-				$($keygen: FullCodec,)+
+				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
 				$( [<$keygen $keygen>]: StorageHasher,)+
 				[<KArg $prefix>]: EncodeLike<$prefix>
 			> HasKeyPrefix<( [<KArg $prefix>] ,)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
@@ -314,7 +314,7 @@ macro_rules! impl_key_prefix_for {
 			}
 
 			impl<
-				$($keygen: FullCodec,)+
+				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
 				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
 				[<KArg $prefix>]: EncodeLike<$prefix>
 			> HasReversibleKeyPrefix<( [<KArg $prefix>] ,)> for
@@ -329,9 +329,9 @@ macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), ($($prefix:ident),+), $suffix:ident) => {
 		paste! {
 			impl<
-				$($keygen: FullCodec,)+
+				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
 				$( [<$keygen $keygen>]: StorageHasher,)+
-				$( [<KArg $prefix>]: EncodeLike<$prefix>),+
+				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
 			> HasKeyPrefix<($( [<KArg $prefix>] ),+)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
 				type Suffix = $suffix;
 
@@ -341,7 +341,7 @@ macro_rules! impl_key_prefix_for {
 			}
 
 			impl<
-				$($keygen: FullCodec,)+
+				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
 				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
 				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
 			> HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for

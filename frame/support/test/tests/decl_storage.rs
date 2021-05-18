@@ -28,7 +28,7 @@ mod tests {
 
 	pub trait Config: frame_support_test::Config {
 		type Origin2: codec::Codec + codec::EncodeLike + Default
-			+ frame_support::traits::MaxEncodedLen;
+			+ frame_support::traits::MaxEncodedLen + scale_info::TypeInfo;
 	}
 
 	frame_support::decl_storage! {
@@ -222,8 +222,8 @@ mod tests {
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("[u8; 4]"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<[u8; 4]>(),
 						unused: false,
 					},
 					default: vec![0],
@@ -234,51 +234,47 @@ mod tests {
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("[u8; 4]"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<[u8; 4]>(),
 						unused: false,
 					},
 					default: vec![0],
 					documentation: vec![],
 				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("MAPU32MYDEF"),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
-						unused: false,
-					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructMAPU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBMAPU32MYDEF"),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
-						unused: false,
-					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBMAPU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
+				// StorageEntryMetadata {
+				// 	name: "MAPU32MYDEF",
+				// 	modifier: StorageEntryModifier::Optional,
+				// 	ty: StorageEntryType::Map {
+				// 		hasher: StorageHasher::Blake2_128Concat,
+				// 		key: scale_info::meta_type::<u32>(),
+				// 		value: scale_info::meta_type::<String>(),
+				// 		unused: false,
+				// 	},
+				// 	default: vec![0],
+				// 	documentation: vec![],
+				// },
+				// StorageEntryMetadata {
+				// 	name: "PUBMAPU32MYDEF",
+				// 	modifier: StorageEntryModifier::Optional,
+				// 	ty: StorageEntryType::Map {
+				// 		hasher: StorageHasher::Blake2_128Concat,
+				// 		key: scale_info::meta_type::<u32>(),
+				// 		value: scale_info::meta_type::<String>(),
+				// 		unused: false,
+				// 	},
+				// 	default: vec![0],
+				// 	documentation: vec![],
+				// },
 				StorageEntryMetadata {
 					name: "GETMAPU32",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("[u8; 4]"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<[u8; 4]>(),
 						unused: false,
 					},
-					default: vec![0],
+					default: vec![0, 0, 0, 0],
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -286,11 +282,11 @@ mod tests {
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("[u8; 4]"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<[u8; 4]>(),
 						unused: false,
 					},
-					default: vec![0],
+					default: vec![0, 0, 0, 0],
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -298,11 +294,11 @@ mod tests {
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("[u8; 4]"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<[u8; 4]>(),
 						unused: false,
 					},
-					default: vec![12, 109, 97, 112], // "map"
+					default: vec![109, 97, 112, 100], // "map"
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -310,60 +306,52 @@ mod tests {
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("[u8; 4]"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<[u8; 4]>(),
 						unused: false,
 					},
-					default: vec![24, 112, 117, 98, 109, 97, 112], // "pubmap"
+					default: vec![112, 117, 98, 109], // "pubmap"
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("DOUBLEMAP"),
+					name: "DOUBLEMAP",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::DoubleMap {
 						hasher: StorageHasher::Blake2_128Concat,
-						key1: DecodeDifferent::Encode("u32"),
-						key2: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("[u8; 4]"),
+						key1: scale_info::meta_type::<u32>(),
+						key2: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<[u8; 4]>(),
 						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructDOUBLEMAP(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![0],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("DOUBLEMAP2"),
+					name: "DOUBLEMAP2",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::DoubleMap {
 						hasher: StorageHasher::Blake2_128Concat,
-						key1: DecodeDifferent::Encode("u32"),
-						key2: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("[u8; 4]"),
+						key1: scale_info::meta_type::<u32>(),
+						key2: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<[u8; 4]>(),
 						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructDOUBLEMAP2(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![0],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
 					name: "COMPLEXTYPE1",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("(::std::option::Option<T::Origin2>,)")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructCOMPLEXTYPE1(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<Option<u32>>()),
+					default: vec![0],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
 					name: "COMPLEXTYPE2",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("([[(u16, Option<()>); 32]; 12], u32)")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructCOMPLEXTYPE2(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<([[(u16, Option<()>); 32]; 12], u32)>()),
+					default: vec![0],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
 					name: "COMPLEXTYPE3",
@@ -373,34 +361,30 @@ mod tests {
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("NMAP"),
+					name: "NMAP",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::NMap {
-						keys: DecodeDifferent::Encode(&["u32", "u16"]),
-						hashers: DecodeDifferent::Encode(&[StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat]),
-						value: DecodeDifferent::Encode("u8"),
+						keys: scale_info::meta_type::<(u32, u16)>(),
+						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+						value: scale_info::meta_type::<u8>(),
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructNMAP(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![0],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("NMAP2"),
+					name: "NMAP2",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::NMap {
-						keys: DecodeDifferent::Encode(&["u32"]),
-						hashers: DecodeDifferent::Encode(&[StorageHasher::Blake2_128Concat]),
-						value: DecodeDifferent::Encode("u8"),
+						keys: scale_info::meta_type::<(u32,)>(),
+						hashers: vec![StorageHasher::Blake2_128Concat],
+						value: scale_info::meta_type::<u8>(),
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructNMAP(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![0],
+					documentation: vec![],
 				},
-			]
-		),
-	};
+			],
+		}
+	}
 
 	#[test]
 	fn storage_info() {

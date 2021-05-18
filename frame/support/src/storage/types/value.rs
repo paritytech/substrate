@@ -27,7 +27,6 @@ use crate::{
 	},
 	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
 };
-use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
