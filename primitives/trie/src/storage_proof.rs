@@ -103,6 +103,7 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
 		for item in proof.iter_nodes() {
+			// TODO insert_with_meta here
 			db.insert(crate::EMPTY_PREFIX, &item);
 		}
 		db

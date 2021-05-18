@@ -451,11 +451,11 @@ mod tests {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)], flagged);
-		let in_memory_root = in_memory.storage_root(::std::iter::empty(), flagged).0;
+		let in_memory_root = in_memory.storage_root(std::iter::empty(), do_flag).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(::std::iter::empty(), do_flag).0;
+		let trie_root = trie.storage_root(std::iter::empty(), do_flag).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
