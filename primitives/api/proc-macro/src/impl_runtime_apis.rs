@@ -675,6 +675,7 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 			#( #attrs )*
 			const _: () = {
 				// All sections with the same name are going to be merged by concatenation.
+				#[cfg(not(feature = "std"))]
 				#[link_section = "runtime_apis"]
 				static SECTION_CONTENTS: [u8; 12] = #c::serialize_runtime_api_info(#id, #version);
 			};
