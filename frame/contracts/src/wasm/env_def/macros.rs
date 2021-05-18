@@ -50,7 +50,12 @@ macro_rules! gen_signature_dispatch {
 		$name:ident
 		( $ctx:ident $( , $names:ident : $params:ty )* ) $( -> $returns:ty )* , $($rest:tt)*
 	) => {
-		if stringify!($module).as_bytes() == $needle_module && stringify!($name).as_bytes() == $needle_name {
+		let module = stringify!($module).as_bytes();
+		#[cfg(not(feature = "unstable-interface"))]
+		if module == b"__unstable__" {
+			return false;
+		}
+		if module == $needle_module && stringify!($name).as_bytes() == $needle_name {
 			let signature = gen_signature!( ( $( $params ),* ) $( -> $returns )* );
 			if $needle_sig == &signature {
 				return true;
@@ -127,8 +132,8 @@ macro_rules! unmarshall_then_body_then_marshall {
 }
 
 macro_rules! define_func {
-	( < E: $seal_ty:tt > $name:ident ( $ctx: ident $(, $names:ident : $params:ty)*) $(-> $returns:ty)* => $body:tt ) => {
-		fn $name< E: $seal_ty >(
+	( $trait:tt $name:ident ( $ctx: ident $(, $names:ident : $params:ty)*) $(-> $returns:ty)* => $body:tt ) => {
+		fn $name< E: $trait >(
 			$ctx: &mut $crate::wasm::Runtime<E>,
 			args: &[sp_sandbox::Value],
 		) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>
@@ -149,24 +154,52 @@ macro_rules! define_func {
 	};
 }
 
-macro_rules! register_func {
-	( $reg_cb:ident, < E: $seal_ty:tt > ; ) => {};
-
-	( $reg_cb:ident, < E: $seal_ty:tt > ;
+macro_rules! register_body {
+	( $reg_cb:ident, $trait:tt;
 		$module:ident $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
-		$( -> $returns:ty )* => $body:tt $($rest:tt)*
+		$( -> $returns:ty )* => $body:tt
 	) => {
 		$reg_cb(
 			stringify!($module).as_bytes(),
 			stringify!($name).as_bytes(),
 			{
 				define_func!(
-					< E: $seal_ty > $name ( $ctx $(, $names : $params )* ) $( -> $returns )* => $body
+					 $trait $name ( $ctx $(, $names : $params )* ) $( -> $returns )* => $body
 				);
 				$name::<E>
 			}
 		);
-		register_func!( $reg_cb, < E: $seal_ty > ; $($rest)* );
+	}
+}
+
+macro_rules! register_func {
+	( $reg_cb:ident, $trait:tt; ) => {};
+
+	( $reg_cb:ident, $trait:tt;
+		__unstable__ $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
+		$( -> $returns:ty )* => $body:tt $($rest:tt)*
+	) => {
+		#[cfg(feature = "unstable-interface")]
+		register_body!(
+			$reg_cb, $trait;
+			__unstable__ $name
+			( $ctx $( , $names : $params )* )
+			$( -> $returns )* => $body
+		);
+		register_func!( $reg_cb, $trait; $($rest)* );
+	};
+
+	( $reg_cb:ident, $trait:tt;
+		$module:ident $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
+		$( -> $returns:ty )* => $body:tt $($rest:tt)*
+	) => {
+		register_body!(
+			$reg_cb, $trait;
+			$module $name
+			( $ctx $( , $names : $params )* )
+			$( -> $returns )* => $body
+		);
+		register_func!( $reg_cb, $trait; $($rest)* );
 	};
 }
 
@@ -178,7 +211,7 @@ macro_rules! register_func {
 /// It's up to the user of this macro to check signatures of wasm code to be executed
 /// and reject the code if any imported function has a mismatched signature.
 macro_rules! define_env {
-	( $init_name:ident , < E: $seal_ty:tt > ,
+	( $init_name:ident , < E: $trait:tt > ,
 		$( [$module:ident] $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
 			$( -> $returns:ty )* => $body:tt , )*
 	) => {
@@ -204,7 +237,7 @@ macro_rules! define_env {
 			fn impls<F: FnMut(&[u8], &[u8], $crate::wasm::env_def::HostFunc<E>)>(f: &mut F) {
 				register_func!(
 					f,
-					< E: $seal_ty > ;
+					$trait;
 					$( $module $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )*
 				);
 			}
@@ -285,7 +318,7 @@ mod tests {
 
 	#[test]
 	fn macro_define_func() {
-		define_func!( <E: Ext> seal_gas (_ctx, amount: u32) => {
+		define_func!( Ext seal_gas (_ctx, amount: u32) => {
 			let amount = Weight::from(amount);
 			if !amount.is_zero() {
 				Ok(())

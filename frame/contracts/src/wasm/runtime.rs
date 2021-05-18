@@ -220,10 +220,6 @@ pub enum RuntimeCosts {
 	ChainExtension(u64),
 	/// Weight charged for copying data from the sandbox.
 	CopyIn(u32),
-	/// Weight of calling `seal_rent_params`.
-	RentParams,
-	/// Weight of calling `seal_rent_status`.
-	RentStatus,
 }
 
 impl RuntimeCosts {
@@ -292,8 +288,6 @@ impl RuntimeCosts {
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			ChainExtension(amount) => amount,
 			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
-			RentParams => s.rent_params,
-			RentStatus => s.rent_status,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -1582,8 +1576,12 @@ define_env!(Env, <E: Ext>,
 	// The returned information was collected and cached when the current contract call
 	// started execution. Any change to those values that happens due to actions of the
 	// current call or contracts that are called by this contract are not considered.
-	[seal0] seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::RentParams)?;
+	//
+	// # Unstable
+	//
+	// This function is unstable and subject to change (or removal) in the future. Do not
+	// deploy a contract using it to a production chain.
+	[__unstable__] seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.rent_params().encode(), false, already_charged
 		)?)
@@ -1601,8 +1599,12 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `at_refcount`: The refcount assumed for the returned `custom_refcount_*` fields
-	[seal0] seal_rent_status(ctx, at_refcount: u32, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::RentStatus)?;
+	//
+	// # Unstable
+	//
+	// This function is unstable and subject to change (or removal) in the future. Do not
+	// deploy a contract using it to a production chain.
+	[__unstable__] seal_rent_status(ctx, at_refcount: u32, out_ptr: u32, out_len_ptr: u32) => {
 		let rent_status = ctx.ext.rent_status(at_refcount).encode();
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &rent_status, false, already_charged

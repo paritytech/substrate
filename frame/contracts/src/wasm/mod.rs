@@ -1821,9 +1821,14 @@ mod tests {
 		);
 	}
 
-	const CODE_RENT_PARAMS: &str = r#"
+
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn rent_params_work() {
+		const CODE_RENT_PARAMS: &str = r#"
 (module
-	(import "seal0" "seal_rent_params" (func $seal_rent_params (param i32 i32)))
+	(import "__unstable__" "seal_rent_params" (func $seal_rent_params (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -1850,9 +1855,6 @@ mod tests {
 	(func (export "deploy"))
 )
 "#;
-
-	#[test]
-	fn rent_params_work() {
 		let output = execute(
 			CODE_RENT_PARAMS,
 			vec![],
@@ -1862,9 +1864,14 @@ mod tests {
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_params });
 	}
 
-	const CODE_RENT_STATUS: &str = r#"
+
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn rent_status_works() {
+		const CODE_RENT_STATUS: &str = r#"
 (module
-	(import "seal0" "seal_rent_status" (func $seal_rent_status (param i32 i32 i32)))
+	(import "__unstable__" "seal_rent_status" (func $seal_rent_status (param i32 i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -1892,9 +1899,6 @@ mod tests {
 	(func (export "deploy"))
 )
 "#;
-
-	#[test]
-	fn rent_status_works() {
 		let output = execute(
 			CODE_RENT_STATUS,
 			vec![],

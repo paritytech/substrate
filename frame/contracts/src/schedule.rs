@@ -388,12 +388,6 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
 
-	/// Weight of calling `seal_rent_params`.
-	pub rent_params: Weight,
-
-	/// Weight of calling `seal_rent_status`.
-	pub rent_status: Weight,
-
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
 	pub _phantom: PhantomData<T>
@@ -622,8 +616,6 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
-			rent_params: cost_batched!(seal_rent_params),
-			rent_status: cost_batched!(seal_rent_status),
 			_phantom: PhantomData,
 		}
 	}
