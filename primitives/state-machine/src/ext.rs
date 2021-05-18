@@ -950,7 +950,8 @@ mod tests {
 				vec![20] => vec![20],
 				vec![40] => vec![40]
 			],
-			children_default: map![]
+			children_default: map![],
+			flag_hashed_value: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -996,6 +997,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
+			flag_hashed_value: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1040,6 +1042,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
+			flag_hashed_value: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1079,6 +1082,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
+			flag_hashed_value: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);

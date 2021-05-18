@@ -780,7 +780,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		let flag = false; // TODO flag from storage!!
+		let flag = storage.flag_hashed_value;
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| {
 				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
@@ -2314,6 +2314,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
+				flag_hashed_value: flagged,
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -2399,6 +2400,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: Default::default(),
 				children_default: Default::default(),
+				flag_hashed_value: flagged,
 			}).unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
@@ -2851,6 +2853,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
+				flag_hashed_value: flagged,
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),

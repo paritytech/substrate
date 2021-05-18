@@ -87,7 +87,9 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 					)
 					.collect();
 
-				Ok(Genesis::Raw(RawGenesis { top, children_default }))
+				let flag_hashed_value = storage.flag_hashed_value;
+
+				Ok(Genesis::Raw(RawGenesis { top, children_default, flag_hashed_value }))
 			},
 		}
 	}
@@ -97,7 +99,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
+			Genesis::Raw(RawGenesis { top: map, children_default: children_map, flag_hashed_value }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 				children_default: children_map.into_iter().map(|(storage_key, child_content)| {
 					let child_info = ChildInfo::new_default(storage_key.0.as_slice());
@@ -109,6 +111,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 						},
 					)
 				}).collect(),
+				flag_hashed_value,
 			}),
 		}
 	}
@@ -130,6 +133,7 @@ pub type GenesisStorage = HashMap<StorageKey, StorageData>;
 pub struct RawGenesis {
 	pub top: GenesisStorage,
 	pub children_default: HashMap<StorageKey, GenesisStorage>,
+	pub flag_hashed_value: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -316,8 +320,9 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 							.collect(),
 					))
 					.collect();
+				let flag_hashed_value = storage.flag_hashed_value;
 
-				Genesis::Raw(RawGenesis { top, children_default })
+				Genesis::Raw(RawGenesis { top, children_default, flag_hashed_value })
 			},
 			(_, genesis) => genesis,
 		};

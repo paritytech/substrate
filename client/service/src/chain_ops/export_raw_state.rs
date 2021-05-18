@@ -42,6 +42,7 @@ where
 	let empty_key = StorageKey(Vec::new());
 	let mut top_storage = client.storage_pairs(&block, &empty_key)?;
 	let mut children_default = HashMap::new();
+	let flag_hashed_value = false; // TODO read from trie (through clinet api).
 
 	// Remove all default child storage roots from the top storage and collect the child storage
 	// pairs.
@@ -69,5 +70,5 @@ where
 	}
 
 	let top = top_storage.into_iter().map(|(k, v)| (k.0, v.0)).collect();
-	Ok(Storage { top, children_default })
+	Ok(Storage { top, children_default, flag_hashed_value })
 }

@@ -346,7 +346,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
-		let flag = false; // TODO flag_hash_value in Storage
+		let flag = input.flag_hashed_value;
 		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta, flag);
 		self.storage_update = Some(storage_update);
 

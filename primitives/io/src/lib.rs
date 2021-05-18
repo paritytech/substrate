@@ -1454,6 +1454,7 @@ mod tests {
 		t = BasicExternalities::new(Storage {
 			top: map![b"foo".to_vec() => b"bar".to_vec()],
 			children_default: map![],
+			flag_hashed_value: false,
 		});
 
 		t.execute_with(|| {
@@ -1468,6 +1469,7 @@ mod tests {
 		let mut t = BasicExternalities::new(Storage {
 			top: map![b":test".to_vec() => value.clone()],
 			children_default: map![],
+			flag_hashed_value: false,
 		});
 
 		t.execute_with(|| {
@@ -1490,6 +1492,7 @@ mod tests {
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
 			children_default: map![],
+			flag_hashed_value: false,
 		});
 
 		t.execute_with(|| {

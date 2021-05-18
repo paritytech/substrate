@@ -140,6 +140,8 @@ pub struct Storage {
 	/// trie kind, so this is exclusively for the `ChildType::ParentKeyId`
 	/// tries.
 	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
+	/// Flag state for using hash of values internally.
+	pub flag_hashed_value: bool,
 }
 
 /// Storage change set

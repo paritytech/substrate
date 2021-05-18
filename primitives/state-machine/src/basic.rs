@@ -74,6 +74,7 @@ impl BasicExternalities {
 			inner: Storage {
 				top: std::mem::take(&mut storage.top),
 				children_default: std::mem::take(&mut storage.children_default),
+				flag_hashed_value: storage.flag_hashed_value,
 			},
 			extensions: Default::default(),
 		};
@@ -128,6 +129,7 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 			inner: Storage {
 				top: hashmap,
 				children_default: Default::default(),
+				flag_hashed_value: false,
 			},
 			extensions: Default::default(),
 		}
@@ -335,8 +337,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn flag_hash_value(&mut self) {
-		unimplemented!("flag_hash_value is not supported in Basic")
-		// TODO consider flag in layout so doable by adding to storage.
+		self.inner.flag_hashed_value = true;
 	}
 }
 
@@ -402,7 +403,8 @@ mod tests {
 					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
 					child_info: child_info.to_owned(),
 				}
-			]
+			],
+			flag_hashed_value: false,
 		});
 
 		assert_eq!(ext.child_storage(child_info, b"doe"), Some(b"reindeer".to_vec()));
@@ -432,9 +434,9 @@ mod tests {
 					],
 					child_info: child_info.to_owned(),
 				}
-			]
+			],
+			flag_hashed_value: false,
 		});
-
 
 		let res = ext.kill_child_storage(child_info, None);
 		assert_eq!(res, (true, 3));

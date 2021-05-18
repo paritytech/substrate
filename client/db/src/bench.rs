@@ -151,7 +151,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		state.add_whitelist_to_tracker();
 
 		state.reopen()?;
-		let flagged = false; // TODO from genesis Storage
+		let flagged = genesis.flag_hashed_value;
 		let child_delta = genesis.children_default.iter().map(|(_storage_key, child_content)| (
 			&child_content.child_info,
 			child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
