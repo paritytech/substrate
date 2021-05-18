@@ -281,7 +281,7 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		Layout::<Blake2Hasher>::trie_root(self.inner.top.clone()).as_ref().into()
+		Layout::<Blake2Hasher>::default().trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
 	fn child_storage_root(

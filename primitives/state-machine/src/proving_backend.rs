@@ -112,7 +112,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 #[derive(Default)]
 struct ProofRecorderInner<Hash> {
 	/// All the records that we have stored so far.
-	records: HashMap<Hash, Option<DBValue>>,
+	records: HashMap<Hash, Option<(DBValue, TrieMeta)>>,
 	/// The encoded size of all recorded values.
 	encoded_size: usize,
 }
@@ -125,11 +125,13 @@ pub struct ProofRecorder<Hash> {
 
 impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 	/// Record the given `key` => `val` combination.
-	pub fn record(&self, key: Hash, val: Option<DBValue>) {
+	pub fn record(&self, key: Hash, val: Option<(DBValue, TrieMeta)>) {
 		let mut inner = self.inner.write();
 		let encoded_size = if let Entry::Vacant(entry) = inner.records.entry(key) {
 			let encoded_size = val.as_ref().map(Encode::encoded_size).unwrap_or(0);
 
+// TODO with new meta
+// val.as_mut().map(|val| val.1.set_accessed_value(false));
 			entry.insert(val);
 			encoded_size
 		} else {
@@ -139,8 +141,15 @@ impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 		inner.encoded_size += encoded_size;
 	}
 
+	/// Record actual trie level value access.
+	pub fn access_from(&self, _key: &Hash) {
+// TODO with new meta
+//		self.inner.write().entry(key[..].to_vec())
+//			.and_modify(|entry| entry.1.set_accessed_value(true));
+	}
+
 	/// Returns the value at the given `key`.
-	pub fn get(&self, key: &Hash) -> Option<Option<DBValue>> {
+	pub fn get(&self, key: &Hash) -> Option<Option<(DBValue, TrieMeta)>> {
 		self.inner.read().records.get(key).cloned()
 	}
 
@@ -159,7 +168,7 @@ impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 		let trie_nodes = self.inner.read()
 			.records
 			.iter()
-			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
+			.filter_map(|(_k, v)| v.as_ref().map(|v| v.0.to_vec()))
 			.collect();
 
 		StorageProof::new(trie_nodes)

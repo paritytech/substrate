@@ -24,7 +24,7 @@ use lazy_static::lazy_static;
 use rand::Rng;
 use hash_db::Prefix;
 use sp_state_machine::Backend as _;
-use sp_trie::{trie_types::TrieDBMut, TrieMut as _};
+use sp_trie::{trie_types::TrieDBMut, TrieMut as _, TrieMeta, MetaHasher, StateHasher};
 
 use node_primitives::Hash;
 
@@ -117,6 +117,7 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 		let mut rng = rand::thread_rng();
 		let warmup_prefix = KUSAMA_STATE_DISTRIBUTION.key(&mut rng);
 
+		// TODO flag trie for hash of value.
 		let mut key_values = KeyValues::new();
 		let mut warmup_keys = KeyValues::new();
 		let mut query_keys = KeyValues::new();
@@ -169,9 +170,15 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 struct Storage(Arc<dyn KeyValueDB>);
 
 impl sp_state_machine::Storage<sp_core::Blake2Hasher> for Storage {
-	fn get(&self, key: &Hash, prefix: Prefix) -> Result<Option<Vec<u8>>, String> {
+	fn get(&self, key: &Hash, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(Vec<u8>, TrieMeta)>, String> {
 		let key = sp_trie::prefixed_key::<sp_core::Blake2Hasher>(key, prefix);
 		self.0.get(0, &key).map_err(|e| format!("Database backend error: {:?}", e))
+			.map(|result| result
+				.map(|value| <StateHasher as MetaHasher<sp_core::Blake2Hasher, _>>::extract_value_owned(value, parent))
+			)
+	}
+
+	fn access_from(&self, _key: &Hash) {
 	}
 }
 

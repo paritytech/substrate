@@ -43,7 +43,9 @@ type Result<V> = sp_std::result::Result<V, crate::DefaultError>;
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get a trie node.
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
+	fn get(&self, key: &H::Out, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>>;
+	/// Call back when value get accessed in trie.
+	fn access_from(&self, key: &H::Out);
 }
 
 /// Patricia trie-based pairs storage essence.
@@ -129,7 +131,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: Option<&ChildInfo>,
 		key: &[u8],
 	) -> Result<Option<StorageKey>> {
-		let dyn_eph: &dyn hash_db::HashDBRef<_, _>;
+		let dyn_eph: &dyn hash_db::HashDBRef<_, _, _>;
 		let keyspace_eph;
 		if let Some(child_info) = child_info.as_ref() {
 			keyspace_eph = KeySpacedDB::new(self, child_info.keyspace());
@@ -386,8 +388,7 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>> {
-		// TODO get impl from memorydb
-		Storage::<H>::get(self.deref(), key, prefix)
+		Storage::<H>::get(self.deref(), key, prefix, parent)
 	}
 
 	fn access_from(&self, key: &H::Out) {
@@ -399,8 +400,8 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 	type Overlay = PrefixedMemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<(DBValue, TrieMeta)>> {
-		Ok(hash_db::HashDB::get_with_meta(self, key, prefix))
+	fn get(&self, key: &H::Out, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>> {
+		Ok(hash_db::HashDB::get_with_meta(self, key, prefix, parent))
 	}
 
 	fn access_from(&self, key: &H::Out) {
@@ -411,8 +412,8 @@ impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 	type Overlay = MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<(DBValue, TrieMeta)>> {
-		Ok(hash_db::HashDB::get_with_meta(self, key, prefix))
+	fn get(&self, key: &H::Out, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>> {
+		Ok(hash_db::HashDB::get_with_meta(self, key, prefix, parent))
 	}
 
 	fn access_from(&self, key: &H::Out) {
@@ -431,14 +432,14 @@ impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue, TrieMeta>
 	for TrieBackendEssence<S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		self.get_with_meta(key, prefix).map(|r| r.0)
+		self.get_with_meta(key, prefix, None).map(|r| r.0)
 	}
 
-	fn get_with_meta(&self, key: &H::Out, prefix: Prefix) -> Option<(DBValue, TrieMeta)> {
+	fn get_with_meta(&self, key: &H::Out, prefix: Prefix, parent: Option<&TrieMeta>) -> Option<(DBValue, TrieMeta)> {
 		if *key == self.empty {
 			return Some(([0u8].to_vec(), <TrieMeta as trie_db::Meta>::meta_for_empty()))
 		}
-		match self.storage.get(&key, prefix) {
+		match self.storage.get(&key, prefix, parent) {
 			Ok(x) => x,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read from DB: {}", e);

@@ -594,7 +594,7 @@ mod tests {
 				let mut memdb = MemoryDBMeta::<_, T::MetaHasher>::default();
 				let mut root = Default::default();
 				// TODO test flagged
-				let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root, layout);
+				let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root);
 				for (x, y) in input.iter().rev() {
 					t.insert(x, y).unwrap();
 				}
@@ -605,18 +605,16 @@ mod tests {
 	}
 
 	fn check_iteration<T: TrieConfiguration>(input: &Vec<(&[u8], &[u8])>) {
-		// TODO test flagged
-		let layout = T::default();
 		let mut memdb = MemoryDBMeta::<_, T::MetaHasher>::default();
 		let mut root = Default::default();
 		{
-			let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root, layout.clone());
+			let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root);
 			for (x, y) in input.clone() {
 				t.insert(x, y).unwrap();
 			}
 		}
 		{
-			let t = TrieDB::<T>::new(&mut memdb, &root, layout).unwrap();
+			let t = TrieDB::<T>::new(&mut memdb, &root).unwrap();
 			assert_eq!(
 				input.iter().map(|(i, j)| (i.to_vec(), j.to_vec())).collect::<Vec<_>>(),
 				t.iter().unwrap()
@@ -628,14 +626,12 @@ mod tests {
 
 	#[test]
 	fn default_trie_root() {
-		// TODO test flagged
-		let layout = Layout::default();
 		let mut db = MemoryDB::default();
 		let mut root = TrieHash::<Layout>::default();
 		let mut empty = TrieDBMut::<Layout>::new(&mut db, &mut root);
 		empty.commit();
 		let root1 = empty.root().as_ref().to_vec();
-		let root2: Vec<u8> = layout.trie_root::<_, Vec<u8>, Vec<u8>>(
+		let root2: Vec<u8> = Layout::default().trie_root::<_, Vec<u8>, Vec<u8>>(
 			std::iter::empty(),
 		).as_ref().iter().cloned().collect();
 
@@ -737,14 +733,13 @@ mod tests {
 		check_iteration::<Layout>(&input);
 	}
 
+	// TODO add flag
 	fn populate_trie<'db, T: TrieConfiguration>(
 		db: &'db mut dyn HashDB<T::Hash, DBValue, T::Meta>,
 		root: &'db mut TrieHash<T>,
-		layout: T,
 		v: &[(Vec<u8>, Vec<u8>)]
 	) -> TrieDBMut<'db, T> {
-		// TODO test non default layout
-		let mut t = TrieDBMut::<T>::new_with_layout(db, root, layout);
+		let mut t = TrieDBMut::<T>::new(db, root);
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -783,7 +778,7 @@ mod tests {
 			let real = layout.trie_root(x.clone());
 			let mut memdb = MemoryDB::default();
 			let mut root = Default::default();
-			let mut memtrie = populate_trie::<Layout>(&mut memdb, &mut root, layout, &x);
+			let mut memtrie = populate_trie::<Layout>(&mut memdb, &mut root, &x);
 
 			memtrie.commit();
 			if *memtrie.root() != real {
@@ -875,13 +870,11 @@ mod tests {
 			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
 		];
 
-		// TODO test non default layout
-		let layout = Layout::default();
 		let mut mdb = MemoryDB::default();
 		let mut root = Default::default();
-		let _ = populate_trie::<Layout>(&mut mdb, &mut root, layout.clone(), &pairs);
+		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs);
 
-		let trie = TrieDB::<Layout>::new_with_layout(&mdb, &root, layout).unwrap();
+		let trie = TrieDB::<Layout>::new(&mdb, &root).unwrap();
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();
@@ -980,8 +973,6 @@ mod tests {
 */
 	#[test]
 	fn generate_storage_root_with_proof_works_independently_from_the_delta_order() {
-		// TODO use old format.
-		let layout = Layout::default();
 		let proof = StorageProof::decode(&mut &include_bytes!("../test-res/proof")[..]).unwrap();
 		let storage_root = sp_core::H256::decode(
 			&mut &include_bytes!("../test-res/storage_root")[..],
@@ -996,14 +987,12 @@ mod tests {
 		).unwrap();
 
 		let proof_db = proof.into_memory_db::<Blake2Hasher>();
-		let first_storage_root = delta_trie_root(
-			layout.clone(),
+		let first_storage_root = delta_trie_root::<Layout, _, _, _, _, _>(
 			&mut proof_db.clone(),
 			storage_root,
 			valid_delta,
 		).unwrap();
-		let second_storage_root = delta_trie_root(
-			layout,
+		let second_storage_root = delta_trie_root::<Layout, _, _, _, _, _>(
 			&mut proof_db.clone(),
 			storage_root,
 			invalid_delta,
