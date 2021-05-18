@@ -61,6 +61,8 @@ pub fn process_generics(def: &mut Def) {
 			syn::parse_quote!(#frame_support::storage::types::OptionQuery);
 		let default_on_empty: syn::Type =
 			syn::parse_quote!(#frame_support::traits::GetDefault);
+		let default_max_values: syn::Type =
+			syn::parse_quote!(#frame_support::traits::GetDefault);
 
 		if let Some(named_generics) = storage_def.named_generics.clone() {
 			args.args.clear();
@@ -73,7 +75,7 @@ pub fn process_generics(def: &mut Def) {
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
 					args.args.push(syn::GenericArgument::Type(on_empty));
 				}
-				StorageGenerics::Map { hasher, key, value, query_kind, on_empty } => {
+				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values } => {
 					args.args.push(syn::GenericArgument::Type(hasher));
 					args.args.push(syn::GenericArgument::Type(key));
 					args.args.push(syn::GenericArgument::Type(value));
@@ -81,9 +83,11 @@ pub fn process_generics(def: &mut Def) {
 					args.args.push(syn::GenericArgument::Type(query_kind));
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
 					args.args.push(syn::GenericArgument::Type(on_empty));
+					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					args.args.push(syn::GenericArgument::Type(max_values));
 				}
 				StorageGenerics::DoubleMap {
-					hasher1, key1, hasher2, key2, value, query_kind, on_empty,
+					hasher1, key1, hasher2, key2, value, query_kind, on_empty, max_values,
 				} => {
 					args.args.push(syn::GenericArgument::Type(hasher1));
 					args.args.push(syn::GenericArgument::Type(key1));
@@ -94,16 +98,18 @@ pub fn process_generics(def: &mut Def) {
 					args.args.push(syn::GenericArgument::Type(query_kind));
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
 					args.args.push(syn::GenericArgument::Type(on_empty));
+					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					args.args.push(syn::GenericArgument::Type(max_values));
 				}
-				StorageGenerics::NMap {
-					keygen, value, query_kind, on_empty,
-				} => {
+				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values, } => {
 					args.args.push(syn::GenericArgument::Type(keygen));
 					args.args.push(syn::GenericArgument::Type(value));
 					let query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
 					args.args.push(syn::GenericArgument::Type(query_kind));
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
 					args.args.push(syn::GenericArgument::Type(on_empty));
+					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					args.args.push(syn::GenericArgument::Type(max_values));
 				}
 			}
 		} else {

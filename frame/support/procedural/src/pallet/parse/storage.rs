@@ -117,6 +117,7 @@ pub enum StorageGenerics {
 		value: syn::Type,
 		query_kind: Option<syn::Type>,
 		on_empty: Option<syn::Type>,
+		max_values: Option<syn::Type>,
 	},
 	Map {
 		hasher: syn::Type,
@@ -124,6 +125,7 @@ pub enum StorageGenerics {
 		value: syn::Type,
 		query_kind: Option<syn::Type>,
 		on_empty: Option<syn::Type>,
+		max_values: Option<syn::Type>,
 	},
 	Value {
 		value: syn::Type,
@@ -135,6 +137,7 @@ pub enum StorageGenerics {
 		value: syn::Type,
 		query_kind: Option<syn::Type>,
 		on_empty: Option<syn::Type>,
+		max_values: Option<syn::Type>,
 	},
 }
 
@@ -277,7 +280,7 @@ fn process_named_generics(
 			check_generics(
 				&parsed,
 				&["Hasher", "Key", "Value"],
-				&["QueryKind", "OnEmpty"],
+				&["QueryKind", "OnEmpty", "MaxValues"],
 				"StorageMap",
 				args_span,
 			)?;
@@ -292,17 +295,16 @@ fn process_named_generics(
 				value: parsed.remove("Value")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				query_kind: parsed.remove("QueryKind")
-					.map(|binding| binding.ty),
-				on_empty: parsed.remove("OnEmpty")
-					.map(|binding| binding.ty),
+				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
+				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
+				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
 			}
 		}
 		StorageKind::DoubleMap => {
 			check_generics(
 				&parsed,
 				&["Hasher1", "Key1", "Hasher2", "Key2", "Value"],
-				&["QueryKind", "OnEmpty"],
+				&["QueryKind", "OnEmpty", "MaxValues"],
 				"StorageDoubleMap",
 				args_span,
 			)?;
@@ -323,17 +325,16 @@ fn process_named_generics(
 				value: parsed.remove("Value")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				query_kind: parsed.remove("QueryKind")
-					.map(|binding| binding.ty),
-				on_empty: parsed.remove("OnEmpty")
-					.map(|binding| binding.ty),
+				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
+				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
+				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
 			}
 		}
 		StorageKind::NMap => {
 			check_generics(
 				&parsed,
 				&["Key", "Value"],
-				&["QueryKind", "OnEmpty"],
+				&["QueryKind", "OnEmpty", "MaxValues"],
 				"StorageNMap",
 				args_span,
 			)?;
@@ -345,10 +346,9 @@ fn process_named_generics(
 				value: parsed.remove("Value")
 					.map(|binding| binding.ty)
 					.expect("checked above as mandatory generic"),
-				query_kind: parsed.remove("QueryKind")
-					.map(|binding| binding.ty),
-				on_empty: parsed.remove("OnEmpty")
-					.map(|binding| binding.ty),
+				query_kind: parsed.remove("QueryKind").map(|binding| binding.ty),
+				on_empty: parsed.remove("OnEmpty").map(|binding| binding.ty),
+				max_values: parsed.remove("MaxValues").map(|binding| binding.ty),
 			}
 		}
 	};
