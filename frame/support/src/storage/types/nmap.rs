@@ -358,7 +358,7 @@ for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty> where
 
 	fn ty() -> StorageEntryType {
 		StorageEntryType::NMap {
-			keys: scale_info::meta_type::<Key::Key>(),
+			keys: scale_info::meta_type::<Key::KArg>(),
 			hashers: Key::HASHER_METADATA.iter().cloned().collect(),
 			value: scale_info::meta_type::<Value>(),
 		}

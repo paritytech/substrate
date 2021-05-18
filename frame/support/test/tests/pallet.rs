@@ -891,6 +891,28 @@ fn metadata() {
 						default: vec![0],
 						documentation: vec![],
 					},
+					StorageEntryMetadata {
+						name: "NMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::NMap {
+							keys: scale_info::meta_type::<(u8,)>(),
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							value: scale_info::meta_type::<u32>(),
+						},
+						default: vec![0],
+						documentation: vec![],
+					},
+					StorageEntryMetadata {
+						name: "NMap2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::NMap {
+							keys: scale_info::meta_type::<(u16, u32)>(),
+							hashers: vec![StorageHasher::Twox64Concat, StorageHasher::Blake2_128Concat],
+							value: scale_info::meta_type::<u64>(),
+						},
+						default: vec![0],
+						documentation: vec![],
+					},
 					#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
 						name: "ConditionalValue",
 						modifier: StorageEntryModifier::Optional,
@@ -919,6 +941,17 @@ fn metadata() {
 							key2: scale_info::meta_type::<u16>(),
 							hasher: StorageHasher::Blake2_128Concat,
 							key2_hasher: StorageHasher::Twox64Concat,
+						},
+						default: vec![0],
+						documentation: vec![],
+					},
+					#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+						name: "ConditionalNMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::NMap {
+							keys: scale_info::meta_type::<(u8, u16)>(),
+							hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+							value: scale_info::meta_type::<u32>(),
 						},
 						default: vec![0],
 						documentation: vec![],

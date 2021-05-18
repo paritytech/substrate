@@ -37,13 +37,13 @@ pub struct Key<Hasher, KeyType>(core::marker::PhantomData<(Hasher, KeyType)>);
 /// A trait that contains the current key as an associated type.
 pub trait KeyGenerator {
 	type Key: EncodeLike<Self::Key> + TypeInfo + 'static;
-	type KArg: Encode;
+	type KArg: Encode + TypeInfo + 'static;
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
 
 	const HASHER_METADATA: &'static [crate::metadata::StorageHasher];
 
-	/// Given a `key` tuple, calculate the final key by encoding each element individuallly and
+	/// Given a `key` tuple, calculate the final key by encoding each element individually and
 	/// hashing them using the corresponding hasher in the `KeyGenerator`.
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
 	/// Given a `key` tuple, migrate the keys from using the old hashers as given by `hash_fns`
