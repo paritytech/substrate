@@ -26,6 +26,9 @@ use sp_runtime::{offchain::{
 use codec::Encode;
 use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
+// pub use pallet_contracts_rpc_runtime_api::{
+// 	self as runtime_api, ContractExecResult, ContractsApi as ContractsRuntimeApi,
+// };
 use alt_serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use hex_literal::hex;
 use log::{info, warn, error};
@@ -40,10 +43,10 @@ use alloc::string::String;
 pub const METRICS_CONTRACT_ADDR: &str = "5EFhuVjnUTH4fkvapxyXqkfmANQWFVGZtmkHd4GaWmhgrCLS";
 // address params: no salt, symbol: CERE, endowement: 1000
 pub const METRICS_CONTRACT_ID: [u8; 32] = [96, 220, 84, 153, 65, 96, 13, 180, 40, 98, 142, 110, 218, 127, 9, 17, 182, 152, 78, 174, 24, 37, 26, 27, 128, 215, 170, 18, 3, 3, 69, 60];
-pub const BLOCK_INTERVAL: u32 = 200; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
+pub const BLOCK_INTERVAL: u32 = 10; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
-
+pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
 
 // Specifying serde path as `alt_serde`
 // ref: https://serde.rs/container-attrs.html#crate
@@ -239,7 +242,18 @@ impl<T: Trait> Module<T> {
             return Ok(());
         }
 
-        let day_start_ms = Self::get_start_of_day_ms();
+        // let day_start_ms = Self::get_start_of_day_ms();
+
+        // Use API
+        // let contract_id = T::ContractId::get();
+        // let day_start = pallet_contracts_rpc_runtime_api::ContractsApi::get_storage(&block_number, contract_id, CURRENT_PERIOD_MS);
+        // info!("[OCW] pallet_contracts_rpc_runtime_api: {:?}", day_start);
+
+        let day_start_ms = Self::sc_get_current_period_ms(&signer)
+        .map_err(|err| {
+            error!("[OCW] Contract error occurred: {:?}", err);
+            "Could not submit get_current_period_ms TX"
+        })?;
 
         let aggregated_metrics = Self::fetch_all_metrics(day_start_ms)
             .map_err(|err| {
@@ -296,6 +310,37 @@ impl<T: Trait> Module<T> {
             return Err("[OCW] No local accounts available. Consider adding one via `author_insertKey` RPC.");
         }
         Ok(signer)
+    }
+
+    fn sc_get_current_period_ms(
+        signer: &Signer::<T::CST, T::AuthorityId>,
+    ) -> ResultStr<(u64)> {
+        let contract_id = T::ContractId::get();
+        info!("[OCW] sc_get_current_period_ms - Contract Address: {:?}", contract_id);
+
+        let results = signer.send_signed_transaction(
+            |account| {
+                info!("[OCW] Sending transactions get_current_period_ms");
+
+                let call_data = Self::encode_get_current_period_ms();
+                pallet_contracts::Call::call(
+                    contract_id.clone(),
+                    0u32.into(),
+                    100_000_000_000,
+                    call_data,
+                )
+            }
+        );
+
+        let ret_val = match &results {
+            None | Some((_, Err(()))) =>
+                return Err("Error while submitting TX to SC"),
+            Some((_, Ok(()))) => {}
+        };
+
+        let ret: u64 = 38_988_004; // TODO: get from ret_val
+
+        Ok((ret))
     }
 
     fn send_metrics_to_sc(
@@ -419,6 +464,12 @@ impl<T: Trait> Module<T> {
         Ok(response.body().collect::<Vec<u8>>())
     }
 
+    /// Prepare get_current_period_ms call params.
+    /// Must match the contract function here: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs
+    fn encode_get_current_period_ms() -> Vec<u8> {
+        CURRENT_PERIOD_MS.to_vec()
+    }
+
     /// Prepare report_metrics call params.
     /// Must match the contract function here: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs
     fn encode_report_metrics(
@@ -445,6 +496,7 @@ impl<T: Trait> Module<T> {
             .map_err(|_| "invalid hex address.")?;
         Ok(AccountId32::from(bytes))
     }
+
 }
 
 #[derive(Default)]
