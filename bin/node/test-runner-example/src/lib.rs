@@ -61,7 +61,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 		Self::SelectChain,
 	>;
 	type SignedExtras = node_runtime::SignedExtra;
-	type InherentDataProviders = SlotTimestampProvider;
+	type InherentDataProviders = (SlotTimestampProvider, sp_consensus_babe::inherents::InherentDataProvider);
 
 	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras {
 		(
@@ -143,9 +143,9 @@ impl ChainInfo for NodeTemplateChainInfo {
 			keystore.sync_keystore(),
 			task_manager,
 			Box::new(|_, client| async move {
-				let provider = SlotTimestampProvider::new(client)
-					.map_err(|err| format!("{:?}", err))?;
-				Ok(provider)
+				let provider = SlotTimestampProvider::new(client).map_err(|err| format!("{:?}", err))?;
+				let babe = sp_consensus_babe::inherents::InherentDataProvider::new(provider.slot().into());
+				Ok((provider, babe))
 			}),
 			Some(Box::new(consensus_data_provider)),
 			select_chain,
