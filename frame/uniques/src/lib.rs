@@ -1022,7 +1022,7 @@ pub mod pallet {
 				});
 
 				Class::<T, I>::insert(&class, &class_details);
-				Self::deposit_event(Event::MetadataSet(class, name, info, false));
+				Self::deposit_event(Event::MetadataSet(class, name, info, is_frozen));
 				Ok(())
 			})
 		}
