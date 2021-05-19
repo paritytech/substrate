@@ -407,9 +407,6 @@ pub mod pallet2 {
 /// Test that the supertrait check works when we pass some parameter to the `frame_system::Config`.
 #[frame_support::pallet]
 pub mod pallet3 {
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
-
 	#[pallet::config]
 	pub trait Config: frame_system::Config<Origin = ()> {}
 
