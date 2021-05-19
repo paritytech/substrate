@@ -99,7 +99,7 @@ impl Meta for TrieMeta {
 	}
 
 	fn write_state_meta(&self) -> Vec<u8> {
-		if self.do_value_hash {
+		if self.recorded_do_value_hash {
 			// Note that this only works with sp_trie codec that
 			// cannot encode node starting by this byte.
 			[trie_constants::ENCODED_META_ALLOW_HASH].to_vec()
@@ -199,34 +199,39 @@ impl TrieMeta {
 }
 
 /// substrate trie layout
-pub struct Layout<H>(sp_std::marker::PhantomData<H>);
+pub struct Layout<H, M>(sp_std::marker::PhantomData<(H, M)>);
 
-impl<H> fmt::Debug for Layout<H> {
+impl<H, M> fmt::Debug for Layout<H, M> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_struct("Layout").finish()
 	}
 }
 
-impl<H> Default for Layout<H> {
+impl<H, M> Default for Layout<H, M> {
 	fn default() -> Self {
 		Layout(sp_std::marker::PhantomData)
 	}
 }
 
-impl<H> Clone for Layout<H> {
+impl<H, M> Clone for Layout<H, M> {
 	fn clone(&self) -> Self {
 		Layout(sp_std::marker::PhantomData)
 	}
 }
 
-impl<H: Hasher> TrieLayout for Layout<H> {
+impl<H, M> TrieLayout for Layout<H, M>
+	where
+		H: Hasher,
+		M: MetaHasher<H, DBValue>,
+		M::Meta: Meta<MetaInput = ()>,
+{
 	const USE_EXTENSION: bool = false;
 	const ALLOW_EMPTY: bool = true;
 	const USE_META: bool = true;
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
-	type MetaHasher = StateHasher;
-	type Meta = TrieMeta;
+	type MetaHasher = M;
+	type Meta = M::Meta;
 
 	fn metainput_for_new_node(&self) -> <Self::Meta as Meta>::MetaInput {
 		()
@@ -236,8 +241,7 @@ impl<H: Hasher> TrieLayout for Layout<H> {
 	}
 }
 
-/// Reimplement `NoMeta` `MetaHasher` with
-/// additional constraint.
+/// Hasher with support to meta.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StateHasher;
 
@@ -328,7 +332,45 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 	}
 }
 
-impl<H: Hasher> TrieConfiguration for Layout<H> {
+/// Reimplement `NoMeta` `MetaHasher` with
+/// additional constraint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NoMetaHasher;
+
+impl<H> MetaHasher<H, DBValue> for NoMetaHasher 
+	where
+		H: Hasher,
+{
+	type Meta = TrieMeta;
+
+	fn hash(value: &[u8], _meta: &Self::Meta) -> H::Out {
+		H::hash(value)
+	}
+
+	fn stored_value(value: &[u8], _meta: Self::Meta) -> DBValue {
+		value.to_vec()
+	}
+
+	fn stored_value_owned(value: DBValue, _meta: Self::Meta) -> DBValue {
+		value
+	}
+
+	fn extract_value<'a>(stored: &'a [u8], _parent_meta: Option<&Self::Meta>) -> (&'a [u8], Self::Meta) {
+		(stored, Default::default())
+	}
+
+	fn extract_value_owned(stored: DBValue, _parent_meta: Option<&Self::Meta>) -> (DBValue, Self::Meta) {
+		(stored, Default::default())
+	}
+}
+
+
+impl<H, M> TrieConfiguration for Layout<H, M>
+	where
+		H: Hasher,
+		M: MetaHasher<H, DBValue>,
+		M::Meta: Meta<MetaInput = ()>,
+{
 	fn trie_root<I, A, B>(&self, input: I) -> <Self::Hash as Hasher>::Out where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
@@ -374,14 +416,20 @@ pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<
 pub type MemoryDB<H> = memory_db::MemoryDB<
 	H, memory_db::HashKey<H>, trie_db::DBValue, StateHasher, MemTracker,
 >;
+/// Reexport from `hash_db`, with genericity set for `Hasher` trait.
+/// This uses a noops `KeyFunction` (key addressing must be hashed or using
+/// an encoding scheme that avoid key conflict).
+pub type MemoryDBNoMeta<H> = memory_db::MemoryDB<
+	H, memory_db::HashKey<H>, trie_db::DBValue, NoMetaHasher, MemTracker,
+>;
 /// MemoryDB with specific meta hasher.
 pub type MemoryDBMeta<H, M> = memory_db::MemoryDB<
 	H, memory_db::HashKey<H>, trie_db::DBValue, M, MemTracker,
 >;
 
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<
-	H, KF, trie_db::DBValue, StateHasher, MemTracker
+pub type GenericMemoryDB<H, KF, MH> = memory_db::MemoryDB<
+	H, KF, trie_db::DBValue, MH, MemTracker
 >;
 
 /// Persistent trie database read-access interface for the a given hasher.
@@ -395,11 +443,18 @@ pub type TrieHash<L> = <<L as TrieLayout>::Hash as Hasher>::Out;
 /// This module is for non generic definition of trie type.
 /// Only the `Hasher` trait is generic in this case.
 pub mod trie_types {
-	pub type Layout<H> = super::Layout<H>;
+	/// State layout.
+	pub type Layout<H> = super::Layout<H, super::StateHasher>;
+	/// Old state layout definition, do not use meta, do not
+	/// do internal value hashing.
+	pub type LayoutNoMeta<H> = super::Layout<H, super::NoMetaHasher>;
 	/// Persistent trie database read-access interface for the a given hasher.
 	pub type TrieDB<'a, H> = super::TrieDB<'a, Layout<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
 	pub type TrieDBMut<'a, H> = super::TrieDBMut<'a, Layout<H>>;
+	/// Persistent trie database write-access interface for the a given hasher,
+	/// old layout.
+	pub type TrieDBMutNoMeta<'a, H> = super::TrieDBMut<'a, LayoutNoMeta<H>>;
 	/// Querying interface, as in `trie_db` but less generic.
 	pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, Layout<H>, Q>;
 	/// As in `trie_db`, but less generic, error type for the crate.
@@ -854,7 +909,7 @@ pub fn estimate_entry_size(entry: &(DBValue, TrieMeta), hash_len: usize) -> usiz
 pub fn resolve_encoded_meta<H: Hasher>(entry: &mut (DBValue, TrieMeta)) {
 	use trie_db::NodeCodec;
 	if entry.1.do_value_hash {
-		let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(entry.0.as_slice(), &mut entry.1);
+		let _ = <trie_types::Layout::<H> as TrieLayout>::Codec::decode_plan(entry.0.as_slice(), &mut entry.1);
 	}
 }
 
@@ -884,7 +939,7 @@ mod tests {
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
 	use hex_literal::hex;
 
-	type Layout = super::Layout<Blake2Hasher>;
+	type Layout = super::trie_types::Layout<Blake2Hasher>;
 
 	fn hashed_null_node<T: TrieConfiguration>() -> TrieHash<T> {
 		<T::Codec as NodeCodecT<T::Meta>>::hashed_null_node()

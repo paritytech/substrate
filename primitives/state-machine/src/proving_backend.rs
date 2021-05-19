@@ -174,12 +174,15 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	}
 
 	/// Convert into a [`StorageProof`].
-	pub fn to_storage_proof(&self) -> StorageProof {
-		// TODO serialize meta.
+	pub fn to_storage_proof<H: Hasher>(&self) -> StorageProof {
 		let trie_nodes = self.inner.read()
 			.records
 			.iter()
-			.filter_map(|(_k, v)| v.as_ref().map(|v| v.0.to_vec()))
+			.filter_map(|(_k, v)| v.as_ref().map(|v| {
+				<
+					<Layout::<H> as sp_trie::TrieLayout>::MetaHasher as hash_db::MetaHasher<H, _>
+				>::stored_value(v.0.as_slice(), v.1.clone())
+			}))
 			.collect();
 
 		StorageProof::new(trie_nodes)
@@ -230,7 +233,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
-		self.0.essence().backend_storage().proof_recorder.to_storage_proof()
+		self.0.essence().backend_storage().proof_recorder.to_storage_proof::<H>()
 	}
 }
 
@@ -443,31 +446,31 @@ mod tests {
 	}
 
 	#[test]
-	fn proof_recorded_and_checked() {
-		proof_recorded_and_checked_inner(false, false);
-		proof_recorded_and_checked_inner(false, true);
-		proof_recorded_and_checked_inner(true, false);
-		proof_recorded_and_checked_inner(true, true);
+	fn proof_recorded_and_checked_top() {
+		proof_recorded_and_checked_inner(true);
+		proof_recorded_and_checked_inner(false);
 	}
-	fn proof_recorded_and_checked_inner(flagged: bool, do_flag: bool) {
-		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
+	fn proof_recorded_and_checked_inner(flagged: bool) {
+		let size_content = 33; // above hashable value treshold.
+		let value_range = 0..64;
+		let contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)], flagged);
-		let in_memory_root = in_memory.storage_root(std::iter::empty(), do_flag).0;
-		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
+		let in_memory_root = in_memory.storage_root(std::iter::empty(), flagged).0;
+		value_range.clone().for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(std::iter::empty(), do_flag).0;
+		let trie_root = trie.storage_root(std::iter::empty(), flagged).0;
 		assert_eq!(in_memory_root, trie_root);
-		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
+		value_range.clone().for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
 		let proving = ProvingBackend::new(trie);
-		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
+		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
 
 		let proof = proving.extract_proof();
 
 		let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
-		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
+		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
 	}
 
 	#[test]

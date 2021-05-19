@@ -58,7 +58,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 			let backend_value = self.db.get(0, &prefixed_key)
 				.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, parent)))
 				.map_err(|e| format!("Database backend error: {:?}", e))?;
-			recorder.record(key.clone(), backend_value.clone(), HashFor::<Block>::LENGTH);
+			recorder.record::<HashFor<Block>>(key.clone(), backend_value.clone());
 			Ok(backend_value)
 		} else {
 			self.db.get(0, &prefixed_key)

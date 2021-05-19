@@ -65,8 +65,8 @@ use sp_blockchain::{
 };
 use codec::{Decode, Encode};
 use hash_db::Prefix;
-use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key, StateHasher, TrieMeta,
-	MetaHasher};
+use sp_trie::{MemoryDB, MemoryDBNoMeta, PrefixedMemoryDB, prefixed_key, StateHasher,
+	TrieMeta, MetaHasher};
 use sp_database::Transaction;
 use sp_core::{Hasher, ChangesTrieConfiguration};
 use sp_core::offchain::OffchainOverlayedChange;
@@ -690,7 +690,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	offchain_storage_updates: OffchainChangesCollection,
-	changes_trie_updates: MemoryDB<HashFor<Block>>,
+	changes_trie_updates: MemoryDBNoMeta<HashFor<Block>>,
 	changes_trie_build_cache_update: Option<ChangesTrieCacheAction<Block::Hash, NumberFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	pending_block: Option<PendingBlock<Block>>,
@@ -1731,7 +1731,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			child_storage_updates: Default::default(),
 			offchain_storage_updates: Default::default(),
 			changes_trie_config_update: None,
-			changes_trie_updates: MemoryDB::default(),
+			changes_trie_updates: MemoryDBNoMeta::default(),
 			changes_trie_build_cache_update: None,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
@@ -2158,9 +2158,9 @@ pub(crate) mod tests {
 
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
-	pub fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<BlakeTwo256>) {
+	pub fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDBNoMeta<BlakeTwo256>) {
 		let mut changes_root = H256::default();
-		let mut changes_trie_update = MemoryDB::<BlakeTwo256>::default();
+		let mut changes_trie_update = MemoryDBNoMeta::<BlakeTwo256>::default();
 		{
 			let mut trie = TrieDBMut::<BlakeTwo256>::new(
 				&mut changes_trie_update,

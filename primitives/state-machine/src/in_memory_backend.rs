@@ -22,7 +22,7 @@ use crate::{
 };
 use std::collections::{BTreeMap, HashMap};
 use hash_db::Hasher;
-use sp_trie::{MemoryDB, empty_trie_root, Layout};
+use sp_trie::{MemoryDB, empty_trie_root, trie_types::Layout};
 use codec::Codec;
 use sp_core::storage::{ChildInfo, Storage};
 

@@ -114,9 +114,9 @@ fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 #[cfg(test)]
 mod tests {
 	use std::collections::HashSet;
-	use sp_trie::MemoryDB;
+	use sp_trie::MemoryDBNoMeta as MemoryDB;
 	use sp_core::H256;
-	use crate::backend::insert_into_memory_db;
+	use crate::backend::insert_into_memory_db_no_meta as insert_into_memory_db;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use codec::Encode;
 	use sp_runtime::traits::BlakeTwo256;

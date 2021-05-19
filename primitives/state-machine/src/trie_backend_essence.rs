@@ -23,7 +23,7 @@ use std::sync::Arc;
 use sp_std::{ops::Deref, boxed::Box, vec::Vec};
 use crate::{warn, debug};
 use hash_db::{self, Hasher, Prefix};
-use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
+use sp_trie::{Trie, PrefixedMemoryDB, DBValue,
 	empty_child_trie_root, read_trie_value, read_child_trie_value,
 	for_keys_in_child_trie, KeySpacedDB, TrieDBIterator, TrieMeta};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
@@ -396,21 +396,13 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	}
 }
 
-// This implementation is used by test storage trie clients.
-impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
-	type Overlay = PrefixedMemoryDB<H>;
-
-	fn get(&self, key: &H::Out, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>> {
-		Ok(hash_db::HashDB::get_with_meta(self, key, prefix, parent))
-	}
-
-	fn access_from(&self, key: &H::Out) {
-		hash_db::HashDB::access_from(self, key, None);
-	}
-}
-
-impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
-	type Overlay = MemoryDB<H>;
+impl<H, KF, MH> TrieBackendStorage<H> for sp_trie::GenericMemoryDB<H, KF, MH>
+	where
+		H: Hasher,
+		MH: sp_trie::MetaHasher<H, sp_trie::DBValue, Meta = TrieMeta>,
+		KF: sp_trie::KeyFunction<H> + Send + Sync,
+{
+	type Overlay = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>> {
 		Ok(hash_db::HashDB::get_with_meta(self, key, prefix, parent))

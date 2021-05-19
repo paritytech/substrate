@@ -143,7 +143,8 @@ mod changes_trie {
 
 #[cfg(feature = "std")]
 mod std_reexport {
-	pub use sp_trie::{trie_types::{Layout, TrieDBMut}, StorageProof, TrieMut, DBValue, MemoryDB};
+	pub use sp_trie::{trie_types::{Layout, TrieDBMut}, StorageProof, TrieMut,
+		DBValue, MemoryDB, MemoryDBNoMeta};
 	pub use crate::testing::TestExternalities;
 	pub use crate::basic::BasicExternalities;
 	pub use crate::read_only::{ReadOnlyExternalities, InspectState};
@@ -194,7 +195,7 @@ mod execution {
 
 	/// Type of changes trie transaction.
 	pub type ChangesTrieTransaction<H, N> = (
-		MemoryDB<H>,
+		MemoryDBNoMeta<H>,
 		ChangesTrieCacheAction<<H as Hasher>::Out, N>,
 	);
 
@@ -842,6 +843,20 @@ mod execution {
 	where
 		H: Hasher,
 		H::Out: Ord + Codec,
+	{
+		read_proof_check_on_proving_backend_generic(proving_backend, key)
+	}
+
+	/// Check storage read proof on pre-created proving backend.
+	pub fn read_proof_check_on_proving_backend_generic<H, KF, MH>(
+		proving_backend: &TrieBackend<sp_trie::GenericMemoryDB<H, KF, MH>, H>,
+		key: &[u8],
+	) -> Result<Option<Vec<u8>>, Box<dyn Error>>
+	where
+		H: Hasher,
+		H::Out: Ord + Codec,
+		MH: sp_trie::MetaHasher<H, sp_trie::DBValue, Meta = sp_trie::TrieMeta>,
+		KF: sp_trie::KeyFunction<H> + Send + Sync,
 	{
 		proving_backend.storage(key).map_err(|e| Box::new(e) as Box<dyn Error>)
 	}

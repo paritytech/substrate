@@ -32,8 +32,9 @@ use sp_trie;
 use sp_core::{H256, convert_hash};
 use sp_runtime::traits::{Header as HeaderT, AtLeast32Bit, Zero, One};
 use sp_state_machine::{
-	MemoryDB, TrieBackend, Backend as StateBackend, StorageProof, InMemoryBackend,
-	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend
+	MemoryDBNoMeta as MemoryDB, TrieBackend, Backend as StateBackend, StorageProof, InMemoryBackend,
+	prove_read_on_trie_backend, read_proof_check,
+	read_proof_check_on_proving_backend_generic as read_proof_check_on_proving_backend,
 };
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -171,7 +172,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 		local_number,
 		remote_hash,
 		|_, local_cht_key|
-			read_proof_check_on_proving_backend::<Hasher>(
+			read_proof_check_on_proving_backend::<Hasher, _, _>(
 				proving_backend,
 				local_cht_key,
 			).map_err(ClientError::from_state),

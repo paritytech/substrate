@@ -103,7 +103,7 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
 		use hash_db::MetaHasher;
 		use trie_db::NodeCodec;
-		use crate::{Layout, TrieLayout};
+		use crate::{trie_types::Layout, TrieLayout};
 		let mut db = crate::MemoryDB::default();
 		// Needed because we do not read trie structure, so
 		// we do a heuristic related to the fact that host function
@@ -119,12 +119,10 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 			let (encoded_node, mut meta) = <
 				<Layout::<H> as TrieLayout>::MetaHasher as MetaHasher<H, _>
 			>::extract_value(item.as_slice(), None);
-			if !is_hashed_value {
-				// read state meta.
-				let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(encoded_node, &mut meta);
-				if meta.recorded_do_value_hash {
-					is_hashed_value = true;
-				}
+			// read state meta.
+			let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(encoded_node, &mut meta);
+			if meta.recorded_do_value_hash {
+				is_hashed_value = true;
 			}
 			// TODO insert_with_meta here
 			accum.push((encoded_node, meta));
@@ -135,6 +133,16 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 				item.1.do_value_hash = true;
 			}
 			db.insert_with_meta(crate::EMPTY_PREFIX, item.0, item.1);
+		}
+		db
+	}
+}
+
+impl<H: Hasher> From<StorageProof> for crate::MemoryDBNoMeta<H> {
+	fn from(proof: StorageProof) -> Self {
+		let mut db = crate::MemoryDBNoMeta::default();
+		for item in proof.iter_nodes() {
+			db.insert(crate::EMPTY_PREFIX, &item);
 		}
 		db
 	}
