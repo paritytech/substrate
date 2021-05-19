@@ -4469,7 +4469,6 @@ dependencies = [
  "hex",
  "hex-literal",
  "lite-json",
- "log",
  "pallet-balances",
  "pallet-contracts",
  "pallet-randomness-collective-flip",

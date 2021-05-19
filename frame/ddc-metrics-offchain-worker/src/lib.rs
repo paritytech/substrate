@@ -15,7 +15,7 @@ use frame_system::{
     }
 };
 use frame_support::{
-	decl_module, decl_storage, decl_event,
+	decl_module, decl_storage, decl_event, debug::{info, warn, error}
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{offchain::{
@@ -28,7 +28,6 @@ use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
 use alt_serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use hex_literal::hex;
-use log::{info, warn, error};
 
 #[macro_use]
 extern crate alloc;
