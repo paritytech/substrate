@@ -75,21 +75,20 @@ fn lifecycle_should_work() {
 		assert!(ClassMetadataOf::<Test>::contains_key(0));
 
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 10));
-		assert_eq!(Balances::total_balance(&1), 99);
+		assert_eq!(Balances::reserved_balance(&1), 6);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 69, 20));
-		assert_eq!(Balances::total_balance(&1), 98);
+		assert_eq!(Balances::reserved_balance(&1), 7);
 		assert_eq!(assets(), vec![(10, 0, 42), (20, 0, 69)]);
 
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![42], vec![42], false));
-		assert_eq!(Balances::reserved_balance(&1), 8);
+		assert_eq!(Balances::reserved_balance(&1), 10);
 		assert!(InstanceMetadataOf::<Test>::contains_key(0, 42));
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, vec![69], vec![69], false));
-		assert_eq!(Balances::reserved_balance(&1), 11);
+		assert_eq!(Balances::reserved_balance(&1), 13);
 		assert!(InstanceMetadataOf::<Test>::contains_key(0, 69));
 
 		let w = Class::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Uniques::destroy(Origin::signed(1), 0, w));
-		assert_eq!(Balances::total_balance(&1), 100);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
 		assert!(!Class::<Test>::contains_key(0));

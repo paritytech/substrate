@@ -37,7 +37,6 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-mod functions;
 mod types;
 pub use types::*;
 
@@ -366,14 +365,14 @@ pub mod pallet {
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
 			Class::<T, I>::try_mutate_exists(class, |maybe_details| {
-				let mut class_details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
+				let class_details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
 				if let Some(check_owner) = maybe_check_owner {
 					ensure!(class_details.owner == check_owner, Error::<T, I>::NoPermission);
 				}
 				ensure!(class_details.instances == witness.instances, Error::<T, I>::BadWitness);
 				ensure!(class_details.free_holds == witness.free_holds, Error::<T, I>::BadWitness);
 
-				for (instance, mut details) in Asset::<T, I>::drain_prefix(&class) {
+				for (instance, details) in Asset::<T, I>::drain_prefix(&class) {
 					Account::<T, I>::remove((&details.owner, &class, &instance));
 					InstanceMetadataOf::<T, I>::remove(&class, &instance);
 				}
@@ -428,11 +427,12 @@ pub mod pallet {
 					deposit
 				};
 
+				let owner = owner.clone();
+				Account::<T, I>::insert((&owner, &class, &instance), ());
 				let details = InstanceDetails { owner, approved: None, is_frozen: false, deposit};
 				Asset::<T, I>::insert(&class, &instance, details);
 				Ok(())
 			})?;
-			Account::<T, I>::insert((&owner, &class, &instance), ());
 
 			Self::deposit_event(Event::Issued(class, instance, owner));
 			Ok(())
@@ -463,7 +463,7 @@ pub mod pallet {
 
 			let owner = Class::<T, I>::try_mutate(&class, |maybe_class_details| -> Result<T::AccountId, DispatchError> {
 				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				let mut details = Asset::<T, I>::get(&class, &instance)
+				let details = Asset::<T, I>::get(&class, &instance)
 					.ok_or(Error::<T, I>::Unknown)?;
 				let is_permitted = class_details.admin == origin || details.owner == origin;
 				ensure!(is_permitted, Error::<T, I>::NoPermission);
@@ -710,11 +710,13 @@ pub mod pallet {
 					return Ok(());
 				}
 
-				let deposit = details.deposit + details.total_deposit;
-
 				// Move the deposit to the new owner.
-				T::Currency::repatriate_reserved(&details.owner, &owner, deposit, Reserved)?;
-
+				T::Currency::repatriate_reserved(
+					&details.owner,
+					&owner,
+					details.total_deposit,
+					Reserved,
+				)?;
 				details.owner = owner.clone();
 
 				Self::deposit_event(Event::OwnerChanged(class, owner));
@@ -1008,8 +1010,7 @@ pub mod pallet {
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				class_details.total_deposit = class_details.total_deposit
-					.saturating_sub(old_deposit);
+				class_details.total_deposit = class_details.total_deposit.saturating_sub(old_deposit);
 				let deposit = if let Some(owner) = maybe_check_owner {
 					let deposit = T::MetadataDepositPerByte::get()
 						.saturating_mul(((name.len() + info.len()) as u32).into())
@@ -1025,8 +1026,7 @@ pub mod pallet {
 				} else {
 					old_deposit
 				};
-				class_details.total_deposit = class_details.total_deposit
-					.saturating_add(deposit);
+				class_details.total_deposit = class_details.total_deposit.saturating_add(deposit);
 
 				*metadata = Some(InstanceMetadata {
 					deposit,
