@@ -101,10 +101,40 @@ impl Iterator for StorageProofNodeIterator {
 
 impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
+		use hash_db::MetaHasher;
+		use trie_db::NodeCodec;
+		use crate::{Layout, TrieLayout};
 		let mut db = crate::MemoryDB::default();
-		for item in proof.iter_nodes() {
+		// Needed because we do not read trie structure, so
+		// we do a heuristic related to the fact that host function
+		// only allow global definition.
+		// Using compact proof will work directly here (read trie structure and
+		// work directly.
+		let mut is_hashed_value = false;
+		let mut accum = Vec::new();
+		for item in proof.trie_nodes.iter() {
+			// Note using `None` as parent meta does not impact `extract_value` of
+			// sp_trie meta hasher.
+			// But does not with `insert_with_meta`.
+			let (encoded_node, mut meta) = <
+				<Layout::<H> as TrieLayout>::MetaHasher as MetaHasher<H, _>
+			>::extract_value(item.as_slice(), None);
+			if !is_hashed_value {
+				// read state meta.
+				let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(encoded_node, &mut meta);
+				if meta.recorded_do_value_hash {
+					is_hashed_value = true;
+				}
+			}
 			// TODO insert_with_meta here
-			db.insert(crate::EMPTY_PREFIX, &item);
+			accum.push((encoded_node, meta));
+		}
+		for mut item in accum.into_iter() {
+			if is_hashed_value {
+				// skipping hierarchy.
+				item.1.do_value_hash = true;
+			}
+			db.insert_with_meta(crate::EMPTY_PREFIX, item.0, item.1);
 		}
 		db
 	}

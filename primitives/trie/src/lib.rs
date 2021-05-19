@@ -163,8 +163,17 @@ impl Meta for TrieMeta {
 
 	fn decoded_callback(
 		&mut self,
-		_node_plan: &NodePlan,
+		node_plan: &NodePlan,
 	) {
+		let (contain_hash, range) = match node_plan.value_plan() {
+			Some(ValuePlan::Value(range)) => (false, range.clone()),
+			Some(ValuePlan::HashedValue(range, _size)) => (true, range.clone()),
+			Some(ValuePlan::NoValue) => return,
+			None => return,
+		};
+
+		self.range = Some(range);
+		self.contain_hash = contain_hash;
 	}
 
 	fn contains_hash_of_value(&self) -> bool {
@@ -241,7 +250,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 	fn hash(value: &[u8], meta: &Self::Meta) -> H::Out {
 		match &meta {
 			TrieMeta { range: Some(range), contain_hash: false, do_value_hash, .. } => {
-				if *do_value_hash {
+				if *do_value_hash && range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
 					let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
 					H::hash(value.as_slice())
 				} else {
@@ -788,7 +797,7 @@ impl<'a, DB, H, T, M> hash_db::AsHashDB<H, T, M> for KeySpacedDBMut<'a, DB, H> w
 }
 
 /// Representation of node with with inner hash instead of value.
-pub fn inner_hashed_value<H: Hasher>(x: &[u8], range: Option<(usize, usize)>) -> Vec<u8> {
+fn inner_hashed_value<H: Hasher>(x: &[u8], range: Option<(usize, usize)>) -> Vec<u8> {
 	if let Some((start, end)) = range {
 		let len = x.len();
 		if start < len && end == len {
@@ -839,6 +848,14 @@ pub fn estimate_entry_size(entry: &(DBValue, TrieMeta), hash_len: usize) -> usiz
 	}
 
 	full_encoded
+}
+
+/// If needed, call to decode plan in order to record meta.
+pub fn resolve_encoded_meta<H: Hasher>(entry: &mut (DBValue, TrieMeta)) {
+	use trie_db::NodeCodec;
+	if entry.1.do_value_hash {
+		let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(entry.0.as_slice(), &mut entry.1);
+	}
 }
 
 /// Constants used into trie simplification codec.

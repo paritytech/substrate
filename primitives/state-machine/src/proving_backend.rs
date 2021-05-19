@@ -125,14 +125,15 @@ pub struct ProofRecorder<Hash> {
 
 impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	/// Record the given `key` => `val` combination.
-	pub fn record(&self, key: Hash, mut val: Option<(DBValue, TrieMeta)>, hash_len: usize) {
+	pub fn record<H: Hasher>(&self, key: Hash, mut val: Option<(DBValue, TrieMeta)>) {
 		let mut inner = self.inner.write();
 
 		let ProofRecorderInner { encoded_size, records } = &mut *inner;
 		records.entry(key).or_insert_with(|| {
 			if let Some(val) = val.as_mut() {
 				val.1.set_accessed_value(false);
-				*encoded_size += sp_trie::estimate_entry_size(val, hash_len);
+				sp_trie::resolve_encoded_meta::<H>(val);
+				*encoded_size += sp_trie::estimate_entry_size(val, H::LENGTH);
 			}
 			val
 		});
@@ -244,7 +245,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 		}
 
 		let backend_value = self.backend.get(key, prefix, parent)?;
-		self.proof_recorder.record(key.clone(), backend_value.clone(), H::LENGTH);
+		self.proof_recorder.record::<H>(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}
 
