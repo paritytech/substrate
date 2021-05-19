@@ -50,7 +50,7 @@ pub trait WeightInfo {
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
-	fn force_transfer() -> Weight;
+	fn refresh_deposit() -> Weight;
 	fn freeze() -> Weight;
 	fn thaw() -> Weight;
 	fn freeze_class() -> Weight;
@@ -58,7 +58,6 @@ pub trait WeightInfo {
 	fn transfer_ownership() -> Weight;
 	fn set_team() -> Weight;
 	fn approve_transfer() -> Weight;
-	fn transfer_approved() -> Weight;
 	fn cancel_approval() -> Weight;
 	fn force_cancel_approval() -> Weight;
 	fn force_asset_status() -> Weight;
@@ -109,7 +108,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
-	fn force_transfer() -> Weight {
+	fn refresh_deposit() -> Weight {
 		(70_968_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
@@ -148,11 +147,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(47_906_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn transfer_approved() -> Weight {
-		(90_338_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 	fn cancel_approval() -> Weight {
 		(48_591_000 as Weight)
@@ -237,7 +231,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
-	fn force_transfer() -> Weight {
+	fn refresh_deposit() -> Weight {
 		(70_968_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
@@ -276,11 +270,6 @@ impl WeightInfo for () {
 		(47_906_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn transfer_approved() -> Weight {
-		(90_338_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 	fn cancel_approval() -> Weight {
 		(48_591_000 as Weight)

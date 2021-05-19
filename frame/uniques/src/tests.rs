@@ -350,21 +350,24 @@ fn set_instance_metadata_should_work() {
 	});
 }
 
-// TODO: burn
-
-/*
 #[test]
 fn force_asset_status_should_work(){
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 10);
 		Balances::make_free_balance_be(&2, 10);
-		assert_ok!(Uniques::create(Origin::signed(1), 0, 1, 30));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 50));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 2, 150));
+		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 69, 2));
+		assert_ok!(Uniques::set_class_metadata)
+		assert_eq!(Uniques::reserved_balance(0), 96);
 
-		//force asset status to change min_balance > balance
-		assert_ok!(Uniques::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 100, true, false));
-		assert_eq!(Uniques::balance(0, 1), 50);
+		//force asset status to be free holding
+		assert_ok!(Uniques::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, true, false));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 142, 1));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 169, 2));
+		assert_ok!(Uniques::set_class_metadata)
+		assert_eq!(Uniques::reserved_balance(0), 96);
+
 
 		//account can recieve assets for balance < min_balance
 		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 1, 1));
@@ -391,6 +394,10 @@ fn force_asset_status_should_work(){
 		assert_eq!(Uniques::total_supply(0), 200);
 	});
 }
+
+// TODO: burn
+
+/*
 
 #[test]
 fn approval_lifecycle_works() {

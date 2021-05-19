@@ -420,14 +420,15 @@ pub mod pallet {
 					.ok_or(ArithmeticError::Overflow)?;
 				class_details.instances = instances;
 
-				let deposit = if class_details.free_holding {
+				let deposit = match class_details.free_holding {
+					true => Zero::zero(),
+					false => T::InstanceDeposit::get(),
+				};
+				if deposit.is_zero() {
 					class_details.free_holds += 1;
-					Zero::zero()
 				} else {
-					let deposit = T::InstanceDeposit::get();
 					T::Currency::reserve(&class_details.owner, deposit)?;
 					class_details.total_deposit += deposit;
-					deposit
 				};
 
 				let owner = owner.clone();
@@ -552,6 +553,56 @@ pub mod pallet {
 		/// Emits `Frozen`.
 		///
 		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::refresh_deposit())]
+		pub(super) fn refresh_deposit(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			#[pallet::compact] instance: T::InstanceId,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+
+			let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(class_details.owner == origin, Error::<T, I>::NoPermission);
+
+			let deposit = match class_details.free_holding {
+				true => Zero::zero(),
+				false => T::InstanceDeposit::get(),
+			};
+			if deposit.is_zero() {
+				class_details.free_holds += 1;
+			} else {
+				T::Currency::reserve(&class_details.owner, deposit)?;
+				class_details.total_deposit += deposit;
+			};
+			if details.deposit > deposit {
+				T::Currency::unreserve(&class_details.owner, details.deposit - deposit);
+			} else {
+				T::Currency::reserve(&class_details.owner, deposit - details.deposit)?;
+			}
+			class_details.total_deposit = class_details.total_deposit
+				.saturated_sub(details.deposit)
+				.saturated_add(deposit);
+			if details.deposit.is_zero() {
+
+			}
+			details.deposit = deposit;
+
+			Asset::<T, I>::insert(&class, &instance, &details);
+			Class::<T, I>::insert(&class, &class_details);
+			Ok(())
+		}
+
+		/// Disallow further unprivileged transfer of an asset instance.
+		///
+		/// Origin must be Signed and the sender should be the Freezer of the asset `class`.
+		///
+		/// - `class`: The class of the asset to be frozen.
+		/// - `instance`: The instance of the asset to be frozen.
+		///
+		/// Emits `Frozen`.
+		///
+		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub(super) fn freeze(
 			origin: OriginFor<T>,
@@ -562,7 +613,6 @@ pub mod pallet {
 
 			let mut details = Asset::<T, I>::get(&class, &instance)
 				.ok_or(Error::<T, I>::Unknown)?;
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(class_details.freezer == origin, Error::<T, I>::NoPermission);
 
 			details.is_frozen = true;
@@ -943,21 +993,20 @@ pub mod pallet {
 
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				class_details.total_deposit = class_details.total_deposit.saturating_sub(old_deposit);
-				let deposit = if let Some(owner) = maybe_check_owner {
-					let deposit = T::MetadataDepositPerByte::get()
-						.saturating_mul(((name.len() + info.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
+				let mut deposit = old_deposit;
+				if !class_details.free_holding {
+					if let Some(owner) = maybe_check_owner {
+						deposit = T::MetadataDepositPerByte::get()
+							.saturating_mul(((name.len() + info.len()) as u32).into())
+							.saturating_add(T::MetadataDepositBase::get());
 
-					if deposit > old_deposit {
-						T::Currency::reserve(&owner, deposit - old_deposit)?;
-					} else {
-						T::Currency::unreserve(&owner, old_deposit - deposit);
+						if deposit > old_deposit {
+							T::Currency::reserve(&owner, deposit - old_deposit)?;
+						} else {
+							T::Currency::unreserve(&owner, old_deposit - deposit);
+						}
 					}
-
-					deposit
-				} else {
-					old_deposit
-				};
+				}
 				class_details.total_deposit = class_details.total_deposit.saturating_add(deposit);
 
 				*metadata = Some(InstanceMetadata {
@@ -1058,20 +1107,20 @@ pub mod pallet {
 
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				details.total_deposit = details.total_deposit.saturating_sub(old_deposit);
-				let deposit = if let Some(owner) = maybe_check_owner {
-					let deposit = T::MetadataDepositPerByte::get()
-						.saturating_mul(((name.len() + info.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
+				let mut deposit = old_deposit;
+				if let Some(owner) = maybe_check_owner {
+					if !details.free_holding {
+						deposit = T::MetadataDepositPerByte::get()
+							.saturating_mul(((name.len() + info.len()) as u32).into())
+							.saturating_add(T::MetadataDepositBase::get());
 
-					if deposit > old_deposit {
-						T::Currency::reserve(&owner, deposit - old_deposit)?;
-					} else {
-						T::Currency::unreserve(&owner, old_deposit - deposit);
+						if deposit > old_deposit {
+							T::Currency::reserve(&owner, deposit - old_deposit)?;
+						} else {
+							T::Currency::unreserve(&owner, old_deposit - deposit);
+						}
 					}
-					deposit
-				} else {
-					old_deposit
-				};
+				}
 				details.total_deposit = details.total_deposit.saturating_add(deposit);
 
 				Class::<T, I>::insert(&class, details);
