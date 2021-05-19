@@ -61,6 +61,7 @@ pub struct OffchainWorkerParams {
 	/// Note that this setting does not change behavior or regular offchain workers,
 	/// but instead runs "Finality Offchain Workers", which require a different Runtime
 	/// API to be implemented.
+	/// If this setting is enabled it is recommended to run without pruning enabled (archive node).
 	/// By default it's only enabled for nodes that are authoring new blocks.
 	#[structopt(
 		long = "finality-offchain-worker",
