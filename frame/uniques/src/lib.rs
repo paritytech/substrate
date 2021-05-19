@@ -281,8 +281,7 @@ pub mod pallet {
 					issuer: admin.clone(),
 					admin: admin.clone(),
 					freezer: admin.clone(),
-					deposit,
-					metadata_deposit: Zero::zero(),
+					total_deposit: deposit,
 					free_holding: false,
 					instances: 0,
 					free_holds: 0,
@@ -328,8 +327,7 @@ pub mod pallet {
 					issuer: owner.clone(),
 					admin: owner.clone(),
 					freezer: owner.clone(),
-					deposit: Zero::zero(),
-					metadata_deposit: Zero::zero(),
+					total_deposit: Zero::zero(),
 					free_holding,
 					instances: 0,
 					free_holds: 0,
@@ -378,16 +376,9 @@ pub mod pallet {
 				for (instance, mut details) in Asset::<T, I>::drain_prefix(&class) {
 					Account::<T, I>::remove((&details.owner, &class, &instance));
 					InstanceMetadataOf::<T, I>::remove(&class, &instance);
-					Self::dead_instance(&mut details, &mut class_details);
 				}
-				debug_assert_eq!(class_details.instances, 0);
-				debug_assert_eq!(class_details.free_holds, 0);
-
 				ClassMetadataOf::<T, I>::remove(&class);
-				T::Currency::unreserve(
-					&class_details.owner,
-					class_details.deposit.saturating_add(class_details.metadata_deposit),
-				);
+				T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
 
 				Self::deposit_event(Event::Destroyed(class));
 
@@ -412,23 +403,38 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
+			let owner = T::Lookup::lookup(owner)?;
 
 			ensure!(!Asset::<T, I>::contains_key(class, instance), Error::<T, I>::AlreadyExists);
 
 			Class::<T, I>::try_mutate(&class, |maybe_class_details| -> DispatchResult {
 				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(class_details.issuer == origin, Error::<T, I>::NoPermission);
-				let details = Self::new_instance(beneficiary.clone(), None, class_details)?;
+
+				let instances = class_details.instances.checked_add(1)
+					.ok_or(ArithmeticError::Overflow)?;
+				class_details.instances = instances;
+
+				let deposit = if class_details.free_holding {
+					class_details.free_holds += 1;
+					Zero::zero()
+				} else {
+					let deposit = T::InstanceDeposit::get();
+					T::Currency::reserve(&class_details.owner, deposit)?;
+					class_details.total_deposit += deposit;
+					deposit
+				};
+
+				let details = InstanceDetails { owner, approved: None, is_frozen: false, deposit};
 				Asset::<T, I>::insert(&class, &instance, details);
 				Ok(())
 			})?;
-			Account::<T, I>::insert((&beneficiary, &class, &instance), ());
+			Account::<T, I>::insert((&owner, &class, &instance), ());
 
-			Self::deposit_event(Event::Issued(class, instance, beneficiary));
+			Self::deposit_event(Event::Issued(class, instance, owner));
 			Ok(())
 		}
 
@@ -462,10 +468,18 @@ pub mod pallet {
 				let is_permitted = class_details.admin == origin || details.owner == origin;
 				ensure!(is_permitted, Error::<T, I>::NoPermission);
 				ensure!(check_owner.map_or(true, |o| o == details.owner), Error::<T, I>::WrongOwner);
-				Self::dead_instance(&mut details, class_details);
+
+				if !details.deposit.is_zero() {
+					// Return the deposit.
+					T::Currency::unreserve(&class_details.owner, details.deposit);
+					class_details.total_deposit = class_details.total_deposit
+						.saturating_sub(details.deposit);
+				}
+				class_details.instances = class_details.instances.saturating_sub(1);
+
 				if let Some(metadata) = InstanceMetadataOf::<T, I>::take(&class, &instance) {
 					// Remove instance metadata
-					class_details.metadata_deposit = class_details.metadata_deposit
+					class_details.total_deposit = class_details.total_deposit
 						.saturating_sub(metadata.deposit);
 					T::Currency::unreserve(&class_details.owner, metadata.deposit);
 				}
@@ -696,7 +710,7 @@ pub mod pallet {
 					return Ok(());
 				}
 
-				let deposit = details.deposit + details.metadata_deposit;
+				let deposit = details.deposit + details.total_deposit;
 
 				// Move the deposit to the new owner.
 				T::Currency::repatriate_reserved(&details.owner, &owner, deposit, Reserved)?;
@@ -994,7 +1008,7 @@ pub mod pallet {
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				class_details.metadata_deposit = class_details.metadata_deposit
+				class_details.total_deposit = class_details.total_deposit
 					.saturating_sub(old_deposit);
 				let deposit = if let Some(owner) = maybe_check_owner {
 					let deposit = T::MetadataDepositPerByte::get()
@@ -1011,7 +1025,7 @@ pub mod pallet {
 				} else {
 					old_deposit
 				};
-				class_details.metadata_deposit = class_details.metadata_deposit
+				class_details.total_deposit = class_details.total_deposit
 					.saturating_add(deposit);
 
 				*metadata = Some(InstanceMetadata {
@@ -1062,7 +1076,7 @@ pub mod pallet {
 
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
 				T::Currency::unreserve(&class_details.owner, deposit);
-				class_details.metadata_deposit = class_details.metadata_deposit.saturating_sub(deposit);
+				class_details.total_deposit = class_details.total_deposit.saturating_sub(deposit);
 
 				Class::<T, I>::insert(&class, &class_details);
 				Self::deposit_event(Event::MetadataCleared(class));
@@ -1110,7 +1124,7 @@ pub mod pallet {
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				details.metadata_deposit = details.metadata_deposit.saturating_sub(old_deposit);
+				details.total_deposit = details.total_deposit.saturating_sub(old_deposit);
 				let deposit = if let Some(owner) = maybe_check_owner {
 					let deposit = T::MetadataDepositPerByte::get()
 						.saturating_mul(((name.len() + info.len()) as u32).into())
@@ -1125,7 +1139,7 @@ pub mod pallet {
 				} else {
 					old_deposit
 				};
-				details.metadata_deposit = details.metadata_deposit.saturating_add(deposit);
+				details.total_deposit = details.total_deposit.saturating_add(deposit);
 
 				Class::<T, I>::insert(&class, details);
 
