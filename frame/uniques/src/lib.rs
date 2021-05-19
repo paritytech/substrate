@@ -1136,7 +1136,7 @@ pub mod pallet {
 					is_frozen,
 				});
 
-				Self::deposit_event(Event::ClassMetadataSet(class, name, info, false));
+				Self::deposit_event(Event::ClassMetadataSet(class, name, info, is_frozen));
 				Ok(())
 			})
 		}
