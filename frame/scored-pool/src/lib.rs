@@ -228,7 +228,6 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub pool: PoolT<T, I>,
 		pub member_count: u32,
-		pub _phantom: sp_std::marker::PhantomData<I>,
 	}
 
 	#[cfg(feature = "std")]
@@ -237,7 +236,6 @@ pub mod pallet {
 			Self {
 				pool: Default::default(),
 				member_count: Default::default(),
-				_phantom: Default::default(),
 			}
 		}
 	}
