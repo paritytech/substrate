@@ -160,7 +160,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	#[pallet::metadata(
 		T::AccountId = "AccountId",
-		T::ClassId = "AssetId",
+		T::ClassId = "ClassId",
 		T::InstanceId = "InstanceId",
 	)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
