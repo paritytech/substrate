@@ -1011,7 +1011,7 @@ pub mod pallet {
 				} else {
 					old_deposit
 				};
-				class_details.metadata_deposit =class_details.metadata_deposit
+				class_details.metadata_deposit = class_details.metadata_deposit
 					.saturating_add(deposit);
 
 				*metadata = Some(InstanceMetadata {
