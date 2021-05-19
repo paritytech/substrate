@@ -474,6 +474,33 @@ mod tests {
 	}
 
 	#[test]
+	fn proof_recorded_and_checked_old_hash() {
+		// test proof starting with old hash content and flagging in between.
+		let size_content = 33; // above hashable value treshold.
+		let value_range = 0..64;
+		let contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
+		let mut in_memory = in_memory.update(vec![(None, contents)], false);
+		let in_memory_root = in_memory.storage_root(std::iter::empty(), false).0;
+		value_range.clone().for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
+
+		in_memory = in_memory.update(vec![], true);
+		let in_memory_root = in_memory.storage_root(std::iter::empty(), false).0;
+		let trie = in_memory.as_trie_backend().unwrap();
+		let trie_root = trie.storage_root(std::iter::empty(), false).0;
+		assert_eq!(in_memory_root, trie_root);
+		value_range.clone().for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
+
+		let proving = ProvingBackend::new(trie);
+		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
+
+		let proof = proving.extract_proof();
+
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
+		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
+	}
+
+	#[test]
 	fn proof_recorded_and_checked_with_child() {
 		proof_recorded_and_checked_with_child_inner(false);
 		proof_recorded_and_checked_with_child_inner(true);
