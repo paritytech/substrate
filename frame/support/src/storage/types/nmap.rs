@@ -24,12 +24,13 @@ use crate::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OnEmptyGetter,
 			OptionQuery, QueryKindTrait, TupleToEncodedIter,
 		},
-		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength,
+		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength, StoragePrefixedMap,
 	},
-	traits::{GetDefault, StorageInstance},
+	traits::{Get, GetDefault, StorageInstance, StorageInfo, MaxEncodedLen},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec};
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
+use sp_runtime::SaturatedConversion;
 use sp_std::prelude::*;
 
 /// A type that allow to store values for an arbitrary number of keys in the form of
@@ -50,18 +51,22 @@ use sp_std::prelude::*;
 /// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher`
 /// such as `blake2_128_concat` must be used for the key hashers. Otherwise, other values
 /// in storage can be compromised.
-pub struct StorageNMap<Prefix, Key, Value, QueryKind = OptionQuery, OnEmpty = GetDefault>(
-	core::marker::PhantomData<(Prefix, Key, Value, QueryKind, OnEmpty)>,
+pub struct StorageNMap<
+	Prefix, Key, Value, QueryKind = OptionQuery, OnEmpty = GetDefault, MaxValues=GetDefault,
+>(
+	core::marker::PhantomData<(Prefix, Key, Value, QueryKind, OnEmpty, MaxValues)>,
 );
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty> crate::storage::generator::StorageNMap<Key, Value>
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::storage::generator::StorageNMap<Key, Value>
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	type Query = QueryKind::Query;
 	fn module_prefix() -> &'static [u8] {
@@ -78,14 +83,16 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty> crate::storage::StoragePrefixedMap<Value>
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::storage::StoragePrefixedMap<Value>
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	fn module_prefix() -> &'static [u8] {
 		<Self as crate::storage::generator::StorageNMap<Key, Value>>::module_prefix()
@@ -95,13 +102,15 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty> StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
@@ -286,13 +295,15 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty> StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::ReversibleKeyGenerator,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	/// Enumerate all elements in the map with prefix key `kp` in no particular order.
 	///
@@ -355,14 +366,15 @@ pub trait StorageNMapMetadata {
 	const HASHERS: &'static [frame_metadata::StorageHasher];
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty> StorageNMapMetadata
-	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> StorageNMapMetadata
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
@@ -370,6 +382,32 @@ where
 		&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData),
 	);
 	const HASHERS: &'static [frame_metadata::StorageHasher] = Key::HASHER_METADATA;
+}
+
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::StorageInfoTrait for
+	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Key: super::key::KeyGenerator + super::key::KeyGeneratorMaxEncodedLen,
+	Value: FullCodec + MaxEncodedLen,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::final_prefix(),
+				max_values: MaxValues::get(),
+				max_size: Some(
+					Key::key_max_encoded_len()
+						.saturating_add(Value::max_encoded_len())
+						.saturated_into(),
+				),
+			}
+		]
+	}
 }
 
 #[cfg(test)]
