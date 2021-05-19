@@ -40,31 +40,30 @@ pub struct ClassDetails<
 	pub(super) total_deposit: DepositBalance,
 	/// If `true`, then no deposit is needed to hold instances of this class.
 	pub(super) free_holding: bool,
-	/// The total number of outstanding unique instances of this asset class.
+	/// The total number of outstanding instances of this asset class.
 	pub(super) instances: u32,
-	/// The number of instances of this asset class with a zero deposit.
-	pub(super) free_holds: u32,
+	/// The total number of outstanding instance metadata of this asset class.
+	pub(super) instance_metadatas: u32,
 	/// Whether the asset is frozen for non-admin transfers.
 	pub(super) is_frozen: bool,
-
 }
 
 /// Witness data for the destroy transactions.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct DestroyWitness {
-	/// The number of instances of this class of asset.
+	/// The total number of outstanding instances of this asset class.
 	#[codec(compact)]
 	pub(super) instances: u32,
-	/// The number of instances of this asset class with a zero deposit.
+	/// The total number of outstanding instance metadata of this asset class.
 	#[codec(compact)]
-	pub(super) free_holds: u32,
+	pub(super) instance_metadatas: u32,
 }
 
 impl<AccountId, DepositBalance> ClassDetails<AccountId, DepositBalance> {
 	pub fn destroy_witness(&self) -> DestroyWitness {
 		DestroyWitness {
 			instances: self.instances,
-			free_holds: self.free_holds,
+			instance_metadatas: self.instance_metadatas,
 		}
 	}
 }

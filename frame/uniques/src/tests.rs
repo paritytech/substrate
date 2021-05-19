@@ -45,10 +45,6 @@ fn assets() -> Vec<(u64, u32, u32)> {
 		let details = Class::<Test>::get(class).unwrap();
 		let instances = Asset::<Test>::iter_prefix(class).count() as u32;
 		assert_eq!(details.instances, instances);
-		let free_holds = Asset::<Test>::iter_prefix(class)
-			.filter(|(_, item)| item.deposit.is_zero())
-			.count() as u32;
-		assert_eq!(details.free_holds, free_holds);
 	}
 	r
 }
@@ -89,6 +85,8 @@ fn lifecycle_should_work() {
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 69, 20));
 		assert_eq!(Balances::reserved_balance(&1), 7);
 		assert_eq!(assets(), vec![(10, 0, 42), (20, 0, 69)]);
+		assert_eq!(Class::<Test>::get(0).unwrap().instances, 2);
+		assert_eq!(Class::<Test>::get(0).unwrap().instance_metadatas, 0);
 
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![42], vec![42], false));
 		assert_eq!(Balances::reserved_balance(&1), 10);
@@ -98,6 +96,8 @@ fn lifecycle_should_work() {
 		assert!(InstanceMetadataOf::<Test>::contains_key(0, 69));
 
 		let w = Class::<Test>::get(0).unwrap().destroy_witness();
+		assert_eq!(w.instances, 2);
+		assert_eq!(w.instance_metadatas, 2);
 		assert_ok!(Uniques::destroy(Origin::signed(1), 0, w));
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
@@ -230,7 +230,7 @@ fn set_class_metadata_should_work() {
 			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], false),
 			Error::<Test>::Unknown,
 		);
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		// Cannot add metadata to unowned asset
 		assert_noop!(
 			Uniques::set_class_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], false),
@@ -291,7 +291,7 @@ fn set_instance_metadata_should_work() {
 		Balances::make_free_balance_be(&1, 30);
 
 		// Cannot add metadata to unknown asset
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		assert_noop!(
 			Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 10], false),
 			Error::<Test>::Unknown,
@@ -315,7 +315,7 @@ fn set_instance_metadata_should_work() {
 
 		// Successfully add metadata and take deposit
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 10], false));
-		assert_eq!(Balances::free_balance(&1), 9);
+		assert_eq!(Balances::free_balance(&1), 8);
 		assert!(InstanceMetadataOf::<Test>::contains_key(0, 42));
 
 		// Force origin works, too.
@@ -323,9 +323,9 @@ fn set_instance_metadata_should_work() {
 
 		// Update deposit
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 5], false));
-		assert_eq!(Balances::free_balance(&1), 14);
+		assert_eq!(Balances::free_balance(&1), 13);
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 15], false));
-		assert_eq!(Balances::free_balance(&1), 4);
+		assert_eq!(Balances::free_balance(&1), 3);
 
 		// Cannot over-reserve
 		assert_noop!(
@@ -353,52 +353,42 @@ fn set_instance_metadata_should_work() {
 #[test]
 fn force_asset_status_should_work(){
 	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&1, 10);
-		Balances::make_free_balance_be(&2, 10);
-		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
+		Balances::make_free_balance_be(&1, 100);
+
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 69, 2));
-		assert_ok!(Uniques::set_class_metadata)
-		assert_eq!(Uniques::reserved_balance(0), 96);
+		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0; 10], vec![0; 10], false));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0; 10], vec![0; 10], false));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, vec![0; 10], vec![0; 10], false));
+		assert_eq!(Balances::reserved_balance(1), 65);
 
 		//force asset status to be free holding
 		assert_ok!(Uniques::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, true, false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 142, 1));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 169, 2));
-		assert_ok!(Uniques::set_class_metadata)
-		assert_eq!(Uniques::reserved_balance(0), 96);
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 142, vec![0; 10], vec![0; 10], false));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 169, vec![0; 10], vec![0; 10], false));
+		assert_eq!(Balances::reserved_balance(1), 65);
 
+		assert_ok!(Uniques::redeposit(Origin::signed(1), 0, vec![0, 42, 50, 69, 100]));
+		assert_eq!(Balances::reserved_balance(1), 63);
 
-		//account can recieve assets for balance < min_balance
-		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 1, 1));
-		assert_eq!(Uniques::balance(0, 1), 51);
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0; 10], vec![0; 10], false));
+		assert_eq!(Balances::reserved_balance(1), 42);
 
-		//account on outbound transfer will cleanup for balance < min_balance
-		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 2, 1));
-		assert_eq!(Uniques::balance(0,1), 0);
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, vec![0; 10], vec![0; 10], false));
+		assert_eq!(Balances::reserved_balance(1), 21);
 
-		//won't create new account with balance below min_balance
-		assert_noop!(Uniques::transfer(Origin::signed(2), 0, 3, 50), TokenError::BelowMinimum);
-
-		//force asset status will not execute for non-existent class
-		assert_noop!(
-			Uniques::force_asset_status(Origin::root(), 1, 1, 1, 1, 1, 90, true, false),
-			Error::<Test>::Unknown
-		);
-
-		//account drains to completion when funds dip below min_balance
-		assert_ok!(Uniques::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 110, true, false));
-		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 1, 110));
-		assert_eq!(Uniques::balance(0, 1), 200);
-		assert_eq!(Uniques::balance(0, 2), 0);
-		assert_eq!(Uniques::total_supply(0), 200);
+		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0; 10], vec![0; 10], false));
+		assert_eq!(Balances::reserved_balance(1), 0);
 	});
 }
 
 // TODO: burn
+// TODO: approvals
 
 /*
-
 #[test]
 fn approval_lifecycle_works() {
 	new_test_ext().execute_with(|| {

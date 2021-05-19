@@ -50,7 +50,7 @@ pub trait WeightInfo {
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
-	fn refresh_deposit() -> Weight;
+	fn redeposit(i: u32, ) -> Weight;
 	fn freeze() -> Weight;
 	fn thaw() -> Weight;
 	fn freeze_class() -> Weight;
@@ -108,7 +108,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
-	fn refresh_deposit() -> Weight {
+	fn redeposit(_i: u32, ) -> Weight {
 		(70_968_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
@@ -231,7 +231,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
-	fn refresh_deposit() -> Weight {
+	fn redeposit(_i: u32, ) -> Weight {
 		(70_968_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
