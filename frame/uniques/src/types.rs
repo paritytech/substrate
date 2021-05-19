@@ -46,6 +46,7 @@ pub struct ClassDetails<
 	pub(super) free_holds: u32,
 	/// Whether the asset is frozen for non-admin transfers.
 	pub(super) is_frozen: bool,
+
 }
 
 /// Witness data for the destroy transactions.

@@ -935,6 +935,8 @@ pub mod pallet {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
 
+			ensure!(Asset::<T, I>::contains_key(&class, &instance), Error::<T, I>::Unknown);
+
 			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
@@ -1043,6 +1045,7 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
 			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
+			ensure!(info.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 
 			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = &maybe_check_owner {
