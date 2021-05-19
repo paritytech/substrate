@@ -32,12 +32,11 @@ pub mod weights;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 */
-/* TODO:
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
 mod tests;
-*/
+
 // TODO: mod impl_non_fungibles;
 mod functions;
 mod types;
@@ -93,9 +92,6 @@ pub mod pallet {
 		/// The additional funds that must be reserved for the number of bytes you store in your
 		/// metadata.
 		type MetadataDepositPerByte: Get<DepositBalanceOf<Self, I>>;
-
-		/// The amount of funds that must be reserved when creating a new approval.
-		type ApprovalDeposit: Get<DepositBalanceOf<Self, I>>;
 
 		/// The maximum length of a name or symbol stored on-chain.
 		type StringLimit: Get<u32>;
@@ -1003,7 +999,7 @@ pub mod pallet {
 					.saturating_sub(old_deposit);
 				let deposit = if let Some(owner) = maybe_check_owner {
 					let deposit = T::MetadataDepositPerByte::get()
-						.saturating_mul((name.len() as u32).into())
+						.saturating_mul(((name.len() + info.len()) as u32).into())
 						.saturating_add(T::MetadataDepositBase::get());
 
 					if deposit > old_deposit {
@@ -1105,8 +1101,8 @@ pub mod pallet {
 
 			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 
+			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = &maybe_check_owner {
-				let details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
 
@@ -1115,9 +1111,10 @@ pub mod pallet {
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
+				details.metadata_deposit = details.metadata_deposit.saturating_sub(old_deposit);
 				let deposit = if let Some(owner) = maybe_check_owner {
 					let deposit = T::MetadataDepositPerByte::get()
-						.saturating_mul((name.len() as u32).into())
+						.saturating_mul(((name.len() + info.len()) as u32).into())
 						.saturating_add(T::MetadataDepositBase::get());
 
 					if deposit > old_deposit {
@@ -1129,6 +1126,9 @@ pub mod pallet {
 				} else {
 					old_deposit
 				};
+				details.metadata_deposit = details.metadata_deposit.saturating_add(deposit);
+
+				Class::<T, I>::insert(&class, details);
 
 				*metadata = Some(ClassMetadata {
 					deposit,

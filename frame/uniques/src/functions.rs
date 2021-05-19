@@ -77,7 +77,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			class_details.free_holds += 1;
 		} else {
 			T::Currency::transfer(
-				&owner,
+				&class_details.owner,
 				&Self::into_account(),
 				deposit,
 				AllowDeath,
@@ -100,7 +100,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Return the deposit.
 			let ok = T::Currency::transfer(
 				&Self::into_account(),
-				&instance_details.owner,
+				&class_details.owner,
 				instance_details.deposit,
 				AllowDeath,
 			).is_ok();
