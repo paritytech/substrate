@@ -1,4 +1,4 @@
-error: Invalid pallet::storage, expected ident: `StorageValue` or `StorageMap` or `StorageDoubleMap` or `StorageNMap` in order to expand metadata, found `u8`
+error: Invalid pallet::storage, expected ident: `StorageValue` or `StorageMap` or `StorageDoubleMap` or `StorageNMap` in order to expand metadata, found `u8`.
   --> $DIR/storage_not_storage_type.rs:19:16
    |
 19 |     type Foo<T> = u8;
