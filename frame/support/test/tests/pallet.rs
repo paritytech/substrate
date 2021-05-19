@@ -903,7 +903,7 @@ fn metadata() {
 						name: "NMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::NMap {
-							keys: scale_info::meta_type::<(u8,)>(),
+							keys: scale_info::meta_type::<u8>(),
 							hashers: vec![StorageHasher::Blake2_128Concat],
 							value: scale_info::meta_type::<u32>(),
 						},

@@ -342,7 +342,7 @@ mod tests {
 				StorageEntryMetadata {
 					name: "COMPLEXTYPE1",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<Option<u32>>()),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<(Option<u32>,)>()),
 					default: vec![0],
 					documentation: vec![],
 				},
@@ -350,7 +350,7 @@ mod tests {
 					name: "COMPLEXTYPE2",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<([[(u16, Option<()>); 32]; 12], u32)>()),
-					default: vec![0],
+					default: [0u8; 1156].to_vec(),
 					documentation: vec![],
 				},
 				StorageEntryMetadata {
@@ -375,7 +375,7 @@ mod tests {
 					name: "NMAP2",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::NMap {
-						keys: scale_info::meta_type::<(u32,)>(),
+						keys: scale_info::meta_type::<u32>(),
 						hashers: vec![StorageHasher::Blake2_128Concat],
 						value: scale_info::meta_type::<u8>(),
 					},

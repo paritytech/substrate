@@ -37,7 +37,7 @@ pub struct Key<Hasher, KeyType>(core::marker::PhantomData<(Hasher, KeyType)>);
 /// A trait that contains the current key as an associated type.
 pub trait KeyGenerator {
 	type Key: EncodeLike<Self::Key> + TypeInfo + 'static;
-	type KArg: Encode + TypeInfo + 'static;
+	type KArg: Encode;
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
 

@@ -371,7 +371,7 @@ where
 
 	fn ty() -> StorageEntryType {
 		StorageEntryType::NMap {
-			keys: scale_info::meta_type::<Key::KArg>(),
+			keys: scale_info::meta_type::<Key::Key>(),
 			hashers: Key::HASHER_METADATA.iter().cloned().collect(),
 			value: scale_info::meta_type::<Value>(),
 		}
