@@ -69,6 +69,12 @@ pub struct TrieMeta {
 	// change on access explicitely: `HashDB::get_with_meta`.
 	// and reset on access explicitely: `HashDB::access_from`.
 	pub unused_value: bool,
+	// Indicate that a node is using old hash scheme.
+	// Write with `do_value_hash` inactive will set this to
+	// true.
+	// In this case hash is not doing internal hashing,
+	// but next write with `do_value_hash` will remove switch scheme.
+	pub old_hash: bool,
 }
 
 impl Meta for TrieMeta {
@@ -150,6 +156,10 @@ impl Meta for TrieMeta {
 
 		self.range = Some(range);
 		self.contain_hash = contain_hash;
+		if self.do_value_hash {
+			// Switch value hashing.
+			self.old_hash = false;
+		}
 	}
 
 	fn set_child_callback(
@@ -253,7 +263,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 
 	fn hash(value: &[u8], meta: &Self::Meta) -> H::Out {
 		match &meta {
-			TrieMeta { range: Some(range), contain_hash: false, do_value_hash, .. } => {
+			TrieMeta { range: Some(range), contain_hash: false, do_value_hash, old_hash: false, .. } => {
 				if *do_value_hash && range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
 					let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
 					H::hash(value.as_slice())
@@ -273,6 +283,22 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 
 	fn stored_value(value: &[u8], mut meta: Self::Meta) -> DBValue {
 		let mut stored = Vec::with_capacity(value.len() + 1);
+		if meta.old_hash {
+			// write as old hash.
+			stored.push(trie_constants::OLD_HASHING);
+			stored.extend_from_slice(value);
+			return stored;
+		}
+		if !meta.do_value_hash {
+			if let Some(range) = meta.range.as_ref() {
+				if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
+					// write as old hash.
+					stored.push(trie_constants::OLD_HASHING);
+					stored.extend_from_slice(value);
+					return stored;
+				}
+			}
+		}
 		if meta.contain_hash {
 			// already contain hash, just flag it.
 			stored.push(trie_constants::DEAD_HEADER_META_HASHED_VALUE);
@@ -305,8 +331,13 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 	fn extract_value<'a>(mut stored: &'a [u8], parent_meta: Option<&Self::Meta>) -> (&'a [u8], Self::Meta) {
 		let input = &mut stored;
 		let mut contain_hash = false;
+		let mut old_hash = false;
 		if input.get(0) == Some(&trie_constants::DEAD_HEADER_META_HASHED_VALUE) {
 			contain_hash = true;
+			*input = &input[1..];
+		}
+		if input.get(0) == Some(&trie_constants::OLD_HASHING) {
+			old_hash = true;
 			*input = &input[1..];
 		}
 		let mut meta = TrieMeta {
@@ -315,6 +346,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 			contain_hash,
 			do_value_hash: false,
 			recorded_do_value_hash: false,
+			old_hash,
 		};
 		// get recorded_do_value_hash
 		let _offset = meta.read_state_meta(stored)
@@ -363,7 +395,6 @@ impl<H> MetaHasher<H, DBValue> for NoMetaHasher
 		(stored, Default::default())
 	}
 }
-
 
 impl<H, M> TrieConfiguration for Layout<H, M>
 	where
@@ -923,6 +954,9 @@ mod trie_constants {
 	pub const ENCODED_META_ALLOW_HASH: u8 = FIRST_PREFIX | 0b_01;
 	/// In proof this header is used when only hashed value is stored.
 	pub const DEAD_HEADER_META_HASHED_VALUE: u8 = FIRST_PREFIX | 0b_00_10;
+	/// If inner hashing should apply, but state is not flagged, then set
+	/// this meta to avoid checking both variant of hashes.
+	pub const OLD_HASHING: u8 = FIRST_PREFIX | 0b_00_11;
 	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
