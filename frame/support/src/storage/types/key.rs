@@ -20,7 +20,7 @@
 use crate::{hash::{ReversibleStorageHasher, StorageHasher}, traits::MaxEncodedLen};
 use codec::{Encode, EncodeLike, FullCodec};
 use paste::paste;
-use scale_info::TypeInfo;
+use scale_info::StaticTypeInfo;
 use sp_std::prelude::*;
 
 /// A type used exclusively by storage maps as their key type.
@@ -36,7 +36,7 @@ pub struct Key<Hasher, KeyType>(core::marker::PhantomData<(Hasher, KeyType)>);
 
 /// A trait that contains the current key as an associated type.
 pub trait KeyGenerator {
-	type Key: EncodeLike<Self::Key> + TypeInfo + 'static;
+	type Key: EncodeLike<Self::Key> + StaticTypeInfo;
 	type KArg: Encode;
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
@@ -67,7 +67,7 @@ pub trait KeyGeneratorInner: KeyGenerator {
 	fn final_hash(encoded: &[u8]) -> Vec<u8>;
 }
 
-impl<H: StorageHasher, K: FullCodec + TypeInfo + 'static> KeyGenerator for Key<H, K> {
+impl<H: StorageHasher, K: FullCodec + StaticTypeInfo> KeyGenerator for Key<H, K> {
 	type Key = K;
 	type KArg = (K,);
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
@@ -97,13 +97,13 @@ impl<H: StorageHasher, K: FullCodec + TypeInfo + 'static> KeyGenerator for Key<H
 	}
 }
 
-impl<H: StorageHasher, K: FullCodec + MaxEncodedLen + TypeInfo + 'static> KeyGeneratorMaxEncodedLen for Key<H, K> {
+impl<H: StorageHasher, K: FullCodec + MaxEncodedLen + StaticTypeInfo> KeyGeneratorMaxEncodedLen for Key<H, K> {
 	fn key_max_encoded_len() -> usize {
 		H::max_len::<K>()
 	}
 }
 
-impl<H: StorageHasher, K: FullCodec + TypeInfo + 'static> KeyGeneratorInner for Key<H, K> {
+impl<H: StorageHasher, K: FullCodec + StaticTypeInfo> KeyGeneratorInner for Key<H, K> {
 	type Hasher = H;
 
 	fn final_hash(encoded: &[u8]) -> Vec<u8> {
@@ -229,7 +229,7 @@ pub trait ReversibleKeyGenerator: KeyGenerator {
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error>;
 }
 
-impl<H: ReversibleStorageHasher, K: FullCodec + TypeInfo + 'static> ReversibleKeyGenerator for Key<H, K> {
+impl<H: ReversibleStorageHasher, K: FullCodec + StaticTypeInfo> ReversibleKeyGenerator for Key<H, K> {
 	type ReversibleHasher = H;
 
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error> {
@@ -275,7 +275,7 @@ macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), ($($prefix:ident),+), ($($suffix:ident),+)) => {
 		paste! {
 			impl<
-				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
+				$($keygen: FullCodec + StaticTypeInfo,)+
 				$( [<$keygen $keygen>]: StorageHasher,)+
 				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
 			> HasKeyPrefix<($( [<KArg $prefix>] ),+)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
@@ -287,7 +287,7 @@ macro_rules! impl_key_prefix_for {
 			}
 
 			impl<
-				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
+				$($keygen: FullCodec + StaticTypeInfo,)+
 				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
 				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
 			> HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for
@@ -302,7 +302,7 @@ macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), $prefix:ident, ($($suffix:ident),+)) => {
 		paste! {
 			impl<
-				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
+				$($keygen: FullCodec + StaticTypeInfo,)+
 				$( [<$keygen $keygen>]: StorageHasher,)+
 				[<KArg $prefix>]: EncodeLike<$prefix>
 			> HasKeyPrefix<( [<KArg $prefix>] ,)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
@@ -314,7 +314,7 @@ macro_rules! impl_key_prefix_for {
 			}
 
 			impl<
-				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
+				$($keygen: FullCodec + StaticTypeInfo,)+
 				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
 				[<KArg $prefix>]: EncodeLike<$prefix>
 			> HasReversibleKeyPrefix<( [<KArg $prefix>] ,)> for
@@ -329,7 +329,7 @@ macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), ($($prefix:ident),+), $suffix:ident) => {
 		paste! {
 			impl<
-				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
+				$($keygen: FullCodec + StaticTypeInfo,)+
 				$( [<$keygen $keygen>]: StorageHasher,)+
 				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
 			> HasKeyPrefix<($( [<KArg $prefix>] ),+)> for ($(Key<[<$keygen $keygen>], $keygen>),+) {
@@ -341,7 +341,7 @@ macro_rules! impl_key_prefix_for {
 			}
 
 			impl<
-				$($keygen: FullCodec + $crate::scale_info::TypeInfo + 'static,)+
+				$($keygen: FullCodec + StaticTypeInfo,)+
 				$( [<$keygen $keygen>]: ReversibleStorageHasher,)+
 				$( [<KArg $prefix>]: EncodeLike<$prefix> ),+
 			> HasReversibleKeyPrefix<($( [<KArg $prefix>] ),+)> for
@@ -357,8 +357,8 @@ macro_rules! impl_key_prefix_for {
 
 impl<A, B, X, Y, KArg> HasKeyPrefix<(KArg,)> for (Key<X, A>, Key<Y, B>)
 where
-	A: FullCodec + TypeInfo + 'static,
-	B: FullCodec + TypeInfo + 'static,
+	A: FullCodec + StaticTypeInfo,
+	B: FullCodec + StaticTypeInfo,
 	X: StorageHasher,
 	Y: StorageHasher,
 	KArg: EncodeLike<A>,
@@ -372,8 +372,8 @@ where
 
 impl<A, B, X, Y, KArg> HasReversibleKeyPrefix<(KArg,)> for (Key<X, A>, Key<Y, B>)
 where
-	A: FullCodec + TypeInfo + 'static,
-	B: FullCodec + TypeInfo + 'static,
+	A: FullCodec + StaticTypeInfo,
+	B: FullCodec + StaticTypeInfo,
 	X: ReversibleStorageHasher,
 	Y: ReversibleStorageHasher,
 	KArg: EncodeLike<A>,

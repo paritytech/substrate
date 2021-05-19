@@ -116,7 +116,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Type used for expressing timestamp.
 		type Moment: Parameter + Default + AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy + scale_info::TypeInfo + 'static;
+			+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy + scale_info::StaticTypeInfo;
 
 		/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 		type OnTimestampSet: OnTimestampSet<Self::Moment>;

@@ -361,7 +361,7 @@ impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadata
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
-	Value: FullCodec + scale_info::TypeInfo + 'static,
+	Value: FullCodec + scale_info::StaticTypeInfo,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,

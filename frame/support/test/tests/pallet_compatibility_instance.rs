@@ -90,7 +90,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		type Balance: Parameter + codec::HasCompact + From<u32> + Into<Weight> + Default
-			+ MaybeSerializeDeserialize + scale_info::TypeInfo + 'static;
+			+ MaybeSerializeDeserialize + scale_info::StaticTypeInfo;
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;

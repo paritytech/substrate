@@ -39,7 +39,7 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		#[pallet::constant]
 		type MyGetParam: Get<u32>;
-		type Balance: Parameter + Default + scale_info::TypeInfo + 'static;
+		type Balance: Parameter + Default + scale_info::StaticTypeInfo;
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 

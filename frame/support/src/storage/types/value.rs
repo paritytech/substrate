@@ -197,7 +197,7 @@ where
 impl<Prefix, Value, QueryKind, OnEmpty> StorageEntryMetadata
 	for StorageValue<Prefix, Value, QueryKind, OnEmpty> where
 	Prefix: StorageInstance,
-	Value: FullCodec + scale_info::TypeInfo + 'static,
+	Value: FullCodec + scale_info::StaticTypeInfo,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {

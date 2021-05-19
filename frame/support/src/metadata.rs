@@ -284,7 +284,7 @@ mod tests {
 	mod system {
 		use super::*;
 
-		pub trait Config: scale_info::TypeInfo + 'static {
+		pub trait Config: scale_info::StaticTypeInfo {
 			type BaseCallFilter;
 			const ASSOCIATED_CONST: u64 = 500;
 			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>

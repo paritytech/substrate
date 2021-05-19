@@ -233,7 +233,7 @@ impl<AccountId, AccountIndex> StaticLookup for AccountIdLookup<AccountId, Accoun
 where
 	AccountId: Codec + Clone + PartialEq + Debug,
 	AccountIndex: Codec + Clone + PartialEq + Debug,
-	crate::MultiAddress<AccountId, AccountIndex>: Codec + scale_info::TypeInfo + 'static,
+	crate::MultiAddress<AccountId, AccountIndex>: Codec + scale_info::StaticTypeInfo,
 {
 	type Source = crate::MultiAddress<AccountId, AccountIndex>;
 	type Target = AccountId;
@@ -740,7 +740,7 @@ impl Dispatchable for () {
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
-pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq + scale_info::TypeInfo + 'static {
+pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq + scale_info::StaticTypeInfo {
 	/// Unique identifier of this signed extension.
 	///
 	/// This will be exposed in the metadata to identify the signed extension used

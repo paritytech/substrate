@@ -330,8 +330,8 @@ impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMeta
 	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
-	Key: FullCodec + scale_info::TypeInfo + 'static,
-	Value: FullCodec + scale_info::TypeInfo + 'static,
+	Key: FullCodec + scale_info::StaticTypeInfo,
+	Value: FullCodec + scale_info::StaticTypeInfo,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
