@@ -53,11 +53,11 @@ pub struct RentStatus<T: Config> {
 	pub current_deposit: BalanceOf<T>,
 	/// Required deposit assuming the specified refcount (None if 0 is supplied).
 	pub custom_refcount_deposit: Option<BalanceOf<T>>,
-	/// Rent that is payed assuming that the contract is the only user of its code.
+	/// Rent that is paid assuming that the contract is the only user of its code.
 	pub max_rent: BalanceOf<T>,
-	/// Rent that is payed given the code's current refcount.
+	/// Rent that is paid given the code's current refcount.
 	pub current_rent: BalanceOf<T>,
-	/// Rent that is payed assuming the specified refcount (None is 0 is supplied).
+	/// Rent that is paid assuming the specified refcount (None is 0 is supplied).
 	pub custom_refcount_rent: Option<BalanceOf<T>>,
 	/// Reserved for backwards compatible changes to this data structure.
 	pub _reserved: Option<()>,
