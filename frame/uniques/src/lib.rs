@@ -37,7 +37,6 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-// TODO: mod impl_non_fungibles;
 mod functions;
 mod types;
 pub use types::*;
