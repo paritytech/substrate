@@ -143,7 +143,7 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 		Self {
 			client,
 			_block: PhantomData,
-			thread_pool: Mutex::new(ThreadPool::new(threads)),
+			thread_pool: Mutex::new(ThreadPool::with_name("offchain-worker".into(), threads)),
 			shared_client,
 			// in case both finality and regular workers are running we will
 			// have at most `threads` elements queued up of each kind.

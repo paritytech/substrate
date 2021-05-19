@@ -74,8 +74,8 @@ pub use self::hash::{
 	StorageHasher, ReversibleStorageHasher
 };
 pub use self::storage::{
-	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
-	IterableStorageDoubleMap, migration,
+	StorageValue, StorageMap, StorageDoubleMap, StorageNMap, StoragePrefixedMap,
+	IterableStorageMap, IterableStorageDoubleMap, IterableStorageNMap, migration,
 	bounded_vec::{self, BoundedVec},
 };
 pub use self::dispatch::{Parameter, Callable};
@@ -1234,10 +1234,16 @@ pub mod pallet_prelude {
 		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
 		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
-		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess},
+		traits::{
+			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
+			ConstU32, GetDefault,
+		},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
-		storage::types::{StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery},
+		storage::types::{
+			Key as NMapKey, StorageDoubleMap, StorageMap, StorageNMap, StorageValue, ValueQuery,
+			OptionQuery,
+		},
 		storage::bounded_vec::BoundedVec,
 	};
 	pub use codec::{Encode, Decode};
@@ -1343,6 +1349,17 @@ pub mod pallet_prelude {
 /// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
 /// `<Pallet as Store>::Foo`.
 ///
+/// To generate the full storage info (used for PoV calculation) use the attribute
+/// `#[pallet::set_storage_max_encoded_len]`, e.g.:
+/// ```ignore
+/// #[pallet::pallet]
+/// #[pallet::set_storage_max_encoded_len]
+/// pub struct Pallet<T>(_);
+/// ```
+///
+/// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
+/// and value types must bound [`traits::MaxEncodedLen`].
+///
 /// ### Macro expansion:
 ///
 /// The macro add this attribute to the struct definition:
@@ -1367,7 +1384,14 @@ pub mod pallet_prelude {
 /// given by [`frame_support::traits::PalletInfo`].
 /// (The implementation use the associated type `frame_system::Config::PalletInfo`).
 ///
-/// If attribute generate_store then macro create the trait `Store` and implement it on `Pallet`.
+/// It implements [`traits::StorageInfoTrait`] on `Pallet` which give information about all storages.
+///
+/// If the attribute generate_store is set then the macro creates the trait `Store` and implements
+/// it on `Pallet`.
+///
+/// If the attribute set_storage_max_encoded_len is set then the macro call
+/// [`traits::StorageInfoTrait`] for each storage in the implementation of
+/// [`traits::StorageInfoTrait`] for the pallet.
 ///
 /// # Hooks: `#[pallet::hooks]` mandatory
 ///
@@ -1562,11 +1586,28 @@ pub mod pallet_prelude {
 /// #[pallet::storage]
 /// #[pallet::getter(fn $getter_name)] // optional
 /// $vis type $StorageName<$some_generic> $optional_where_clause
+/// 	= $StorageType<$generic_name = $some_generics, $other_name = $some_other, ...>;
+/// ```
+/// or with unnamed generic
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::getter(fn $getter_name)] // optional
+/// $vis type $StorageName<$some_generic> $optional_where_clause
 /// 	= $StorageType<_, $some_generics, ...>;
 /// ```
 /// I.e. it must be a type alias, with generics: `T` or `T: Config`, aliased type must be one
 /// of `StorageValue`, `StorageMap` or `StorageDoubleMap` (defined in frame_support).
-/// Their first generic must be `_` as it is written by the macro itself.
+/// The generic arguments of the storage type can be given in two manner: named and unnamed.
+/// For named generic argument: the name for each argument is the one as define on the storage
+/// struct:
+/// * [`pallet_prelude::StorageValue`] expect `Value` and optionally `QueryKind` and `OnEmpty`,
+/// * [`pallet_prelude::StorageMap`] expect `Hasher`, `Key`, `Value` and optionally `QueryKind` and
+///   `OnEmpty`,
+/// * [`pallet_prelude::StorageDoubleMap`] expect `Hasher1`, `Key1`, `Hasher2`, `Key2`, `Value` and
+///   optionally `QueryKind` and `OnEmpty`.
+///
+/// For unnamed generic argument: Their first generic must be `_` as it is replaced by the macro
+/// and other generic must declared as a normal declaration of type generic in rust.
 ///
 /// The Prefix generic written by the macro is generated using `PalletInfo::name::<Pallet<..>>()`
 /// and the name of the storage type.
@@ -1580,6 +1621,12 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::getter(fn my_storage)]
+/// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
+/// ```
+/// or
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::getter(fn my_storage)]
 /// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 /// ```
 ///
@@ -1589,7 +1636,7 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[cfg(feature = "my-feature")]
 /// #[pallet::storage]
-/// pub(super) type MyStorage<T> = StorageValue<_, u32>;
+/// pub(super) type MyStorage<T> = StorageValue<Value = u32>;
 /// ```
 ///
 /// All the `cfg` attributes are automatically copied to the items generated for the storage, i.e. the
@@ -1606,10 +1653,11 @@ pub mod pallet_prelude {
 /// ### Macro expansion
 ///
 /// For each storage item the macro generates a struct named
-/// `_GeneratedPrefixForStorage$NameOfStorage`, and implements [`StorageInstance`](traits::StorageInstance)
-/// on it using the pallet and storage name. It then uses it as the first generic of the aliased
-/// type.
+/// `_GeneratedPrefixForStorage$NameOfStorage`, and implements
+/// [`StorageInstance`](traits::StorageInstance) on it using the pallet and storage name. It then
+/// uses it as the first generic of the aliased type.
 ///
+/// For named generic, the macro will reorder the generics, and remove the names.
 ///
 /// The macro implements the function `storage_metadata` on `Pallet` implementing the metadata for
 /// all storage items based on their kind:
@@ -1891,12 +1939,13 @@ pub mod pallet_prelude {
 /// 	// storage item. Thus generic hasher is supported.
 /// 	#[pallet::storage]
 /// 	pub(super) type MyStorageValue<T: Config> =
-/// 		StorageValue<_, T::Balance, ValueQuery, MyDefault<T>>;
+/// 		StorageValue<Value = T::Balance, QueryKind = ValueQuery, OnEmpty = MyDefault<T>>;
 ///
 /// 	// Another storage declaration
 /// 	#[pallet::storage]
 /// 	#[pallet::getter(fn my_storage)]
-/// 	pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
+/// 	pub(super) type MyStorage<T> =
+/// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
 /// 	// Declare the genesis config (optional).
 /// 	//
@@ -2033,12 +2082,12 @@ pub mod pallet_prelude {
 ///
 /// 	#[pallet::storage]
 /// 	pub(super) type MyStorageValue<T: Config<I>, I: 'static = ()> =
-/// 		StorageValue<_, T::Balance, ValueQuery, MyDefault<T, I>>;
+/// 		StorageValue<Value = T::Balance, QueryKind = ValueQuery, OnEmpty = MyDefault<T, I>>;
 ///
 /// 	#[pallet::storage]
 /// 	#[pallet::getter(fn my_storage)]
 /// 	pub(super) type MyStorage<T, I = ()> =
-/// 		StorageMap<_, Blake2_128Concat, u32, u32>;
+/// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
 /// 	#[pallet::genesis_config]
 /// 	#[derive(Default)]
@@ -2210,7 +2259,7 @@ pub mod pallet_prelude {
 /// 		```ignore
 /// 		#[pallet::type_value] fn MyStorageOnEmpty() -> u32 { 3u32 }
 /// 		#[pallet::storage]
-/// 		pub(super) type MyStorage<T> = StorageValue<u32, ValueQuery, MyStorageOnEmpty>;
+/// 		pub(super) type MyStorage<T> = StorageValue<_, u32, ValueQuery, MyStorageOnEmpty>;
 /// 		```
 ///
 /// 	NOTE: `decl_storage` also generates functions `assimilate_storage` and `build_storage`
