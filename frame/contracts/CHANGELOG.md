@@ -20,6 +20,8 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Added
 
+- Add new **unstable** version of `seal_call` that offers more features.
+
 - New **unstable** `seal_rent_params` and `seal_rent_status` contract callable function.
 [#8231](https://github.com/paritytech/substrate/pull/8231)
 [#8780](https://github.com/paritytech/substrate/pull/8780)
