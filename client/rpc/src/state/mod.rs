@@ -325,9 +325,10 @@ impl<Block, Client> State<Block, Client>
 
 		// state_runtimeVersion/state_unsubscribeRuntimeVersion
 		// state_storage/state_unsubscribeStorage
-		let runtime_version_subs = module.register_subscription("state_runtimeVersion", "state_unsubscribeRuntimeVersion")?;
-		let storage_subs = module.register_subscription("state_storage", "state_unsubscribeStorage")?;
-		let sinks = SubscriptionSinks::new(vec![runtime_version_subs, storage_subs], client);
+		let runtime_version_sink = module.register_subscription("state_runtimeVersion", "state_unsubscribeRuntimeVersion")?;
+		// TODO: this one is tricky, need to look up storage values, but how?
+		let _storage_subs = module.register_subscription("state_storage", "state_unsubscribeStorage")?;
+		let sinks = SubscriptionSinks::new(client, runtime_version_sink);
 
 
 		Ok((module, sinks))
@@ -335,8 +336,8 @@ impl<Block, Client> State<Block, Client>
 }
 
 pub struct SubscriptionSinks<Block, Client> {
-	sinks: Vec<SubscriptionSink>,
 	client: Arc<Client>,
+	runtime_version_sink: SubscriptionSink,
 	marker: PhantomData<Block>,
 }
 
@@ -345,8 +346,8 @@ impl<Block, Client> SubscriptionSinks<Block, Client>
 		Block: BlockT + 'static,
 		Client: BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 {
-	fn new(sinks: Vec<SubscriptionSink>, client: Arc<Client>) -> Self {
-		Self { sinks, client, marker: PhantomData }
+	fn new(client: Arc<Client>, runtime_version_sink: SubscriptionSink, ) -> Self {
+		Self { client, runtime_version_sink, marker: PhantomData }
 	}
 
 	/// Set up subscriptions to storage events.
@@ -354,7 +355,7 @@ impl<Block, Client> SubscriptionSinks<Block, Client>
 	pub async fn subscribe(mut self) {
 		let version = self.client.runtime_version_at(&BlockId::hash(self.client.info().best_hash)).expect("TODO");
 		let mut previous_version = version.clone();
-		self.sinks[0].send(&version);
+		self.runtime_version_sink.send(&version);
 
 		let rt_version_stream = self.client.storage_changes_notification_stream(
 			Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
@@ -386,7 +387,7 @@ impl<Block, Client> SubscriptionSinks<Block, Client>
 
 		loop {
 			if let Some(version) = stream.next().await {
-				self.sinks[0].send(&version);
+				self.runtime_version_sink.send(&version);
 			}
 		}
 
