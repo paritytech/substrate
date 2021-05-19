@@ -385,7 +385,29 @@ fn force_asset_status_should_work(){
 	});
 }
 
-// TODO: burn
+#[test]
+fn burn_works() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+		assert_ok!(Uniques::set_team(Origin::signed(1), 0, 2, 3, 4));
+
+		assert_noop!(Uniques::burn(Origin::signed(5), 0, 42, Some(5)), Error::<Test>::Unknown);
+
+		assert_ok!(Uniques::mint(Origin::signed(2), 0, 42, 5));
+		assert_ok!(Uniques::mint(Origin::signed(2), 0, 69, 5));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, vec![0; 1], vec![0; 1], false));
+		assert_eq!(Balances::reserved_balance(1), 5);
+
+		assert_noop!(Uniques::burn(Origin::signed(0), 0, 42, None), Error::<Test>::NoPermission);
+		assert_noop!(Uniques::burn(Origin::signed(5), 0, 42, Some(6)), Error::<Test>::WrongOwner);
+
+		assert_ok!(Uniques::burn(Origin::signed(5), 0, 42, Some(5)));
+		assert_ok!(Uniques::burn(Origin::signed(3), 0, 69, Some(5)));
+		assert_eq!(Balances::reserved_balance(1), 0);
+	});
+}
+
 // TODO: approvals
 
 /*
