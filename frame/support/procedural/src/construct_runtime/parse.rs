@@ -210,13 +210,18 @@ pub struct PalletPath {
 
 impl Parse for PalletPath {
 	fn parse(input: ParseStream) -> Result<Self> {
+		let mut lookahead = input.lookahead1();
 		let mut segments = Punctuated::new();
 
-		// Stop when the instance or the pallet part begins
-		while !input.peek(token::Brace) && !input.peek(Token![<]) {
+		while lookahead.peek(Ident) {
 			let ident = input.parse()?;
 			segments.push(PathSegment { ident, arguments: PathArguments::None });
 			let _: Token![::] = input.parse()?;
+			lookahead = input.lookahead1();
+		}
+
+		if !lookahead.peek(token::Brace) && !lookahead.peek(Token![<]) {
+			return Err(lookahead.error());
 		}
 
 		Ok(Self {
