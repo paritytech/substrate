@@ -20,7 +20,7 @@
 
 use structopt::clap::arg_enum;
 
-/// How to execute Wasm runtime code
+/// How to execute Wasm runtime code.
 #[derive(Debug, Clone, Copy)]
 pub enum WasmExecutionMethod {
 	/// Uses an interpreter.
