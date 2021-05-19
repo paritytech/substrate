@@ -28,6 +28,7 @@ use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	storage::child,
 	traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons},
+	DefaultNoBound,
 };
 use pallet_contracts_primitives::{ContractAccessError, RentProjection, RentProjectionResult};
 use sp_runtime::{
@@ -44,7 +45,7 @@ use sp_runtime::{
 ///
 /// The `current_*` fields do **not** consider changes to the code's refcount made during
 /// the currently running call.
-#[derive(codec::Encode)]
+#[derive(codec::Encode, DefaultNoBound)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct RentStatus<T: Config> {
 	/// Required deposit assuming that this contract is the only user of its code.
@@ -61,21 +62,6 @@ pub struct RentStatus<T: Config> {
 	pub custom_refcount_rent: Option<BalanceOf<T>>,
 	/// Reserved for backwards compatible changes to this data structure.
 	pub _reserved: Option<()>,
-}
-
-/// We cannot derive `Default` because `T` does not necessarily implement `Default`.
-impl<T: Config> Default for RentStatus<T> {
-	fn default() -> Self {
-		Self {
-			max_deposit: Default::default(),
-			current_deposit: Default::default(),
-			custom_refcount_deposit: Default::default(),
-			max_rent: Default::default(),
-			current_rent: Default::default(),
-			custom_refcount_rent: Default::default(),
-			_reserved: Default::default(),
-		}
-	}
 }
 
 pub struct Rent<T, E>(sp_std::marker::PhantomData<(T, E)>);

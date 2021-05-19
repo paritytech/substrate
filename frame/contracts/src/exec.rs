@@ -32,7 +32,7 @@ use frame_support::{
 	storage::{with_transaction, TransactionOutcome},
 	traits::{ExistenceRequirement, Currency, Time, Randomness, Get},
 	weights::Weight,
-	ensure,
+	ensure, DefaultNoBound,
 };
 use pallet_contracts_primitives::{ExecReturnValue};
 use smallvec::{SmallVec, Array};
@@ -82,7 +82,7 @@ impl<T: Into<DispatchError>> From<T> for ExecError {
 }
 
 /// Information needed for rent calculations that can be requested by a contract.
-#[derive(codec::Encode)]
+#[derive(codec::Encode, DefaultNoBound)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct RentParams<T: Config> {
 	/// The total balance of the contract. Includes the balance transferred from the caller.
@@ -138,27 +138,6 @@ where
 			code_size: executable.aggregate_code_len(),
 			code_refcount: executable.refcount(),
 			_reserved: None,
-		}
-	}
-}
-
-/// We cannot derive `Default` because `T` does not necessarily implement `Default`.
-#[cfg(test)]
-impl<T: Config> Default for RentParams<T> {
-	fn default() -> Self {
-		Self {
-			total_balance: Default::default(),
-			free_balance: Default::default(),
-			subsistence_threshold: Default::default(),
-			deposit_per_contract: Default::default(),
-			deposit_per_storage_byte: Default::default(),
-			deposit_per_storage_item: Default::default(),
-			rent_allowance: Default::default(),
-			rent_fraction: Default::default(),
-			storage_size: Default::default(),
-			code_size: Default::default(),
-			code_refcount: Default::default(),
-			_reserved: Default::default(),
 		}
 	}
 }
