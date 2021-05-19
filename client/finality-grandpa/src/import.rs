@@ -446,7 +446,9 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block
 		match self.inner.status(BlockId::Hash(hash)) {
-			Ok(BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(BlockStatus::InChain) => {
+				return (&*self.inner).import_block(block, new_cache).await
+			}
 			Ok(BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}

@@ -168,12 +168,12 @@ impl<B: BlockT> StateRequestHandler<B> {
 			}
 		}
 
-		debug!(
+		log::trace!(
 			target: LOG_TARGET,
 			"Handling storage request from {}: Block {:?}, Starting at {:?}",
 			peer,
-			request.block,
-			request.start,
+			sp_core::hexdisplay::HexDisplay::from(&request.block),
+			sp_core::hexdisplay::HexDisplay::from(&request.start),
 		);
 
 		let result = if reputation_changes.is_empty() {
@@ -190,6 +190,12 @@ impl<B: BlockT> StateRequestHandler<B> {
 				response.values.push(StateEntry { key: k.0, value: v.0 });
 			}
 
+			log::trace!(
+				target: LOG_TARGET,
+				"Storage response contains {} keys, {} bytes",
+				response.values.len(),
+				total_len,
+			);
 			// If response contains nay data, we can consider it as successful request.
 			if !response.values.is_empty() {
 				if let Some(value) = self.seen_requests.get_mut(&key) {

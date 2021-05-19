@@ -214,6 +214,7 @@ pub struct ChainSync<B: BlockT> {
 	block_announce_validation_per_peer_stats: HashMap<PeerId, usize>,
 	/// State sync in progress, if any.
 	state_sync: Option<StateSync<B>>,
+	imported_state: bool,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -502,6 +503,7 @@ impl<B: BlockT> ChainSync<B> {
 			block_announce_validation: Default::default(),
 			block_announce_validation_per_peer_stats: Default::default(),
 			state_sync: None,
+			imported_state: false,
 		}
 	}
 
@@ -744,7 +746,7 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Get an iterator over all block requests of all peers.
 	pub fn block_requests(&mut self) -> impl Iterator<Item = (&PeerId, BlockRequest<B>)> + '_ {
-		if self.pending_requests.is_empty() {
+		if self.pending_requests.is_empty() || self.state_sync.is_some() {
 			return Either::Left(std::iter::empty())
 		}
 		if self.queue_blocks.len() > MAX_IMPORTING_BLOCKS {
@@ -838,7 +840,8 @@ impl<B: BlockT> ChainSync<B> {
 				return None;
 			}
 			for (id, peer) in self.peers.iter_mut() {
-				if peer.state.is_available() && peer.common_number <= sync.target_block_num() {
+				log::info!("Checking common {}", peer.common_number);
+				if peer.state.is_available() && peer.common_number >= sync.target_block_num() {
 					peer.state = PeerSyncState::DownloadingState;
 					let request = sync.next_request();
 					return Some((id.clone(), request))
@@ -1077,10 +1080,15 @@ impl<B: BlockT> ChainSync<B> {
 					body: None,
 					justifications: None,
 					origin: None,
-					allow_missing_state: false,
+					allow_missing_state: true,
 					import_existing: true,
 					state: Some(state),
 				};
+				debug!(target: "sync", "State sync is complete.");
+				self.imported_state = true;
+				self.state_sync = None;
+				self.required_block_attributes |= BlockAttributes::BODY;
+
 				Ok(OnStateData::Import(origin, block))
 			}
 			state::ImportResult::Continue(request) => {
@@ -1312,6 +1320,30 @@ impl<B: BlockT> ChainSync<B> {
 		let r = self.extra_justifications.on_block_finalized(hash, number, |base, block| {
 			is_descendent_of(&**client, base, block)
 		});
+
+		if matches!(self.mode, SyncMode::LightState { .. }) {
+			if !self.imported_state
+				&& self.state_sync.is_none()
+				&& !self.peers.is_empty()
+				&& self.queue_blocks.is_empty()
+			{
+				// Finalized a recent block.
+				let mut heads: Vec<_> = self.peers.iter().map(|(_, peer)| peer.best_number).collect();
+				heads.sort();
+				let median = heads[heads.len() / 2];
+				if number + 32u32.saturated_into() >= median {
+					if let Ok(Some(header)) = self.client.header(BlockId::hash(hash.clone())) {
+						log::info!(
+							target: "sync",
+							"Starting state sync for #{} ({})",
+							number,
+							hash,
+						);
+						self.state_sync = Some(StateSync::new(header));
+					}
+				}
+			}
+		}
 
 		if let Err(err) = r {
 			warn!(
@@ -2099,7 +2131,7 @@ mod test {
 		let peer_id = PeerId::random();
 
 		let mut sync = ChainSync::new(
-			Roles::AUTHORITY,
+			SyncMode::Full,
 			client.clone(),
 			&info,
 			block_announce_validator,
@@ -2170,7 +2202,7 @@ mod test {
 		let info = client.info();
 
 		let mut sync = ChainSync::new(
-			Roles::AUTHORITY,
+			SyncMode::Full,
 			client.clone(),
 			&info,
 			Box::new(DefaultBlockAnnounceValidator),
@@ -2345,7 +2377,7 @@ mod test {
 		let info = client.info();
 
 		let mut sync = ChainSync::new(
-			Roles::AUTHORITY,
+			SyncMode::Full,
 			client.clone(),
 			&info,
 			Box::new(DefaultBlockAnnounceValidator),
@@ -2459,7 +2491,7 @@ mod test {
 		let info = client.info();
 
 		let mut sync = ChainSync::new(
-			Roles::AUTHORITY,
+			SyncMode::Full,
 			client.clone(),
 			&info,
 			Box::new(DefaultBlockAnnounceValidator),
@@ -2581,7 +2613,7 @@ mod test {
 		let info = client.info();
 
 		let mut sync = ChainSync::new(
-			Roles::AUTHORITY,
+			SyncMode::Full,
 			client.clone(),
 			&info,
 			Box::new(DefaultBlockAnnounceValidator),
@@ -2695,7 +2727,7 @@ mod test {
 		let info = client.info();
 
 		let mut sync = ChainSync::new(
-			Roles::AUTHORITY,
+			SyncMode::Full,
 			client.clone(),
 			&info,
 			Box::new(DefaultBlockAnnounceValidator),

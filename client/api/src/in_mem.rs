@@ -562,7 +562,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
+	fn reset_storage(&mut self, storage: Storage, commit: bool) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
 		let child_delta = storage.children_default.iter()
@@ -578,7 +578,9 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 			child_delta,
 		);
 
-		self.new_state = Some(transaction);
+		if commit {
+			self.new_state = Some(transaction);
+		}
 		Ok(root)
 	}
 

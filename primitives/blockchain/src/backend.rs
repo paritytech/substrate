@@ -272,7 +272,7 @@ pub struct Info<Block: BlockT> {
 }
 
 /// Block status.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockStatus {
 	/// Already in the blockchain.
 	InChain,

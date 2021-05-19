@@ -364,6 +364,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 				offchain_worker_enabled : config.offchain_worker.enabled,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
+				write_genesis: config.network.sync_mode == sc_network::config::SyncMode::Full,
 			},
 		)?;
 

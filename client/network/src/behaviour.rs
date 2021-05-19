@@ -201,6 +201,7 @@ impl<B: BlockT> Behaviour<B> {
 		let block_request_protocol_name = block_request_protocol_config.name.to_string();
 		let state_request_protocol_name = state_request_protocol_config.name.to_string();
 		request_response_protocols.push(block_request_protocol_config);
+		request_response_protocols.push(state_request_protocol_config);
 
 		request_response_protocols.push(light_client_request_protocol_config);
 

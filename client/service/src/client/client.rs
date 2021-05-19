@@ -152,7 +152,7 @@ impl<H> PrePostHeader<H> {
 
 enum PrepareStorageChangesResult<B: backend::Backend<Block>, Block: BlockT> {
 	Discard(ImportResult),
-	Import(Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>),
+	Import((Option<sp_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>>, bool)),
 }
 
 /// Create an instance of in-memory client.
@@ -196,6 +196,8 @@ pub struct ClientConfig {
 	pub offchain_indexing_api: bool,
 	/// Path where WASM files exist to override the on-chain WASM.
 	pub wasm_runtime_overrides: Option<PathBuf>,
+	/// Write genesis state on first start.
+	pub write_genesis: bool,
 }
 
 /// Create a client with the explicitly provided backend.
@@ -319,8 +321,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let genesis_storage = build_genesis_storage.build_storage()
 				.map_err(sp_blockchain::Error::Storage)?;
 			let mut op = backend.begin_operation()?;
-			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
-			let state_root = op.reset_storage(genesis_storage)?;
+			let state_root = op.reset_storage(genesis_storage, config.write_genesis)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!("🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
 				genesis_block.header().state_root(),
@@ -620,7 +621,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		operation: &mut ClientImportOperation<Block, B>,
 		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
-		storage_changes: Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>,
+		storage_changes: Option<sp_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>>,
 	) -> sp_blockchain::Result<ImportResult> where
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
@@ -709,7 +710,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: PrePostHeader<Block::Header>,
 		justifications: Option<Justifications>,
 		body: Option<Vec<Block::Extrinsic>>,
-		storage_changes: Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>,
+		storage_changes: Option<sp_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -734,7 +735,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		// the block is lower than our last finalized block so it must revert
 		// finality, refusing import.
-		if *import_headers.post().number() <= info.finalized_number {
+		if status == blockchain::BlockStatus::Unknown
+			&& *import_headers.post().number() <= info.finalized_number
+		{
 			return Err(sp_blockchain::Error::NotInFinalizedChain);
 		}
 
@@ -748,7 +751,43 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let storage_changes = match storage_changes {
 			Some(storage_changes) => {
-				self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+				let storage_changes = match storage_changes {
+					sp_consensus::StorageChanges::Raw(storage_changes) => {
+						self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+						let (
+							main_sc,
+							child_sc,
+							offchain_sc,
+							tx, _,
+							changes_trie_tx,
+							tx_index,
+						) = storage_changes.into_inner();
+
+						if self.config.offchain_indexing_api {
+							operation.op.update_offchain_storage(offchain_sc)?;
+						}
+
+						operation.op.update_db_storage(tx)?;
+						operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
+						operation.op.update_transaction_index(tx_index)?;
+
+						if let Some(changes_trie_transaction) = changes_trie_tx {
+							operation.op.update_changes_trie(changes_trie_transaction)?;
+						}
+
+						Some((main_sc, child_sc))
+					}
+					sp_consensus::StorageChanges::Import(changes) => {
+						let storage = sp_storage::Storage {
+							top: changes.state.into_iter().collect(),
+							children_default: Default::default(),
+						};
+						println!("Top contains {} keys", storage.top.len());
+						let state_root = operation.op.reset_storage(storage, true)?;
+						assert_eq!(&state_root, import_headers.post().state_root());
+						None
+					}
+				};
 
 				// ensure parent block is finalized to maintain invariant that
 				// finality is called sequentially.
@@ -763,29 +802,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				}
 
 				operation.op.update_cache(new_cache);
+				storage_changes
 
-				let (
-					main_sc,
-					child_sc,
-					offchain_sc,
-					tx, _,
-					changes_trie_tx,
-					tx_index,
-				) = storage_changes.into_inner();
-
-				if self.config.offchain_indexing_api {
-					operation.op.update_offchain_storage(offchain_sc)?;
-				}
-
-				operation.op.update_db_storage(tx)?;
-				operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
-				operation.op.update_transaction_index(tx_index)?;
-
-				if let Some(changes_trie_transaction) = changes_trie_tx {
-					operation.op.update_changes_trie(changes_trie_transaction)?;
-				}
-
-				Some((main_sc, child_sc))
 			},
 			None => None,
 		};
@@ -869,29 +887,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let enact_state = match self.block_status(&at)? {
 			BlockStatus::Unknown => return Ok(PrepareStorageChangesResult::Discard(ImportResult::UnknownParent)),
 			BlockStatus::InChainWithState | BlockStatus::Queued => true,
-			BlockStatus::InChainPruned if import_block.allow_missing_state => false,
+			BlockStatus::InChainPruned if import_block.allow_missing_state =>
+				matches!(import_block.storage_changes, Some(sp_consensus::StorageChanges::Import(_))),
 			BlockStatus::InChainPruned => return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
 			BlockStatus::KnownBad => return Ok(PrepareStorageChangesResult::Discard(ImportResult::KnownBad)),
 		};
 
 		let storage_changes = import_block.storage_changes.take();
-		let storage_changes = match (enact_state, storage_changes, &import_block.body) {
+		let (storage_changes, set_head) = match (enact_state, storage_changes, &import_block.body) {
 			// We have storage changes and should enact the state, so we don't need to do anything
 			// here
-			(true, Some(sp_consensus::StorageChanges::Raw(changes)), _) => Some(changes),
+			(true, changes @ Some(sp_consensus::StorageChanges::Raw(_)), _) => (changes, false),
 			// We have imported state. Convert it to storage changes.
-			(true, Some(sp_consensus::StorageChanges::Import(imported_state)), _) => {
-				let state = self.backend.empty_state()?;
-				let mut overlay = sp_state_machine::OverlayedChanges::default();
-				let cache = Default::default();
-				for (k, v) in imported_state.state {
-					overlay.set_storage(k, Some(v));
-				}
-				let changes = overlay.into_storage_changes(&state, None, parent_hash.clone(), cache)
-					.map_err(sp_blockchain::Error::Storage)?;
-
-				Some(changes)
-			}
+			(true, changes @ Some(sp_consensus::StorageChanges::Import(_)), _) => (changes, true),
 			// We should enact state, but don't have any storage changes, so we need to execute the
 			// block.
 			(true, None, Some(ref body)) => {
@@ -925,15 +933,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				{
 					return Err(Error::InvalidStateRoot)
 				}
-				Some(gen_storage_changes)
+				(Some(sp_consensus::StorageChanges::Raw(gen_storage_changes)), false)
 			},
 			// No block body, no storage changes
-			(true, None, None) => None,
+			(true, None, None) => (None, false),
 			// We should not enact the state, so we set the storage changes to `None`.
-			(false, _, _) => None,
+			(false, _, _) => (None, false)
 		};
 
-		Ok(PrepareStorageChangesResult::Import(storage_changes))
+		Ok(PrepareStorageChangesResult::Import((storage_changes, set_head)))
 	}
 
 	fn apply_finality_with_block_hash(
@@ -1772,7 +1780,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
 		let _enter = span.enter();
 
-		let storage_changes = match self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
+		let (storage_changes, set_head) = match self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
 			warn!("Block prepare storage changes error:\n{:?}", e);
 			ConsensusError::ClientImport(e.to_string())
 		})? {
@@ -1781,6 +1789,10 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 		};
 
 		self.lock_import_and_run(|operation| {
+			if set_head {
+				println!("Set head {:?} {:?}", import_block.header.hash(), import_block.post_hash.unwrap());
+				operation.op.mark_head(BlockId::Hash(import_block.post_hash.unwrap()))?;
+			}
 			self.apply_block(operation, import_block, new_cache, storage_changes)
 		}).map_err(|e| {
 			warn!("Block import error:\n{:?}", e);
@@ -1823,9 +1835,14 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 		match self.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
-			BlockStatus::InChainWithState | BlockStatus::Queued if !import_existing  => return Ok(ImportResult::AlreadyInChain),
+			BlockStatus::InChainWithState | BlockStatus::Queued if !import_existing  => {
+				return Ok(ImportResult::AlreadyInChain)
+			},
 			BlockStatus::InChainWithState | BlockStatus::Queued => {},
-			BlockStatus::InChainPruned => return Ok(ImportResult::AlreadyInChain),
+			BlockStatus::InChainPruned if !import_existing => {
+				return Ok(ImportResult::AlreadyInChain)
+			},
+			BlockStatus::InChainPruned => {},
 			BlockStatus::Unknown => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}

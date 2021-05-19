@@ -7895,6 +7895,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-state-machine",
+ "sp-storage",
  "sp-tracing",
  "sp-transaction-pool",
  "sp-trie",

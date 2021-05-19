@@ -1275,7 +1275,11 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		// early exit if block already in chain, otherwise the check for
 		// epoch changes will error when trying to re-import an epoch change
 		match self.client.status(BlockId::Hash(hash)) {
-			Ok(sp_blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(sp_blockchain::BlockStatus::InChain) => {
+				let _ = block.take_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY)?;
+				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+				return self.inner.import_block(block, new_cache).await.map_err(Into::into)
+			}
 			Ok(sp_blockchain::BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}

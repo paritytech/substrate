@@ -267,8 +267,14 @@ pub(crate) async fn import_single_block_metered<B: BlockT, V: Verifier<B>, Trans
 		cache.extend(keys.into_iter());
 	}
 	import_block.allow_missing_state = block.allow_missing_state;
+	import_block.import_existing = block.import_existing;
+	let mut import_block = import_block.convert_transaction();
+	if let Some(state) = block.state {
+		println!("Set queue state");
+		import_block.storage_changes = Some(crate::StorageChanges::Import(state));
+	}
 
-	let imported = import_handle.import_block(import_block.convert_transaction(), cache).await;
+	let imported = import_handle.import_block(import_block, cache).await;
 	if let Some(metrics) = metrics.as_ref() {
 		metrics.report_verification_and_import(started.elapsed());
 	}

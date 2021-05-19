@@ -325,7 +325,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, input: Storage) -> ClientResult<Block::Hash> {
+	fn reset_storage(&mut self, input: Storage, commit: bool) -> ClientResult<Block::Hash> {
 		check_genesis_storage(&input)?;
 
 		// changes trie configuration
@@ -351,7 +351,9 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 		let storage_update = InMemoryBackend::from(storage);
 		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
-		self.storage_update = Some(storage_update);
+		if commit {
+			self.storage_update = Some(storage_update);
+		}
 
 		Ok(storage_root)
 	}

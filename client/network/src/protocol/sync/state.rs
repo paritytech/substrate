@@ -36,11 +36,11 @@ pub enum ImportResult<B: BlockT> {
 }
 
 impl<B: BlockT> StateSync<B> {
-	pub fn new(target: &B::Header) -> Self {
+	pub fn new(target: B::Header) -> Self {
 		StateSync {
 			target_block: target.hash(),
 			target_root: target.state_root().clone(),
-			target_header: target.clone(),
+			target_header: target,
 			last_key: Vec::default(),
 			state: Vec::default(),
 		}
@@ -50,6 +50,11 @@ impl<B: BlockT> StateSync<B> {
 		if let Some(StateEntry { key, .. }) = response.values.last() {
 			self.last_key = key.clone();
 		}
+		log::info!(
+			target: "sync",
+			"Importing state {}",
+			sp_core::hexdisplay::HexDisplay::from(&self.last_key)
+		);
 		for StateEntry { key, value } in response.values {
 			self.state.push((key, value))
 		};

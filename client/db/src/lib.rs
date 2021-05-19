@@ -763,6 +763,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 	fn reset_storage(
 		&mut self,
 		storage: Storage,
+		commit: bool,
 	) -> ClientResult<Block::Hash> {
 		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
 			return Err(sp_blockchain::Error::GenesisInvalid.into());
@@ -789,7 +790,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 		self.db_updates = transaction;
 		self.changes_trie_config_update = Some(changes_trie_config);
-		self.commit_state = true;
+		self.commit_state = commit;
 		Ok(root)
 	}
 
@@ -875,18 +876,39 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 	}
 }
 
-struct DbGenesisStorage<Block: BlockT>(pub Block::Hash);
+struct DbGenesisStorage<Block: BlockT> {
+	root: Block::Hash,
+	storage: PrefixedMemoryDB<HashFor<Block>>,
+}
 
 impl<Block: BlockT> DbGenesisStorage<Block> {
-	pub fn new() -> Self {
-		let mut root = Block::Hash::default();
-		let mut mdb = MemoryDB::<HashFor<Block>>::default();
-		sp_state_machine::TrieDBMut::<HashFor<Block>>::new(&mut mdb, &mut root);
-		DbGenesisStorage(root)
+	pub fn new(root: Block::Hash, storage: PrefixedMemoryDB<HashFor<Block>>) -> Self {
+		DbGenesisStorage {
+			root,
+			storage,
+		}
 	}
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStorage<Block> {
+	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		use hash_db::HashDB;
+		Ok(self.storage.get(key, prefix))
+	}
+}
+
+struct EmptyStorage<Block: BlockT>(pub Block::Hash);
+
+impl<Block: BlockT> EmptyStorage<Block> {
+	pub fn new() -> Self {
+		let mut root = Block::Hash::default();
+		let mut mdb = MemoryDB::<HashFor<Block>>::default();
+		sp_state_machine::TrieDBMut::<HashFor<Block>>::new(&mut mdb, &mut root);
+		EmptyStorage(root)
+	}
+}
+
+impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for EmptyStorage<Block> {
 	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
@@ -948,6 +970,7 @@ pub struct Backend<Block: BlockT> {
 	transaction_storage: TransactionStorageMode,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
+	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1042,6 +1065,7 @@ impl<Block: BlockT> Backend<Block> {
 			state_usage: Arc::new(StateUsageStats::new()),
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
+			genesis_state: RwLock::new(None),
 		})
 	}
 
@@ -1273,6 +1297,11 @@ impl<Block: BlockT> Backend<Block> {
 				if operation.changes_trie_config_update.is_none() {
 					operation.changes_trie_config_update = Some(None);
 				}
+
+				*self.genesis_state.write() = Some(Arc::new(DbGenesisStorage::new(
+					pending_block.header.state_root().clone(),
+					operation.db_updates.clone()
+				)));
 			}
 
 			let finalized = if operation.commit_state {
@@ -1414,6 +1443,7 @@ impl<Block: BlockT> Backend<Block> {
 				let number = header.number();
 				let hash = header.hash();
 
+				println!("Set head to {}", hash);
 				let (enacted, retracted) = self.set_head_with_transaction(
 					&mut transaction,
 					hash.clone(),
@@ -1711,7 +1741,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	type OffchainStorage = offchain::LocalStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
-		let mut old_state = self.state_at(BlockId::Hash(Default::default()))?;
+		let mut old_state = self.empty_state()?;
 		old_state.disable_syncing();
 
 		Ok(BlockImportOperation {
@@ -2035,12 +2065,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
-		// special case for genesis initialization
-		match block {
-			BlockId::Hash(h) if h == Default::default() => {
-				let genesis_storage = DbGenesisStorage::<Block>::new();
-				let root = genesis_storage.0.clone();
-				let db_state = DbState::<Block>::new(Arc::new(genesis_storage), root);
+		if block.is_genesis() {
+			if let Some(genesis_state) = &*self.genesis_state.read() {
+				let root = genesis_state.root.clone();
+				let db_state = DbState::<Block>::new(genesis_state.clone(), root);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				let caching_state = CachingState::new(
 					state,
@@ -2048,13 +2076,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					None,
 				);
 				return Ok(SyncingCachingState::new(
-					caching_state,
-					self.state_usage.clone(),
-					self.blockchain.meta.clone(),
-					self.import_lock.clone(),
+						caching_state,
+						self.state_usage.clone(),
+						self.blockchain.meta.clone(),
+						self.import_lock.clone(),
 				));
-			},
-			_ => {}
+			}
 		}
 
 		let hash = match block {
@@ -2126,7 +2153,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn empty_state(&self) -> ClientResult<Self::State> {
-		let root = DbGenesisStorage::<Block>::new().0; // Empty trie
+		let root = EmptyStorage::<Block>::new().0; // Empty trie
 		let db_state = DbState::<Block>::new(self.storage.clone(), root);
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 		let caching_state = CachingState::new(
@@ -2224,7 +2251,6 @@ pub(crate) mod tests {
 			BlockId::Number(number - 1)
 		};
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, Some(body), None, NewBlockState::Best).unwrap();
 		if let Some(index) = transaction_index {
 			op.update_transaction_index(index).unwrap();
@@ -2319,7 +2345,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-			}).unwrap();
+			}, true).unwrap();
 			op.set_block_data(
 				header.clone(),
 				Some(vec![]),
@@ -2402,7 +2428,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: Default::default(),
 				children_default: Default::default(),
-			}).unwrap();
+			}, true).unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(
@@ -2849,7 +2875,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-			}).unwrap();
+			}, true).unwrap();
 			op.set_block_data(
 				header.clone(),
 				Some(vec![]),

@@ -28,7 +28,7 @@ use sp_core::RuntimeDebug;
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeMallocSizeOf,
-	NumberFor,
+	NumberFor, Zero,
 };
 use crate::Justifications;
 
@@ -53,6 +53,14 @@ impl<Block: BlockT> BlockId<Block> {
 	/// Create a block ID from a number.
 	pub fn number(number: NumberFor<Block>) -> Self {
 		BlockId::Number(number)
+	}
+
+	/// Check if this block ID refers to the genesis block.
+	pub fn is_genesis(&self) -> bool {
+		match self {
+			BlockId::Hash(hash) => hash == &Default::default(),
+			BlockId::Number(number) => number.is_zero(),
+		}
 	}
 }
 
