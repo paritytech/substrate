@@ -196,7 +196,7 @@ pub mod pallet {
 		StorageValue<_, <T::AccountId as SomeAssociation2>::_2>;
 
 	#[pallet::storage]
-	pub type Value<T> = StorageValue<_, u32>;
+	pub type Value<T> = StorageValue<Value = u32>;
 
 	#[pallet::type_value]
 	pub fn MyDefault<T: Config>() -> u16
@@ -211,14 +211,19 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, u8, u16, ValueQuery, MyDefault<T>>;
 
 	#[pallet::storage]
-	pub type Map2<T> = StorageMap<_, Twox64Concat, u16, u32, OptionQuery, GetDefault, ConstU32<3>>;
+	pub type Map2<T> = StorageMap<
+		Hasher = Twox64Concat, Key = u16, Value = u32, MaxValues = ConstU32<3>
+	>;
 
 	#[pallet::storage]
 	pub type DoubleMap<T> = StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
 
 	#[pallet::storage]
 	pub type DoubleMap2<T> = StorageDoubleMap<
-		_, Twox64Concat, u16, Blake2_128Concat, u32, u64, OptionQuery, GetDefault, ConstU32<5>,
+		Hasher1 = Twox64Concat, Key1 = u16,
+		Hasher2 = Blake2_128Concat, Key2 = u32,
+		Value = u64,
+		MaxValues = ConstU32<5>,
 	>;
 
 	#[pallet::storage]
@@ -228,15 +233,9 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn nmap2)]
 	pub type NMap2<T> = StorageNMap<
-		_,
-		(
-			NMapKey<Twox64Concat, u16>,
-			NMapKey<Blake2_128Concat, u32>,
-		),
-		u64,
-		OptionQuery,
-		GetDefault,
-		ConstU32<11>,
+		Key = (NMapKey<Twox64Concat, u16>, NMapKey<Blake2_128Concat, u32>),
+		Value = u64,
+		MaxValues = ConstU32<11>,
 	>;
 
 	#[pallet::storage]
