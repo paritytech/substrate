@@ -195,10 +195,6 @@ pub mod pallet {
 		/// cancelled by its `owner`.
 		/// \[ clsss, instance, owner, delegate \]
 		ApprovalCancelled(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
-		/// The `instance` of the asset `class` was transferred from `owner` to `destination` by
-		/// the approved `delegate`.
-		/// \[ class, instance, owner, delegate, destination \]
-		TransferredApproved(T::ClassId, T::InstanceId, T::AccountId, T::AccountId, T::AccountId),
 		/// An asset `class` has had its attributes changed by the `Force` origin.
 		/// \[ class \]
 		AssetStatusChanged(T::ClassId),
@@ -240,6 +236,13 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
+
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/// Get the owner of the asset instance, if the asset exists.
+		pub fn owner(class: T::ClassId, instance: T::InstanceId) -> Option<T::AccountId> {
+			Asset::<T, I>::get(class, instance).map(|i| i.owner)
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -496,8 +499,12 @@ pub mod pallet {
 
 		/// Move an asset from the sender account to another.
 		///
-		/// Origin must be Signed and the signing account must be the owner of the asset `instance`.
+		/// Origin must be Signed and the signing account must be either:
+		/// - the Admin of the asset `class`;
+		/// - the Owner of the asset `instance`;
+		/// - the approved delegate for the asset `instance` (in this case, the approval is reset).
 		///
+		/// Arguments:
 		/// - `class`: The class of the asset to be transferred.
 		/// - `instance`: The instance of the asset to be transferred.
 		/// - `dest`: The account to receive ownership of the asset.
@@ -519,53 +526,18 @@ pub mod pallet {
 			ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
 
 			let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(details.owner == origin, Error::<T, I>::NoPermission);
 			ensure!(!details.is_frozen, Error::<T, I>::Frozen);
+			if details.owner != origin && class_details.admin != origin {
+				let approved = details.approved.take().map_or(false, |i| i == origin);
+				ensure!(approved, Error::<T, I>::NoPermission);
+			}
 
-			Account::<T, I>::remove((&origin, &class, &instance));
+			Account::<T, I>::remove((&details.owner, &class, &instance));
 			Account::<T, I>::insert((&dest, &class, &instance), ());
 			details.owner = dest;
 			Asset::<T, I>::insert(&class, &instance, &details);
 
 			Self::deposit_event(Event::Transferred(class, instance, origin, details.owner));
-
-			Ok(())
-		}
-
-		/// Move some assets from one account to another.
-		///
-		/// Origin must be Signed and the sender should be the Admin of the asset `class`.
-		///
-		/// - `class`: The class of the asset to be transferred.
-		/// - `instance`: The instance of the asset to be transferred.
-		/// - `dest`: The account to receive ownership of the asset.
-		///
-		/// Emits `Transferred`.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::force_transfer())]
-		pub(super) fn force_transfer(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
-			dest: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
-
-			let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(class_details.admin == origin, Error::<T, I>::NoPermission);
-
-			let source = details.owner;
-			details.owner = dest;
-
-			Account::<T, I>::remove((&source, &class, &instance));
-			Account::<T, I>::insert((&details.owner, &class, &instance), ());
-
-			Asset::<T, I>::insert(&class, &instance, &details);
-
-			Self::deposit_event(Event::Transferred(class, instance, source, details.owner));
 
 			Ok(())
 		}
@@ -873,48 +845,6 @@ pub mod pallet {
 
 			Asset::<T, I>::insert(&class, &instance, &details);
 			Self::deposit_event(Event::ApprovalCancelled(class, instance, details.owner, old));
-
-			Ok(())
-		}
-
-		/// Transfer some asset instance from a target account to a destination account by an
-		/// approved delegate.
-		///
-		/// Origin must be Signed and there must be an approval in place for the signer on this
-		/// asset `instance`.
-		///
-		/// - `class`: The class of the asset to transfer.
-		/// - `instance`: The instance of the asset to transfer.
-		/// - `dest`: The account to which ownership of the asset instance will be transferred.
-		///
-		/// Emits `TransferredApproved` on success.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::transfer_approved())]
-		pub(super) fn transfer_approved(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
-			dest: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
-
-			let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(!details.is_frozen, Error::<T, I>::Frozen);
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
-			ensure!(details.approved.as_ref() == Some(&origin), Error::<T, I>::Unapproved);
-
-			let source = details.owner;
-			details.owner = dest;
-
-			Account::<T, I>::remove((&source, &class, &instance));
-			Account::<T, I>::insert((&details.owner, &class, &instance), ());
-
-			Asset::<T, I>::insert(&class, &instance, &details);
-
-			Self::deposit_event(Event::TransferredApproved(class, instance, source, origin, details.owner));
 
 			Ok(())
 		}

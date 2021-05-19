@@ -26,23 +26,32 @@ fn last_event() -> mock::Event {
 }
 */
 fn assets() -> Vec<(u64, u32, u32)> {
-	let mut r: Vec<_> = Account::<Test, ()>::iter().map(|x| x.0).collect();
+	let mut r: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 	r.sort();
-	r
-}
-/*
-fn assets_of(who: u64) -> Vec<(u32, u32)> {
-	let mut r: Vec<_> = Account::<Test, ()>::iter_prefix((who,)).map(|x| x.0).collect();
-	r.sort();
+	let mut s: Vec<_> = Asset::<Test>::iter().map(|x| (x.2.owner, x.0, x.1)).collect();
+	s.sort();
+	assert_eq!(r, s);
+	for class in Asset::<Test>::iter()
+		.map(|x| x.0)
+		.scan(None, |s, item| if s.map_or(false, |last| last == item) {
+				*s = Some(item);
+				Some(None)
+			} else {
+				Some(Some(item))
+			}
+		).filter_map(|item| item)
+	{
+		let details = Class::<Test>::get(class).unwrap();
+		let instances = Asset::<Test>::iter_prefix(class).count() as u32;
+		assert_eq!(details.instances, instances);
+		let free_holds = Asset::<Test>::iter_prefix(class)
+			.filter(|(_, item)| item.deposit.is_zero())
+			.count() as u32;
+		assert_eq!(details.free_holds, free_holds);
+	}
 	r
 }
 
-fn assets_of_class(who: u64, class: u32) -> Vec<u32> {
-	let mut r: Vec<_> = Account::<Test, ()>::iter_prefix((who, class)).map(|x| x.0).collect();
-	r.sort();
-	r
-}
-*/
 #[test]
 fn basic_setup_works() {
 	new_test_ext().execute_with(|| {
@@ -112,144 +121,65 @@ fn destroy_with_bad_witness_should_not_work() {
 		assert_noop!(Uniques::destroy(Origin::signed(1), 0, w), Error::<Test>::BadWitness);
 	});
 }
-/*
+
 #[test]
-fn non_providing_should_work() {
+fn mint_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false, 1));
-
-		Balances::make_free_balance_be(&0, 100);
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 0, 100));
-
-		// Cannot mint into account 2 since it doesn't (yet) exist...
-		assert_noop!(Uniques::mint(Origin::signed(1), 0, 1, 100), TokenError::CannotCreate);
-		// ...or transfer...
-		assert_noop!(Uniques::transfer(Origin::signed(0), 0, 1, 50), TokenError::CannotCreate);
-		// ...or force-transfer
-		assert_noop!(Uniques::force_transfer(Origin::signed(1), 0, 0, 1, 50), TokenError::CannotCreate);
-
-		Balances::make_free_balance_be(&1, 100);
-		Balances::make_free_balance_be(&2, 100);
-		assert_ok!(Uniques::transfer(Origin::signed(0), 0, 1, 25));
-		assert_ok!(Uniques::force_transfer(Origin::signed(1), 0, 0, 2, 25));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
+		assert_eq!(Uniques::owner(0, 42).unwrap(), 1);
+		assert_eq!(assets(), vec![(1, 0, 42)]);
 	});
 }
 
 #[test]
-fn min_balance_should_work() {
+fn transfer_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 10));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
-		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
 
-		// Cannot create a new account with a balance that is below minimum...
-		assert_noop!(Uniques::mint(Origin::signed(1), 0, 2, 9), TokenError::BelowMinimum);
-		assert_noop!(Uniques::transfer(Origin::signed(1), 0, 2, 9), TokenError::BelowMinimum);
-		assert_noop!(Uniques::force_transfer(Origin::signed(1), 0, 1, 2, 9), TokenError::BelowMinimum);
+		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 42, 3));
+		assert_eq!(assets(), vec![(3, 0, 42)]);
+		assert_noop!(Uniques::transfer(Origin::signed(2), 0, 42, 4), Error::<Test>::NoPermission);
 
-		// When deducting from an account to below minimum, it should be reaped.
-		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 2, 91));
-		assert!(Uniques::balance(0, 1).is_zero());
-		assert_eq!(Uniques::balance(0, 2), 100);
-		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
-
-		assert_ok!(Uniques::force_transfer(Origin::signed(1), 0, 2, 1, 91));
-		assert!(Uniques::balance(0, 2).is_zero());
-		assert_eq!(Uniques::balance(0, 1), 100);
-		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
-
-		assert_ok!(Uniques::burn(Origin::signed(1), 0, 1, 91));
-		assert!(Uniques::balance(0, 1).is_zero());
-		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 0);
+		assert_ok!(Uniques::approve_transfer(Origin::signed(3), 0, 42, 2));
+		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 42, 4));
 	});
 }
 
 #[test]
-fn querying_total_supply_should_work() {
+fn freezing_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
-		assert_eq!(Uniques::balance(0, 1), 100);
-		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 2, 50));
-		assert_eq!(Uniques::balance(0, 1), 50);
-		assert_eq!(Uniques::balance(0, 2), 50);
-		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 3, 31));
-		assert_eq!(Uniques::balance(0, 1), 50);
-		assert_eq!(Uniques::balance(0, 2), 19);
-		assert_eq!(Uniques::balance(0, 3), 31);
-		assert_ok!(Uniques::burn(Origin::signed(1), 0, 3, u64::max_value()));
-		assert_eq!(Uniques::total_supply(0), 69);
-	});
-}
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
+		assert_ok!(Uniques::freeze(Origin::signed(1), 0, 42));
+		assert_noop!(Uniques::transfer(Origin::signed(1), 0, 42, 2), Error::<Test>::Frozen);
 
-#[test]
-fn transferring_amount_below_available_balance_should_work() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
-		assert_eq!(Uniques::balance(0, 1), 100);
-		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 2, 50));
-		assert_eq!(Uniques::balance(0, 1), 50);
-		assert_eq!(Uniques::balance(0, 2), 50);
-	});
-}
+		assert_ok!(Uniques::thaw(Origin::signed(1), 0, 42));
+		assert_ok!(Uniques::freeze_class(Origin::signed(1), 0));
+		assert_noop!(Uniques::transfer(Origin::signed(1), 0, 42, 2), Error::<Test>::Frozen);
 
-#[test]
-fn transferring_enough_to_kill_source_when_keep_alive_should_fail() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 10));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
-		assert_eq!(Uniques::balance(0, 1), 100);
-		assert_noop!(Uniques::transfer_keep_alive(Origin::signed(1), 0, 2, 91), Error::<Test>::BalanceLow);
-		assert_ok!(Uniques::transfer_keep_alive(Origin::signed(1), 0, 2, 90));
-		assert_eq!(Uniques::balance(0, 1), 10);
-		assert_eq!(Uniques::balance(0, 2), 90);
-	});
-}
-
-#[test]
-fn transferring_frozen_user_should_not_work() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
-		assert_eq!(Uniques::balance(0, 1), 100);
-		assert_ok!(Uniques::freeze(Origin::signed(1), 0, 1));
-		assert_noop!(Uniques::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
-		assert_ok!(Uniques::thaw(Origin::signed(1), 0, 1));
-		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 2, 50));
-	});
-}
-
-#[test]
-fn transferring_frozen_asset_should_not_work() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
-		assert_eq!(Uniques::balance(0, 1), 100);
-		assert_ok!(Uniques::freeze_asset(Origin::signed(1), 0));
-		assert_noop!(Uniques::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
-		assert_ok!(Uniques::thaw_asset(Origin::signed(1), 0));
-		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 2, 50));
+		assert_ok!(Uniques::thaw_class(Origin::signed(1), 0));
+		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 42, 2));
 	});
 }
 
 #[test]
 fn origin_guards_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_noop!(Uniques::transfer_ownership(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
 		assert_noop!(Uniques::set_team(Origin::signed(2), 0, 2, 2, 2), Error::<Test>::NoPermission);
-		assert_noop!(Uniques::freeze(Origin::signed(2), 0, 1), Error::<Test>::NoPermission);
-		assert_noop!(Uniques::thaw(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
-		assert_noop!(Uniques::mint(Origin::signed(2), 0, 2, 100), Error::<Test>::NoPermission);
-		assert_noop!(Uniques::burn(Origin::signed(2), 0, 1, 100), Error::<Test>::NoPermission);
-		assert_noop!(Uniques::force_transfer(Origin::signed(2), 0, 1, 2, 100), Error::<Test>::NoPermission);
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+		assert_noop!(Uniques::freeze(Origin::signed(2), 0, 42), Error::<Test>::NoPermission);
+		assert_noop!(Uniques::thaw(Origin::signed(2), 0, 42), Error::<Test>::NoPermission);
+		assert_noop!(Uniques::mint(Origin::signed(2), 0, 69, 2), Error::<Test>::NoPermission);
+		assert_noop!(Uniques::burn(Origin::signed(2), 0, 42, None), Error::<Test>::NoPermission);
+		let w = Class::<Test>::get(0).unwrap().destroy_witness();
 		assert_noop!(Uniques::destroy(Origin::signed(2), 0, w), Error::<Test>::NoPermission);
 	});
 }
-
+/*
 #[test]
 fn transfer_owner_should_work() {
 	new_test_ext().execute_with(|| {
@@ -276,7 +206,7 @@ fn transfer_owner_should_work() {
 #[test]
 fn set_team_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		assert_ok!(Uniques::set_team(Origin::signed(1), 0, 2, 3, 4));
 
 		assert_ok!(Uniques::mint(Origin::signed(2), 0, 2, 100));
@@ -290,8 +220,8 @@ fn set_team_should_work() {
 #[test]
 fn transferring_to_frozen_account_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 2, 100));
 		assert_eq!(Uniques::balance(0, 1), 100);
 		assert_eq!(Uniques::balance(0, 2), 100);
@@ -304,8 +234,8 @@ fn transferring_to_frozen_account_should_work() {
 #[test]
 fn transferring_amount_more_than_available_balance_should_not_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::balance(0, 1), 100);
 		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 2, 50));
 		assert_eq!(Uniques::balance(0, 1), 50);
@@ -320,8 +250,8 @@ fn transferring_amount_more_than_available_balance_should_not_work() {
 #[test]
 fn transferring_less_than_one_unit_is_fine() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::balance(0, 1), 100);
 		assert_ok!(Uniques::transfer(Origin::signed(1), 0, 2, 0));
 		assert_eq!(
@@ -334,8 +264,8 @@ fn transferring_less_than_one_unit_is_fine() {
 #[test]
 fn transferring_more_units_than_total_supply_should_not_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::balance(0, 1), 100);
 		assert_noop!(Uniques::transfer(Origin::signed(1), 0, 2, 101), Error::<Test>::BalanceLow);
 	});
@@ -344,8 +274,8 @@ fn transferring_more_units_than_total_supply_should_not_work() {
 #[test]
 fn burning_asset_balance_with_positive_balance_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::balance(0, 1), 100);
 		assert_ok!(Uniques::burn(Origin::signed(1), 0, 1, u64::max_value()));
 		assert_eq!(Uniques::balance(0, 1), 0);
@@ -355,8 +285,8 @@ fn burning_asset_balance_with_positive_balance_should_work() {
 #[test]
 fn burning_asset_balance_with_zero_balance_does_nothing() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::balance(0, 2), 0);
 		assert_ok!(Uniques::burn(Origin::signed(1), 0, 2, u64::max_value()));
 		assert_eq!(Uniques::balance(0, 2), 0);
@@ -372,7 +302,7 @@ fn set_metadata_should_work() {
 				Uniques::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], 12),
 				Error::<Test>::Unknown,
 			);
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		// Cannot add metadata to unowned asset
 		assert_noop!(
 				Uniques::set_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], 12),
@@ -419,7 +349,7 @@ fn set_metadata_should_work() {
 fn freezer_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 10));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::balance(0, 1), 100);
 
 
@@ -458,7 +388,7 @@ fn imbalances_should_work() {
 	use frame_support::traits::tokens::fungibles::Balanced;
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 
 		let imb = Uniques::issue(0, 100);
 		assert_eq!(Uniques::total_supply(0), 100);
@@ -481,7 +411,7 @@ fn imbalances_should_work() {
 fn force_metadata_should_work() {
 	new_test_ext().execute_with(|| {
 		//force set metadata works
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		assert_ok!(Uniques::force_set_metadata(Origin::root(), 0, vec![0u8; 10], vec![0u8; 10], 8, false));
 		assert!(Metadata::<Test>::contains_key(0));
 
@@ -559,8 +489,8 @@ fn force_asset_status_should_work(){
 #[test]
 fn approval_lifecycle_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		Balances::make_free_balance_be(&1, 1);
 		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50));
 		assert_eq!(Balances::reserved_balance(&1), 1);
@@ -575,8 +505,8 @@ fn approval_lifecycle_works() {
 #[test]
 fn approval_deposits_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		let e = BalancesError::<Test>::InsufficientBalance;
 		assert_noop!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50), e);
 
@@ -596,8 +526,8 @@ fn approval_deposits_work() {
 #[test]
 fn cannot_transfer_more_than_approved() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		Balances::make_free_balance_be(&1, 1);
 		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50));
 		let e = Error::<Test>::Unapproved;
@@ -608,8 +538,8 @@ fn cannot_transfer_more_than_approved() {
 #[test]
 fn cannot_transfer_more_than_exists() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		Balances::make_free_balance_be(&1, 1);
 		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 101));
 		let e = Error::<Test>::BalanceLow;
@@ -620,8 +550,8 @@ fn cannot_transfer_more_than_exists() {
 #[test]
 fn cancel_approval_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		Balances::make_free_balance_be(&1, 1);
 		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50));
 		assert_noop!(Uniques::cancel_approval(Origin::signed(1), 1, 2), Error::<Test>::Unknown);
@@ -635,8 +565,8 @@ fn cancel_approval_works() {
 #[test]
 fn force_cancel_approval_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		Balances::make_free_balance_be(&1, 1);
 		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50));
 		let e = Error::<Test>::NoPermission;
