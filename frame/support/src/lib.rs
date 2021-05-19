@@ -1418,7 +1418,7 @@ pub mod pallet_prelude {
 /// NOTE: The macro also adds some tracing logic when implementing the above traits. The following
 ///  hooks emit traces: `on_initialize`, `on_finalize` and `on_runtime_upgrade`.
 ///
-/// # Call: `#[pallet::call]` mandatory
+/// # Call: `#[pallet::call]` optional
 ///
 /// Implementation of pallet dispatchables.
 ///

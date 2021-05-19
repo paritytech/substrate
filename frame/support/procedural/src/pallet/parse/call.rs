@@ -233,4 +233,15 @@ impl CallDef {
 			docs: helper::get_doc_literals(&item.attrs),
 		})
 	}
+
+	pub fn empty(attr_span: proc_macro2::Span) -> Self {
+		Self {
+			where_clause: None,
+			instances: Vec::new(),
+			index: 0,
+			methods: Vec::new(),
+			attr_span,
+			docs: Vec::new(),
+		}
+	}
 }

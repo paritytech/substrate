@@ -15,37 +15,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::pallet::{Def, parse::call::CallDef};
 use frame_support_procedural_tools::clean_type_string;
 use syn::spanned::Spanned;
 
 /// * Generate enum call and implement various trait on it.
 /// * Implement Callable and call_function on `Pallet`
 pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
+	let empty_call;
+	let call = match def.call.as_ref() {
+		Some(call) => call,
+		None => {
+			empty_call = CallDef::empty(def.pallet_struct.attr_span);
+			&empty_call
+		}
+	};
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_generics(def.call.attr_span);
-	let type_decl_bounded_gen = &def.type_decl_bounded_generics(def.call.attr_span);
-	let type_use_gen = &def.type_use_generics(def.call.attr_span);
-	let call_ident = syn::Ident::new("Call", def.call.attr_span);
+	let type_impl_gen = &def.type_impl_generics(call.attr_span);
+	let type_decl_bounded_gen = &def.type_decl_bounded_generics(call.attr_span);
+	let type_use_gen = &def.type_use_generics(call.attr_span);
+	let call_ident = syn::Ident::new("Call", call.attr_span);
 	let pallet_ident = &def.pallet_struct.pallet;
-	let where_clause = &def.call.where_clause;
+	let where_clause = &call.where_clause;
 
-	let fn_name = def.call.methods.iter().map(|method| &method.name).collect::<Vec<_>>();
+	let fn_name = call.methods.iter().map(|method| &method.name).collect::<Vec<_>>();
 
-	let fn_weight = def.call.methods.iter().map(|method| &method.weight);
+	let fn_weight = call.methods.iter().map(|method| &method.weight);
 
-	let fn_doc = def.call.methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
+	let fn_doc = call.methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
 
-	let args_name = def.call.methods.iter()
+	let args_name = call.methods.iter()
 		.map(|method| method.args.iter().map(|(_, name, _)| name.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 
-	let args_type = def.call.methods.iter()
+	let args_type = call.methods.iter()
 		.map(|method| method.args.iter().map(|(_, _, type_)| type_.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 
-	let args_compact_attr = def.call.methods.iter().map(|method| {
+	let args_compact_attr = call.methods.iter().map(|method| {
 		method.args.iter()
 			.map(|(is_compact, _, type_)| {
 				if *is_compact {
@@ -57,7 +65,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
-	let args_metadata_type = def.call.methods.iter().map(|method| {
+	let args_metadata_type = call.methods.iter().map(|method| {
 		method.args.iter()
 			.map(|(is_compact, _, type_)| {
 				let final_type = if *is_compact {
@@ -73,13 +81,13 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let default_docs = [syn::parse_quote!(
 		r"Contains one variant per dispatchable that can be called by an extrinsic."
 	)];
-	let docs = if def.call.docs.is_empty() {
+	let docs = if call.docs.is_empty() {
 		&default_docs[..]
 	} else {
-		&def.call.docs[..]
+		&call.docs[..]
 	};
 
-	quote::quote_spanned!(def.call.attr_span =>
+	quote::quote_spanned!(call.attr_span =>
 		#( #[doc = #docs] )*
 		#[derive(
 			#frame_support::RuntimeDebugNoBound,

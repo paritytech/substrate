@@ -415,9 +415,6 @@ pub mod pallet3 {
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
 }
 
 frame_support::parameter_types!(

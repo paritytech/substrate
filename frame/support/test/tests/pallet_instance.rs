@@ -220,9 +220,6 @@ pub mod pallet2 {
 	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
-	#[pallet::call]
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
-
 	#[pallet::event]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Something
