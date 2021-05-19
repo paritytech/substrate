@@ -36,7 +36,9 @@
 #![warn(missing_docs)]
 
 use std::{
-	fmt, marker::PhantomData, sync::Arc,
+	fmt,
+	marker::PhantomData,
+	sync::{atomic::{AtomicUsize, Ordering}, Arc},
 	collections::HashSet,
 };
 
@@ -80,23 +82,73 @@ where
 	}
 }
 
+
+/// Counts number of concurrently running workers
+/// and makes sure it does not go above configured limit.
+struct MaxRunning {
+	limit: usize,
+	current: Arc<AtomicUsize>,
+}
+
+impl MaxRunning {
+	/// Create new `MaxRunning` with given `limit`.
+	pub fn new(limit: usize) -> Self {
+		Self { limit, current: Default::default() }
+	}
+
+	/// Attempt to acquire running slot.
+	///
+	/// In case the limit is reached an `Err(())` is returned.
+	/// In case the slot is succesfuly acquired, a `MaxRunningGuard`
+	/// is returned, which will release the slot upon dropping.
+	pub fn try_run(&self) -> Result<MaxRunningGuard, ()> {
+		let limit = self.limit;
+		let update_res = self.current.fetch_update(
+			Ordering::SeqCst,
+			Ordering::SeqCst,
+			|val| if val < limit { Some(val + 1) } else { None }
+		);
+
+		update_res
+			.map(|_| MaxRunningGuard { current: self.current.clone() })
+			.map_err(|_| ())
+	}
+}
+
+struct MaxRunningGuard {
+	current: Arc<AtomicUsize>,
+}
+
+impl Drop for MaxRunningGuard {
+	fn drop(&mut self) {
+		self.current.fetch_sub(1, Ordering::SeqCst);
+	}
+}
+
 /// An offchain workers manager.
 pub struct OffchainWorkers<Client, Block: traits::Block> {
 	client: Arc<Client>,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
 	shared_client: api::SharedClient,
+	finality_limit: MaxRunning,
+	regular_limit: MaxRunning,
 }
 
 impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(client: Arc<Client>) -> Self {
 		let shared_client = api::SharedClient::new();
+		let threads = num_cpus::get();
 		Self {
 			client,
 			_block: PhantomData,
-			thread_pool: Mutex::new(ThreadPool::new(num_cpus::get())),
+			thread_pool: Mutex::new(ThreadPool::new(threads)),
 			shared_client,
+			// in case both finality and regular workers are running we will
+			// have at most `threads` elements queued up of each kind.
+			finality_limit: MaxRunning::new(threads),
+			regular_limit: MaxRunning::new(threads),
 		}
 	}
 }
@@ -153,13 +205,24 @@ impl<Client, Block> OffchainWorkers<
 		let runtime = self.client.runtime_api();
 		let at = BlockId::hash(header.hash());
 		let version = ocw_api_version(&at, runtime);
+		log::debug!("Checking finality offchain workers at {:?}: version: {:?}", at, version);
 		if version < 3 {
-			log::debug!(
+			log::trace!(
 				"Skipping running finality offchain workers, because they are not supported by current runtime. Version: {} < 3", version
 			);
 			return Either::Right(future::ready(()));
 		}
-		log::debug!("Checking finality offchain workers at {:?}: version: {:?}", at, version);
+
+		let guard = match self.finality_limit.try_run() {
+			Ok(guard) => guard,
+			Err(()) => {
+				log::debug!(
+					"Skipping running finality offchain workers at {:?}: limit reached.", at
+				);
+				return Either::Right(future::ready(()));
+			}
+		};
+
 		let (api, runner) = api::AsyncApi::new(
 			network_provider,
 			is_validator,
@@ -179,6 +242,7 @@ impl<Client, Block> OffchainWorkers<
 			if let Err(e) =	run {
 				log::error!("Error running finality offchain workers at {:?}: {:?}", at, e);
 			}
+			std::mem::drop(guard);
 		});
 		Either::Left(runner.process())
 	}
@@ -196,9 +260,19 @@ impl<Client, Block> OffchainWorkers<
 		let version = ocw_api_version(&at, runtime);
 		log::debug!("Checking offchain workers at {:?}: version:{}", at, version);
 		if version == 0 {
+			log::trace!("Skipping running offchain workers, because they are not supported by current runtime.");
 			return Either::Right(future::ready(()));
 		}
 
+		let guard = match self.regular_limit.try_run() {
+			Ok(guard) => guard,
+			Err(()) => {
+				log::debug!(
+					"Skipping running finality offchain workers at {:?}: limit reached.", at
+				);
+				return Either::Right(future::ready(()));
+			}
+		};
 		let (api, runner) = api::AsyncApi::new(
 			network_provider,
 			is_validator,
@@ -232,6 +306,7 @@ impl<Client, Block> OffchainWorkers<
 			if let Err(e) =	run {
 				log::error!("Error running offchain workers at {:?}: {:?}", at, e);
 			}
+			std::mem::drop(guard);
 		});
 		Either::Left(runner.process())
 	}
@@ -252,6 +327,8 @@ impl<Client, Block> OffchainWorkers<
 /// Inform the offchain worker about new imported blocks
 pub async fn notification_future<Client, Block, Spawner>(
 	is_validator: bool,
+	is_regular_ocw_enabled: bool,
+	is_finality_ocw_enabled: bool,
 	client: Arc<Client>,
 	offchain: Arc<OffchainWorkers<Client, Block>>,
 	spawner: Spawner,
@@ -266,41 +343,50 @@ pub async fn notification_future<Client, Block, Spawner>(
 	let spawner1 = spawner.clone();
 	let offchain1 = offchain.clone();
 	let network_provider1 = network_provider.clone();
-	let finality = client.finality_notification_stream().for_each(move |n| {
-		spawner1.spawn(
-			"offchain-on-finality",
-			offchain1.on_block_finalized(
-				&n.header,
-				network_provider1.clone(),
-				is_validator,
-			).boxed(),
-		);
+	let import = if is_regular_ocw_enabled {
+		Either::Left(client.import_notification_stream().for_each(move |n| {
+			if n.is_new_best {
+				spawner.spawn(
+					"offchain-on-block",
+					offchain.on_block_imported(
+						&n.header,
+						network_provider.clone(),
+						is_validator,
+					).boxed(),
+				);
+			} else {
+				log::debug!(
+					target: "sc_offchain",
+					"Skipping offchain workers for non-canon block: {:?}",
+					n.header,
+				)
+			}
 
-		future::ready(())
-	});
+			future::ready(())
+		}))
+	} else {
+		Either::Right(future::ready(()))
+	};
 
-	let import = client.import_notification_stream().for_each(move |n| {
-		if n.is_new_best {
-			spawner.spawn(
-				"offchain-on-block",
-				offchain.on_block_imported(
+	if is_finality_ocw_enabled {
+		let finality = client.finality_notification_stream().for_each(move |n| {
+			spawner1.spawn(
+				"offchain-on-finality",
+				offchain1.on_block_finalized(
 					&n.header,
-					network_provider.clone(),
+					network_provider1.clone(),
 					is_validator,
 				).boxed(),
 			);
-		} else {
-			log::debug!(
-				target: "sc_offchain",
-				"Skipping offchain workers for non-canon block: {:?}",
-				n.header,
-			)
-		}
 
-		future::ready(())
-	});
+			future::ready(())
+		});
 
-	future::join(finality, import).await;
+
+		future::join(finality, import).await;
+	} else {
+		import.await;
+	}
 }
 
 #[cfg(test)]

@@ -185,8 +185,6 @@ pub fn new_in_mem<E, Block, S, RA>(
 /// Relevant client configuration items relevant for the client.
 #[derive(Debug,Clone,Default)]
 pub struct ClientConfig {
-	/// Enable the offchain worker db.
-	pub offchain_worker_enabled: bool,
 	/// If true, allows access from the runtime to write into offchain worker db.
 	pub offchain_indexing_api: bool,
 	/// Path where WASM files exist to override the on-chain WASM.

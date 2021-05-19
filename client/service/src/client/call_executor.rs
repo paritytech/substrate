@@ -358,7 +358,6 @@ mod tests {
 		// wasm_runtime_overrides is `None` here because we construct the
 		// LocalCallExecutor directly later on
 		let client_config = ClientConfig {
-			offchain_worker_enabled: false,
 			offchain_indexing_api: false,
 			wasm_runtime_overrides: None,
 		};
