@@ -321,11 +321,10 @@ where
 		let calc_share = |refcount: u32| {
 			aggregated_code_size.checked_div(refcount).unwrap_or(0)
 		};
-		let max_share = calc_share(1);
 		let current_share = calc_share(current_refcount);
 		let custom_share = calc_share(at_refcount);
 		RentStatus {
-			max_deposit: Self::required_deposit(contract, max_share),
+			max_deposit: Self::required_deposit(contract, aggregated_code_size),
 			current_deposit: Self::required_deposit(contract, current_share),
 			custom_refcount_deposit:
 				if at_refcount > 0 {
@@ -333,7 +332,7 @@ where
 				} else {
 					None
 				},
-			max_rent: Self::fee_per_block(free_balance, contract, max_share),
+			max_rent: Self::fee_per_block(free_balance, contract, aggregated_code_size),
 			current_rent: Self::fee_per_block(free_balance, contract, current_share),
 			custom_refcount_rent:
 				if at_refcount > 0 {
