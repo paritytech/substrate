@@ -81,14 +81,4 @@ impl HooksDef {
 			where_clause: item.generics.where_clause.clone(),
 		})
 	}
-
-	pub fn empty(attr_span: proc_macro2::Span) -> Self {
-		Self {
-			attr_span,
-			index: 0,
-			instances: Vec::new(),
-			where_clause: None,
-			has_runtime_upgrade: false,
-		}
-	}
 }

@@ -15,26 +15,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{Def, parse::hooks::HooksDef};
+use crate::pallet::Def;
 
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
-	let empty_hooks;
-	let hooks = match def.hooks.as_ref() {
-		Some(hooks) => hooks,
-		None => {
-			empty_hooks = HooksDef::empty(def.pallet_struct.attr_span);
-			&empty_hooks
-		}
+	let (where_clause, span, has_runtime_upgrade) = match def.hooks.as_ref() {
+		Some(hooks) => {
+			let where_clause = hooks.where_clause.clone();
+			let span = hooks.attr_span;
+			let has_runtime_upgrade = hooks.has_runtime_upgrade;
+			(where_clause, span, has_runtime_upgrade)
+		},
+		None => (None, def.pallet_struct.attr_span, false),
 	};
 
 	let frame_support = &def.frame_support;
-	let type_impl_gen = &def.type_impl_generics(hooks.attr_span);
-	let type_use_gen = &def.type_use_generics(hooks.attr_span);
+	let type_impl_gen = &def.type_impl_generics(span);
+	let type_use_gen = &def.type_use_generics(span);
 	let pallet_ident = &def.pallet_struct.pallet;
-	let where_clause = &hooks.where_clause;
 	let frame_system = &def.frame_system;
-	let has_runtime_upgrade = hooks.has_runtime_upgrade;
 
 	let log_runtime_upgrade = if has_runtime_upgrade {
 		// a migration is defined here.
@@ -69,7 +68,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		proc_macro2::TokenStream::new()
 	};
 
-	quote::quote_spanned!(hooks.attr_span =>
+	quote::quote_spanned!(span =>
 		#hooks_impl
 
 		impl<#type_impl_gen>
