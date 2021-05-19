@@ -963,6 +963,32 @@ mod trie_constants {
 	pub const BRANCH_WITH_MASK: u8 = 0b_11 << 6;
 }
 
+/// Utility to tag a state without meta with old_hash internal
+/// hashing.
+pub fn tag_old_hashes<H: Hasher>(existing: &[u8]) -> Option<Vec<u8>> {
+	use trie_db::NodeCodec;
+	let mut meta = TrieMeta::default();
+	// allows restarting a migration.
+	if existing.len() > 0 && existing[0] == trie_constants::OLD_HASHING {
+		return None; // allow restarting a migration.
+	}
+	let _ = <trie_types::Layout::<H> as TrieLayout>::Codec::decode_plan(existing, &mut meta)
+		.expect("Invalid db state entry found: {:?}, entry.0.as_slice()");
+	match meta.range {
+		Some(range) => {
+			if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
+				let mut res = Vec::with_capacity(existing.len() + 1);
+				res.push(trie_constants::OLD_HASHING);
+				res.extend_from_slice(existing);
+				Some(res)
+			} else {
+				None
+			}
+		},
+		None => None,
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

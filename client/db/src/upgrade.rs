@@ -31,7 +31,7 @@ use codec::{Decode, Encode};
 const VERSION_FILE_NAME: &'static str = "db_version";
 
 /// Current db version.
-const CURRENT_VERSION: u32 = 3;
+const CURRENT_VERSION: u32 = 4;
 
 /// Number of columns in v1.
 const V1_NUM_COLUMNS: u32 = 11;
@@ -49,6 +49,7 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_bl
 				migrate_2_to_3::<Block>(db_path, db_type)?
 			},
 			2 => migrate_2_to_3::<Block>(db_path, db_type)?,
+			3 => migrate_3_to_4::<Block>(db_path, db_type)?,
 			CURRENT_VERSION => (),
 			_ => Err(sp_blockchain::Error::Backend(format!("Future database version: {}", db_version)))?,
 		}
@@ -97,6 +98,41 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 
 	Ok(())
 }
+
+/// Migration from version3 to version4:
+/// - Trie state meta for state that could be hashed internaly.
+fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
+	let db_path = db_path.to_str()
+		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
+	let db_cfg = DatabaseConfig::with_columns(V2_NUM_COLUMNS);
+	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
+
+	let batch_size = 10_000; // TODO use bigger size (need to iterate all each time).
+	loop {
+		let mut full_batch = false;
+		let mut size = 0;
+		let mut transaction = db.transaction();
+		// Get all the keys we need to update.
+		// Note that every batch will restart full iter, could use
+		// a `iter_from` function.
+		for entry in db.iter(columns::STATE) {
+			if let Some(new_val) = sp_trie::tag_old_hashes::<sp_runtime::traits::HashFor<Block>>(&entry.1) {
+				transaction.put_vec(columns::STATE, &entry.0, new_val);
+				size += 1;
+				if size == batch_size {
+					full_batch = true;
+					break;
+				}
+			}
+		}
+		db.write(transaction).map_err(db_err)?;
+		if !full_batch {
+			break;
+		}
+	}
+	Ok(())
+}
+
 
 /// Reads current database version from the file at given path.
 /// If the file does not exist returns 0.
