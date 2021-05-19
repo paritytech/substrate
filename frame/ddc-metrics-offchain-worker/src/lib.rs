@@ -26,9 +26,9 @@ use sp_runtime::{offchain::{
 use codec::Encode;
 use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
-// pub use pallet_contracts_rpc_runtime_api::{
-// 	self as runtime_api, ContractExecResult, ContractsApi as ContractsRuntimeApi,
-// };
+pub use pallet_contracts_rpc_runtime_api::{
+	self as runtime_api, ContractExecResult,
+};
 use alt_serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use hex_literal::hex;
 use log::{info, warn, error};
@@ -316,27 +316,26 @@ impl<T: Trait> Module<T> {
         signer: &Signer::<T::CST, T::AuthorityId>,
     ) -> ResultStr<(u64)> {
         let contract_id = T::ContractId::get();
-        info!("[OCW] sc_get_current_period_ms - Contract Address: {:?}", contract_id);
 
-        let results = signer.send_signed_transaction(
-            |account| {
-                info!("[OCW] Sending transactions get_current_period_ms");
-
-                let call_data = Self::encode_get_current_period_ms();
-                pallet_contracts::Call::call(
-                    contract_id.clone(),
-                    0u32.into(),
-                    100_000_000_000,
-                    call_data,
-                )
-            }
+        let call_data = Self::encode_get_current_period_ms();
+        let (exec_result, gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
+            <<T as Trait>::CT as frame_system::Trait>::AccountId::default(),
+            <<T as Trait>::CT as frame_system::Trait>::AccountId::default(),
+            0u32.into(),
+            100_000_000_000,
+            call_data,
         );
 
-        let ret_val = match &results {
-            None | Some((_, Err(()))) =>
-                return Err("Error while submitting TX to SC"),
-            Some((_, Ok(()))) => {}
+        let ret_val = match exec_result {
+            Ok(v) => ContractExecResult::Success {
+                flags: v.flags.bits(),
+                data: v.data,
+                gas_consumed: gas_consumed,
+            },
+            Err(_) => ContractExecResult::Error,
         };
+
+        info!("------------------------ [OCW] sc_get_current_period_ms - ret_val: {:?}", ret_val);
 
         let ret: u64 = 38_988_004; // TODO: get from ret_val
 
