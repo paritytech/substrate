@@ -723,7 +723,6 @@ mod tests {
 		static FEE_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
 	}
 
-
 	pub struct DealWithFees;
 	impl OnUnbalanced<pallet_balances::NegativeImbalance<Runtime>> for DealWithFees {
 		fn on_unbalanceds<B>(
