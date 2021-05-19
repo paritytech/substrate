@@ -59,7 +59,6 @@ pub trait WeightInfo {
 	fn set_team() -> Weight;
 	fn approve_transfer() -> Weight;
 	fn cancel_approval() -> Weight;
-	fn force_cancel_approval() -> Weight;
 	fn force_asset_status() -> Weight;
 	fn set_metadata(n: u32, i: u32, ) -> Weight;
 	fn clear_metadata() -> Weight;
@@ -151,11 +150,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn cancel_approval() -> Weight {
 		(48_591_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn force_cancel_approval() -> Weight {
-		(54_879_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn force_asset_status() -> Weight {
@@ -274,11 +268,6 @@ impl WeightInfo for () {
 	fn cancel_approval() -> Weight {
 		(48_591_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn force_cancel_approval() -> Weight {
-		(54_879_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn force_asset_status() -> Weight {

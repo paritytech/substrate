@@ -21,11 +21,7 @@ use super::*;
 use crate::mock::*;
 use frame_support::{assert_ok, assert_noop, traits::Currency};
 use pallet_balances::Error as BalancesError;
-/*
-fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-}
-*/
+
 fn assets() -> Vec<(u64, u32, u32)> {
 	let mut r: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 	r.sort();
@@ -408,43 +404,18 @@ fn burn_works() {
 	});
 }
 
-// TODO: approvals
-
-/*
 #[test]
 fn approval_lifecycle_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
-		Balances::make_free_balance_be(&1, 1);
-		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50));
-		assert_eq!(Balances::reserved_balance(&1), 1);
-		assert_ok!(Uniques::transfer_approved(Origin::signed(2), 0, 1, 3, 40));
-		assert_ok!(Uniques::cancel_approval(Origin::signed(1), 0, 2));
-		assert_eq!(Uniques::balance(0, 1), 60);
-		assert_eq!(Uniques::balance(0, 3), 40);
-		assert_eq!(Balances::reserved_balance(&1), 0);
-	});
-}
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
+		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
+		assert_ok!(Uniques::transfer(Origin::signed(3), 0, 42, 4));
+		assert_noop!(Uniques::transfer(Origin::signed(3), 0, 42, 3), Error::<Test>::NoPermission);
+		assert!(Asset::<Test>::get(0, 42).unwrap().approved.is_none());
 
-#[test]
-fn approval_deposits_work() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
-		let e = BalancesError::<Test>::InsufficientBalance;
-		assert_noop!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50), e);
-
-		Balances::make_free_balance_be(&1, 1);
-		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50));
-		assert_eq!(Balances::reserved_balance(&1), 1);
-
-		assert_ok!(Uniques::transfer_approved(Origin::signed(2), 0, 1, 3, 50));
-		assert_eq!(Balances::reserved_balance(&1), 0);
-
-		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50));
-		assert_ok!(Uniques::cancel_approval(Origin::signed(1), 0, 2));
-		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_ok!(Uniques::approve_transfer(Origin::signed(4), 0, 42, 2));
+		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 42, 2));
 	});
 }
 
@@ -452,31 +423,47 @@ fn approval_deposits_work() {
 fn cancel_approval_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
-		Balances::make_free_balance_be(&1, 1);
-		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50));
-		assert_noop!(Uniques::cancel_approval(Origin::signed(1), 1, 2), Error::<Test>::Unknown);
-		assert_noop!(Uniques::cancel_approval(Origin::signed(2), 0, 2), Error::<Test>::Unknown);
-		assert_noop!(Uniques::cancel_approval(Origin::signed(1), 0, 3), Error::<Test>::Unknown);
-		assert_ok!(Uniques::cancel_approval(Origin::signed(1), 0, 2));
-		assert_noop!(Uniques::cancel_approval(Origin::signed(1), 0, 2), Error::<Test>::Unknown);
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
+
+		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
+		assert_noop!(Uniques::cancel_approval(Origin::signed(2), 1, 42, None), Error::<Test>::Unknown);
+		assert_noop!(Uniques::cancel_approval(Origin::signed(2), 0, 43, None), Error::<Test>::Unknown);
+		assert_noop!(Uniques::cancel_approval(Origin::signed(3), 0, 42, None), Error::<Test>::NoPermission);
+		assert_noop!(Uniques::cancel_approval(Origin::signed(2), 0, 42, Some(4)), Error::<Test>::WrongDelegate);
+
+		assert_ok!(Uniques::cancel_approval(Origin::signed(2), 0, 42, Some(3)));
+		assert_noop!(Uniques::cancel_approval(Origin::signed(2), 0, 42, None), Error::<Test>::NoDelegate);
 	});
 }
 
 #[test]
-fn force_cancel_approval_works() {
+fn cancel_approval_works_with_admin() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
-		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
-		Balances::make_free_balance_be(&1, 1);
-		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, 2, 50));
-		let e = Error::<Test>::NoPermission;
-		assert_noop!(Uniques::force_cancel_approval(Origin::signed(2), 0, 1, 2), e);
-		assert_noop!(Uniques::force_cancel_approval(Origin::signed(1), 1, 1, 2), Error::<Test>::Unknown);
-		assert_noop!(Uniques::force_cancel_approval(Origin::signed(1), 0, 2, 2), Error::<Test>::Unknown);
-		assert_noop!(Uniques::force_cancel_approval(Origin::signed(1), 0, 1, 3), Error::<Test>::Unknown);
-		assert_ok!(Uniques::force_cancel_approval(Origin::signed(1), 0, 1, 2));
-		assert_noop!(Uniques::force_cancel_approval(Origin::signed(1), 0, 1, 2), Error::<Test>::Unknown);
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
+
+		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
+		assert_noop!(Uniques::cancel_approval(Origin::signed(1), 1, 42, None), Error::<Test>::Unknown);
+		assert_noop!(Uniques::cancel_approval(Origin::signed(1), 0, 43, None), Error::<Test>::Unknown);
+		assert_noop!(Uniques::cancel_approval(Origin::signed(1), 0, 42, Some(4)), Error::<Test>::WrongDelegate);
+
+		assert_ok!(Uniques::cancel_approval(Origin::signed(1), 0, 42, Some(3)));
+		assert_noop!(Uniques::cancel_approval(Origin::signed(1), 0, 42, None), Error::<Test>::NoDelegate);
 	});
 }
-*/
+
+#[test]
+fn cancel_approval_works_with_force() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
+
+		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
+		assert_noop!(Uniques::cancel_approval(Origin::root(), 1, 42, None), Error::<Test>::Unknown);
+		assert_noop!(Uniques::cancel_approval(Origin::root(), 0, 43, None), Error::<Test>::Unknown);
+		assert_noop!(Uniques::cancel_approval(Origin::root(), 0, 42, Some(4)), Error::<Test>::WrongDelegate);
+
+		assert_ok!(Uniques::cancel_approval(Origin::root(), 0, 42, Some(3)));
+		assert_noop!(Uniques::cancel_approval(Origin::root(), 0, 42, None), Error::<Test>::NoDelegate);
+	});
+}

@@ -803,27 +803,38 @@ pub mod pallet {
 			#[pallet::compact] instance: T::InstanceId,
 			delegate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+
 			let delegate = T::Lookup::lookup(delegate)?;
 
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			let mut details = Asset::<T, I>::get(&class, &instance)
 				.ok_or(Error::<T, I>::Unknown)?;
-			ensure!(details.owner == origin, Error::<T, I>::NoPermission);
+
+			if let Some(check) = maybe_check {
+				let permitted = &check == &class_details.admin || &check == &details.owner;
+				ensure!(permitted, Error::<T, I>::NoPermission);
+			}
 
 			details.approved = Some(delegate);
 			Asset::<T, I>::insert(&class, &instance, &details);
 
 			let delegate = details.approved.expect("set as Some above; qed");
-			Self::deposit_event(Event::ApprovedTransfer(class, instance, origin, delegate));
+			Self::deposit_event(Event::ApprovedTransfer(class, instance, details.owner, delegate));
 
 			Ok(())
 		}
 
 		/// Cancel the prior approval for the transfer of an asset by a delegate.
 		///
-		/// Origin must be Signed and there must be an approval in place between signer and
-		/// `delegate`.
+		/// Origin must be either:
+		/// - the `Force` origin;
+		/// - `Signed` with the signer being the Admin of the asset `class`;
+		/// - `Signed` with the signer being the Owner of the asset `instance`;
 		///
+		/// Arguments:
 		/// - `class`: The class of the asset of whose approval will be cancelled.
 		/// - `instance`: The instance of the asset of whose approval will be cancelled.
 		/// - `maybe_check_delegate`: If `Some` will ensure that the given account is the one to
@@ -839,56 +850,18 @@ pub mod pallet {
 			#[pallet::compact] instance: T::InstanceId,
 			maybe_check_delegate: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-			let maybe_check_delegate = maybe_check_delegate.map(T::Lookup::lookup).transpose()?;
+			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			let mut details = Asset::<T, I>::get(&class, &instance)
 				.ok_or(Error::<T, I>::Unknown)?;
-			ensure!(details.owner == origin, Error::<T, I>::NoPermission);
-			let old = details.approved.take().ok_or(Error::<T, I>::NoDelegate)?;
-			if let Some(check_delegate) = maybe_check_delegate {
-				ensure!(check_delegate == old, Error::<T, I>::WrongDelegate);
+			if let Some(check) = maybe_check {
+				let permitted = &check == &class_details.admin || &check == &details.owner;
+				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
-
-			Asset::<T, I>::insert(&class, &instance, &details);
-			Self::deposit_event(Event::ApprovalCancelled(class, instance, origin, old));
-
-			Ok(())
-		}
-
-		/// Cancel the prior approval for the transfer of an asset by a delegate.
-		///
-		/// Origin must be either ForceOrigin or Signed origin with the signer being the Admin
-		/// account of the asset `class`.
-		///
-		/// - `class`: The class of the asset of whose approval will be cancelled.
-		/// - `instance`: The instance of the asset of whose approval will be cancelled.
-		/// - `maybe_check_delegate`: If `Some` will ensure that the given account is the one to
-		///   which permission of transfer is delegated.
-		///
-		/// Emits `ApprovalCancelled` on success.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::force_cancel_approval())]
-		pub(super) fn force_cancel_approval(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
-			maybe_check_delegate: Option<<T::Lookup as StaticLookup>::Source>,
-		) -> DispatchResult {
-			T::ForceOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(|origin| -> DispatchResult {
-					let origin = ensure_signed(origin)?;
-					let d = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
-					ensure!(&origin == &d.admin, Error::<T, I>::NoPermission);
-					Ok(())
-				})?;
-
 			let maybe_check_delegate = maybe_check_delegate.map(T::Lookup::lookup).transpose()?;
-
-			let mut details = Asset::<T, I>::get(&class, &instance)
-				.ok_or(Error::<T, I>::Unknown)?;
 			let old = details.approved.take().ok_or(Error::<T, I>::NoDelegate)?;
 			if let Some(check_delegate) = maybe_check_delegate {
 				ensure!(check_delegate == old, Error::<T, I>::WrongDelegate);
