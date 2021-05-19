@@ -32,6 +32,7 @@ pub use pallet_contracts_rpc_runtime_api::{
 use alt_serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use hex_literal::hex;
 use log::{info, warn, error};
+use codec::Decode;
 
 #[macro_use]
 extern crate alloc;
@@ -316,11 +317,12 @@ impl<T: Trait> Module<T> {
         signer: &Signer::<T::CST, T::AuthorityId>,
     ) -> ResultStr<(u64)> {
         let contract_id = T::ContractId::get();
+        let contract_idx = <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::lookup(contract_id).unwrap();
 
         let call_data = Self::encode_get_current_period_ms();
         let (exec_result, gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
-            <<T as Trait>::CT as frame_system::Trait>::AccountId::default(),
-            <<T as Trait>::CT as frame_system::Trait>::AccountId::default(),
+            Default::default(),
+            contract_idx,
             0u32.into(),
             100_000_000_000,
             call_data,
