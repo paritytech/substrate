@@ -25,14 +25,16 @@ mod state_light;
 mod tests;
 
 use std::sync::Arc;
+use std::marker::PhantomData;
+use futures::{future, StreamExt};
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use jsonrpsee_ws_server::{RpcModule, RpcContextModule, SubscriptionSink};
 
 use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
-use sp_core::{Bytes, storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
+use sp_core::{Bytes, storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey, well_known_keys}};
 use sp_version::RuntimeVersion;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
@@ -214,7 +216,8 @@ pub struct State<Block, Client> {
 impl<Block, Client> State<Block, Client>
 	where
 		Block: BlockT + 'static,
-		Client: BlockchainEvents<Block> + Send + Sync + 'static,
+		Client: BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block>
+			 + Send + Sync + 'static,
 {
 	/// Register all RPC methods and return an [`RpcModule`].
 	pub fn into_rpc_module(self) -> Result<(RpcModule, SubscriptionSinks<Block, Client>), JsonRpseeError> {
@@ -331,7 +334,6 @@ impl<Block, Client> State<Block, Client>
 	}
 }
 
-use std::marker::PhantomData;
 pub struct SubscriptionSinks<Block, Client> {
 	sinks: Vec<SubscriptionSink>,
 	client: Arc<Client>,
@@ -341,19 +343,52 @@ pub struct SubscriptionSinks<Block, Client> {
 impl<Block, Client> SubscriptionSinks<Block, Client>
 	where
 		Block: BlockT + 'static,
-		Client: BlockchainEvents<Block> +Send + Sync + 'static,
+		Client: BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 {
 	fn new(sinks: Vec<SubscriptionSink>, client: Arc<Client>) -> Self {
 		Self { sinks, client, marker: PhantomData }
 	}
 
+	/// Set up subscriptions to storage events.
+	// Note: Spawned in `gen_rpc_module` in builder.rs
 	pub async fn subscribe(mut self) {
-		// TODO: figure out what it is I need here exactly and adjust the types
-		// 1. use client.storage_change_notification_stream to get a stream (from BlockchainEvents trait)
-		// 2. filter out well_known_keys::CODE
-		// 3. get the current runtime version (to start off the stream I presume?) from the backend? `self.runtime_version()`-ish
-		// 4. set up the stream to send values only when there's a new runtime version
-		// 5. send the first version and `.chain` on the stream created above
+		let version = self.client.runtime_version_at(&BlockId::hash(self.client.info().best_hash)).expect("TODO");
+		let mut previous_version = version.clone();
+		self.sinks[0].send(&version);
+
+		let rt_version_stream = self.client.storage_changes_notification_stream(
+			Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
+			None,
+		).expect("TODO: how do we return errors from spawned tasks?");
+		let client = self.client.clone();
+    	let mut stream = rt_version_stream
+			// I don't plan to change this logic, but to me it seems kind of crazy to implement watching for runtime
+			// version changes this way. Storage change notifications seems fairly expensive and here we just ignore all
+			// of them. They are `(<Block as Block>::Hash, StorageChangeSet)` and afaict they can be aribtrarily big
+			// (and allocate). In reality I think we only need a notification on each new block, i.e. use
+			// `import_notification_stream()` instead. I guess it would be ok-ish to use the storage changes stream if
+			// the user mostly subscribe to all storage changes and if there was a way to read all items off the stream
+			// and send some items to one sink and other items to another?
+			.filter_map(move |_| {
+				let info = client.info();
+				let version = client
+        			.runtime_version_at(&BlockId::hash(info.best_hash))
+        			// .map_err(|api_err| Error::Client(Box::new(api_err)))
+        			// .map_err(Into::into)
+        			.expect("TODO: error handling");
+				if previous_version != version {
+					previous_version = version.clone();
+					future::ready(Some(version))
+				} else {
+					future::ready(None)
+				}
+			});
+
+		loop {
+			if let Some(version) = stream.next().await {
+				self.sinks[0].send(&version);
+			}
+		}
 
 	}
 }
