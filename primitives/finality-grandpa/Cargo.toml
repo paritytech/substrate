@@ -25,6 +25,7 @@ sp-core = { version = "3.0.0", default-features = false, path = "../core" }
 sp-keystore = { version = "0.9.0", default-features = false, path = "../keystore", optional = true }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "3.0.0", default-features = false, path = "../std" }
+max-encoded-len = { version = "3.0.0", default-features = false, path = "../../frame/max-encoded-len", features = [ "derive" ] }
 
 [features]
 default = ["std"]
@@ -39,4 +40,5 @@ std = [
 	"sp-keystore",
 	"sp-runtime/std",
 	"sp-std/std",
+	"max-encoded-len/std",
 ]

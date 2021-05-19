@@ -28,6 +28,7 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtim
 sp-timestamp = { version = "3.0.0", path = "../../timestamp", optional = true }
 serde = { version = "1.0.123", features = ["derive"], optional = true }
 async-trait = { version = "0.1.48", optional = true }
+max-encoded-len = { version = "3.0.0", default-features = false, path = "../../../frame/max-encoded-len", features = [ "derive" ] }
 
 [features]
 default = ["std"]
@@ -47,4 +48,5 @@ std = [
 	"serde",
 	"sp-timestamp",
 	"async-trait",
+	"max-encoded-len/std",
 ]

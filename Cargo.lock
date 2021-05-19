@@ -4247,6 +4247,7 @@ name = "node-primitives"
 version = "2.0.0"
 dependencies = [
  "frame-system",
+ "max-encoded-len",
  "parity-scale-codec",
  "pretty_assertions 0.6.1",
  "sp-application-crypto",
@@ -4988,6 +4989,7 @@ dependencies = [
  "frame-system",
  "lite-json",
  "log",
+ "max-encoded-len",
  "parity-scale-codec",
  "sp-core",
  "sp-io",
@@ -5080,6 +5082,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "max-encoded-len",
  "pallet-authorship",
  "pallet-session",
  "parity-scale-codec",
@@ -8589,6 +8592,7 @@ dependencies = [
 name = "sp-application-crypto"
 version = "3.0.0"
 dependencies = [
+ "max-encoded-len",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -8640,6 +8644,7 @@ dependencies = [
 name = "sp-authority-discovery"
 version = "3.0.0"
 dependencies = [
+ "max-encoded-len",
  "parity-scale-codec",
  "sp-api",
  "sp-application-crypto",
@@ -8726,6 +8731,7 @@ name = "sp-consensus-aura"
 version = "0.9.0"
 dependencies = [
  "async-trait",
+ "max-encoded-len",
  "parity-scale-codec",
  "sp-api",
  "sp-application-crypto",
@@ -8742,6 +8748,7 @@ name = "sp-consensus-babe"
 version = "0.9.0"
 dependencies = [
  "async-trait",
+ "max-encoded-len",
  "merlin",
  "parity-scale-codec",
  "serde",
@@ -8872,6 +8879,7 @@ version = "3.0.0"
 dependencies = [
  "finality-grandpa",
  "log",
+ "max-encoded-len",
  "parity-scale-codec",
  "serde",
  "sp-api",
