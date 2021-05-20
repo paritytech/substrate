@@ -33,6 +33,7 @@ use alt_serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use hex_literal::hex;
 use log::{info, warn, error};
 use codec::Decode;
+use core::convert::TryInto;
 
 #[macro_use]
 extern crate alloc;
@@ -243,14 +244,7 @@ impl<T: Trait> Module<T> {
             return Ok(());
         }
 
-        // let day_start_ms = Self::get_start_of_day_ms();
-
-        // Use API
-        // let contract_id = T::ContractId::get();
-        // let day_start = pallet_contracts_rpc_runtime_api::ContractsApi::get_storage(&block_number, contract_id, CURRENT_PERIOD_MS);
-        // info!("[OCW] pallet_contracts_rpc_runtime_api: {:?}", day_start);
-
-        let day_start_ms = Self::sc_get_current_period_ms(&signer)
+        let day_start_ms = Self::sc_get_current_period_ms()
         .map_err(|err| {
             error!("[OCW] Contract error occurred: {:?}", err);
             "Could not submit get_current_period_ms TX"
@@ -313,14 +307,12 @@ impl<T: Trait> Module<T> {
         Ok(signer)
     }
 
-    fn sc_get_current_period_ms(
-        signer: &Signer::<T::CST, T::AuthorityId>,
-    ) -> ResultStr<(u64)> {
+    fn sc_get_current_period_ms() -> ResultStr<u64> {
         let contract_id = T::ContractId::get();
         let contract_idx = <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::lookup(contract_id).unwrap();
 
         let call_data = Self::encode_get_current_period_ms();
-        let (exec_result, gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
+        let (exec_result, _gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
             Default::default(),
             contract_idx,
             0u32.into(),
@@ -328,20 +320,16 @@ impl<T: Trait> Module<T> {
             call_data,
         );
 
-        let ret_val = match exec_result {
-            Ok(v) => ContractExecResult::Success {
-                flags: v.flags.bits(),
-                data: v.data,
-                gas_consumed: gas_consumed,
-            },
-            Err(_) => ContractExecResult::Error,
+        let (data) = match exec_result {
+            Ok(v) => v.data,
+            Err(_) => [0].to_vec(),
         };
 
-        info!("------------------------ [OCW] sc_get_current_period_ms - ret_val: {:?}", ret_val);
+        let ret: u64 = u64::from_le_bytes(data.try_into().unwrap());
+        
+        info!("[OCW] sc_get_current_period_ms - data response from sc: {:?}", ret);
 
-        let ret: u64 = 38_988_004; // TODO: get from ret_val
-
-        Ok((ret))
+        Ok(ret)
     }
 
     fn send_metrics_to_sc(
