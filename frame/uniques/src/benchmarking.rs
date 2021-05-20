@@ -29,94 +29,76 @@ use frame_benchmarking::{
 use frame_support::traits::Get;
 use frame_support::{traits::EnsureOrigin, dispatch::UnfilteredDispatchable};
 
-use crate::Pallet as Assets;
+use crate::Pallet as Uniques;
 
 const SEED: u32 = 0;
 
-fn create_default_asset<T: Config<I>, I: 'static>(is_sufficient: bool)
+fn create_class<T: Config<I>, I: 'static>()
 	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
 {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
-	let root = SystemOrigin::Root.into();
-	assert!(Assets::<T, I>::force_create(
-		root,
-		Default::default(),
-		caller_lookup.clone(),
-		is_sufficient,
-		1u32.into(),
-	).is_ok());
-	(caller, caller_lookup)
-}
-
-fn create_default_minted_asset<T: Config<I>, I: 'static>(is_sufficient: bool, amount: T::Balance)
-	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
-{
-	let (caller, caller_lookup)  = create_default_asset::<T, I>(is_sufficient);
-	if !is_sufficient {
-		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
-	}
-	assert!(Assets::<T, I>::mint(
+	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
+	assert!(Uniques::<T, I>::create(
 		SystemOrigin::Signed(caller.clone()).into(),
 		Default::default(),
 		caller_lookup.clone(),
-		amount,
 	).is_ok());
 	(caller, caller_lookup)
 }
 
-fn swap_is_sufficient<T: Config<I>, I: 'static>(s: &mut bool) {
-	Asset::<T, I>::mutate(&T::AssetId::default(), |maybe_a|
-		if let Some(ref mut a) = maybe_a { sp_std::mem::swap(s, &mut a.is_sufficient) }
-	);
-}
-
-fn add_consumers<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
-	let origin = SystemOrigin::Signed(minter);
-	let mut s = false;
-	swap_is_sufficient::<T, I>(&mut s);
-	for i in 0..n {
-		let target = account("consumer", i, SEED);
-		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
-		let target_lookup = T::Lookup::unlookup(target);
-		assert!(Assets::<T, I>::mint(origin.clone().into(), Default::default(), target_lookup, 100u32.into()).is_ok());
+fn add_class_metadata<T: Config<I>, I: 'static>()
+	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
+{
+	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
+	if caller != whitelisted_caller() {
+		whitelist_account!(caller);
 	}
-	swap_is_sufficient::<T, I>(&mut s);
-}
-
-fn add_sufficients<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
-	let origin = SystemOrigin::Signed(minter);
-	let mut s = true;
-	swap_is_sufficient::<T, I>(&mut s);
-	for i in 0..n {
-		let target = account("sufficient", i, SEED);
-		let target_lookup = T::Lookup::unlookup(target);
-		assert!(Assets::<T, I>::mint(origin.clone().into(), Default::default(), target_lookup, 100u32.into()).is_ok());
-	}
-	swap_is_sufficient::<T, I>(&mut s);
-}
-
-fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
-	T::Currency::deposit_creating(&minter, T::ApprovalDeposit::get() * n.into());
-	let minter_lookup = T::Lookup::unlookup(minter.clone());
-	let origin = SystemOrigin::Signed(minter);
-	Assets::<T, I>::mint(
-		origin.clone().into(),
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
+	assert!(Uniques::<T, I>::set_class_metadata(
+		SystemOrigin::Signed(caller.clone()).into(),
 		Default::default(),
-		minter_lookup,
-		(100 * (n + 1)).into(),
-	).unwrap();
-	for i in 0..n {
-		let target = account("approval", i, SEED);
-		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
-		let target_lookup = T::Lookup::unlookup(target);
-		Assets::<T, I>::approve_transfer(
-			origin.clone().into(),
-			Default::default(),
-			target_lookup,
-			100u32.into(),
-		).unwrap();
+		vec![0; T::StringLimit::get() as usize],
+		vec![0; T::StringLimit::get() as usize],
+		false,
+	).is_ok());
+	(caller, caller_lookup)
+}
+
+fn mint_instance<T: Config<I>, I: 'static>(index: u16)
+	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
+{
+	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().admin;
+	if caller != whitelisted_caller() {
+		whitelist_account!(caller);
 	}
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
+	assert!(Uniques::<T, I>::mint(
+		SystemOrigin::Signed(caller.clone()).into(),
+		Default::default(),
+		index.into(),
+		caller_lookup.clone(),
+	).is_ok());
+	(caller, caller_lookup)
+}
+
+fn add_instance_metadata<T: Config<I>, I: 'static>(index: u16)
+	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
+{
+	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
+	if caller != whitelisted_caller() {
+		whitelist_account!(caller);
+	}
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
+	assert!(Uniques::<T, I>::set_metadata(
+		SystemOrigin::Signed(caller.clone()).into(),
+		Default::default(),
+		index.into(),
+		vec![0; T::StringLimit::get() as usize],
+		vec![0; T::StringLimit::get() as usize],
+		false,
+	).is_ok());
+	(caller, caller_lookup)
 }
 
 fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
@@ -126,7 +108,7 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	let frame_system::EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
 }
-
+/*
 fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
 	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	let events = frame_system::Pallet::<T>::events();
@@ -134,13 +116,13 @@ fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event
 		matches!(&event_record, frame_system::EventRecord { event, .. } if &system_event == event)
 	}));
 }
-
+*/
 benchmarks_instance_pallet! {
 	create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1u32.into())
+	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::Created(Default::default(), caller.clone(), caller).into());
 	}
@@ -148,25 +130,31 @@ benchmarks_instance_pallet! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, Default::default(), caller_lookup, true, 1u32.into())
+	}: _(SystemOrigin::Root, Default::default(), caller_lookup, true)
 	verify {
 		assert_last_event::<T, I>(Event::ForceCreated(Default::default(), caller).into());
 	}
 
 	destroy {
-		let c in 0 .. 5_000;
-		let s in 0 .. 5_000;
-		let a in 0 .. 5_00;
-		let (caller, _) = create_default_asset::<T, I>(true);
-		add_consumers::<T, I>(caller.clone(), c);
-		add_sufficients::<T, I>(caller.clone(), s);
-		add_approvals::<T, I>(caller.clone(), a);
-		let witness = Asset::<T, I>::get(T::AssetId::default()).unwrap().destroy_witness();
+		let n in 0 .. 5_000;
+		let m in 0 .. 5_000;
+
+		let (caller, _) = create_class::<T, I>();
+		add_class_metadata::<T, I>();
+		for i in 0..n + m {
+			// create instance
+			mint_instance::<T, I>(i as u16);
+			if i < m {
+				// add metadata
+				add_instance_metadata::<T, I>(i as u16);
+			}
+		}
+		let witness = Class::<T, I>::get(T::ClassId::default()).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), Default::default(), witness)
 	verify {
 		assert_last_event::<T, I>(Event::Destroyed(Default::default()).into());
 	}
-
+/*
 	mint {
 		let (caller, caller_lookup) = create_default_asset::<T, I>(true);
 		let amount = T::Balance::from(100u32);
@@ -423,7 +411,7 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), id, caller_lookup, delegate_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled(id, caller, delegate).into());
-	}
+	}*/
 }
 
-impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test);
+impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);

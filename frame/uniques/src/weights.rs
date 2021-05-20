@@ -46,7 +46,7 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy(c: u32, s: u32, ) -> Weight;
+	fn destroy(n: u32, m: u32, ) -> Weight;
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
@@ -79,18 +79,18 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn destroy(c: u32, s: u32, ) -> Weight {
+	fn destroy(n: u32, m: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 38_000
-			.saturating_add((24_232_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add((24_232_000 as Weight).saturating_mul(n as Weight))
 			// Standard Error: 38_000
-			.saturating_add((30_467_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((30_467_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(c as Weight)))
-			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(s as Weight)))
+			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(n as Weight)))
+			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(m as Weight)))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((2 as Weight).saturating_mul(c as Weight)))
-			.saturating_add(T::DbWeight::get().writes((2 as Weight).saturating_mul(s as Weight)))
+			.saturating_add(T::DbWeight::get().writes((2 as Weight).saturating_mul(n as Weight)))
+			.saturating_add(T::DbWeight::get().writes((2 as Weight).saturating_mul(m as Weight)))
 	}
 	fn mint() -> Weight {
 		(46_433_000 as Weight)
@@ -197,18 +197,18 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn destroy(c: u32, s: u32, ) -> Weight {
+	fn destroy(n: u32, m: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 38_000
-			.saturating_add((24_232_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add((24_232_000 as Weight).saturating_mul(n as Weight))
 			// Standard Error: 38_000
-			.saturating_add((30_467_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((30_467_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((2 as Weight).saturating_mul(c as Weight)))
-			.saturating_add(RocksDbWeight::get().reads((2 as Weight).saturating_mul(s as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((2 as Weight).saturating_mul(n as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((2 as Weight).saturating_mul(m as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((2 as Weight).saturating_mul(c as Weight)))
-			.saturating_add(RocksDbWeight::get().writes((2 as Weight).saturating_mul(s as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((2 as Weight).saturating_mul(n as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((2 as Weight).saturating_mul(m as Weight)))
 	}
 	fn mint() -> Weight {
 		(46_433_000 as Weight)

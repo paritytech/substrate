@@ -28,10 +28,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod weights;
-/* TODO:
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-*/
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
@@ -69,7 +67,7 @@ pub mod pallet {
 		type ClassId: Member + Parameter + Default + Copy + HasCompact;
 
 		/// The type used to identify a unique asset within an asset class.
-		type InstanceId: Member + Parameter + Default + Copy + HasCompact;
+		type InstanceId: Member + Parameter + Default + Copy + HasCompact + From<u16>;
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -351,11 +349,11 @@ pub mod pallet {
 		///
 		/// Emits `Destroyed` event when successful.
 		///
-		/// Weight: `O(i + f)` where:
-		/// - `i = witness.instances`
-		/// - `f = witness.instance_metdadatas`
+		/// Weight: `O(n + m)` where:
+		/// - `n = witness.instances - witness.instance_metdadatas`
+		/// - `m = witness.instance_metdadatas`
 		#[pallet::weight(T::WeightInfo::destroy(
-			witness.instances,
+			witness.instances.saturating_sub(witness.instance_metadatas),
  			witness.instance_metadatas,
  		))]
 		pub(super) fn destroy(
