@@ -36,6 +36,7 @@ pub mod hashed;
 pub mod bounded_btree_map;
 pub mod bounded_btree_set;
 pub mod bounded_vec;
+pub mod weak_bounded_vec;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
@@ -965,12 +966,14 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 mod private {
 	use super::*;
 	use bounded_vec::BoundedVec;
+	use weak_bounded_vec::WeakBoundedVec;
 
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
 	impl<T, S> Sealed for BoundedVec<T, S> {}
+	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
 
@@ -1009,6 +1012,121 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
 /// format ever changes, we need to remove this here.
 impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
+
+/// Marker trait that will be implemented for types that support the `storage::try_append` api.
+///
+/// This trait is sealed.
+pub trait StorageTryAppend<Item>: StorageDecodeLength + private::Sealed {
+	fn bound() -> usize;
+}
+
+/// Storage value that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
+pub trait TryAppendValue<T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage item.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<LikeI: EncodeLike<I>>(item: LikeI) -> Result<(), ()>;
+}
+
+impl<T, I, StorageValueT> TryAppendValue<T, I> for StorageValueT
+where
+	I: Encode,
+	T: FullCodec + StorageTryAppend<I>,
+	StorageValueT: generator::StorageValue<T>,
+{
+	fn try_append<LikeI: EncodeLike<I>>(item: LikeI) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len().unwrap_or_default();
+		if current < bound {
+			// NOTE: we cannot reuse the implementation for `Vec<T>` here because we never want to
+			// mark `BoundedVec<T, S>` as `StorageAppend`.
+			let key = Self::storage_value_final_key();
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Storage map that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
+pub trait TryAppendMap<K: Encode, T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage map at the given `key`.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<LikeK: EncodeLike<K> + Clone, LikeI: EncodeLike<I>>(
+		key: LikeK,
+		item: LikeI,
+	) -> Result<(), ()>;
+}
+
+impl<K, T, I, StorageMapT> TryAppendMap<K, T, I> for StorageMapT
+where
+	K: FullCodec,
+	T: FullCodec + StorageTryAppend<I>,
+	I: Encode,
+	StorageMapT: generator::StorageMap<K, T>,
+{
+	fn try_append<LikeK: EncodeLike<K> + Clone, LikeI: EncodeLike<I>>(
+		key: LikeK,
+		item: LikeI,
+	) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len(key.clone()).unwrap_or_default();
+		if current < bound {
+			let key = Self::storage_map_final_key(key);
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Storage double map that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
+pub trait TryAppendDoubleMap<K1: Encode, K2: Encode, T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage double map at the given `key`.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<
+		LikeK1: EncodeLike<K1> + Clone,
+		LikeK2: EncodeLike<K2> + Clone,
+		LikeI: EncodeLike<I>,
+	>(
+		key1: LikeK1,
+		key2: LikeK2,
+		item: LikeI,
+	) -> Result<(), ()>;
+}
+
+impl<K1, K2, T, I, StorageDoubleMapT> TryAppendDoubleMap<K1, K2, T, I> for StorageDoubleMapT
+where
+	K1: FullCodec,
+	K2: FullCodec,
+	T: FullCodec + StorageTryAppend<I>,
+	I: Encode,
+	StorageDoubleMapT: generator::StorageDoubleMap<K1, K2, T>,
+{
+	fn try_append<
+		LikeK1: EncodeLike<K1> + Clone,
+		LikeK2: EncodeLike<K2> + Clone,
+		LikeI: EncodeLike<I>,
+	>(
+		key1: LikeK1,
+		key2: LikeK2,
+		item: LikeI,
+	) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len(key1.clone(), key2.clone()).unwrap_or_default();
+		if current < bound {
+			let double_map_key = Self::storage_double_map_final_key(key1, key2);
+			sp_io::storage::append(&double_map_key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
 
 #[cfg(test)]
 mod test {
