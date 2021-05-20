@@ -31,8 +31,6 @@ pub use pallet_contracts_rpc_runtime_api::{
 };
 use alt_serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use hex_literal::hex;
-use log::{info, warn, error};
-use codec::Decode;
 use core::convert::TryInto;
 
 #[macro_use]
@@ -47,8 +45,10 @@ pub const METRICS_CONTRACT_ADDR: &str = "5EFhuVjnUTH4fkvapxyXqkfmANQWFVGZtmkHd4G
 pub const METRICS_CONTRACT_ID: [u8; 32] = [96, 220, 84, 153, 65, 96, 13, 180, 40, 98, 142, 110, 218, 127, 9, 17, 182, 152, 78, 174, 24, 37, 26, 27, 128, 215, 170, 18, 3, 3, 69, 60];
 pub const BLOCK_INTERVAL: u32 = 200; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
+// Smart contract method selectors
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
+pub const FINALIZE_METRIC_PERIOD: [u8; 4] = hex!("b269d557");
 
 // Specifying serde path as `alt_serde`
 // ref: https://serde.rs/container-attrs.html#crate
@@ -247,20 +247,32 @@ impl<T: Trait> Module<T> {
         let day_start_ms = Self::sc_get_current_period_ms()
         .map_err(|err| {
             error!("[OCW] Contract error occurred: {:?}", err);
-            "Could not submit get_current_period_ms TX"
+            "Could not call get_current_period_ms TX"
         })?;
 
-        let aggregated_metrics = Self::fetch_all_metrics(day_start_ms)
+        let day_end_ms = day_start_ms + MS_PER_DAY;
+
+        let aggregated_metrics = Self::fetch_all_metrics(day_start_ms, day_end_ms)
             .map_err(|err| {
                 error!("[OCW] HTTP error occurred: {:?}", err);
                 "could not fetch metrics"
             })?;
 
-        Self::send_metrics_to_sc(signer, day_start_ms, aggregated_metrics)
+        Self::send_metrics_to_sc(&signer, day_start_ms, aggregated_metrics)
             .map_err(|err| {
                 error!("[OCW] Contract error occurred: {:?}", err);
                 "could not submit report_metrics TX"
             })?;
+
+        let block_timestamp = sp_io::offchain::timestamp().unix_millis();
+
+        if day_end_ms < block_timestamp {
+            Self::finalize_metric_period(&signer, day_start_ms)
+            .map_err(|err| {
+                error!("[OCW] Contract error occurred: {:?}", err);
+                "could not call finalize_metric_period TX"
+            })?;
+        }
 
         Ok(())
     }
@@ -293,11 +305,11 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    fn get_start_of_day_ms() -> u64 {
-        let now = sp_io::offchain::timestamp();
-        let day_start_ms = (now.unix_millis() / MS_PER_DAY) * MS_PER_DAY;
-        day_start_ms
-    }
+    // fn get_start_of_day_ms() -> u64 {
+    //     let now = sp_io::offchain::timestamp();
+    //     let day_start_ms = (now.unix_millis() / MS_PER_DAY) * MS_PER_DAY;
+    //     day_start_ms
+    // }
 
     fn get_signer() -> ResultStr<Signer::<T::CST, T::AuthorityId>> {
         let signer = Signer::<_, _>::any_account();
@@ -332,8 +344,39 @@ impl<T: Trait> Module<T> {
         Ok(ret)
     }
 
+    fn finalize_metric_period(
+        signer: &Signer::<T::CST, T::AuthorityId>,
+        in_day_start_ms: u64,
+        ) -> ResultStr<()> {
+        let contract_id = T::ContractId::get();
+
+        let call_data = Self::encode_finalize_metric_period(in_day_start_ms);
+        let results = signer.send_signed_transaction(
+            |account| {
+                info!("[OCW] Sending transactions with in_day_start_ms {:?}", in_day_start_ms);
+
+                let call_data = Self::encode_finalize_metric_period(in_day_start_ms);
+
+                pallet_contracts::Call::call(
+                    contract_id.clone(),
+                    0u32.into(),
+                    100_000_000_000,
+                    call_data,
+                )
+            }
+        );
+
+        match &results {
+            None | Some((_, Err(()))) =>
+                return Err("Error while submitting TX to SC"),
+            Some((_, Ok(()))) => {}
+        }
+
+        Ok(())
+    }
+
     fn send_metrics_to_sc(
-        signer: Signer::<T::CST, T::AuthorityId>,
+        signer: &Signer::<T::CST, T::AuthorityId>,
         day_start_ms: u64,
         metrics: Vec<MetricInfo>,
     ) -> ResultStr<()> {
@@ -372,16 +415,14 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    fn fetch_all_metrics(day_start_ms: u64) -> ResultStr<Vec<MetricInfo>> {
-        let a_moment_ago_ms = sp_io::offchain::timestamp().sub(Duration::from_millis(END_TIME_DELAY_MS)).unix_millis();
-
+    fn fetch_all_metrics(day_start_ms: u64, day_end_ms: u64) -> ResultStr<Vec<MetricInfo>> {
         let mut aggregated_metrics = MetricsAggregator::default();
 
         let nodes = Self::fetch_nodes()?;
 
         for node in &nodes {
             let metrics_of_node = Self::fetch_node_metrics(
-                &node.httpAddr, day_start_ms, a_moment_ago_ms)?;
+                &node.httpAddr, day_start_ms, day_end_ms)?;
 
             for metrics in &metrics_of_node {
                 aggregated_metrics.add(metrics);
@@ -457,6 +498,15 @@ impl<T: Trait> Module<T> {
     /// Must match the contract function here: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs
     fn encode_get_current_period_ms() -> Vec<u8> {
         CURRENT_PERIOD_MS.to_vec()
+    }
+
+    /// Prepare finalize_metric_period call params.
+    /// Must match the contract function here: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs
+    fn encode_finalize_metric_period(in_day_start_ms: u64) -> Vec<u8> {
+        let mut call_data = FINALIZE_METRIC_PERIOD.to_vec();
+        in_day_start_ms.encode_to(&mut call_data);
+
+        call_data
     }
 
     /// Prepare report_metrics call params.
