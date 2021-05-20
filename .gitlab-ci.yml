@@ -671,6 +671,7 @@ deploy-prometheus-alerting-rules:
   needs:
     - job:                         test-prometheus-alerting-rules
       artifacts:                   false
+  allow_failure:                   true
   trigger:
     project:  parity/infrastructure/cloud-infra
     strategy: depend
