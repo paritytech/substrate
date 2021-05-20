@@ -485,7 +485,6 @@ impl<T: Trait> Module<T> {
             .map_err(|_| "invalid hex address.")?;
         Ok(AccountId32::from(bytes))
     }
-
 }
 
 #[derive(Default)]
