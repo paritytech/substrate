@@ -1013,7 +1013,8 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 /// format ever changes, we need to remove this here.
 impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
 
-/// Marker trait that will be implemented for types that support the `storage::try_append` api.
+/// Marker trait that is implemented for types that support the `storage::append` api with a limit
+/// on the number of element.
 ///
 /// This trait is sealed.
 pub trait StorageTryAppend<Item>: StorageDecodeLength + private::Sealed {
