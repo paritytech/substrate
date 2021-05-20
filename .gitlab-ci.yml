@@ -674,7 +674,6 @@ deploy-prometheus-alerting-rules:
   allow_failure:                   true
   trigger:
     project:  parity/infrastructure/cloud-infra
-    strategy: depend
   variables:
     SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
     SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
