@@ -45,6 +45,7 @@ pub struct CallDef {
 	pub docs: Vec<syn::Lit>,
 }
 
+#[derive(Clone)]
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
 pub struct CallVariantDef {
 	/// Function name.
@@ -232,16 +233,5 @@ impl CallDef {
 			where_clause: item.generics.where_clause.clone(),
 			docs: helper::get_doc_literals(&item.attrs),
 		})
-	}
-
-	pub fn empty(attr_span: proc_macro2::Span) -> Self {
-		Self {
-			where_clause: None,
-			instances: Vec::new(),
-			index: 0,
-			methods: Vec::new(),
-			attr_span,
-			docs: Vec::new(),
-		}
 	}
 }
