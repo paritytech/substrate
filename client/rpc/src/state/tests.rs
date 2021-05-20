@@ -138,7 +138,7 @@ fn should_return_child_storage() {
 
 #[test]
 fn should_call_contract() {
-	let client = Arc::new(substrate_test_runtime_client::new());
+	let client = Arc::new(substrate_test_runtime_client::new(true));
 	let genesis_hash = client.genesis_hash();
 	let (client, _child) = new_full(
 		client,
@@ -157,7 +157,7 @@ fn should_notify_about_storage_changes() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let mut client = Arc::new(substrate_test_runtime_client::new(true));
 		let (api, _child) = new_full(
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
@@ -195,7 +195,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let mut client = Arc::new(substrate_test_runtime_client::new(true));
 		let (api, _child) = new_full(
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
@@ -435,10 +435,20 @@ fn should_query_storage() {
 		);
 	}
 
-	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
+	run_tests(Arc::new(substrate_test_runtime_client::new(true)), false);
+	run_tests(Arc::new(substrate_test_runtime_client::new(false)), false);
 	run_tests(
 		Arc::new(
 			TestClientBuilder::new()
+				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
+				.build(),
+		),
+		true,
+	);
+	run_tests(
+		Arc::new(
+			TestClientBuilder::new()
+				.state_hashed_value()
 				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
 				.build(),
 		),
@@ -455,10 +465,13 @@ fn should_split_ranges() {
 	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
 }
 
-
 #[test]
 fn should_return_runtime_version() {
-	let client = Arc::new(substrate_test_runtime_client::new());
+	should_return_runtime_version_inner(true);
+	should_return_runtime_version_inner(false);
+}
+fn should_return_runtime_version_inner(hashed_value: bool) {
+	let client = Arc::new(substrate_test_runtime_client::new(hashed_value));
 	let (api, _child) = new_full(
 		client.clone(),
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
@@ -485,7 +498,7 @@ fn should_notify_on_runtime_version_initially() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let client = Arc::new(substrate_test_runtime_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new(true));
 		let (api, _child) = new_full(
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),

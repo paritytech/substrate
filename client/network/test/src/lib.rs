@@ -822,7 +822,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 
 	/// Add a light peer.
 	fn add_light_peer(&mut self) {
-		let (c, backend) = substrate_test_runtime_client::new_light();
+		let (c, backend) = substrate_test_runtime_client::new_light(true);
 		let client = Arc::new(c);
 		let (
 			block_import,

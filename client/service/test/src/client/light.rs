@@ -305,6 +305,10 @@ fn light_aux_store_is_updated_via_non_importing_op() {
 
 #[test]
 fn execution_proof_is_generated_and_checked() {
+	execution_proof_is_generated_and_checked_inner(true);
+	execution_proof_is_generated_and_checked_inner(false);
+}
+fn execution_proof_is_generated_and_checked_inner(hashed_value: bool) {
 	fn execute(remote_client: &TestClient, at: u64, method: &'static str) -> (Vec<u8>, Vec<u8>) {
 		let remote_block_id = BlockId::Number(at);
 		let remote_header = remote_client.header(&remote_block_id).unwrap().unwrap();
@@ -371,7 +375,7 @@ fn execution_proof_is_generated_and_checked() {
 	}
 
 	// prepare remote client
-	let mut remote_client = substrate_test_runtime_client::new();
+	let mut remote_client = substrate_test_runtime_client::new(hashed_value);
 	for i in 1u32..3u32 {
 		let mut digest = Digest::default();
 		digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
@@ -451,9 +455,9 @@ type TestChecker = LightDataChecker<
 	DummyStorage,
 >;
 
-fn prepare_for_read_proof_check() -> (TestChecker, Header, StorageProof, u32) {
+fn prepare_for_read_proof_check(hashed_value: bool) -> (TestChecker, Header, StorageProof, u32) {
 	// prepare remote client
-	let remote_client = substrate_test_runtime_client::new();
+	let remote_client = substrate_test_runtime_client::new(hashed_value);
 	let remote_block_id = BlockId::Number(0);
 	let flagged = false;
 	let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
@@ -536,9 +540,9 @@ fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, V
 	(local_checker, remote_block_header, remote_read_proof, child_value)
 }
 
-fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, StorageProof) {
+fn prepare_for_header_proof_check(insert_cht: bool, hashed_value: bool) -> (TestChecker, Hash, Header, StorageProof) {
 	// prepare remote client
-	let mut remote_client = substrate_test_runtime_client::new();
+	let mut remote_client = substrate_test_runtime_client::new(hashed_value);
 	let mut local_headers_hashes = Vec::new();
 	for i in 0..4 {
 		let block = remote_client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -578,7 +582,16 @@ fn header_with_computed_extrinsics_root(extrinsics: Vec<Extrinsic>) -> Header {
 
 #[test]
 fn storage_read_proof_is_generated_and_checked() {
-	let (local_checker, remote_block_header, remote_read_proof, heap_pages) = prepare_for_read_proof_check();
+	storage_read_proof_is_generated_and_checked_inner(true);
+	storage_read_proof_is_generated_and_checked_inner(false);
+}
+fn storage_read_proof_is_generated_and_checked_inner(hashed_value: bool) {
+	let (
+		local_checker,
+		remote_block_header,
+		remote_read_proof,
+		heap_pages,
+	) = prepare_for_read_proof_check(hashed_value);
 	assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
 		block: remote_block_header.hash(),
 		header: remote_block_header,
@@ -610,7 +623,11 @@ fn storage_child_read_proof_is_generated_and_checked() {
 
 #[test]
 fn header_proof_is_generated_and_checked() {
-	let (local_checker, local_cht_root, remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
+	header_proof_is_generated_and_checked_inner(true);
+	header_proof_is_generated_and_checked_inner(false);
+}
+fn header_proof_is_generated_and_checked_inner(hashed: bool) {
+	let (local_checker, local_cht_root, remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true, hashed);
 	assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 		cht_root: local_cht_root,
 		block: 1,
@@ -620,7 +637,7 @@ fn header_proof_is_generated_and_checked() {
 
 #[test]
 fn check_header_proof_fails_if_cht_root_is_invalid() {
-	let (local_checker, _, mut remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
+	let (local_checker, _, mut remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true, true);
 	remote_block_header.number = 100;
 	assert!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 		cht_root: Default::default(),
@@ -631,7 +648,12 @@ fn check_header_proof_fails_if_cht_root_is_invalid() {
 
 #[test]
 fn check_header_proof_fails_if_invalid_header_provided() {
-	let (local_checker, local_cht_root, mut remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
+	let (
+		local_checker,
+		local_cht_root,
+		mut remote_block_header,
+		remote_header_proof,
+	) = prepare_for_header_proof_check(true, true);
 	remote_block_header.number = 100;
 	assert!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 		cht_root: local_cht_root,

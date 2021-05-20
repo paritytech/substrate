@@ -1155,13 +1155,19 @@ mod tests {
 		check_iteration::<Layout>(&input);
 	}
 
-	// TODO add flag
-	fn populate_trie<'db, T: TrieConfiguration>(
+	fn populate_trie<'db, T>(
 		db: &'db mut dyn HashDB<T::Hash, DBValue, T::Meta>,
 		root: &'db mut TrieHash<T>,
-		v: &[(Vec<u8>, Vec<u8>)]
-	) -> TrieDBMut<'db, T> {
+		v: &[(Vec<u8>, Vec<u8>)],
+		flag_hash: bool,
+	) -> TrieDBMut<'db, T>
+		where
+			T: TrieConfiguration<Meta = TrieMeta>,
+	{
 		let mut t = TrieDBMut::<T>::new(db, root);
+		if flag_hash {
+			flag_meta_hasher(&mut t).unwrap();
+		}
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -1182,6 +1188,10 @@ mod tests {
 
 	#[test]
 	fn random_should_work() {
+		random_should_work_inner(true);
+		random_should_work_inner(false);
+	}
+	fn random_should_work_inner(flag: bool) {
 		let mut seed = <Blake2Hasher as Hasher>::Out::zero();
 		for test_i in 0..10000 {
 			if test_i % 50 == 0 {
@@ -1195,12 +1205,12 @@ mod tests {
 				count: 100,
 			}.make_with(seed.as_fixed_bytes_mut());
 
-			// TODO test other layout states.
 			let layout = Layout::default();
+			// TODO implement variant for stream codec or use iter_build.
 			let real = layout.trie_root(x.clone());
 			let mut memdb = MemoryDB::default();
 			let mut root = Default::default();
-			let mut memtrie = populate_trie::<Layout>(&mut memdb, &mut root, &x);
+			let mut memtrie = populate_trie::<Layout>(&mut memdb, &mut root, &x, flag);
 
 			memtrie.commit();
 			if *memtrie.root() != real {
@@ -1260,7 +1270,6 @@ mod tests {
 
 	#[test]
 	fn codec_trie_two_tuples_disjoint_keys() {
-		// TODO switch to old layout
 		let layout = Layout::default();
 		let input = vec![(&[0x48, 0x19], &[0xfe]), (&[0x13, 0x14], &[0xff])];
 		let trie = layout.trie_root_unhashed(input);
@@ -1287,19 +1296,26 @@ mod tests {
 
 	#[test]
 	fn iterator_works() {
-		let pairs = vec![
+		iterator_works_inner(true);
+		iterator_works_inner(false);
+	}
+	fn iterator_works_inner(flag: bool) {
+		let mut pairs = vec![
 			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),
 			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
 		];
 
 		let mut mdb = MemoryDB::default();
 		let mut root = Default::default();
-		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs);
+		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs, flag);
 
 		let trie = TrieDB::<Layout>::new(&mdb, &root).unwrap();
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();
+		if flag {
+			pairs.insert(0, (vec![], vec![]));
+		}
 		for pair in iter {
 			let (key, value) = pair.unwrap();
 			iter_pairs.push((key, value.to_vec()));

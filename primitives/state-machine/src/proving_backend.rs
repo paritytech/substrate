@@ -481,9 +481,7 @@ mod tests {
 		let contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)], false);
-		let in_memory_root = in_memory.storage_root(std::iter::empty(), false).0;
 		value_range.clone().for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
-
 		in_memory = in_memory.update(vec![], true);
 		let in_memory_root = in_memory.storage_root(std::iter::empty(), false).0;
 		let trie = in_memory.as_trie_backend().unwrap();
