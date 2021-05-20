@@ -22,7 +22,7 @@
 use crate::instance_wrapper::InstanceWrapper;
 use crate::util;
 use core::slice;
-use std::{cell::RefCell, rc::Rc, vec::Splice};
+use std::{cell::RefCell, rc::Rc};
 use log::trace;
 use codec::{Encode, Decode};
 use sp_allocator::FreeingBumpHeapAllocator;
@@ -31,7 +31,7 @@ use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use wasmtime::{Func, Val};
-use sandbox::{SandboxBackend, SandboxCapabiliesHolder};
+use sandbox::{SandboxCapabiliesHolder};
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -210,7 +210,8 @@ impl Sandbox for HostState {
 					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 				};
 
-				// TODO Proof of safety
+				// This is safe because we construct slice from the same parts as the memory region itself.
+				// Current implementation is single threaded, so we should not face any synchronization or aliasing issues.
 				let source = unsafe { slice::from_raw_parts(sandboxed_memory.data_ptr(), sandboxed_memory.data_size() as usize) };
 
 				self.inner.instance
@@ -279,7 +280,8 @@ impl Sandbox for HostState {
 					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 				};
 
-				// TODO Proof of safety
+				// This is safe because we construct slice from the same parts as the memory region itself.
+				// Current implementation is single threaded, so we should not face any synchronization or aliasing issues.
 				let dest = unsafe { slice::from_raw_parts_mut(sandboxed_memory.data_ptr(), sandboxed_memory.data_size() as usize) };
 
 				self.inner.instance
@@ -401,7 +403,6 @@ impl Sandbox for HostState {
 		let store = &mut *self.inner.sandbox_store.borrow_mut();
 		let result = DISPATCH_THUNK.set(&dispatch_thunk, || {
 			store.instantiate::<_, CapsHolder, ThunkHolder>(
-				// dispatch_thunk,
 				wasm,
 				guest_env,
 				state

@@ -622,6 +622,7 @@ pub enum Memory {
 }
 
 impl Memory {
+	/// View as wasmi memory
 	pub fn as_wasmi(&self) -> Option<MemoryRef> {
 		match self {
 			Memory::Wasmi(memory) => Some(memory.clone()),
@@ -629,6 +630,7 @@ impl Memory {
 		}
 	}
 
+	/// View as wasmer memory
 	pub fn as_wasmer(&self) -> Option<wasmer::Memory> {
 		match self {
 			Memory::Wasmer(memory) => Some(memory.clone()),
