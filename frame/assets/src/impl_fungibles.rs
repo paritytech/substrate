@@ -19,7 +19,7 @@
 
 use super::*;
 
-impl<T: Config<I>, I: 'static> non_fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	type AssetId = T::AssetId;
 	type Balance = T::Balance;
 
