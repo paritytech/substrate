@@ -891,11 +891,11 @@ where
 				}
 			}
 		} else {
-			if let Some(message) = &self.debug_message {
+			if let Some((msg, false)) = self.debug_message.as_ref().map(|m| (m, m.is_empty())) {
 				log::debug!(
 					target: "runtime::contracts",
-					"Debug Message: {}",
-					core::str::from_utf8(message).unwrap_or("<Invalid UTF8>"),
+					"Execution finished with debug buffer: {}",
+					core::str::from_utf8(msg).unwrap_or("<Invalid UTF8>"),
 				);
 			}
 			// Write back to the root gas meter.
