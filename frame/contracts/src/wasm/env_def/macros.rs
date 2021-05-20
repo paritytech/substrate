@@ -51,10 +51,6 @@ macro_rules! gen_signature_dispatch {
 		( $ctx:ident $( , $names:ident : $params:ty )* ) $( -> $returns:ty )* , $($rest:tt)*
 	) => {
 		let module = stringify!($module).as_bytes();
-		#[cfg(not(feature = "unstable-interface"))]
-		if module == b"__unstable__" {
-			return false;
-		}
 		if module == $needle_module && stringify!($name).as_bytes() == $needle_name {
 			let signature = gen_signature!( ( $( $params ),* ) $( -> $returns )* );
 			if $needle_sig == &signature {
@@ -219,6 +215,10 @@ macro_rules! define_env {
 
 		impl $crate::wasm::env_def::ImportSatisfyCheck for $init_name {
 			fn can_satisfy(module: &[u8], name: &[u8], func_type: &parity_wasm::elements::FunctionType) -> bool {
+				#[cfg(not(feature = "unstable-interface"))]
+				if module == b"__unstable__" {
+					return false;
+				}
 				gen_signature_dispatch!(
 					module, name, func_type ;
 					$( $module, $name ( $ctx $(, $names : $params )* ) $( -> $returns )* , )*
