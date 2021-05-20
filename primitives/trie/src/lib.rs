@@ -594,6 +594,17 @@ pub fn flag_meta_hasher<L>(
 	Ok(())
 }
 
+/// Resolve if inner hashing of value is active.
+pub fn state_hashed_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta>>(
+	db: &DB,
+	root: &TrieHash<L>,
+) -> bool {
+	if let Ok(t) = TrieDB::<L>::new(&*db, root) {
+		unimplemented!("TODO has_flag on triedb");
+	}
+	false
+}
+
 /// Read a value from the trie.
 pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta>>(
 	db: &DB,

@@ -1525,6 +1525,10 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 
 		Ok(result)
 	}
+
+	fn state_hashed_value(&self, id: &BlockId<Block>) -> sp_blockchain::Result<bool> {
+		Ok(self.state_at(id)?.state_hashed_value())
+	}
 }
 
 impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA> where

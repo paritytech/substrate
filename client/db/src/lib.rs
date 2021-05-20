@@ -269,6 +269,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn usage_info(&self) -> StateUsageInfo {
 		self.state.usage_info()
 	}
+
+	fn state_hashed_value(&self) -> bool {
+		self.state.state_hashed_value()
+	}
 }
 
 /// Database settings.
@@ -2286,7 +2290,10 @@ pub(crate) mod tests {
 
 	#[test]
 	fn set_state_data() {
-		let flagged = false; // TODO test with flagged
+		set_state_data_inner(true);
+		set_state_data_inner(false);
+	}
+	fn set_state_data_inner(flagged: bool) {
 		let db = Backend::<Block>::new_test(2, 0);
 		let hash = {
 			let mut op = db.begin_operation().unwrap();

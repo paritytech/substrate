@@ -254,6 +254,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn proof_size(&self) -> Option<u32> {
 		unimplemented!()
 	}
+
+	/// Does trie state allow hashing of value.
+	fn state_hashed_value(&self) -> bool;
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
@@ -334,6 +337,10 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()
+	}
+
+	fn state_hashed_value(&self) -> bool {
+		(*self).state_hashed_value()
 	}
 }
 

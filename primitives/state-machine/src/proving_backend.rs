@@ -361,6 +361,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.0.usage_info()
 	}
+
+	fn state_hashed_value(&self) -> bool {
+		self.0.state_hashed_value()
+	}
 }
 
 /// Create proof check backend.

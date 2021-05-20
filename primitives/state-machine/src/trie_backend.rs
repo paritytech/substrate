@@ -255,6 +255,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn wipe(&self) -> Result<(), Self::Error> {
 		Ok(())
 	}
+
+	fn state_hashed_value(&self) -> bool {
+		self.essence.state_hashed_value()
+	}
 }
 
 #[cfg(test)]

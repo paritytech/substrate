@@ -31,6 +31,7 @@ use crate::simple_trie::SimpleTrie;
 pub fn generate_trie(
 	db: Arc<dyn KeyValueDB>,
 	key_values: impl IntoIterator<Item=(Vec<u8>, Vec<u8>)>,
+	flag_hashed_value: bool,
 ) -> Hash {
 	let mut root = Hash::default();
 
@@ -44,6 +45,9 @@ pub fn generate_trie(
 		{
 			let mut trie_db = TrieDBMut::new(&mut trie, &mut root);
 
+			if flag_hashed_value {
+				sp_trie::flag_meta_hasher(&mut trie_db).expect("flag trie failed");
+			}
 			for (key, value) in key_values {
 				trie_db.insert(&key, &value).expect("trie insertion failed");
 			}

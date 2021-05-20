@@ -528,6 +528,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn proof_size(&self) -> Option<u32> {
 		self.proof_recorder.as_ref().map(|recorder| recorder.estimate_encoded_size() as u32)
 	}
+
+	fn state_hashed_value(&self) -> bool {
+		self.state.borrow().as_ref().map_or(Default::default(), |s| s.state_hashed_value())
+	}
 }
 
 impl<Block: BlockT> std::fmt::Debug for BenchmarkingState<Block> {

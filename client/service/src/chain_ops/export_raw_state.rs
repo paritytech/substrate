@@ -42,7 +42,7 @@ where
 	let empty_key = StorageKey(Vec::new());
 	let mut top_storage = client.storage_pairs(&block, &empty_key)?;
 	let mut children_default = HashMap::new();
-	let flag_hashed_value = false; // TODO read from trie (through clinet api).
+	let flag_hashed_value = client.state_hashed_value(&block)?;
 
 	// Remove all default child storage roots from the top storage and collect the child storage
 	// pairs.

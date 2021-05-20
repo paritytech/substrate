@@ -540,4 +540,11 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 			GenesisOrUnavailableState::Unavailable => None,
 		}
 	}
+
+	fn state_hashed_value(&self) -> bool {
+		match self {
+			GenesisOrUnavailableState::Genesis(state) => state.state_hashed_value(),
+			GenesisOrUnavailableState::Unavailable => false,
+		}
+	}
 }

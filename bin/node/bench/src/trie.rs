@@ -117,7 +117,6 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 		let mut rng = rand::thread_rng();
 		let warmup_prefix = KUSAMA_STATE_DISTRIBUTION.key(&mut rng);
 
-		// TODO flag trie for hash of value.
 		let mut key_values = KeyValues::new();
 		let mut warmup_keys = KeyValues::new();
 		let mut query_keys = KeyValues::new();
@@ -146,6 +145,7 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 		let root = generate_trie(
 			database.open(self.database_type),
 			key_values,
+			true,
 		);
 
 		Box::new(TrieReadBenchmark {
@@ -263,6 +263,7 @@ impl core::BenchmarkDescription for TrieWriteBenchmarkDescription {
 		let root = generate_trie(
 			database.open(self.database_type),
 			key_values,
+			true,
 		);
 
 		Box::new(TrieWriteBenchmark {
