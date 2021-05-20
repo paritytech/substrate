@@ -133,6 +133,7 @@ pub type GenesisStorage = HashMap<StorageKey, StorageData>;
 pub struct RawGenesis {
 	pub top: GenesisStorage,
 	pub children_default: HashMap<StorageKey, GenesisStorage>,
+	#[serde(default)]
 	pub flag_hashed_value: bool,
 }
 
