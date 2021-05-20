@@ -1021,7 +1021,7 @@ pub trait StorageTryAppend<Item>: StorageDecodeLength + private::Sealed {
 	fn bound() -> usize;
 }
 
-/// Storage value that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
+/// Storage value that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
 pub trait TryAppendValue<T: StorageTryAppend<I>, I: Encode> {
 	/// Try and append the `item` into the storage item.
 	///
@@ -1050,7 +1050,7 @@ where
 	}
 }
 
-/// Storage map that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
+/// Storage map that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
 pub trait TryAppendMap<K: Encode, T: StorageTryAppend<I>, I: Encode> {
 	/// Try and append the `item` into the storage map at the given `key`.
 	///
@@ -1084,7 +1084,7 @@ where
 	}
 }
 
-/// Storage double map that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
+/// Storage double map that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
 pub trait TryAppendDoubleMap<K1: Encode, K2: Encode, T: StorageTryAppend<I>, I: Encode> {
 	/// Try and append the `item` into the storage double map at the given `key`.
 	///
