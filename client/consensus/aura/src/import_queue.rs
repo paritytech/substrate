@@ -113,19 +113,19 @@ fn check_header<C, B: BlockT, P: Pair>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, P, CAW, IDP> {
+pub struct AuraVerifier<C, P, CAW, CIDP> {
 	client: Arc<C>,
 	phantom: PhantomData<P>,
-	create_inherent_data_providers: IDP,
+	create_inherent_data_providers: CIDP,
 	can_author_with: CAW,
 	check_for_equivocation: CheckForEquivocation,
 	telemetry: Option<TelemetryHandle>,
 }
 
-impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> {
+impl<C, P, CAW, CIDP> AuraVerifier<C, P, CAW, CIDP> {
 	pub(crate) fn new(
 		client: Arc<C>,
-		create_inherent_data_providers: IDP,
+		create_inherent_data_providers: CIDP,
 		can_author_with: CAW,
 		check_for_equivocation: CheckForEquivocation,
 		telemetry: Option<TelemetryHandle>,
@@ -141,21 +141,21 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> {
 	}
 }
 
-impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
+impl<C, P, CAW, CIDP> AuraVerifier<C, P, CAW, CIDP> where
 	P: Send + Sync + 'static,
 	CAW: Send + Sync + 'static,
-	IDP: Send,
+	CIDP: Send,
 {
 	async fn check_inherents<B: BlockT>(
 		&self,
 		block: B,
 		block_id: BlockId<B>,
 		inherent_data: sp_inherents::InherentData,
-		create_inherent_data_providers: IDP::InherentDataProviders,
+		create_inherent_data_providers: CIDP::InherentDataProviders,
 	) -> Result<(), Error<B>> where
 		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B>,
 		CAW: CanAuthorWith<B>,
-		IDP: CreateInherentDataProviders<B, ()>,
+		CIDP: CreateInherentDataProviders<B, ()>,
 	{
 		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
 			debug!(
@@ -187,7 +187,7 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> where
+impl<B: BlockT, C, P, CAW, CIDP> Verifier<B> for AuraVerifier<C, P, CAW, CIDP> where
 	C: ProvideRuntimeApi<B> +
 		Send +
 		Sync +
@@ -200,8 +200,8 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
-	IDP: CreateInherentDataProviders<B, ()> + Send + Sync,
-	IDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
 	async fn verify(
 		&mut self,
@@ -522,12 +522,14 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 {
 	initialize_authorities_cache(&*client)?;
 
-	let verifier = AuraVerifier::<_, P, _, _>::new(
-		client,
-		create_inherent_data_providers,
-		can_author_with,
-		check_for_equivocation,
-		telemetry,
+	let verifier = build_verifier::<P, _, _, _>(
+		BuildVerifierParams {
+			client,
+			create_inherent_data_providers,
+			can_author_with,
+			check_for_equivocation,
+			telemetry,
+		},
 	);
 
 	Ok(BasicQueue::new(
@@ -537,4 +539,37 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 		spawner,
 		registry,
 	))
+}
+
+/// Parameters of [`build_verifier`].
+pub struct BuildVerifierParams<C, CIDP, CAW> {
+	/// The client to interact with the chain.
+	pub client: Arc<C>,
+	/// Something that can create the inherent data providers.
+	pub create_inherent_data_providers: CIDP,
+	/// Can we author with the current node?
+	pub can_author_with: CAW,
+	/// Should we check for equivocation?
+	pub check_for_equivocation: CheckForEquivocation,
+	/// Telemetry instance used to report telemetry metrics.
+	pub telemetry: Option<TelemetryHandle>,
+}
+
+/// Build the [`AuraVerifier`]
+pub fn build_verifier<P, C, CIDP, CAW>(
+	BuildVerifierParams {
+		client,
+		create_inherent_data_providers,
+		can_author_with,
+		check_for_equivocation,
+		telemetry,
+	}: BuildVerifierParams<C, CIDP, CAW>
+) -> AuraVerifier<C, P, CAW, CIDP> {
+	AuraVerifier::<_, P, _, _>::new(
+		client,
+		create_inherent_data_providers,
+		can_author_with,
+		check_for_equivocation,
+		telemetry,
+	)
 }

@@ -70,7 +70,10 @@ pub use sp_consensus_aura::{
 	},
 };
 pub use sp_consensus::SyncOracle;
-pub use import_queue::{ImportQueueParams, import_queue, AuraBlockImport, CheckForEquivocation};
+pub use import_queue::{
+	ImportQueueParams, import_queue, AuraBlockImport, CheckForEquivocation,
+	build_verifier, BuildVerifierParams, AuraVerifier,
+};
 pub use sc_consensus_slots::SlotProportion;
 
 type AuthorityId<P> = <P as Pair>::Public;
