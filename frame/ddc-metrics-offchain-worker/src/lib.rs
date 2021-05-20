@@ -45,7 +45,7 @@ use alloc::string::String;
 pub const METRICS_CONTRACT_ADDR: &str = "5EFhuVjnUTH4fkvapxyXqkfmANQWFVGZtmkHd4GaWmhgrCLS";
 // address params: no salt, symbol: CERE, endowement: 1000
 pub const METRICS_CONTRACT_ID: [u8; 32] = [96, 220, 84, 153, 65, 96, 13, 180, 40, 98, 142, 110, 218, 127, 9, 17, 182, 152, 78, 174, 24, 37, 26, 27, 128, 215, 170, 18, 3, 3, 69, 60];
-pub const BLOCK_INTERVAL: u32 = 10; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
+pub const BLOCK_INTERVAL: u32 = 200; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
