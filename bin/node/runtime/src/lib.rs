@@ -1092,6 +1092,8 @@ impl pallet_gilt::Config for Runtime {
 parameter_types! {
 	pub const ClassDeposit: Balance = 100 * DOLLARS;
 	pub const InstanceDeposit: Balance = 1 * DOLLARS;
+	pub const KeyLimit: u32 = 32;
+	pub const ValueLimit: u32 = 256;
 }
 
 impl pallet_uniques::Config for Runtime {
@@ -1103,8 +1105,11 @@ impl pallet_uniques::Config for Runtime {
 	type ClassDeposit = ClassDeposit;
 	type InstanceDeposit = InstanceDeposit;
 	type MetadataDepositBase = MetadataDepositBase;
-	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type AttributeDepositBase = MetadataDepositBase;
+	type DepositPerByte = MetadataDepositPerByte;
 	type StringLimit = StringLimit;
+	type KeyLimit = KeyLimit;
+	type ValueLimit = ValueLimit;
 	type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
 }
 

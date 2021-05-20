@@ -45,6 +45,12 @@ fn assets() -> Vec<(u64, u32, u32)> {
 	r
 }
 
+fn attributes(class: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
+	let mut s: Vec<_> = Attribute::<Test>::iter_prefix((class,)).map(|(k, v)| (k.0, k.1, v.0)).collect();
+	s.sort();
+	s
+}
+
 #[test]
 fn basic_setup_works() {
 	new_test_ext().execute_with(|| {
@@ -288,10 +294,6 @@ fn set_instance_metadata_should_work() {
 
 		// Cannot add metadata to unknown asset
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
-		assert_noop!(
-			Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 10], false),
-			Error::<Test>::Unknown,
-		);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		// Cannot add metadata to unowned asset
 		assert_noop!(
@@ -347,6 +349,74 @@ fn set_instance_metadata_should_work() {
 }
 
 #[test]
+fn set_attribute_should_work() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+
+		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, None, vec![0], vec![0]));
+		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, Some(0), vec![0], vec![0]));
+		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, Some(0), vec![1], vec![0]));
+		assert_eq!(attributes(0), vec![
+			(None, vec![0], vec![0]),
+			(Some(0), vec![0], vec![0]),
+			(Some(0), vec![1], vec![0]),
+		]);
+		assert_eq!(Balances::reserved_balance(1), 9);
+
+		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, None, vec![0], vec![0; 10]));
+		assert_eq!(attributes(0), vec![
+			(None, vec![0], vec![0; 10]),
+			(Some(0), vec![0], vec![0]),
+			(Some(0), vec![1], vec![0]),
+		]);
+		assert_eq!(Balances::reserved_balance(1), 18);
+
+		assert_ok!(Uniques::clear_attribute(Origin::signed(1), 0, Some(0), vec![1]));
+		assert_eq!(attributes(0), vec![
+			(None, vec![0], vec![0; 10]),
+			(Some(0), vec![0], vec![0]),
+		]);
+		assert_eq!(Balances::reserved_balance(1), 15);
+
+		let w = Class::<Test>::get(0).unwrap().destroy_witness();
+		assert_ok!(Uniques::destroy(Origin::signed(1), 0, w));
+		assert_eq!(attributes(0), vec![]);
+		assert_eq!(Balances::reserved_balance(1), 0);
+	});
+}
+
+#[test]
+fn set_attribute_should_respect_freeze() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+
+		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, None, vec![0], vec![0]));
+		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, Some(0), vec![0], vec![0]));
+		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, Some(1), vec![0], vec![0]));
+		assert_eq!(attributes(0), vec![
+			(None, vec![0], vec![0]),
+			(Some(0), vec![0], vec![0]),
+			(Some(1), vec![0], vec![0]),
+		]);
+		assert_eq!(Balances::reserved_balance(1), 9);
+
+		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![], vec![], true));
+		let e = Error::<Test>::Frozen;
+		assert_noop!(Uniques::set_attribute(Origin::signed(1), 0, None, vec![0], vec![0]), e);
+		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, Some(0), vec![0], vec![1]));
+
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 0, vec![], vec![], true));
+		let e = Error::<Test>::Frozen;
+		assert_noop!(Uniques::set_attribute(Origin::signed(1), 0, Some(0), vec![0], vec![1]), e);
+		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, Some(1), vec![0], vec![1]));
+	});
+}
+
+#[test]
 fn force_asset_status_should_work(){
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
@@ -392,8 +462,7 @@ fn burn_works() {
 
 		assert_ok!(Uniques::mint(Origin::signed(2), 0, 42, 5));
 		assert_ok!(Uniques::mint(Origin::signed(2), 0, 69, 5));
-		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, vec![0; 1], vec![0; 1], false));
-		assert_eq!(Balances::reserved_balance(1), 5);
+		assert_eq!(Balances::reserved_balance(1), 2);
 
 		assert_noop!(Uniques::burn(Origin::signed(0), 0, 42, None), Error::<Test>::NoPermission);
 		assert_noop!(Uniques::burn(Origin::signed(5), 0, 42, Some(6)), Error::<Test>::WrongOwner);
