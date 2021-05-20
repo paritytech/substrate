@@ -272,7 +272,7 @@ impl<T, S> Eq for BoundedVec<T, S> where T: Eq {}
 
 impl<T, S> StorageDecodeLength for BoundedVec<T, S> {}
 
-impl<I, T, S: Get<u32>> StorageTryAppend<I> for BoundedVec<T, S> {
+impl<T, S: Get<u32>> StorageTryAppend<T> for BoundedVec<T, S> {
 	fn bound() -> usize {
 		S::get() as usize
 	}
@@ -299,7 +299,7 @@ pub mod test {
 	use super::*;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
-	use crate::{assert_ok, Twox128};
+	use crate::Twox128;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;
@@ -311,6 +311,11 @@ pub mod test {
 	crate::generate_storage_alias! {
 		Prefix,
 		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, Seven>>
+	}
+
+	#[test]
+	fn try_append_is_correct() {
+		assert_eq!(BoundedVec::<u32, Seven>::bound(), 7);
 	}
 
 	#[test]
@@ -336,70 +341,6 @@ pub mod test {
 			assert!(FooDoubleMap::decode_len(2, 1).is_none());
 			assert!(FooDoubleMap::decode_len(1, 2).is_none());
 			assert!(FooDoubleMap::decode_len(2, 2).is_none());
-		});
-	}
-
-	#[test]
-	fn try_append_works() {
-		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-			Foo::put(bounded);
-			assert_ok!(Foo::try_append(4));
-			assert_ok!(Foo::try_append(5));
-			assert_ok!(Foo::try_append(6));
-			assert_ok!(Foo::try_append(7));
-			assert_eq!(Foo::decode_len().unwrap(), 7);
-			assert!(Foo::try_append(8).is_err());
-		});
-
-		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-			FooMap::insert(1, bounded);
-
-			assert_ok!(FooMap::try_append(1, 4));
-			assert_ok!(FooMap::try_append(1, 5));
-			assert_ok!(FooMap::try_append(1, 6));
-			assert_ok!(FooMap::try_append(1, 7));
-			assert_eq!(FooMap::decode_len(1).unwrap(), 7);
-			assert!(FooMap::try_append(1, 8).is_err());
-
-			// append to a non-existing
-			assert!(FooMap::get(2).is_none());
-			assert_ok!(FooMap::try_append(2, 4));
-			assert_eq!(
-				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4]),
-			);
-			assert_ok!(FooMap::try_append(2, 5));
-			assert_eq!(
-				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5]),
-			);
-		});
-
-		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-			FooDoubleMap::insert(1, 1, bounded);
-
-			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
-			assert_ok!(FooDoubleMap::try_append(1, 1, 5));
-			assert_ok!(FooDoubleMap::try_append(1, 1, 6));
-			assert_ok!(FooDoubleMap::try_append(1, 1, 7));
-			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 7);
-			assert!(FooDoubleMap::try_append(1, 1, 8).is_err());
-
-			// append to a non-existing
-			assert!(FooDoubleMap::get(2, 1).is_none());
-			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
-			assert_eq!(
-				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4]),
-			);
-			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
-			assert_eq!(
-				FooDoubleMap::get(2, 1).unwrap(),
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5]),
-			);
 		});
 	}
 
