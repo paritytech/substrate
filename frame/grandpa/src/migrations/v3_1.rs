@@ -63,7 +63,7 @@ pub fn migrate<
 		_ => {
 			log::warn!(
 				target: "runtime::afg",
-				"Attempted to apply migration to v3.1 but failed because storage version is {:?}",
+				"Attempted to apply migration to v3.1 but cancelled because storage version is {:?}",
 				maybe_storage_version,
 			);
 			0
