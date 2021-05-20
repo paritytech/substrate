@@ -47,7 +47,7 @@ pub fn migrate<
 	let maybe_storage_version = <P as GetPalletVersion>::storage_version();
 	log::info!(
 		target: "runtime::afg",
-		"Running migration to v4 for grandpa with storage version {:?}",
+		"Running migration to v3.1 for grandpa with storage version {:?}",
 		maybe_storage_version,
 	);
 
@@ -63,7 +63,7 @@ pub fn migrate<
 		_ => {
 			log::warn!(
 				target: "runtime::afg",
-				"Attempted to apply migration to v4 but failed because storage version is {:?}",
+				"Attempted to apply migration to v3.1 but failed because storage version is {:?}",
 				maybe_storage_version,
 			);
 			0
