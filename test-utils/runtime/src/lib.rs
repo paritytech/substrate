@@ -92,6 +92,7 @@ pub fn wasm_binary_logging_disabled_unwrap() -> &'static [u8] {
 }
 
 /// Test runtime version.
+#[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("test"),
 	impl_name: create_runtime_str!("parity-test"),
@@ -665,10 +666,6 @@ cfg_if! {
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
 					CheckInherentsResult::new()
 				}
-
-				fn random_seed() -> <Block as BlockT>::Hash {
-					unimplemented!()
-				}
 			}
 
 			impl self::TestAPI<Block> for Runtime {
@@ -921,10 +918,6 @@ cfg_if! {
 
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
 					CheckInherentsResult::new()
-				}
-
-				fn random_seed() -> <Block as BlockT>::Hash {
-					unimplemented!()
 				}
 			}
 

@@ -202,11 +202,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		pub struct RuntimeApi {}
 		/// Implements all runtime apis for the client side.
 		#[cfg(any(feature = "std", test))]
-		pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static>
-			where
-				// Rust bug: https://github.com/rust-lang/rust/issues/24159
-				C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
-		{
+		pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 			call: &'static C,
 			commit_on_success: std::cell::RefCell<bool>,
 			initialized_block: std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
@@ -223,25 +219,16 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		#[cfg(any(feature = "std", test))]
 		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Send
 			for RuntimeApiImpl<Block, C>
-				where
-					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{}
 
 		#[cfg(any(feature = "std", test))]
 		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Sync
 			for RuntimeApiImpl<Block, C>
-				where
-					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{}
 
 		#[cfg(any(feature = "std", test))]
 		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
 			RuntimeApiImpl<Block, C>
-				where
-					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{
 			type StateBackend = C::StateBackend;
 
@@ -319,8 +306,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			for RuntimeApi
 				where
 					C: #crate_::CallApiAt<Block> + 'static,
-					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
 		{
 			type RuntimeApi = RuntimeApiImpl<Block, C>;
 
@@ -339,11 +324,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		}
 
 		#[cfg(any(feature = "std", test))]
-		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C>
-			where
-				// Rust bug: https://github.com/rust-lang/rust/issues/24159
-				C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
-		{
+		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C> {
 			fn call_api_at<
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
 				F: FnOnce(
@@ -652,7 +633,10 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 /// runtime apis.
 fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut result = Vec::with_capacity(impls.len());
+	let mut sections = Vec::with_capacity(impls.len());
 	let mut processed_traits = HashSet::new();
+
+	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 
 	for impl_ in impls {
 		let mut path = extend_with_runtime_decl_path(
@@ -686,12 +670,22 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 			#( #attrs )*
 			(#id, #version)
 		));
-	}
 
-	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+		sections.push(quote!(
+			#( #attrs )*
+			const _: () = {
+				// All sections with the same name are going to be merged by concatenation.
+				#[cfg(not(feature = "std"))]
+				#[link_section = "runtime_apis"]
+				static SECTION_CONTENTS: [u8; 12] = #c::serialize_runtime_api_info(#id, #version);
+			};
+		));
+	}
 
 	Ok(quote!(
 		const RUNTIME_API_VERSIONS: #c::ApisVec = #c::create_apis_vec!([ #( #result ),* ]);
+
+		#( #sections )*
 	))
 }
 

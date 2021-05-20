@@ -21,13 +21,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{result, prelude::*};
-use sp_std::collections::btree_set::BTreeSet;
-use frame_support::dispatch;
-use frame_support::traits::{FindAuthor, VerifySeal, Get};
+use sp_std::{result, prelude::*, collections::btree_set::BTreeSet};
+use frame_support::{
+	dispatch, traits::{FindAuthor, VerifySeal, Get},
+	inherent::{InherentData, ProvideInherent, InherentIdentifier},
+};
 use codec::{Encode, Decode};
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
-use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
@@ -293,8 +293,7 @@ impl<T: Config> Pallet<T> {
 		uncle: &T::Header,
 		existing_uncles: I,
 		accumulator: &mut <T::FilterUncle as FilterUncle<T::Header, T::AccountId>>::Accumulator,
-	) -> Result<Option<T::AccountId>, dispatch::DispatchError>
-	{
+	) -> Result<Option<T::AccountId>, dispatch::DispatchError> {
 		let now = <frame_system::Pallet<T>>::block_number();
 
 		let (minimum_height, maximum_height) = {

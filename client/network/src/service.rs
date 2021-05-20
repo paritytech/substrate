@@ -619,6 +619,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
+
+	/// Returns the list of reserved peers.
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.network_service.behaviour().user_protocol().reserved_peers()
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
@@ -1536,7 +1541,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
-					remote, protocol, notifications_sink, role
+					remote, protocol, negotiated_fallback, notifications_sink, role
 				})) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.notifications_streams_opened_total
@@ -1544,11 +1549,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
-						peers_notifications_sinks.insert((remote.clone(), protocol.clone()), notifications_sink);
+						let _previous_value = peers_notifications_sinks
+							.insert((remote.clone(), protocol.clone()), notifications_sink);
+						debug_assert!(_previous_value.is_none());
 					}
 					this.event_streams.send(Event::NotificationStreamOpened {
 						remote,
 						protocol,
+						negotiated_fallback,
 						role,
 					});
 				},
@@ -1563,6 +1571,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							target: "sub-libp2p",
 							"NotificationStreamReplaced for non-existing substream"
 						);
+						debug_assert!(false);
 					}
 
 					// TODO: Notifications might have been lost as a result of the previous
@@ -1597,7 +1606,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					});
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
-						peers_notifications_sinks.remove(&(remote.clone(), protocol));
+						let _previous_value = peers_notifications_sinks
+							.remove(&(remote.clone(), protocol));
+						debug_assert!(_previous_value.is_some());
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationsReceived { remote, messages })) => {
