@@ -18,7 +18,7 @@
 use proc_macro2::TokenStream;
 use crate::construct_runtime::Pallet;
 use syn::{Ident, TypePath};
-use quote::{format_ident, quote};
+use quote::quote;
 
 pub fn expand_runtime_metadata(
 	runtime: &Ident,
@@ -135,16 +135,19 @@ fn expand_pallet_metadata_events(
 	decl: &Pallet,
 ) -> TokenStream {
 	if filtered_names.contains(&"Event") {
-		let mod_name = decl.pallet.mod_name();
-		let event = if let Some(instance) = decl.instance.as_ref() {
-			format_ident!("__module_events_{}_{}", mod_name, instance)
-		} else {
-			format_ident!("__module_events_{}", mod_name)
+		let path = &decl.pallet;
+		let pallet_is_generic =
+			!decl.find_part("Event").expect("Event part exists; qed").generics.params.is_empty();
+		let pallet_event = match (decl.instance.as_ref(), pallet_is_generic) {
+			(Some(inst), true) => quote!(#path::Event::<#runtime, #path::#inst>),
+			(Some(inst), false) => quote!(#path::Event::<#path::#inst>),
+			(None, true) => quote!(#path::Event::<#runtime>),
+			(None, false) => quote!(#path::Event),
 		};
 
 		quote!{
 			Some(#scrate::metadata::DecodeDifferent::Encode(
-				#scrate::metadata::FnEncode(#runtime::#event)
+				#scrate::metadata::FnEncode(#pallet_event::metadata)
 			))
 		}
 	} else {
