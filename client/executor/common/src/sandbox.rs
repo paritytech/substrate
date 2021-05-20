@@ -406,10 +406,7 @@ impl<FR> SandboxInstance<FR> {
 							let function = wasmer_instance
 								.exports
 								.get_function(export_name)
-								.map_err(|error| {
-									println!("{:?}", error);
-									wasmi::Error::Function("wasmer function failed".to_string())
-								})?;
+								.map_err(|error| wasmi::Error::Function("wasmer function failed".to_string()))?;
 
 							let args: Vec<wasmer::Val> = args
 								.iter()
@@ -424,7 +421,9 @@ impl<FR> SandboxInstance<FR> {
 							let wasmer_result = DTH::initialize_thunk(&self.dispatch_thunk, || function.call(&args))
 								.map_err(|e| wasmi::Error::Function(e.to_string()))?;
 
-							assert!(wasmer_result.len() < 2, "multiple return types are not supported yet");
+							if wasmer_result.len() < 2 {
+								return Err(wasmi::Error::Function("multiple return types are not supported yet".to_owned()));
+							}
 
 							let wasmer_result = if let Some(wasmer_value) = wasmer_result.first() {
 								let wasmer_value = match *wasmer_value {
@@ -690,8 +689,6 @@ impl<FR> Store<FR> {
 
 		let memory = match &backend_context {
 			BackendContext::Wasmi => {
-				println!("creating wasmi memory {}..{}", initial, maximum.map(|v| v.to_string()).unwrap_or("?".into()));
-
 				Memory::Wasmi(MemoryInstance::alloc(
 					Pages(initial as usize),
 					maximum.map(|m| Pages(m as usize)),
@@ -700,14 +697,9 @@ impl<FR> Store<FR> {
 
 			BackendContext::Wasmer(context) => {
 				let ty = wasmer::MemoryType::new(initial, maximum, false);
-				println!("creating wasmer memory {:?}", ty);
-
 				Memory::Wasmer(
 					wasmer::Memory::new(&context.store, ty)
-						.map_err(|r| {
-							println!("Error creating wasmer Memory: {}", r.to_string());
-							Error::InvalidMemoryReference
-						})?
+						.map_err(|r| Error::InvalidMemoryReference)?
 				)
 			}
 		};
@@ -738,8 +730,7 @@ impl<FR> Store<FR> {
 	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
 		let memories = &mut self.memories;
 		let backend_context = &self.backend_context;
-		dbg!(initial, maximum);
-		dbg!(Self::allocate_memory(memories, backend_context, initial, maximum).map(|(index, _)| index))
+		Self::allocate_memory(memories, backend_context, initial, maximum).map(|(index, _)| index)
 	}
 
 	/// Returns `SandboxInstance` by `instance_idx`.
@@ -870,32 +861,23 @@ impl<FR> Store<FR> {
 			}
 
 			BackendContext::Wasmer(context) => {
-				println!("Decoding module...");
 				let module = wasmer::Module::new(&context.store, wasm).map_err(|error| {
-					println!("{:?}", error);
 					InstantiationError::ModuleDecoding
 				})?;
-
-				println!("Module name is {}", module.name().unwrap_or("(unknown)"));
 
 				type Exports = HashMap<String, wasmer::Exports>;
 				let mut exports_map = Exports::new();
 
+				// Populate exports map with module imports
 				for import in module
 					.imports()
 					.into_iter()
 				{
 					match import.ty() {
-						wasmer::ExternType::Global(global) => {
-							println!("Importing global '{}' :: '{}' {}", import.module(), import.name(), global.to_string());
-						}
-
-						wasmer::ExternType::Table(table) => {
-							println!("Importing table '{}' :: '{}' {}", import.module(), import.name(), table.to_string());
-						}
+						// Nothing to do here
+						wasmer::ExternType::Global(_) | wasmer::ExternType::Table(_) => (),
 
 						wasmer::ExternType::Memory(memory_type) => {
-							println!("Importing memory '{}' :: '{}' {}", import.module(), import.name(), memory_type.to_string());
 							let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
 							let memory = guest_env.imports.memory_by_name(import.module(), import.name()).ok_or(InstantiationError::ModuleDecoding)?;
 
@@ -903,18 +885,16 @@ impl<FR> Store<FR> {
 						}
 
 						wasmer::ExternType::Function(func_ty) => {
-							println!("Importing function '{}' :: '{}' {}", import.module(), import.name(), func_ty.to_string());
-
 							let guest_func_index = if let Some(index) = guest_env.imports.func_by_name(import.module(), import.name()) {
 								index
 							} else {
-								// Missing import
-								println!("Missing import '{}' :: '{}'", import.module(), import.name());
+								// Missing import (should we abort here?)
 								continue;
 							};
 
 							let supervisor_func_index = guest_env.guest_to_supervisor_mapping
-								.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
+								.func_by_guest_index(guest_func_index)
+								.ok_or(InstantiationError::ModuleDecoding)?;
 
 							let function = wasmer::Function::new(&context.store, func_ty, move |params: &[wasmer::Val]| {
 
@@ -1011,10 +991,8 @@ impl<FR> Store<FR> {
 					import_object.register(module_name, exports);
 				}
 
-				println!("Instantiating module...");
 				let instance = wasmer::Instance::new(&module, &import_object)
 					.map_err(|error| {
-						println!("{:?}", error);
 
 						match error {
 							wasmer::InstantiationError::Link(_) => InstantiationError::Instantiation,
@@ -1023,7 +1001,6 @@ impl<FR> Store<FR> {
 						}
 					})?;
 
-				println!("Creating SandboxInstance...");
 				Rc::new(SandboxInstance {
 					backend_instance: BackendInstance::Wasmer(instance),
 					dispatch_thunk: DTH::with_dispatch_thunk(|dispatch_thunk| dispatch_thunk.clone()),
