@@ -46,7 +46,7 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy(n: u32, m: u32, ) -> Weight;
+	fn destroy(n: u32, m: u32, _a: u32, ) -> Weight;
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
@@ -60,6 +60,7 @@ pub trait WeightInfo {
 	fn approve_transfer() -> Weight;
 	fn cancel_approval() -> Weight;
 	fn force_asset_status() -> Weight;
+	fn set_attribute(k: u32, v: u32, ) -> Weight;
 	fn set_metadata(n: u32, i: u32, ) -> Weight;
 	fn clear_metadata() -> Weight;
 	fn set_class_metadata(n: u32, i: u32, ) -> Weight;
@@ -79,7 +80,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn destroy(n: u32, m: u32, ) -> Weight {
+	fn destroy(n: u32, m: u32, _a: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 38_000
 			.saturating_add((24_232_000 as Weight).saturating_mul(n as Weight))
@@ -157,6 +158,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+	fn set_attribute(k: u32, v: u32, ) -> Weight {
+		(27_117_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((5_000 as Weight).saturating_mul(k as Weight))
+			.saturating_add((5_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
 	fn set_metadata(n: u32, i: u32, ) -> Weight {
 		(27_117_000 as Weight)
 			// Standard Error: 0
@@ -197,7 +206,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn destroy(n: u32, m: u32, ) -> Weight {
+	fn destroy(n: u32, m: u32, _a: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 38_000
 			.saturating_add((24_232_000 as Weight).saturating_mul(n as Weight))
@@ -273,6 +282,14 @@ impl WeightInfo for () {
 	fn force_asset_status() -> Weight {
 		(23_366_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn set_attribute(k: u32, v: u32, ) -> Weight {
+		(27_117_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((5_000 as Weight).saturating_mul(k as Weight))
+			.saturating_add((5_000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn set_metadata(n: u32, i: u32, ) -> Weight {

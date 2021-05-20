@@ -139,8 +139,9 @@ benchmarks_instance_pallet! {
 	destroy {
 		let n in 0 .. 5_000;
 		let m in 0 .. 5_000;
+		let a in 0 .. 5_000;
 
-		let (class, caller, _) = create_class::<T, I>();
+		let (class, caller, caller_lookup) = create_class::<T, I>();
 		add_class_metadata::<T, I>();
 		for i in 0..n + m {
 			// create instance
@@ -149,6 +150,15 @@ benchmarks_instance_pallet! {
 				// add metadata
 				add_instance_metadata::<T, I>(instance);
 			}
+		}
+		for i in 0..a {
+			assert!(Uniques::<T, I>::set_attribute(
+				SystemOrigin::Signed(caller.clone()).into(),
+				class,
+				Some((i as u16).into()),
+				vec![0; T::StringLimit::get() as usize],
+				Some(vec![0; T::StringLimit::get() as usize]),
+			).is_ok());
 		}
 		let witness = Class::<T, I>::get(class).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), class, witness)
@@ -280,6 +290,20 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::AssetStatusChanged(class).into());
+	}
+
+	set_attribute {
+		let k in 0 .. T::StringLimit::get();
+		let v in 0 .. T::StringLimit::get();
+
+		let key = vec![0u8; k as usize];
+		let value = vec![0u8; v as usize];
+
+		let (class, caller, _) = create_class::<T, I>();
+		let (instance, ..) = mint_instance::<T, I>(0);
+	}: _(SystemOrigin::Signed(caller), class, Some(instance), key.clone(), Some(value.clone()))
+	verify {
+		assert_last_event::<T, I>(Event::AttributeSet(class, Some(instance), key, Some(value)).into());
 	}
 
 	set_metadata {
