@@ -156,28 +156,20 @@ benchmarks_instance_pallet! {
 	}
 
 	destroy {
-		let n in 0 .. 5_000;
-		let m in 0 .. 5_000;
-		let a in 0 .. 5_000;
+		let n in 0 .. 1_000;
+		let m in 0 .. 1_000;
+		let a in 0 .. 1_000;
 
 		let (class, caller, caller_lookup) = create_class::<T, I>();
 		add_class_metadata::<T, I>();
-		for i in 0..n + m {
-			// create instance
-			let (instance, ..) = mint_instance::<T, I>(i as u16);
-			if i < m {
-				// add metadata
-				add_instance_metadata::<T, I>(instance);
-			}
+		for i in 0..n {
+			mint_instance::<T, I>(i as u16);
+		}
+		for i in 0..m {
+			add_instance_metadata::<T, I>((i as u16).into());
 		}
 		for i in 0..a {
-			assert!(Uniques::<T, I>::set_attribute(
-				SystemOrigin::Signed(caller.clone()).into(),
-				class,
-				Some((i as u16).into()),
-				vec![0; T::KeyLimit::get() as usize],
-				vec![0; T::ValueLimit::get() as usize],
-			).is_ok());
+			add_instance_attribute::<T, I>((i as u16).into());
 		}
 		let witness = Class::<T, I>::get(class).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), class, witness)
