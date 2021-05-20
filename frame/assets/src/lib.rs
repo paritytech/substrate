@@ -132,8 +132,8 @@ mod tests;
 
 mod extra_mutator;
 pub use extra_mutator::*;
-mod impl_fungibles;
 mod impl_stored_map;
+mod impl_fungibles;
 mod functions;
 mod types;
 pub use types::*;

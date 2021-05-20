@@ -163,7 +163,7 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Some asset class was created. \[class, creator, owner\]
 		Created(T::ClassId, T::AccountId, T::AccountId),
-		/// Some asset class was force-created. \[asset_id, owner\]
+		/// Some asset class was force-created. \[class, owner\]
 		ForceCreated(T::ClassId, T::AccountId),
 		/// An asset class was destroyed.
 		Destroyed(T::ClassId),
@@ -196,14 +196,17 @@ pub mod pallet {
 		/// An asset `class` has had its attributes changed by the `Force` origin.
 		/// \[ class \]
 		AssetStatusChanged(T::ClassId),
-		/// New metadata has been set for an asset class. \[ asset_id, name, info, is_frozen \]
+		/// New metadata has been set for an asset class. \[ class, name, info, is_frozen \]
 		ClassMetadataSet(T::ClassId, Vec<u8>, Vec<u8>, bool),
-		/// Metadata has been cleared for an asset class. \[ asset_id \]
+		/// Metadata has been cleared for an asset class. \[ class \]
 		ClassMetadataCleared(T::ClassId),
-		/// New metadata has been set for an asset instance. \[ asset_id, name, info, is_frozen \]
-		MetadataSet(T::ClassId, Vec<u8>, Vec<u8>, bool),
-		/// Metadata has been cleared for an asset instance. \[ asset_id \]
-		MetadataCleared(T::ClassId),
+		/// New metadata has been set for an asset instance.
+		/// \[ class, instance, name, info, is_frozen \]
+		MetadataSet(T::ClassId, T::InstanceId, Vec<u8>, Vec<u8>, bool),
+		/// Metadata has been cleared for an asset instance. \[ class, instance \]
+		MetadataCleared(T::ClassId, T::InstanceId),
+		/// Metadata has been cleared for an asset instance. \[ class, successful_instances \]
+		Redeposited(T::ClassId, Vec<T::InstanceId>),
 	}
 
 	#[pallet::error]
@@ -566,6 +569,7 @@ pub mod pallet {
 				false => T::InstanceDeposit::get(),
 			};
 
+			let mut successful = Vec::with_capacity(instances.len());
 			for instance in instances.into_iter() {
 				let mut details = match Asset::<T, I>::get(&class, &instance) {
 					Some(x) => x,
@@ -580,13 +584,18 @@ pub mod pallet {
 						// this is OK to do.
 						continue
 					}
+				} else {
+					continue
 				}
 				class_details.total_deposit.saturating_accrue(deposit);
 				class_details.total_deposit.saturating_reduce(old);
 				details.deposit = deposit;
 				Asset::<T, I>::insert(&class, &instance, &details);
+				successful.push(instance);
 			}
 			Class::<T, I>::insert(&class, &class_details);
+
+			Self::deposit_event(Event::<T, I>::Redeposited(class, successful));
 
 			Ok(())
 		}
@@ -647,7 +656,7 @@ pub mod pallet {
 			details.is_frozen = false;
 			Asset::<T, I>::insert(&class, &instance, &details);
 
-			Self::deposit_event(Event::<T, I>::Frozen(class, instance));
+			Self::deposit_event(Event::<T, I>::Thawed(class, instance));
 			Ok(())
 		}
 
@@ -989,7 +998,7 @@ pub mod pallet {
 				});
 
 				Class::<T, I>::insert(&class, &class_details);
-				Self::deposit_event(Event::MetadataSet(class, name, info, is_frozen));
+				Self::deposit_event(Event::MetadataSet(class, instance, name, info, is_frozen));
 				Ok(())
 			})
 		}
@@ -1035,7 +1044,7 @@ pub mod pallet {
 				class_details.total_deposit.saturating_reduce(deposit);
 
 				Class::<T, I>::insert(&class, &class_details);
-				Self::deposit_event(Event::MetadataCleared(class));
+				Self::deposit_event(Event::MetadataCleared(class, instance));
 				Ok(())
 			})
 		}
