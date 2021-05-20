@@ -609,7 +609,7 @@ mod tests {
 			DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight,
 			WeightToFeePolynomial, WeightToFeeCoefficients, WeightToFeeCoefficient,
 		},
-		traits::Currency,
+		traits::{Currency, OnUnbalanced, Imbalance},
 	};
 	use pallet_balances::Call as BalancesCall;
 	use sp_core::H256;
@@ -718,8 +718,27 @@ mod tests {
 		}
 	}
 
+	thread_local! {
+		static TIP_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
+		static FEE_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
+	}
+
+	pub struct DealWithFees;
+	impl OnUnbalanced<pallet_balances::NegativeImbalance<Runtime>> for DealWithFees {
+		fn on_unbalanceds<B>(
+			mut fees_then_tips: impl Iterator<Item=pallet_balances::NegativeImbalance<Runtime>>
+		) {
+			if let Some(fees) = fees_then_tips.next() {
+				FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() += fees.peek());
+				if let Some(tips) = fees_then_tips.next() {
+					TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() += tips.peek());
+				}
+			}
+		}
+	}
+
 	impl Config for Runtime {
-		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
+		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();
@@ -832,6 +851,10 @@ mod tests {
 					::post_dispatch(pre, &info_from_weight(5), &default_post_info(), len, &Ok(()))
 			);
 			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
+			assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| a.borrow().clone()), 5 + 5 + 10);
+			assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| a.borrow().clone()), 0);
+
+			FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() = 0);
 
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
@@ -843,6 +866,8 @@ mod tests {
 					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
 			);
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 50 - 5);
+			assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| a.borrow().clone()), 5 + 10 + 50);
+			assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| a.borrow().clone()), 5);
 		});
 	}
 

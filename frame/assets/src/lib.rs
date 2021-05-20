@@ -237,12 +237,14 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Approved balance transfers. First balance is the amount approved for transfer. Second
 	/// is the amount of `T::Currency` reserved for storing this.
-	pub(super) type Approvals<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	/// First key is the asset ID, second key is the owner and third key is the delegate.
+	pub(super) type Approvals<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
-		Blake2_128Concat,
-		T::AssetId,
-		Blake2_128Concat,
-		ApprovalKey<T::AccountId>,
+		(
+			NMapKey<Blake2_128Concat, T::AssetId>,
+			NMapKey<Blake2_128Concat, T::AccountId>, // owner
+			NMapKey<Blake2_128Concat, T::AccountId>, // delegate
+		),
 		Approval<T::Balance, DepositBalanceOf<T, I>>,
 		OptionQuery,
 	>;
@@ -502,7 +504,7 @@ pub mod pallet {
 					details.deposit.saturating_add(metadata.deposit),
 				);
 
-				Approvals::<T, I>::remove_prefix(&id);
+				Approvals::<T, I>::remove_prefix((&id,));
 				Self::deposit_event(Event::Destroyed(id));
 
 				// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
@@ -1118,19 +1120,18 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let key = ApprovalKey { owner, delegate };
-			Approvals::<T, I>::try_mutate(id, &key, |maybe_approved| -> DispatchResult {
+			Approvals::<T, I>::try_mutate((id, &owner, &delegate), |maybe_approved| -> DispatchResult {
 				let mut approved = maybe_approved.take().unwrap_or_default();
 				let deposit_required = T::ApprovalDeposit::get();
 				if approved.deposit < deposit_required {
-					T::Currency::reserve(&key.owner, deposit_required - approved.deposit)?;
+					T::Currency::reserve(&owner, deposit_required - approved.deposit)?;
 					approved.deposit = deposit_required;
 				}
 				approved.amount = approved.amount.saturating_add(amount);
 				*maybe_approved = Some(approved);
 				Ok(())
 			})?;
-			Self::deposit_event(Event::ApprovedTransfer(id, key.owner, key.delegate, amount));
+			Self::deposit_event(Event::ApprovedTransfer(id, owner, delegate, amount));
 
 			Ok(())
 		}
@@ -1156,11 +1157,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
-			let key = ApprovalKey { owner, delegate };
-			let approval = Approvals::<T, I>::take(id, &key).ok_or(Error::<T, I>::Unknown)?;
-			T::Currency::unreserve(&key.owner, approval.deposit);
+			let approval = Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
+			T::Currency::unreserve(&owner, approval.deposit);
 
-			Self::deposit_event(Event::ApprovalCancelled(id, key.owner, key.delegate));
+			Self::deposit_event(Event::ApprovalCancelled(id, owner, delegate));
 			Ok(())
 		}
 
@@ -1196,11 +1196,10 @@ pub mod pallet {
 			let owner = T::Lookup::lookup(owner)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let key = ApprovalKey { owner, delegate };
-			let approval = Approvals::<T, I>::take(id, &key).ok_or(Error::<T, I>::Unknown)?;
-			T::Currency::unreserve(&key.owner, approval.deposit);
+			let approval = Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
+			T::Currency::unreserve(&owner, approval.deposit);
 
-			Self::deposit_event(Event::ApprovalCancelled(id, key.owner, key.delegate));
+			Self::deposit_event(Event::ApprovalCancelled(id, owner, delegate));
 			Ok(())
 		}
 
@@ -1234,8 +1233,7 @@ pub mod pallet {
 			let owner = T::Lookup::lookup(owner)?;
 			let destination = T::Lookup::lookup(destination)?;
 
-			let key = ApprovalKey { owner, delegate };
-			Approvals::<T, I>::try_mutate_exists(id, &key, |maybe_approved| -> DispatchResult {
+			Approvals::<T, I>::try_mutate_exists((id, &owner, delegate), |maybe_approved| -> DispatchResult {
 				let mut approved = maybe_approved.take().ok_or(Error::<T, I>::Unapproved)?;
 				let remaining = approved
 					.amount
@@ -1247,10 +1245,10 @@ pub mod pallet {
 					best_effort: false,
 					burn_dust: false
 				};
-				Self::do_transfer(id, &key.owner, &destination, amount, None, f)?;
+				Self::do_transfer(id, &owner, &destination, amount, None, f)?;
 
 				if remaining.is_zero() {
-					T::Currency::unreserve(&key.owner, approved.deposit);
+					T::Currency::unreserve(&owner, approved.deposit);
 				} else {
 					approved.amount = remaining;
 					*maybe_approved = Some(approved);
