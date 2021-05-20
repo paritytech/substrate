@@ -182,7 +182,6 @@ mod multiplier_tests {
 	}
 
 	#[test]
-	#[ignore]
 	fn min_change_per_day() {
 		run_with_system_weight(max(), || {
 			let mut fm = Multiplier::one();
@@ -192,7 +191,7 @@ mod multiplier_tests {
 				let next = runtime_multiplier_update(fm);
 				fm = next;
 			}
-			assert!(fm > Multiplier::saturating_from_rational(1234, 1000));
+			assert!(fm > Multiplier::saturating_from_rational(1140, 1000));
 		})
 	}
 
