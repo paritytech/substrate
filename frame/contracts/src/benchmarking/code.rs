@@ -103,6 +103,7 @@ impl ImportedMemory {
 }
 
 pub struct ImportedFunction {
+	pub module: &'static str,
 	pub name: &'static str,
 	pub params: Vec<ValueType>,
 	pub return_type: Option<ValueType>,
@@ -171,7 +172,7 @@ where
 				.build_sig();
 			let sig = contract.push_signature(sig);
 			contract = contract.import()
-				.module("seal0")
+				.module(func.module)
 				.field(func.name)
 				.with_external(parity_wasm::elements::External::Function(sig))
 				.build();
@@ -292,6 +293,7 @@ where
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: getter_name,
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -321,6 +323,7 @@ where
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name,
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,

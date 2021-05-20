@@ -1908,9 +1908,12 @@ mod tests {
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_status });
 	}
 
-	const CODE_DEBUG_MESSAGE: &str = r#"
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn debug_message_works() {
+		const CODE_DEBUG_MESSAGE: &str = r#"
 (module
-	(import "seal0" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "__unstable__" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(data (i32.const 0) "Hello World!")
@@ -1926,9 +1929,6 @@ mod tests {
 	(func (export "deploy"))
 )
 "#;
-
-	#[test]
-	fn debug_message_works() {
 		let mut ext = MockExt::default();
 		execute(
 			CODE_DEBUG_MESSAGE,
@@ -1939,39 +1939,39 @@ mod tests {
 		assert_eq!(std::str::from_utf8(&ext.debug_buffer).unwrap(), "Hello World!");
 	}
 
-	const CODE_DEBUG_MESSAGE_FAIL: &str = r#"
-	(module
-		(import "seal0" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
-		(import "env" "memory" (memory 1 1))
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn debug_message_invalid_utf8_fails() {
+		const CODE_DEBUG_MESSAGE_FAIL: &str = r#"
+(module
+	(import "__unstable__" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
 
-		(data (i32.const 0) "\fc")
+	(data (i32.const 0) "\fc")
 
-		(func (export "call")
-			(call $seal_debug_message
-				(i32.const 0)	;; Pointer to the text buffer
-				(i32.const 1)	;; The size of the buffer
-			)
-			drop
+	(func (export "call")
+		(call $seal_debug_message
+			(i32.const 0)	;; Pointer to the text buffer
+			(i32.const 1)	;; The size of the buffer
 		)
-
-		(func (export "deploy"))
+		drop
 	)
-	"#;
 
-		#[test]
-		fn debug_message_invalid_utf8_fails() {
-			let mut ext = MockExt::default();
-			let result = execute(
-				CODE_DEBUG_MESSAGE_FAIL,
-				vec![],
-				&mut ext,
-			);
-			assert_eq!(
-				result,
-				Err(ExecError {
-					error: Error::<Test>::DebugMessageInvalidUTF8.into(),
-					origin: ErrorOrigin::Caller,
-				})
-			);
-		}
+	(func (export "deploy"))
+)
+"#;
+		let mut ext = MockExt::default();
+		let result = execute(
+			CODE_DEBUG_MESSAGE_FAIL,
+			vec![],
+			&mut ext,
+		);
+		assert_eq!(
+			result,
+			Err(ExecError {
+				error: Error::<Test>::DebugMessageInvalidUTF8.into(),
+				origin: ErrorOrigin::Caller,
+			})
+		);
+	}
 }
