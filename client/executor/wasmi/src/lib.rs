@@ -18,12 +18,8 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-use std::{str, cell::RefCell, sync::Arc, rc::Rc};
-use wasmi::{
-	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
-	FuncInstance, memory_units::Pages,
-	RuntimeValue::{I32, I64, self},
-};
+use std::{borrow::BorrowMut, cell::RefCell, io::Bytes, ops::{Deref, Range}, rc::Rc, slice, str, sync::Arc};
+use wasmi::{FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef, RuntimeValue::{I32, I64, self}, TableRef, memory_units::{self, Pages}};
 use codec::{Encode, Decode};
 use sp_core::sandbox as sandbox_primitives;
 use log::{error, trace, debug};
@@ -136,6 +132,18 @@ impl FunctionContext for FunctionExecutor {
 	}
 }
 
+// TODO Move to executor common and deduplicate code
+/// Construct a range from an offset to a data length after the offset.
+/// Returns None if the end of the range would exceed some maximum offset.
+pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
+	let end = offset.checked_add(len)?;
+	if end <= max {
+		Some(offset..end)
+	} else {
+		None
+	}
+}
+
 impl Sandbox for FunctionExecutor {
 	fn memory_get(
 		&mut self,
@@ -165,7 +173,27 @@ impl Sandbox for FunctionExecutor {
 			}
 
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				todo!()
+				let len = buf_len as usize;
+
+				let src_range = match checked_range(offset as usize, len, sandboxed_memory.data_size() as usize) {
+					Some(range) => range,
+					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				};
+
+				let memory_size: memory_units::Bytes = self.inner.memory.current_size().into();
+				let dst_range = match checked_range(buf_ptr.into(), len, memory_size.0) {
+					Some(range) => range,
+					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				};
+
+				// This is safe because we construct slice from the same parts as the memory region itself
+				let src_buffer = unsafe { slice::from_raw_parts(sandboxed_memory.data_ptr(), sandboxed_memory.data_size() as usize) };
+
+				self.inner.memory.with_direct_access_mut(|dst_buffer| {
+					dst_buffer[dst_range].copy_from_slice(&src_buffer[src_range]);
+				});
+
+				Ok(sandbox_primitives::ERR_OK)
 			}
 		}
 
@@ -199,7 +227,27 @@ impl Sandbox for FunctionExecutor {
 			}
 
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				todo!()
+				let len = val_len as usize;
+
+				let memory_size: memory_units::Bytes = self.inner.memory.current_size().into();
+				let src_range = match checked_range(val_ptr.into(), len, memory_size.0) {
+					Some(range) => range,
+					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				};
+
+				let dst_range = match checked_range(offset as usize, len, sandboxed_memory.data_size() as usize) {
+					Some(range) => range,
+					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+				};
+
+				// This is safe because we construct slice from the same parts as the memory region itself
+				let dest_buffer = unsafe { slice::from_raw_parts_mut(sandboxed_memory.data_ptr(), sandboxed_memory.data_size() as usize) };
+
+				self.inner.memory.with_direct_access(|src_buffer| {
+					dest_buffer[dst_range].copy_from_slice(&src_buffer[src_range]);
+				});
+
+				Ok(sandbox_primitives::ERR_OK)
 			}
 		}
 	}
