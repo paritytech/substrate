@@ -15,7 +15,7 @@ use frame_system::{
     }
 };
 use frame_support::{
-	decl_module, decl_storage, decl_event,
+	decl_module, decl_storage, decl_event, debug::{info, warn, error}
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{offchain::{
