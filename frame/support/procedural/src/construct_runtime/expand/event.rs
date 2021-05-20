@@ -76,16 +76,6 @@ pub fn expand_outer_event(
 		#event_conversions
 
 		impl #runtime {
-			#[allow(dead_code)]
-			pub fn outer_event_metadata() -> #scrate::event::OuterEventMetadata {
-				#scrate::event::OuterEventMetadata {
-					name: #scrate::event::DecodeDifferent::Encode("Event"),
-					events: #scrate::event::DecodeDifferent::Encode(&[
-						#events_metadata
-					])
-				}
-			}
-
 			#pallet_event_fns
 		}
 	})
