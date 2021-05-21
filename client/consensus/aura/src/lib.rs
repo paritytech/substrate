@@ -494,8 +494,6 @@ enum Error<B: BlockT> {
 	#[display(fmt = "Bad signature on {:?}", _0)]
 	BadSignature(B::Hash),
 	Client(sp_blockchain::Error),
-	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
-	ParentUnavailable(B::Hash, B::Hash),
 	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
 	UnknownInherentError(sp_inherents::InherentIdentifier),
 	#[display(fmt = "Inherent error: {}", _0)]
