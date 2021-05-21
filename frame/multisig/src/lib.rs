@@ -197,7 +197,11 @@ pub mod pallet{
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", T::BlockNumber = "BlockNumber", Timepoint<T::BlockNumber> = "Timepoint<BlockNumber>")]
+	#[pallet::metadata(
+		T::AccountId = "AccountId",
+		T::BlockNumber = "BlockNumber",
+		Timepoint<T::BlockNumber> = "Timepoint<BlockNumber>"
+	)]
 	pub enum Event<T: Config> {
 		/// A new multisig operation has begun. \[approving, multisig, call_hash\]
 		NewMultisig(T::AccountId, T::AccountId, CallHash),
