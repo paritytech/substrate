@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - DDC Metrics reporter using offchain worker
 
+## [2.2.4]
+
+### Changed
+
+- EPOCH_DURATION_IN_BLOCKS set to 4 HOURS
+
 ## [2.2.3]
 
 ### Changed
