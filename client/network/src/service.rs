@@ -48,7 +48,7 @@ use crate::{
 		Protocol,
 		Ready,
 		event::Event,
-		sync::SyncState,
+		sync::{SyncState, Status as SyncStatus},
 	},
 	transactions,
 	transport, ReputationChange,
@@ -444,14 +444,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 	/// High-level network status information.
 	pub fn status(&self) -> NetworkStatus<B> {
+		let status = self.sync_state();
 		NetworkStatus {
-			sync_state: self.sync_state(),
+			sync_state: status.state,
 			best_seen_block: self.best_seen_block(),
 			num_sync_peers: self.num_sync_peers(),
 			num_connected_peers: self.num_connected_peers(),
 			num_active_peers: self.num_active_peers(),
 			total_bytes_inbound: self.total_bytes_inbound(),
 			total_bytes_outbound: self.total_bytes_outbound(),
+			state_sync: status.state_sync,
 		}
 	}
 
@@ -476,7 +478,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// Current global sync state.
-	pub fn sync_state(&self) -> SyncState {
+	pub fn sync_state(&self) -> SyncStatus<B> {
 		self.network_service.behaviour().user_protocol().sync_state()
 	}
 
@@ -1802,7 +1804,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			*this.external_addresses.lock() = external_addresses;
 		}
 
-		let is_major_syncing = match this.network_service.behaviour_mut().user_protocol_mut().sync_state() {
+		let is_major_syncing = match this.network_service.behaviour_mut().user_protocol_mut().sync_state().state {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
 		};

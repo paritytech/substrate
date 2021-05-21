@@ -50,7 +50,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub},
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sync::{ChainSync, SyncState};
+use sync::{ChainSync, Status as SyncStatus};
 use std::borrow::Cow;
 use std::convert::TryFrom as _;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -481,8 +481,8 @@ impl<B: BlockT> Protocol<B> {
 	}
 
 	/// Current global sync state.
-	pub fn sync_state(&self) -> SyncState {
-		self.sync.status().state
+	pub fn sync_state(&self) -> SyncStatus<B> {
+		self.sync.status()
 	}
 
 	/// Target sync block number.

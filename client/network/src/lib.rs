@@ -322,4 +322,6 @@ pub struct NetworkStatus<B: BlockT> {
 	pub total_bytes_inbound: u64,
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
+	/// State sync in progress (percentage, bytes)
+	pub state_sync: Option<(u32, u64)>,
 }

@@ -31,6 +31,7 @@ pub struct StateSync<B: BlockT> {
 	state: Vec<(Vec<u8>, Vec<u8>)>,
 	complete: bool,
 	client: Arc<dyn Client<B>>,
+	imported_bytes: u64,
 }
 
 pub enum ImportResult<B: BlockT> {
@@ -49,6 +50,7 @@ impl<B: BlockT> StateSync<B> {
 			last_key: Vec::default(),
 			state: Vec::default(),
 			complete: false,
+			imported_bytes: 0,
 		}
 	}
 
@@ -63,9 +65,11 @@ impl<B: BlockT> StateSync<B> {
 		if let Some(key) = response.keys.last() {
 			self.last_key = key.clone();
 		}
-		log::info!(
+		let proof_size = response.proof.iter().map(|v| v.len()).sum::<usize>() as u64;
+		log::trace!(
 			target: "sync",
-			"Importing state {:?} to {:?}",
+			"Importing state {} bytes, {:?} to {:?}",
+			proof_size,
 			sp_core::hexdisplay::HexDisplay::from(&self.last_key),
 			response.keys.first().map(sp_core::hexdisplay::HexDisplay::from),
 		);
@@ -88,9 +92,11 @@ impl<B: BlockT> StateSync<B> {
 
 		for (key, value) in values {
 			if let Some(value) = value {
+				self.imported_bytes += key.len() as u64;
 				self.state.push((key, value))
 			}
 		};
+		self.imported_bytes += proof_size;
 		if response.complete {
 			self.complete = true;
 			ImportResult::Import(self.target_block.clone(), self.target_header.clone(), ImportedState {
@@ -119,6 +125,11 @@ impl<B: BlockT> StateSync<B> {
 
 	pub fn target(&self) -> B::Hash {
 		self.target_block.clone()
+	}
+
+	pub fn progress(&self) -> (u32, u64) {
+		let percent_done = (*self.last_key.get(0).unwrap_or(&0u8) as u32) * 100 / 256;
+		(percent_done, self.imported_bytes)
 	}
 }
 

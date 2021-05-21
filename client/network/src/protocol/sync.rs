@@ -315,6 +315,8 @@ pub struct Status<B: BlockT> {
 	pub num_peers: u32,
 	/// Number of blocks queued for import
 	pub queued_blocks: u32,
+	/// State sync in progress (percentage, bytes)
+	pub state_sync: Option<(u32, u64)>,
 }
 
 /// A peer did not behave as expected and should be reported.
@@ -536,6 +538,7 @@ impl<B: BlockT> ChainSync<B> {
 			best_seen_block: best_seen,
 			num_peers: self.peers.len() as u32,
 			queued_blocks: self.queue_blocks.len() as u32,
+			state_sync: self.state_sync.as_ref().map(|s| s.progress()),
 		}
 	}
 
