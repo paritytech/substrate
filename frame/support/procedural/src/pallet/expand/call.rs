@@ -66,7 +66,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
-	let args_metadata_type = methods.iter().map(|method| {
+	let args_meta_type = methods.iter().map(|method| {
 		method.args.iter()
 			.map(|(is_compact, _, type_)| {
 				if *is_compact {
