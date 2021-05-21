@@ -159,7 +159,7 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	ensure, BoundedVec,
+	ensure, WeakBoundedVec,
 	traits::{
 		Currency, OnUnbalanced, TryDrop, StoredMap, MaxEncodedLen,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
@@ -442,7 +442,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
+		WeakBoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
 		ValueQuery,
 		GetDefault,
 		ConstU32<300_000>,
@@ -832,7 +832,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
 		let bounded_locks = unsafe {
-			BoundedVec::<_, T::MaxLocks>::force_from(locks.to_vec(), Some("Balances Update Locks"))
+			WeakBoundedVec::<_, T::MaxLocks>::force_from(locks.to_vec(), Some("Balances Update Locks"))
 		};
 
 		if locks.len() as u32 > T::MaxLocks::get() {
