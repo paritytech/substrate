@@ -256,10 +256,10 @@ fn expand_origin_caller_variant(
 	instance: Option<&Ident>,
 	generics: &Generics,
 ) -> TokenStream {
-	let pallet_is_generic = !generics.params.is_empty();
+	let part_is_generic = !generics.params.is_empty();
 	let mod_name = &path.mod_name();
 
-	match (instance, pallet_is_generic) {
+	match (instance, part_is_generic) {
 		(Some(inst), true) => {
 			let variant = format_ident!("{}_{}", mod_name, inst);
 			quote!(#[codec(index = #index)] #variant(#path::Origin<#runtime, #path::#inst>),)
@@ -291,8 +291,8 @@ fn expand_origin_pallet_conversions(
 		mod_name
 	};
 
-	let pallet_is_generic = !generics.params.is_empty();
-	let pallet_origin = match (instance, pallet_is_generic) {
+	let part_is_generic = !generics.params.is_empty();
+	let pallet_origin = match (instance, part_is_generic) {
 		(Some(inst), true) => quote!(#path::Origin<#runtime, #path::#inst>),
 		(Some(inst), false) => quote!(#path::Origin<#path::#inst>),
 		(None, true) => quote!(#path::Origin<#runtime>),

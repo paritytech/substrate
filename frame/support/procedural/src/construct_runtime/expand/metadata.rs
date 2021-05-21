@@ -136,9 +136,9 @@ fn expand_pallet_metadata_events(
 ) -> TokenStream {
 	if filtered_names.contains(&"Event") {
 		let path = &decl.pallet;
-		let pallet_is_generic =
+		let part_is_generic =
 			!decl.find_part("Event").expect("Event part exists; qed").generics.params.is_empty();
-		let pallet_event = match (decl.instance.as_ref(), pallet_is_generic) {
+		let pallet_event = match (decl.instance.as_ref(), part_is_generic) {
 			(Some(inst), true) => quote!(#path::Event::<#runtime, #path::#inst>),
 			(Some(inst), false) => quote!(#path::Event::<#path::#inst>),
 			(None, true) => quote!(#path::Event::<#runtime>),

@@ -147,7 +147,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 	let dispatch = decl_outer_dispatch(&name, pallets.iter(), &scrate);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
-	let outer_config = decl_outer_config(&name, pallets.iter(), &scrate);
+	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
 	let inherent = decl_outer_inherent(
 		&name,
 		&block,
@@ -241,44 +241,6 @@ fn decl_outer_inherent<'a>(
 				#(#pallets_tokens)*
 			}
 		);
-	)
-}
-
-fn decl_outer_config<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations
-		.filter_map(|pallet_declaration| {
-			pallet_declaration.find_part("Config").map(|part| {
-				let transformed_generics: Vec<_> = part
-					.generics
-					.params
-					.iter()
-					.map(|param| quote!(<#param>))
-					.collect();
-				(pallet_declaration, transformed_generics)
-			})
-		})
-		.map(|(pallet_declaration, generics)| {
-			let pallet = &pallet_declaration.pallet.inner.segments.last().unwrap();
-			let name = Ident::new(
-				&format!("{}Config", pallet_declaration.name),
-				pallet_declaration.name.span(),
-			);
-			let instance = pallet_declaration.instance.as_ref().into_iter();
-			quote!(
-				#name =>
-					#pallet #(#instance)* #(#generics)*,
-			)
-		});
-	quote!(
-		#scrate::impl_outer_config! {
-			pub struct GenesisConfig for #runtime where AllPalletsWithSystem = AllPalletsWithSystem {
-				#(#pallets_tokens)*
-			}
-		}
 	)
 }
 

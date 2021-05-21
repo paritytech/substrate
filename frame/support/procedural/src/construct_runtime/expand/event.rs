@@ -45,8 +45,8 @@ pub fn expand_outer_event(
 				return Err(syn::Error::new(pallet_decl.name.span(), msg));
 			}
 
-			let pallet_is_generic = !generics.params.is_empty();
-			let pallet_event = match (instance, pallet_is_generic) {
+			let part_is_generic = !generics.params.is_empty();
+			let pallet_event = match (instance, part_is_generic) {
 				(Some(inst), true) => quote!(#path::Event::<#runtime, #path::#inst>),
 				(Some(inst), false) => quote!(#path::Event::<#path::#inst>),
 				(None, true) => quote!(#path::Event::<#runtime>),
@@ -82,10 +82,10 @@ fn expand_event_variant(
 	instance: Option<&Ident>,
 	generics: &Generics,
 ) -> TokenStream {
-	let pallet_is_generic = !generics.params.is_empty();
+	let part_is_generic = !generics.params.is_empty();
 	let mod_name = &path.mod_name();
 
-	match (instance, pallet_is_generic) {
+	match (instance, part_is_generic) {
 		(Some(inst), true) => {
 			let variant = format_ident!("{}_{}", mod_name, inst);
 			quote!(#[codec(index = #index)] #variant(#path::Event<#runtime, #path::#inst>),)
