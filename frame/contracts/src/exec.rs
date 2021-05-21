@@ -791,7 +791,7 @@ where
 			let code_len = executable.code_len();
 
 			// Every call or instantiate also optionally transferres balance.
-			self.initial_transfer().map_err(|e| (ExecError::from(e), 0))?;
+			self.initial_transfer().map_err(|e| (ExecError::from(e), code_len))?;
 
 			// Call into the wasm blob.
 			let output = executable.execute(
