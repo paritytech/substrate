@@ -366,7 +366,7 @@ fn calling_plain_account_fails() {
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
 			Err(
 				DispatchErrorWithPostInfo {
-					error: Error::<Test>::NotCallable.into(),
+					error: Error::<Test>::ContractNotFound.into(),
 					post_info: PostDispatchInfo {
 						actual_weight: Some(base_cost),
 						pays_fee: Default::default(),
@@ -1088,7 +1088,7 @@ fn call_removed_contract() {
 			// Calling contract should deny access because rent cannot be paid.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null()),
-				Error::<Test>::NotCallable
+				Error::<Test>::RentNotPayed,
 			);
 			// No event is generated because the contract is not actually removed.
 			assert_eq!(System::events(), vec![]);
@@ -1096,7 +1096,7 @@ fn call_removed_contract() {
 			// Subsequent contract calls should also fail.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null()),
-				Error::<Test>::NotCallable
+				Error::<Test>::RentNotPayed,
 			);
 
 			// A snitch can now remove the contract
@@ -1321,7 +1321,7 @@ fn restoration(
 				Contracts::call(
 					Origin::signed(ALICE), addr_bob.clone(), 0, GAS_LIMIT, call::null()
 				),
-				Error::<Test>::NotCallable
+				Error::<Test>::RentNotPayed,
 			);
 			assert!(System::events().is_empty());
 			assert!(ContractInfoOf::<Test>::get(&addr_bob).unwrap().get_alive().is_some());

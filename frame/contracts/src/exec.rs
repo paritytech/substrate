@@ -686,8 +686,11 @@ where
 					contract
 				} else {
 					<ContractInfoOf<T>>::get(&dest)
-						.and_then(|contract| contract.get_alive())
-						.ok_or((Error::<T>::NotCallable.into(), 0))?
+						.ok_or((<Error<T>>::ContractNotFound.into(), 0))
+						.and_then(|contract|
+							contract.get_alive()
+								.ok_or((<Error<T>>::ContractIsTombstone.into(), 0))
+						)?
 				};
 
 				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)
@@ -701,7 +704,7 @@ where
 				let contract = Rent::<T, E>
 					::charge(&dest, contract, executable.occupied_storage())
 					.map_err(|e| (e.into(), executable.code_len()))?
-					.ok_or((Error::<T>::NotCallable.into(), executable.code_len()))?;
+					.ok_or((Error::<T>::RentNotPayed.into(), executable.code_len()))?;
 				(dest, contract, executable, ExportedFunction::Call)
 			}
 			FrameArgs::Instantiate{sender, trie_seed, executable, salt} => {
@@ -2297,7 +2300,7 @@ mod tests {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
 				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![]),
-				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::NotCallable.into()
+				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::ContractNotFound.into()
 			);
 			exec_success()
 		});

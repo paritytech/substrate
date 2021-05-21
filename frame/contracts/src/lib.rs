@@ -535,9 +535,20 @@ pub mod pallet {
 		/// Performing a call was denied because the calling depth reached the limit
 		/// of what is specified in the schedule.
 		MaxCallDepthReached,
-		/// The contract that was called is either no contract at all (a plain account)
-		/// or is a tombstone.
-		NotCallable,
+		/// No contract was found at the specified address.
+		ContractNotFound,
+		/// A tombstone exist at the specified address.
+		///
+		/// Tombstone cannot be called. Anyone can use `seal_restore_to` in order to revive
+		/// the contract, though.
+		ContractIsTombstone,
+		/// The called contract does not have enough balance to pay for its storage.
+		///
+		/// The contract ran out of balance and is therefore eligible for eviction into a
+		/// tombstone. Anyone can evict the contract by submitting a `claim_surcharge`
+		/// extrinsic. Alternatively, a plain balance transfer can be used in order to
+		/// increase the contracts funds so that it can be called again.
+		RentNotPayed,
 		/// The code supplied to `instantiate_with_code` exceeds the limit specified in the
 		/// current schedule.
 		CodeTooLarge,
