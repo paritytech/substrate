@@ -954,12 +954,23 @@ where
 
 	// The transfer as performed by a call or instantiate.
 	fn initial_transfer(&self) -> DispatchResult {
+		let frame = self.top_frame();
+		let value = frame.value_transferred;
+		let subsistence_threshold = <Contracts<T>>::subsistence_threshold();
+
+		// If the value transferred to a new conteact is less than the subsistence threshold
+		// we can error out early. This avoids executing the constructor in cases where
+		// we already that the contract has too few balance.
+		if frame.entry_point == ExportedFunction::Constructor && value < subsistence_threshold {
+			return Err(<Error<T>>::NewContractNotFunded.into());
+		}
+
 		Self::transfer(
 			self.caller_is_origin(),
 			false,
 			self.caller(),
-			&self.top_frame().account_id,
-			self.top_frame().value_transferred,
+			&frame.account_id,
+			value,
 		)
 	}
 
@@ -2005,7 +2016,7 @@ mod tests {
 					ctx.ext.instantiate(
 						0,
 						dummy_ch,
-						15u64,
+						Contracts::<Test>::subsistence_threshold(),
 						vec![],
 						&[],
 					),
