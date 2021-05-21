@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// use sp_io::logging::log;
+
 pub trait AccountableSafety {
 	/// Update the accountable safety state machine(s), if there are any active.
 	fn update();
@@ -46,6 +48,8 @@ pub struct AccountableSafetyHandler;
 
 impl AccountableSafety for AccountableSafetyHandler {
 	fn update() {
+		let a = Grandpa::block_not_included();
+		log::info!("JON: a: {}", a);
 	}
 
 	fn start_accountable_safety_protocol() {

@@ -350,6 +350,10 @@ pub mod pallet {
 	#[pallet::getter(fn session_for_set)]
 	pub(super) type SetIdSession<T: Config> = StorageMap<_, Twox64Concat, SetId, SessionIndex>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn block_not_included)]
+	pub(super) type BlockNotIncluded<T: Config> = StorageValue<_, T::BlockNumber>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub authorities: AuthorityList,
