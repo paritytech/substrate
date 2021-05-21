@@ -94,12 +94,10 @@ pub struct ClassMetadata<DepositBalance> {
 	///
 	/// This pays for the data stored in this struct.
 	pub(super) deposit: DepositBalance,
-	/// The user friendly name of this asset. Limited in length by `StringLimit`.
-	pub(super) name: Vec<u8>,
 	/// General information concerning this asset. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
-	pub(super) information: Vec<u8>,
+	pub(super) data: Vec<u8>,
 	/// Whether the asset metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
 }
@@ -110,12 +108,10 @@ pub struct InstanceMetadata<DepositBalance> {
 	///
 	/// This pays for the data stored in this struct.
 	pub(super) deposit: DepositBalance,
-	/// The user friendly name of this asset. Limited in length by `StringLimit`.
-	pub(super) name: Vec<u8>,
 	/// General information concerning this asset. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
-	pub(super) information: Vec<u8>,
+	pub(super) data: Vec<u8>,
 	/// Whether the asset metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
 }

@@ -78,7 +78,7 @@ fn lifecycle_should_work() {
 		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::reserved_balance(&1), 2);
 
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0], vec![0], false));
+		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0], false));
 		assert_eq!(Balances::reserved_balance(&1), 5);
 		assert!(ClassMetadataOf::<Test>::contains_key(0));
 
@@ -90,10 +90,10 @@ fn lifecycle_should_work() {
 		assert_eq!(Class::<Test>::get(0).unwrap().instances, 2);
 		assert_eq!(Class::<Test>::get(0).unwrap().instance_metadatas, 0);
 
-		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![42], vec![42], false));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![42], false));
 		assert_eq!(Balances::reserved_balance(&1), 10);
 		assert!(InstanceMetadataOf::<Test>::contains_key(0, 42));
-		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, vec![69], vec![69], false));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 69, vec![69], false));
 		assert_eq!(Balances::reserved_balance(&1), 13);
 		assert!(InstanceMetadataOf::<Test>::contains_key(0, 69));
 
@@ -199,9 +199,9 @@ fn transfer_owner_should_work() {
 		assert_noop!(Uniques::transfer_ownership(Origin::signed(1), 0, 1), Error::<Test>::NoPermission);
 
 		// Mint and set metadata now and make sure that deposit gets transferred back.
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], false));
+		assert_ok!(Uniques::set_class_metadata(Origin::signed(2), 0, vec![0u8; 20], false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
-		assert_ok!(Uniques::set_metadata(Origin::signed(2), 0, 42, vec![0u8; 10], vec![0u8; 10], false));
+		assert_ok!(Uniques::set_metadata(Origin::signed(2), 0, 42, vec![0u8; 20], false));
 		assert_ok!(Uniques::transfer_ownership(Origin::signed(2), 0, 3));
 		assert_eq!(Balances::total_balance(&2), 57);
 		assert_eq!(Balances::total_balance(&3), 145);
@@ -229,57 +229,53 @@ fn set_class_metadata_should_work() {
 	new_test_ext().execute_with(|| {
 		// Cannot add metadata to unknown asset
 		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], false),
+			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 20], false),
 			Error::<Test>::Unknown,
 		);
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
 		// Cannot add metadata to unowned asset
 		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], false),
+			Uniques::set_class_metadata(Origin::signed(2), 0, vec![0u8; 20], false),
 			Error::<Test>::NoPermission,
 		);
 
 		// Cannot add oversized metadata
 		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 51], vec![0u8; 1], false),
-			Error::<Test>::BadMetadata,
-		);
-		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 1], vec![0u8; 51], false),
+			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 51], false),
 			Error::<Test>::BadMetadata,
 		);
 
 		// Successfully add metadata and take deposit
 		Balances::make_free_balance_be(&1, 30);
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], false));
+		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 20], false));
 		assert_eq!(Balances::free_balance(&1), 9);
 		assert!(ClassMetadataOf::<Test>::contains_key(0));
 
 		// Force origin works, too.
-		assert_ok!(Uniques::set_class_metadata(Origin::root(), 0, vec![0u8; 9], vec![0u8; 9], false));
+		assert_ok!(Uniques::set_class_metadata(Origin::root(), 0, vec![0u8; 18], false));
 
 		// Update deposit
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 5], false));
+		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 15], false));
 		assert_eq!(Balances::free_balance(&1), 14);
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 15], false));
+		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 25], false));
 		assert_eq!(Balances::free_balance(&1), 4);
 
 		// Cannot over-reserve
 		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 20], vec![0u8; 20], false),
+			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 40], false),
 			BalancesError::<Test, _>::InsufficientBalance,
 		);
 
 		// Can't set or clear metadata once frozen
-		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 5], true));
+		assert_ok!(Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 15], true));
 		assert_noop!(
-			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 5], false),
+			Uniques::set_class_metadata(Origin::signed(1), 0, vec![0u8; 15], false),
 			Error::<Test, _>::Frozen,
 		);
 		assert_noop!(Uniques::clear_class_metadata(Origin::signed(1), 0), Error::<Test>::Frozen);
 
 		// Clear Metadata
-		assert_ok!(Uniques::set_class_metadata(Origin::root(), 0, vec![0u8; 10], vec![0u8; 5], false));
+		assert_ok!(Uniques::set_class_metadata(Origin::root(), 0, vec![0u8; 15], false));
 		assert_noop!(Uniques::clear_class_metadata(Origin::signed(2), 0), Error::<Test>::NoPermission);
 		assert_noop!(Uniques::clear_class_metadata(Origin::signed(1), 1), Error::<Test>::Unknown);
 		assert_ok!(Uniques::clear_class_metadata(Origin::signed(1), 0));
@@ -297,50 +293,46 @@ fn set_instance_metadata_should_work() {
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		// Cannot add metadata to unowned asset
 		assert_noop!(
-			Uniques::set_metadata(Origin::signed(2), 0, 42, vec![0u8; 10], vec![0u8; 10], false),
+			Uniques::set_metadata(Origin::signed(2), 0, 42, vec![0u8; 20], false),
 			Error::<Test>::NoPermission,
 		);
 
 		// Cannot add oversized metadata
 		assert_noop!(
-			Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 51], vec![0u8; 1], false),
-			Error::<Test>::BadMetadata,
-		);
-		assert_noop!(
-			Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 1], vec![0u8; 51], false),
+			Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 51], false),
 			Error::<Test>::BadMetadata,
 		);
 
 		// Successfully add metadata and take deposit
-		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 10], false));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 20], false));
 		assert_eq!(Balances::free_balance(&1), 8);
 		assert!(InstanceMetadataOf::<Test>::contains_key(0, 42));
 
 		// Force origin works, too.
-		assert_ok!(Uniques::set_metadata(Origin::root(), 0, 42, vec![0u8; 9], vec![0u8; 9], false));
+		assert_ok!(Uniques::set_metadata(Origin::root(), 0, 42, vec![0u8; 18], false));
 
 		// Update deposit
-		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 5], false));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 15], false));
 		assert_eq!(Balances::free_balance(&1), 13);
-		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 15], false));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 25], false));
 		assert_eq!(Balances::free_balance(&1), 3);
 
 		// Cannot over-reserve
 		assert_noop!(
-			Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 20], vec![0u8; 20], false),
+			Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 40], false),
 			BalancesError::<Test, _>::InsufficientBalance,
 		);
 
 		// Can't set or clear metadata once frozen
-		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 5], true));
+		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 15], true));
 		assert_noop!(
-			Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 10], vec![0u8; 5], false),
+			Uniques::set_metadata(Origin::signed(1), 0, 42, vec![0u8; 15], false),
 			Error::<Test, _>::Frozen,
 		);
 		assert_noop!(Uniques::clear_metadata(Origin::signed(1), 0, 42), Error::<Test>::Frozen);
 
 		// Clear Metadata
-		assert_ok!(Uniques::set_metadata(Origin::root(), 0, 42, vec![0u8; 10], vec![0u8; 5], false));
+		assert_ok!(Uniques::set_metadata(Origin::root(), 0, 42, vec![0u8; 15], false));
 		assert_noop!(Uniques::clear_metadata(Origin::signed(2), 0, 42), Error::<Test>::NoPermission);
 		assert_noop!(Uniques::clear_metadata(Origin::signed(1), 1, 42), Error::<Test>::Unknown);
 		assert_ok!(Uniques::clear_metadata(Origin::signed(1), 0, 42));

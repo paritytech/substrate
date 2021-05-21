@@ -218,13 +218,13 @@ pub mod pallet {
 		/// An asset `class` has had its attributes changed by the `Force` origin.
 		/// \[ class \]
 		AssetStatusChanged(T::ClassId),
-		/// New metadata has been set for an asset class. \[ class, name, info, is_frozen \]
-		ClassMetadataSet(T::ClassId, Vec<u8>, Vec<u8>, bool),
+		/// New metadata has been set for an asset class. \[ class, data, is_frozen \]
+		ClassMetadataSet(T::ClassId, Vec<u8>, bool),
 		/// Metadata has been cleared for an asset class. \[ class \]
 		ClassMetadataCleared(T::ClassId),
 		/// New metadata has been set for an asset instance.
-		/// \[ class, instance, name, info, is_frozen \]
-		MetadataSet(T::ClassId, T::InstanceId, Vec<u8>, Vec<u8>, bool),
+		/// \[ class, instance, data, is_frozen \]
+		MetadataSet(T::ClassId, T::InstanceId, Vec<u8>, bool),
 		/// Metadata has been cleared for an asset instance. \[ class, instance \]
 		MetadataCleared(T::ClassId, T::InstanceId),
 		/// Metadata has been cleared for an asset instance. \[ class, successful_instances \]
@@ -1081,8 +1081,7 @@ pub mod pallet {
 		///
 		/// - `class`: The identifier of the asset class whose instance's metadata to set.
 		/// - `instance`: The identifier of the asset instance whose metadata to set.
-		/// - `name`: The user visible name of this asset. Limited in length by `StringLimit`.
-		/// - `info`: The general information of this asset. Limited in length by `StringLimit`.
+		/// - `data`: The general information of this asset. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
 		///
 		/// Emits `MetadataSet`.
@@ -1093,16 +1092,14 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
-			name: Vec<u8>,
-			info: Vec<u8>,
+			data: Vec<u8>,
 			is_frozen: bool,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
-			ensure!(info.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
+			ensure!(data.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 
 			let mut class_details = Class::<T, I>::get(&class)
 				.ok_or(Error::<T, I>::Unknown)?;
@@ -1135,13 +1132,12 @@ pub mod pallet {
 
 				*metadata = Some(InstanceMetadata {
 					deposit,
-					name: name.clone(),
-					information: info.clone(),
+					data: data.clone(),
 					is_frozen,
 				});
 
 				Class::<T, I>::insert(&class, &class_details);
-				Self::deposit_event(Event::MetadataSet(class, instance, name, info, is_frozen));
+				Self::deposit_event(Event::MetadataSet(class, instance, data, is_frozen));
 				Ok(())
 			})
 		}
@@ -1202,7 +1198,7 @@ pub mod pallet {
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset whose metadata to update.
-		/// - `name`: The user visible name of this asset. Limited in length by `StringLimit`.
+		/// - `info`: The general information of this asset. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
 		///
 		/// Emits `ClassMetadataSet`.
@@ -1212,16 +1208,14 @@ pub mod pallet {
 		pub(super) fn set_class_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
-			name: Vec<u8>,
-			info: Vec<u8>,
+			data: Vec<u8>,
 			is_frozen: bool,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
-			ensure!(info.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
+			ensure!(data.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 
 			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = &maybe_check_owner {
@@ -1251,12 +1245,11 @@ pub mod pallet {
 
 				*metadata = Some(ClassMetadata {
 					deposit,
-					name: name.clone(),
-					information: info.clone(),
+					data: data.clone(),
 					is_frozen,
 				});
 
-				Self::deposit_event(Event::ClassMetadataSet(class, name, info, is_frozen));
+				Self::deposit_event(Event::ClassMetadataSet(class, data, is_frozen));
 				Ok(())
 			})
 		}

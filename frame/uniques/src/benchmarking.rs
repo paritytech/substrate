@@ -59,7 +59,6 @@ fn add_class_metadata<T: Config<I>, I: 'static>()
 		SystemOrigin::Signed(caller.clone()).into(),
 		Default::default(),
 		vec![0; T::StringLimit::get() as usize],
-		vec![0; T::StringLimit::get() as usize],
 		false,
 	).is_ok());
 	(caller, caller_lookup)
@@ -95,7 +94,6 @@ fn add_instance_metadata<T: Config<I>, I: 'static>(instance: T::InstanceId)
 		SystemOrigin::Signed(caller.clone()).into(),
 		Default::default(),
 		instance,
-		vec![0; T::StringLimit::get() as usize],
 		vec![0; T::StringLimit::get() as usize],
 		false,
 	).is_ok());
@@ -317,14 +315,13 @@ benchmarks_instance_pallet! {
 	}
 
 	set_metadata {
-		let name = vec![0u8; T::StringLimit::get() as usize];
-		let info = vec![0u8; T::StringLimit::get() as usize];
+		let data = vec![0u8; T::StringLimit::get() as usize];
 
 		let (class, caller, _) = create_class::<T, I>();
 		let (instance, ..) = mint_instance::<T, I>(0);
-	}: _(SystemOrigin::Signed(caller), class, instance, name.clone(), info.clone(), false)
+	}: _(SystemOrigin::Signed(caller), class, instance, data.clone(), false)
 	verify {
-		assert_last_event::<T, I>(Event::MetadataSet(class, instance, name, info, false).into());
+		assert_last_event::<T, I>(Event::MetadataSet(class, instance, data, false).into());
 	}
 
 	clear_metadata {
@@ -337,13 +334,12 @@ benchmarks_instance_pallet! {
 	}
 
 	set_class_metadata {
-		let name = vec![0u8; T::StringLimit::get() as usize];
-		let info = vec![0u8; T::StringLimit::get() as usize];
+		let data = vec![0u8; T::StringLimit::get() as usize];
 
 		let (class, caller, _) = create_class::<T, I>();
-	}: _(SystemOrigin::Signed(caller), class, name.clone(), info.clone(), false)
+	}: _(SystemOrigin::Signed(caller), class, data.clone(), false)
 	verify {
-		assert_last_event::<T, I>(Event::ClassMetadataSet(class, name, info, false).into());
+		assert_last_event::<T, I>(Event::ClassMetadataSet(class, data, false).into());
 	}
 
 	clear_class_metadata {
