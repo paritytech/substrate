@@ -209,11 +209,11 @@ pub mod pallet {
 		TeamChanged(T::ClassId, T::AccountId, T::AccountId, T::AccountId),
 		/// An `instance` of an asset `class` has been approved by the `owner` for transfer by a
 		/// `delegate`.
-		/// \[ clsss, instance, owner, delegate \]
+		/// \[ class, instance, owner, delegate \]
 		ApprovedTransfer(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
 		/// An approval for a `delegate` account to transfer the `instance` of an asset `class` was
 		/// cancelled by its `owner`.
-		/// \[ clsss, instance, owner, delegate \]
+		/// \[ class, instance, owner, delegate \]
 		ApprovalCancelled(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
 		/// An asset `class` has had its attributes changed by the `Force` origin.
 		/// \[ class \]
