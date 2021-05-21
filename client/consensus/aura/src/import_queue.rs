@@ -32,11 +32,11 @@ use sp_consensus::{
 		Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport,
 	},
 };
-use sc_client_api::{backend::AuxStore, BlockOf};
+use sc_client_api::{BlockOf, UsageProvider, backend::AuxStore};
 use sp_blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, ProvideCache, HeaderBackend};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justifications};
-use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero};
+use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
@@ -320,7 +320,7 @@ impl<B: BlockT, C, P, CAW, CIDP> Verifier<B> for AuraVerifier<C, P, CAW, CIDP> w
 fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
 	A: Codec + Debug,
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
 	// no cache => no initialization
@@ -329,6 +329,8 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 		None => return Ok(()),
 	};
 
+	let best_hash = client.usage_info().chain.best_hash;
+
 	// check if we already have initialized the cache
 	let map_err = |error| sp_consensus::Error::from(sp_consensus::Error::ClientImport(
 		format!(
@@ -336,17 +338,17 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 			error,
 		)));
 
-	let genesis_id = BlockId::Number(Zero::zero());
-	let genesis_authorities: Option<Vec<A>> = cache
-		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
+	let block_id = BlockId::hash(best_hash);
+	let authorities: Option<Vec<A>> = cache
+		.get_at(&well_known_cache_keys::AUTHORITIES, &block_id)
 		.unwrap_or(None)
 		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
-	if genesis_authorities.is_some() {
+	if authorities.is_some() {
 		return Ok(());
 	}
 
-	let genesis_authorities = authorities(client, &genesis_id)?;
-	cache.initialize(&well_known_cache_keys::AUTHORITIES, genesis_authorities.encode())
+	let authorities = crate::authorities(client, &block_id)?;
+	cache.initialize(&well_known_cache_keys::AUTHORITIES, authorities.encode())
 		.map_err(map_err)?;
 
 	Ok(())
@@ -506,6 +508,7 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 		+ Send
 		+ Sync
 		+ AuxStore
+		+ UsageProvider<Block>
 		+ HeaderBackend<Block>,
 	I: BlockImport<Block, Error=ConsensusError, Transaction = sp_api::TransactionFor<C, Block>>
 		+ Send
