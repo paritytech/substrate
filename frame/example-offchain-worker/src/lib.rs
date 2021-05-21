@@ -199,7 +199,7 @@ pub mod pallet {
 		/// Since the blocks are finalized this method does not need to handle potential forks.
 		/// Be aware that multiple `finality_offchain_workers` can be run in parallel though.
 		fn finality_offchain_worker(n: T::BlockNumber) {
-			log::info!("Hello world from finality offchain worker at {}", n);
+			log::info!("Hello world from finality offchain worker at {:?}", n);
 		}
 	}
 
