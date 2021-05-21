@@ -174,8 +174,8 @@ impl DeriveJunction {
 impl<T: AsRef<str>> From<T> for DeriveJunction {
 	fn from(j: T) -> DeriveJunction {
 		let j = j.as_ref();
-		let (code, hard) = if j.starts_with('/') {
-			(&j[1..], true)
+		let (code, hard) = if let Some(stripped) = j.strip_prefix('/') {
+			(stripped, true)
 		} else {
 			(j, false)
 		};
@@ -262,7 +262,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 				let upper = data[1] & 0b00111111;
 				(2, (lower as u16) | ((upper as u16) << 8))
 			}
-			_ => Err(PublicError::UnknownVersion)?,
+			_ => return Err(PublicError::UnknownVersion),
 		};
 		if data.len() != prefix_len + body_len + CHECKSUM_LEN { return Err(PublicError::BadLength) }
 		let format = ident.try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
@@ -294,15 +294,15 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
 		// We mask out the upper two bits of the ident - SS58 Prefix currently only supports 14-bits
-		let ident: u16 = u16::from(version) & 0b00111111_11111111;
+		let ident: u16 = u16::from(version) & 0b0011_1111_1111_1111;
 		let mut v = match ident {
 			0..=63 => vec![ident as u8],
 			64..=16_383 => {
 				// upper six bits of the lower byte(!)
-				let first = ((ident & 0b00000000_11111100) as u8) >> 2;
+				let first = ((ident & 0b0000_0000_1111_1100) as u8) >> 2;
 				// lower two bits of the lower byte in the high pos,
 				// lower bits of the upper byte in the low pos
-				let second = ((ident >> 8) as u8) | ((ident & 0b00000000_00000011) as u8) << 6;
+				let second = ((ident >> 8) as u8) | ((ident & 0b0000_0000_0000_0011) as u8) << 6;
 				vec![first | 0b01000000, second]
 			}
 			_ => unreachable!("masked out the upper two bits; qed"),
@@ -612,14 +612,14 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		let s = cap.name("ss58")
 			.map(|r| r.as_str())
 			.unwrap_or(DEV_ADDRESS);
-		let addr = if s.starts_with("0x") {
-			let d = hex::decode(&s[2..]).map_err(|_| PublicError::InvalidFormat)?;
+		let addr = if let Some(stripped) = s.strip_prefix("0x") {
+			let d = hex::decode(stripped).map_err(|_| PublicError::InvalidFormat)?;
 			let mut r = Self::default();
 			if d.len() == r.as_ref().len() {
 				r.as_mut().copy_from_slice(&d);
 				r
 			} else {
-				Err(PublicError::BadLength)?
+				return Err(PublicError::BadLength)
 			}
 		} else {
 			Self::from_ss58check(s)?
@@ -1009,8 +1009,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 		let phrase = cap.name("phrase").map(|r| r.as_str()).unwrap_or(DEV_PHRASE);
 		let password = password_override.or_else(|| cap.name("password").map(|m| m.as_str()));
 
-		let (root, seed) = if phrase.starts_with("0x") {
-			hex::decode(&phrase[2..]).ok()
+		let (root, seed) = if let Some(stripped) = phrase.strip_prefix("0x") {
+			hex::decode(stripped).ok()
 				.and_then(|seed_vec| {
 					let mut seed = Self::Seed::default();
 					if seed.as_ref().len() == seed_vec.len() {

@@ -72,5 +72,9 @@ runtime-benchmarks = [
 	"frame-benchmarking",
 	"rand",
 	"rand_pcg",
+	"unstable-interface",
 ]
 try-runtime = ["frame-support/try-runtime"]
+# Make contract callable functions marked as __unstable__ available. Do not enable
+# on live chains as those are subject to change.
+unstable-interface = []
