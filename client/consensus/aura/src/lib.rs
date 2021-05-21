@@ -44,7 +44,7 @@ use sp_consensus::{
 	BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
 	BlockOrigin, Error as ConsensusError, SelectChain,
 };
-use sc_client_api::{backend::AuxStore, BlockOf};
+use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
 use sp_blockchain::{Result as CResult, well_known_cache_keys, ProvideCache, HeaderBackend};
 use sp_core::crypto::Public;
 use sp_application_crypto::{AppKey, AppPublic};
@@ -85,7 +85,7 @@ pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::Slot
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
 	A: Codec,
 	B: BlockT,
-	C: AuxStore + ProvideRuntimeApi<B>,
+	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
 	SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b).map_err(Into::into))

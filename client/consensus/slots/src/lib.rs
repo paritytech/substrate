@@ -584,7 +584,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
 	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self> where
-		C: sc_client_api::backend::AuxStore,
+		C: sc_client_api::backend::AuxStore + sc_client_api::UsageProvider<B>,
 		C: ProvideRuntimeApi<B>,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
@@ -599,13 +599,13 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 					})
 				}),
 			None => {
-				use sp_runtime::traits::Zero;
+				let best_hash = client.usage_info().chain.best_hash;
 				let genesis_slot_duration =
-					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
+					cb(client.runtime_api(), &BlockId::hash(best_hash))?;
 
 				info!(
 					"⏱  Loaded block-time = {:?} from genesis on first-launch",
-					genesis_slot_duration.slot_duration()
+					genesis_slot_duration.slot_duration(),
 				);
 
 				genesis_slot_duration
