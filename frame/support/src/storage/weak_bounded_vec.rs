@@ -43,13 +43,7 @@ pub struct WeakBoundedVec<T, S>(Vec<T>, PhantomData<S>);
 impl<T: Decode, S: Get<u32>> Decode for WeakBoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
-		if inner.len() > S::get() as usize {
-			log::warn!(
-				target: crate::LOG_TARGET,
-				"length of a weakly bounded vector is not respected.",
-			);
-		}
-		Ok(Self(inner, PhantomData))
+		Ok(Self::force_from(inner, Some("decode")))
 	}
 
 	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
