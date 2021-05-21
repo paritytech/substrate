@@ -1062,10 +1062,10 @@ impl<B: BlockT> ChainSync<B> {
 		let import_result = if let Some(sync) = &mut self.state_sync {
 			debug!(
 				target: "sync",
-				"Importing state data from {} with {} keys, {} nodes.",
+				"Importing state data from {} with {} keys, {} values.",
 				who,
 				response.keys.len(),
-				response.proof.len(),
+				response.values.len(),
 			);
 			sync.import(response)
 		} else {
@@ -1097,7 +1097,7 @@ impl<B: BlockT> ChainSync<B> {
 			state::ImportResult::Continue(request) => {
 				Ok(OnStateData::Request(who.clone(), request))
 			}
-			state::ImportResult::Bad => {
+			state::ImportResult::BadResponse => {
 				debug!(target: "sync", "Bad state data received from {}", who);
 				Err(BadPeer(who.clone(), rep::BAD_BLOCK))
 			}
@@ -1307,6 +1307,7 @@ impl<B: BlockT> ChainSync<B> {
 				e @ Err(BlockImportError::UnknownParent) |
 				e @ Err(BlockImportError::Other(_)) => {
 					warn!(target: "sync", "💔 Error importing block {:?}: {:?}", hash, e);
+					self.state_sync = None;
 					output.extend(self.restart());
 				},
 				Err(BlockImportError::Cancelled) => {}
@@ -1332,7 +1333,7 @@ impl<B: BlockT> ChainSync<B> {
 			is_descendent_of(&**client, base, block)
 		});
 
-		if matches!(self.mode, SyncMode::LightState { .. }) {
+		if let SyncMode::LightState { skip_proofs } = &self.mode {
 			if !self.imported_state
 				&& self.state_sync.is_none()
 				&& !self.peers.is_empty()
@@ -1350,7 +1351,7 @@ impl<B: BlockT> ChainSync<B> {
 							number,
 							hash,
 						);
-						self.state_sync = Some(StateSync::new(self.client.clone(), header));
+						self.state_sync = Some(StateSync::new(self.client.clone(), header, !skip_proofs));
 					}
 				}
 			}

@@ -32,16 +32,17 @@ pub struct StateSync<B: BlockT> {
 	complete: bool,
 	client: Arc<dyn Client<B>>,
 	imported_bytes: u64,
+	request_proof: bool,
 }
 
 pub enum ImportResult<B: BlockT> {
 	Import(B::Hash, B::Header, ImportedState<B>),
 	Continue(StateRequest),
-	Bad,
+	BadResponse,
 }
 
 impl<B: BlockT> StateSync<B> {
-	pub fn new(client: Arc<dyn Client<B>>, target: B::Header) -> Self {
+	pub fn new(client: Arc<dyn Client<B>>, target: B::Header, request_proof: bool) -> Self {
 		StateSync {
 			client,
 			target_block: target.hash(),
@@ -51,6 +52,7 @@ impl<B: BlockT> StateSync<B> {
 			state: Vec::default(),
 			complete: false,
 			imported_bytes: 0,
+			request_proof,
 		}
 	}
 
@@ -60,43 +62,52 @@ impl<B: BlockT> StateSync<B> {
 				target: "sync",
 				"Bad state response",
 			);
-			return ImportResult::Bad;
+			return ImportResult::BadResponse;
 		}
 		if let Some(key) = response.keys.last() {
 			self.last_key = key.clone();
 		}
-		let proof_size = response.proof.iter().map(|v| v.len()).sum::<usize>() as u64;
 		log::trace!(
 			target: "sync",
-			"Importing state {} bytes, {:?} to {:?}",
-			proof_size,
+			"Importing state, {:?} to {:?}",
 			sp_core::hexdisplay::HexDisplay::from(&self.last_key),
 			response.keys.first().map(sp_core::hexdisplay::HexDisplay::from),
 		);
 
-		let values = match self.client.verify_proof(
-			&response.keys,
-			self.target_root,
-			StorageProof::new(response.proof),
-		) {
-			Err(e) => {
-				log::debug!(
-					target: "sync",
-					"StateResponse failed proof verification: {:?}",
-					e,
-				);
-				return ImportResult::Bad;
-			},
-			Ok(values) => values,
-		};
-
-		for (key, value) in values {
-			if let Some(value) = value {
-				self.imported_bytes += key.len() as u64;
-				self.state.push((key, value))
+		if self.request_proof {
+			let proof_size = response.values.iter().map(|v| v.len()).sum::<usize>() as u64;
+			let values = match self.client.verify_proof(
+				&response.keys,
+				self.target_root,
+				StorageProof::new(response.values),
+			) {
+				Err(e) => {
+					log::debug!(
+						target: "sync",
+						"StateResponse failed proof verification: {:?}",
+						e,
+					);
+					return ImportResult::BadResponse;
+				},
+				Ok(values) => values,
+			};
+			for (key, value) in values {
+				if let Some(value) = value {
+					self.imported_bytes += key.len() as u64;
+					self.state.push((key, value))
+				}
+			};
+			self.imported_bytes += proof_size;
+		} else {
+			if response.keys.len() != response.values.len() {
+				log::debug!(target: "sync", "Bad state response. Keys/values mismatch");
+				return ImportResult::BadResponse;
 			}
-		};
-		self.imported_bytes += proof_size;
+			for (k, v) in response.keys.into_iter().zip(response.values.into_iter()) {
+				self.imported_bytes += (k.len() + v.len()) as u64;
+				self.state.push((k, v))
+			}
+		}
 		if response.complete {
 			self.complete = true;
 			ImportResult::Import(self.target_block.clone(), self.target_header.clone(), ImportedState {
@@ -112,6 +123,7 @@ impl<B: BlockT> StateSync<B> {
 		StateRequest {
 			block: self.target_block.encode(),
 			start: self.last_key.clone(),
+			proof: self.request_proof,
 		}
 	}
 

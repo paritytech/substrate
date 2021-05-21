@@ -788,10 +788,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							top: changes.state.into_iter().collect(),
 							children_default: Default::default(),
 						};
-						info!("Recovering state...");
 						let state_root = operation.op.reset_storage(storage, true)?;
-						assert_eq!(&state_root, import_headers.post().state_root());
-						info!("Complete.");
+						if state_root != *import_headers.post().state_root() {
+							// State root mismatch when importing state. This should not happe in safe fast sync mode,
+							// but may happen in unsafe mode.
+							warn!("Error imporing state: State root mismatch.");
+							return Err(Error::InvalidStateRoot);
+						}
 						None
 					}
 				};
@@ -1331,6 +1334,38 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<(Vec<Vec<u8>>, StorageProof)> {
 		let state = self.state_at(id)?;
 		Ok(prove_read_with_size::<_, HashFor<Block>, _>(state, start_key, size_limit)?)
+	}
+
+	/// Given a `BlockId` Iterator over all storage values starting at `start_key`.
+	/// Returns collected keys and values.
+	fn read_state_collection(
+		&self,
+		id: &BlockId<Block>,
+		start_key: &StorageKey,
+		size_limit: usize,
+	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>> {
+		let state = self.state_at(id)?;
+		let mut current_key = start_key.as_ref().to_vec();
+		let mut total_size = 0;
+		let mut entries = Vec::new();
+		while let Some(next_key) = state
+			.next_storage_key(&current_key)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+		{
+			let value = state
+				.storage(next_key.as_ref())
+				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+				.unwrap_or_default();
+			let size = value.len() + next_key.len();
+			if total_size + size > size_limit && !entries.is_empty() {
+				break;
+			}
+			total_size += size;
+			entries.push((next_key.clone(), value));
+			current_key = next_key;
+		}
+		Ok(entries)
+
 	}
 
 	/// Verify proof

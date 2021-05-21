@@ -72,14 +72,23 @@ pub trait ProofProvider<Block: BlockT> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 
-	/// Given a `BlockId` an iterator over all storage values building proofs until size limit is reached.
-	/// Returns collected keys and a combined proof.
+	/// Given a `BlockId` iterate over all storage values starting at `start_key`,
+	/// building proofs until size limit is reached. Returns collected keys and a combined proof.
 	fn read_proof_collection(
 		&self,
 		id: &BlockId<Block>,
 		start_key: &StorageKey,
 		size_limit: usize,
 	) -> sp_blockchain::Result<(Vec<Vec<u8>>, StorageProof)>;
+
+	/// Given a `BlockId` Iterator over all storage values starting at `start_key`.
+	/// Returns collected keys and values.
+	fn read_state_collection(
+		&self,
+		id: &BlockId<Block>,
+		start_key: &StorageKey,
+		size_limit: usize,
+	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>>;
 
 	/// Verify proof
 	fn verify_proof(

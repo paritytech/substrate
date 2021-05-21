@@ -74,15 +74,17 @@ message StateRequest {
 	bytes block = 1;
 	// Start from this key.
 	bytes start = 2; // optional
-
+	// Include proof.
+	bool proof = 3;
 }
 
 // Response to `BlockRequest`
 message StateResponse {
 	// A collection of keys.
 	repeated bytes keys = 1;
-	// Trie nodes that compose the proof for the keys above.
-	repeated bytes proof = 2;
-	// True if there are no more keys.
+	// If `proof` is true in request, this contains proof nodes.
+	// Otherwise it contains values mathcing `keys`
+	repeated bytes values = 2;
+	// Set to true when there are no more keys to return.
 	bool complete = 3;
 }

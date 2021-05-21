@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Helper for handling (i.e. answering) storage requests from a remote peer via the
+//! Helper for handling (i.e. answering) state requests from a remote peer via the
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
 use codec::{Decode};
@@ -42,7 +42,7 @@ mod rep {
 	use super::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
-	pub const SAME_REQUEST: Rep = Rep::new(i32::min_value(), "Same storage request multiple times");
+	pub const SAME_REQUEST: Rep = Rep::new(i32::min_value(), "Same state request multiple times");
 }
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
@@ -56,12 +56,12 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 	}
 }
 
-/// Generate the storage protocol name from chain specific protocol identifier.
+/// Generate the state protocol name from chain specific protocol identifier.
 fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	let mut s = String::new();
 	s.push_str("/");
 	s.push_str(protocol_id.as_ref());
-	s.push_str("/storage/1");
+	s.push_str("/state/1");
 	s
 }
 
@@ -127,7 +127,7 @@ impl<B: BlockT> StateRequestHandler<B> {
 				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
 				Err(e) => debug!(
 					target: LOG_TARGET,
-					"Failed to handle block request from {}: {}",
+					"Failed to handle state request from {}: {}",
 					peer,
 					e,
 				),
@@ -142,7 +142,6 @@ impl<B: BlockT> StateRequestHandler<B> {
 		peer: &PeerId,
 	) -> Result<(), HandleRequestError> {
 		let request = StateRequest::decode(&payload[..])?;
-
 		let block: B::Hash = Decode::decode(&mut request.block.as_ref())?;
 
 		let key = SeenRequestsKey {
@@ -169,29 +168,42 @@ impl<B: BlockT> StateRequestHandler<B> {
 
 		log::trace!(
 			target: LOG_TARGET,
-			"Handling storage request from {}: Block {:?}, Starting at {:?}",
+			"Handling state request from {}: Block {:?}, Starting at {:?}, proof={}",
 			peer,
 			sp_core::hexdisplay::HexDisplay::from(&request.block),
 			sp_core::hexdisplay::HexDisplay::from(&request.start),
+			request.proof,
 		);
 
 		let result = if reputation_changes.is_empty() {
 			let mut response = StateResponse::default();
-			let (keys, proof) = self.client.read_proof_collection(
-				&BlockId::hash(block),
-				&StorageKey(request.start),
-				MAX_RESPONSE_BYTES,
-			)?;
-			if keys.is_empty() {
+
+			if request.proof {
+				let (keys, proof) = self.client.read_proof_collection(
+					&BlockId::hash(block),
+					&StorageKey(request.start),
+					MAX_RESPONSE_BYTES,
+				)?;
+				response.keys = keys;
+				response.values = proof.into_nodes();
+			} else {
+				let entries = self.client.read_state_collection(
+					&BlockId::hash(block),
+					&StorageKey(request.start),
+					MAX_RESPONSE_BYTES,
+				)?;
+				for (k, v) in entries {
+					response.keys.push(k);
+					response.values.push(v);
+				}
+			}
+			if response.keys.is_empty() {
 				response.complete = true;
 			}
 
-			response.keys = keys;
-			response.proof = proof.into_nodes();
-
 			log::trace!(
 				target: LOG_TARGET,
-				"Storage response contains {} keys, complete={}, from {:?} to {:?}",
+				"StateResponse contains {} keys, complete={}, from {:?} to {:?}",
 				response.keys.len(),
 				response.complete,
 				response.keys.first().map(sp_core::hexdisplay::HexDisplay::from),
