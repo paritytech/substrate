@@ -66,6 +66,7 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 
 
 impl trie_root::TrieStream for TrieStream {
+	type GlobalMeta = bool;
 
 	fn new() -> Self {
 		TrieStream {

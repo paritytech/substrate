@@ -89,6 +89,17 @@ impl Meta for TrieMeta {
 		self.do_value_hash = state_meta;
 	}
 
+	fn extract_global_meta(&self) -> Self::GlobalMeta {
+		self.recorded_do_value_hash
+	}
+
+	fn set_global_meta(&mut self, global_meta: Self::GlobalMeta) {
+		if global_meta {
+			self.recorded_do_value_hash = true;
+			self.do_value_hash = true;
+		}
+	}
+
 	fn has_state_meta(&self) -> bool {
 		self.recorded_do_value_hash
 	}
@@ -230,14 +241,12 @@ impl<H, M> TrieLayout for Layout<H, M>
 		self.0
 	}
 	fn initialize_from_root_meta(&mut self, root_meta: &Self::Meta) {
-		if root_meta.recorded_do_value_hash {
+		if root_meta.extract_global_meta() {
 			self.0 = true;
 		}
 	}
 	fn set_root_meta(root_meta: &mut Self::Meta, global_meta: GlobalMeta<Self>) {
-		if global_meta {
-			root_meta.recorded_do_value_hash = true;
-		}
+		root_meta.set_global_meta(true);
 	}
 }
 
@@ -399,7 +408,7 @@ impl<H, M> TrieConfiguration for Layout<H, M>
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::trie_root_no_extension::<H, _, TrieStream, _, _, _>(input, self.clone())
+		trie_root::trie_root_no_extension::<H, M, TrieStream, _, _, _>(input, self.layout_meta())
 	}
 
 	fn trie_root_unhashed<I, A, B>(&self, input: I) -> Vec<u8> where
@@ -407,7 +416,7 @@ impl<H, M> TrieConfiguration for Layout<H, M>
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::unhashed_trie_no_extension::<H, _, TrieStream, _, _, _>(input, self.clone())
+		trie_root::unhashed_trie_no_extension::<H, M, TrieStream, _, _, _>(input, self.layout_meta())
 	}
 
 	fn encode_index(input: u32) -> Vec<u8> {

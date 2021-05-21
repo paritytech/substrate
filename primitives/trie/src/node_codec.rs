@@ -181,7 +181,7 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 	type HashOut = H::Out;
 
 	fn hashed_null_node() -> <H as Hasher>::Out {
-		H::hash(<Self as NodeCodecT<M>>::empty_node())
+		H::hash(<Self as NodeCodecT<M>>::empty_node_no_meta())
 	}
 
 	fn decode_plan(data: &[u8], meta: &mut M) -> Result<NodePlan, Self::Error> {
