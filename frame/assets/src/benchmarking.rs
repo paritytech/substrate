@@ -172,7 +172,7 @@ benchmarks_instance_pallet! {
 		let (caller, caller_lookup) = create_default_minted_asset::<T, I>(true, amount);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)
 	verify {
-		assert_last_event::<T, I>(Event::Burned(Default::default(), caller, amount).into());
+		assert_last_event::<T, I>(Event::Slashed(Default::default(), caller, amount).into());
 	}
 
 	transfer {

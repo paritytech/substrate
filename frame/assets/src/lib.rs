@@ -273,8 +273,8 @@ pub mod pallet {
 		Issued(T::AssetId, T::AccountId, T::Balance),
 		/// Some assets were transferred. \[asset_id, from, to, amount\]
 		Transferred(T::AssetId, T::AccountId, T::AccountId, T::Balance),
-		/// Some assets were destroyed. \[asset_id, owner, balance\]
-		Burned(T::AssetId, T::AccountId, T::Balance),
+		/// Some assets were destroyed from an account. \[asset_id, owner, balance\]
+		Slashed(T::AssetId, T::AccountId, T::Balance),
 		/// The management team changed \[asset_id, issuer, admin, freezer\]
 		TeamChanged(T::AssetId, T::AccountId, T::AccountId, T::AccountId),
 		/// The owner changed \[asset_id, owner\]
@@ -548,7 +548,7 @@ pub mod pallet {
 		/// - `who`: The account to be debited from.
 		/// - `amount`: The maximum amount by which `who`'s balance should be reduced.
 		///
-		/// Emits `Burned` with the actual amount burned. If this takes the balance to below the
+		/// Emits `Slashed` with the actual amount burned. If this takes the balance to below the
 		/// minimum for the asset, then the amount burned is increased to take it to zero.
 		///
 		/// Weight: `O(1)`

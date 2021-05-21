@@ -342,7 +342,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Burned(id, target.clone(), actual));
+		Self::deposit_event(Event::Slashed(id, target.clone(), actual));
 		Ok(actual)
 	}
 
