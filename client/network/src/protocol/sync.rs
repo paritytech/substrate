@@ -1059,9 +1059,10 @@ impl<B: BlockT> ChainSync<B> {
 		let import_result = if let Some(sync) = &mut self.state_sync {
 			debug!(
 				target: "sync",
-				"Importing state data from {} with {} values.",
+				"Importing state data from {} with {} keys, {} nodes.",
 				who,
-				response.values.len(),
+				response.keys.len(),
+				response.proof.len(),
 			);
 			sync.import(response)
 		} else {
@@ -1094,6 +1095,7 @@ impl<B: BlockT> ChainSync<B> {
 				Ok(OnStateData::Request(who.clone(), request))
 			}
 			state::ImportResult::Bad => {
+				debug!(target: "sync", "Bad state data received from {}", who);
 				Err(BadPeer(who.clone(), rep::BAD_BLOCK))
 			}
 		}
@@ -1345,7 +1347,7 @@ impl<B: BlockT> ChainSync<B> {
 							number,
 							hash,
 						);
-						self.state_sync = Some(StateSync::new(header));
+						self.state_sync = Some(StateSync::new(self.client.clone(), header));
 					}
 				}
 			}

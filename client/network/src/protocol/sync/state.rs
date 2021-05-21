@@ -16,18 +16,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
 use codec::Encode;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
-use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
-use crate::chain::ImportedState;
+use sc_client_api::StorageProof;
+use crate::schema::v1::{StateRequest, StateResponse};
+use crate::chain::{Client, ImportedState};
 
 pub struct StateSync<B: BlockT> {
 	target_block: B::Hash,
 	target_header: B::Header,
-	_target_root: B::Hash,
+	target_root: B::Hash,
 	last_key: Vec<u8>,
 	state: Vec<(Vec<u8>, Vec<u8>)>,
 	complete: bool,
+	client: Arc<dyn Client<B>>,
 }
 
 pub enum ImportResult<B: BlockT> {
@@ -37,10 +40,11 @@ pub enum ImportResult<B: BlockT> {
 }
 
 impl<B: BlockT> StateSync<B> {
-	pub fn new(target: B::Header) -> Self {
+	pub fn new(client: Arc<dyn Client<B>>, target: B::Header) -> Self {
 		StateSync {
+			client,
 			target_block: target.hash(),
-			_target_root: target.state_root().clone(),
+			target_root: target.state_root().clone(),
 			target_header: target,
 			last_key: Vec::default(),
 			state: Vec::default(),
@@ -49,24 +53,43 @@ impl<B: BlockT> StateSync<B> {
 	}
 
 	pub fn import(&mut self, response: StateResponse) -> ImportResult<B> {
-		if response.values.is_empty() && !response.complete {
-			log::info!(
+		if response.keys.is_empty() && !response.complete {
+			log::debug!(
 				target: "sync",
 				"Bad state response",
 			);
 			return ImportResult::Bad;
 		}
-		if let Some(StateEntry { key, .. }) = response.values.last() {
+		if let Some(key) = response.keys.last() {
 			self.last_key = key.clone();
 		}
 		log::info!(
 			target: "sync",
 			"Importing state {:?} to {:?}",
 			sp_core::hexdisplay::HexDisplay::from(&self.last_key),
-			response.values.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
+			response.keys.first().map(sp_core::hexdisplay::HexDisplay::from),
 		);
-		for StateEntry { key, value } in response.values {
-			self.state.push((key, value))
+
+		let values = match self.client.verify_proof(
+			&response.keys,
+			self.target_root,
+			StorageProof::new(response.proof),
+		) {
+			Err(e) => {
+				log::debug!(
+					target: "sync",
+					"StateResponse failed proof verification: {:?}",
+					e,
+				);
+				return ImportResult::Bad;
+			},
+			Ok(values) => values,
+		};
+
+		for (key, value) in values {
+			if let Some(value) = value {
+				self.state.push((key, value))
+			}
 		};
 		if response.complete {
 			self.complete = true;

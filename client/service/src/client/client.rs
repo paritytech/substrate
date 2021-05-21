@@ -52,6 +52,7 @@ use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
+	prove_read_with_size, read_proof_check,
 };
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
@@ -75,7 +76,7 @@ use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
-		changes_tries_state_at_block, StorageProvider, StorageIterProvider,
+		changes_tries_state_at_block, StorageProvider,
 		LockImportRun, apply_aux,
 	},
 	client::{
@@ -86,7 +87,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageNotifications, StorageEventStream},
 	KeyIterator, CallExecutor, ExecutorProvider, ProofProvider,
-	cht, UsageProvider, KeyValueIterator,
+	cht, UsageProvider,
 };
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
 use sp_blockchain::Error;
@@ -1321,6 +1322,26 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 			cht::size(),
 		)
 	}
+
+	fn read_proof_collection(
+		&self,
+		id: &BlockId<Block>,
+		start_key: &StorageKey,
+		size_limit: usize,
+	) -> sp_blockchain::Result<(Vec<Vec<u8>>, StorageProof)> {
+		let state = self.state_at(id)?;
+		Ok(prove_read_with_size::<_, HashFor<Block>, _>(state, start_key, size_limit)?)
+	}
+
+	/// Verify proof
+	fn verify_proof(
+		&self,
+		keys: &[Vec<u8>],
+		root: Block::Hash,
+		proof: StorageProof,
+	) -> sp_blockchain::Result<HashMap<Vec<u8>, Option<Vec<u8>>>> {
+		Ok(read_proof_check::<HashFor<Block>, _>(root, proof, keys)?)
+	}
 }
 
 
@@ -1552,25 +1573,6 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 		}
 
 		Ok(result)
-	}
-}
-
-impl<B, E, Block, RA> StorageIterProvider<Block> for Client<B, E, Block, RA> where
-	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
-	Block: BlockT,
-	B::State: 'static,
-{
-	fn storage_pairs_iter(
-		&self,
-		id: &BlockId<Block>,
-		start_key: Option<&StorageKey>
-	) -> sp_blockchain::Result<Box<dyn Iterator<Item=(StorageKey, StorageData)>>> {
-		let state = self.state_at(id)?;
-		let start_key = start_key
-			.map(|key| key.0.clone())
-			.unwrap_or_else(Vec::new);
-		Ok(Box::new(KeyValueIterator::<_, Block>::new(state, start_key)))
 	}
 }
 

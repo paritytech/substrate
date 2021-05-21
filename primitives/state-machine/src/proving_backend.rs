@@ -212,6 +212,14 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	pub fn extract_proof(&self) -> StorageProof {
 		self.0.essence().backend_storage().proof_recorder.to_storage_proof()
 	}
+
+	/// Returns the estimated encoded size of the proof.
+	///
+	/// The estimation is maybe bigger (by in maximum 4 bytes), but never smaller than the actual
+	/// encoded proof.
+	pub fn estimate_encoded_size(&self) -> usize {
+		self.0.essence().backend_storage().proof_recorder.estimate_encoded_size()
+	}
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>

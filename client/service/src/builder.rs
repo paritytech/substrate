@@ -71,7 +71,7 @@ use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
-	StorageProvider, StorageIterProvider,
+	StorageProvider,
 	proof_provider::ProofProvider,
 	execution_extensions::ExecutionExtensions
 };
@@ -862,7 +862,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		TBl: BlockT,
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
-		HeaderBackend<TBl> + BlockchainEvents<TBl> + StorageIterProvider<TBl> + 'static,
+		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
 {

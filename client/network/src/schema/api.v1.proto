@@ -74,21 +74,15 @@ message StateRequest {
 	bytes block = 1;
 	// Start from this key.
 	bytes start = 2; // optional
+
 }
 
 // Response to `BlockRequest`
 message StateResponse {
-	// State data for the requested sequence.
-	repeated StateEntry values = 1;
-	// True if storage is exhausted
-	bool complete = 2;
+	// A collection of keys.
+	repeated bytes keys = 1;
+	// Trie nodes that compose the proof for the keys above.
+	repeated bytes proof = 2;
+	// True if there are no more keys.
+	bool complete = 3;
 }
-
-// Block data sent in the response.
-message StateEntry {
-	// Storage key
-	bytes key = 1;
-	// Storage value
-	bytes value = 2; 
-}
-

@@ -726,6 +726,48 @@ mod execution {
 		prove_read_on_trie_backend(trie_backend, keys)
 	}
 
+	/// Generate storage read proof for values starting at given key.
+	/// limited by given size.
+	pub fn prove_read_with_size<B, H, K>(
+		mut backend: B,
+		start: K,
+		size_limit: usize,
+	) -> Result<(Vec<Vec<u8>>, StorageProof), Box<dyn Error>>
+	where
+		B: Backend<H>,
+		H: Hasher,
+		H::Out: Ord + Codec,
+		K: AsRef<[u8]>,
+	{
+		let trie_backend = backend.as_trie_backend()
+			.ok_or_else(
+				|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>
+			)?;
+
+		let mut current_key = start.as_ref().to_vec();
+		let mut entries_size = 0;
+		let mut keys = Vec::new();
+		let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
+		while let Some(next_key) = proving_backend.next_storage_key(&current_key)
+			.map_err(|e| Box::new(e) as Box<dyn Error>)?
+		{
+			let _value = proving_backend
+				.storage(next_key.as_ref())
+				.map_err(|e| Box::new(e) as Box<dyn Error>)?
+				.unwrap_or_default();
+
+			entries_size += next_key.len();
+			keys.push(next_key.clone());
+			let proof_size = proving_backend.estimate_encoded_size();
+			if entries_size + proof_size > size_limit {
+				break;
+			}
+			current_key = next_key;
+		}
+		let proof = proving_backend.extract_proof();
+		Ok((keys, proof))
+	}
+
 	/// Generate child storage read proof.
 	pub fn prove_child_read<B, H, I>(
 		mut backend: B,
@@ -1410,7 +1452,7 @@ mod tests {
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
- 		// check proof locally
+		// check proof locally
 		let local_result1 = read_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone(),
@@ -1421,7 +1463,7 @@ mod tests {
 			remote_proof.clone(),
 			&[&[0xff]],
 		).is_ok();
- 		// check that results are correct
+		// check that results are correct
 		assert_eq!(
 			local_result1.into_iter().collect::<Vec<_>>(),
 			vec![(b"value2".to_vec(), Some(vec![24]))],
@@ -1455,6 +1497,24 @@ mod tests {
 			local_result2.into_iter().collect::<Vec<_>>(),
 			vec![(b"value2".to_vec(), None)],
 		);
+	}
+
+	#[test]
+	fn prove_read_with_size_works() {
+		let remote_backend = trie_backend::tests::test_trie();
+		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let (keys, _) = prove_read_with_size(remote_backend, &[], 0).unwrap();
+		// Alwasys contains at least one entry, unless there's nothing following start key.
+		assert_eq!(keys.len(), 1);
+		let remote_backend = trie_backend::tests::test_trie();
+		let (keys, proof) = prove_read_with_size(remote_backend, &[], 1000).unwrap();
+		assert_eq!(keys.len(), 102);
+		let results = read_proof_check::<BlakeTwo256, _>(
+			remote_root,
+			proof,
+			&keys,
+		).unwrap();
+		assert_eq!(results.len(), 102);
 	}
 
 	#[test]

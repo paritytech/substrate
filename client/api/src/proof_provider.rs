@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Proof utilities
+use std::collections::HashMap;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT},
@@ -70,4 +71,21 @@ pub trait ProofProvider<Block: BlockT> {
 		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
+
+	/// Given a `BlockId` an iterator over all storage values building proofs until size limit is reached.
+	/// Returns collected keys and a combined proof.
+	fn read_proof_collection(
+		&self,
+		id: &BlockId<Block>,
+		start_key: &StorageKey,
+		size_limit: usize,
+	) -> sp_blockchain::Result<(Vec<Vec<u8>>, StorageProof)>;
+
+	/// Verify proof
+	fn verify_proof(
+		&self,
+		keys: &[Vec<u8>],
+		root: Block::Hash,
+		proof: StorageProof,
+	) -> sp_blockchain::Result<HashMap<Vec<u8>, Option<Vec<u8>>>>;
 }

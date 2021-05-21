@@ -21,7 +21,7 @@ use codec::{Decode};
 use crate::chain::{Client, StorageKey};
 use crate::config::ProtocolId;
 use crate::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
-use crate::schema::v1::{StateResponse, StateRequest, StateEntry};
+use crate::schema::v1::{StateResponse, StateRequest};
 use crate::{PeerId, ReputationChange};
 use futures::channel::{mpsc, oneshot};
 use futures::stream::StreamExt;
@@ -35,8 +35,7 @@ use std::time::Duration;
 use std::hash::{Hasher, Hash};
 
 const LOG_TARGET: &str = "sync";
-// This should not be lower than max possible storage key-value size.
-const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024; // Actual reponse may be bigger.
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 
 mod rep {
@@ -177,36 +176,32 @@ impl<B: BlockT> StateRequestHandler<B> {
 		);
 
 		let result = if reputation_changes.is_empty() {
-			let mut total_len = 0;
 			let mut response = StateResponse::default();
-			let iter = self.client.storage_pairs_iter(&BlockId::hash(block), Some(&StorageKey(request.start)))?;
-			response.complete = true;
-			for (k, v) in iter {
-				total_len += k.as_ref().len() + v.0.len();
-				if total_len > MAX_RESPONSE_BYTES {
-					response.complete = false;
-					break;
-				}
-				response.values.push(StateEntry { key: k.0, value: v.0 });
+			let (keys, proof) = self.client.read_proof_collection(
+				&BlockId::hash(block),
+				&StorageKey(request.start),
+				MAX_RESPONSE_BYTES,
+			)?;
+			if keys.is_empty() {
+				response.complete = true;
 			}
+
+			response.keys = keys;
+			response.proof = proof.into_nodes();
 
 			log::trace!(
 				target: LOG_TARGET,
-				"Storage response contains {} keys, {} bytes, complete= {}, from {:?} to {:?}",
-				response.values.len(),
-				total_len,
+				"Storage response contains {} keys, complete={}, from {:?} to {:?}",
+				response.keys.len(),
 				response.complete,
-				response.values.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
-				response.values.last().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
+				response.keys.first().map(sp_core::hexdisplay::HexDisplay::from),
+				response.keys.last().map(sp_core::hexdisplay::HexDisplay::from),
 			);
-			// If response contains nay data, we can consider it as successful request.
-			if !response.values.is_empty() {
-				if let Some(value) = self.seen_requests.get_mut(&key) {
-					// If this is the first time we have processed this request, we need to change
-					// it to `Fulfilled`.
-					if let SeenRequestsValue::First = value {
-						*value = SeenRequestsValue::Fulfilled(1);
-					}
+			if let Some(value) = self.seen_requests.get_mut(&key) {
+				// If this is the first time we have processed this request, we need to change
+				// it to `Fulfilled`.
+				if let SeenRequestsValue::First = value {
+					*value = SeenRequestsValue::Fulfilled(1);
 				}
 			}
 
