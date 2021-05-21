@@ -85,12 +85,21 @@ pub mod pallet {
 		/// The basic amount of funds that must be reserved when adding metadata to your asset.
 		type MetadataDepositBase: Get<DepositBalanceOf<Self, I>>;
 
-		/// The additional funds that must be reserved for the number of bytes you store in your
-		/// metadata.
-		type MetadataDepositPerByte: Get<DepositBalanceOf<Self, I>>;
+		/// The basic amount of funds that must be reserved when adding an attribute to an asset.
+		type AttributeDepositBase: Get<DepositBalanceOf<Self, I>>;
+
+		/// The additional funds that must be reserved for the number of bytes store in metadata,
+		/// either "normal" metadata or attribute metadata.
+		type DepositPerByte: Get<DepositBalanceOf<Self, I>>;
 
 		/// The maximum length of a name or symbol stored on-chain.
 		type StringLimit: Get<u32>;
+
+		/// The maximum length of an attribute key.
+		type KeyLimit: Get<u32>;
+
+		/// The maximum length of an attribute value.
+		type ValueLimit: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -153,6 +162,19 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	#[pallet::storage]
+	/// Metadata of an asset class.
+	pub(super) type Attribute<T: Config<I>, I: 'static = ()> = StorageNMap<
+		_,
+		(
+			NMapKey<Blake2_128Concat, T::ClassId>,
+			NMapKey<Blake2_128Concat, Option<T::InstanceId>>,
+			NMapKey<Blake2_128Concat, Vec<u8>>,
+		),
+		(Vec<u8>, DepositBalanceOf<T, I>),
+		OptionQuery
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	#[pallet::metadata(
@@ -207,6 +229,12 @@ pub mod pallet {
 		MetadataCleared(T::ClassId, T::InstanceId),
 		/// Metadata has been cleared for an asset instance. \[ class, successful_instances \]
 		Redeposited(T::ClassId, Vec<T::InstanceId>),
+		/// New attribute metadata has been set for an asset class or instance.
+		/// \[ class, maybe_instance, key, value \]
+		AttributeSet(T::ClassId, Option<T::InstanceId>, Vec<u8>, Vec<u8>),
+		/// Attribute metadata has been cleared for an asset class or instance.
+		/// \[ class, maybe_instance, key, maybe_value \]
+		AttributeCleared(T::ClassId, Option<T::InstanceId>, Vec<u8>),
 	}
 
 	#[pallet::error]
@@ -288,6 +316,7 @@ pub mod pallet {
 					free_holding: false,
 					instances: 0,
 					instance_metadatas: 0,
+					attributes: 0,
 					is_frozen: false,
 				},
 			);
@@ -334,6 +363,7 @@ pub mod pallet {
 					free_holding,
 					instances: 0,
 					instance_metadatas: 0,
+					attributes: 0,
 					is_frozen: false,
 				},
 			);
@@ -353,11 +383,13 @@ pub mod pallet {
 		/// Emits `Destroyed` event when successful.
 		///
 		/// Weight: `O(n + m)` where:
-		/// - `n = witness.instances - witness.instance_metdadatas`
+		/// - `n = witness.instances`
 		/// - `m = witness.instance_metdadatas`
+		/// - `a = witness.attributes`
 		#[pallet::weight(T::WeightInfo::destroy(
-			witness.instances.saturating_sub(witness.instance_metadatas),
+			witness.instances,
  			witness.instance_metadatas,
+			witness.attributes,
  		))]
 		pub(super) fn destroy(
 			origin: OriginFor<T>,
@@ -375,12 +407,14 @@ pub mod pallet {
 				}
 				ensure!(class_details.instances == witness.instances, Error::<T, I>::BadWitness);
 				ensure!(class_details.instance_metadatas == witness.instance_metadatas, Error::<T, I>::BadWitness);
+				ensure!(class_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
 
 				for (instance, details) in Asset::<T, I>::drain_prefix(&class) {
 					Account::<T, I>::remove((&details.owner, &class, &instance));
 				}
 				InstanceMetadataOf::<T, I>::remove_prefix(&class);
 				ClassMetadataOf::<T, I>::remove(&class);
+				Attribute::<T, I>::remove_prefix((&class,));
 				T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
 
 				Self::deposit_event(Event::Destroyed(class));
@@ -474,13 +508,6 @@ pub mod pallet {
 				T::Currency::unreserve(&class_details.owner, details.deposit);
 				class_details.total_deposit.saturating_reduce(details.deposit);
 				class_details.instances.saturating_dec();
-
-				if let Some(metadata) = InstanceMetadataOf::<T, I>::take(&class, &instance) {
-					// Remove instance metadata
-					T::Currency::unreserve(&class_details.owner, metadata.deposit);
-					class_details.total_deposit.saturating_reduce(metadata.deposit);
-					class_details.instance_metadatas.saturating_dec();
-				}
 				Ok(details.owner)
 			})?;
 
@@ -925,13 +952,131 @@ pub mod pallet {
 			})
 		}
 
+		/// Set an attribute for an asset class or instance.
+		///
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// asset `class`.
+		///
+		/// If the origin is Signed, then funds of signer are reserved according to the formula:
+		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
+		/// account any already reserved funds.
+		///
+		/// - `class`: The identifier of the asset class whose instance's metadata to set.
+		/// - `instance`: The identifier of the asset instance whose metadata to set.
+		/// - `key`: The key of the attribute.
+		/// - `value`: The value to which to set the attribute.
+		///
+		/// Emits `AttributeSet`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::set_attribute())]
+		pub(super) fn set_attribute(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			maybe_instance: Option<T::InstanceId>,
+			key: Vec<u8>,
+			value: Vec<u8>,
+		) -> DispatchResult {
+			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some))?;
+
+			ensure!(key.len() <= T::KeyLimit::get() as usize, Error::<T, I>::BadMetadata);
+			ensure!(value.len() <= T::ValueLimit::get() as usize, Error::<T, I>::BadMetadata);
+
+			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			if let Some(check_owner) = &maybe_check_owner {
+				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
+			}
+			let maybe_is_frozen = match maybe_instance {
+				None => ClassMetadataOf::<T, I>::get(class).map(|v| v.is_frozen),
+				Some(instance) =>
+					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen),
+			};
+			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+
+			let attribute = Attribute::<T, I>::get((class, maybe_instance, &key));
+			if attribute.is_none() {
+				class_details.attributes.saturating_inc();
+			}
+			let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
+			class_details.total_deposit.saturating_reduce(old_deposit);
+			let mut deposit = Zero::zero();
+			if !class_details.free_holding && maybe_check_owner.is_some() {
+				deposit = T::DepositPerByte::get()
+					.saturating_mul(((key.len() + value.len()) as u32).into())
+					.saturating_add(T::AttributeDepositBase::get());
+			}
+			class_details.total_deposit.saturating_accrue(deposit);
+			if deposit > old_deposit {
+				T::Currency::reserve(&class_details.owner, deposit - old_deposit)?;
+			} else if deposit < old_deposit {
+				T::Currency::unreserve(&class_details.owner, old_deposit - deposit);
+			}
+
+			Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
+			Class::<T, I>::insert(class, &class_details);
+			Self::deposit_event(Event::AttributeSet(class, maybe_instance, key, value));
+			Ok(())
+		}
+
+		/// Set an attribute for an asset class or instance.
+		///
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// asset `class`.
+		///
+		/// If the origin is Signed, then funds of signer are reserved according to the formula:
+		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
+		/// account any already reserved funds.
+		///
+		/// - `class`: The identifier of the asset class whose instance's metadata to set.
+		/// - `instance`: The identifier of the asset instance whose metadata to set.
+		/// - `key`: The key of the attribute.
+		/// - `value`: The value to which to set the attribute.
+		///
+		/// Emits `AttributeSet`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::clear_attribute())]
+		pub(super) fn clear_attribute(
+			origin: OriginFor<T>,
+			#[pallet::compact] class: T::ClassId,
+			maybe_instance: Option<T::InstanceId>,
+			key: Vec<u8>,
+		) -> DispatchResult {
+			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some))?;
+
+			ensure!(key.len() <= T::KeyLimit::get() as usize, Error::<T, I>::BadMetadata);
+			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			if let Some(check_owner) = &maybe_check_owner {
+				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
+			}
+			let maybe_is_frozen = match maybe_instance {
+				None => ClassMetadataOf::<T, I>::get(class).map(|v| v.is_frozen),
+				Some(instance) =>
+					InstanceMetadataOf::<T, I>::get(class, instance).map(|v| v.is_frozen),
+			};
+			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+
+			if let Some((_, deposit)) = Attribute::<T, I>::take((class, maybe_instance, &key)) {
+				class_details.attributes.saturating_dec();
+				class_details.total_deposit.saturating_reduce(deposit);
+				T::Currency::unreserve(&class_details.owner, deposit);
+				Class::<T, I>::insert(class, &class_details);
+				Self::deposit_event(Event::AttributeCleared(class, maybe_instance, key));
+			}
+			Ok(())
+		}
+
 		/// Set the metadata for an asset instance.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `class`.
 		///
 		/// If the origin is Signed, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + MetadataDepositPerByte * (name.len + info.len)` taking into
+		/// `MetadataDepositBase + DepositPerByte * (name.len + info.len)` taking into
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset class whose instance's metadata to set.
@@ -943,7 +1088,7 @@ pub mod pallet {
 		/// Emits `MetadataSet`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, info.len() as u32))]
+		#[pallet::weight(T::WeightInfo::set_metadata())]
 		pub(super) fn set_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
@@ -966,8 +1111,6 @@ pub mod pallet {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			ensure!(Asset::<T, I>::contains_key(&class, &instance), Error::<T, I>::Unknown);
-
 			InstanceMetadataOf::<T, I>::try_mutate_exists(class, instance, |metadata| {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
@@ -979,7 +1122,7 @@ pub mod pallet {
 				class_details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
 				if !class_details.free_holding && maybe_check_owner.is_some() {
-					deposit = T::MetadataDepositPerByte::get()
+					deposit = T::DepositPerByte::get()
 						.saturating_mul(((name.len() + info.len()) as u32).into())
 						.saturating_add(T::MetadataDepositBase::get());
 				}
@@ -1055,7 +1198,7 @@ pub mod pallet {
 		/// the asset `class`.
 		///
 		/// If the origin is `Signed`, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + MetadataDepositPerByte * name.len` taking into
+		/// `MetadataDepositBase + DepositPerByte * name.len` taking into
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset whose metadata to update.
@@ -1065,7 +1208,7 @@ pub mod pallet {
 		/// Emits `ClassMetadataSet`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::set_class_metadata(name.len() as u32, info.len() as u32))]
+		#[pallet::weight(T::WeightInfo::set_class_metadata())]
 		pub(super) fn set_class_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
@@ -1093,7 +1236,7 @@ pub mod pallet {
 				details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
 				if maybe_check_owner.is_some() && !details.free_holding {
-					deposit = T::MetadataDepositPerByte::get()
+					deposit = T::DepositPerByte::get()
 						.saturating_mul(((name.len() + info.len()) as u32).into())
 						.saturating_add(T::MetadataDepositBase::get());
 				}

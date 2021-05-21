@@ -102,6 +102,25 @@ fn add_instance_metadata<T: Config<I>, I: 'static>(instance: T::InstanceId)
 	(caller, caller_lookup)
 }
 
+fn add_instance_attribute<T: Config<I>, I: 'static>(instance: T::InstanceId)
+	-> (Vec<u8>, T::AccountId, <T::Lookup as StaticLookup>::Source)
+{
+	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
+	if caller != whitelisted_caller() {
+		whitelist_account!(caller);
+	}
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
+	let key = vec![0; T::KeyLimit::get() as usize];
+	assert!(Uniques::<T, I>::set_attribute(
+		SystemOrigin::Signed(caller.clone()).into(),
+		Default::default(),
+		Some(instance),
+		key.clone(),
+		vec![0; T::ValueLimit::get() as usize],
+	).is_ok());
+	(key, caller, caller_lookup)
+}
+
 fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
 	let events = frame_system::Pallet::<T>::events();
 	let system_event: <T as frame_system::Config>::Event = generic_event.into();
@@ -137,18 +156,20 @@ benchmarks_instance_pallet! {
 	}
 
 	destroy {
-		let n in 0 .. 5_000;
-		let m in 0 .. 5_000;
+		let n in 0 .. 1_000;
+		let m in 0 .. 1_000;
+		let a in 0 .. 1_000;
 
-		let (class, caller, _) = create_class::<T, I>();
+		let (class, caller, caller_lookup) = create_class::<T, I>();
 		add_class_metadata::<T, I>();
-		for i in 0..n + m {
-			// create instance
-			let (instance, ..) = mint_instance::<T, I>(i as u16);
-			if i < m {
-				// add metadata
-				add_instance_metadata::<T, I>(instance);
-			}
+		for i in 0..n {
+			mint_instance::<T, I>(i as u16);
+		}
+		for i in 0..m {
+			add_instance_metadata::<T, I>((i as u16).into());
+		}
+		for i in 0..a {
+			add_instance_attribute::<T, I>((i as u16).into());
 		}
 		let witness = Class::<T, I>::get(class).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), class, witness)
@@ -167,7 +188,6 @@ benchmarks_instance_pallet! {
 	burn {
 		let (class, caller, caller_lookup) = create_class::<T, I>();
 		let (instance, ..) = mint_instance::<T, I>(0);
-		add_instance_metadata::<T, I>(instance);
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance, Some(caller_lookup))
 	verify {
 		assert_last_event::<T, I>(Event::Burned(class, instance, caller).into());
@@ -282,12 +302,31 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::AssetStatusChanged(class).into());
 	}
 
-	set_metadata {
-		let n in 0 .. T::StringLimit::get();
-		let i in 0 .. T::StringLimit::get();
+	set_attribute {
+		let key = vec![0u8; T::KeyLimit::get() as usize];
+		let value = vec![0u8; T::ValueLimit::get() as usize];
 
-		let name = vec![0u8; n as usize];
-		let info = vec![0u8; i as usize];
+		let (class, caller, _) = create_class::<T, I>();
+		let (instance, ..) = mint_instance::<T, I>(0);
+		add_instance_metadata::<T, I>(instance);
+	}: _(SystemOrigin::Signed(caller), class, Some(instance), key.clone(), value.clone())
+	verify {
+		assert_last_event::<T, I>(Event::AttributeSet(class, Some(instance), key, value).into());
+	}
+
+	clear_attribute {
+		let (class, caller, _) = create_class::<T, I>();
+		let (instance, ..) = mint_instance::<T, I>(0);
+		add_instance_metadata::<T, I>(instance);
+		let (key, ..) = add_instance_attribute::<T, I>(instance);
+	}: _(SystemOrigin::Signed(caller), class, Some(instance), key.clone())
+	verify {
+		assert_last_event::<T, I>(Event::AttributeCleared(class, Some(instance), key).into());
+	}
+
+	set_metadata {
+		let name = vec![0u8; T::StringLimit::get() as usize];
+		let info = vec![0u8; T::StringLimit::get() as usize];
 
 		let (class, caller, _) = create_class::<T, I>();
 		let (instance, ..) = mint_instance::<T, I>(0);
@@ -306,11 +345,8 @@ benchmarks_instance_pallet! {
 	}
 
 	set_class_metadata {
-		let n in 0 .. T::StringLimit::get();
-		let i in 0 .. T::StringLimit::get();
-
-		let name = vec![0u8; n as usize];
-		let info = vec![0u8; i as usize];
+		let name = vec![0u8; T::StringLimit::get() as usize];
+		let info = vec![0u8; T::StringLimit::get() as usize];
 
 		let (class, caller, _) = create_class::<T, I>();
 	}: _(SystemOrigin::Signed(caller), class, name.clone(), info.clone(), false)

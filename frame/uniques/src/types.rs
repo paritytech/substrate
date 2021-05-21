@@ -44,6 +44,8 @@ pub struct ClassDetails<
 	pub(super) instances: u32,
 	/// The total number of outstanding instance metadata of this asset class.
 	pub(super) instance_metadatas: u32,
+	/// The total number of attributes for this asset class.
+	pub(super) attributes: u32,
 	/// Whether the asset is frozen for non-admin transfers.
 	pub(super) is_frozen: bool,
 }
@@ -57,6 +59,9 @@ pub struct DestroyWitness {
 	/// The total number of outstanding instance metadata of this asset class.
 	#[codec(compact)]
 	pub(super) instance_metadatas: u32,
+	#[codec(compact)]
+	/// The total number of attributes for this asset class.
+	pub(super) attributes: u32,
 }
 
 impl<AccountId, DepositBalance> ClassDetails<AccountId, DepositBalance> {
@@ -64,6 +69,7 @@ impl<AccountId, DepositBalance> ClassDetails<AccountId, DepositBalance> {
 		DestroyWitness {
 			instances: self.instances,
 			instance_metadatas: self.instance_metadatas,
+			attributes: self.attributes,
 		}
 	}
 }
