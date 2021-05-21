@@ -96,7 +96,7 @@
 //! ### Privileged Functions
 //! * `destroy`: Destroys an entire asset class; called by the asset class's Owner.
 //! * `mint`: Increases the asset balance of an account; called by the asset class's Issuer.
-//! * `burn`: Decreases the asset balance of an account; called by the asset class's Admin.
+//! * `slash`: Decreases the asset balance of an account; called by the asset class's Admin.
 //! * `force_transfer`: Transfers between arbitrary accounts; called by the asset class's Admin.
 //! * `freeze`: Disallows further `transfer`s from an account; called by the asset class's Freezer.
 //! * `thaw`: Allows further `transfer`s from an account; called by the asset class's Admin.
