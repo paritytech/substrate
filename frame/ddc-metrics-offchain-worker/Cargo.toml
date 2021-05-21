@@ -1,5 +1,5 @@
 [package]
-name = "pallet-example-offchain-worker"
+name = "pallet-ddc-metrics-offchain-worker"
 version = "2.0.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -21,7 +21,13 @@ sp-core = { version = "2.0.0", default-features = false, path = "../../primitive
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+pallet-contracts  = { version = '2.0.0', default-features = false, path = "../contracts" }
 lite-json = { version = "0.1", default-features = false }
+alt_serde = { version = "1", default-features = false, features = ["derive"] }
+serde_json = { version = "1", default-features = false, git = "https://github.com/Cerebellum-Network/json", branch = "no-std-cere", features = ["alloc"] }
+# pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../contracts/rpc/runtime-api/" }
+hex-literal = "^0.3.1"
+hex = { version = "0.4", default-features = false }
 
 [features]
 default = ["std"]
@@ -35,4 +41,12 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"pallet-contracts/std",
+	# "pallet-contracts-rpc-runtime-api/std",
 ]
+
+[dev-dependencies]
+pallet-balances = { version = "2.0.0", path = "../balances" }
+pallet-timestamp = { version = "2.0.0", path = "../timestamp" }
+pallet-randomness-collective-flip = { version = "2.0.0", path = "../randomness-collective-flip" }
+pretty_assertions = "0.6.1"

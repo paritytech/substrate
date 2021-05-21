@@ -71,6 +71,7 @@ use sp_inherents::{InherentData, CheckInherentsResult};
 use static_assertions::const_assert;
 pub use pallet_cere_ddc;
 pub use pallet_chainbridge;
+pub use pallet_ddc_metrics_offchain_worker;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -114,7 +115,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 263,
+	spec_version: 265,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -938,6 +939,31 @@ impl pallet_erc20::Trait for Runtime {
 	type Erc721Id = NFTTokenId;
 }
 
+parameter_types! {
+	pub MetricsContractId: AccountId = {
+		AccountId::from(pallet_ddc_metrics_offchain_worker::get_contract_id())
+	};
+
+	pub const OcwBlockInterval: u32 = pallet_ddc_metrics_offchain_worker::BLOCK_INTERVAL;
+
+	pub DdcUrl: Vec<u8> = {
+		pallet_ddc_metrics_offchain_worker::get_ddc_url_or_default("https://node-0.ddc.stage.cere.network")
+	};
+}
+
+impl pallet_ddc_metrics_offchain_worker::Trait for Runtime {
+	type ContractId = MetricsContractId;
+	type BlockInterval = OcwBlockInterval;
+	type DdcUrl = DdcUrl;
+
+	type CT = Self;
+	type CST = Self;
+	type AuthorityId = pallet_ddc_metrics_offchain_worker::crypto::TestAuthId;
+
+	type Event = Event;
+	type Call = Call;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -980,6 +1006,7 @@ construct_runtime!(
 		ChainBridge: pallet_chainbridge::{Module, Call, Storage, Event<T>},
 		Erc721: pallet_erc721::{Module, Call, Storage, Event<T>},
 		Erc20: pallet_erc20::{Module, Call, Event<T>},
+		DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Module, Call, Event<T>},
 	}
 );
 
