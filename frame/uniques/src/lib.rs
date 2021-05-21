@@ -183,27 +183,27 @@ pub mod pallet {
 		T::InstanceId = "InstanceId",
 	)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// Some asset class was created. \[class, creator, owner\]
+		/// An asset class was created. \[ class, creator, owner \]
 		Created(T::ClassId, T::AccountId, T::AccountId),
-		/// Some asset class was force-created. \[class, owner\]
+		/// An asset class was force-created. \[ class, owner \]
 		ForceCreated(T::ClassId, T::AccountId),
-		/// An asset class was destroyed.
+		/// An asset `class` was destroyed. \[ class \]
 		Destroyed(T::ClassId),
-		/// Some assets were issued. \[class, instance, owner\]
+		/// An asset `instace` was issued. \[ class, instance, owner \]
 		Issued(T::ClassId, T::InstanceId, T::AccountId),
-		/// Some assets were transferred. \[class, instance, from, to\]
+		/// An asset `instace` was transferred. \[ class, instance, from, to \]
 		Transferred(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
-		/// Some assets were destroyed. \[class, instance, owner\]
+		/// An asset `instance` was destroyed. \[ class, instance, owner \]
 		Burned(T::ClassId, T::InstanceId, T::AccountId),
-		/// Some account `who` was frozen. \[ class, instance \]
+		/// Some asset `instance` was frozen. \[ class, instance \]
 		Frozen(T::ClassId, T::InstanceId),
-		/// Some account `who` was thawed. \[ class, instance \]
+		/// Some asset `instance` was thawed. \[ class, instance \]
 		Thawed(T::ClassId, T::InstanceId),
 		/// Some asset `class` was frozen. \[ class \]
 		ClassFrozen(T::ClassId),
 		/// Some asset `class` was thawed. \[ class \]
 		ClassThawed(T::ClassId),
-		/// The owner changed \[ class, owner \]
+		/// The owner changed \[ class, new_owner \]
 		OwnerChanged(T::ClassId, T::AccountId),
 		/// The management team changed \[ class, issuer, admin, freezer \]
 		TeamChanged(T::ClassId, T::AccountId, T::AccountId, T::AccountId),
