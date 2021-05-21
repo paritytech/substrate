@@ -600,18 +600,19 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 				}),
 			None => {
 				let best_hash = client.usage_info().chain.best_hash;
-				let genesis_slot_duration =
+				let slot_duration =
 					cb(client.runtime_api(), &BlockId::hash(best_hash))?;
 
 				info!(
-					"⏱  Loaded block-time = {:?} from genesis on first-launch",
-					genesis_slot_duration.slot_duration(),
+					"⏱  Loaded block-time = {:?} from block {:?}",
+					slot_duration.slot_duration(),
+					best_hash,
 				);
 
-				genesis_slot_duration
+				slot_duration
 					.using_encoded(|s| client.insert_aux(&[(T::SLOT_KEY, &s[..])], &[]))?;
 
-				Ok(SlotDuration(genesis_slot_duration))
+				Ok(SlotDuration(slot_duration))
 			}
 		}?;
 
