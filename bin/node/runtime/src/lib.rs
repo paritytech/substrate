@@ -328,7 +328,7 @@ impl pallet_babe::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const IndexDeposit: Balance = 1 * DOLLARS;
+	pub const IndexDeposit: Balance = 10 * DOLLARS;
 }
 
 impl pallet_indices::Trait for Runtime {
@@ -384,7 +384,7 @@ impl pallet_timestamp::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const UncleGenerations: BlockNumber = 5;
+	pub const UncleGenerations: BlockNumber = 0;
 }
 
 impl pallet_authorship::Trait for Runtime {
@@ -522,7 +522,7 @@ impl pallet_democracy::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const CouncilMotionDuration: BlockNumber = 5 * DAYS;
+	pub const CouncilMotionDuration: BlockNumber = 7 * DAYS;
 	pub const CouncilMaxProposals: u32 = 100;
 	pub const CouncilMaxMembers: u32 = 100;
 }
@@ -540,11 +540,11 @@ impl pallet_collective::Trait<CouncilCollective> for Runtime {
 }
 
 parameter_types! {
-	pub const CandidacyBond: Balance = 10 * DOLLARS;
+	pub const CandidacyBond: Balance = 100 * DOLLARS;
 	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
-	pub const DesiredRunnersUp: u32 = 7;
+	pub const DesiredRunnersUp: u32 = 20;
 	pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 }
 
@@ -607,7 +607,7 @@ impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {
 
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
-	pub const ProposalBondMinimum: Balance = 1 * DOLLARS;
+	pub const ProposalBondMinimum: Balance = 100 * DOLLARS;
 	pub const SpendPeriod: BlockNumber = 1 * DAYS;
 	pub const Burn: Permill = Permill::from_percent(0);
 	pub const TipCountdown: BlockNumber = 1 * DAYS;
@@ -615,12 +615,12 @@ parameter_types! {
 	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
 	pub const DataDepositPerByte: Balance = 1 * CENTS;
 	pub const BountyDepositBase: Balance = 1 * DOLLARS;
-	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
+	pub const BountyDepositPayoutDelay: BlockNumber = 8 * DAYS;
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
-	pub const BountyUpdatePeriod: BlockNumber = 14 * DAYS;
+	pub const BountyUpdatePeriod: BlockNumber = 90 * DAYS;
 	pub const MaximumReasonLength: u32 = 16384;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
-	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
+	pub const BountyValueMinimum: Balance = 10 * DOLLARS;
 }
 
 impl pallet_treasury::Trait for Runtime {
@@ -876,7 +876,7 @@ impl pallet_society::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
+	pub const MinVestedTransfer: Balance = 1 * DOLLARS;
 }
 
 impl pallet_vesting::Trait for Runtime {
