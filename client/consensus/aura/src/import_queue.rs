@@ -20,14 +20,14 @@
 
 use crate::{AuthorityId, find_pre_digest, slot_author, aura_err, Error, authorities};
 use std::{
-	sync::Arc, marker::PhantomData, hash::Hash, fmt::Debug, collections::HashMap,
+	sync::Arc, marker::PhantomData, hash::Hash, fmt::Debug,
 };
 use log::{debug, info, trace};
 use prometheus_endpoint::Registry;
 use codec::{Encode, Decode, Codec};
 use sp_consensus::{
 	BlockImport, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
-	BlockOrigin, Error as ConsensusError, BlockCheckParams, ImportResult,
+	BlockOrigin, Error as ConsensusError,
 	import_queue::{
 		Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport,
 	},
@@ -352,91 +352,6 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 		.map_err(map_err)?;
 
 	Ok(())
-}
-
-/// A block-import handler for Aura.
-pub struct AuraBlockImport<Block: BlockT, C, I: BlockImport<Block>, P> {
-	inner: I,
-	client: Arc<C>,
-	_phantom: PhantomData<(Block, P)>,
-}
-
-impl<Block: BlockT, C, I: Clone + BlockImport<Block>, P> Clone for AuraBlockImport<Block, C, I, P> {
-	fn clone(&self) -> Self {
-		AuraBlockImport {
-			inner: self.inner.clone(),
-			client: self.client.clone(),
-			_phantom: PhantomData,
-		}
-	}
-}
-
-impl<Block: BlockT, C, I: BlockImport<Block>, P> AuraBlockImport<Block, C, I, P> {
-	/// New aura block import.
-	pub fn new(
-		inner: I,
-		client: Arc<C>,
-	) -> Self {
-		Self {
-			inner,
-			client,
-			_phantom: PhantomData,
-		}
-	}
-}
-
-#[async_trait::async_trait]
-impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I, P> where
-	I: BlockImport<Block, Transaction = sp_api::TransactionFor<C, Block>> + Send + Sync,
-	I::Error: Into<ConsensusError>,
-	C: HeaderBackend<Block> + ProvideRuntimeApi<Block>,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
-	P::Signature: Encode + Decode,
-	sp_api::TransactionFor<C, Block>: Send + 'static,
-{
-	type Error = ConsensusError;
-	type Transaction = sp_api::TransactionFor<C, Block>;
-
-	async fn check_block(
-		&mut self,
-		block: BlockCheckParams<Block>,
-	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(block).await.map_err(Into::into)
-	}
-
-	async fn import_block(
-		&mut self,
-		block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
-	) -> Result<ImportResult, Self::Error> {
-		let hash = block.post_hash();
-		let slot = find_pre_digest::<Block, P::Signature>(&block.header)
-			.expect("valid Aura headers must contain a predigest; \
-					 header has been already verified; qed");
-
-		let parent_hash = *block.header.parent_hash();
-		let parent_header = self.client.header(BlockId::Hash(parent_hash))
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
-			.ok_or_else(|| ConsensusError::ChainLookup(aura_err(
-				Error::<Block>::ParentUnavailable(parent_hash, hash)
-			).into()))?;
-
-		let parent_slot = find_pre_digest::<Block, P::Signature>(&parent_header)
-			.expect("valid Aura headers contain a pre-digest; \
-					parent header has already been verified; qed");
-
-		// make sure that slot number is strictly increasing
-		if slot <= parent_slot {
-			return Err(
-				ConsensusError::ClientImport(aura_err(
-					Error::<Block>::SlotMustIncrease(parent_slot, slot)
-				).into())
-			);
-		}
-
-		self.inner.import_block(block, new_cache).await.map_err(Into::into)
-	}
 }
 
 /// Should we check for equivocation of a block author?

@@ -71,7 +71,7 @@ pub use sp_consensus_aura::{
 };
 pub use sp_consensus::SyncOracle;
 pub use import_queue::{
-	ImportQueueParams, import_queue, AuraBlockImport, CheckForEquivocation,
+	ImportQueueParams, import_queue, CheckForEquivocation,
 	build_verifier, BuildVerifierParams, AuraVerifier,
 };
 pub use sc_consensus_slots::SlotProportion;
@@ -494,8 +494,6 @@ enum Error<B: BlockT> {
 	#[display(fmt = "Bad signature on {:?}", _0)]
 	BadSignature(B::Hash),
 	Client(sp_blockchain::Error),
-	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
-	SlotMustIncrease(Slot, Slot),
 	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
 	ParentUnavailable(B::Hash, B::Hash),
 	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
