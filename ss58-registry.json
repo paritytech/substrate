@@ -85,11 +85,11 @@
 		{
 			"prefix": 8,
 			"network": "karura",
-			"displayName": "Acala Karura Canary",
+			"displayName": "Karura",
 			"symbols": ["KAR"],
-			"decimals": [18],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": "https://acala.network/"
+			"website": "https://karura.network/"
 		},
 		{
 			"prefix": 9,
@@ -105,7 +105,7 @@
 			"network": "acala",
 			"displayName": "Acala",
 			"symbols": ["ACA"],
-			"decimals": [18],
+			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://acala.network/"
 		},

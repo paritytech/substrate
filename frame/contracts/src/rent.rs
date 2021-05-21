@@ -28,6 +28,7 @@ use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	storage::child,
 	traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons},
+	DefaultNoBound,
 };
 use pallet_contracts_primitives::{ContractAccessError, RentProjection, RentProjectionResult};
 use sp_runtime::{
@@ -35,54 +36,32 @@ use sp_runtime::{
 	traits::{Bounded, CheckedDiv, CheckedMul, SaturatedConversion, Saturating, Zero},
 };
 
-/// The amount to charge.
+/// Information about the required deposit and resulting rent.
 ///
-/// This amount respects the contract's rent allowance and the subsistence deposit.
-/// Because of that, charging the amount cannot remove the contract.
-struct OutstandingAmount<T: Config> {
-	amount: BalanceOf<T>,
-}
-
-impl<T: Config> OutstandingAmount<T> {
-	/// Create the new outstanding amount.
-	///
-	/// The amount should be always withdrawable and it should not kill the account.
-	fn new(amount: BalanceOf<T>) -> Self {
-		Self { amount }
-	}
-
-	/// Returns the amount this instance wraps.
-	fn peek(&self) -> BalanceOf<T> {
-		self.amount
-	}
-
-	/// Withdraws the outstanding amount from the given account.
-	fn withdraw(self, account: &T::AccountId) {
-		if let Ok(imbalance) = T::Currency::withdraw(
-			account,
-			self.amount,
-			WithdrawReasons::FEE,
-			ExistenceRequirement::KeepAlive,
-		) {
-			// This should never fail. However, let's err on the safe side.
-			T::RentPayment::on_unbalanced(imbalance);
-		}
-	}
-}
-
-enum Verdict<T: Config> {
-	/// The contract is exempted from paying rent.
-	///
-	/// For example, it already paid its rent in the current block, or it has enough deposit for not
-	/// paying rent at all.
-	Exempt,
-	/// The contract cannot afford payment within its rent budget so it gets evicted. However,
-	/// because its balance is greater than the subsistence threshold it leaves a tombstone.
-	Evict {
-		amount: Option<OutstandingAmount<T>>,
-	},
-	/// Everything is OK, we just only take some charge.
-	Charge { amount: OutstandingAmount<T> },
+/// The easiest way to guarantee that a contract stays alive is to assert that
+/// `max_rent == 0` at the **end** of a contract's execution.
+///
+/// # Note
+///
+/// The `current_*` fields do **not** consider changes to the code's refcount made during
+/// the currently running call.
+#[derive(codec::Encode, DefaultNoBound)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
+pub struct RentStatus<T: Config> {
+	/// Required deposit assuming that this contract is the only user of its code.
+	pub max_deposit: BalanceOf<T>,
+	/// Required deposit assuming the code's current refcount.
+	pub current_deposit: BalanceOf<T>,
+	/// Required deposit assuming the specified refcount (None if 0 is supplied).
+	pub custom_refcount_deposit: Option<BalanceOf<T>>,
+	/// Rent that is paid assuming that the contract is the only user of its code.
+	pub max_rent: BalanceOf<T>,
+	/// Rent that is paid given the code's current refcount.
+	pub current_rent: BalanceOf<T>,
+	/// Rent that is paid assuming the specified refcount (None is 0 is supplied).
+	pub custom_refcount_rent: Option<BalanceOf<T>>,
+	/// Reserved for backwards compatible changes to this data structure.
+	pub _reserved: Option<()>,
 }
 
 pub struct Rent<T, E>(sp_std::marker::PhantomData<(T, E)>);
@@ -93,24 +72,304 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Executable<T>,
 {
-	/// Returns a fee charged per block from the contract.
+	/// Make account paying the rent for the current block number
 	///
-	/// This function accounts for the storage rent deposit. I.e. if the contract possesses enough funds
-	/// then the fee can drop to zero.
-	fn compute_fee_per_block(
+	/// This functions does **not** evict the contract. It returns `None` in case the
+	/// contract is in need of eviction. [`try_eviction`] must
+	/// be called to perform the eviction.
+	pub fn charge(
+		account: &T::AccountId,
+		contract: AliveContractInfo<T>,
+		code_size: u32,
+	) -> Result<Option<AliveContractInfo<T>>, DispatchError> {
+		let current_block_number = <frame_system::Pallet<T>>::block_number();
+		let verdict = Self::consider_case(
+			account,
+			current_block_number,
+			Zero::zero(),
+			&contract,
+			code_size,
+		);
+		Self::enact_verdict(account, contract, current_block_number, verdict, None)
+	}
+
+	/// Process a report that a contract under the given address should be evicted.
+	///
+	/// Enact the eviction right away if the contract should be evicted and return the amount
+	/// of rent that the contract payed over its lifetime.
+	/// Otherwise, **do nothing** and return None.
+	///
+	/// The `handicap` parameter gives a way to check the rent to a moment in the past instead
+	/// of current block. E.g. if the contract is going to be evicted at the current block,
+	/// `handicap = 1` can defer the eviction for 1 block. This is useful to handicap certain snitchers
+	/// relative to others.
+	///
+	/// NOTE this function performs eviction eagerly. All changes are read and written directly to
+	/// storage.
+	pub fn try_eviction(
+		account: &T::AccountId,
+		handicap: T::BlockNumber,
+	) -> Result<(Option<BalanceOf<T>>, u32), DispatchError> {
+		let contract = <ContractInfoOf<T>>::get(account);
+		let contract = match contract {
+			None | Some(ContractInfo::Tombstone(_)) => return Ok((None, 0)),
+			Some(ContractInfo::Alive(contract)) => contract,
+		};
+		let module = PrefabWasmModule::<T>::from_storage_noinstr(contract.code_hash)?;
+		let code_len = module.code_len();
+		let current_block_number = <frame_system::Pallet<T>>::block_number();
+		let verdict = Self::consider_case(
+			account,
+			current_block_number,
+			handicap,
+			&contract,
+			module.occupied_storage(),
+		);
+
+		// Enact the verdict only if the contract gets removed.
+		match verdict {
+			Verdict::Evict { ref amount } => {
+				// The outstanding `amount` is withdrawn inside `enact_verdict`.
+				let rent_payed = amount
+					.as_ref()
+					.map(|a| a.peek())
+					.unwrap_or_else(|| <BalanceOf<T>>::zero())
+					.saturating_add(contract.rent_payed);
+				Self::enact_verdict(
+					account, contract, current_block_number, verdict, Some(module),
+				)?;
+				Ok((Some(rent_payed), code_len))
+			}
+			_ => Ok((None, code_len)),
+		}
+	}
+
+	/// Returns the projected time a given contract will be able to sustain paying its rent. The
+	/// returned projection is relevant for the current block, i.e. it is as if the contract was
+	/// accessed at the beginning of the current block. Returns `None` in case if the contract was
+	/// evicted before or as a result of the rent collection.
+	///
+	/// The returned value is only an estimation. It doesn't take into account any top ups, changing the
+	/// rent allowance, or any problems coming from withdrawing the dues.
+	///
+	/// NOTE that this is not a side-effect free function! It will actually collect rent and then
+	/// compute the projection. This function is only used for implementation of an RPC method through
+	/// `RuntimeApi` meaning that the changes will be discarded anyway.
+	pub fn compute_projection(
+		account: &T::AccountId,
+	) -> RentProjectionResult<T::BlockNumber> {
+		use ContractAccessError::IsTombstone;
+
+		let contract_info = <ContractInfoOf<T>>::get(account);
+		let alive_contract_info = match contract_info {
+			None | Some(ContractInfo::Tombstone(_)) => return Err(IsTombstone),
+			Some(ContractInfo::Alive(contract)) => contract,
+		};
+		let module = <PrefabWasmModule<T>>::from_storage_noinstr(alive_contract_info.code_hash)
+			.map_err(|_| IsTombstone)?;
+		let code_size = module.occupied_storage();
+		let current_block_number = <frame_system::Pallet<T>>::block_number();
+		let verdict = Self::consider_case(
+			account,
+			current_block_number,
+			Zero::zero(),
+			&alive_contract_info,
+			code_size,
+		);
+
+		// We skip the eviction in case one is in order.
+		// Evictions should only be performed by [`try_eviction`].
+		let new_contract_info = Self::enact_verdict(
+			account, alive_contract_info, current_block_number, verdict, None,
+		);
+
+		// Check what happened after enaction of the verdict.
+		let alive_contract_info = new_contract_info.map_err(|_| IsTombstone)?.ok_or_else(|| IsTombstone)?;
+
+		// Compute how much would the fee per block be with the *updated* balance.
+		let total_balance = T::Currency::total_balance(account);
+		let free_balance = T::Currency::free_balance(account);
+		let fee_per_block = Self::fee_per_block(
+			&free_balance, &alive_contract_info, code_size,
+		);
+		if fee_per_block.is_zero() {
+			return Ok(RentProjection::NoEviction);
+		}
+
+		// Then compute how much the contract will sustain under these circumstances.
+		let rent_budget = Self::rent_budget(&total_balance, &free_balance, &alive_contract_info).expect(
+			"the contract exists and in the alive state;
+			the updated balance must be greater than subsistence deposit;
+			this function doesn't return `None`;
+			qed
+			",
+		);
+		let blocks_left = match rent_budget.checked_div(&fee_per_block) {
+			Some(blocks_left) => blocks_left,
+			None => {
+				// `fee_per_block` is not zero here, so `checked_div` can return `None` if
+				// there is an overflow. This cannot happen with integers though. Return
+				// `NoEviction` here just in case.
+				return Ok(RentProjection::NoEviction);
+			}
+		};
+
+		let blocks_left = blocks_left.saturated_into::<u32>().into();
+		Ok(RentProjection::EvictionAt(
+			current_block_number + blocks_left,
+		))
+	}
+
+	/// Restores the destination account using the origin as prototype.
+	///
+	/// The restoration will be performed iff:
+	/// - the supplied code_hash does still exist on-chain
+	/// - origin exists and is alive,
+	/// - the origin's storage is not written in the current block
+	/// - the restored account has tombstone
+	/// - the tombstone matches the hash of the origin storage root, and code hash.
+	///
+	/// Upon succesful restoration, `origin` will be destroyed, all its funds are transferred to
+	/// the restored account. The restored account will inherit the last write block and its last
+	/// deduct block will be set to the current block.
+	///
+	/// # Return Value
+	///
+	/// Result<(CallerCodeSize, DestCodeSize), (DispatchError, CallerCodeSize, DestCodesize)>
+	pub fn restore_to(
+		origin: &T::AccountId,
+		mut origin_contract: AliveContractInfo<T>,
+		dest: T::AccountId,
+		code_hash: CodeHash<T>,
+		rent_allowance: BalanceOf<T>,
+		delta: Vec<crate::exec::StorageKey>,
+	) -> Result<(u32, u32), (DispatchError, u32, u32)> {
+		let child_trie_info = origin_contract.child_trie_info();
+
+		let current_block = <frame_system::Pallet<T>>::block_number();
+
+		if origin_contract.last_write == Some(current_block) {
+			return Err((Error::<T>::InvalidContractOrigin.into(), 0, 0));
+		}
+
+		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
+			.and_then(|c| c.get_tombstone())
+			.ok_or((Error::<T>::InvalidDestinationContract.into(), 0, 0))?;
+
+		let last_write = if !delta.is_empty() {
+			Some(current_block)
+		} else {
+			origin_contract.last_write
+		};
+
+		// Fails if the code hash does not exist on chain
+		let caller_code_len = E::add_user(code_hash).map_err(|e| (e, 0, 0))?;
+
+		// We are allowed to eagerly modify storage even though the function can
+		// fail later due to tombstones not matching. This is because the restoration
+		// is always called from a contract and therefore in a storage transaction.
+		// The failure of this function will lead to this transaction's rollback.
+		let bytes_taken: u32 = delta.iter()
+			.filter_map(|key| {
+				let key = blake2_256(key);
+				child::get_raw(&child_trie_info, &key).map(|value| {
+					child::kill(&child_trie_info, &key);
+					value.len() as u32
+				})
+			})
+			.sum();
+
+		let tombstone = <TombstoneContractInfo<T>>::new(
+			// This operation is cheap enough because last_write (delta not included)
+			// is not this block as it has been checked earlier.
+			&child::root(&child_trie_info)[..],
+			code_hash,
+		);
+
+		if tombstone != dest_tombstone {
+			return Err((Error::<T>::InvalidTombstone.into(), caller_code_len, 0));
+		}
+
+		origin_contract.storage_size -= bytes_taken;
+
+		<ContractInfoOf<T>>::remove(&origin);
+		let tombstone_code_len = E::remove_user(origin_contract.code_hash);
+		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
+			code_hash,
+			rent_allowance,
+			rent_payed: <BalanceOf<T>>::zero(),
+			deduct_block: current_block,
+			last_write,
+			.. origin_contract
+		}));
+
+		let origin_free_balance = T::Currency::free_balance(&origin);
+		T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
+		T::Currency::deposit_creating(&dest, origin_free_balance);
+
+		Ok((caller_code_len, tombstone_code_len))
+	}
+
+	/// Create a new `RentStatus` struct for pass through to a requesting contract.
+	pub fn rent_status(
 		free_balance: &BalanceOf<T>,
+		contract: &AliveContractInfo<T>,
+		aggregated_code_size: u32,
+		current_refcount: u32,
+		at_refcount: u32,
+	) -> RentStatus<T> {
+		let calc_share = |refcount: u32| {
+			aggregated_code_size.checked_div(refcount).unwrap_or(0)
+		};
+		let current_share = calc_share(current_refcount);
+		let custom_share = calc_share(at_refcount);
+		RentStatus {
+			max_deposit: Self::required_deposit(contract, aggregated_code_size),
+			current_deposit: Self::required_deposit(contract, current_share),
+			custom_refcount_deposit:
+				if at_refcount > 0 {
+					Some(Self::required_deposit(contract, custom_share))
+				} else {
+					None
+				},
+			max_rent: Self::fee_per_block(free_balance, contract, aggregated_code_size),
+			current_rent: Self::fee_per_block(free_balance, contract, current_share),
+			custom_refcount_rent:
+				if at_refcount > 0 {
+					Some(Self::fee_per_block(free_balance, contract, custom_share))
+				} else {
+					None
+				},
+			_reserved: None,
+		}
+	}
+
+	/// Returns how much deposit is required to not pay rent.
+	fn required_deposit(
 		contract: &AliveContractInfo<T>,
 		code_size_share: u32,
 	) -> BalanceOf<T> {
-		let uncovered_by_balance = T::DepositPerStorageByte::get()
+		T::DepositPerStorageByte::get()
 			.saturating_mul(contract.storage_size.saturating_add(code_size_share).into())
 			.saturating_add(
 				T::DepositPerStorageItem::get()
 					.saturating_mul(contract.pair_count.into())
 			)
 			.saturating_add(T::DepositPerContract::get())
+	}
+
+	/// Returns a fee charged per block from the contract.
+	///
+	/// This function accounts for the storage rent deposit. I.e. if the contract
+	/// possesses enough funds then the fee can drop to zero.
+	fn fee_per_block(
+		free_balance: &BalanceOf<T>,
+		contract: &AliveContractInfo<T>,
+		code_size_share: u32,
+	) -> BalanceOf<T> {
+		let missing_deposit = Self::required_deposit(contract, code_size_share)
 			.saturating_sub(*free_balance);
-		T::RentFraction::get().mul_ceil(uncovered_by_balance)
+		T::RentFraction::get().mul_ceil(missing_deposit)
 	}
 
 	/// Returns amount of funds available to consume by rent mechanism.
@@ -166,7 +425,7 @@ where
 		let free_balance = T::Currency::free_balance(account);
 
 		// An amount of funds to charge per block for storage taken up by the contract.
-		let fee_per_block = Self::compute_fee_per_block(&free_balance, contract, code_size);
+		let fee_per_block = Self::fee_per_block(&free_balance, contract, code_size);
 		if fee_per_block.is_zero() {
 			// The rent deposit offset reduced the fee to 0. This means that the contract
 			// gets the rent for free.
@@ -295,241 +554,55 @@ where
 		}
 	}
 
-	/// Make account paying the rent for the current block number
+
+}
+
+/// The amount to charge.
+///
+/// This amount respects the contract's rent allowance and the subsistence deposit.
+/// Because of that, charging the amount cannot remove the contract.
+struct OutstandingAmount<T: Config> {
+	amount: BalanceOf<T>,
+}
+
+impl<T: Config> OutstandingAmount<T> {
+	/// Create the new outstanding amount.
 	///
-	/// This functions does **not** evict the contract. It returns `None` in case the
-	/// contract is in need of eviction. [`try_eviction`] must
-	/// be called to perform the eviction.
-	pub fn charge(
-		account: &T::AccountId,
-		contract: AliveContractInfo<T>,
-		code_size: u32,
-	) -> Result<Option<AliveContractInfo<T>>, DispatchError> {
-		let current_block_number = <frame_system::Pallet<T>>::block_number();
-		let verdict = Self::consider_case(
+	/// The amount should be always withdrawable and it should not kill the account.
+	fn new(amount: BalanceOf<T>) -> Self {
+		Self { amount }
+	}
+
+	/// Returns the amount this instance wraps.
+	fn peek(&self) -> BalanceOf<T> {
+		self.amount
+	}
+
+	/// Withdraws the outstanding amount from the given account.
+	fn withdraw(self, account: &T::AccountId) {
+		if let Ok(imbalance) = T::Currency::withdraw(
 			account,
-			current_block_number,
-			Zero::zero(),
-			&contract,
-			code_size,
-		);
-		Self::enact_verdict(account, contract, current_block_number, verdict, None)
-	}
-
-	/// Process a report that a contract under the given address should be evicted.
-	///
-	/// Enact the eviction right away if the contract should be evicted and return the amount
-	/// of rent that the contract payed over its lifetime.
-	/// Otherwise, **do nothing** and return None.
-	///
-	/// The `handicap` parameter gives a way to check the rent to a moment in the past instead
-	/// of current block. E.g. if the contract is going to be evicted at the current block,
-	/// `handicap = 1` can defer the eviction for 1 block. This is useful to handicap certain snitchers
-	/// relative to others.
-	///
-	/// NOTE this function performs eviction eagerly. All changes are read and written directly to
-	/// storage.
-	pub fn try_eviction(
-		account: &T::AccountId,
-		handicap: T::BlockNumber,
-	) -> Result<(Option<BalanceOf<T>>, u32), DispatchError> {
-		let contract = <ContractInfoOf<T>>::get(account);
-		let contract = match contract {
-			None | Some(ContractInfo::Tombstone(_)) => return Ok((None, 0)),
-			Some(ContractInfo::Alive(contract)) => contract,
-		};
-		let module = PrefabWasmModule::<T>::from_storage_noinstr(contract.code_hash)?;
-		let code_len = module.code_len();
-		let current_block_number = <frame_system::Pallet<T>>::block_number();
-		let verdict = Self::consider_case(
-			account,
-			current_block_number,
-			handicap,
-			&contract,
-			module.occupied_storage(),
-		);
-
-		// Enact the verdict only if the contract gets removed.
-		match verdict {
-			Verdict::Evict { ref amount } => {
-				// The outstanding `amount` is withdrawn inside `enact_verdict`.
-				let rent_payed = amount
-					.as_ref()
-					.map(|a| a.peek())
-					.unwrap_or_else(|| <BalanceOf<T>>::zero())
-					.saturating_add(contract.rent_payed);
-				Self::enact_verdict(
-					account, contract, current_block_number, verdict, Some(module),
-				)?;
-				Ok((Some(rent_payed), code_len))
-			}
-			_ => Ok((None, code_len)),
+			self.amount,
+			WithdrawReasons::FEE,
+			ExistenceRequirement::KeepAlive,
+		) {
+			// This should never fail. However, let's err on the safe side.
+			T::RentPayment::on_unbalanced(imbalance);
 		}
 	}
+}
 
-	/// Returns the projected time a given contract will be able to sustain paying its rent. The
-	/// returned projection is relevant for the current block, i.e. it is as if the contract was
-	/// accessed at the beginning of the current block. Returns `None` in case if the contract was
-	/// evicted before or as a result of the rent collection.
+enum Verdict<T: Config> {
+	/// The contract is exempted from paying rent.
 	///
-	/// The returned value is only an estimation. It doesn't take into account any top ups, changing the
-	/// rent allowance, or any problems coming from withdrawing the dues.
-	///
-	/// NOTE that this is not a side-effect free function! It will actually collect rent and then
-	/// compute the projection. This function is only used for implementation of an RPC method through
-	/// `RuntimeApi` meaning that the changes will be discarded anyway.
-	pub fn compute_projection(
-		account: &T::AccountId,
-	) -> RentProjectionResult<T::BlockNumber> {
-		use ContractAccessError::IsTombstone;
-
-		let contract_info = <ContractInfoOf<T>>::get(account);
-		let alive_contract_info = match contract_info {
-			None | Some(ContractInfo::Tombstone(_)) => return Err(IsTombstone),
-			Some(ContractInfo::Alive(contract)) => contract,
-		};
-		let module = <PrefabWasmModule<T>>::from_storage_noinstr(alive_contract_info.code_hash)
-			.map_err(|_| IsTombstone)?;
-		let code_size = module.occupied_storage();
-		let current_block_number = <frame_system::Pallet<T>>::block_number();
-		let verdict = Self::consider_case(
-			account,
-			current_block_number,
-			Zero::zero(),
-			&alive_contract_info,
-			code_size,
-		);
-
-		// We skip the eviction in case one is in order.
-		// Evictions should only be performed by [`try_eviction`].
-		let new_contract_info = Self::enact_verdict(
-			account, alive_contract_info, current_block_number, verdict, None,
-		);
-
-		// Check what happened after enaction of the verdict.
-		let alive_contract_info = new_contract_info.map_err(|_| IsTombstone)?.ok_or_else(|| IsTombstone)?;
-
-		// Compute how much would the fee per block be with the *updated* balance.
-		let total_balance = T::Currency::total_balance(account);
-		let free_balance = T::Currency::free_balance(account);
-		let fee_per_block = Self::compute_fee_per_block(
-			&free_balance, &alive_contract_info, code_size,
-		);
-		if fee_per_block.is_zero() {
-			return Ok(RentProjection::NoEviction);
-		}
-
-		// Then compute how much the contract will sustain under these circumstances.
-		let rent_budget = Self::rent_budget(&total_balance, &free_balance, &alive_contract_info).expect(
-			"the contract exists and in the alive state;
-			the updated balance must be greater than subsistence deposit;
-			this function doesn't return `None`;
-			qed
-			",
-		);
-		let blocks_left = match rent_budget.checked_div(&fee_per_block) {
-			Some(blocks_left) => blocks_left,
-			None => {
-				// `fee_per_block` is not zero here, so `checked_div` can return `None` if
-				// there is an overflow. This cannot happen with integers though. Return
-				// `NoEviction` here just in case.
-				return Ok(RentProjection::NoEviction);
-			}
-		};
-
-		let blocks_left = blocks_left.saturated_into::<u32>().into();
-		Ok(RentProjection::EvictionAt(
-			current_block_number + blocks_left,
-		))
-	}
-
-	/// Restores the destination account using the origin as prototype.
-	///
-	/// The restoration will be performed iff:
-	/// - the supplied code_hash does still exist on-chain
-	/// - origin exists and is alive,
-	/// - the origin's storage is not written in the current block
-	/// - the restored account has tombstone
-	/// - the tombstone matches the hash of the origin storage root, and code hash.
-	///
-	/// Upon succesful restoration, `origin` will be destroyed, all its funds are transferred to
-	/// the restored account. The restored account will inherit the last write block and its last
-	/// deduct block will be set to the current block.
-	///
-	/// # Return Value
-	///
-	/// Result<(CallerCodeSize, DestCodeSize), (DispatchError, CallerCodeSize, DestCodesize)>
-	pub fn restore_to(
-		origin: &T::AccountId,
-		mut origin_contract: AliveContractInfo<T>,
-		dest: T::AccountId,
-		code_hash: CodeHash<T>,
-		rent_allowance: BalanceOf<T>,
-		delta: Vec<crate::exec::StorageKey>,
-	) -> Result<(u32, u32), (DispatchError, u32, u32)> {
-		let child_trie_info = origin_contract.child_trie_info();
-
-		let current_block = <frame_system::Pallet<T>>::block_number();
-
-		if origin_contract.last_write == Some(current_block) {
-			return Err((Error::<T>::InvalidContractOrigin.into(), 0, 0));
-		}
-
-		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
-			.and_then(|c| c.get_tombstone())
-			.ok_or((Error::<T>::InvalidDestinationContract.into(), 0, 0))?;
-
-		let last_write = if !delta.is_empty() {
-			Some(current_block)
-		} else {
-			origin_contract.last_write
-		};
-
-		// Fails if the code hash does not exist on chain
-		let caller_code_len = E::add_user(code_hash).map_err(|e| (e, 0, 0))?;
-
-		// We are allowed to eagerly modify storage even though the function can
-		// fail later due to tombstones not matching. This is because the restoration
-		// is always called from a contract and therefore in a storage transaction.
-		// The failure of this function will lead to this transaction's rollback.
-		let bytes_taken: u32 = delta.iter()
-			.filter_map(|key| {
-				let key = blake2_256(key);
-				child::get_raw(&child_trie_info, &key).map(|value| {
-					child::kill(&child_trie_info, &key);
-					value.len() as u32
-				})
-			})
-			.sum();
-
-		let tombstone = <TombstoneContractInfo<T>>::new(
-			// This operation is cheap enough because last_write (delta not included)
-			// is not this block as it has been checked earlier.
-			&child::root(&child_trie_info)[..],
-			code_hash,
-		);
-
-		if tombstone != dest_tombstone {
-			return Err((Error::<T>::InvalidTombstone.into(), caller_code_len, 0));
-		}
-
-		origin_contract.storage_size -= bytes_taken;
-
-		<ContractInfoOf<T>>::remove(&origin);
-		let tombstone_code_len = E::remove_user(origin_contract.code_hash);
-		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
-			code_hash,
-			rent_allowance,
-			rent_payed: <BalanceOf<T>>::zero(),
-			deduct_block: current_block,
-			last_write,
-			.. origin_contract
-		}));
-
-		let origin_free_balance = T::Currency::free_balance(&origin);
-		T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
-		T::Currency::deposit_creating(&dest, origin_free_balance);
-
-		Ok((caller_code_len, tombstone_code_len))
-	}
+	/// For example, it already paid its rent in the current block, or it has enough deposit for not
+	/// paying rent at all.
+	Exempt,
+	/// The contract cannot afford payment within its rent budget so it gets evicted. However,
+	/// because its balance is greater than the subsistence threshold it leaves a tombstone.
+	Evict {
+		amount: Option<OutstandingAmount<T>>,
+	},
+	/// Everything is OK, we just only take some charge.
+	Charge { amount: OutstandingAmount<T> },
 }
