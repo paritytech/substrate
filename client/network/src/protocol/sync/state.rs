@@ -24,9 +24,10 @@ use crate::chain::ImportedState;
 pub struct StateSync<B: BlockT> {
 	target_block: B::Hash,
 	target_header: B::Header,
-	target_root: B::Hash,
+	_target_root: B::Hash,
 	last_key: Vec<u8>,
 	state: Vec<(Vec<u8>, Vec<u8>)>,
+	complete: bool,
 }
 
 pub enum ImportResult<B: BlockT> {
@@ -39,26 +40,36 @@ impl<B: BlockT> StateSync<B> {
 	pub fn new(target: B::Header) -> Self {
 		StateSync {
 			target_block: target.hash(),
-			target_root: target.state_root().clone(),
+			_target_root: target.state_root().clone(),
 			target_header: target,
 			last_key: Vec::default(),
 			state: Vec::default(),
+			complete: false,
 		}
 	}
 
 	pub fn import(&mut self, response: StateResponse) -> ImportResult<B> {
+		if response.values.is_empty() && !response.complete {
+			log::info!(
+				target: "sync",
+				"Bad state response",
+			);
+			return ImportResult::Bad;
+		}
 		if let Some(StateEntry { key, .. }) = response.values.last() {
 			self.last_key = key.clone();
 		}
 		log::info!(
 			target: "sync",
-			"Importing state {}",
-			sp_core::hexdisplay::HexDisplay::from(&self.last_key)
+			"Importing state {:?} to {:?}",
+			sp_core::hexdisplay::HexDisplay::from(&self.last_key),
+			response.values.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
 		);
 		for StateEntry { key, value } in response.values {
 			self.state.push((key, value))
 		};
 		if response.complete {
+			self.complete = true;
 			ImportResult::Import(self.target_block.clone(), self.target_header.clone(), ImportedState {
 				block: self.target_block.clone(),
 				state: std::mem::take(&mut self.state)
@@ -75,8 +86,16 @@ impl<B: BlockT> StateSync<B> {
 		}
 	}
 
+	pub fn is_complete(&self) -> bool {
+		self.complete
+	}
+
 	pub fn target_block_num(&self) -> NumberFor<B> {
 		self.target_header.number().clone()
+	}
+
+	pub fn target(&self) -> B::Hash {
+		self.target_block.clone()
 	}
 }
 

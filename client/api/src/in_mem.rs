@@ -347,6 +347,11 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 			genesis_hash: storage.genesis_hash,
 			finalized_hash: storage.finalized_hash,
 			finalized_number: storage.finalized_number,
+			finalized_state: if storage.finalized_hash != Default::default() {
+				Some((storage.finalized_hash.clone(), storage.finalized_number))
+			} else {
+				None
+			},
 			number_leaves: storage.leaves.count()
 		}
 	}

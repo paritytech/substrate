@@ -361,6 +361,7 @@ mod tests {
 			offchain_worker_enabled: false,
 			offchain_indexing_api: false,
 			wasm_runtime_overrides: None,
+			no_genesis: false,
 		};
 
 		// client is used for the convenience of creating and inserting the genesis block.

@@ -288,10 +288,9 @@ impl<B: BlockT> Protocol<B> {
 		let sync = ChainSync::new(
 			config.sync_mode(),
 			chain.clone(),
-			&info,
 			block_announce_validator,
 			config.max_parallel_downloads,
-		);
+		).map_err(Box::new)?;
 
 		let boot_node_ids = {
 			let mut list = HashSet::new();

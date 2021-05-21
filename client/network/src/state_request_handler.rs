@@ -192,9 +192,12 @@ impl<B: BlockT> StateRequestHandler<B> {
 
 			log::trace!(
 				target: LOG_TARGET,
-				"Storage response contains {} keys, {} bytes",
+				"Storage response contains {} keys, {} bytes, complete= {}, from {:?} to {:?}",
 				response.values.len(),
 				total_len,
+				response.complete,
+				response.values.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
+				response.values.last().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
 			);
 			// If response contains nay data, we can consider it as successful request.
 			if !response.values.is_empty() {
