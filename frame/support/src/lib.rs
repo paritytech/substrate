@@ -321,6 +321,7 @@ macro_rules! parameter_types {
 	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
 		impl $name {
 			/// Returns the value of this parameter type.
+			#[allow(unused)]
 			pub const fn get() -> $type {
 				$value
 			}
@@ -335,6 +336,7 @@ macro_rules! parameter_types {
 	(IMPL $name:ident, $type:ty, $value:expr) => {
 		impl $name {
 			/// Returns the value of this parameter type.
+			#[allow(unused)]
 			pub fn get() -> $type {
 				$value
 			}
@@ -349,6 +351,7 @@ macro_rules! parameter_types {
 	(IMPL_STORAGE $name:ident, $type:ty, $value:expr) => {
 		impl $name {
 			/// Returns the key for this parameter type.
+			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
 				$crate::sp_io::hashing::twox_128(
 					concat!(":", stringify!($name), ":").as_bytes()
@@ -359,6 +362,7 @@ macro_rules! parameter_types {
 			///
 			/// This needs to be executed in an externalities provided
 			/// environment.
+			#[allow(unused)]
 			pub fn set(value: &$type) {
 				$crate::storage::unhashed::put(&Self::key(), value);
 			}
@@ -367,6 +371,7 @@ macro_rules! parameter_types {
 			///
 			/// This needs to be executed in an externalities provided
 			/// environment.
+			#[allow(unused)]
 			pub fn get() -> $type {
 				$crate::storage::unhashed::get(&Self::key()).unwrap_or_else(|| $value)
 			}
