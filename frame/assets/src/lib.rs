@@ -544,7 +544,7 @@ pub mod pallet {
 		///
 		/// Bails with `BalanceZero` if the `who` is already dead.
 		///
-		/// - `id`: The identifier of the asset to have some amount burned.
+		/// - `id`: The identifier of the asset to have some amount slashed.
 		/// - `who`: The account to be debited from.
 		/// - `amount`: The maximum amount by which `who`'s balance should be reduced.
 		///
@@ -553,8 +553,8 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		/// Modes: Post-existence of `who`; Pre & post Zombie-status of `who`.
-		#[pallet::weight(T::WeightInfo::burn())]
-		pub(super) fn burn(
+		#[pallet::weight(T::WeightInfo::slash())]
+		pub(super) fn slash(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -564,8 +564,7 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 
 			let f = DebitFlags { keep_alive: false, best_effort: true };
-			let burned = Self::do_burn(id, &who, amount, Some(origin), f)?;
-			Self::deposit_event(Event::Burned(id, who, burned));
+			let _ = Self::do_burn(id, &who, amount, Some(origin), f)?;
 			Ok(())
 		}
 
