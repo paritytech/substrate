@@ -39,7 +39,7 @@ pub use storage_proof::StorageProof;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration,
-	nibble_ops, TrieDBIterator, Meta, NodeChange, node::{NodePlan, ValuePlan},
+	nibble_ops, TrieDBIterator, Meta, node::{NodePlan, ValuePlan}, GlobalMeta,
 };
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
@@ -79,7 +79,7 @@ pub struct TrieMeta {
 
 impl Meta for TrieMeta {
 	/// Layout do not have content.
-	type MetaInput = ();
+	type GlobalMeta = bool;
 
 	/// When true apply inner hashing of value.
 	type StateMeta = bool;
@@ -115,33 +115,23 @@ impl Meta for TrieMeta {
 	}
 
 	fn meta_for_new(
-		_input: Self::MetaInput,
-		parent: Option<&Self>,
+		global: Self::GlobalMeta,
 	) -> Self {
 		let mut result = Self::default();
-		result.do_value_hash = parent.map(|p| p.do_value_hash).unwrap_or_default();
+		result.do_value_hash = global;
 		result
 	}
 
 	fn meta_for_existing_inline_node(
-		input: Self::MetaInput,
-		parent: Option<&Self>,
+		global: Self::GlobalMeta,
 	) -> Self {
-		Self::meta_for_new(input, parent)
+		Self::meta_for_new(global)
 	}
 
 	fn meta_for_empty(
+		global: Self::GlobalMeta,
 	) -> Self {
-		Default::default()
-	}
-
-	fn set_value_callback(
-		&mut self,
-		_new_value: Option<&[u8]>,
-		_is_branch: bool,
-		changed: NodeChange,
-	) -> NodeChange {
-		changed
+		Self::meta_for_new(global)
 	}
 
 	fn encoded_value_callback(
@@ -160,15 +150,6 @@ impl Meta for TrieMeta {
 			// Switch value hashing.
 			self.old_hash = false;
 		}
-	}
-
-	fn set_child_callback(
-		&mut self,
-		_child: Option<&Self>,
-		changed: NodeChange,
-		_at: usize,
-	) -> NodeChange {
-		changed
 	}
 
 	fn decoded_callback(
@@ -209,7 +190,7 @@ impl TrieMeta {
 }
 
 /// substrate trie layout
-pub struct Layout<H, M>(sp_std::marker::PhantomData<(H, M)>);
+pub struct Layout<H, M>(bool, sp_std::marker::PhantomData<(H, M)>);
 
 impl<H, M> fmt::Debug for Layout<H, M> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -217,37 +198,46 @@ impl<H, M> fmt::Debug for Layout<H, M> {
 	}
 }
 
-impl<H, M> Default for Layout<H, M> {
-	fn default() -> Self {
-		Layout(sp_std::marker::PhantomData)
+impl<H, M> Clone for Layout<H, M> {
+	fn clone(&self) -> Self {
+		Layout(self.0, sp_std::marker::PhantomData)
 	}
 }
 
-impl<H, M> Clone for Layout<H, M> {
-	fn clone(&self) -> Self {
-		Layout(sp_std::marker::PhantomData)
+impl<H, M> Default for Layout<H, M> {
+	fn default() -> Self {
+		Layout(false, sp_std::marker::PhantomData)
 	}
 }
 
 impl<H, M> TrieLayout for Layout<H, M>
 	where
 		H: Hasher,
-		M: MetaHasher<H, DBValue>,
-		M::Meta: Meta<MetaInput = ()>,
+		M: MetaHasher<H, DBValue, GlobalMeta = bool>,
+		M::Meta: Meta<GlobalMeta = bool>,
 {
 	const USE_EXTENSION: bool = false;
 	const ALLOW_EMPTY: bool = true;
 	const USE_META: bool = true;
+	const READ_ROOT_STATE_META: bool = true;
+
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
 	type MetaHasher = M;
 	type Meta = M::Meta;
 
-	fn metainput_for_new_node(&self) -> <Self::Meta as Meta>::MetaInput {
-		()
+	fn layout_meta(&self) -> GlobalMeta<Self> {
+		self.0
 	}
-	fn metainput_for_stored_inline_node(&self) -> <Self::Meta as Meta>::MetaInput {
-		()
+	fn initialize_from_root_meta(&mut self, root_meta: &Self::Meta) {
+		if root_meta.recorded_do_value_hash {
+			self.0 = true;
+		}
+	}
+	fn set_root_meta(root_meta: &mut Self::Meta, global_meta: GlobalMeta<Self>) {
+		if global_meta {
+			root_meta.recorded_do_value_hash = true;
+		}
 	}
 }
 
@@ -260,6 +250,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		H: Hasher,
 {
 	type Meta = TrieMeta;
+	type GlobalMeta = bool;
 
 	fn hash(value: &[u8], meta: &Self::Meta) -> H::Out {
 		match &meta {
@@ -328,7 +319,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		<Self as MetaHasher<H, DBValue>>::stored_value(value.as_slice(), meta)
 	}
 
-	fn extract_value<'a>(mut stored: &'a [u8], parent_meta: Option<&Self::Meta>) -> (&'a [u8], Self::Meta) {
+	fn extract_value(mut stored: &[u8], global_meta: Self::GlobalMeta) -> (&[u8], Self::Meta) {
 		let input = &mut stored;
 		let mut contain_hash = false;
 		let mut old_hash = false;
@@ -352,13 +343,13 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		let _offset = meta.read_state_meta(stored)
 			.expect("State meta reading failure.");
 		//let stored = &stored[offset..];
-		meta.do_value_hash = meta.recorded_do_value_hash || parent_meta.map(|m| m.do_value_hash).unwrap_or(false);
+		meta.do_value_hash = meta.recorded_do_value_hash || global_meta;
 		(stored, meta)
 	}
 
-	fn extract_value_owned(mut stored: DBValue, parent_meta: Option<&Self::Meta>) -> (DBValue, Self::Meta) {
+	fn extract_value_owned(mut stored: DBValue, global: Self::GlobalMeta) -> (DBValue, Self::Meta) {
 		let len = stored.len();
-		let (v, meta) = <Self as MetaHasher<H, DBValue>>::extract_value(stored.as_slice(), parent_meta);
+		let (v, meta) = <Self as MetaHasher<H, DBValue>>::extract_value(stored.as_slice(), global);
 		let removed = len - v.len();
 		(stored.split_off(removed), meta)
 	}
@@ -374,6 +365,7 @@ impl<H> MetaHasher<H, DBValue> for NoMetaHasher
 		H: Hasher,
 {
 	type Meta = TrieMeta;
+	type GlobalMeta = bool;
 
 	fn hash(value: &[u8], _meta: &Self::Meta) -> H::Out {
 		H::hash(value)
@@ -387,11 +379,11 @@ impl<H> MetaHasher<H, DBValue> for NoMetaHasher
 		value
 	}
 
-	fn extract_value<'a>(stored: &'a [u8], _parent_meta: Option<&Self::Meta>) -> (&'a [u8], Self::Meta) {
+	fn extract_value(stored: &[u8], _meta: Self::GlobalMeta) -> (&[u8], Self::Meta) {
 		(stored, Default::default())
 	}
 
-	fn extract_value_owned(stored: DBValue, _parent_meta: Option<&Self::Meta>) -> (DBValue, Self::Meta) {
+	fn extract_value_owned(stored: DBValue, _meta: Self::GlobalMeta) -> (DBValue, Self::Meta) {
 		(stored, Default::default())
 	}
 }
@@ -399,15 +391,15 @@ impl<H> MetaHasher<H, DBValue> for NoMetaHasher
 impl<H, M> TrieConfiguration for Layout<H, M>
 	where
 		H: Hasher,
-		M: MetaHasher<H, DBValue>,
-		M::Meta: Meta<MetaInput = ()>,
+		M: MetaHasher<H, DBValue, GlobalMeta = bool>,
+		M::Meta: Meta<GlobalMeta = bool>,
 {
 	fn trie_root<I, A, B>(&self, input: I) -> <Self::Hash as Hasher>::Out where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input)
+		trie_root::trie_root_no_extension::<H, _, TrieStream, _, _, _>(input, self.clone())
 	}
 
 	fn trie_root_unhashed<I, A, B>(&self, input: I) -> Vec<u8> where
@@ -415,7 +407,7 @@ impl<H, M> TrieConfiguration for Layout<H, M>
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(input)
+		trie_root::unhashed_trie_no_extension::<H, _, TrieStream, _, _, _>(input, self.clone())
 	}
 
 	fn encode_index(input: u32) -> Vec<u8> {
@@ -431,10 +423,10 @@ type MemTracker = memory_db::MemCounter<trie_db::DBValue>;
 /// TrieDB error over `TrieConfiguration` trait.
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-pub trait AsHashDB<H: Hasher, M>: hash_db::AsHashDB<H, trie_db::DBValue, M> {}
-impl<H: Hasher, M, T: hash_db::AsHashDB<H, trie_db::DBValue, M>> AsHashDB<H, M> for T {}
+pub trait AsHashDB<H: Hasher, M, GM>: hash_db::AsHashDB<H, trie_db::DBValue, M, GM> {}
+impl<H: Hasher, M, GM, T: hash_db::AsHashDB<H, trie_db::DBValue, M, GM>> AsHashDB<H, M, GM> for T {}
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-pub type HashDB<'a, H, M> = dyn hash_db::HashDB<H, trie_db::DBValue, M> + 'a;
+pub type HashDB<'a, H, M, GM> = dyn hash_db::HashDB<H, trie_db::DBValue, M, GM> + 'a;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 /// This uses a `KeyFunction` for prefixing keys internally (avoiding
 /// key conflict for non random keys).
@@ -545,7 +537,7 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	A: Borrow<[u8]>,
 	B: Borrow<Option<V>>,
 	V: Borrow<[u8]>,
-	DB: hash_db::HashDB<L::Hash, trie_db::DBValue, L::Meta>,
+	DB: hash_db::HashDB<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 {
 	{
 		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
@@ -570,7 +562,7 @@ pub fn flag_inner_meta_hasher<L, DB>(
 	mut root: TrieHash<L>,
 ) -> Result<TrieHash<L>, Box<TrieError<L>>> where
 	L: TrieConfiguration<Meta = TrieMeta>,
-	DB: hash_db::HashDB<L::Hash, trie_db::DBValue, L::Meta>,
+	DB: hash_db::HashDB<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 {
 	{
 		let mut t = TrieDBMut::<L>::from_existing(db, &mut root)?;
@@ -595,7 +587,7 @@ pub fn flag_meta_hasher<L>(
 }
 
 /// Resolve if inner hashing of value is active.
-pub fn state_hashed_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta>>(
+pub fn state_hashed_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>>(
 	db: &DB,
 	root: &TrieHash<L>,
 ) -> bool {
@@ -606,7 +598,7 @@ pub fn state_hashed_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, 
 }
 
 /// Read a value from the trie.
-pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta>>(
+pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>>(
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8]
@@ -617,8 +609,8 @@ pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, tri
 /// Read a value from the trie with given Query.
 pub fn read_trie_value_with<
 	L: TrieConfiguration,
-	Q: Query<L::Hash, Item=DBValue>,
-	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta>
+	Q: Query<L::Hash, L::Meta, Item=DBValue>,
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>
 >(
 	db: &DB,
 	root: &TrieHash<L>,
@@ -666,7 +658,7 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 		B: Borrow<Option<V>>,
 		V: Borrow<[u8]>,
 		RD: AsRef<[u8]>,
-		DB: hash_db::HashDB<L::Hash, trie_db::DBValue, L::Meta>
+		DB: hash_db::HashDB<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -689,7 +681,7 @@ pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]) -> bool, DB>
 	mut f: F
 ) -> Result<(), Box<TrieError<L>>>
 	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta>
+		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -713,9 +705,9 @@ pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]) -> bool, DB>
 pub fn record_all_keys<L: TrieConfiguration, DB>(
 	db: &DB,
 	root: &TrieHash<L>,
-	recorder: &mut Recorder<TrieHash<L>>
+	recorder: &mut Recorder<TrieHash<L>, L::Meta>
 ) -> Result<(), Box<TrieError<L>>> where
-	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta>
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 {
 	let trie = TrieDB::<L>::new(&*db, root)?;
 	let iter = trie.iter()?;
@@ -740,7 +732,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	key: &[u8]
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta>
+		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -751,7 +743,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 }
 
 /// Read a value from the child trie with given query.
-pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=DBValue>, DB>(
+pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, L::Meta, Item=DBValue>, DB>(
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],
@@ -759,7 +751,7 @@ pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=D
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta>
+		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -806,8 +798,8 @@ impl<'a, DB, H> KeySpacedDBMut<'a, DB, H> where
 	}
 }
 
-impl<'a, DB, H, T, M> hash_db::HashDBRef<H, T, M> for KeySpacedDB<'a, DB, H> where
-	DB: hash_db::HashDBRef<H, T, M>,
+impl<'a, DB, H, T, M, GM> hash_db::HashDBRef<H, T, M, GM> for KeySpacedDB<'a, DB, H> where
+	DB: hash_db::HashDBRef<H, T, M, GM>,
 	H: Hasher,
 	T: From<&'static [u8]>,
 {
@@ -820,9 +812,9 @@ impl<'a, DB, H, T, M> hash_db::HashDBRef<H, T, M> for KeySpacedDB<'a, DB, H> whe
 		self.0.access_from(key, at)
 	}
 
-	fn get_with_meta(&self, key: &H::Out, prefix: Prefix, parent: Option<&M>) -> Option<(T, M)> {
+	fn get_with_meta(&self, key: &H::Out, prefix: Prefix, global: GM) -> Option<(T, M)> {
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.get_with_meta(key, (&derived_prefix.0, derived_prefix.1), parent)
+		self.0.get_with_meta(key, (&derived_prefix.0, derived_prefix.1), global)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
@@ -831,8 +823,8 @@ impl<'a, DB, H, T, M> hash_db::HashDBRef<H, T, M> for KeySpacedDB<'a, DB, H> whe
 	}
 }
 
-impl<'a, DB, H, T, M> hash_db::HashDB<H, T, M> for KeySpacedDBMut<'a, DB, H> where
-	DB: hash_db::HashDB<H, T, M>,
+impl<'a, DB, H, T, M, GM> hash_db::HashDB<H, T, M, GM> for KeySpacedDBMut<'a, DB, H> where
+	DB: hash_db::HashDB<H, T, M, GM>,
 	H: Hasher,
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
@@ -845,9 +837,9 @@ impl<'a, DB, H, T, M> hash_db::HashDB<H, T, M> for KeySpacedDBMut<'a, DB, H> whe
 		self.0.access_from(key, at)
 	}
 
-	fn get_with_meta(&self, key: &H::Out, prefix: Prefix, parent: Option<&M>) -> Option<(T, M)> {
+	fn get_with_meta(&self, key: &H::Out, prefix: Prefix, global: GM) -> Option<(T, M)> {
 		let derived_prefix = keyspace_as_prefix_alloc(self.1, prefix);
-		self.0.get_with_meta(key, (&derived_prefix.0, derived_prefix.1), parent)
+		self.0.get_with_meta(key, (&derived_prefix.0, derived_prefix.1), global)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
@@ -881,14 +873,14 @@ impl<'a, DB, H, T, M> hash_db::HashDB<H, T, M> for KeySpacedDBMut<'a, DB, H> whe
 	}
 }
 
-impl<'a, DB, H, T, M> hash_db::AsHashDB<H, T, M> for KeySpacedDBMut<'a, DB, H> where
-	DB: hash_db::HashDB<H, T, M>,
+impl<'a, DB, H, T, M, GM> hash_db::AsHashDB<H, T, M, GM> for KeySpacedDBMut<'a, DB, H> where
+	DB: hash_db::HashDB<H, T, M, GM>,
 	H: Hasher,
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
-	fn as_hash_db(&self) -> &dyn hash_db::HashDB<H, T, M> { &*self }
+	fn as_hash_db(&self) -> &dyn hash_db::HashDB<H, T, M, GM> { &*self }
 
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, T, M> + 'b) {
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, T, M, GM> + 'b) {
 		&mut *self
 	}
 }

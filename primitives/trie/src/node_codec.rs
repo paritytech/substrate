@@ -197,10 +197,16 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 	}
 
 	fn is_empty_node(data: &[u8]) -> bool {
-		data == <Self as NodeCodecT<M>>::empty_node()
+		data == <Self as NodeCodecT<M>>::empty_node_no_meta()
 	}
 
-	fn empty_node() -> &'static [u8] {
+	fn empty_node(meta: &mut M) -> Vec<u8> {
+		let mut output = meta.write_state_meta();
+		output.extend_from_slice(&[trie_constants::EMPTY_TRIE]);
+		output
+	}
+
+	fn empty_node_no_meta() -> &'static [u8] {
 		&[trie_constants::EMPTY_TRIE]
 	}
 
