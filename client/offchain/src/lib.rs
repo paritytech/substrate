@@ -207,9 +207,8 @@ impl<Client, Block> OffchainWorkers<
 		let version = ocw_api_version(&at, runtime);
 		log::debug!("Checking finality offchain workers at {:?}: version: {:?}", at, version);
 		if version < 3 {
-			log::trace!(
-				"Skipping running finality offchain workers, because they are not supported by current runtime. Version: {} < 3", version
-			);
+			let msg = "Skipping running finality offchain workers, because they are not supported by current runtime";
+			log::trace!("{}. Version: {} < 3", msg, version);
 			return Either::Right(future::ready(()));
 		}
 
