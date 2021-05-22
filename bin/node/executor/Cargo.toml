@@ -45,6 +45,7 @@ sp-externalities = { version = "0.9.0", path = "../../../primitives/externalitie
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
 wat = "1.0"
 futures = "0.3.9"
+max-encoded-len = { version = "3.0.0", path = "../../../max-encoded-len" }
 
 [features]
 wasmtime = [

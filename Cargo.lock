@@ -4198,6 +4198,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "futures 0.3.13",
+ "max-encoded-len",
  "node-primitives",
  "node-runtime",
  "node-testing",
