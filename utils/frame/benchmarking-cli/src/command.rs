@@ -92,14 +92,15 @@ impl BenchmarkCmd {
 				self.extra,
 			).encode(),
 			extensions,
-			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code(sp_state_machine::ExecutionContext::Offchain)?,
 			sp_core::testing::TaskExecutor::new(),
 		)
-		.execute(strategy.into())
+		.execute(sp_state_machine::ExecutionConfig::new_offchain(strategy.into()))
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-		let results = <std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
-			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
+		let results =
+			<std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
+				.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
 		match results {
 			Ok(batches) => {

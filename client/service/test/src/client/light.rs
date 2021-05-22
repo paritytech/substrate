@@ -202,7 +202,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_id: &BlockId<Block>,
 		_method: &str,
 		_call_data: &[u8],
-		_strategy: ExecutionStrategy,
+		_strategy: Execution,
 		_extensions: Option<Extensions>,
 	) -> Result<Vec<u8>, ClientError> {
 		Ok(vec![42])

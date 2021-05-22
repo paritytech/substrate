@@ -39,10 +39,9 @@ pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
 
-pub use sp_state_machine::{StorageProof, ExecutionStrategy};
+pub use sp_state_machine::{StorageProof, ExecutionStrategy, ExecutionConfig, ExecutionContext};
 
 /// Usage Information Provider interface
-///
 pub trait UsageProvider<Block: sp_runtime::traits::Block> {
 	/// Get usage info about current client.
 	fn usage_info(&self) -> ClientInfo<Block>;

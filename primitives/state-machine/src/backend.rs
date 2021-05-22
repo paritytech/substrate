@@ -399,7 +399,10 @@ impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode for
 }
 
 #[cfg(feature = "std")]
-impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H> where H::Out: Encode {
+impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H>
+where
+	H::Out: Encode,
+{
 	/// Create a new instance.
 	pub fn new(backend: &'a B) -> Self {
 		Self {
@@ -409,13 +412,25 @@ impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H> where H::Out: En
 	}
 
 	/// Return the [`RuntimeCode`] build from the wrapped `backend`.
-	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
-		let hash = self.backend.storage_hash(well_known_keys::CODE)
+	pub fn runtime_code(
+		&self,
+		context: crate::ExecutionContext,
+	) -> Result<RuntimeCode, &'static str> {
+		let hash = self
+			.backend
+			.storage_hash(well_known_keys::CODE)
 			.ok()
 			.flatten()
 			.ok_or("`:code` hash not found")?
 			.encode();
-		let heap_pages = self.backend.storage(well_known_keys::HEAP_PAGES)
+
+		let heap_pages_key = match context {
+			ExecutionContext::Consensus => well_known_keys::HEAP_PAGES,
+			ExecutionContext::Offchain => well_known_keys::OFFCHAIN_HEAP_PAGES,
+		};
+		let heap_pages = self
+			.backend
+			.storage(heap_pages_key)
 			.ok()
 			.flatten()
 			.and_then(|d| Decode::decode(&mut &d[..]).ok());

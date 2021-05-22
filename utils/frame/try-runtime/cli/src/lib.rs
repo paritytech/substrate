@@ -188,10 +188,10 @@ impl TryRuntimeCmd {
 			&[],
 			ext.extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
-				.runtime_code()?,
+				.runtime_code(sp_state_machine::ExecutionContext::Offchain)?,
 			sp_core::testing::TaskExecutor::new(),
 		)
-		.execute(execution.into())
+		.execute(sp_state_machine::ExecutionConfig::new_offchain(execution.into()))
 		.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade' due to {:?}", e))?;
 
 		let (weight, total_weight) = <(u64, u64) as Decode>::decode(&mut &*encoded_result)
