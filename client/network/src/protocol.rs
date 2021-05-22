@@ -1362,7 +1362,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					},
 					Poll::Ready(Ok(Err(e))) => {
 						peer.request.take();
-						debug!(target: "sync", "Block request to peer {:?} failed: {:?}.", id, e);
+						debug!(target: "sync", "Request to peer {:?} failed: {:?}.", id, e);
 
 						match e {
 							RequestFailure::Network(OutboundFailure::Timeout) => {
@@ -1400,7 +1400,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						peer.request.take();
 						trace!(
 							target: "sync",
-							"Block request to peer {:?} failed due to oneshot being canceled.",
+							"Request to peer {:?} failed due to oneshot being canceled.",
 							id,
 						);
 						self.behaviour.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);

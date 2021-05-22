@@ -19,8 +19,7 @@
 use std::{pin::Pin, time::Duration, collections::HashMap, borrow::Cow};
 use sc_client_api::ImportNotifications;
 use sp_runtime::{DigestItem, traits::Block as BlockT, generic::BlockId};
-use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, StorageChanges,
-	import_queue::BoxBlockImport};
+use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, StorageChanges, import_queue::BoxBlockImport};
 use futures::{prelude::*, task::{Context, Poll}};
 use futures_timer::Delay;
 use log::*;

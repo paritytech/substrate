@@ -87,6 +87,9 @@ const MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS: usize = 256;
 /// See [`MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS`] for more information.
 const MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS_PER_PEER: usize = 4;
 
+/// Pick the state to sync as the latest finalized number minus this.
+const STATE_SYNC_FINALITY_THRESHOLD: u32 = 8;
+
 /// We use a heuristic that with a high likelihood, by the time
 /// `MAJOR_SYNC_BLOCKS` have been imported we'll be on the same
 /// chain as (or at least closer to) the peer so we want to delay
@@ -211,7 +214,8 @@ pub struct ChainSync<B: BlockT> {
 	block_announce_validation_per_peer_stats: HashMap<PeerId, usize>,
 	/// State sync in progress, if any.
 	state_sync: Option<StateSync<B>>,
-	imported_state: bool,
+	/// Enable imporing existing blocks. This is used used after the state download to
+	/// catch up to the latest state while re-importing blocks.
 	import_existing: bool,
 }
 
@@ -495,7 +499,6 @@ impl<B: BlockT> ChainSync<B> {
 			block_announce_validation: Default::default(),
 			block_announce_validation_per_peer_stats: Default::default(),
 			state_sync: None,
-			imported_state: false,
 			import_existing: false,
 		};
 		sync.reset_sync_start_point()?;
@@ -848,6 +851,7 @@ impl<B: BlockT> ChainSync<B> {
 			}
 			for (id, peer) in self.peers.iter_mut() {
 				if peer.state.is_available() && peer.common_number >= sync.target_block_num() {
+					trace!(target: "sync", "New StateRequest for {}", id);
 					peer.state = PeerSyncState::DownloadingState;
 					let request = sync.next_request();
 					return Some((id.clone(), request))
@@ -1158,7 +1162,7 @@ impl<B: BlockT> ChainSync<B> {
 			// We only request one justification at a time
 			let justification = if let Some(block) = response.blocks.into_iter().next() {
 				if hash != block.hash {
-					info!(
+					warn!(
 						target: "sync",
 						"💔 Invalid block justification provided by {}: requested: {:?} got: {:?}", who, hash, block.hash
 					);
@@ -1247,7 +1251,7 @@ impl<B: BlockT> ChainSync<B> {
 
 					if aux.bad_justification {
 						if let Some(ref peer) = who {
-							info!("💔 Sent block with bad justification to import");
+							warn!("💔 Sent block with bad justification to import");
 							output.push(Err(BadPeer(peer.clone(), rep::BAD_JUSTIFICATION)));
 						}
 					}
@@ -1257,9 +1261,8 @@ impl<B: BlockT> ChainSync<B> {
 					}
 					let state_sync_complete = self.state_sync.as_ref().map_or(false, |s| s.target() == hash);
 					if state_sync_complete {
-						info!(target: "sync", "State sync complete, restarting block sync.");
+						debug!(target: "sync", "State sync complete, restarting block sync.");
 						self.state_sync = None;
-						self.imported_state = true;
 						self.mode = SyncMode::Full;
 						output.extend(self.restart());
 					}
@@ -1289,7 +1292,7 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				Err(BlockImportError::BadBlock(who)) => {
 					if let Some(peer) = who {
-						info!(
+						warn!(
 							target: "sync",
 							"💔 Block {:?} received from peer {} has been blacklisted",
 							hash,
@@ -1334,8 +1337,7 @@ impl<B: BlockT> ChainSync<B> {
 		});
 
 		if let SyncMode::LightState { skip_proofs } = &self.mode {
-			if !self.imported_state
-				&& self.state_sync.is_none()
+			if self.state_sync.is_none()
 				&& !self.peers.is_empty()
 				&& self.queue_blocks.is_empty()
 			{
@@ -1343,9 +1345,9 @@ impl<B: BlockT> ChainSync<B> {
 				let mut heads: Vec<_> = self.peers.iter().map(|(_, peer)| peer.best_number).collect();
 				heads.sort();
 				let median = heads[heads.len() / 2];
-				if number + 32u32.saturated_into() >= median {
+				if number + STATE_SYNC_FINALITY_THRESHOLD.saturated_into() >= median {
 					if let Ok(Some(header)) = self.client.header(BlockId::hash(hash.clone())) {
-						log::info!(
+						log::debug!(
 							target: "sync",
 							"Starting state sync for #{} ({})",
 							number,
@@ -1784,7 +1786,7 @@ impl<B: BlockT> ChainSync<B> {
 		})
 	}
 
-	/// Find a block to start sync from. If we sync w state, that's the latest block we have state for.
+	/// Find a block to start sync from. If we sync with state, that's the latest block we have state for.
 	fn reset_sync_start_point(&mut self) -> Result<(), ClientError> {
 		let info = self.client.info();
 		if matches!(self.mode, SyncMode::LightState {..}) && info.finalized_state.is_some() {
@@ -1794,30 +1796,23 @@ impl<B: BlockT> ChainSync<B> {
 			);
 			self.mode = SyncMode::Full;
 		}
-		let best_num = info.best_number;
-		let mut num = best_num;
+		self.import_existing = false;
+		self.best_queued_hash = info.best_hash;
 		self.best_queued_number = info.best_number;
 		if self.mode == SyncMode::Full {
-			while num > Zero::zero() {
-				if self.client.block_status(&BlockId::number(num))? == BlockStatus::InChainWithState {
-					log::trace!(target: "sync", "Found state #{}", num);
-					self.best_queued_hash = self.client.hash(num)?.expect("Header existence is verified");
-					self.best_queued_number = num;
-					self.import_existing = num != info.best_number;
-					break;
-				}
-				log::trace!(target: "sync", "Missing state #{}", num);
-				num -= One::one();
-			}
-			if num.is_zero() {
-				log::debug!(target: "sync", "Restarting from genesis");
-				self.best_queued_hash = Default::default();
-				self.best_queued_number = Zero::zero();
+			if self.client.block_status(&BlockId::hash(info.best_hash))? != BlockStatus::InChainWithState {
 				self.import_existing = true;
+				// Latest state is missing, start with the last finalized state or genesis instead.
+				if let Some((hash, number)) = info.finalized_state {
+					log::debug!(target: "sync", "Starting from finalized state #{}", number);
+					self.best_queued_hash = hash;
+					self.best_queued_number = number;
+				} else {
+					log::debug!(target: "sync", "Restarting from genesis");
+					self.best_queued_hash = Default::default();
+					self.best_queued_number = Zero::zero();
+				}
 			}
-		} else {
-			self.best_queued_hash = info.best_hash;
-			self.best_queued_number = info.best_number;
 		}
 		log::trace!(target: "sync", "Restarted sync at #{} ({:?})", self.best_queued_number, self.best_queued_hash);
 		Ok(())

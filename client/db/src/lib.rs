@@ -1073,13 +1073,13 @@ impl<Block: BlockT> Backend<Block> {
 			genesis_state: RwLock::new(None),
 		};
 
-		// Older versions had no last state key. Check if the state is still available.
+		// Older DB versions have no last state key. Check if the state is available and set it.
+		// TODO: this code may be removed after a couple of releases.
 		let info = backend.blockchain.info();
 		if info.finalized_state.is_none()
 			&& info.finalized_hash != Default::default()
 			&& sc_client_api::Backend::have_state_at(&backend, &info.finalized_hash, info.finalized_number)
 		{
-			println!("Restored LAST_F");
 			backend.blockchain.update_meta(
 				info.finalized_hash,
 				info.finalized_number,
@@ -1260,6 +1260,7 @@ impl<Block: BlockT> Backend<Block> {
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 		let mut last_finalized_num = self.blockchain.meta.read().finalized_number;
+		let best_num = self.blockchain.meta.read().best_number;
 
 		let mut changes_trie_cache_ops = None;
 		for (block, justification) in operation.finalized_blocks {
@@ -1279,9 +1280,12 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		let imported = if let Some(pending_block) = operation.pending_block {
+
 			let hash = pending_block.header.hash();
+
 			let parent_hash = *pending_block.header.parent_hash();
 			let number = pending_block.header.number().clone();
+			let existing_header = number <= best_num && self.blockchain.header(BlockId::hash(hash))?.is_some();
 
 			// blocks are keyed by number + hash.
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
@@ -1328,6 +1332,8 @@ impl<Block: BlockT> Backend<Block> {
 				}
 
 				if !operation.commit_state {
+					// When we don't want to commit the genesis state, we still preserve it in memory.
+					// It is queried for an initial list of authorities, etc.
 					*self.genesis_state.write() = Some(Arc::new(DbGenesisStorage::new(
 						pending_block.header.state_root().clone(),
 						operation.db_updates.clone()
@@ -1412,11 +1418,11 @@ impl<Block: BlockT> Backend<Block> {
 			let is_best = pending_block.leaf_state.is_best();
 			let changes_trie_updates = operation.changes_trie_updates;
 			debug!(target: "db",
-				"DB Commit {:?} ({}), best={}, state={}",
-				hash, number, is_best, operation.commit_state
+				"DB Commit {:?} ({}), best={}, state={}, existing={}",
+				hash, number, is_best, operation.commit_state, existing_header,
 			);
 
-			if number > last_finalized_num || last_finalized_hash == Default::default() {
+			if !existing_header {
 				let changes_trie_config_update = operation.changes_trie_config_update;
 				changes_trie_cache_ops = Some(self.changes_tries_storage.commit(
 					&mut transaction,
@@ -1523,6 +1529,7 @@ impl<Block: BlockT> Backend<Block> {
 			is_best,
 			mut cache,
 		)) = imported {
+			trace!(target: "db", "DB Commit done {:?}", hash);
 			let header_metadata = CachedHeaderMetadata::from(&header);
 			self.blockchain.insert_header_metadata(
 				header_metadata.hash,
@@ -2308,12 +2315,12 @@ pub(crate) mod tests {
 		};
 		let header_hash = header.hash();
 
-		let mut op = backend.begin_operation().unwrap();
 		let block_id = if number == 0 {
 			BlockId::Hash(Default::default())
 		} else {
 			BlockId::Number(number - 1)
 		};
+		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, Some(body), None, NewBlockState::Best).unwrap();
 		if let Some(index) = transaction_index {
@@ -2790,7 +2797,6 @@ pub(crate) mod tests {
 
 	#[test]
 	fn test_children_with_complex_block_tree() {
-		sp_tracing::try_init_simple();
 		let backend: Arc<Backend<substrate_test_runtime_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
 		substrate_test_runtime_client::trait_tests::test_children_for_backend(backend);
 	}
@@ -3078,7 +3084,6 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize_with_fork() {
-		sp_tracing::try_init_simple();
 		let backend = Backend::<Block>::new_test_with_tx_storage(
 			2,
 			10,

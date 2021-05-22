@@ -124,7 +124,7 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
 
-	/// Request response configuration for the storage request protocol.
+	/// Request response configuration for the state request protocol.
 	///
 	/// Can be constructed either via
 	/// [`crate::state_requests::generate_protocol_config`] allowing outgoing but not
@@ -378,13 +378,13 @@ impl From<multiaddr::Error> for ParseErr {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-/// Sync operation
+/// Sync operation mode.
 pub enum SyncMode {
 	/// Full block download and verification.
 	Full,
 	/// Download headers and the latest state.
 	Fast {
-		/// Skip storage proof download and verification.
+		/// Skip state proof download and verification.
 		skip_proofs: bool
 	},
 }

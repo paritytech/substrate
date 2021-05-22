@@ -25,13 +25,11 @@ pub use sc_client_api::{StorageKey, StorageData, ImportedState};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: HeaderBackend<Block> + ProofProvider<Block> + BlockIdTo<Block, Error = Error>
-	+ BlockBackend<Block> + HeaderMetadata<Block, Error = Error>
-	+  Send + Sync
+	+ BlockBackend<Block> + HeaderMetadata<Block, Error = Error> + Send + Sync
 {}
 
 impl<Block: BlockT, T> Client<Block> for T
 	where
 		T: HeaderBackend<Block> + ProofProvider<Block> + BlockIdTo<Block, Error = Error>
-			+ BlockBackend<Block> + HeaderMetadata<Block, Error = Error>
-			+ Send + Sync
+			+ BlockBackend<Block> + HeaderMetadata<Block, Error = Error> + Send + Sync
 {}

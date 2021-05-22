@@ -187,7 +187,7 @@ impl<B: BlockT> StateRequestHandler<B> {
 				response.keys = keys;
 				response.values = proof.into_nodes();
 			} else {
-				let entries = self.client.read_state_collection(
+				let entries = self.client.storage_collection(
 					&BlockId::hash(block),
 					&StorageKey(request.start),
 					MAX_RESPONSE_BYTES,

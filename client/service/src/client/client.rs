@@ -1337,9 +1337,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		Ok(prove_read_with_size::<_, HashFor<Block>, _>(state, start_key, size_limit)?)
 	}
 
-	/// Given a `BlockId` Iterator over all storage values starting at `start_key`.
-	/// Returns collected keys and values.
-	fn read_state_collection(
+	fn storage_collection(
 		&self,
 		id: &BlockId<Block>,
 		start_key: &StorageKey,
@@ -1369,8 +1367,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 
 	}
 
-	/// Verify proof
-	fn verify_proof(
+	fn verify_read_proof(
 		&self,
 		keys: &[Vec<u8>],
 		root: Block::Hash,

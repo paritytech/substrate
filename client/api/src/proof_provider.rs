@@ -81,17 +81,17 @@ pub trait ProofProvider<Block: BlockT> {
 		size_limit: usize,
 	) -> sp_blockchain::Result<(Vec<Vec<u8>>, StorageProof)>;
 
-	/// Given a `BlockId` Iterator over all storage values starting at `start_key`.
+	/// Given a `BlockId` iterate over all storage values starting at `start_key`.
 	/// Returns collected keys and values.
-	fn read_state_collection(
+	fn storage_collection(
 		&self,
 		id: &BlockId<Block>,
 		start_key: &StorageKey,
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>>;
 
-	/// Verify proof
-	fn verify_proof(
+	/// Verify read storage proof for a set of keys.
+	fn verify_read_proof(
 		&self,
 		keys: &[Vec<u8>],
 		root: Block::Hash,

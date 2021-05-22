@@ -233,6 +233,7 @@ arg_enum! {
 }
 
 arg_enum! {
+	/// Syncing mode.
 	#[allow(missing_docs)]
 	#[derive(Debug, Clone, Copy)]
 	pub enum SyncMode {

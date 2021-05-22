@@ -23,6 +23,8 @@ use sc_client_api::StorageProof;
 use crate::schema::v1::{StateRequest, StateResponse};
 use crate::chain::{Client, ImportedState};
 
+/// State sync state machine. Accumulates partial state data until it
+/// is ready to be imported.
 pub struct StateSync<B: BlockT> {
 	target_block: B::Hash,
 	target_header: B::Header,
@@ -35,13 +37,18 @@ pub struct StateSync<B: BlockT> {
 	request_proof: bool,
 }
 
+/// Import state chunk result.
 pub enum ImportResult<B: BlockT> {
+	/// State is complete and ready for import.
 	Import(B::Hash, B::Header, ImportedState<B>),
+	/// Continue dowloading.
 	Continue(StateRequest),
+	/// Bad state chunk.
 	BadResponse,
 }
 
 impl<B: BlockT> StateSync<B> {
+	///  Create a new instance.
 	pub fn new(client: Arc<dyn Client<B>>, target: B::Header, request_proof: bool) -> Self {
 		StateSync {
 			client,
@@ -56,6 +63,7 @@ impl<B: BlockT> StateSync<B> {
 		}
 	}
 
+	///  Validate and import a state reponse.
 	pub fn import(&mut self, response: StateResponse) -> ImportResult<B> {
 		if response.keys.is_empty() && !response.complete {
 			log::debug!(
@@ -67,7 +75,7 @@ impl<B: BlockT> StateSync<B> {
 		if let Some(key) = response.keys.last() {
 			self.last_key = key.clone();
 		}
-		log::trace!(
+		log::debug!(
 			target: "sync",
 			"Importing state, {:?} to {:?}",
 			sp_core::hexdisplay::HexDisplay::from(&self.last_key),
@@ -76,7 +84,7 @@ impl<B: BlockT> StateSync<B> {
 
 		if self.request_proof {
 			let proof_size = response.values.iter().map(|v| v.len()).sum::<usize>() as u64;
-			let values = match self.client.verify_proof(
+			let values = match self.client.verify_read_proof(
 				&response.keys,
 				self.target_root,
 				StorageProof::new(response.values),
@@ -119,6 +127,7 @@ impl<B: BlockT> StateSync<B> {
 		}
 	}
 
+	/// Produce next state request.
 	pub fn next_request(&self) -> StateRequest {
 		StateRequest {
 			block: self.target_block.encode(),
@@ -127,18 +136,22 @@ impl<B: BlockT> StateSync<B> {
 		}
 	}
 
+	/// Check if the state is complete.
 	pub fn is_complete(&self) -> bool {
 		self.complete
 	}
 
+	/// Returns target block number.
 	pub fn target_block_num(&self) -> NumberFor<B> {
 		self.target_header.number().clone()
 	}
 
+	/// Returns target block hash.
 	pub fn target(&self) -> B::Hash {
 		self.target_block.clone()
 	}
 
+	/// Returns state sync estimated progress (percentage, bytes)
 	pub fn progress(&self) -> (u32, u64) {
 		let percent_done = (*self.last_key.get(0).unwrap_or(&0u8) as u32) * 100 / 256;
 		(percent_done, self.imported_bytes)

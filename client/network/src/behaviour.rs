@@ -80,7 +80,7 @@ pub struct Behaviour<B: BlockT> {
 	#[behaviour(ignore)]
 	block_request_protocol_name: String,
 
-	/// Protocol name used to send out storage requests via
+	/// Protocol name used to send out state requests via
 	/// [`request_responses::RequestResponsesBehaviour`].
 	#[behaviour(ignore)]
 	state_request_protocol_name: String,
@@ -342,7 +342,7 @@ Behaviour<B> {
 				if let Err(err) = request.encode(&mut buf) {
 					log::warn!(
 						target: "sync",
-						"Failed to encode storage request {:?}: {:?}",
+						"Failed to encode state request {:?}: {:?}",
 						request, err
 					);
 					return
