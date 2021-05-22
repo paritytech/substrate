@@ -270,7 +270,6 @@ pub(crate) async fn import_single_block_metered<B: BlockT, V: Verifier<B>, Trans
 	import_block.import_existing = block.import_existing;
 	let mut import_block = import_block.convert_transaction();
 	if let Some(state) = block.state {
-		println!("Set queue state");
 		import_block.storage_changes = Some(crate::StorageChanges::Import(state));
 	}
 

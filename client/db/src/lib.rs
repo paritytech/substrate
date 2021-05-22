@@ -1396,6 +1396,7 @@ impl<Block: BlockT> Backend<Block> {
 					let commit = self.storage.state_db.canonicalize_block(&hash)
 						.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 					apply_state_commit(&mut transaction, commit);
+					meta_updates.push((hash, number, false, true, true));
 				}
 
 
@@ -1410,7 +1411,10 @@ impl<Block: BlockT> Backend<Block> {
 			let header = &pending_block.header;
 			let is_best = pending_block.leaf_state.is_best();
 			let changes_trie_updates = operation.changes_trie_updates;
-			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, is_best);
+			debug!(target: "db",
+				"DB Commit {:?} ({}), best={}, state={}",
+				hash, number, is_best, operation.commit_state
+			);
 
 			if number > last_finalized_num || last_finalized_hash == Default::default() {
 				let changes_trie_config_update = operation.changes_trie_config_update;
@@ -1680,6 +1684,23 @@ impl<Block: BlockT> Backend<Block> {
 			None => return Ok(()),
 		}
 		Ok(())
+	}
+
+	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
+		let root = EmptyStorage::<Block>::new().0; // Empty trie
+		let db_state = DbState::<Block>::new(self.storage.clone(), root);
+		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
+		let caching_state = CachingState::new(
+			state,
+			self.shared_cache.clone(),
+			None,
+		);
+		Ok(SyncingCachingState::new(
+				caching_state,
+				self.state_usage.clone(),
+				self.blockchain.meta.clone(),
+				self.import_lock.clone(),
+		))
 	}
 }
 
@@ -2209,23 +2230,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&*self.import_lock
-	}
-
-	fn empty_state(&self) -> ClientResult<Self::State> {
-		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		let db_state = DbState::<Block>::new(self.storage.clone(), root);
-		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-		let caching_state = CachingState::new(
-			state,
-			self.shared_cache.clone(),
-			None,
-		);
-		Ok(SyncingCachingState::new(
-				caching_state,
-				self.state_usage.clone(),
-				self.blockchain.meta.clone(),
-				self.import_lock.clone(),
-		))
 	}
 }
 

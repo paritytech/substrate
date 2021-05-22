@@ -56,7 +56,7 @@ use sc_network::{
 	NetworkWorker, NetworkService, config::{ProtocolId, MultiaddrWithPeerId, NonReservedPeerMode},
 	Multiaddr,
 };
-use sc_network::config::{NetworkConfiguration, NonDefaultSetConfig, TransportConfig};
+use sc_network::config::{NetworkConfiguration, NonDefaultSetConfig, TransportConfig, SyncMode};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
@@ -177,6 +177,19 @@ impl PeersClient {
 		match *self {
 			PeersClient::Full(ref client, ref _backend) => client.header(block),
 			PeersClient::Light(ref client, ref _backend) => client.header(block),
+		}
+	}
+
+	pub fn have_state_at(&self, block: &BlockId<Block>) -> bool {
+		let header = match self.header(block).unwrap() {
+			Some(header) => header,
+			None => return false,
+		};
+		match self {
+			PeersClient::Full(_client, backend) =>
+				backend.have_state_at(&header.hash(), *header.number()),
+			PeersClient::Light(_client, backend) =>
+				backend.have_state_at(&header.hash(), *header.number()),
 		}
 	}
 
@@ -645,6 +658,8 @@ pub struct FullPeerConfig {
 	pub connect_to_peers: Option<Vec<usize>>,
 	/// Whether the full peer should have the authority role.
 	pub is_authority: bool,
+	/// Syncing mode
+	pub sync_mode: SyncMode,
 }
 
 pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>::Transaction: Send {
@@ -700,10 +715,13 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 
 	/// Add a full peer.
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
-		let test_client_builder = match config.keep_blocks {
+		let mut test_client_builder = match config.keep_blocks {
 			Some(keep_blocks) => TestClientBuilder::with_pruning_window(keep_blocks),
 			None => TestClientBuilder::with_default_backend(),
 		};
+		if matches!(config.sync_mode, SyncMode::Fast{..}) {
+			test_client_builder = test_client_builder.set_no_genesis();
+		}
 		let backend = test_client_builder.backend();
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
@@ -737,6 +755,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			Default::default(),
 			None,
 		);
+		network_config.sync_mode = config.sync_mode;
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;

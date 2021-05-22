@@ -236,16 +236,21 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 
 	/// Auxiliary function for "converting" the transaction type.
 	///
-	/// Actually this just sets `storage_changes` to `None` and makes rustc think that `Self` now
+	/// Actually this just sets Raw `storage_changes` to `None` and makes rustc think that `Self` now
 	/// uses a different transaction type.
 	pub fn convert_transaction<Transaction2>(self) -> BlockImportParams<Block, Transaction2> {
+		// Preserve imported state.
+		let state = match self.storage_changes {
+			Some(StorageChanges::Import(state)) => Some(state),
+			Some(StorageChanges::Raw(_)) | None => None,
+		};
 		BlockImportParams {
 			origin: self.origin,
 			header: self.header,
 			justifications: self.justifications,
 			post_digests: self.post_digests,
 			body: self.body,
-			storage_changes: None,
+			storage_changes: state.map(StorageChanges::Import),
 			finalized: self.finalized,
 			auxiliary: self.auxiliary,
 			intermediates: self.intermediates,

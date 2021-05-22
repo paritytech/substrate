@@ -788,6 +788,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							top: changes.state.into_iter().collect(),
 							children_default: Default::default(),
 						};
+
 						let state_root = operation.op.reset_storage(storage, true)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happe in safe fast sync mode,

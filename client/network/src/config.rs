@@ -389,6 +389,12 @@ pub enum SyncMode {
 	},
 }
 
+impl Default for SyncMode {
+	fn default() -> Self {
+		SyncMode::Full
+	}
+}
+
 /// Network service configuration.
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {

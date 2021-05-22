@@ -464,9 +464,6 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
 
-	/// Returns an empty state.
-	fn empty_state(&self) -> sp_blockchain::Result<Self::State>;
-
 	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
 	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
 	/// inconsistent state.
