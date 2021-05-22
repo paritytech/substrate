@@ -1,12 +1,12 @@
 [package]
-name = "max-encoded-len-derive"
+name = "test-procedural-tools-derive"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "Derive support for MaxEncodedLen"
+description = "Use to derive parsing for parsing struct."
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -15,11 +15,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-frame-support-procedural-tools = { version = "3.0.0", path = "../../support/procedural/tools" }
 proc-macro2 = "1.0.6"
-quote = "1.0.3"
-syn = { version = "1.0.58", features = ["full"] }
-
-[features]
-default = ["std"]
-std = []
+quote = { version = "1.0.3", features = ["proc-macro"] }
+syn = { version = "1.0.58", features = ["proc-macro" ,"full", "extra-traits", "parsing"] }

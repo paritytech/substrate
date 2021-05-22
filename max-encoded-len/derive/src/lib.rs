@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support_procedural_tools::generate_crate_access_2018;
+use temp_procedural_tools::generate_crate_access_2018;
 use quote::{quote, quote_spanned};
 use syn::{
 	Data, DeriveInput, Fields, GenericParam, Generics, TraitBound, Type, TypeParamBound,

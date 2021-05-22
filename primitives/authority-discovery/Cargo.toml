@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", default-features = false, version = "2
 sp-std = { version = "3.0.0", default-features = false, path = "../std" }
 sp-api = { version = "3.0.0", default-features = false, path = "../api" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
-max-encoded-len = { version = "3.0.0", default-features = false, path = "../../frame/max-encoded-len", features = [ "derive" ] }
+max-encoded-len = { version = "3.0.0", default-features = false, path = "../../max-encoded-len", features = [ "derive" ] }
 
 [features]
 default = ["std"]

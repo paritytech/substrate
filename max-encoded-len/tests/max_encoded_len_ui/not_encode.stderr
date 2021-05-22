@@ -4,7 +4,7 @@ error[E0277]: the trait bound `NotEncode: parity_scale_codec::codec::WrapperType
 3  | #[derive(MaxEncodedLen)]
    |          ^^^^^^^^^^^^^ the trait `parity_scale_codec::codec::WrapperTypeEncode` is not implemented for `NotEncode`
    |
-  ::: $WORKSPACE/frame/max-encoded-len/src/lib.rs
+  ::: $WORKSPACE/max-encoded-len/src/lib.rs
    |
    | pub trait MaxEncodedLen: Encode {
    |                          ------ required by this bound in `MaxEncodedLen`

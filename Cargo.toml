@@ -90,8 +90,6 @@ members = [
 	"frame/im-online",
 	"frame/indices",
 	"frame/lottery",
-	"frame/max-encoded-len",
-	"frame/max-encoded-len/derive",
 	"frame/membership",
 	"frame/merkle-mountain-range",
 	"frame/merkle-mountain-range/primitives",
@@ -204,6 +202,10 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/prometheus",
 	"utils/wasm-builder",
+	# temp deps
+	"max-encoded-len",
+	"max-encoded-len/derive",
+	"max-encoded-len/derive/tools",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
