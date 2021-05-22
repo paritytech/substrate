@@ -3,12 +3,12 @@
 The Offchain Worker Example: A simple pallet demonstrating
 concepts, APIs and structures common to most offchain workers.
 
-Run `cargo doc --package pallet-example-offchain-worker --open` to view this module's
+Run `cargo doc --package pallet-ddc-metrics-offchain-worker --open` to view this module's
 documentation.
 
-- [`pallet_example_offchain_worker::Trait`](https://docs.rs/pallet-example-offchain-worker/latest/pallet_example_offchain_worker/trait.Trait.html)
-- [`Call`](https://docs.rs/pallet-example-offchain-worker/latest/pallet_example_offchain_worker/enum.Call.html)
-- [`Module`](https://docs.rs/pallet-example-offchain-worker/latest/pallet_example_offchain_worker/struct.Module.html)
+- [`pallet_ddc_metrics_offchain_worker::Trait`](https://docs.rs/pallet-ddc-metrics-offchain-worker/latest/pallet_ddc_metrics_offchain_worker/trait.Trait.html)
+- [`Call`](https://docs.rs/pallet-ddc-metrics-offchain-worker/latest/pallet_ddc_metrics_offchain_worker/enum.Call.html)
+- [`Module`](https://docs.rs/pallet-ddc-metrics-offchain-worker/latest/pallet_ddc_metrics_offchain_worker/struct.Module.html)
 
 
 ## Overview
