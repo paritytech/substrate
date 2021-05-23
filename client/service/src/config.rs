@@ -23,7 +23,11 @@ pub use sc_client_db::{
 	KeepBlocks, TransactionStorageMode
 };
 pub use sc_network::Multiaddr;
-pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
+pub use sc_network::config::{
+	ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig,
+	SetConfig, NonDefaultSetConfig, TransportConfig,
+	RequestResponseConfig, IncomingRequest, OutgoingResponse,
+};
 pub use sc_executor::WasmExecutionMethod;
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 
