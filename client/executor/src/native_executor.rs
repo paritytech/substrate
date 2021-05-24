@@ -163,7 +163,7 @@ impl WasmExecutor {
 		allow_missing_host_functions: bool,
 		f: F,
 	) -> Result<R>
-		where F: FnOnce(
+		where F: Fn(
 			AssertUnwindSafe<&Arc<dyn WasmModule>>,
 			AssertUnwindSafe<&dyn WasmInstance>,
 			Option<&RuntimeVersion>,
@@ -479,7 +479,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 
 	fn call<
 		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
+		NC: Fn() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 	>(
 		&self,
 		ext: &mut dyn Externalities,
