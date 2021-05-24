@@ -19,14 +19,14 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use sp_std::prelude::*;
+use sp_std::{prelude::*, convert::TryInto};
 use super::*;
 use sp_runtime::traits::Bounded;
 use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{
 	benchmarks_instance_pallet, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite
 };
-use frame_support::{traits::{Get, EnsureOrigin}, dispatch::UnfilteredDispatchable};
+use frame_support::{traits::{Get, EnsureOrigin}, dispatch::UnfilteredDispatchable, BoundedVec};
 
 use crate::Pallet as Uniques;
 
@@ -58,7 +58,7 @@ fn add_class_metadata<T: Config<I>, I: 'static>()
 	assert!(Uniques::<T, I>::set_class_metadata(
 		SystemOrigin::Signed(caller.clone()).into(),
 		Default::default(),
-		vec![0; T::StringLimit::get() as usize],
+		vec![0; T::StringLimit::get() as usize].try_into().unwrap(),
 		false,
 	).is_ok());
 	(caller, caller_lookup)
@@ -94,27 +94,27 @@ fn add_instance_metadata<T: Config<I>, I: 'static>(instance: T::InstanceId)
 		SystemOrigin::Signed(caller.clone()).into(),
 		Default::default(),
 		instance,
-		vec![0; T::StringLimit::get() as usize],
+		vec![0; T::StringLimit::get() as usize].try_into().unwrap(),
 		false,
 	).is_ok());
 	(caller, caller_lookup)
 }
 
 fn add_instance_attribute<T: Config<I>, I: 'static>(instance: T::InstanceId)
-	-> (Vec<u8>, T::AccountId, <T::Lookup as StaticLookup>::Source)
+	-> (BoundedVec<u8, T::KeyLimit>, T::AccountId, <T::Lookup as StaticLookup>::Source)
 {
 	let caller = Class::<T, I>::get(T::ClassId::default()).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
-	let key = vec![0; T::KeyLimit::get() as usize];
+	let key: BoundedVec<_, _> = vec![0; T::KeyLimit::get() as usize].try_into().unwrap();
 	assert!(Uniques::<T, I>::set_attribute(
 		SystemOrigin::Signed(caller.clone()).into(),
 		Default::default(),
 		Some(instance),
 		key.clone(),
-		vec![0; T::ValueLimit::get() as usize],
+		vec![0; T::ValueLimit::get() as usize].try_into().unwrap(),
 	).is_ok());
 	(key, caller, caller_lookup)
 }
@@ -293,8 +293,8 @@ benchmarks_instance_pallet! {
 	}
 
 	set_attribute {
-		let key = vec![0u8; T::KeyLimit::get() as usize];
-		let value = vec![0u8; T::ValueLimit::get() as usize];
+		let key: BoundedVec<_, _> = vec![0u8; T::KeyLimit::get() as usize].try_into().unwrap();
+		let value: BoundedVec<_, _> = vec![0u8; T::ValueLimit::get() as usize].try_into().unwrap();
 
 		let (class, caller, _) = create_class::<T, I>();
 		let (instance, ..) = mint_instance::<T, I>(0);
@@ -315,7 +315,7 @@ benchmarks_instance_pallet! {
 	}
 
 	set_metadata {
-		let data = vec![0u8; T::StringLimit::get() as usize];
+		let data: BoundedVec<_, _> = vec![0u8; T::StringLimit::get() as usize].try_into().unwrap();
 
 		let (class, caller, _) = create_class::<T, I>();
 		let (instance, ..) = mint_instance::<T, I>(0);
@@ -334,7 +334,7 @@ benchmarks_instance_pallet! {
 	}
 
 	set_class_metadata {
-		let data = vec![0u8; T::StringLimit::get() as usize];
+		let data: BoundedVec<_, _> = vec![0u8; T::StringLimit::get() as usize].try_into().unwrap();
 
 		let (class, caller, _) = create_class::<T, I>();
 	}: _(SystemOrigin::Signed(caller), class, data.clone(), false)

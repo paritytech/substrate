@@ -18,6 +18,7 @@
 //! Various basic types for use in the assets pallet.
 
 use super::*;
+use frame_support::{traits::Get, BoundedVec};
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
@@ -89,7 +90,7 @@ pub struct InstanceDetails<AccountId, DepositBalance> {
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
-pub struct ClassMetadata<DepositBalance> {
+pub struct ClassMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.
@@ -97,13 +98,13 @@ pub struct ClassMetadata<DepositBalance> {
 	/// General information concerning this asset. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
-	pub(super) data: Vec<u8>,
+	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the asset metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
-pub struct InstanceMetadata<DepositBalance> {
+pub struct InstanceMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.
@@ -111,7 +112,7 @@ pub struct InstanceMetadata<DepositBalance> {
 	/// General information concerning this asset. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
-	pub(super) data: Vec<u8>,
+	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the asset metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
 }

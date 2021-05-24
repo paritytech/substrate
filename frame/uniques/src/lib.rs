@@ -146,7 +146,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::ClassId,
-		ClassMetadata<DepositBalanceOf<T, I>>,
+		ClassMetadata<DepositBalanceOf<T, I>, T::StringLimit>,
 		OptionQuery,
 	>;
 
@@ -158,7 +158,7 @@ pub mod pallet {
 		T::ClassId,
 		Blake2_128Concat,
 		T::InstanceId,
-		InstanceMetadata<DepositBalanceOf<T, I>>,
+		InstanceMetadata<DepositBalanceOf<T, I>, T::StringLimit>,
 		OptionQuery,
 	>;
 
@@ -169,9 +169,9 @@ pub mod pallet {
 		(
 			NMapKey<Blake2_128Concat, T::ClassId>,
 			NMapKey<Blake2_128Concat, Option<T::InstanceId>>,
-			NMapKey<Blake2_128Concat, Vec<u8>>,
+			NMapKey<Blake2_128Concat, BoundedVec<u8, T::KeyLimit>>,
 		),
-		(Vec<u8>, DepositBalanceOf<T, I>),
+		(BoundedVec<u8, T::ValueLimit>, DepositBalanceOf<T, I>),
 		OptionQuery
 	>;
 
@@ -219,22 +219,27 @@ pub mod pallet {
 		/// \[ class \]
 		AssetStatusChanged(T::ClassId),
 		/// New metadata has been set for an asset class. \[ class, data, is_frozen \]
-		ClassMetadataSet(T::ClassId, Vec<u8>, bool),
+		ClassMetadataSet(T::ClassId, BoundedVec<u8, T::StringLimit>, bool),
 		/// Metadata has been cleared for an asset class. \[ class \]
 		ClassMetadataCleared(T::ClassId),
 		/// New metadata has been set for an asset instance.
 		/// \[ class, instance, data, is_frozen \]
-		MetadataSet(T::ClassId, T::InstanceId, Vec<u8>, bool),
+		MetadataSet(T::ClassId, T::InstanceId, BoundedVec<u8, T::StringLimit>, bool),
 		/// Metadata has been cleared for an asset instance. \[ class, instance \]
 		MetadataCleared(T::ClassId, T::InstanceId),
 		/// Metadata has been cleared for an asset instance. \[ class, successful_instances \]
 		Redeposited(T::ClassId, Vec<T::InstanceId>),
 		/// New attribute metadata has been set for an asset class or instance.
 		/// \[ class, maybe_instance, key, value \]
-		AttributeSet(T::ClassId, Option<T::InstanceId>, Vec<u8>, Vec<u8>),
+		AttributeSet(
+			T::ClassId,
+			Option<T::InstanceId>,
+			BoundedVec<u8, T::KeyLimit>,
+			BoundedVec<u8, T::ValueLimit>,
+		),
 		/// Attribute metadata has been cleared for an asset class or instance.
 		/// \[ class, maybe_instance, key, maybe_value \]
-		AttributeCleared(T::ClassId, Option<T::InstanceId>, Vec<u8>),
+		AttributeCleared(T::ClassId, Option<T::InstanceId>, BoundedVec<u8, T::KeyLimit>),
 	}
 
 	#[pallet::error]
@@ -259,8 +264,6 @@ pub mod pallet {
 		NoDelegate,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
-		/// Invalid metadata given.
-		BadMetadata,
 	}
 
 	#[pallet::hooks]
@@ -974,15 +977,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
-			key: Vec<u8>,
-			value: Vec<u8>,
+			key: BoundedVec<u8, T::KeyLimit>,
+			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			ensure!(key.len() <= T::KeyLimit::get() as usize, Error::<T, I>::BadMetadata);
-			ensure!(value.len() <= T::ValueLimit::get() as usize, Error::<T, I>::BadMetadata);
 
 			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = &maybe_check_owner {
@@ -1042,13 +1042,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
-			key: Vec<u8>,
+			key: BoundedVec<u8, T::KeyLimit>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			ensure!(key.len() <= T::KeyLimit::get() as usize, Error::<T, I>::BadMetadata);
 			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
@@ -1092,14 +1091,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
-			data: Vec<u8>,
+			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			ensure!(data.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 
 			let mut class_details = Class::<T, I>::get(&class)
 				.ok_or(Error::<T, I>::Unknown)?;
@@ -1120,7 +1117,7 @@ pub mod pallet {
 				let mut deposit = Zero::zero();
 				if !class_details.free_holding && maybe_check_owner.is_some() {
 					deposit = T::DepositPerByte::get()
-						.saturating_mul(((name.len() + info.len()) as u32).into())
+						.saturating_mul(((data.len()) as u32).into())
 						.saturating_add(T::MetadataDepositBase::get());
 				}
 				if deposit > old_deposit {
@@ -1208,14 +1205,12 @@ pub mod pallet {
 		pub(super) fn set_class_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
-			data: Vec<u8>,
+			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			ensure!(data.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 
 			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = &maybe_check_owner {
@@ -1231,7 +1226,7 @@ pub mod pallet {
 				let mut deposit = Zero::zero();
 				if maybe_check_owner.is_some() && !details.free_holding {
 					deposit = T::DepositPerByte::get()
-						.saturating_mul(((name.len() + info.len()) as u32).into())
+						.saturating_mul(((data.len()) as u32).into())
 						.saturating_add(T::MetadataDepositBase::get());
 				}
 				if deposit > old_deposit {
