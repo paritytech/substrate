@@ -357,8 +357,7 @@ impl<Block, Client> SubscriptionSinks<Block, Client>
 			.map_err(|api_err| Error::Client(Box::new(api_err)))?;
 		let mut previous_version = version.clone();
 		// TODO: fix error handling here
-		self.runtime_version_sink.send(&version).unwrap();
-			//.map_err(|state_err| Error::Client(Box::new(<anyhow::Error as AsRef<(dyn std::error::Error + Sync + std::marker::Send + 'static)>>::as_ref(&state_err))))?;
+		self.runtime_version_sink.send(&version).map_err(|state_err| Error::Client(state_err.into()))?;
 
 		let rt_version_stream = self.client.storage_changes_notification_stream(
 			Some(&[StorageKey(well_known_keys::CODE.to_vec())]),

@@ -808,8 +808,13 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	// Spawn subscription tasks.
 	// TODO: Stream setup can fail I think; should return error? Don't call subscribe if it fails.
 	task_executor.execute_new(Box::pin(chain_subs.subscribe()));
-	let state_subscriptions = state_subs.subscribe().unwrap_or_else(|| log::error!("Could not set up state subscriptions"));
-	task_executor.execute_new(Box::pin(state_subscriptions));
+
+	// TODO: task executor doesn't allow error; either allow errors or use channels.
+	std::thread::spawn(move || {
+		if let Err(e) = futures::executor::block_on(state_subs.subscribe()) {
+			log::error!("state_subscription failed: {:?}", e)
+		}
+	});
 
 	rpc_api
 }
