@@ -2924,25 +2924,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonrpsee-http-client"
-version = "0.2.0-alpha.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2737440f37efa10e5ef7beeec43d059d29dc92640978be21fcdcef481a2edb0d"
-dependencies = [
- "async-trait",
- "fnv",
- "hyper 0.13.10",
- "hyper-rustls",
- "jsonrpsee-types",
- "jsonrpsee-utils",
- "log",
- "serde",
- "serde_json",
- "thiserror",
- "url 2.2.1",
-]
-
-[[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.2.0-alpha.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2969,17 +2950,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
-]
-
-[[package]]
-name = "jsonrpsee-utils"
-version = "0.2.0-alpha.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d63cf4d423614e71fd144a8691208539d2b23d8373e069e2fbe023c5eba5e922"
-dependencies = [
- "futures-util",
- "hyper 0.13.10",
- "jsonrpsee-types",
 ]
 
 [[package]]
@@ -6695,7 +6665,6 @@ version = "0.9.0"
 dependencies = [
  "env_logger 0.8.3",
  "hex-literal",
- "jsonrpsee-http-client",
  "jsonrpsee-proc-macros",
  "jsonrpsee-ws-client",
  "log",
