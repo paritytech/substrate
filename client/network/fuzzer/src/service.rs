@@ -213,6 +213,7 @@ enum Action {
 	DenyUnreservedPeers(SenderNode),
 	AddReservedPeer(SenderNode, ReceiverNode),
 	RemoveReservedPeer(SenderNode, ReceiverNode),
+	SetAuthorizedOnly(SenderNode, bool),
 }
 
 fn main() {
@@ -260,6 +261,10 @@ fn main() {
 						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
 						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
 						sender.remove_reserved_peer(receiver.local_peer_id().clone());
+					},
+					Action::SetAuthorizedOnly(sender, reserved_only) => {
+						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
+						sender.set_authorized_only(reserved_only);
 					},
 				};
 			}
