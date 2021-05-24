@@ -206,6 +206,7 @@ enum ReceiverNode {
 #[derive(Arbitrary)]
 enum Action {
 	WriteNotification(SenderNode, ReceiverNode, Vec<u8>),
+	NotificationSender(SenderNode, ReceiverNode),
 	DisconnectPeer(SenderNode, ReceiverNode),
 	ReportPeer(SenderNode, ReceiverNode, ReputationChange),
 	AcceptUnreservedPeers(SenderNode),
@@ -225,6 +226,11 @@ fn main() {
 						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
 						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
 						sender.write_notification(receiver.local_peer_id().clone(), PROTOCOL_NAME, data);
+					},
+					Action::NotificationSender(sender, receiver) => {
+						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
+						let receiver = if matches!(receiver, ReceiverNode::A) { &a } else { &b };
+						let _ = sender.notification_sender(receiver.local_peer_id().clone(), PROTOCOL_NAME);
 					},
 					Action::DisconnectPeer(sender, receiver) => {
 						let sender = if matches!(sender, SenderNode::A) { &a } else { &b };
