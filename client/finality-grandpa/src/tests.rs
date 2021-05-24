@@ -218,6 +218,19 @@ sp_api::mock_impl_runtime_apis! {
 		) -> Option<OpaqueKeyOwnershipProof> {
 			None
 		}
+
+		fn submit_start_accountable_safety_protocol_extrinsic() {
+		}
+
+		fn accountable_safety_state() -> Option<()> {
+			None
+		}
+
+		fn submit_accountable_safety_response_extrinsic() {
+		}
+
+		fn submit_accountable_safety_prevote_response_extrinsic() {
+		}
 	}
 }
 

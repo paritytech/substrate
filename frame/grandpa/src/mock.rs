@@ -249,6 +249,8 @@ impl Config for Test {
 		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
+
+	type AccountableSafety = super::AccountableSafetyHandler;
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
