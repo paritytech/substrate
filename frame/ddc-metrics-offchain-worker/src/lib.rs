@@ -102,32 +102,27 @@ impl MetricInfo {
     }
 }
 
-pub fn get_contract_id() -> [u8; 32] {
-    let sc_address_store = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::sc_address");
+pub fn get_contract_id() -> Option<[u8; 32]> {
+	let sc_address_store = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::sc_address");
 
-    let mut contract_id = METRICS_CONTRACT_ID;
+	let value = sc_address_store.get::<[u8; 32]>();
 
-    let value = sc_address_store.get::<[u8; 32]>();
+	if !value.is_none() {
+		let contract_id = value.unwrap();
 
-    if !value.is_none() {
-        contract_id = value.unwrap().unwrap();
-    }
+		if !contract_id.is_none() {
+			return Some(contract_id.unwrap());
+		}
+	}
 
-    return contract_id;
+	return None;
 }
 
-pub fn get_ddc_url_or_default(default_url: &str) -> Vec<u8> {
+pub fn get_ddc_url() -> Option<Vec<u8>> {
     use sp_io::offchain::local_storage_get;
     use sp_core::offchain::StorageKind::PERSISTENT;
 
-    let maybe_value = local_storage_get(PERSISTENT, b"ddc-metrics-offchain-worker::ddc_url");
-
-    let ddc_url = match maybe_value {
-        None => default_url.as_bytes().to_vec(),
-        Some(url) => url,
-    };
-
-    ddc_url
+    local_storage_get(PERSISTENT, b"ddc-metrics-offchain-worker::ddc_url")
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -233,6 +228,22 @@ impl<T: Trait> Module<T> {
             Ok(signer) => signer,
         };
 
+		let contract_address = match T::ContractId::get() {
+			None => {
+				warn!("Smart Contract is not configured. Please configure it using offchain_localStorageSet");
+				return Ok(());
+			},
+			Some(contract_address) => contract_address
+		};
+
+		let ddc_url = match T::DdcUrl::get() {
+			None => {
+				warn!("DDC URL is not configured. Please configure it using offchain_localStorageSet");
+				return Ok(());
+			},
+			Some(ddc_url) => ddc_url,
+		};
+
         let should_proceed = Self::check_if_should_proceed(block_number);
         if should_proceed == false {
             return Ok(());
@@ -240,13 +251,13 @@ impl<T: Trait> Module<T> {
 
         let day_start_ms = Self::get_start_of_day_ms();
 
-        let aggregated_metrics = Self::fetch_all_metrics(day_start_ms)
+        let aggregated_metrics = Self::fetch_all_metrics(ddc_url, day_start_ms)
             .map_err(|err| {
                 error!("[OCW] HTTP error occurred: {:?}", err);
                 "could not fetch metrics"
             })?;
 
-        Self::send_metrics_to_sc(signer, day_start_ms, aggregated_metrics)
+        Self::send_metrics_to_sc(contract_address, signer, day_start_ms, aggregated_metrics)
             .map_err(|err| {
                 error!("[OCW] Contract error occurred: {:?}", err);
                 "could not submit report_metrics TX"
@@ -298,11 +309,11 @@ impl<T: Trait> Module<T> {
     }
 
     fn send_metrics_to_sc(
+		contract_id: <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::Source,
         signer: Signer::<T::CST, T::AuthorityId>,
         day_start_ms: u64,
         metrics: Vec<MetricInfo>,
     ) -> ResultStr<()> {
-        let contract_id = T::ContractId::get();
         info!("[OCW] Using Contract Address: {:?}", contract_id);
 
         for one_metric in metrics.iter() {
@@ -337,12 +348,12 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    fn fetch_all_metrics(day_start_ms: u64) -> ResultStr<Vec<MetricInfo>> {
+    fn fetch_all_metrics(ddc_url: Vec<u8>, day_start_ms: u64) -> ResultStr<Vec<MetricInfo>> {
         let a_moment_ago_ms = sp_io::offchain::timestamp().sub(Duration::from_millis(END_TIME_DELAY_MS)).unix_millis();
 
         let mut aggregated_metrics = MetricsAggregator::default();
 
-        let nodes = Self::fetch_nodes()?;
+        let nodes = Self::fetch_nodes(ddc_url)?;
 
         for node in &nodes {
             let metrics_of_node = Self::fetch_node_metrics(
@@ -356,10 +367,10 @@ impl<T: Trait> Module<T> {
         Ok(aggregated_metrics.finish())
     }
 
-    fn fetch_nodes() -> ResultStr<Vec<NodeInfo>> {
+    fn fetch_nodes(ddc_url: Vec<u8>) -> ResultStr<Vec<NodeInfo>> {
         let nodes_url = format!(
             "{}{}",
-            from_utf8(&T::DdcUrl::get()).unwrap(),
+            from_utf8(&ddc_url).unwrap(),
             HTTP_NODES);
 
         Self::http_get_json(&nodes_url)
@@ -484,8 +495,8 @@ decl_event!(
 
 
 pub trait Trait: frame_system::Trait {
-    type ContractId: Get<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>;
-    type DdcUrl: Get<Vec<u8>>;
+    type ContractId: Get<Option<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>>;
+    type DdcUrl: Get<Option<Vec<u8>>>;
 
     type CT: pallet_contracts::Trait;
     type CST: CreateSignedTransaction<pallet_contracts::Call<Self::CT>>;
