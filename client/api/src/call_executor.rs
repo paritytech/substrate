@@ -18,7 +18,7 @@
 
 //! A method call executor interface.
 
-use std::{panic::UnwindSafe, result, cell::RefCell};
+use std::cell::RefCell;
 use codec::{Encode, Decode};
 use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, HashFor},

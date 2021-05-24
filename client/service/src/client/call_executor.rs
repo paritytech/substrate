@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
+use std::{sync::Arc, cell::RefCell};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, HashFor, NumberFor},
@@ -338,7 +338,7 @@ mod tests {
 	#[test]
 	fn should_get_override_if_exists() {
 		let executor =
-			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
+			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, 1);
 
 		let overrides = crate::client::wasm_override::dummy_overrides(&executor);
 		let onchain_code = WrappedRuntimeCode(substrate_test_runtime::wasm_binary_unwrap().into());

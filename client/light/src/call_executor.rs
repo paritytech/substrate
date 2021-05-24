@@ -19,7 +19,7 @@
 //! Methods that light client could use to execute runtime calls.
 
 use std::{
-	sync::Arc, panic::UnwindSafe, result, cell::RefCell,
+	sync::Arc, cell::RefCell,
 };
 
 use codec::{Encode, Decode};

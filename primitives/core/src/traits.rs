@@ -20,7 +20,6 @@
 use std::{
 	borrow::Cow,
 	fmt::{Debug, Display},
-	panic::UnwindSafe,
 };
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};

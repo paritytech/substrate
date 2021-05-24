@@ -77,13 +77,11 @@ pub use sp_core::{offchain, ExecutionContext};
 pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
 pub use sp_std::{slice, mem};
-#[cfg(feature = "std")]
-use sp_std::result;
 #[doc(hidden)]
 pub use codec::{Encode, Decode, DecodeLimit, self};
 use sp_core::OpaqueMetadata;
 #[cfg(feature = "std")]
-use std::{panic::UnwindSafe, cell::RefCell};
+use std::cell::RefCell;
 
 
 /// Maximum nesting level for extrinsics.

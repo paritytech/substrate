@@ -172,7 +172,7 @@ mod std_reexport {
 #[cfg(feature = "std")]
 mod execution {
 	use super::*;
-	use std::{fmt, result, collections::HashMap, panic::UnwindSafe};
+	use std::{fmt, collections::HashMap};
 	use log::{warn, trace};
 	use hash_db::Hasher;
 	use codec::{Decode, Encode, Codec};
@@ -855,7 +855,7 @@ mod tests {
 		map, traits::{Externalities, RuntimeCode}, testing::TaskExecutor,
 	};
 	use sp_runtime::traits::BlakeTwo256;
-	use std::{result, collections::HashMap, panic::UnwindSafe};
+	use std::collections::HashMap;
 	use codec::Decode;
 	use sp_core::{
 		storage::ChildInfo, NativeOrEncoded, NeverNativeValue,
@@ -875,11 +875,12 @@ mod tests {
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<
+		fn do_call<
 			R: Encode + Decode + PartialEq,
 		>(
 			&self,
 			ext: &mut dyn Externalities,
+			_heap_pages: u64,
 			_: &RuntimeCode,
 			_method: &str,
 			_data: &[u8],
@@ -899,7 +900,7 @@ mod tests {
 
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
-				(true, true, _, None) | (false, _, true, None) => {
+				(true, true, _) | (false, _, true) => {
 					(
 						Ok(
 							NativeOrEncoded::Encoded(
@@ -1013,7 +1014,6 @@ mod tests {
 					consensus_failed = true;
 					we
 				}),
-				None,
 			).is_err()
 		);
 		assert!(consensus_failed);
@@ -1504,7 +1504,6 @@ mod tests {
 
 	#[test]
 	fn runtime_registered_extensions_are_removed_after_execution() {
-		use sp_externalities::ExternalitiesExt;
 		sp_externalities::decl_extension! {
 			struct DummyExt(u32);
 		}
@@ -1531,15 +1530,8 @@ mod tests {
 		);
 
 		let run_state_machine = |state_machine: &mut StateMachine<_, _, _, _>| {
-			state_machine.execute_using_consensus_failure_handler::<fn(_, _) -> _, _, _>(
+			state_machine.execute_using_consensus_failure_handler::<fn(_, _) -> _, ()>(
 				ExecutionManager::NativeWhenPossible,
-				Some(|| {
-					sp_externalities::with_externalities(|mut ext| {
-						ext.register_extension(DummyExt(2)).unwrap();
-					}).unwrap();
-
-					Ok(())
-				}),
 			).unwrap();
 		};
 

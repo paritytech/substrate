@@ -145,7 +145,6 @@ impl TryRuntimeCmd {
 		let mut changes = Default::default();
 		// don't really care about these -- use the default values.
 		let max_runtime_instances = config.max_runtime_instances;
-		let heap_pages = config.default_heap_pages;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method.into(),
 			max_runtime_instances,

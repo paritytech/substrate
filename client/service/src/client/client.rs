@@ -21,7 +21,7 @@
 use std::{
 	marker::PhantomData,
 	collections::{HashSet, BTreeMap, HashMap},
-	sync::Arc, panic::UnwindSafe, result,
+	sync::Arc,
 	path::PathBuf
 };
 use log::{info, trace, warn};
