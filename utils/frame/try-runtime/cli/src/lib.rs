@@ -86,7 +86,7 @@ pub enum State {
 		modules: Option<Vec<String>>,
 
 		/// The url to connect to.
-		#[structopt(default_value = "http://localhost:9933", parse(try_from_str = parse_url))]
+		#[structopt(default_value = "ws://localhost:9944", parse(try_from_str = parse_url))]
 		url: String,
 	},
 }
@@ -109,11 +109,11 @@ fn parse_hash(block_number: &str) -> Result<String, String> {
 }
 
 fn parse_url(s: &str) -> Result<String, &'static str> {
-	if s.starts_with("http://") {
+	if s.starts_with("ws://") || s.starts_with("wss://") {
 		// could use Url crate as well, but lets keep it simple for now.
 		Ok(s.to_string())
 	} else {
-		Err("not a valid HTTP url: must start with 'http://'")
+		Err("not a valid WS(S) url: must start with 'ws://' or 'wss://'")
 	}
 }
 
