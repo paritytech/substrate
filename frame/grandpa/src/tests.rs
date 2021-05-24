@@ -942,3 +942,18 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		assert_eq!(post_info.pays_fee, Pays::Yes);
 	})
 }
+
+#[test]
+fn accountable_safety_basic() {
+	let authorities = test_authorities();
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let authorities = Grandpa::grandpa_authorities();
+		dbg!(&authorities);
+
+		let state = Grandpa::accountable_safety_state();
+		Grandpa::start_accountable_safety_protocol();
+		let state = Grandpa::accountable_safety_state();
+	});
+}
