@@ -17,7 +17,6 @@
 
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
-use std::collections::BTreeSet;
 use syn::{Ident, Result};
 
 const MAX_IDENTS: usize = 18;
@@ -33,55 +32,25 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 		let current_tuple = (0..i)
 			.map(|n| Ident::new(&format!("Tuple{}", n), Span::call_site()))
 			.collect::<Vec<_>>();
-		let mut prefix_iter = current_tuple.iter().rev().cloned().peekable();
-		let mut suffix_set = BTreeSet::new();
 
-		while let Some(next_ident) = prefix_iter.next() {
-			if prefix_iter.peek().is_none() {
-				break;
-			}
+		for prefix_count in 1..i {
+			let (prefixes, suffixes) = current_tuple.split_at(prefix_count);
 
-			suffix_set.insert(next_ident);
 			let hashers = current_tuple.iter().map(|ident| format_ident!("Hasher{}", ident)).collect::<Vec<_>>();
-			let kargs = prefix_iter.clone().rev().map(|ident| format_ident!("KArg{}", ident)).collect::<Vec<_>>();
-			let prefixes = prefix_iter.clone().rev().collect::<Vec<_>>();
-			let partial_keygen = if suffix_set.len() == current_tuple.len() - 1 {
-				let key = prefix_iter.peek().expect("Next element is guaranteed to not be empty; qed");
-				let hasher = format_ident!("Hasher{}", key);
-
-				quote!(Key<#hasher, #key>)
-			} else {
-				let keys = prefix_iter.clone().rev();
-				let hashers = keys.clone().map(|ident| format_ident!("Hasher{}", ident));
-
-				quote!((#(Key<#hashers, #keys>),*))
-			};
-			let suffixes = if suffix_set.len() == 1 {
-				suffix_set.iter().next().expect("Next element is checked to not be empty; qed").to_token_stream()
-			} else {
-				quote!((#(#suffix_set),*))
-			};
-			let suffix_keygen = if suffix_set.len() == 1 {
-				let key = suffix_set.iter().next().expect("Next element is checked to not be empty; qed");
-				let hasher = format_ident!("Hasher{}", key);
-
-				quote!(Key<#hasher, #key>)
-			} else {
-				let keys = &suffix_set;
-				let hashers = keys.iter().map(|ident| format_ident!("Hasher{}", ident));
-
-				quote!((#(Key<#hashers, #keys>),*))
-			};
+			let kargs = prefixes.iter().map(|ident| format_ident!("KArg{}", ident)).collect::<Vec<_>>();
+			let partial_keygen = generate_keygen(prefixes);
+			let suffix_keygen = generate_keygen(suffixes);
+			let suffix_tuple = generate_tuple(suffixes);
 
 			let trait_impls = quote!{
 				impl<
 					#(#current_tuple: FullCodec,)*
 					#(#hashers: StorageHasher,)*
 					#(#kargs: EncodeLike<#prefixes>),*
-				> HasKeyPrefix<(#(#kargs,)*)> for (#(Key<#hashers, #current_tuple>,)*) {
-					type Suffix = #suffixes;
+				> HasKeyPrefix<( #( #kargs, )* )> for ( #( Key<#hashers, #current_tuple>, )* ) {
+					type Suffix = #suffix_tuple;
 
-					fn partial_key(prefix: (#(#kargs,)*)) -> Vec<u8> {
+					fn partial_key(prefix: ( #( #kargs, )* )) -> Vec<u8> {
 						<#partial_keygen>::final_key(prefix)
 					}
 				}
@@ -90,7 +59,7 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 					#(#current_tuple: FullCodec,)*
 					#(#hashers: ReversibleStorageHasher,)*
 					#(#kargs: EncodeLike<#prefixes>),*
-				> HasReversibleKeyPrefix<(#(#kargs,)*)> for (#(Key<#hashers, #current_tuple>,)*) {
+				> HasReversibleKeyPrefix<( #( #kargs, )* )> for ( #( Key<#hashers, #current_tuple>, )* ) {
 					fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
 						<#suffix_keygen>::decode_final_key(key_material).map(|k| k.0)
 					}
@@ -102,4 +71,25 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 	}
 
 	Ok(all_trait_impls)
+}
+
+fn generate_tuple(idents: &[Ident]) -> TokenStream {
+    if idents.len() == 1 {
+		idents[0].to_token_stream()
+	} else {
+		quote!((#(#idents),*))
+	}
+}
+
+fn generate_keygen(idents: &[Ident]) -> TokenStream {
+	if idents.len() == 1 {
+		let key = &idents[0];
+		let hasher = format_ident!("Hasher{}", key);
+
+		quote!(Key<#hasher, #key>)
+	} else {
+		let hashers = idents.iter().map(|ident| format_ident!("Hasher{}", ident));
+
+		quote!((#(Key<#hashers, #idents>),*))
+	}
 }
