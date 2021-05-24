@@ -940,7 +940,7 @@ impl pallet_erc20::Trait for Runtime {
 }
 
 parameter_types! {
-	pub MetricsContractId: AccountId = {
+	pub MetricsContractId: Option<AccountId> = {
 		let contract_id = pallet_ddc_metrics_offchain_worker::get_contract_id();
 		if contract_id.is_none() {
 			return None;
