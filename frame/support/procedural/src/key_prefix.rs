@@ -74,7 +74,7 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 }
 
 fn generate_tuple(idents: &[Ident]) -> TokenStream {
-    if idents.len() == 1 {
+	if idents.len() == 1 {
 		idents[0].to_token_stream()
 	} else {
 		quote!((#(#idents),*))
