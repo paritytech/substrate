@@ -515,12 +515,6 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 								changes,
 								storage_transaction_cache,
 								initialized_block,
-								params.map(|p| {
-									#runtime_mod_path #native_call_generator_ident ::
-										<#runtime, __SR_API_BLOCK__ #(, #trait_generic_arguments )*> (
-										#( #param_tuple_access ),*
-									)
-								}),
 								context,
 								recorder,
 							)

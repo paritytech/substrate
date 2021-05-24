@@ -148,7 +148,6 @@ impl TryRuntimeCmd {
 		let heap_pages = config.default_heap_pages;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method.into(),
-			heap_pages,
 			max_runtime_instances,
 		);
 

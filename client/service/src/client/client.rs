@@ -1677,7 +1677,7 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 			params.context,
 		);
 
-		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
+		self.executor.contextual_call::<_,_,_>(
 			|| core_api
 				.initialize_block(at, &self.prepare_environment_block(at)?)
 				.map_err(Error::RuntimeApiError),
