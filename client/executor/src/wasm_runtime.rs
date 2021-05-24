@@ -75,7 +75,7 @@ impl VersionedRuntime {
 		ext: &mut dyn Externalities,
 		f: F,
 	) -> Result<R, Error>
-		where F: FnOnce(
+		where F: Fn(
 			&Arc<dyn WasmModule>,
 			&dyn WasmInstance,
 			Option<&RuntimeVersion>,
@@ -137,6 +137,7 @@ impl VersionedRuntime {
 }
 
 const MAX_RUNTIMES: usize = 2;
+const MAX_HEAP_PAGES: u64 = 67_108_864; // 4GB worth of heap pages.
 
 /// Cache for the runtimes.
 ///
@@ -213,7 +214,7 @@ impl RuntimeCache {
 		allow_missing_func_imports: bool,
 		f: F,
 	) -> Result<Result<R, Error>, Error>
-		where F: FnOnce(
+		where F: Fn(
 			&Arc<dyn WasmModule>,
 			&dyn WasmInstance,
 			Option<&RuntimeVersion>,
@@ -221,75 +222,82 @@ impl RuntimeCache {
 		-> Result<R, Error>,
 	{
 		let code_hash = &runtime_code.hash;
-		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
+		let mut heap_pages = default_heap_pages;
+		loop {
+			let try_heap_pages = runtime_code.heap_pages.clone().unwrap_or(heap_pages);
 
-		let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
-		let pos = runtimes.iter().position(|r| r.as_ref().map_or(
-			false,
-			|r| r.wasm_method == wasm_method &&
-				r.code_hash == *code_hash &&
-				r.heap_pages == heap_pages
-		));
+			let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
+			let pos = runtimes.iter().position(|r| r.as_ref().map_or(
+				false,
+				|r| r.wasm_method == wasm_method &&
+					r.code_hash == *code_hash &&
+					r.heap_pages == try_heap_pages
+			));
 
-		let runtime = match pos {
-			Some(n) => runtimes[n]
-				.clone()
-				.expect("`position` only returns `Some` for entries that are `Some`"),
-			None =>  {
-				let code = runtime_code.fetch_runtime_code().ok_or(WasmError::CodeNotFound)?;
+			let runtime = match pos {
+				Some(n) => runtimes[n]
+					.clone()
+					.expect("`position` only returns `Some` for entries that are `Some`"),
+				None => {
+					let code = runtime_code.fetch_runtime_code().ok_or(WasmError::CodeNotFound)?;
 
-				#[cfg(not(target_os = "unknown"))]
-				let time = std::time::Instant::now();
+					#[cfg(not(target_os = "unknown"))]
+						let time = std::time::Instant::now();
 
-				let result = create_versioned_wasm_runtime(
-					&code,
-					code_hash.clone(),
-					ext,
-					wasm_method,
-					heap_pages,
-					host_functions.into(),
-					allow_missing_func_imports,
-					self.max_runtime_instances,
-					self.cache_path.as_deref(),
-				);
+					let result = create_versioned_wasm_runtime(
+						&code,
+						code_hash.clone(),
+						ext,
+						wasm_method,
+						try_heap_pages,
+						host_functions.into(),
+						allow_missing_func_imports,
+						self.max_runtime_instances,
+						self.cache_path.as_deref(),
+					);
 
-				match result {
-					Ok(ref result) => {
-						#[cfg(not(target_os = "unknown"))]
-						log::debug!(
-							target: "wasm-runtime",
-							"Prepared new runtime version {:?} in {} ms.",
-							result.version,
-							time.elapsed().as_millis(),
-						);
+					match result {
+						Ok(ref result) => {
+							#[cfg(not(target_os = "unknown"))]
+							log::debug!(
+								target: "wasm-runtime",
+								"Prepared new runtime version {:?} in {} ms.",
+								result.version,
+								time.elapsed().as_millis(),
+							);
+						}
+						Err(ref err) => {
+							log::warn!(target: "wasm-runtime", "Cannot create a runtime: {:?}", err);
+						}
 					}
-					Err(ref err) => {
-						log::warn!(target: "wasm-runtime", "Cannot create a runtime: {:?}", err);
+
+					Arc::new(result?)
+				}
+			};
+
+			// Rearrange runtimes by last recently used.
+			match pos {
+				Some(0) => {},
+				Some(n) => {
+					for i in (1..n + 1).rev() {
+						runtimes.swap(i, i - 1);
 					}
 				}
-
-				Arc::new(result?)
-			}
-		};
-
-		// Rearrange runtimes by last recently used.
-		match pos {
-			Some(0) => {},
-			Some(n) => {
-				for i in (1 .. n + 1).rev() {
-					runtimes.swap(i, i - 1);
+				None => {
+					runtimes[MAX_RUNTIMES - 1] = Some(runtime.clone());
+					for i in (1..MAX_RUNTIMES).rev() {
+						runtimes.swap(i, i - 1);
+					}
 				}
 			}
-			None => {
-				runtimes[MAX_RUNTIMES-1] = Some(runtime.clone());
-				for i in (1 .. MAX_RUNTIMES).rev() {
-					runtimes.swap(i, i - 1);
-				}
+			drop(runtimes);
+
+			let r = runtime.with_instance(ext, f);
+			if r.is_ok() || runtime_code.heap_pages.is_some() || heap_pages >= MAX_HEAP_PAGES {
+				return Ok(r)
 			}
+			heap_pages *= 2;
 		}
-		drop(runtimes);
-
-		Ok(runtime.with_instance(ext, f))
 	}
 }
 
