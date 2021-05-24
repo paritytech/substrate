@@ -24,7 +24,7 @@ use std::collections::{VecDeque, HashSet, HashMap};
 use std::sync::Arc;
 use std::hash::Hash as StdHash;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use ritelinked::{LinkedHashMap, linked_hash_map::Entry};
+use ritelinked::{LinkedHashMap, linked_hash_map, linked_hash_map::Entry};
 use hash_db::Hasher;
 use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_core::hexdisplay::HexDisplay;
@@ -139,7 +139,13 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 	fn get<Q:?Sized>(&mut self, k: &Q) -> Option<&mut V>
 		where K: std::borrow::Borrow<Q>,
 			Q: StdHash + Eq {
-		self.0.get_refresh(k)
+		match self.0.raw_entry_mut().from_key(k) {
+                        linked_hash_map::RawEntryMut::Occupied(mut occupied) => {
+                               occupied.to_back();
+                               Some(occupied.into_mut())
+                        }
+                        linked_hash_map::RawEntryMut::Vacant(_) => None,
+               }
 	}
 
 	fn used_size(&self) -> usize {
