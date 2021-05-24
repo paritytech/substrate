@@ -181,17 +181,20 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				self.essence.backend_storage(),
 				&mut write_overlay,
 			);
-			if flag_inner_hash_value {
-				root = match sp_trie::flag_inner_meta_hasher::<Layout<H>, _>(&mut eph, root) {
-					Ok(ret) => ret,
-					Err(e) => {
-						warn!(target: "trie", "Failed to flag trie: {}", e);
-						root
-					},
+			let res = || {
+				if flag_inner_hash_value {
+					let layout = sp_trie::Layout::with_inner_hashing();
+					let mut t = sp_trie::trie_types::TrieDBMut::<H>::from_existing_with_layout(
+						&mut eph,
+						&mut root,
+						layout,
+					)?;
+					t.force_layout_meta()?;
 				}
-			}
+				delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta)
+			};
 		
-			match delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta) {
+			match res() {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -286,10 +289,19 @@ pub mod tests {
 		{
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			if hashed_value {
-				sp_trie::flag_meta_hasher(&mut trie).expect("flag failed");
-			}
+			let mut trie = if hashed_value {
+				let layout = Layout::with_inner_hashing();
+				let mut t = TrieDBMut::new_with_layout(
+					&mut mdb,
+					&mut root,
+					layout,
+				);
+				t.force_layout_meta()
+					.expect("failed forced layout change");
+				t
+			} else {
+				TrieDBMut::new(&mut mdb, &mut root)
+			};
 
 			trie.insert(child_info.prefixed_storage_key().as_slice(), &sub_root[..])
 				.expect("insert failed");

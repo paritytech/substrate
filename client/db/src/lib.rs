@@ -867,14 +867,14 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	fn get(&self, key: &Block::Hash, prefix: Prefix, global: bool) -> Result<Option<(DBValue, TrieMeta)>, String> {
 		if self.prefix_keys {
 			let key = prefixed_key::<HashFor<Block>>(key, prefix);
 			self.state_db.get(&key, self)
 		} else {
 			self.state_db.get(key.as_ref(), self)
 		}
-		.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, parent)))
+		.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)))
 		.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 
@@ -903,7 +903,7 @@ impl<Block: BlockT> DbGenesisStorage<Block> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStorage<Block> {
-	fn get(&self, _key: &Block::Hash, _prefix: Prefix, _parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	fn get(&self, _key: &Block::Hash, _prefix: Prefix, _global: bool) -> Result<Option<(DBValue, TrieMeta)>, String> {
 		Ok(None)
 	}
 	fn access_from(&self, _key: &Block::Hash) {
@@ -2125,7 +2125,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						self.storage.as_ref(),
 						&header.state_root,
 						(&[], None),
-						None,
+						Default::default(),
 					).unwrap_or(None).is_some()
 				},
 				_ => false,

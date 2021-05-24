@@ -17,13 +17,15 @@
 
 //! `TrieStream` implementation for Substrate's trie format.
 
-use hash_db::Hasher;
+use hash_db::{MetaHasher, Hasher};
 use trie_root;
-use codec::Encode;
+use codec::{Encode, Compact};
 use sp_std::vec::Vec;
-use crate::trie_constants;
+use sp_std::ops::Range;
+use crate::{trie_constants, TrieMeta, StateHasher};
 use crate::node_header::{NodeKind, size_and_prefix_iterator};
 use crate::node_codec::Bitmap;
+use trie_db::Meta;
 
 const BRANCH_NODE_NO_VALUE: u8 = 254;
 const BRANCH_NODE_WITH_VALUE: u8 = 255;
@@ -32,6 +34,8 @@ const BRANCH_NODE_WITH_VALUE: u8 = 255;
 /// Codec-flavored TrieStream.
 pub struct TrieStream {
 	buffer: Vec<u8>,
+	inner_value_hashing: bool,
+	current_value_range: Option<Range<usize>>,
 }
 
 impl TrieStream {
@@ -68,9 +72,11 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 impl trie_root::TrieStream for TrieStream {
 	type GlobalMeta = bool;
 
-	fn new() -> Self {
-		TrieStream {
-			buffer: Vec::new()
+	fn new(meta: bool) -> Self {
+		Self {
+			buffer: Vec::new(),
+			inner_value_hashing: meta,
+			current_value_range: None,
 		}
 	}
 
@@ -80,7 +86,9 @@ impl trie_root::TrieStream for TrieStream {
 
 	fn append_leaf(&mut self, key: &[u8], value: &[u8]) {
 		self.buffer.extend(fuse_nibbles_node(key, NodeKind::Leaf));
-		value.encode_to(&mut self.buffer);
+		Compact(value.len() as u32).encode_to(&mut self.buffer);
+		self.current_value_range = Some(self.buffer.len()..self.buffer.len() + value.len());
+		self.buffer.extend_from_slice(value);
 	}
 
 	fn begin_branch(
@@ -102,7 +110,9 @@ impl trie_root::TrieStream for TrieStream {
 			self.buffer.extend(&branch_node(maybe_value.is_some(), has_children));
 		}
 		if let Some(value) = maybe_value {
-			value.encode_to(&mut self.buffer);
+			Compact(value.len() as u32).encode_to(&mut self.buffer);
+			self.current_value_range = Some(self.buffer.len()..self.buffer.len() + value.len());
+			self.buffer.extend_from_slice(value);
 		}
 	}
 
@@ -115,6 +125,35 @@ impl trie_root::TrieStream for TrieStream {
 		match data.len() {
 			0..=31 => data.encode_to(&mut self.buffer),
 			_ => H::hash(&data).as_ref().encode_to(&mut self.buffer),
+		}
+	}
+
+	fn hash_root<H: Hasher>(self) -> H::Out {
+		let inner_value_hashing = self.inner_value_hashing;
+		let range = self.current_value_range;
+		let data = self.buffer;
+		if inner_value_hashing
+			&& range.as_ref().map(|r| r.end - r.start >= trie_constants::INNER_HASH_TRESHOLD)
+				.unwrap_or_default() {
+			let meta = TrieMeta {
+				range: range,
+				unused_value: false,
+				contain_hash: false,
+				do_value_hash: true,
+				old_hash: false,
+				recorded_do_value_hash: true,
+			};
+			// Add the recorded_do_value_hash to encoded
+			let mut encoded = meta.write_state_meta();
+			let encoded = if encoded.len() > 0 {
+				encoded.extend(data);
+				encoded
+			} else {
+				data
+			};
+			<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&encoded, &meta)
+		} else {
+			H::hash(&data)
 		}
 	}
 

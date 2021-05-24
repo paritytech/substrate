@@ -43,11 +43,15 @@ pub fn generate_trie(
 		);
 		let mut trie = SimpleTrie { db, overlay: &mut overlay };
 		{
-			let mut trie_db = TrieDBMut::new(&mut trie, &mut root);
 
-			if flag_hashed_value {
-				sp_trie::flag_meta_hasher(&mut trie_db).expect("flag trie failed");
-			}
+			let mut trie_db = if flag_hashed_value {
+				let layout = sp_trie::Layout::with_inner_hashing();
+				let mut t = TrieDBMut::<crate::simple_trie::Hasher>::new_with_layout(&mut trie, &mut root, layout);
+				t.force_layout_meta();
+				t
+			} else {
+				TrieDBMut::new(&mut trie, &mut root)
+			};
 			for (key, value) in key_values {
 				trie_db.insert(&key, &value).expect("trie insertion failed");
 			}

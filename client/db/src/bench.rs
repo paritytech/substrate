@@ -49,20 +49,20 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	fn get(&self, key: &Block::Hash, prefix: Prefix, global: bool) -> Result<Option<(DBValue, TrieMeta)>, String> {
 		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 		if let Some(recorder) = &self.proof_recorder {
 			if let Some(v) = recorder.get(&key) {
 				return Ok(v.clone());
 			}
 			let backend_value = self.db.get(0, &prefixed_key)
-				.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, parent)))
+				.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)))
 				.map_err(|e| format!("Database backend error: {:?}", e))?;
 			recorder.record::<HashFor<Block>>(key.clone(), backend_value.clone());
 			Ok(backend_value)
 		} else {
 			self.db.get(0, &prefixed_key)
-				.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, parent)))
+				.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)))
 				.map_err(|e| format!("Database backend error: {:?}", e))
 		}
 	}

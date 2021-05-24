@@ -35,7 +35,7 @@ use sp_core::storage::ChildInfo;
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	pub(crate) backend: &'a TrieBackendEssence<S, H>,
-	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
+	pub(crate) proof_recorder: &'a mut Recorder<H::Out, TrieMeta>,
 }
 
 impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
@@ -242,12 +242,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 {
 	type Overlay = S::Overlay;
 
-	fn get(&self, key: &H::Out, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	fn get(&self, key: &H::Out, prefix: Prefix, global: bool) -> Result<Option<(DBValue, TrieMeta)>, String> {
 		if let Some(v) = self.proof_recorder.get(key) {
 			return Ok(v);
 		}
 
-		let backend_value = self.backend.get(key, prefix, parent)?;
+		let backend_value = self.backend.get(key, prefix, global)?;
 		self.proof_recorder.record::<H>(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}

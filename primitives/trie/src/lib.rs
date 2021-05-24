@@ -220,6 +220,13 @@ impl<H, M> Default for Layout<H, M> {
 		Layout(false, sp_std::marker::PhantomData)
 	}
 }
+impl<H, M> Layout<H, M> {
+	/// Layout with inner hashing active.
+	/// Will flag trie for hashing.
+	pub fn with_inner_hashing() -> Self {
+		Layout(true, sp_std::marker::PhantomData)
+	}
+}
 
 impl<H, M> TrieLayout for Layout<H, M>
 	where
@@ -246,7 +253,7 @@ impl<H, M> TrieLayout for Layout<H, M>
 		}
 	}
 	fn set_root_meta(root_meta: &mut Self::Meta, global_meta: GlobalMeta<Self>) {
-		root_meta.set_global_meta(true);
+		root_meta.set_global_meta(global_meta);
 	}
 }
 
@@ -461,7 +468,7 @@ pub type MemoryDBMeta<H, M> = memory_db::MemoryDB<
 
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 pub type GenericMemoryDB<H, KF, MH> = memory_db::MemoryDB<
-	H, KF, trie_db::DBValue, MH, MemTracker
+	H, KF, trie_db::DBValue, MH, MemTracker,
 >;
 
 /// Persistent trie database read-access interface for the a given hasher.
@@ -563,36 +570,6 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	}
 
 	Ok(root)
-}
-
-/// Flag inner trie with state metadata to enable hash of value internally.
-pub fn flag_inner_meta_hasher<L, DB>(
-	db: &mut DB,
-	mut root: TrieHash<L>,
-) -> Result<TrieHash<L>, Box<TrieError<L>>> where
-	L: TrieConfiguration<Meta = TrieMeta>,
-	DB: hash_db::HashDB<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
-{
-	{
-		let mut t = TrieDBMut::<L>::from_existing(db, &mut root)?;
-		flag_meta_hasher(&mut t)?;
-	}
-	Ok(root)
-}
-
-/// Flag inner trie with state metadata to enable hash of value internally.
-pub fn flag_meta_hasher<L>(
-	t: &mut TrieDBMut<L>
-) -> Result<(), Box<TrieError<L>>> where
-	L: TrieConfiguration<Meta = TrieMeta>,
-{
-	let flag = true;
-	let key: &[u8]= &[];
-	if !t.contains(key)? {
-		t.insert(key, b"")?;
-	}
-	assert!(t.flag(key, flag)?);
-	Ok(())
 }
 
 /// Resolve if inner hashing of value is active.
@@ -1168,7 +1145,7 @@ mod tests {
 	}
 
 	fn populate_trie<'db, T>(
-		db: &'db mut dyn HashDB<T::Hash, DBValue, T::Meta>,
+		db: &'db mut dyn HashDB<T::Hash, DBValue, T::Meta, GlobalMeta<T>>,
 		root: &'db mut TrieHash<T>,
 		v: &[(Vec<u8>, Vec<u8>)],
 		flag_hash: bool,
@@ -1176,10 +1153,20 @@ mod tests {
 		where
 			T: TrieConfiguration<Meta = TrieMeta>,
 	{
-		let mut t = TrieDBMut::<T>::new(db, root);
-		if flag_hash {
-			flag_meta_hasher(&mut t).unwrap();
-		}
+		let mut t = if flag_hash {
+			let mut root_meta = Default::default();
+			T::set_root_meta(&mut root_meta, flag_hash);
+
+			let mut layout = T::default();
+			layout.initialize_from_root_meta(&root_meta);
+
+			let mut t = TrieDBMut::<T>::new_with_layout(db, root, layout);
+			t.force_layout_meta()
+				.expect("Could not force layout.");
+			t
+		} else {
+			TrieDBMut::<T>::new(db, root)
+		};
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;

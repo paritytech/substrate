@@ -170,11 +170,11 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 struct Storage(Arc<dyn KeyValueDB>);
 
 impl sp_state_machine::Storage<sp_core::Blake2Hasher> for Storage {
-	fn get(&self, key: &Hash, prefix: Prefix, parent: Option<&TrieMeta>) -> Result<Option<(Vec<u8>, TrieMeta)>, String> {
+	fn get(&self, key: &Hash, prefix: Prefix, global: bool) -> Result<Option<(Vec<u8>, TrieMeta)>, String> {
 		let key = sp_trie::prefixed_key::<sp_core::Blake2Hasher>(key, prefix);
 		self.0.get(0, &key).map_err(|e| format!("Database backend error: {:?}", e))
 			.map(|result| result
-				.map(|value| <StateHasher as MetaHasher<sp_core::Blake2Hasher, _>>::extract_value_owned(value, parent))
+				.map(|value| <StateHasher as MetaHasher<sp_core::Blake2Hasher, _>>::extract_value_owned(value, global))
 			)
 	}
 
