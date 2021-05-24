@@ -54,11 +54,7 @@ impl<T: Config> AccountableSafety<T> for AccountableSafetyHandler {
 		log::info!("JON: a: {:?}", a);
 
 		let a = a.unwrap_or(1u32.into());
-		// let a = T::BlockNumber::from(1u32);
-
-		// <BlockNotIncluded<T>>::put(a);
 		<BlockNotIncluded<T>>::put(a.saturating_add(1u32.into()));
-		// Pallet::<T>::BlockNotIncluded::set(a.saturating_add(1));
 	}
 
 	fn start_accountable_safety_protocol() {
