@@ -316,7 +316,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
-		config.default_heap_pages,
 		config.max_runtime_instances,
 	);
 
@@ -393,7 +392,6 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
-		config.default_heap_pages,
 		config.max_runtime_instances,
 	);
 

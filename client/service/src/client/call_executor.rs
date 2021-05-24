@@ -154,9 +154,8 @@ where
 			extensions.unwrap_or_default(),
 			&runtime_code,
 			self.spawn_handle.clone(),
-		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
+		).execute_using_consensus_failure_handler::<_, NeverNativeValue>(
 			strategy.get_manager(),
-			None,
 		)?;
 
 		Ok(return_data.into_encoded())
@@ -170,7 +169,6 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
 		initialize_block_fn: IB,
@@ -183,7 +181,6 @@ where
 		>>,
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
-		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
@@ -237,7 +234,6 @@ where
 				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,
-					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
 				)
 			},
 			None => {
@@ -259,7 +255,6 @@ where
 				).with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c));
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,
-					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
 				)
 			}
 		}.map_err(Into::into)

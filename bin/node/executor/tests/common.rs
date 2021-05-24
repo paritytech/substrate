@@ -102,13 +102,11 @@ pub fn executor() -> NativeExecutor<Executor> {
 
 pub fn executor_call<
 	R:Decode + Encode + PartialEq,
-	NC: FnOnce() -> std::result::Result<R, Box<dyn std::error::Error + Send + Sync>> + std::panic::UnwindSafe
 >(
 	t: &mut TestExternalities<BlakeTwo256>,
 	method: &str,
 	data: &[u8],
 	use_native: bool,
-	native_call: Option<NC>,
 ) -> (Result<NativeOrEncoded<R>>, bool) {
 	let mut t = t.ext();
 
@@ -126,7 +124,6 @@ pub fn executor_call<
 		method,
 		data,
 		use_native,
-		native_call,
 	)
 }
 
