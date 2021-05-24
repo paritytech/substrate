@@ -166,9 +166,12 @@ impl TryRuntimeCmd {
 					block_at,
 					modules
 				} => Builder::<B>::new().mode(Mode::Online(OnlineConfig {
-					uri: url.into(),
+					transport: url[..].into(),
 					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-					modules: modules.clone().unwrap_or_default(),
+					modules: modules
+						.as_ref()
+						.map(|m| m.into_iter().map(|x| x.as_ref()).collect::<Vec<_>>())
+						.unwrap_or_default(),
 					at: block_at.as_ref()
 						.map(|b| b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))).transpose()?,
 					..Default::default()
