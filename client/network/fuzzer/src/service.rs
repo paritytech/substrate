@@ -217,10 +217,10 @@ enum Action {
 }
 
 fn main() {
-	let (a, mut events_stream_a, b, mut events_stream_b) = build_nodes_one_proto();
-
 	loop {
 		fuzz!(|actions: Vec<Action>| {
+			let (a, mut events_stream_a, b, mut events_stream_b) = build_nodes_one_proto();
+
 			for action in actions {
 				match action {
 					Action::WriteNotification(sender, receiver, data) => {
@@ -268,6 +268,22 @@ fn main() {
 					},
 				};
 			}
+
+			async_std::task::block_on(async move {
+				// Grab next event from either `events_stream_a` or `events_stream_b`.
+				let _next_event = {
+					let next_a = events_stream_a.next();
+					let next_b = events_stream_b.next();
+					// We also await on a small timer, otherwise it is possible for the test to wait
+					// forever while nothing at all happens on the network.
+					let continue_test = futures_timer::Delay::new(Duration::from_millis(20));
+					futures::select!{
+						_next_a_res = next_a.fuse() => {},
+						_next_b_res = next_b.fuse() => {},
+						_ = continue_test.fuse() => {},
+					};
+				};
+			});
         });
     }
 }
