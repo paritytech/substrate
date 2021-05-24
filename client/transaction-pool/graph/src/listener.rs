@@ -21,7 +21,7 @@ use std::{
 	collections::HashMap, hash, fmt::Debug,
 };
 
-use linked_hash_map::LinkedHashMap;
+use ritelinked::LinkedHashMap;
 use serde::Serialize;
 use log::{debug, trace, warn};
 use sp_runtime::traits;

@@ -18,7 +18,7 @@
 
 use futures::{stream::unfold, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
-use linked_hash_set::LinkedHashSet;
+use ritelinked::LinkedHashSet;
 use std::time::Duration;
 use std::{hash::Hash, num::NonZeroUsize};
 

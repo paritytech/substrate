@@ -50,7 +50,7 @@ use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::{HashMap, HashSet};
 use parking_lot::{Mutex, RwLock};
-use linked_hash_map::LinkedHashMap;
+use ritelinked::LinkedHashMap;
 use log::{trace, debug, warn};
 
 use sc_client_api::{

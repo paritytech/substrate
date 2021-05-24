@@ -88,6 +88,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "739f4a8db6605981345c5654f3a85b056ce52f37a39d34da03f25bf2151ea16e"
 
 [[package]]
+name = "ahash"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11149c3eb723d15cb065a9ea5cc74ab57250f098ef33c9f6f7f39b48bd207750"
+dependencies = [
+ "getrandom 0.2.2",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2347,7 +2358,16 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
 dependencies = [
- "ahash",
+ "ahash 0.4.7",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash 0.7.3",
 ]
 
 [[package]]
@@ -2677,7 +2697,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "824845a0bf897a9042383849b02c1bc219c2383772efcd5c6f9766fa4b81aef3"
 dependencies = [
  "autocfg",
- "hashbrown",
+ "hashbrown 0.9.1",
  "serde",
 ]
 
@@ -3592,15 +3612,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fb9b38af92608140b86b693604b9ffcc5824240a484d1ecd4795bacb2fe88f3"
 
 [[package]]
-name = "linked_hash_set"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47186c6da4d81ca383c7c47c1bfc80f4b95f4720514d860a5407aaf4233f9588"
-dependencies = [
- "linked-hash-map",
-]
-
-[[package]]
 name = "linregress"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3662,7 +3673,7 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f374d42cdfc1d7dbf3d3dec28afab2eb97ffbf43a3234d795b5986dbf4b90ba"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.9.1",
 ]
 
 [[package]]
@@ -3775,7 +3786,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "814bbecfc0451fc314eeea34f05bbcd5b98a7ad7af37faee088b86a1e633f1d4"
 dependencies = [
  "hash-db",
- "hashbrown",
+ "hashbrown 0.9.1",
  "parity-util-mem",
 ]
 
@@ -5689,7 +5700,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "664a8c6b8e62d8f9f2f937e391982eb433ab285b4cd9545b342441e04a906e42"
 dependencies = [
  "cfg-if 1.0.0",
- "hashbrown",
+ "hashbrown 0.9.1",
  "impl-trait-for-tuples",
  "parity-util-mem-derive",
  "parking_lot 0.11.1",
@@ -6711,6 +6722,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ritelinked"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6eafef31f28b4af65d9afdab6a36f9fee1956c949bea84cee677f717e21f3c4"
+dependencies = [
+ "ahash 0.7.3",
+ "hashbrown 0.11.2",
+]
+
+[[package]]
 name = "rocksdb"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7055,13 +7076,13 @@ dependencies = [
  "kvdb",
  "kvdb-memorydb",
  "kvdb-rocksdb",
- "linked-hash-map",
  "log",
  "parity-db",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.11.1",
  "quickcheck",
+ "ritelinked",
  "sc-client-api",
  "sc-executor",
  "sc-state-db",
@@ -7431,7 +7452,6 @@ dependencies = [
  "fork-tree",
  "futures 0.3.13",
  "futures-timer 3.0.2",
- "linked-hash-map",
  "log",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -7600,8 +7620,6 @@ dependencies = [
  "hex",
  "ip_network",
  "libp2p",
- "linked-hash-map",
- "linked_hash_set",
  "log",
  "lru",
  "nohash-hasher",
@@ -7612,6 +7630,7 @@ dependencies = [
  "prost-build",
  "quickcheck",
  "rand 0.7.3",
+ "ritelinked",
  "sc-block-builder",
  "sc-client-api",
  "sc-peerset",
@@ -8053,12 +8072,12 @@ dependencies = [
  "criterion",
  "derive_more",
  "futures 0.3.13",
- "linked-hash-map",
  "log",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.11.1",
  "retain_mut",
+ "ritelinked",
  "serde",
  "sp-blockchain",
  "sp-core",
@@ -10351,7 +10370,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec051edf7f0fc9499a2cb0947652cab2148b9d7f61cee7605e312e9f970dacaf"
 dependencies = [
  "hash-db",
- "hashbrown",
+ "hashbrown 0.9.1",
  "log",
  "rustc-hex",
  "smallvec 1.6.1",
