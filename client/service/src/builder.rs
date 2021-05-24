@@ -785,6 +785,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 		.expect("Infallible; qed");
 	let (state, child_state) = sc_rpc::state::new_full(client.clone(), deny_unsafe);
 
+	// TODO: fix proofs here. If it's actually infallible don't return `Result`. If not, handle errors.
 	let (state_rpc, state_subs) = state.into_rpc_module().expect("Infallible; qed");
 	let child_state_rpc = child_state.into_rpc_module().expect("Infallible; qed");
 
@@ -805,8 +806,10 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	rpc_api.push(child_state_rpc);
 
 	// Spawn subscription tasks.
+	// TODO: Stream setup can fail I think; should return error? Don't call subscribe if it fails.
 	task_executor.execute_new(Box::pin(chain_subs.subscribe()));
-	task_executor.execute_new(Box::pin(state_subs.subscribe()));
+	let state_subscriptions = state_subs.subscribe().unwrap_or_else(|| log::error!("Could not set up state subscriptions"));
+	task_executor.execute_new(Box::pin(state_subscriptions));
 
 	rpc_api
 }
