@@ -173,9 +173,6 @@ pub mod pallet {
 		PendingSwap<T>,
 	>;
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Swap already exists.

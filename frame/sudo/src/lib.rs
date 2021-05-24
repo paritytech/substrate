@@ -65,9 +65,6 @@
 //! 	#[pallet::pallet]
 //! 	pub struct Pallet<T>(PhantomData<T>);
 //!
-//! 	#[pallet::hooks]
-//! 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-//!
 //! 	#[pallet::call]
 //! 	impl<T: Config> Pallet<T> {
 //! 		#[pallet::weight(0)]
@@ -129,9 +126,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
