@@ -477,8 +477,8 @@
 			"decimals": [0,9,9,9,9,9,9,9],
 			"standardAccount": "*25519",
 			"website": "https://equilibrium.io"
-    },
-    {
+		},
+		{
 			"prefix": 69,
 			"network": "sora",
 			"displayName": "SORA Network",
@@ -486,6 +486,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://sora.org"
+		},
+		{
+			"prefix": 84,
+			"network": "bholdus",
+			"displayName": "BHoldus Network",
+			"symbols": ["BHO"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://bholdus.com"
 		},
 		{
 			"prefix": 252,
