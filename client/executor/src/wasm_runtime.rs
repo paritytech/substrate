@@ -178,24 +178,17 @@ impl RuntimeCache {
 
 	/// Prepares a WASM module instance and executes given function for it.
 	///
-	/// This uses internal cache to find avaiable instance or create a new one.
+	/// This uses internal cache to find available instance or create a new one.
+	///
 	/// # Parameters
-	///
-	/// `code` - Provides external code or tells the executor to fetch it from storage.
-	///
-	/// `runtime_code` - The runtime wasm code used setup the runtime.
-	///
-	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
-	///
-	/// `wasm_method` - Type of WASM backend to use.
-	///
-	/// `host_functions` - The host functions that should be registered for the Wasm runtime.
-	///
-	/// `allow_missing_func_imports` - Ignore missing function imports.
-	///
-	/// `max_runtime_instances` - The size of the instances cache.
-	///
-	/// `f` - Function to execute.
+	/// - `code` - Provides external code or tells the executor to fetch it from storage.
+	/// - `runtime_code` - The runtime wasm code used setup the runtime.
+	/// - `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	/// - `wasm_method` - Type of WASM backend to use.
+	/// - `host_functions` - The host functions that should be registered for the Wasm runtime.
+	/// - `allow_missing_func_imports` - Ignore missing function imports.
+	/// - `max_runtime_instances` - The size of the instances cache.
+	/// - `f` - Function to execute.
 	///
 	/// # Returns result of `f` wrapped in an additonal result.
 	/// In case of failure one of two errors can be returned:
