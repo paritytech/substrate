@@ -149,6 +149,10 @@ fn should_submit_signed_transaction_on_chain() {
     t.execute_with(|| {
         deploy_contract();
 
+		let kind = sp_core::offchain::StorageKind::PERSISTENT;
+		sp_io::offchain::local_storage_set(kind, b"ddc-metrics-offchain-worker::sc_address", b"5EFhuVjnUTH4fkvapxyXqkfmANQWFVGZtmkHd4GaWmhgrCLS");
+		sp_io::offchain::local_storage_set(kind, b"ddc-metrics-offchain-worker::ddc_url", b"https://TEST_DDC");
+
         // Trigger the worker.
 		DdcMetricsOffchainWorker::offchain_worker(0);
 

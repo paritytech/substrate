@@ -221,11 +221,11 @@ thread_local! {
 }
 
 parameter_types! {
-	pub MetricsContractId: AccountId = {
-		CURRENT_METRICS_CONTRACT_ID.with(|v| *v.borrow())
+	pub MetricsContractId: Option<AccountId> = {
+		Some(CURRENT_METRICS_CONTRACT_ID.with(|v| *v.borrow()))
 	};
-    pub DdcUrl: Vec<u8> = {
-		crate::get_ddc_url_or_default("https://TEST_DDC")
+    pub DdcUrl: Option<Vec<u8>> = {
+		crate::get_ddc_url()
 	};
     pub const OcwBlockInterval: u32 = crate::BLOCK_INTERVAL;
 }
