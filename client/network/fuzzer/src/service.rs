@@ -217,10 +217,10 @@ enum Action {
 }
 
 fn main() {
+	let (a, mut events_stream_a, b, mut events_stream_b) = build_nodes_one_proto();
+
 	loop {
 		fuzz!(|actions: Vec<Action>| {
-			let (a, mut events_stream_a, b, mut events_stream_b) = build_nodes_one_proto();
-
 			for action in actions {
 				match action {
 					Action::WriteNotification(sender, receiver, data) => {
@@ -269,7 +269,7 @@ fn main() {
 				};
 			}
 
-			async_std::task::block_on(async move {
+			async_std::task::block_on(async {
 				// Grab next event from either `events_stream_a` or `events_stream_b`.
 				let _next_event = {
 					let next_a = events_stream_a.next();
