@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - dev-cere
-      - feature/align-params-with-polkadot
 env:
   ECR_REPOSITORY: pos-network-node
 jobs:
