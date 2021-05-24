@@ -352,15 +352,19 @@ impl<Block, Client> SubscriptionSinks<Block, Client>
 
 	/// Set up subscriptions to storage events.
 	// Note: Spawned in `gen_rpc_module` in builder.rs
-	pub async fn subscribe(mut self) {
-		let version = self.client.runtime_version_at(&BlockId::hash(self.client.info().best_hash)).expect("TODO");
+	pub async fn subscribe(mut self) -> Result<(), Error> {
+		let version = self.client.runtime_version_at(&BlockId::hash(self.client.info().best_hash))
+			.map_err(|api_err| Error::Client(Box::new(api_err)))?;
 		let mut previous_version = version.clone();
-		self.runtime_version_sink.send(&version);
+		// TODO: fix error handling here
+		self.runtime_version_sink.send(&version).unwrap();
+			//.map_err(|state_err| Error::Client(Box::new(<anyhow::Error as AsRef<(dyn std::error::Error + Sync + std::marker::Send + 'static)>>::as_ref(&state_err))))?;
 
 		let rt_version_stream = self.client.storage_changes_notification_stream(
 			Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
 			None,
-		).expect("TODO: how do we return errors from spawned tasks?");
+		).map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
+
 		let client = self.client.clone();
     	let mut stream = rt_version_stream
 			// I don't plan to change this logic, but to me it seems kind of crazy to implement watching for runtime
@@ -374,20 +378,27 @@ impl<Block, Client> SubscriptionSinks<Block, Client>
 				let info = client.info();
 				let version = client
         			.runtime_version_at(&BlockId::hash(info.best_hash))
-        			// .map_err(|api_err| Error::Client(Box::new(api_err)))
-        			// .map_err(Into::into)
-        			.expect("TODO: error handling");
-				if previous_version != version {
-					previous_version = version.clone();
-					future::ready(Some(version))
-				} else {
-					future::ready(None)
+        			.map_err(|api_err| Error::Client(Box::new(api_err)));
+				match version {
+					Ok(v) => if previous_version != v {
+							previous_version = v.clone();
+							future::ready(Some(v))
+						} else {
+							future::ready(None)
+						},
+					Err(e) => {
+						log::error!("Could not fetch current runtime version. Error={:?}", e);
+						// TODO: this terminates the stream yes? What is the best way to let users know?
+						future::ready(None)
+					}
+
 				}
 			});
 
 		loop {
 			if let Some(version) = stream.next().await {
-				self.runtime_version_sink.send(&version);
+				// TODO: what to do about the error here?
+				let _ = self.runtime_version_sink.send(&version);
 			}
 		}
 
