@@ -356,7 +356,6 @@ impl<Block, Client> SubscriptionSinks<Block, Client>
 		let version = self.client.runtime_version_at(&BlockId::hash(self.client.info().best_hash))
 			.map_err(|api_err| Error::Client(Box::new(api_err)))?;
 		let mut previous_version = version.clone();
-		// TODO: fix error handling here
 		self.runtime_version_sink.send(&version).map_err(|state_err| Error::Client(state_err.into()))?;
 
 		let rt_version_stream = self.client.storage_changes_notification_stream(
@@ -396,8 +395,9 @@ impl<Block, Client> SubscriptionSinks<Block, Client>
 
 		loop {
 			if let Some(version) = stream.next().await {
-				// TODO: what to do about the error here?
-				let _ = self.runtime_version_sink.send(&version);
+				if let Err(e) = self.runtime_version_sink.send(&version) {
+					log::error!("RuntimeVersion subscription failed with: {:?}", e);
+				}
 			}
 		}
 
