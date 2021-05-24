@@ -17,7 +17,7 @@
 
 use crate::{
 	CodeHash, Event, Config, Pallet as Contracts,
-	BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::Storage,
+	BalanceOf, ContractInfo, gas::GasMeter, rent::{Rent, RentStatus}, storage::Storage,
 	Error, ContractInfoOf, Schedule, AliveContractInfo, AccountCounter,
 };
 use sp_core::crypto::UncheckedFrom;
@@ -32,7 +32,7 @@ use frame_support::{
 	storage::{with_transaction, TransactionOutcome},
 	traits::{ExistenceRequirement, Currency, Time, Randomness, Get},
 	weights::Weight,
-	ensure,
+	ensure, DefaultNoBound,
 };
 use pallet_contracts_primitives::{ExecReturnValue};
 use smallvec::{SmallVec, Array};
@@ -82,7 +82,7 @@ impl<T: Into<DispatchError>> From<T> for ExecError {
 }
 
 /// Information needed for rent calculations that can be requested by a contract.
-#[derive(codec::Encode)]
+#[derive(codec::Encode, DefaultNoBound)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct RentParams<T: Config> {
 	/// The total balance of the contract. Includes the balance transferred from the caller.
@@ -138,27 +138,6 @@ where
 			code_size: executable.aggregate_code_len(),
 			code_refcount: executable.refcount(),
 			_reserved: None,
-		}
-	}
-}
-
-/// We cannot derive `Default` because `T` does not necessarily implement `Default`.
-#[cfg(test)]
-impl<T: Config> Default for RentParams<T> {
-	fn default() -> Self {
-		Self {
-			total_balance: Default::default(),
-			free_balance: Default::default(),
-			subsistence_threshold: Default::default(),
-			deposit_per_contract: Default::default(),
-			deposit_per_storage_byte: Default::default(),
-			deposit_per_storage_item: Default::default(),
-			rent_allowance: Default::default(),
-			rent_fraction: Default::default(),
-			storage_size: Default::default(),
-			code_size: Default::default(),
-			code_refcount: Default::default(),
-			_reserved: Default::default(),
 		}
 	}
 }
@@ -313,8 +292,21 @@ pub trait Ext: sealing::Sealed {
 	/// Information needed for rent calculations.
 	fn rent_params(&self) -> &RentParams<Self::T>;
 
+	/// Information about the required deposit and resulting rent.
+	fn rent_status(&mut self, at_refcount: u32) -> RentStatus<Self::T>;
+
 	/// Get a mutable reference to the nested gas meter.
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T>;
+
+	/// Append a string to the debug buffer.
+	///
+	/// It is added as-is without any additional new line.
+	///
+	/// This is a no-op if debug message recording is disabled which is always the case
+	/// when the code is executing on-chain.
+	///
+	/// Returns `true` if debug message recording is enabled. Otherwise `false` is returned.
+	fn append_debug_buffer(&mut self, msg: &str) -> bool;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -434,6 +426,11 @@ pub struct Stack<'a, T: Config, E> {
 	frames: SmallVec<T::CallStack>,
 	/// Statically guarantee that each call stack has at least one frame.
 	first_frame: Frame<T>,
+	/// A text buffer used to output human readable information.
+	///
+	/// All the bytes added to this field should be valid UTF-8. The buffer has no defined
+	/// structure and is intended to be shown to users as-is for debugging purposes.
+	debug_message: Option<&'a mut Vec<u8>>,
 	/// No executable is held by the struct but influences its behaviour.
 	_phantom: PhantomData<E>,
 }
@@ -442,6 +439,11 @@ pub struct Stack<'a, T: Config, E> {
 ///
 /// For each nested contract call or instantiate one frame is created. It holds specific
 /// information for the said call and caches the in-storage `ContractInfo` data structure.
+///
+/// # Note
+///
+/// This is an internal data structure. It is exposed to the public for the sole reason
+/// of specifying [`Config::CallStack`].
 pub struct Frame<T: Config> {
 	/// The account id of the executing contract.
 	account_id: T::AccountId,
@@ -574,6 +576,11 @@ where
 {
 	/// Create an run a new call stack by calling into `dest`.
 	///
+	/// # Note
+	///
+	/// `debug_message` should only ever be set to `Some` when executing as an RPC because
+	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
+	///
 	/// # Return Value
 	///
 	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
@@ -584,6 +591,7 @@ where
 		schedule: &'a Schedule<T>,
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
+		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
 		let (mut stack, executable) = Self::new(
 			FrameArgs::Call{dest, cached_info: None},
@@ -591,11 +599,17 @@ where
 			gas_meter,
 			schedule,
 			value,
+			debug_message,
 		)?;
 		stack.run(executable, input_data)
 	}
 
 	/// Create and run a new call stack by instantiating a new contract.
+	///
+	/// # Note
+	///
+	/// `debug_message` should only ever be set to `Some` when executing as an RPC because
+	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
 	///
 	/// # Return Value
 	///
@@ -608,6 +622,7 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
+		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
 		let (mut stack, executable) = Self::new(
 			FrameArgs::Instantiate {
@@ -620,6 +635,7 @@ where
 			gas_meter,
 			schedule,
 			value,
+			debug_message,
 		).map_err(|(e, _code_len)| e)?;
 		let account_id = stack.top_frame().account_id.clone();
 		stack.run(executable, input_data)
@@ -634,6 +650,7 @@ where
 		gas_meter: &'a mut GasMeter<T>,
 		schedule: &'a Schedule<T>,
 		value: BalanceOf<T>,
+		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(Self, E), (ExecError, u32)> {
 		let (first_frame, executable) = Self::new_frame(args, value, gas_meter, 0, &schedule)?;
 		let stack = Self {
@@ -645,6 +662,7 @@ where
 			account_counter: None,
 			first_frame,
 			frames: Default::default(),
+			debug_message,
 			_phantom: Default::default(),
 		};
 
@@ -841,6 +859,7 @@ where
 
 		// Pop the current frame from the stack and return it in case it needs to interact
 		// with duplicates that might exist on the stack.
+		// A `None` means that we are returning from the `first_frame`.
 		let frame = self.frames.pop();
 
 		if let Some(frame) = frame {
@@ -872,6 +891,13 @@ where
 				}
 			}
 		} else {
+			if let Some((msg, false)) = self.debug_message.as_ref().map(|m| (m, m.is_empty())) {
+				log::debug!(
+					target: "runtime::contracts",
+					"Execution finished with debug buffer: {}",
+					core::str::from_utf8(msg).unwrap_or("<Invalid UTF8>"),
+				);
+			}
 			// Write back to the root gas meter.
 			self.gas_meter.absorb_nested(mem::take(&mut self.first_frame.nested_meter));
 			// Only gas counter changes are persisted in case of a failure.
@@ -1181,7 +1207,7 @@ where
 	fn block_number(&self) -> T::BlockNumber { self.block_number }
 
 	fn max_value_size(&self) -> u32 {
-		T::MaxValueSize::get()
+		T::Schedule::get().limits.payload_len
 	}
 
 	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
@@ -1196,8 +1222,33 @@ where
 		&self.top_frame().rent_params
 	}
 
+	fn rent_status(&mut self, at_refcount: u32) -> RentStatus<Self::T> {
+		let frame = self.top_frame_mut();
+		let balance = T::Currency::free_balance(&frame.account_id);
+		let code_size = frame.rent_params.code_size;
+		let refcount = frame.rent_params.code_refcount;
+		<Rent<T, E>>::rent_status(
+			&balance,
+			&frame.contract_info(),
+			code_size,
+			refcount,
+			at_refcount,
+		)
+	}
+
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
 		&mut self.top_frame_mut().nested_meter
+	}
+
+	fn append_debug_buffer(&mut self, msg: &str) -> bool {
+		if let Some(buffer) = &mut self.debug_message {
+			if !msg.is_empty() {
+				buffer.extend(msg.as_bytes());
+			}
+			true
+		} else {
+			false
+		}
 	}
 }
 
@@ -1241,7 +1292,7 @@ mod tests {
 			test_utils::{place_contract, set_balance, get_balance},
 		},
 		exec::ExportedFunction::*,
-		Error, Weight, CurrentSchedule,
+		Error, Weight,
 	};
 	use sp_core::Bytes;
 	use sp_runtime::DispatchError;
@@ -1436,12 +1487,12 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, exec_ch);
 
 			assert_matches!(
 				MockStack::run_call(
-					ALICE, BOB, &mut gas_meter, &schedule, value, vec![],
+					ALICE, BOB, &mut gas_meter, &schedule, value, vec![], None,
 				),
 				Ok(_)
 			);
@@ -1487,7 +1538,7 @@ mod tests {
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, return_ch);
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
@@ -1499,6 +1550,7 @@ mod tests {
 				&schedule,
 				55,
 				vec![],
+				None,
 			).unwrap();
 
 			assert!(!output.0.is_success());
@@ -1548,7 +1600,7 @@ mod tests {
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, return_ch);
 
 			let result = MockStack::run_call(
@@ -1558,6 +1610,7 @@ mod tests {
 				&schedule,
 				0,
 				vec![],
+				None,
 			);
 
 			let output = result.unwrap();
@@ -1578,8 +1631,8 @@ mod tests {
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
-			place_contract(&dest, return_ch);
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, return_ch);
 
 			let result = MockStack::run_call(
 				origin,
@@ -1588,6 +1641,7 @@ mod tests {
 				&schedule,
 				0,
 				vec![],
+				None,
 			);
 
 			let output = result.unwrap();
@@ -1605,7 +1659,7 @@ mod tests {
 
 		// This one tests passing the input data into a contract via call.
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, input_data_ch);
 
 			let result = MockStack::run_call(
@@ -1615,6 +1669,7 @@ mod tests {
 				&schedule,
 				0,
 				vec![1, 2, 3, 4],
+				None,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -1629,7 +1684,7 @@ mod tests {
 
 		// This one tests passing the input data into a contract via instantiate.
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			let subsistence = Contracts::<Test>::subsistence_threshold();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(
@@ -1646,6 +1701,7 @@ mod tests {
 				subsistence * 3,
 				vec![1, 2, 3, 4],
 				&[],
+				None,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -1683,7 +1739,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			set_balance(&BOB, 1);
 			place_contract(&BOB, recurse_ch);
 
@@ -1694,6 +1750,7 @@ mod tests {
 				&schedule,
 				value,
 				vec![],
+				None,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1732,7 +1789,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&dest, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
 
@@ -1743,6 +1800,7 @@ mod tests {
 				&schedule,
 				0,
 				vec![],
+				None,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1771,7 +1829,7 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
 
@@ -1782,6 +1840,7 @@ mod tests {
 				&schedule,
 				0,
 				vec![],
+				None,
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1793,7 +1852,7 @@ mod tests {
 		let dummy_ch = MockLoader::insert(Constructor, |_, _| exec_success());
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(
 				dummy_ch, &schedule, &mut gas_meter
@@ -1808,6 +1867,7 @@ mod tests {
 					0, // <- zero endowment
 					vec![],
 					&[],
+					None,
 				),
 				Err(_)
 			);
@@ -1822,7 +1882,7 @@ mod tests {
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(
 				dummy_ch, &schedule, &mut gas_meter
@@ -1838,6 +1898,7 @@ mod tests {
 					100,
 					vec![],
 					&[],
+					None,
 				),
 				Ok((address, ref output)) if output.data == Bytes(vec![80, 65, 83, 83]) => address
 			);
@@ -1859,7 +1920,7 @@ mod tests {
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(
 				dummy_ch, &schedule, &mut gas_meter
@@ -1875,6 +1936,7 @@ mod tests {
 					100,
 					vec![],
 					&[],
+					None,
 				),
 				Ok((address, ref output)) if output.data == Bytes(vec![70, 65, 73, 76]) => address
 			);
@@ -1908,13 +1970,13 @@ mod tests {
 		});
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			set_balance(&ALICE, Contracts::<Test>::subsistence_threshold() * 100);
 			place_contract(&BOB, instantiator_ch);
 
 			assert_matches!(
 				MockStack::run_call(
-					ALICE, BOB, &mut GasMeter::<Test>::new(GAS_LIMIT), &schedule, 20, vec![],
+					ALICE, BOB, &mut GasMeter::<Test>::new(GAS_LIMIT), &schedule, 20, vec![], None,
 				),
 				Ok(_)
 			);
@@ -1958,14 +2020,14 @@ mod tests {
 		});
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			set_balance(&ALICE, 1000);
 			set_balance(&BOB, 100);
 			place_contract(&BOB, instantiator_ch);
 
 			assert_matches!(
 				MockStack::run_call(
-					ALICE, BOB, &mut GasMeter::<Test>::new(GAS_LIMIT), &schedule, 20, vec![],
+					ALICE, BOB, &mut GasMeter::<Test>::new(GAS_LIMIT), &schedule, 20, vec![], None,
 				),
 				Ok(_)
 			);
@@ -1987,7 +2049,7 @@ mod tests {
 			.existential_deposit(15)
 			.build()
 			.execute_with(|| {
-				let schedule = <CurrentSchedule<Test>>::get();
+				let schedule = <Test as Config>::Schedule::get();
 				let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 				let executable = MockExecutable::from_storage(
 					terminate_ch, &schedule, &mut gas_meter
@@ -2003,6 +2065,7 @@ mod tests {
 						100,
 						vec![],
 						&[],
+						None,
 					),
 					Err(Error::<Test>::TerminatedInConstructor.into())
 				);
@@ -2027,7 +2090,7 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let subsistence = Contracts::<Test>::subsistence_threshold();
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(
 				rent_allowance_ch, &schedule, &mut gas_meter
@@ -2042,6 +2105,7 @@ mod tests {
 				subsistence * 5,
 				vec![],
 				&[],
+				None,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2060,7 +2124,7 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let subsistence = Contracts::<Test>::subsistence_threshold();
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, subsistence * 10);
 			place_contract(&BOB, code_hash);
@@ -2071,6 +2135,7 @@ mod tests {
 				&schedule,
 				0,
 				vec![],
+				None,
 			).unwrap();
 		});
 	}
@@ -2109,7 +2174,7 @@ mod tests {
 
 		ExtBuilder::default().build().execute_with(|| {
 			let subsistence = Contracts::<Test>::subsistence_threshold();
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, subsistence * 100);
 			place_contract(&BOB, code_hash);
@@ -2120,6 +2185,49 @@ mod tests {
 				&schedule,
 				subsistence * 50,
 				vec![],
+				None,
+			).unwrap();
+		});
+	}
+
+	#[test]
+	fn rent_status_works() {
+		let code_hash = MockLoader::insert(Call, |ctx, _| {
+			assert_eq!(ctx.ext.rent_status(0), RentStatus {
+				max_deposit: 80000,
+				current_deposit: 80000,
+				custom_refcount_deposit: None,
+				max_rent: 32,
+				current_rent: 32,
+				custom_refcount_rent: None,
+				_reserved: None,
+			});
+			assert_eq!(ctx.ext.rent_status(1), RentStatus {
+				max_deposit: 80000,
+				current_deposit: 80000,
+				custom_refcount_deposit: Some(80000),
+				max_rent: 32,
+				current_rent: 32,
+				custom_refcount_rent: Some(32),
+				_reserved: None,
+			});
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, subsistence * 10);
+			place_contract(&BOB, code_hash);
+			MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
 			).unwrap();
 		});
 	}
@@ -2156,7 +2264,7 @@ mod tests {
 
 		// This one tests passing the input data into a contract via call.
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
 
@@ -2167,6 +2275,7 @@ mod tests {
 				&schedule,
 				0,
 				vec![0],
+				None,
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -2174,10 +2283,9 @@ mod tests {
 
 	#[test]
 	fn recursive_call_during_constructor_fails() {
-		let code = MockLoader::insert(Constructor, |ctx, executable| {
-			let my_hash = <Contracts<Test>>::contract_address(&ALICE, &executable.code_hash, &[]);
+		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
-				ctx.ext.call(0, my_hash, 0, vec![]),
+				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![]),
 				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::NotCallable.into()
 			);
 			exec_success()
@@ -2185,7 +2293,7 @@ mod tests {
 
 		// This one tests passing the input data into a contract via instantiate.
 		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <CurrentSchedule<Test>>::get();
+			let schedule = <Test as Config>::Schedule::get();
 			let subsistence = Contracts::<Test>::subsistence_threshold();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			let executable = MockExecutable::from_storage(
@@ -2202,8 +2310,70 @@ mod tests {
 				subsistence * 3,
 				vec![],
 				&[],
+				None,
 			);
 			assert_matches!(result, Ok(_));
 		});
+	}
+
+	#[test]
+	fn printing_works() {
+		let code_hash = MockLoader::insert(Call, |ctx, _| {
+			ctx.ext.append_debug_buffer("This is a test");
+			ctx.ext.append_debug_buffer("More text");
+			exec_success()
+		});
+
+		let mut debug_buffer = Vec::new();
+
+		ExtBuilder::default().build().execute_with(|| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, subsistence * 10);
+			place_contract(&BOB, code_hash);
+			MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&schedule,
+				0,
+				vec![],
+				Some(&mut debug_buffer),
+			).unwrap();
+		});
+
+		assert_eq!(&String::from_utf8(debug_buffer).unwrap(), "This is a testMore text");
+	}
+
+	#[test]
+	fn printing_works_on_fail() {
+		let code_hash = MockLoader::insert(Call, |ctx, _| {
+			ctx.ext.append_debug_buffer("This is a test");
+			ctx.ext.append_debug_buffer("More text");
+			exec_trapped()
+		});
+
+		let mut debug_buffer = Vec::new();
+
+		ExtBuilder::default().build().execute_with(|| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, subsistence * 10);
+			place_contract(&BOB, code_hash);
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&schedule,
+				0,
+				vec![],
+				Some(&mut debug_buffer),
+			);
+			assert!(result.is_err());
+		});
+
+		assert_eq!(&String::from_utf8(debug_buffer).unwrap(), "This is a testMore text");
 	}
 }

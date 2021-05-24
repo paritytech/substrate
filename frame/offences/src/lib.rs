@@ -131,9 +131,6 @@ pub mod pallet {
 			migration::remove_deferred_storage::<T>()
 		}
 	}
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
 }
 
 impl<T: Config, O: Offence<T::IdentificationTuple>>

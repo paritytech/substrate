@@ -671,21 +671,13 @@ deploy-prometheus-alerting-rules:
   needs:
     - job:                         test-prometheus-alerting-rules
       artifacts:                   false
-  interruptible:                   true
-  retry:                           1
-  tags:
-    - kubernetes-parity-build
-  image:                           paritytech/kubetools:latest
-  environment:
-    name: parity-mgmt-polkadot-alerting
+  allow_failure:                   true
+  trigger:
+    project:  parity/infrastructure/cloud-infra
   variables:
-    NAMESPACE:                     monitoring
-    PROMETHEUSRULE:                prometheus-k8s-rules-polkadot-alerting
-    RULES:                         .maintain/monitoring/alerting-rules/alerting-rules.yaml
-  script:
-    - echo "deploying prometheus alerting rules"
-    - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE}
-        --type=merge --patch "$(sed 's/^/  /;1s/^/spec:\n/' ${RULES})"
+    SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
+    SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
+    UPSTREAM_TRIGGER_PROJECT:       "${CI_PROJECT_PATH}"
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never

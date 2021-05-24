@@ -238,6 +238,7 @@ fn generate_emit_link_section_decl(contents: &[u8], section_name: &str) -> Token
 	let len = contents.len();
 	quote! {
 		const _: () = {
+			#[cfg(not(feature = "std"))]
 			#[link_section = #section_name]
 			static SECTION_CONTENTS: [u8; #len] = [#(#contents),*];
 		};
