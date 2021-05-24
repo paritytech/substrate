@@ -119,7 +119,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The accountable safety subsystem
-		type AccountableSafety: AccountableSafety;
+		type AccountableSafety: AccountableSafety<Self>;
 	}
 
 	#[pallet::hooks]

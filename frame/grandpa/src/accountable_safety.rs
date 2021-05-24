@@ -15,9 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use sp_io::logging::log;
+use super::{Pallet, Config};
+use crate::BlockNotIncluded;
+use sp_runtime::traits::Saturating;
 
-pub trait AccountableSafety {
+pub trait AccountableSafety<T: Config> {
 	/// Update the accountable safety state machine(s), if there are any active.
 	fn update();
 
@@ -36,7 +38,7 @@ pub trait AccountableSafety {
 	fn add_prevote_response();
 }
 
-impl AccountableSafety for () {
+impl<T: Config> AccountableSafety<T> for () {
 	fn update() {}
 	fn start_accountable_safety_protocol() {}
 	fn state() -> Option<()> { None }
@@ -46,10 +48,17 @@ impl AccountableSafety for () {
 
 pub struct AccountableSafetyHandler;
 
-impl AccountableSafety for AccountableSafetyHandler {
+impl<T: Config> AccountableSafety<T> for AccountableSafetyHandler {
 	fn update() {
-		let a = Grandpa::block_not_included();
-		log::info!("JON: a: {}", a);
+		let a = Pallet::<T>::block_not_included();
+		log::info!("JON: a: {:?}", a);
+
+		let a = a.unwrap_or(1u32.into());
+		// let a = T::BlockNumber::from(1u32);
+
+		// <BlockNotIncluded<T>>::put(a);
+		<BlockNotIncluded<T>>::put(a.saturating_add(1u32.into()));
+		// Pallet::<T>::BlockNotIncluded::set(a.saturating_add(1));
 	}
 
 	fn start_accountable_safety_protocol() {
