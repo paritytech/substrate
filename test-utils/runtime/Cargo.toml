@@ -98,3 +98,5 @@ std = [
 ]
 # Special feature to disable logging
 disable-logging = [ "sp-api/disable-logging" ]
+# Special feature to build runtime with tracing
+with-tracing = [ "sp-io/with-tracing", "frame-executive/with-tracing" ]
