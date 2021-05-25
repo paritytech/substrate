@@ -1,8 +1,5 @@
 [workspace]
 members = [
-	"bin/node-template/node",
-	"bin/node-template/runtime",
-	"bin/node-template/pallets/template",
 	"bin/node/bench",
 	"bin/node/browser-testing",
 	"bin/node/cli",
