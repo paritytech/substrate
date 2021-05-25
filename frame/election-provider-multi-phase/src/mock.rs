@@ -269,6 +269,7 @@ parameter_types! {
 	pub static MockWeightInfo: bool = false;
 
 	pub static EpochLength: u64 = 30;
+	pub static UntrustedMinScore: ElectionScore = [0u128, 0, 0];
 }
 
 // Hopefully this won't be too much of a hassle to maintain.
@@ -345,6 +346,7 @@ impl crate::Config for Runtime {
 	type BenchmarkingConfig = ();
 	type OnChainAccuracy = Perbill;
 	type Fallback = Fallback;
+	type UntrustedScoreVerification = untrusted_score_verification::EnsureMinScore<UntrustedMinScore>;
 	type CompactSolution = TestCompact;
 }
 

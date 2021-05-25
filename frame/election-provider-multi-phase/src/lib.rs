@@ -229,7 +229,7 @@ use sp_runtime::{
 		TransactionValidityError, ValidTransaction,
 	},
 	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
-	traits::Bounded,
+	traits::{Bounded, Convert},
 };
 use sp_std::{
 	convert::TryInto,
@@ -251,6 +251,7 @@ const LOG_TARGET: &'static str = "runtime::election-provider";
 
 pub mod unsigned;
 pub mod weights;
+pub mod untrusted_score_verification;
 
 /// The weight declaration of the pallet.
 pub use weights::WeightInfo;
@@ -502,6 +503,8 @@ pub enum FeasibilityError {
 	InvalidScore,
 	/// The provided round is incorrect.
 	InvalidRound,
+	/// The checks from `T::UntrustedScoreVerification` failed.
+	UntrustedScoreFailed,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -560,6 +563,9 @@ pub mod pallet {
 		/// The miner will ensure that the total length of the unsigned solution will not exceed
 		/// this value.
 		type MinerMaxLength: Get<u32>;
+
+		/// An additional verification executed on any external solution (signed or unsigned);
+		type UntrustedScoreVerification: Convert<ElectionScore, bool>;
 
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
@@ -1051,6 +1057,12 @@ impl<T: Config> Pallet<T> {
 		// already checked this in `unsigned_per_dispatch_checks`. The signed path *could* check it
 		// upon arrival, thus we would then remove it here. Given overlay it is cheap anyhow
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
+
+		// ensure that the solution's score can pass any limits.
+		ensure!(
+			T::UntrustedScoreVerification::convert(solution.score),
+			FeasibilityError::UntrustedScoreFailed
+		);
 
 		// read the entire snapshot.
 		let RoundSnapshot { voters: snapshot_voters, targets: snapshot_targets } =
@@ -1593,6 +1605,31 @@ mod tests {
 			roll_to(29);
 			let (supports, _) = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
+		})
+	}
+
+	#[test]
+	fn untrusted_score_verification_is_respected() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+
+			let (solution, _) = MultiPhase::mine_solution(2).unwrap();
+			// default solution has a score of [50, 100, 5000].
+			assert_eq!(solution.score, [50, 100, 5000]);
+
+			crate::mock::UntrustedMinScore::set([49, 0, 0]);
+			assert_ok!(MultiPhase::feasibility_check(solution.clone(), ElectionCompute::Signed));
+
+			crate::mock::UntrustedMinScore::set([51, 0, 0]);
+			assert_noop!(
+				MultiPhase::feasibility_check(
+					solution,
+					ElectionCompute::Signed
+				),
+				FeasibilityError::UntrustedScoreFailed,
+			);
 		})
 	}
 
