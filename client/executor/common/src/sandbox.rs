@@ -406,7 +406,7 @@ impl<FR> SandboxInstance<FR> {
 							let function = wasmer_instance
 								.exports
 								.get_function(export_name)
-								.map_err(|error| wasmi::Error::Function("wasmer function failed".to_string()))?;
+								.map_err(|error| wasmi::Error::Function(error.to_string()))?;
 
 							let args: Vec<wasmer::Val> = args
 								.iter()
@@ -419,7 +419,7 @@ impl<FR> SandboxInstance<FR> {
 								.collect();
 
 							let wasmer_result = DTH::initialize_thunk(&self.dispatch_thunk, || function.call(&args))
-								.map_err(|e| wasmi::Error::Function(e.to_string()))?;
+								.map_err(|error| wasmi::Error::Function(error.to_string()))?;
 
 							if wasmer_result.len() < 2 {
 								return Err(wasmi::Error::Function("multiple return types are not supported yet".to_owned()));
@@ -699,7 +699,7 @@ impl<FR> Store<FR> {
 				let ty = wasmer::MemoryType::new(initial, maximum, false);
 				Memory::Wasmer(
 					wasmer::Memory::new(&context.store, ty)
-						.map_err(|r| Error::InvalidMemoryReference)?
+						.map_err(|_| Error::InvalidMemoryReference)?
 				)
 			}
 		};
@@ -861,7 +861,7 @@ impl<FR> Store<FR> {
 			}
 
 			BackendContext::Wasmer(context) => {
-				let module = wasmer::Module::new(&context.store, wasm).map_err(|error| {
+				let module = wasmer::Module::new(&context.store, wasm).map_err(|_| {
 					InstantiationError::ModuleDecoding
 				})?;
 
@@ -877,7 +877,7 @@ impl<FR> Store<FR> {
 						// Nothing to do here
 						wasmer::ExternType::Global(_) | wasmer::ExternType::Table(_) => (),
 
-						wasmer::ExternType::Memory(memory_type) => {
+						wasmer::ExternType::Memory(_) => {
 							let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
 							let memory = guest_env.imports.memory_by_name(import.module(), import.name()).ok_or(InstantiationError::ModuleDecoding)?;
 
