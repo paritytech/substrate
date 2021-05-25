@@ -409,7 +409,7 @@ benchmarks! {
 
 	// We benchmark the costs for sucessfully evicting an empty contract.
 	// The actual costs are depending on how many storage items the evicted contract
-	// does have. However, those costs are not to be payed by the sender but
+	// does have. However, those costs are not to be paid by the sender but
 	// will be distributed over multiple blocks using a scheduler. Otherwise there is
 	// no incentive to remove large contracts when the removal is more expensive than
 	// the reward for removing them.
@@ -435,7 +435,7 @@ benchmarks! {
 		instance.ensure_tombstone()?;
 
 		// the caller should get the reward for being a good snitch
-		// this is capped by the maximum amount of rent payed. So we only now that it should
+		// this is capped by the maximum amount of rent paid. So we only now that it should
 		// have increased by at most the surcharge reward.
 		assert!(
 			T::Currency::free_balance(&instance.caller) >
