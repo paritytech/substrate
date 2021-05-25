@@ -241,7 +241,10 @@ impl<T: Config> Pallet<T> {
 	/// 1. base deposit, fixed for all submissions.
 	/// 2. a per-byte deposit, for renting the state usage.
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
-	pub fn deposit_for(solution: &RawSolution<CompactOf<T>>, size: SolutionOrSnapshotSize) -> BalanceOf<T> {
+	pub fn deposit_for(
+		solution: &RawSolution<CompactOf<T>>,
+		size: SolutionOrSnapshotSize,
+	) -> BalanceOf<T> {
 		let encoded_len: BalanceOf<T> = solution.using_encoded(|e| e.len() as u32).into();
 		let feasibility_weight = Self::feasibility_weight_of(solution, size);
 

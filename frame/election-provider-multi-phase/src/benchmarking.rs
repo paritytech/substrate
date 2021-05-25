@@ -263,15 +263,22 @@ frame_benchmarking::benchmarks! {
 	submit {
 		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
 
-		// the solution will be worse than all of them meaning the score need to be checked against ~ log2(c)
-		let solution = RawSolution { score: [(10_000_000u128 - 1).into(), 0, 0], ..Default::default() };
+		// the solution will be worse than all of them meaning the score need to be checked against
+		// ~ log2(c)
+		let solution = RawSolution {
+			score: [(10_000_000u128 - 1).into(), 0, 0],
+			..Default::default()
+		};
 
 		<CurrentPhase<T>>::put(Phase::Signed);
 		<Round<T>>::put(1);
 
 		<SignedSubmissions<T>>::mutate(|queue| {
 			for i in 0..c {
-				let solution = RawSolution { score: [(10_000_000 + i).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution {
+					score: [(10_000_000 + i).into(), 0, 0],
+					..Default::default()
+				};
 				let signed_submission = SignedSubmission { solution, ..Default::default() };
 				queue.push(signed_submission);
 			}
@@ -295,9 +302,12 @@ frame_benchmarking::benchmarks! {
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		let a in
+			(T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		let d in
+			(T::BenchmarkingConfig::DESIRED_TARGETS[0]) ..
+			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d);
@@ -310,7 +320,8 @@ frame_benchmarking::benchmarks! {
 		let encoded_call = <Call<T>>::submit_unsigned(raw_solution.clone(), witness).encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::submit_unsigned(RawOrigin::None.into(), raw_solution, witness));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
+			.unwrap();
 		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
@@ -324,13 +335,17 @@ frame_benchmarking::benchmarks! {
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		let a in
+			(T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		let d in
+			(T::BenchmarkingConfig::DESIRED_TARGETS[0]) ..
+			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 		// Subtract this percentage from the actual encoded size
 		let f in 0 .. 95;
 
-		// Compute a random solution, then work backwards to get the lists of voters, targets, and assignments
+		// Compute a random solution, then work backwards to get the lists of voters, targets, and
+		// assignments
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let RawSolution { compact, .. } = solution_with_size::<T>(witness, a, d);
 		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().unwrap();
@@ -374,7 +389,11 @@ frame_benchmarking::benchmarks! {
 	} verify {
 		let compact = CompactOf::<T>::try_from(index_assignments.as_slice()).unwrap();
 		let encoding = compact.encode();
-		log!(trace, "encoded size prediction = {}", encoded_size_of(index_assignments.as_slice()).unwrap());
+		log!(
+			trace,
+			"encoded size prediction = {}",
+			encoded_size_of(index_assignments.as_slice()).unwrap(),
+		);
 		log!(trace, "actual encoded size = {}", encoding.len());
 		assert!(encoding.len() <= desired_size);
 	}
@@ -387,9 +406,12 @@ frame_benchmarking::benchmarks! {
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
 		// a subset of `v` component.
-		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		let a in
+			(T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
 		// number of desired targets. Must be a subset of `t` component.
-		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		let d in
+			(T::BenchmarkingConfig::DESIRED_TARGETS[0]) ..
+			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let size = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(size, a, d);
@@ -401,7 +423,8 @@ frame_benchmarking::benchmarks! {
 		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
+			.unwrap();
 	}
 }
 
