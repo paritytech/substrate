@@ -229,7 +229,7 @@ use sp_runtime::{
 		TransactionValidityError, ValidTransaction,
 	},
 	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
-	traits::{Bounded, Convert},
+	traits::Bounded,
 };
 use sp_std::{
 	convert::TryInto,
@@ -251,7 +251,6 @@ const LOG_TARGET: &'static str = "runtime::election-provider";
 
 pub mod unsigned;
 pub mod weights;
-pub mod untrusted_score_verification;
 
 /// The weight declaration of the pallet.
 pub use weights::WeightInfo;
@@ -564,9 +563,6 @@ pub mod pallet {
 		/// this value.
 		type MinerMaxLength: Get<u32>;
 
-		/// An additional verification executed on any external solution (signed or unsigned);
-		type UntrustedScoreVerification: Convert<ElectionScore, bool>;
-
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
@@ -584,6 +580,9 @@ pub mod pallet {
 
 		/// Configuration for the fallback
 		type Fallback: Get<FallbackStrategy>;
+
+		/// Origin that can set the minimum score.
+		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The configuration of benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
@@ -779,6 +778,13 @@ pub mod pallet {
 
 			Ok(None.into())
 		}
+
+		#[pallet::weight(T::DbWeight::get().reads(1))]
+		fn set_minimum_untrusted_score(origin: OriginFor<T>, maybe_next_score: Option<ElectionScore>) -> DispatchResultWithPostInfo {
+			T::ForceOrigin::ensure_origin(origin)?;
+			<MinimumUntrustedScore<T>>::set(maybe_next_score);
+			Ok(None.into())
+		}
 	}
 
 	#[pallet::event]
@@ -914,6 +920,10 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn minimum_untrusted_score)]
+	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -1058,9 +1068,12 @@ impl<T: Config> Pallet<T> {
 		// upon arrival, thus we would then remove it here. Given overlay it is cheap anyhow
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 
-		// ensure that the solution's score can pass any limits.
+		// ensure that the solution's score can pass absolute min-score.
+		let submitted_score = solution.score.clone();
 		ensure!(
-			T::UntrustedScoreVerification::convert(solution.score),
+			Self::minimum_untrusted_score().map_or(true, |min_score|
+				sp_npos_elections::is_score_better(submitted_score, min_score, Perbill::zero())
+			),
 			FeasibilityError::UntrustedScoreFailed
 		);
 
@@ -1619,10 +1632,10 @@ mod tests {
 			// default solution has a score of [50, 100, 5000].
 			assert_eq!(solution.score, [50, 100, 5000]);
 
-			crate::mock::UntrustedMinScore::set([49, 0, 0]);
+			<MinimumUntrustedScore<Runtime>>::put([49, 0, 0]);
 			assert_ok!(MultiPhase::feasibility_check(solution.clone(), ElectionCompute::Signed));
 
-			crate::mock::UntrustedMinScore::set([51, 0, 0]);
+			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
 			assert_noop!(
 				MultiPhase::feasibility_check(
 					solution,
