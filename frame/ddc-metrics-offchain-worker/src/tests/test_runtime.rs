@@ -219,19 +219,10 @@ where
 }
 
 parameter_types! {
-    pub MetricsContractId: Option<AccountId> = {
-        let contract_id = crate::get_contract_id();
-        contract_id.map(|id| AccountId::from(id))
-    };
-    pub DdcUrl: Option<Vec<u8>> = {
-        crate::get_ddc_url()
-    };
     pub const OcwBlockInterval: u32 = crate::BLOCK_INTERVAL;
 }
 
 impl Trait for Test {
-    type ContractId = MetricsContractId;
-    type DdcUrl = DdcUrl;
     type BlockInterval = OcwBlockInterval;
 
     type CT = Self;

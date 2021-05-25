@@ -13,21 +13,13 @@ use test_runtime::{
     AccountId, Balances, Contracts, DdcMetricsOffchainWorker, Origin, System, Test, Timestamp,
 };
 
-use crate::{METRICS_CONTRACT_ADDR, METRICS_CONTRACT_ID, REPORT_METRICS_SELECTOR};
+use crate::REPORT_METRICS_SELECTOR;
 use hex_literal::hex;
 use sp_core::bytes::from_hex;
 
 mod test_runtime;
 
 type T = Test;
-
-#[test]
-fn decode_contract_address() {
-    let account_decoded = AccountId::from_str(METRICS_CONTRACT_ADDR).unwrap();
-    let account_from_bytes = AccountId::from(METRICS_CONTRACT_ID);
-
-    assert_eq!(account_decoded, account_from_bytes);
-}
 
 #[test]
 fn test_contract_api() {
