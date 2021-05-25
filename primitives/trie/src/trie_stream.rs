@@ -121,10 +121,28 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn append_substream<H: Hasher>(&mut self, other: Self) {
+		let inner_value_hashing = other.inner_value_hashing;
+		let range = other.current_value_range.clone();
 		let data = other.out();
 		match data.len() {
 			0..=31 => data.encode_to(&mut self.buffer),
-			_ => H::hash(&data).as_ref().encode_to(&mut self.buffer),
+			_ => {
+				if inner_value_hashing
+					&& range.as_ref().map(|r| r.end - r.start >= trie_constants::INNER_HASH_TRESHOLD)
+						.unwrap_or_default() {
+					let meta = TrieMeta {
+						range: range,
+						unused_value: false,
+						contain_hash: false,
+						do_value_hash: true,
+						old_hash: false,
+						recorded_do_value_hash: false,
+					};
+					<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta).as_ref().encode_to(&mut self.buffer);
+				} else {
+					H::hash(&data).as_ref().encode_to(&mut self.buffer);
+				}
+			},
 		}
 	}
 
@@ -132,28 +150,31 @@ impl trie_root::TrieStream for TrieStream {
 		let inner_value_hashing = self.inner_value_hashing;
 		let range = self.current_value_range;
 		let data = self.buffer;
+		let meta = TrieMeta {
+			range: range,
+			unused_value: false,
+			contain_hash: false,
+			do_value_hash: inner_value_hashing,
+			old_hash: false,
+			recorded_do_value_hash: inner_value_hashing,
+		};
+			
+		// Add the recorded_do_value_hash to encoded
+		let mut encoded = meta.write_state_meta();
+		let encoded = if encoded.len() > 0 {
+			encoded.extend(data);
+			encoded
+		} else {
+			data
+		};
+
 		if inner_value_hashing
-			&& range.as_ref().map(|r| r.end - r.start >= trie_constants::INNER_HASH_TRESHOLD)
+			&& meta.range.as_ref().map(|r| r.end - r.start >= trie_constants::INNER_HASH_TRESHOLD)
 				.unwrap_or_default() {
-			let meta = TrieMeta {
-				range: range,
-				unused_value: false,
-				contain_hash: false,
-				do_value_hash: true,
-				old_hash: false,
-				recorded_do_value_hash: true,
-			};
-			// Add the recorded_do_value_hash to encoded
-			let mut encoded = meta.write_state_meta();
-			let encoded = if encoded.len() > 0 {
-				encoded.extend(data);
-				encoded
-			} else {
-				data
-			};
+		
 			<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&encoded, &meta)
 		} else {
-			H::hash(&data)
+			H::hash(&encoded)
 		}
 	}
 

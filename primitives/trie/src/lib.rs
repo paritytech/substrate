@@ -1206,7 +1206,7 @@ mod tests {
 	}
 	fn random_should_work_inner(flag: bool) {
 		let mut seed = <Blake2Hasher as Hasher>::Out::zero();
-		for test_i in 0..10000 {
+		for test_i in 0..10_000 {
 			if test_i % 50 == 0 {
 				println!("{:?} of 10000 stress tests done", test_i);
 			}
@@ -1218,8 +1218,11 @@ mod tests {
 				count: 100,
 			}.make_with(seed.as_fixed_bytes_mut());
 
-			let layout = Layout::default();
-			// TODO implement variant for stream codec or use iter_build.
+			let layout = if flag {
+				Layout::with_inner_hashing()
+			} else {
+				Layout::default()
+			};
 			let real = layout.trie_root(x.clone());
 			let mut memdb = MemoryDB::default();
 			let mut root = Default::default();
