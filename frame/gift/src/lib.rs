@@ -47,7 +47,6 @@ pub mod pallet {
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{Currency, ExistenceRequirement, ReservableCurrency},
-		weights::Pays,
 		sp_runtime::traits::{CheckedAdd, Saturating, Zero},
 	};
 	use frame_system::pallet_prelude::*;
@@ -87,7 +86,6 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::AccountId,
 		GiftInfo<T::AccountId, BalanceOf<T>>,
-		OptionQuery
 	>;
 
 	#[pallet::event]
@@ -116,9 +114,6 @@ pub mod pallet {
 		/// You are not the owner of this gift.
 		NotGifter,
 	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
 	// These functions materialize as "extrinsics", which are often compared to transactions.
