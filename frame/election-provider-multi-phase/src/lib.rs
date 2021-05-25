@@ -502,8 +502,8 @@ pub enum FeasibilityError {
 	InvalidScore,
 	/// The provided round is incorrect.
 	InvalidRound,
-	/// The checks from `T::UntrustedScoreVerification` failed.
-	UntrustedScoreFailed,
+	/// Comparison against `MinimumUntrustedScore` failed.
+	UntrustedScoreTooLow,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -779,6 +779,11 @@ pub mod pallet {
 			Ok(None.into())
 		}
 
+		/// Set a new value for `MinimumUntrustedScore`.
+		///
+		/// Dispatch origin must be aligned with `T::ForceOrigin`.
+		///
+		/// This check can be turned off by setting the value to `None`.
 		#[pallet::weight(T::DbWeight::get().reads(1))]
 		fn set_minimum_untrusted_score(
 			origin: OriginFor<T>,
@@ -924,6 +929,10 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
+	/// The minimum score that each 'untrusted' solution must attain in order to be considered
+	/// feasible.
+	///
+	/// Can be set via `set_minimum_untrusted_score`.
 	#[pallet::storage]
 	#[pallet::getter(fn minimum_untrusted_score)]
 	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
@@ -1077,7 +1086,7 @@ impl<T: Config> Pallet<T> {
 			Self::minimum_untrusted_score().map_or(true, |min_score|
 				sp_npos_elections::is_score_better(submitted_score, min_score, Perbill::zero())
 			),
-			FeasibilityError::UntrustedScoreFailed
+			FeasibilityError::UntrustedScoreTooLow
 		);
 
 		// read the entire snapshot.
@@ -1644,7 +1653,7 @@ mod tests {
 					solution,
 					ElectionCompute::Signed
 				),
-				FeasibilityError::UntrustedScoreFailed,
+				FeasibilityError::UntrustedScoreTooLow,
 			);
 		})
 	}
