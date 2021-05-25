@@ -134,6 +134,21 @@ pub mod pallet {
 	pub type DoubleMap2<T, I = ()> =
 		StorageDoubleMap<_, Twox64Concat, u16, Blake2_128Concat, u32, u64>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn nmap)]
+	pub type NMap<T, I = ()> = StorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn nmap2)]
+	pub type NMap2<T, I = ()> = StorageNMap<
+		_,
+		(
+			storage::Key<Twox64Concat, u16>,
+			storage::Key<Blake2_128Concat, u32>,
+		),
+		u64,
+	>;
+
 	#[pallet::genesis_config]
 	#[derive(Default)]
 	pub struct GenesisConfig {
@@ -170,6 +185,10 @@ pub mod pallet {
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
+			unimplemented!();
+		}
 	}
 
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
@@ -177,20 +196,19 @@ pub mod pallet {
 	pub enum InherentError {
 	}
 
-	impl sp_inherents::IsFatalError for InherentError {
+	impl frame_support::inherent::IsFatalError for InherentError {
 		fn is_fatal_error(&self) -> bool {
 			unimplemented!();
 		}
 	}
 
-	pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"testpall";
+	pub const INHERENT_IDENTIFIER: frame_support::inherent::InherentIdentifier = *b"testpall";
 }
 
 // Test that a instantiable pallet with a generic genesis_config is correctly handled
 #[frame_support::pallet]
 pub mod pallet2 {
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
@@ -200,12 +218,6 @@ pub mod pallet2 {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
-
-	#[pallet::call]
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
 
 	#[pallet::event]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -399,7 +411,7 @@ fn pallet_expand_deposit_event() {
 #[test]
 fn storage_expand() {
 	use frame_support::pallet_prelude::*;
-	use frame_support::StoragePrefixedMap;
+	use frame_support::storage::StoragePrefixedMap;
 
 	fn twox_64_concat(d: &[u8]) -> Vec<u8> {
 		let mut v = twox_64(d).to_vec();
@@ -443,6 +455,19 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime>>::final_prefix());
+
+		<pallet::NMap<Runtime>>::insert((&1,), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"NMap")].concat();
+		k.extend(1u8.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
+		assert_eq!(&k[..32], &<pallet::NMap<Runtime>>::final_prefix());
+
+		<pallet::NMap2<Runtime>>::insert((&1, &2), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"NMap2")].concat();
+		k.extend(1u16.using_encoded(twox_64_concat));
+		k.extend(2u32.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
+		assert_eq!(&k[..32], &<pallet::NMap2<Runtime>>::final_prefix());
 	});
 
 	TestExternalities::default().execute_with(|| {
@@ -475,6 +500,19 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime, pallet::Instance1>>::final_prefix());
+
+		<pallet::NMap<Runtime, pallet::Instance1>>::insert((&1,), &3);
+		let mut k = [twox_128(b"Instance1Example"), twox_128(b"NMap")].concat();
+		k.extend(1u8.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
+		assert_eq!(&k[..32], &<pallet::NMap<Runtime, pallet::Instance1>>::final_prefix());
+
+		<pallet::NMap2<Runtime, pallet::Instance1>>::insert((&1, &2), &3);
+		let mut k = [twox_128(b"Instance1Example"), twox_128(b"NMap2")].concat();
+		k.extend(1u16.using_encoded(twox_64_concat));
+		k.extend(2u32.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
+		assert_eq!(&k[..32], &<pallet::NMap2<Runtime, pallet::Instance1>>::final_prefix());
 	});
 }
 
@@ -613,6 +651,36 @@ fn metadata() {
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("NMap".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec!["u8".to_string()]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Blake2_128Concat,
+						]),
+						value: DecodeDifferent::Decoded("u32".to_string()),
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("NMap2".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec![
+							"u16".to_string(),
+							"u32".to_string(),
+						]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Twox64Concat,
+							StorageHasher::Blake2_128Concat,
+						]),
+						value: DecodeDifferent::Decoded("u64".to_string()),
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
 			]),
 		})),
 		calls: Some(DecodeDifferent::Decoded(vec![
@@ -692,7 +760,7 @@ fn metadata() {
 
 
 	let metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V12(metadata) => metadata,
+		RuntimeMetadata::V13(metadata) => metadata,
 		_ => panic!("metadata has been bump, test needs to be updated"),
 	};
 
@@ -707,4 +775,19 @@ fn metadata() {
 
 	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
 	pretty_assertions::assert_eq!(pallet_instance1_metadata, expected_pallet_instance1_metadata);
+}
+
+#[test]
+fn test_pallet_info_access() {
+	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::name(), "System");
+	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::name(), "Example");
+	assert_eq!(<Instance1Example as frame_support::traits::PalletInfoAccess>::name(), "Instance1Example");
+	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::name(), "Example2");
+	assert_eq!(<Instance1Example2 as frame_support::traits::PalletInfoAccess>::name(), "Instance1Example2");
+
+	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
+	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);
+	assert_eq!(<Instance1Example as frame_support::traits::PalletInfoAccess>::index(), 2);
+	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 3);
+	assert_eq!(<Instance1Example2 as frame_support::traits::PalletInfoAccess>::index(), 4);
 }

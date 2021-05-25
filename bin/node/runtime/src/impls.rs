@@ -29,7 +29,7 @@ impl OnUnbalanced<NegativeImbalance> for Author {
 
 #[cfg(test)]
 mod multiplier_tests {
-	use sp_runtime::{assert_eq_error_rate, FixedPointNumber, traits::Convert};
+	use sp_runtime::{assert_eq_error_rate, FixedPointNumber, traits::{Convert, One, Zero}};
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 
 	use crate::{

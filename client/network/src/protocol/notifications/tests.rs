@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use crate::protocol::notifications::{Notifications, NotificationsOut};
+use crate::protocol::notifications::{Notifications, NotificationsOut, ProtocolConfig};
 
 use futures::prelude::*;
 use libp2p::{PeerId, Multiaddr, Transport};
@@ -80,7 +80,12 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: Notifications::new(peerset, iter::once(("/foo".into(), Vec::new(), 1024 * 1024))),
+			inner: Notifications::new(peerset, iter::once(ProtocolConfig {
+				name: "/foo".into(),
+				fallback_names: Vec::new(),
+				handshake: Vec::new(),
+				max_notification_size: 1024 * 1024
+			})),
 			addrs: addrs
 				.iter()
 				.enumerate()
@@ -97,7 +102,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			behaviour,
 			keypairs[index].public().into_peer_id()
 		);
-		Swarm::listen_on(&mut swarm, addrs[index].clone()).unwrap();
+		swarm.listen_on(addrs[index].clone()).unwrap();
 		out.push(swarm);
 	}
 
@@ -192,16 +197,24 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		self.inner.inject_dial_failure(peer_id)
 	}
 
-	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
-		self.inner.inject_new_listen_addr(addr)
+	fn inject_new_listener(&mut self, id: ListenerId) {
+		self.inner.inject_new_listener(id)
 	}
 
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		self.inner.inject_expired_listen_addr(addr)
+	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.inner.inject_new_listen_addr(id, addr)
+	}
+
+	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.inner.inject_expired_listen_addr(id, addr)
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.inner.inject_new_external_addr(addr)
+	}
+
+	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
+		self.inner.inject_expired_external_addr(addr)
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn error::Error + 'static)) {
@@ -245,7 +258,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
 							if service2_state == ServiceState::FirstConnec {
-								service1.disconnect_peer(
+								service1.behaviour_mut().disconnect_peer(
 									Swarm::local_peer_id(&service2),
 									sc_peerset::SetId::from(0)
 								);
@@ -267,7 +280,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
 							if service1_state == ServiceState::FirstConnec {
-								service1.disconnect_peer(
+								service1.behaviour_mut().disconnect_peer(
 									Swarm::local_peer_id(&service2),
 									sc_peerset::SetId::from(0)
 								);

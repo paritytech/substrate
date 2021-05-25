@@ -239,8 +239,5 @@ fn generate_call_to_trait(
 
 /// Returns if the given `Signature` takes a `self` argument.
 fn takes_self_argument(sig: &Signature) -> bool {
-	match sig.inputs.first() {
-		Some(FnArg::Receiver(_)) => true,
-		_ => false,
-	}
+	matches!(sig.inputs.first(), Some(FnArg::Receiver(_)))
 }

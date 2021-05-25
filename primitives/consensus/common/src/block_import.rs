@@ -237,13 +237,10 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
 		let (k, v) = self.intermediates.remove_entry(key).ok_or(Error::NoIntermediate)?;
 
-		match v.downcast::<T>() {
-			Ok(v) => Ok(v),
-			Err(v) => {
+		v.downcast::<T>().or_else(|v| {
 				self.intermediates.insert(k, v);
 				Err(Error::InvalidIntermediate)
-			},
-		}
+		})
 	}
 
 	/// Get a reference to a given intermediate.
