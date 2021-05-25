@@ -453,6 +453,8 @@ pub fn derive_max_encoded_len(input: TokenStream) -> TokenStream {
 	max_encoded_len::derive_max_encoded_len(input)
 }
 
+/// This macro is meant to be used by frame-support only.
+/// It implements the trait `HasKeyPrefix` and `HasReversibleKeyPrefix` for tuple of `Key`.
 #[proc_macro]
 pub fn impl_key_prefix_for_tuples(input: TokenStream) -> TokenStream {
 	key_prefix::impl_key_prefix_for_tuples(input).unwrap_or_else(syn::Error::into_compile_error).into()
