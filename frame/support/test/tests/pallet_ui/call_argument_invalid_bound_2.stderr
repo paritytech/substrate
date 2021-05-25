@@ -1,3 +1,16 @@
+error[E0277]: can't compare `Foo<T>` with `Foo<T>`
+   --> $DIR/eq.rs:6:8
+    |
+6   | struct Foo<T: Config> {
+    |        ^^^ no implementation for `Foo<T> == Foo<T>`
+    |
+   ::: $RUST/core/src/cmp.rs
+    |
+    | pub trait Eq: PartialEq<Self> {
+    |               --------------- required by this bound in `std::cmp::Eq`
+    |
+    = help: the trait `PartialEq` is not implemented for `Foo<T>`
+root@a7fe91a203ee:/builds# cat frame/support/test/tests/pallet_ui/call_argument_invalid_bound_2.stderr
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeDecode` is not satisfied
    --> $DIR/call_argument_invalid_bound_2.rs:20:37
     |
