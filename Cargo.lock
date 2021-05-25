@@ -454,6 +454,9 @@ name = "beef"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6736e2428df2ca2848d846c43e88745121a6654696e349ce0054a420815a7409"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bincode"
@@ -2484,6 +2487,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-body"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60daa14be0e0786db0f03a9e57cb404c9d756eed2b6c62b9ea98ec5743ec75a9"
+dependencies = [
+ "bytes 1.0.1",
+ "http 0.2.3",
+ "pin-project-lite 0.2.6",
+]
+
+[[package]]
 name = "httparse"
 version = "1.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2559,6 +2573,28 @@ dependencies = [
  "pin-project 1.0.5",
  "socket2 0.3.19",
  "tokio 0.2.25",
+ "tower-service",
+ "tracing",
+ "want 0.3.0",
+]
+
+[[package]]
+name = "hyper"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bf09f61b52cfcf4c00de50df88ae423d6c02354e385a86341133b5338630ad1"
+dependencies = [
+ "bytes 1.0.1",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
+ "http 0.2.3",
+ "http-body 0.4.2",
+ "httparse",
+ "httpdate",
+ "itoa",
+ "pin-project 1.0.5",
+ "tokio 1.3.0",
  "tower-service",
  "tracing",
  "want 0.3.0",
@@ -2961,15 +2997,17 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.2.0-alpha.6"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#f7a0091ef07339d3cb7ad6a77b27c047bd3f8323"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#a60896e16c192b2fb4f3efea166ebcb4d9d1ba3b"
 dependencies = [
  "async-trait",
  "beef",
  "futures-channel",
  "futures-util",
+ "hyper 0.14.5",
  "log",
  "serde",
  "serde_json",
+ "soketto",
  "thiserror",
 ]
 
@@ -2987,35 +3025,35 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.2.0-alpha.6"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#f7a0091ef07339d3cb7ad6a77b27c047bd3f8323"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#a60896e16c192b2fb4f3efea166ebcb4d9d1ba3b"
 dependencies = [
- "anyhow",
  "futures-channel",
  "futures-util",
  "jsonrpsee-types 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
- "log",
- "rustc-hash",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "jsonrpsee-ws-server"
-version = "0.2.0-alpha.6"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#f7a0091ef07339d3cb7ad6a77b27c047bd3f8323"
-dependencies = [
- "anyhow",
- "futures-channel",
- "futures-util",
- "jsonrpsee-types 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
- "jsonrpsee-utils 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
  "log",
  "parking_lot 0.11.1",
  "rand 0.8.3",
  "rustc-hash",
  "serde",
  "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "jsonrpsee-ws-server"
+version = "0.2.0-alpha.6"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#a60896e16c192b2fb4f3efea166ebcb4d9d1ba3b"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "jsonrpsee-types 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-utils 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "log",
+ "rustc-hash",
+ "serde",
+ "serde_json",
  "soketto",
+ "thiserror",
  "tokio 1.3.0",
  "tokio-stream",
  "tokio-util 0.6.3",
