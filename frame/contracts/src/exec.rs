@@ -704,7 +704,7 @@ where
 				let contract = Rent::<T, E>
 					::charge(&dest, contract, executable.occupied_storage())
 					.map_err(|e| (e.into(), executable.code_len()))?
-					.ok_or((Error::<T>::RentNotPayed.into(), executable.code_len()))?;
+					.ok_or((Error::<T>::RentNotPaid.into(), executable.code_len()))?;
 				(dest, contract, executable, ExportedFunction::Call)
 			}
 			FrameArgs::Instantiate{sender, trie_seed, executable, salt} => {

@@ -603,7 +603,7 @@ where
 		let no_code = Error::<E::T>::CodeNotFound.into();
 		let not_found = Error::<E::T>::ContractNotFound.into();
 		let is_tombstone = Error::<E::T>::ContractIsTombstone.into();
-		let rent_not_payed = Error::<E::T>::RentNotPayed.into();
+		let rent_not_payed = Error::<E::T>::RentNotPaid.into();
 
 		match from {
 			x if x == below_sub => Ok(BelowSubsistenceThreshold),

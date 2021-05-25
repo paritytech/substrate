@@ -548,7 +548,7 @@ pub mod pallet {
 		/// tombstone. Anyone can evict the contract by submitting a `claim_surcharge`
 		/// extrinsic. Alternatively, a plain balance transfer can be used in order to
 		/// increase the contracts funds so that it can be called again.
-		RentNotPayed,
+		RentNotPaid,
 		/// The code supplied to `instantiate_with_code` exceeds the limit specified in the
 		/// current schedule.
 		CodeTooLarge,
