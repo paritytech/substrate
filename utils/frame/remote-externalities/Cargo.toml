@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee-http-client = { version = "=0.2.0-alpha.6", default-features = false, features = ["tokio02"] }
+jsonrpsee-ws-client = { version = "=0.2.0-alpha.6", default-features = false }
 jsonrpsee-proc-macros = "=0.2.0-alpha.6"
 
 hex-literal = "0.3.1"
@@ -26,7 +26,7 @@ sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-tokio = { version = "0.2", features = ["macros"] }
+tokio = { version = "1.6.0", features = ["macros", "rt"] }
 
 [features]
 remote-test = []
