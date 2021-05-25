@@ -961,9 +961,9 @@ where
 		let value = frame.value_transferred;
 		let subsistence_threshold = <Contracts<T>>::subsistence_threshold();
 
-		// If the value transferred to a new conteact is less than the subsistence threshold
+		// If the value transferred to a new contract is less than the subsistence threshold
 		// we can error out early. This avoids executing the constructor in cases where
-		// we already that the contract has too few balance.
+		// we already know that the contract has too little balance.
 		if frame.entry_point == ExportedFunction::Constructor && value < subsistence_threshold {
 			return Err(<Error<T>>::NewContractNotFunded.into());
 		}
