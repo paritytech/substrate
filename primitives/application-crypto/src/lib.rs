@@ -200,7 +200,6 @@ macro_rules! app_crypto_public_full_crypto {
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
-				$crate::max_encoded_len::MaxEncodedLen,
 			)]
 			#[derive(Hash)]
 			pub struct Public($public);
