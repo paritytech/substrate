@@ -4988,6 +4988,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-gift"
+version = "3.0.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
 name = "pallet-gilt"
 version = "3.0.0"
 dependencies = [

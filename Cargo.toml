@@ -84,6 +84,7 @@ members = [
 	"frame/example-offchain-worker",
 	"frame/example-parallel",
 	"frame/executive",
+	"frame/gift",
 	"frame/gilt",
 	"frame/grandpa",
 	"frame/identity",
