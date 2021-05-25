@@ -84,7 +84,7 @@ pub mod pallet {
 	#[pallet::getter(fn gifts)]
 	pub type Gifts<T: Config> = StorageMap<
 		_,
-		Twox64Concat,
+		Blake2_128Concat,
 		T::AccountId,
 		GiftInfo<T::AccountId, BalanceOf<T>>,
 		OptionQuery
@@ -125,12 +125,21 @@ pub mod pallet {
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T:Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
+		/// Create a gift.
+		///
+		/// A gift is some balance which is reserved from the calling account, and placed under
+		/// control of the `controller` account.
+		///
+		/// The credentials of this controller account can be shared with anyone, allow them to then
+		/// transfer the balance to a final account, without needing to expose the final accounts
+		/// credentials. This is done via the `claim` extrinsic.
+		///
+		/// NOTE: The fee of this extrinsic should take into account the full cost of `claim`, which
+		/// is allowed for free as a result of this extrinsic.
 		#[pallet::weight(0)]
-		fn gift(origin: OriginFor<T>, amount: BalanceOf<T>, to: T::AccountId) -> DispatchResultWithPostInfo {
+		fn gift(origin: OriginFor<T>, amount: BalanceOf<T>, controller: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(!Gifts::<T>::contains_key(&to), Error::<T>::PendingGift);
+			ensure!(!Gifts::<T>::contains_key(&controller), Error::<T>::PendingGift);
 			ensure!(amount >= T::MinimumGift::get(), Error::<T>::GiftTooSmall);
 
 			let deposit = T::GiftDeposit::get();
@@ -144,13 +153,20 @@ pub mod pallet {
 				amount,
 			};
 
-			Gifts::<T>::insert(&to, gift);
-			Self::deposit_event(Event::<T>::GiftCreated(amount, to));
-			Ok(().into())
+			Gifts::<T>::insert(&controller, gift);
+			Self::deposit_event(Event::<T>::GiftCreated(amount, controller));
+			Ok(())
 		}
 
+		/// Claim a gift.
+		///
+		/// This extrinsic allows a controller of a gift to transfer the reserved balance to a final
+		/// `to` account.
+		///
+		/// The intention of this extrinsic is to allow a brand new user to claim a gift without
+		/// needing to pay transaction fees.
 		#[pallet::weight((0, Pays::No))] // Does not pay fee, so we MUST prevalidate this function
-		fn claim(origin: OriginFor<T>, to: T::AccountId) -> DispatchResultWithPostInfo {
+		fn claim(origin: OriginFor<T>, to: T::AccountId) -> DispatchResult {
 			// In the pre-validation function we confirmed that this user has a gift, and this
 			// signed transaction is enough for them to claim it to whomever.
 			let who = ensure_signed(origin)?;
@@ -166,11 +182,14 @@ pub mod pallet {
 			debug_assert!(res.is_ok());
 
 			Self::deposit_event(Event::<T>::GiftClaimed(who, gift.amount, to));
-			Ok(().into())
+			Ok(())
 		}
 
+		/// Remove a gift.
+		///
+		/// The original gifter can revoke a gift assuming that it has not been claimed.
 		#[pallet::weight(0)]
-		fn remove(origin: OriginFor<T>, to: T::AccountId) -> DispatchResultWithPostInfo {
+		fn remove(origin: OriginFor<T>, to: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let gift = Gifts::<T>::get(&to).ok_or(Error::<T>::NoGift)?;
@@ -183,7 +202,7 @@ pub mod pallet {
 			Gifts::<T>::remove(&to);
 
 			Self::deposit_event(Event::<T>::GiftRemoved(to));
-			Ok(().into())
+			Ok(())
 		}
 	}
 }
