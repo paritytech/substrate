@@ -167,7 +167,7 @@ fn construct_block(
 	};
 	let hash = header.hash();
 	let mut overlay = OverlayedChanges::default();
-	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
+	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 	let task_executor = Box::new(TaskExecutor::new());
 
