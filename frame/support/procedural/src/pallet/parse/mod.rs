@@ -45,8 +45,8 @@ pub struct Def {
 	pub item: syn::ItemMod,
 	pub config: config::ConfigDef,
 	pub pallet_struct: pallet_struct::PalletStructDef,
-	pub hooks: hooks::HooksDef,
-	pub call: call::CallDef,
+	pub hooks: Option<hooks::HooksDef>,
+	pub call: Option<call::CallDef>,
 	pub storages: Vec<storage::StorageDef>,
 	pub error: Option<error::ErrorDef>,
 	pub event: Option<event::EventDef>,
@@ -156,9 +156,8 @@ impl Def {
 			config: config.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::config]`"))?,
 			pallet_struct: pallet_struct
 				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::pallet]`"))?,
-			hooks: hooks
-				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::hooks]`"))?,
-			call: call.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::call]"))?,
+			hooks,
+			call,
 			extra_constants,
 			genesis_config,
 			genesis_build,
@@ -206,10 +205,14 @@ impl Def {
 	/// instance iff it is defined with instance.
 	fn check_instance_usage(&self) -> syn::Result<()> {
 		let mut instances = vec![];
-		instances.extend_from_slice(&self.call.instances[..]);
 		instances.extend_from_slice(&self.pallet_struct.instances[..]);
-		instances.extend_from_slice(&self.hooks.instances[..]);
 		instances.extend(&mut self.storages.iter().flat_map(|s| s.instances.clone()));
+		if let Some(call) = &self.call {
+			instances.extend_from_slice(&call.instances[..]);
+		}
+		if let Some(hooks) = &self.hooks {
+			instances.extend_from_slice(&hooks.instances[..]);
+		}
 		if let Some(event) = &self.event {
 			instances.extend_from_slice(&event.instances[..]);
 		}

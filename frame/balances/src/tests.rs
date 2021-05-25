@@ -24,7 +24,7 @@ macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{ArithmeticError, FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_storage_noop, assert_ok, assert_err, StorageValue,
 			traits::{
@@ -52,10 +52,6 @@ macro_rules! decl_tests {
 			System::reset_events();
 
 			evt
-		}
-
-		fn last_event() -> Event {
-			system::Pallet::<Test>::events().pop().expect("Event expected").event
 		}
 
 		#[test]
@@ -467,9 +463,8 @@ macro_rules! decl_tests {
 				let _ = Balances::deposit_creating(&2, 1);
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
-				assert_eq!(
-					last_event(),
-					Event::pallet_balances(crate::Event::ReserveRepatriated(1, 2, 41, Status::Free)),
+				System::assert_last_event(
+					Event::pallet_balances(crate::Event::ReserveRepatriated(1, 2, 41, Status::Free))
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -523,7 +518,7 @@ macro_rules! decl_tests {
 
 				assert_err!(
 					Balances::transfer(Some(1).into(), 2, u64::max_value()),
-					Error::<$test, _>::Overflow,
+					ArithmeticError::Overflow,
 				);
 
 				assert_eq!(Balances::free_balance(1), u64::max_value());
@@ -688,27 +683,18 @@ macro_rules! decl_tests {
 					System::set_block_number(2);
 					assert_ok!(Balances::reserve(&1, 10));
 
-					assert_eq!(
-						last_event(),
-						Event::pallet_balances(crate::Event::Reserved(1, 10)),
-					);
+					System::assert_last_event(Event::pallet_balances(crate::Event::Reserved(1, 10)));
 
 					System::set_block_number(3);
 					assert!(Balances::unreserve(&1, 5).is_zero());
 
-					assert_eq!(
-						last_event(),
-						Event::pallet_balances(crate::Event::Unreserved(1, 5)),
-					);
+					System::assert_last_event(Event::pallet_balances(crate::Event::Unreserved(1, 5)));
 
 					System::set_block_number(4);
 					assert_eq!(Balances::unreserve(&1, 6), 1);
 
 					// should only unreserve 5
-					assert_eq!(
-						last_event(),
-						Event::pallet_balances(crate::Event::Unreserved(1, 5)),
-					);
+					System::assert_last_event(Event::pallet_balances(crate::Event::Unreserved(1, 5)));
 				});
 		}
 

@@ -15,15 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Multisig Module
-//! A module for doing multisig dispatch.
+//! # Multisig pallet
+//! A pallet for doing multisig dispatch.
 //!
 //! - [`Config`]
 //! - [`Call`]
 //!
 //! ## Overview
 //!
-//! This module contains functionality for multi-signature dispatch, a (potentially) stateful
+//! This pallet contains functionality for multi-signature dispatch, a (potentially) stateful
 //! operation, allowing multiple signed
 //! origins (accounts) to coordinate and dispatch a call from a well-known origin, derivable
 //! deterministically from the set of account IDs and the threshold number of accounts from the
@@ -53,50 +53,20 @@ pub mod weights;
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
-use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
+use frame_support::{ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency},
 	weights::{Weight, GetDispatchInfo},
-	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchResultWithPostInfo, DispatchResult, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
-use frame_system::{self as system, ensure_signed, RawOrigin};
-use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable, Zero}};
+use frame_system::{self as system, RawOrigin};
+use sp_runtime::{DispatchError, traits::{Dispatchable, Zero}};
 pub use weights::WeightInfo;
+
+pub use pallet::*;
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 /// Just a bunch of bytes, but they should decode to a valid `Call`.
 pub type OpaqueCall = Vec<u8>;
-
-/// Configuration trait.
-pub trait Config: frame_system::Config {
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
-
-	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>>;
-
-	/// The currency mechanism.
-	type Currency: ReservableCurrency<Self::AccountId>;
-
-	/// The base amount of currency needed to reserve for creating a multisig execution or to store
-	/// a dispatch call for later.
-	///
-	/// This is held for an additional storage item whose value size is
-	/// `4 + sizeof((BlockNumber, Balance, AccountId))` bytes and whose key size is
-	/// `32 + sizeof(AccountId)` bytes.
-	type DepositBase: Get<BalanceOf<Self>>;
-
-	/// The amount of currency needed per unit threshold when creating a multisig execution.
-	///
-	/// This is held for adding 32 bytes more into a pre-existing storage value.
-	type DepositFactor: Get<BalanceOf<Self>>;
-
-	/// The maximum amount of signatories allowed in the multisig.
-	type MaxSignatories: Get<u16>;
-
-	/// Weight information for extrinsics in this pallet.
-	type WeightInfo: WeightInfo;
-}
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
 /// block's height. This allows a transaction in which a multisig operation of a particular
@@ -122,19 +92,79 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	approvals: Vec<AccountId>,
 }
 
-decl_storage! {
-	trait Store for Module<T: Config> as Multisig {
-		/// The set of open multisig operations.
-		pub Multisigs: double_map
-			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
-			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
+type CallHash = [u8; 32];
 
-		pub Calls: map hasher(identity) [u8; 32] => Option<(OpaqueCall, T::AccountId, BalanceOf<T>)>;
-	}
+enum CallOrHash {
+	Call(OpaqueCall, bool),
+	Hash([u8; 32]),
 }
 
-decl_error! {
-	pub enum Error for Module<T: Config> {
+#[frame_support::pallet]
+pub mod pallet{
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+	use super::*;
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The overarching call type.
+		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
+			+ GetDispatchInfo + From<frame_system::Call<Self>>;
+
+		/// The currency mechanism.
+		type Currency: ReservableCurrency<Self::AccountId>;
+
+		/// The base amount of currency needed to reserve for creating a multisig execution or to store
+		/// a dispatch call for later.
+		///
+		/// This is held for an additional storage item whose value size is
+		/// `4 + sizeof((BlockNumber, Balance, AccountId))` bytes and whose key size is
+		/// `32 + sizeof(AccountId)` bytes.
+		#[pallet::constant]
+		type DepositBase: Get<BalanceOf<Self>>;
+
+		/// The amount of currency needed per unit threshold when creating a multisig execution.
+		///
+		/// This is held for adding 32 bytes more into a pre-existing storage value.
+		#[pallet::constant]
+		type DepositFactor: Get<BalanceOf<Self>>;
+
+		/// The maximum amount of signatories allowed in the multisig.
+		#[pallet::constant]
+		type MaxSignatories: Get<u16>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
+	}
+
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
+
+	/// The set of open multisig operations.
+	#[pallet::storage]
+	pub type Multisigs<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		[u8; 32],
+		Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>,
+	>;
+
+	#[pallet::storage]
+	pub type Calls<T: Config> = StorageMap<
+		_,
+		Identity,
+		[u8; 32],
+		(OpaqueCall, T::AccountId, BalanceOf<T>),
+	>;
+
+	#[pallet::error]
+	pub enum Error<T> {
 		/// Threshold must be 2 or greater.
 		MinimumThreshold,
 		/// Call is already approved by this signatory.
@@ -164,49 +194,31 @@ decl_error! {
 		/// The data to be stored is already stored.
 		AlreadyStored,
 	}
-}
 
-decl_event! {
-	/// Events type.
-	pub enum Event<T> where
-		AccountId = <T as system::Config>::AccountId,
-		BlockNumber = <T as system::Config>::BlockNumber,
-		CallHash = [u8; 32]
-	{
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::metadata(
+		T::AccountId = "AccountId",
+		T::BlockNumber = "BlockNumber",
+		Timepoint<T::BlockNumber> = "Timepoint<BlockNumber>"
+	)]
+	pub enum Event<T: Config> {
 		/// A new multisig operation has begun. \[approving, multisig, call_hash\]
-		NewMultisig(AccountId, AccountId, CallHash),
+		NewMultisig(T::AccountId, T::AccountId, CallHash),
 		/// A multisig operation has been approved by someone.
 		/// \[approving, timepoint, multisig, call_hash\]
-		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
+		MultisigApproval(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash),
 		/// A multisig operation has been executed. \[approving, timepoint, multisig, call_hash\]
-		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, CallHash, DispatchResult),
+		MultisigExecuted(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash, DispatchResult),
 		/// A multisig operation has been cancelled. \[cancelling, timepoint, multisig, call_hash\]
-		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
+		MultisigCancelled(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash)
 	}
-}
 
-enum CallOrHash {
-	Call(OpaqueCall, bool),
-	Hash([u8; 32]),
-}
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
-
-		/// Deposit one of this module's events by using the default implementation.
-		fn deposit_event() = default;
-
-		/// The base amount of currency needed to reserve for creating a multisig execution or to store
-		/// a dispatch call for later.
-		const DepositBase: BalanceOf<T> = T::DepositBase::get();
-
-		/// The amount of currency needed per unit threshold when creating a multisig execution.
-		const DepositFactor: BalanceOf<T> = T::DepositFactor::get();
-
-		/// The maximum amount of signatories allowed for a given multisig.
-		const MaxSignatories: u16 = T::MaxSignatories::get();
-
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Immediately dispatch a multi-signature call using a single approval from the caller.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -223,7 +235,7 @@ decl_module! {
 		/// - DB Weight: None
 		/// - Plus Call Weight
 		/// # </weight>
-		#[weight = {
+		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
 				T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
@@ -232,8 +244,9 @@ decl_module! {
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
 			)
-		}]
-		fn as_multi_threshold_1(origin,
+		})]
+		pub(super) fn as_multi_threshold_1(
+			origin: OriginFor<T>,
 			other_signatories: Vec<T::AccountId>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
@@ -312,7 +325,7 @@ decl_module! {
 		///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
 		/// - Plus Call Weight
 		/// # </weight>
-		#[weight = {
+		#[pallet::weight({
 			let s = other_signatories.len() as u32;
 			let z = call.len() as u32;
 
@@ -321,8 +334,9 @@ decl_module! {
 			.max(T::WeightInfo::as_multi_approve(s, z))
 			.max(T::WeightInfo::as_multi_complete(s, z))
 			.saturating_add(*max_weight)
-		}]
-		fn as_multi(origin,
+		})]
+		pub(super) fn as_multi(
+			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
@@ -370,15 +384,16 @@ decl_module! {
 		///     - Read: Multisig Storage, [Caller Account]
 		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
-		#[weight = {
+		#[pallet::weight({
 			let s = other_signatories.len() as u32;
 
 			T::WeightInfo::approve_as_multi_create(s)
 			.max(T::WeightInfo::approve_as_multi_approve(s))
 			.max(T::WeightInfo::approve_as_multi_complete(s))
 			.saturating_add(*max_weight)
-		}]
-		fn approve_as_multi(origin,
+		})]
+		pub(super) fn approve_as_multi(
+			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
@@ -415,8 +430,9 @@ decl_module! {
 		///     - Read: Multisig Storage, [Caller Account], Refund Account, Calls
 		///     - Write: Multisig Storage, [Caller Account], Refund Account, Calls
 		/// # </weight>
-		#[weight = T::WeightInfo::cancel_as_multi(other_signatories.len() as u32)]
-		fn cancel_as_multi(origin,
+		#[pallet::weight(T::WeightInfo::cancel_as_multi(other_signatories.len() as u32))]
+		pub(super) fn cancel_as_multi(
+			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			timepoint: Timepoint<T::BlockNumber>,
@@ -441,13 +457,13 @@ decl_module! {
 			<Multisigs<T>>::remove(&id, &call_hash);
 			Self::clear_call(&call_hash);
 
-			Self::deposit_event(RawEvent::MultisigCancelled(who, timepoint, id, call_hash));
+			Self::deposit_event(Event::MultisigCancelled(who, timepoint, id, call_hash));
 			Ok(())
 		}
 	}
 }
 
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	/// Derive a multi-account ID from the sorted list of accounts and the threshold that are
 	/// required.
 	///
@@ -513,7 +529,7 @@ impl<T: Config> Module<T> {
 				T::Currency::unreserve(&m.depositor, m.deposit);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
-				Self::deposit_event(RawEvent::MultisigExecuted(
+				Self::deposit_event(Event::MultisigExecuted(
 					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
 				));
 				Ok(get_result_weight(result).map(|actual_weight|
@@ -538,7 +554,7 @@ impl<T: Config> Module<T> {
 					// Record approval.
 					m.approvals.insert(pos, who.clone());
 					<Multisigs<T>>::insert(&id, call_hash, m);
-					Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
+					Self::deposit_event(Event::MultisigApproval(who, timepoint, id, call_hash));
 				} else {
 					// If we already approved and didn't store the Call, then this was useless and
 					// we report an error.
@@ -581,7 +597,7 @@ impl<T: Config> Module<T> {
 				depositor: who.clone(),
 				approvals: vec![who.clone()],
 			});
-			Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
+			Self::deposit_event(Event::NewMultisig(who, id, call_hash));
 
 			let final_weight = if stored {
 				T::WeightInfo::as_multi_create_store(
