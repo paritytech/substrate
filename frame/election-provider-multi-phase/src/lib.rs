@@ -784,14 +784,14 @@ pub mod pallet {
 		/// Dispatch origin must be aligned with `T::ForceOrigin`.
 		///
 		/// This check can be turned off by setting the value to `None`.
-		#[pallet::weight(T::DbWeight::get().reads(1))]
+		#[pallet::weight(T::DbWeight::get().writes(1))]
 		fn set_minimum_untrusted_score(
 			origin: OriginFor<T>,
 			maybe_next_score: Option<ElectionScore>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			<MinimumUntrustedScore<T>>::set(maybe_next_score);
-			Ok(None.into())
+			Ok(())
 		}
 	}
 
