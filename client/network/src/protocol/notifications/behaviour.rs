@@ -1853,7 +1853,7 @@ impl NetworkBehaviour for Notifications {
 
 							*entry.into_mut() = PeerState::Disabled {
 								connections,
-								backoff_until: None
+								backoff_until: Some(Instant::now() + Duration::from_secs(10))
 							};
 						} else {
 							*entry.into_mut() = PeerState::Enabled { connections };
