@@ -1,3 +1,43 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd. SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License. You may obtain a copy of the License at
+//
+//  http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software distributed under the License
+// is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+// or implied. See the License for the specific language governing permissions and limitations under
+// the License.
+
+//! # Gift Pallet
+//! A pallet allowing existing users to onboard new users by sending them tokens before they have
+//! created an account.
+//!
+//! ## Overview
+//!
+//! Alice wants to send DOT to Bob as a gift for this birthday, but Bob is not really familiar with
+//! Polkadot and does not have a Polkadot account.
+//!
+//! Alice uses the Gift pallet to reserve some funds in her account, and allows access to a "shared
+//! account" to transfer those funds away from Alice. (similar to transfer approvals)
+//!
+//! Alice then shares the private key of the shared account with Bob, who can then generate a brand
+//! new account that Alice has no idea about, and then use the shared account to finally transfer
+//! balance to Bob's final account.
+//!
+//! ## Design
+//!
+//! This pallet is designed to solve the following problems:
+//! * Allow Alice to send gift to a user who does not have an account (yet)
+//! * Allow a new user to safely claim those funds without exposing or involving anyone else for
+//!   account creation
+//! * Allow the new user to make that claim without needing to have any initial funds (a free
+//!   transaction)
+//!
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
@@ -111,8 +151,8 @@ pub mod pallet {
 
 		#[pallet::weight((0, Pays::No))] // Does not pay fee, so we MUST prevalidate this function
 		fn claim(origin: OriginFor<T>, to: T::AccountId) -> DispatchResultWithPostInfo {
-			// In the pre-validation function we confirmed that this user has a gift,
-			// and this signed transaction is enough for them to claim it to whomever.
+			// In the pre-validation function we confirmed that this user has a gift, and this
+			// signed transaction is enough for them to claim it to whomever.
 			let who = ensure_signed(origin)?;
 
 			// They should 100% have a gift, but no reason not to handle the error anyway.
