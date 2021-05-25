@@ -463,13 +463,13 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 			BlockId::Hash(h) => {
 				let mut cache = self.header_cache.lock();
 				if let Some(result) = {
-				        match cache.raw_entry_mut().from_key(h) {
-                                                linked_hash_map::RawEntryMut::Occupied(mut occupied) => {
-                                                        occupied.to_back();
-                                                        Some(occupied.into_mut())
-                                                }
-                                                linked_hash_map::RawEntryMut::Vacant(_) => None,
-                                       }
+					match cache.raw_entry_mut().from_key(h) {
+						linked_hash_map::RawEntryMut::Occupied(mut occupied) => {
+							occupied.to_back();
+							Some(occupied.into_mut())
+						}
+						linked_hash_map::RawEntryMut::Vacant(_) => None,
+					}
 				} {
 					return Ok(result.clone());
 				}

@@ -140,12 +140,12 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		where K: std::borrow::Borrow<Q>,
 			Q: StdHash + Eq {
 		match self.0.raw_entry_mut().from_key(k) {
-                        linked_hash_map::RawEntryMut::Occupied(mut occupied) => {
-                               occupied.to_back();
-                               Some(occupied.into_mut())
-                        }
-                        linked_hash_map::RawEntryMut::Vacant(_) => None,
-               }
+			linked_hash_map::RawEntryMut::Occupied(mut occupied) => {
+				occupied.to_back();
+				Some(occupied.into_mut())
+			}
+			linked_hash_map::RawEntryMut::Vacant(_) => None,
+		}
 	}
 
 	fn used_size(&self) -> usize {
