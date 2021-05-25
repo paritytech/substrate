@@ -40,7 +40,7 @@ use codec::{self as codec, Decode, Encode};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use fg_primitives::{
 	ConsensusLog, EquivocationProof, GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID,
-	RoundNumber, ScheduledChange, SetId
+	RoundNumber, ScheduledChange, SetId,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -359,7 +359,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn get_accountable_safety_state)]
-	pub(super) type AccountableSafetyState<T: Config> = StorageValue<_, StoredAccountableSafetyState<T::BlockNumber>>;
+	pub(super) type AccountableSafetyState<T: Config> = StorageValue<_, fg_primitives::accountable_safety::StoredAccountableSafetyState<T::BlockNumber>>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
@@ -433,54 +433,6 @@ pub enum StoredState<N> {
 		/// Number of blocks after which the change will be enacted.
 		delay: N,
 	},
-}
-
-#[derive(Encode, Decode)]
-pub struct StoredAccountableSafetyState<N> {
-	block_not_included: N,
-	round_for_block_not_included: N,
-	commit_for_block_not_included: N,
-	querying_rounds: BTreeMap<RoundNumber, QueryState<N>>,
-	prevote_queries: BTreeMap<RoundNumber, QueryState<N>>,
-}
-
-#[derive(Encode, Decode)]
-pub struct QueryState<N> {
-	round: N,
-	voters: Vec<AuthorityId>,
-	responses: BTreeMap<AuthorityId, QueryResponse<N>>,
-	equivocations: Vec<EquivocationDetected<N>>,
-}
-
-#[derive(Encode, Decode)]
-pub enum QueryResponse<N> {
-	Prevotes(Vec<Prevote<N>>),
-	Precommits(Vec<Precommit<N>>),
-}
-
-#[derive(Encode, Decode)]
-pub struct Prevote<N>  {
-	target_number: N,
-	id: AuthorityId,
-}
-
-#[derive(Encode, Decode)]
-pub struct Precommit<N>  {
-	target_number: N,
-	id: AuthorityId,
-}
-
-#[derive(Encode, Decode)]
-pub enum EquivocationDetected<N> {
-	Prevote(Vec<Equivocation<N>>),
-	Precommit(Vec<Equivocation<N>>),
-	InvalidResponse(AuthorityId),
-}
-
-#[derive(Encode, Decode)]
-pub struct Equivocation<N> {
-	voter: AuthorityId,
-	blocks: Vec<N>,
 }
 
 impl<T: Config> Pallet<T> {
@@ -689,8 +641,9 @@ impl<T: Config> Pallet<T> {
 		T::AccountableSafety::start_accountable_safety_protocol()
 	}
 
-	pub fn accountable_safety_state() -> Option<()> {
-		T::AccountableSafety::state()
+	pub fn accountable_safety_state() -> Option<fg_primitives::accountable_safety::StoredAccountableSafetyState<T::BlockNumber>> {
+		Self::get_accountable_safety_state()
+		// T::AccountableSafety::state()
 	}
 
 	pub fn add_response() {

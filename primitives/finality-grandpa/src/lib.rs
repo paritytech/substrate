@@ -311,6 +311,66 @@ where
 	}
 }
 
+pub mod accountable_safety {
+	use super::{
+		Encode, Decode,
+		RoundNumber,
+		AuthorityId,
+	};
+	use sp_std::{
+		collections::btree_map::BTreeMap,
+		vec::Vec,
+	};
+
+	#[derive(Encode, Decode, PartialEq, Eq)]
+	pub struct StoredAccountableSafetyState<N> {
+		block_not_included: N,
+		round_for_block_not_included: N,
+		commit_for_block_not_included: N,
+		querying_rounds: BTreeMap<RoundNumber, QueryState<N>>,
+		prevote_queries: BTreeMap<RoundNumber, QueryState<N>>,
+	}
+
+	#[derive(Encode, Decode, PartialEq, Eq)]
+	pub struct QueryState<N> {
+		round: N,
+		voters: Vec<AuthorityId>,
+		responses: BTreeMap<AuthorityId, QueryResponse<N>>,
+		equivocations: Vec<EquivocationDetected<N>>,
+	}
+
+	#[derive(Encode, Decode, Eq, PartialEq)]
+	pub enum QueryResponse<N> {
+		Prevotes(Vec<Prevote<N>>),
+		Precommits(Vec<Precommit<N>>),
+	}
+
+	#[derive(Encode, Decode, PartialEq, Eq)]
+	pub struct Prevote<N>  {
+		target_number: N,
+		id: AuthorityId,
+	}
+
+	#[derive(Encode, Decode, PartialEq, Eq)]
+	pub struct Precommit<N>  {
+		target_number: N,
+		id: AuthorityId,
+	}
+
+	#[derive(Encode, Decode, PartialEq, Eq)]
+	pub enum EquivocationDetected<N> {
+		Prevote(Vec<Equivocation<N>>),
+		Precommit(Vec<Equivocation<N>>),
+		InvalidResponse(AuthorityId),
+	}
+
+	#[derive(Encode, Decode, PartialEq, Eq)]
+	pub struct Equivocation<N> {
+		voter: AuthorityId,
+		blocks: Vec<N>,
+	}
+}
+
 /// Encode round message localized to a given round and set id.
 pub fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetId, message: &E) -> Vec<u8> {
 	let mut buf = Vec::new();
@@ -541,7 +601,7 @@ sp_api::decl_runtime_apis! {
 
 		/// Get the current state of the accountable safety protocol instance(s). This is used by
 		/// the accountable safety worker to determine e.g if it needs to submit any query replies.
-		fn accountable_safety_state() -> Option<()>;
+		fn accountable_safety_state() -> Option<accountable_safety::StoredAccountableSafetyState<NumberFor<Block>>>;
 
 		/// Submit a response to a query where the reply can be either prevotes or precommits
 		fn submit_accountable_safety_response_extrinsic();

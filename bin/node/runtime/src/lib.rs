@@ -1283,7 +1283,10 @@ impl_runtime_apis! {
 			Grandpa::start_accountable_safety_protocol()
 		}
 
-		fn accountable_safety_state() -> Option<()> {
+		fn accountable_safety_state(
+		) -> Option<
+			fg_primitives::accountable_safety::StoredAccountableSafetyState<NumberFor<Block>>
+		> {
 			Grandpa::accountable_safety_state()
 		}
 
