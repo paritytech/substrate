@@ -244,14 +244,3 @@ pub const DEFAULT_EXECUTION_BLOCK_CONSTRUCTION: ExecutionStrategy = ExecutionStr
 pub const DEFAULT_EXECUTION_OFFCHAIN_WORKER: ExecutionStrategy = ExecutionStrategy::Native;
 /// Default value for the `--execution-other` parameter.
 pub const DEFAULT_EXECUTION_OTHER: ExecutionStrategy = ExecutionStrategy::Native;
-
-arg_enum! {
-	/// How to execute wasm in a sandboxed environment
-	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-	pub enum SandboxExecutionMethod {
-		// Uses an interpreter.
-		Interpreted,
-		// Uses a compiled runtime.
-		Compiled,
-	}
-}
