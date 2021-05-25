@@ -297,9 +297,10 @@ impl<B: BlockT> Builder<'_, B> {
 				error!(target: LOG_TARGET, "Error = {:?}", e);
 				"rpc get_keys failed"
 			})?;
-			all_keys.extend(page.clone());
+			let page_len = page.len();
+			all_keys.extend(page);
 
-			if page.len() < (PAGE as usize) {
+			if page_len < PAGE as usize {
 				debug!(target: LOG_TARGET, "last page received: {}", page.len());
 				break all_keys;
 			} else {
