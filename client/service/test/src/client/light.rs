@@ -54,7 +54,6 @@ use sp_blockchain::{
 	BlockStatus, Result as ClientResult, Error as ClientError, CachedHeaderMetadata,
 	HeaderBackend, well_known_cache_keys
 };
-use std::panic::UnwindSafe;
 use std::cell::RefCell;
 use sp_state_machine::{OverlayedChanges, ExecutionManager};
 use parity_scale_codec::{Decode, Encode};
