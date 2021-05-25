@@ -65,15 +65,15 @@ macro_rules! impl_compact {
 }
 
 impl_compact!(
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L261
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L261
 	u8 => 2;
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L291
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L291
 	u16 => 4;
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L326
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L326
 	u32 => 5;
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L369
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L369
 	u64 => 9;
-	// https://github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L413
+	// github.com/paritytech/parity-scale-codec/blob/f0341dabb01aa9ff0548558abb6dcc5c31c669a1/src/compact.rs#L413
 	u128 => 17;
 );
 

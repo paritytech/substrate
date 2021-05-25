@@ -827,7 +827,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
-		let bounded_locks = WeakBoundedVec::<_, T::MaxLocks>::force_from(locks.to_vec(), Some("Balances Update Locks"));
+		let bounded_locks = WeakBoundedVec::<_, T::MaxLocks>::force_from(
+			locks.to_vec(),
+			Some("Balances Update Locks"),
+		);
 
 		if locks.len() as u32 > T::MaxLocks::get() {
 			log::warn!(

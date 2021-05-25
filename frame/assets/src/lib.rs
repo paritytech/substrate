@@ -1003,8 +1003,15 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			let bounded_name: BoundedVec<u8, T::StringLimit> = name.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
-			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
+			let bounded_name: BoundedVec<u8, T::StringLimit> = name
+				.clone()
+				.try_into()
+				.map_err(|_| Error::<T, I>::BadMetadata)?;
+
+			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol
+				.clone()
+				.try_into()
+				.map_err(|_| Error::<T, I>::BadMetadata)?;
 
 			ensure!(Asset::<T, I>::contains_key(id), Error::<T, I>::Unknown);
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
