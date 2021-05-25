@@ -113,14 +113,14 @@ use sp_core::{
 	storage::{StorageKey, StorageData},
 };
 use codec::{Encode, Decode};
-use jsonrpsee_http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee_http_client::{HttpClient, HttpClientBuilder, v2::params::JsonRpcParams};
 
 use sp_runtime::traits::Block as BlockT;
 
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
-const TARGET: &str = "http://localhost:9933";
+const DEFAULT_URI: &str = "http://localhost:9934";
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi<B: BlockT> {
@@ -166,8 +166,22 @@ pub struct OnlineConfig<B: BlockT> {
 
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
-		Self { uri: TARGET.to_owned(), at: None, state_snapshot: None, modules: Default::default() }
+		Self { uri: DEFAULT_URI.to_owned(), at: None, state_snapshot: None, modules: Default::default() }
 	}
+}
+
+// TODO
+pub async fn get_header<B: BlockT, S: AsRef<str>>(from: S, at: B::Hash) -> B::Header where B::Header: serde::de::DeserializeOwned {
+	use jsonrpsee_http_client::traits::Client;
+	let params = vec![serde_json::to_value(at).unwrap()];
+	let client = HttpClientBuilder::default().max_request_body_size(u32::MAX).build(from).expect("valid HTTP url; qed");
+	client.request::<B::Header>("chain_getHeader", JsonRpcParams::Array(params)).await.unwrap()
+}
+
+pub async fn get_finalized_head<B: BlockT, S: AsRef<str>>(from: S) -> B::Hash {
+	use jsonrpsee_http_client::traits::Client;
+	let client = HttpClientBuilder::default().max_request_body_size(u32::MAX).build(from).expect("valid HTTP url; qed");
+	client.request::<B::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams).await.unwrap()
 }
 
 impl<B: BlockT> OnlineConfig<B> {
@@ -231,6 +245,7 @@ impl<B: BlockT> Builder<B> {
 
 // RPC methods
 impl<B: BlockT> Builder<B> {
+	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
 		RpcApi::<B>::finalized_head(&self.as_online().rpc()).await.map_err(|e| {
