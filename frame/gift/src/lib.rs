@@ -84,7 +84,7 @@ pub mod pallet {
 	pub type Gifts<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		T::AccountId,
+		T::AccountId, // Gift Controller
 		GiftInfo<T::AccountId, BalanceOf<T>>,
 	>;
 
@@ -92,9 +92,9 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A gift has been created! [amount, claimer]
+		/// A gift has been created! [amount, controller]
 		GiftCreated(BalanceOf<T>, T::AccountId),
-		/// A gift has been claimed! [claimer, amount, to]
+		/// A gift has been claimed! [controller, amount, to]
 		GiftClaimed(T::AccountId, BalanceOf<T>, T::AccountId),
 		/// A gift has been removed :( [to]
 		GiftRemoved(T::AccountId),
@@ -184,19 +184,19 @@ pub mod pallet {
 		///
 		/// The original gifter can revoke a gift assuming that it has not been claimed.
 		#[pallet::weight(0)]
-		fn remove(origin: OriginFor<T>, to: T::AccountId) -> DispatchResult {
+		fn remove(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			let gift = Gifts::<T>::get(&to).ok_or(Error::<T>::NoGift)?;
+			let gift = Gifts::<T>::get(&controller).ok_or(Error::<T>::NoGift)?;
 			ensure!(gift.gifter == who, Error::<T>::NotGifter);
 
 			let err_amount = T::Currency::unreserve(&gift.gifter, gift.deposit.saturating_add(gift.amount));
 			// Should always have enough reserved unless there is a bug somewhere.
 			debug_assert!(err_amount.is_zero());
 
-			Gifts::<T>::remove(&to);
+			Gifts::<T>::remove(&controller);
 
-			Self::deposit_event(Event::<T>::GiftRemoved(to));
+			Self::deposit_event(Event::<T>::GiftRemoved(controller));
 			Ok(())
 		}
 	}
