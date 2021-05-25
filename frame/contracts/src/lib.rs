@@ -388,7 +388,7 @@ pub mod pallet {
 		/// producer fails to do so, a regular users will be allowed to claim the reward.
 		///
 		/// In case of a successful eviction no fees are charged from the sender. However, the
-		/// reward is capped by the total amount of rent that was payed by the contract while
+		/// reward is capped by the total amount of rent that was paid by the contract while
 		/// it was alive.
 		///
 		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
@@ -421,10 +421,10 @@ pub mod pallet {
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			match Rent::<T, PrefabWasmModule<T>>::try_eviction(&dest, handicap)? {
-				(Some(rent_payed), code_len) => {
+				(Some(rent_paid), code_len) => {
 					T::Currency::deposit_into_existing(
 						&rewarded,
-						T::SurchargeReward::get().min(rent_payed),
+						T::SurchargeReward::get().min(rent_paid),
 					)
 					.map(|_| PostDispatchInfo {
 						actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),

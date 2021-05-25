@@ -396,7 +396,7 @@ fn account_removal_does_not_remove_storage() {
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(1),
 				rent_allowance: 40,
-				rent_payed: 0,
+				rent_paid: 0,
 				last_write: None,
 				_reserved: None,
 			});
@@ -412,7 +412,7 @@ fn account_removal_does_not_remove_storage() {
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(2),
 				rent_allowance: 40,
-				rent_payed: 0,
+				rent_paid: 0,
 				last_write: None,
 				_reserved: None,
 			});
@@ -2669,11 +2669,11 @@ fn surcharge_reward_is_capped() {
 		let balance = Balances::free_balance(&ALICE);
 		let reward = <Test as Config>::SurchargeReward::get();
 
-		// some rent should have payed due to instantiation
-		assert_ne!(contract.rent_payed, 0);
+		// some rent should have paid due to instantiation
+		assert_ne!(contract.rent_paid, 0);
 
 		// the reward should be parameterized sufficiently high to make this test useful
-		assert!(reward > contract.rent_payed);
+		assert!(reward > contract.rent_paid);
 
 		// make contract eligible for eviction
 		initialize_block(40);
@@ -2682,13 +2682,13 @@ fn surcharge_reward_is_capped() {
 		assert_ok!(Contracts::claim_surcharge(Origin::none(), addr.clone(), Some(ALICE)));
 
 		// this reward does not take into account the last rent payment collected during eviction
-		let capped_reward = reward.min(contract.rent_payed);
+		let capped_reward = reward.min(contract.rent_paid);
 
 		// this is smaller than the actual reward because it does not take into account the
 		// rent collected during eviction
 		assert!(Balances::free_balance(&ALICE) > balance + capped_reward);
 
-		// the full reward is not payed out because of the cap introduced by rent_payed
+		// the full reward is not paid out because of the cap introduced by rent_paid
 		assert!(Balances::free_balance(&ALICE) < balance + reward);
 	});
 }
