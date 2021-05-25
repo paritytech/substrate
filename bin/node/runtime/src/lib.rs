@@ -942,11 +942,7 @@ impl pallet_erc20::Trait for Runtime {
 parameter_types! {
 	pub MetricsContractId: Option<AccountId> = {
 		let contract_id = pallet_ddc_metrics_offchain_worker::get_contract_id();
-		if contract_id.is_none() {
-			return None;
-		}
-
-		Some(AccountId::from(contract_id.unwrap()))
+		contract_id.map(|id| AccountId::from(id))
 	};
 
 	pub const OcwBlockInterval: u32 = pallet_ddc_metrics_offchain_worker::BLOCK_INTERVAL;

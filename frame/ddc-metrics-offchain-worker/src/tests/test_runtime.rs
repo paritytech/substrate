@@ -9,15 +9,18 @@ use frame_support::{
     impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types, traits::Get,
     weights::Weight,
 };
-use sp_core::{sr25519::Signature, H256};
+use sp_core::H256;
 use sp_runtime::{
     testing::{Header, TestXt},
-    traits::{BlakeTwo256, Convert, Extrinsic as ExtrinsicT, IdentityLookup, Verify},
-    Perbill,
+    traits::{
+        BlakeTwo256, Convert, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify,
+    },
+    MultiSignature, Perbill,
 };
 use std::cell::RefCell;
 
-pub type AccountId = sp_core::sr25519::Public;
+pub type Signature = MultiSignature;
+pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 // -- Implement a contracts runtime for testing --
 
@@ -45,24 +48,24 @@ pub type DdcMetricsOffchainWorker = Module<Test>;
 
 // Macros based on the names above. Not Rust syntax.
 impl_outer_event! {
-	pub enum MetaEvent for Test {
-		system<T>,
-		balances<T>,
-		contracts<T>,
-		example_offchain_worker<T>,
-	}
+    pub enum MetaEvent for Test {
+        system<T>,
+        balances<T>,
+        contracts<T>,
+        example_offchain_worker<T>,
+    }
 }
 
 impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
+    pub enum Origin for Test where system = frame_system {}
 }
 
 impl_outer_dispatch! {
-	pub enum MetaCall for Test where origin: Origin {
-		balances::Balances,
-		contracts::Contracts,
-		example_offchain_worker::DdcMetricsOffchainWorker,
-	}
+    pub enum MetaCall for Test where origin: Origin {
+        balances::Balances,
+        contracts::Contracts,
+        example_offchain_worker::DdcMetricsOffchainWorker,
+    }
 }
 
 // For testing the module, we construct most of a mock runtime. This means
@@ -71,10 +74,10 @@ impl_outer_dispatch! {
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct Test;
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+    pub const BlockHashCount: u64 = 250;
+    pub const MaximumBlockWeight: Weight = 1024;
+    pub const MaximumBlockLength: u32 = 2 * 1024;
+    pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
     type BaseCallFilter = ();
@@ -116,7 +119,7 @@ impl pallet_balances::Trait for Test {
 }
 
 thread_local! {
-	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+    static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 }
 
 pub struct ExistentialDeposit;
@@ -128,7 +131,7 @@ impl Get<u64> for ExistentialDeposit {
 }
 
 parameter_types! {
-	pub const MinimumPeriod: u64 = 1;
+    pub const MinimumPeriod: u64 = 1;
 }
 impl pallet_timestamp::Trait for Test {
     type Moment = u64;
@@ -137,14 +140,14 @@ impl pallet_timestamp::Trait for Test {
     type WeightInfo = ();
 }
 parameter_types! {
-	pub const SignedClaimHandicap: u64 = 2;
-	pub const TombstoneDeposit: u64 = 16;
-	pub const StorageSizeOffset: u32 = 8;
-	pub const RentByteFee: u64 = 4;
-	pub const RentDepositOffset: u64 = 10_000;
-	pub const SurchargeReward: u64 = 150;
-	pub const MaxDepth: u32 = 100;
-	pub const MaxValueSize: u32 = 16_384;
+    pub const SignedClaimHandicap: u64 = 2;
+    pub const TombstoneDeposit: u64 = 16;
+    pub const StorageSizeOffset: u32 = 8;
+    pub const RentByteFee: u64 = 4;
+    pub const RentDepositOffset: u64 = 10_000;
+    pub const SurchargeReward: u64 = 150;
+    pub const MaxDepth: u32 = 100;
+    pub const MaxValueSize: u32 = 16_384;
 }
 
 // Contracts for Test Runtime.
@@ -171,7 +174,7 @@ impl contracts::Trait for Test {
 }
 
 parameter_types! {
-	pub const TransactionByteFee: u64 = 0;
+    pub const TransactionByteFee: u64 = 0;
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
@@ -194,16 +197,16 @@ impl SigningTypes for Test {
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Test
-    where
-        MetaCall: From<LocalCall>,
+where
+    MetaCall: From<LocalCall>,
 {
     type OverarchingCall = MetaCall;
     type Extrinsic = Extrinsic;
 }
 
 impl<LocalCall> CreateSignedTransaction<LocalCall> for Test
-    where
-        MetaCall: From<LocalCall>,
+where
+    MetaCall: From<LocalCall>,
 {
     fn create_transaction<C: AppCrypto<Self::Public, Self::Signature>>(
         call: MetaCall,
@@ -215,18 +218,14 @@ impl<LocalCall> CreateSignedTransaction<LocalCall> for Test
     }
 }
 
-// Mutable contract address.
-thread_local! {
-	pub static CURRENT_METRICS_CONTRACT_ID: RefCell<AccountId> = RefCell::new(AccountId::from_raw(METRICS_CONTRACT_ID));
-}
-
 parameter_types! {
-	pub MetricsContractId: Option<AccountId> = {
-		Some(CURRENT_METRICS_CONTRACT_ID.with(|v| *v.borrow()))
-	};
+    pub MetricsContractId: Option<AccountId> = {
+        let contract_id = crate::get_contract_id();
+        contract_id.map(|id| AccountId::from(id))
+    };
     pub DdcUrl: Option<Vec<u8>> = {
-		crate::get_ddc_url()
-	};
+        crate::get_ddc_url()
+    };
     pub const OcwBlockInterval: u32 = crate::BLOCK_INTERVAL;
 }
 
