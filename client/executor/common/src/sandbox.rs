@@ -18,15 +18,16 @@
 
 //! This module implements sandboxing support in the runtime.
 //!
-//! Sandboxing is baked by wasmi at the moment. In future, however, we would like to add/switch to
-//! a compiled execution engine.
+//! Sandboxing is baked by wasmi and wasmer, depending on the configuration.
 
 use crate::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
-
-use wasmi::{Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages};
+use wasmi::{
+	Externals, ImportResolver, MemoryInstance, MemoryRef, Module,
+	ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages
+};
 use sp_wasm_interface::{Value, FunctionContext, Pointer, WordSize};
 use wasmer_compiler_singlepass::Singlepass;
 
@@ -246,9 +247,9 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 			.func_by_guest_index(index)
 			.expect(
 				"`invoke_index` is called with indexes registered via `FuncInstance::alloc_host`;
-					`FuncInstance::alloc_host` is called with indexes that was obtained from `guest_to_supervisor_mapping`;
-					`func_by_guest_index` called with `index` can't return `None`;
-					qed"
+				`FuncInstance::alloc_host` is called with indexes that were obtained from `guest_to_supervisor_mapping`;
+				`func_by_guest_index` called with `index` can't return `None`;
+				qed"
 			);
 
 		// Serialize arguments into a byte vector.
@@ -422,7 +423,9 @@ impl<FR> SandboxInstance<FR> {
 								.map_err(|error| wasmi::Error::Function(error.to_string()))?;
 
 							if wasmer_result.len() < 2 {
-								return Err(wasmi::Error::Function("multiple return types are not supported yet".to_owned()));
+								return Err(wasmi::Error::Function(
+									"multiple return types are not supported yet".to_owned())
+								);
 							}
 
 							let wasmer_result = if let Some(wasmer_value) = wasmer_result.first() {
@@ -681,7 +684,12 @@ pub struct Store<FR> {
 }
 
 impl<FR> Store<FR> {
-	fn allocate_memory(memories: &mut Vec<Option<Memory>>, backend_context: &BackendContext, initial: u32, maximum: u32) -> Result<(u32, Memory)> {
+	fn allocate_memory(
+		memories: &mut Vec<Option<Memory>>,
+		backend_context: &BackendContext,
+		initial: u32,
+		maximum: u32
+	) -> Result<(u32, Memory)> {
 		let maximum = match maximum {
 			sandbox_primitives::MEM_UNLIMITED => None,
 			specified_limit => Some(specified_limit),
@@ -878,14 +886,21 @@ impl<FR> Store<FR> {
 						wasmer::ExternType::Global(_) | wasmer::ExternType::Table(_) => (),
 
 						wasmer::ExternType::Memory(_) => {
-							let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
-							let memory = guest_env.imports.memory_by_name(import.module(), import.name()).ok_or(InstantiationError::ModuleDecoding)?;
+							let exports = exports_map
+								.entry(import.module().to_string())
+								.or_insert(wasmer::Exports::new());
+
+							let memory = guest_env.imports.memory_by_name(
+								import.module(),
+								import.name()
+							).ok_or(InstantiationError::ModuleDecoding)?;
 
 							exports.insert(import.name(), wasmer::Extern::Memory(memory.as_wasmer().unwrap()));
 						}
 
 						wasmer::ExternType::Function(func_ty) => {
-							let guest_func_index = if let Some(index) = guest_env.imports.func_by_name(import.module(), import.name()) {
+							let guest_func_index = guest_env.imports.func_by_name(import.module(), import.name());
+							let guest_func_index = if let Some(index) = guest_func_index {
 								index
 							} else {
 								// Missing import (should we abort here?)
@@ -896,8 +911,7 @@ impl<FR> Store<FR> {
 								.func_by_guest_index(guest_func_index)
 								.ok_or(InstantiationError::ModuleDecoding)?;
 
-							let function = wasmer::Function::new(&context.store, func_ty, move |params: &[wasmer::Val]| {
-
+							let function = wasmer::Function::new(&context.store, func_ty, move |params| {
 								SCH::with_sandbox_capabilities(|supervisor_externals| {
 									// Serialize arguments into a byte vector.
 									let invoke_args_data = params
@@ -917,7 +931,9 @@ impl<FR> Store<FR> {
 									let invoke_args_len = invoke_args_data.len() as WordSize;
 									let invoke_args_ptr = supervisor_externals
 										.allocate_memory(invoke_args_len)
-										.map_err(|_| wasmer::RuntimeError::new("Can't allocate memory in supervisor for the arguments"))?;
+										.map_err(|_| wasmer::RuntimeError::new(
+											"Can't allocate memory in supervisor for the arguments")
+										)?;
 
 									let deallocate = |fe: &mut FE, ptr, fail_msg| {
 										fe
@@ -929,7 +945,12 @@ impl<FR> Store<FR> {
 										.write_memory(invoke_args_ptr, &invoke_args_data)
 										.is_err()
 									{
-										deallocate(supervisor_externals, invoke_args_ptr, "Failed dealloction after failed write of invoke arguments")?;
+										deallocate(
+											supervisor_externals,
+											invoke_args_ptr,
+											"Failed dealloction after failed write of invoke arguments"
+										)?;
+
 										return Err(wasmer::RuntimeError::new("Can't write invoke args into memory"));
 									}
 
@@ -955,9 +976,15 @@ impl<FR> Store<FR> {
 
 									let serialized_result_val = supervisor_externals
 										.read_memory(serialized_result_val_ptr, serialized_result_val_len)
-										.map_err(|_| wasmer::RuntimeError::new("Can't read the serialized result from dispatch thunk"));
+										.map_err(|_| wasmer::RuntimeError::new(
+											"Can't read the serialized result from dispatch thunk")
+										);
 
-									let deserialized_result = deallocate(supervisor_externals, serialized_result_val_ptr, "Can't deallocate memory for dispatch thunk's result")
+									let deserialized_result = deallocate(
+										supervisor_externals,
+										serialized_result_val_ptr,
+										"Can't deallocate memory for dispatch thunk's result"
+									)
 										.and_then(|_| serialized_result_val)
 										.and_then(|serialized_result_val| {
 											deserialize_result(&serialized_result_val)
@@ -979,7 +1006,10 @@ impl<FR> Store<FR> {
 								})
 							});
 
-							let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
+							let exports = exports_map
+								.entry(import.module().to_string())
+								.or_insert(wasmer::Exports::new());
+
 							exports.insert(import.name(), wasmer::Extern::Function(function));
 						}
 					}
@@ -997,7 +1027,9 @@ impl<FR> Store<FR> {
 						match error {
 							wasmer::InstantiationError::Link(_) => InstantiationError::Instantiation,
 							wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
-							wasmer::InstantiationError::HostEnvInitialization(_) => InstantiationError::EnvironmentDefinitionCorrupted,
+							wasmer::InstantiationError::HostEnvInitialization(_) => {
+								InstantiationError::EnvironmentDefinitionCorrupted
+							}
 						}
 					})?;
 

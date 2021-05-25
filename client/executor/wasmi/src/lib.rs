@@ -19,7 +19,10 @@
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
 use std::{cell::RefCell, ops::Range, rc::Rc, slice, str, sync::Arc};
-use wasmi::{FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef, RuntimeValue::{I32, I64, self}, TableRef, memory_units::{self, Pages}};
+use wasmi::{
+	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
+	RuntimeValue::{I32, I64, self}, TableRef, memory_units::{self, Pages}
+};
 use codec::{Encode, Decode};
 use sp_core::sandbox as sandbox_primitives;
 use log::{error, trace, debug};
@@ -184,9 +187,13 @@ impl Sandbox for FunctionExecutor {
 					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 				};
 
-				// This is safe because we construct slice from the same parts as the memory region itself.
-				// Current implementation is single threaded, so we should not face any synchronization or aliasing issues.
-				let src_buffer = unsafe { slice::from_raw_parts(sandboxed_memory.data_ptr(), sandboxed_memory.data_size() as usize) };
+				// This is safe because we construct slice from the same parts as
+				// the memory region itself. Current implementation is single threaded,
+				// so we should not face any synchronization or aliasing issues.
+				let src_buffer = unsafe { slice::from_raw_parts(
+					sandboxed_memory.data_ptr(),
+					sandboxed_memory.data_size() as usize)
+				};
 
 				self.inner.memory.with_direct_access_mut(|dst_buffer| {
 					dst_buffer[dst_range].copy_from_slice(&src_buffer[src_range]);
@@ -239,9 +246,13 @@ impl Sandbox for FunctionExecutor {
 					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 				};
 
-				// This is safe because we construct slice from the same parts as the memory region itself.
-				// Current implementation is single threaded, so we should not face any synchronization or aliasing issues.
-				let dest_buffer = unsafe { slice::from_raw_parts_mut(sandboxed_memory.data_ptr(), sandboxed_memory.data_size() as usize) };
+				// This is safe because we construct slice from the same parts as
+				// the memory region itself. Current implementation is single threaded,
+				// so we should not face any synchronization or aliasing issues.
+				let dest_buffer = unsafe { slice::from_raw_parts_mut(
+					sandboxed_memory.data_ptr(),
+					sandboxed_memory.data_size() as usize)
+				};
 
 				self.inner.memory.with_direct_access(|src_buffer| {
 					dest_buffer[dst_range].copy_from_slice(&src_buffer[src_range]);
