@@ -301,7 +301,7 @@ impl<B: BlockT> Builder<'_, B> {
 			all_keys.extend(page);
 
 			if page_len < PAGE as usize {
-				debug!(target: LOG_TARGET, "last page received: {}", page.len());
+				debug!(target: LOG_TARGET, "last page received: {}", page_len);
 				break all_keys;
 			} else {
 				let new_last_key =
