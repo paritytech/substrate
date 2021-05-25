@@ -167,3 +167,10 @@ impl<T: FullCodec + Copy + Default + Eq + PartialEq + Debug> AssetId for T {}
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
 pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug {}
 impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug> Balance for T {}
+
+/// A simple hook allowing pallets to trigger some functionality when a balance transfer (or
+/// equivalent operation) has been made.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait OnTransfer<AccountId, Balance> {
+	fn on_transfer(sender: &AccountId, recipient: &AccountId, amount: &Balance);
+}

@@ -26,7 +26,7 @@ pub use tokens::currency::{
 	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, VestingSchedule,
 };
 pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
-pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};
+pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus, OnTransfer};
 
 mod members;
 pub use members::{

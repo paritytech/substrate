@@ -46,7 +46,7 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::{
 		pallet_prelude::*,
-		traits::{Currency, ExistenceRequirement, ReservableCurrency},
+		traits::{Currency, ExistenceRequirement, ReservableCurrency, OnTransfer},
 		sp_runtime::traits::{CheckedAdd, Saturating, Zero},
 	};
 	use frame_system::pallet_prelude::*;
@@ -65,7 +65,8 @@ pub mod pallet {
 		type GiftDeposit: Get<BalanceOf<Self>>;
 		/// The minimum gift amount. Should be greater than the existential deposit.
 		type MinimumGift: Get<BalanceOf<Self>>;
-
+		/// Pallet hook for when a gift is claimed.
+		type OnGift: OnTransfer<Self::AccountId, BalanceOf<Self>>;
 	}
 
 	#[pallet::pallet]
@@ -175,6 +176,9 @@ pub mod pallet {
 			let res = T::Currency::transfer(&gift.gifter, &to, gift.amount, ExistenceRequirement::AllowDeath);
 			// Should never fail because we unreserve more than this above.
 			debug_assert!(res.is_ok());
+
+			// Perform any hooks trigger by the gift being claimed.
+			T::OnGift::on_transfer(&gift.gifter, &to, &gift.amount);
 
 			Self::deposit_event(Event::<T>::GiftClaimed(who, gift.amount, to));
 			Ok(())
