@@ -139,14 +139,14 @@ jsonrpsee_proc_macros::rpc_client_api! {
 
 /// The execution mode.
 #[derive(Clone)]
-pub enum Mode<'a, B: BlockT> {
+pub enum Mode<B: BlockT> {
 	/// Online.
-	Online(OnlineConfig<'a, B>),
+	Online(OnlineConfig<B>),
 	/// Offline. Uses a state snapshot file and needs not any client config.
 	Offline(OfflineConfig),
 }
 
-impl<B: BlockT> Default for Mode<'_, B> {
+impl<B: BlockT> Default for Mode<B> {
 	fn default() -> Self {
 		Mode::Online(OnlineConfig::default())
 	}
@@ -163,19 +163,19 @@ pub struct OfflineConfig {
 
 /// Description of the transport protocol.
 #[derive(Debug)]
-pub struct Transport<'a> {
-	uri: &'a str,
+pub struct Transport {
+	uri: String,
 	client: Option<WsClient>,
 }
 
-impl Clone for Transport<'_> {
+impl Clone for Transport {
 	fn clone(&self) -> Self {
-		Self { uri: self.uri, client: None }
+		Self { uri: self.uri.clone(), client: None }
 	}
 }
 
-impl<'a> From<&'a str> for Transport<'a> {
-	fn from(t: &'a str) -> Self {
+impl From<String> for Transport {
+	fn from(t: String) -> Self {
 		Self { uri: t, client: None }
 	}
 }
@@ -184,21 +184,21 @@ impl<'a> From<&'a str> for Transport<'a> {
 ///
 /// A state snapshot config may be present and will be written to in that case.
 #[derive(Clone)]
-pub struct OnlineConfig<'a, B: BlockT> {
+pub struct OnlineConfig<B: BlockT> {
 	/// The block number at which to connect. Will be latest finalized head if not provided.
 	pub at: Option<B::Hash>,
 	/// An optional state snapshot file to WRITE to, not for reading. Not written if set to `None`.
 	pub state_snapshot: Option<SnapshotConfig>,
 	/// The modules to scrape. If empty, entire chain state will be scraped.
-	pub modules: Vec<&'a str>,
+	pub modules: Vec<String>,
 	/// Transport config.
-	pub transport: Transport<'a>,
+	pub transport: Transport,
 }
 
-impl<B: BlockT> Default for OnlineConfig<'_, B> {
+impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport { uri: DEFAULT_TARGET, client: None },
+			transport: Transport { uri: DEFAULT_TARGET.to_string(), client: None },
 			at: None,
 			state_snapshot: None,
 			modules: vec![],
@@ -206,7 +206,7 @@ impl<B: BlockT> Default for OnlineConfig<'_, B> {
 	}
 }
 
-impl<B: BlockT> OnlineConfig<'_, B> {
+impl<B: BlockT> OnlineConfig<B> {
 	/// Return rpc (ws) client.
 	fn rpc_client(&self) -> &WsClient {
 		self.transport.client.as_ref().expect("ws client must have been initialized by now; qed.")
@@ -233,31 +233,31 @@ impl Default for SnapshotConfig {
 }
 
 /// Builder for remote-externalities.
-pub struct Builder<'a, B: BlockT> {
+pub struct Builder<B: BlockT> {
 	/// Pallets to inject their prefix into the externalities.
 	inject: Vec<KeyPair>,
 	/// connectivity mode, online or offline.
-	mode: Mode<'a, B>,
+	mode: Mode<B>,
 }
 
 // NOTE: ideally we would use `DefaultNoBound` here, but not worth bringing in frame-support for
 // that.
-impl<B: BlockT> Default for Builder<'_, B> {
+impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
 		Self { inject: Default::default(), mode: Default::default() }
 	}
 }
 
 // Mode methods
-impl<'a, B: BlockT> Builder<'a, B> {
-	fn as_online(&self) -> &OnlineConfig<'a, B> {
+impl<B: BlockT> Builder<B> {
+	fn as_online(&self) -> &OnlineConfig<B> {
 		match &self.mode {
 			Mode::Online(config) => &config,
 			_ => panic!("Unexpected mode: Online"),
 		}
 	}
 
-	fn as_online_mut(&mut self) -> &mut OnlineConfig<'a, B> {
+	fn as_online_mut(&mut self) -> &mut OnlineConfig<B> {
 		match &mut self.mode {
 			Mode::Online(config) => config,
 			_ => panic!("Unexpected mode: Online"),
@@ -266,7 +266,7 @@ impl<'a, B: BlockT> Builder<'a, B> {
 }
 
 // RPC methods
-impl<B: BlockT> Builder<'_, B> {
+impl<B: BlockT> Builder<B> {
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
 		RpcApi::<B>::finalized_head(self.as_online().rpc_client()).await.map_err(|e| {
@@ -359,7 +359,7 @@ impl<B: BlockT> Builder<'_, B> {
 }
 
 // Internal methods
-impl<B: BlockT> Builder<'_, B> {
+impl<B: BlockT> Builder<B> {
 	/// Save the given data as state snapshot.
 	fn save_state_snapshot(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
 		info!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
@@ -414,7 +414,7 @@ impl<B: BlockT> Builder<'_, B> {
 		// First, initialize the ws client.
 		let ws_client = WsClientBuilder::default()
 			.max_request_body_size(u32::MAX)
-			.build(online.transport.uri)
+			.build(&online.transport.uri)
 			.await
 			.map_err(|_| "failed to build ws client")?;
 		online.transport.client = Some(ws_client);
@@ -452,7 +452,7 @@ impl<B: BlockT> Builder<'_, B> {
 }
 
 // Public methods
-impl<'a, B: BlockT> Builder<'a, B> {
+impl<B: BlockT> Builder<B> {
 	/// Create a new builder.
 	pub fn new() -> Self {
 		Default::default()
@@ -467,7 +467,7 @@ impl<'a, B: BlockT> Builder<'a, B> {
 	}
 
 	/// Configure a state snapshot to be used.
-	pub fn mode(mut self, mode: Mode<'a, B>) -> Self {
+	pub fn mode(mut self, mode: Mode<B>) -> Self {
 		self.mode = mode;
 		self
 	}
@@ -527,9 +527,9 @@ mod remote_tests {
 	#[tokio::test]
 	async fn can_build_one_pallet() {
 		init_logger();
-		Builder::<'_, Block>::new()
+		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				modules: vec!["Proxy"],
+				modules: vec!["Proxy".to_owned()],
 				..Default::default()
 			}))
 			.build()
@@ -541,10 +541,10 @@ mod remote_tests {
 	#[tokio::test]
 	async fn can_create_state_snapshot() {
 		init_logger();
-		Builder::<'_, Block>::new()
+		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
 				state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove.bin")),
-				modules: vec!["Balances"],
+				modules: vec!["Balances".to_owned()],
 				..Default::default()
 			}))
 			.build()

@@ -26,7 +26,7 @@ sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-tokio = { version = "0.2", features = ["macros"] }
+tokio = { version = "1.6.0", features = ["macros", "rt"] }
 
 [features]
 remote-test = []
