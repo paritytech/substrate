@@ -820,6 +820,7 @@ enum Releases {
 	V4_0_0,
 	V5_0_0, // blockable validators.
 	V6_0_0, // removal of all storage associated with offchain phragmen.
+	V6_1_0, // keep track of number of nominators / validators in map, not used yet.
 }
 
 impl Default for Releases {
@@ -865,9 +866,15 @@ decl_storage! {
 		pub Validators get(fn validators):
 			map hasher(twox_64_concat) T::AccountId => ValidatorPrefs;
 
+		/// A tracker to keep count of the number of items in the `Validators` map.
+		pub ValidatorsCount get(fn validators_count): u32;
+
 		/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 		pub Nominators get(fn nominators):
 			map hasher(twox_64_concat) T::AccountId => Option<Nominations<T::AccountId>>;
+
+		/// A tracker to keep count of the number of items in the `Nominators` map.
+		pub NominatorsCount get(fn nominators_count): u32;
 
 		/// The current era index.
 		///
@@ -1031,6 +1038,34 @@ decl_storage! {
 
 pub mod migrations {
 	use super::*;
+
+	pub mod v7 {
+		use super::*;
+
+		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
+			assert!(ValidatorsCount::get().is_zero(), "ValidatorsCount already set.");
+			assert!(NominatorsCount::get().is_zero(), "NominatorsCount already set.");
+			assert!(StorageVersion::get() == Releases::V6_0_0);
+			Ok(())
+		}
+
+		pub fn migrate<T: Config>() -> Weight {
+			log!(info, "Migrating staking to Releases::V6_1_0");
+			let validator_count = <Validators<T>>::iter().count() as u32;
+			let nominator_count = <Nominators<T>>::iter().count() as u32;
+
+			ValidatorsCount::put(validator_count);
+			NominatorsCount::put(nominator_count);
+
+			StorageVersion::put(Releases::V6_1_0);
+			log!(info, "Done.");
+
+			T::DbWeight::get().reads_writes(
+				validator_count.saturating_add(nominator_count).into(),
+				2,
+			)
+		}
+	}
 
 	pub mod v6 {
 		use super::*;
@@ -1477,7 +1512,10 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
-			<Nominators<T>>::remove(stash);
+			if Nominators::<T>::contains_key(stash) {
+				Nominators::<T>::remove(stash);
+				NominatorsCount::mutate(|x| x = x.saturating_sub(One::one()));
+			}
 			<Validators<T>>::insert(stash, prefs);
 		}
 
@@ -2539,13 +2577,13 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	}
 
 	fn voters(
-		maybe_max_len: Option<usize>,
+		maybe_max_len: Option<u32>,
 	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
 		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
 		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
 		// report weight in failures.
-		let nominator_count = <Nominators<T>>::iter().count();
-		let validator_count = <Validators<T>>::iter().count();
+		let nominator_count = NominatorsCount::get();
+		let validator_count = ValidatorsCount::get();
 		let voter_count = nominator_count.saturating_add(validator_count);
 
 		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
@@ -2554,15 +2592,15 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 
 		let slashing_span_count = <SlashingSpans<T>>::iter().count();
 		let weight = T::WeightInfo::get_npos_voters(
-			nominator_count as u32,
-			validator_count as u32,
+			nominator_count,
+			validator_count,
 			slashing_span_count as u32,
 		);
 		Ok((Self::get_npos_voters(), weight))
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
-		let target_count = <Validators<T>>::iter().count();
+	fn targets(maybe_max_len: Option<u32>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+		let target_count = ValidatorsCount::get();
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
 			return Err("Target snapshot too big");
