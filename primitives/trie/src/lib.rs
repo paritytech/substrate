@@ -576,11 +576,25 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 pub fn state_hashed_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>>(
 	db: &DB,
 	root: &TrieHash<L>,
-) -> bool {
-	if let Ok(t) = TrieDB::<L>::new(&*db, root) {
-		unimplemented!("TODO has_flag on triedb");
+) -> Option<GlobalMeta<L>> {
+	struct ReadMeta<L: TrieConfiguration> {
+		hashed: Option<GlobalMeta<L>>,
 	}
-	false
+	impl<L: TrieConfiguration> trie_db::Query<L::Hash, L::Meta> for &mut ReadMeta<L> {
+		type Item = DBValue;
+		fn decode(self, value: &[u8]) -> DBValue { value.to_vec() }
+		fn record(&mut self, _hash: &<L::Hash as Hasher>::Out, _data: &[u8], _depth: u32, meta: &L::Meta) {
+			debug_assert!(self.hashed.is_none());
+			self.hashed = Some(meta.extract_global_meta());
+		}
+	}
+	let mut read_meta: ReadMeta<L> = ReadMeta {
+		hashed: None,
+	};
+	if let Ok(t) = TrieDB::<L>::new(&*db, root) {
+		let _ = t.get_with(&[], &mut read_meta);
+	}
+	read_meta.hashed
 }
 
 /// Read a value from the trie.
@@ -1299,7 +1313,7 @@ mod tests {
 		iterator_works_inner(false);
 	}
 	fn iterator_works_inner(flag: bool) {
-		let mut pairs = vec![
+		let pairs = vec![
 			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),
 			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
 		];
@@ -1312,9 +1326,6 @@ mod tests {
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();
-		if flag {
-			pairs.insert(0, (vec![], vec![]));
-		}
 		for pair in iter {
 			let (key, value) = pair.unwrap();
 			iter_pairs.push((key, value.to_vec()));
