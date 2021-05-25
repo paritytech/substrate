@@ -23,12 +23,9 @@ use sp_runtime::{offchain::{
     Duration,
     storage::StorageValueRef,
 }, traits::StaticLookup, AccountId32};
-use codec::Encode;
+use codec::{Decode, Encode};
 use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
-pub use pallet_contracts_rpc_runtime_api::{
-	self as runtime_api, ContractExecResult,
-};
 use alt_serde::{Deserialize, de::DeserializeOwned, Deserializer};
 use hex_literal::hex;
 use core::convert::TryInto;
@@ -332,16 +329,22 @@ impl<T: Trait> Module<T> {
             call_data,
         );
 
-        let (data) = match exec_result {
-            Ok(v) => v.data,
-            Err(_) => [0].to_vec(),
+        let mut data = match &exec_result {
+            Ok(v) => &v.data[..],
+            Err(err) => {
+                return Err("[OCW] error calling contract get_current_period_ms");
+            }
         };
 
-        let ret: u64 = u64::from_le_bytes(data.try_into().unwrap());
-        
-        info!("[OCW] sc_get_current_period_ms - data response from sc: {:?}", ret);
+        let current_period_ms = u64::decode(&mut data)
+            .map_err(|_| "[OCW] error decoding get_current_period_ms result")?;
 
-        Ok(ret)
+        info!(
+            "[OCW] sc_get_current_period_ms - data response from sc: {:?}",
+            current_period_ms
+        );
+
+        Ok(current_period_ms)
     }
 
     fn finalize_metric_period(
