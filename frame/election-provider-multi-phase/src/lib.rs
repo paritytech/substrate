@@ -780,7 +780,10 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(T::DbWeight::get().reads(1))]
-		fn set_minimum_untrusted_score(origin: OriginFor<T>, maybe_next_score: Option<ElectionScore>) -> DispatchResultWithPostInfo {
+		fn set_minimum_untrusted_score(
+			origin: OriginFor<T>,
+			maybe_next_score: Option<ElectionScore>,
+		) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::ensure_origin(origin)?;
 			<MinimumUntrustedScore<T>>::set(maybe_next_score);
 			Ok(None.into())
