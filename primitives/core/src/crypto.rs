@@ -581,6 +581,8 @@ ss58_address_format!(
 		(69, "sora", "SORA Network, standard account (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
+	BasiliskAccount =>
+		(10041, "basilisk", "Basilisk standard account (*25519).")
 
 	// Note: 16384 and above are reserved.
 );
