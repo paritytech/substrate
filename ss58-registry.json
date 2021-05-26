@@ -488,6 +488,24 @@
 			"website": "https://sora.org"
 		},
 		{
+			"prefix": 77,
+			"network": "manta",
+			"displayName": "Manta network",
+			"symbols": ["MA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://manta.network"
+		},
+		{
+			"prefix": 78,
+			"network": "calamari",
+			"displayName": "Calamari: Manta Canary Network",
+			"symbols": ["KMA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://manta.network"
+		},
+		{
 			"prefix": 252,
 			"network": "social-network",
 			"displayName": "Social Network",
