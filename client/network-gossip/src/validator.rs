@@ -29,6 +29,10 @@ pub trait Validator<B: BlockT>: Send + Sync {
 	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<B>, _who: &PeerId) {
 	}
 
+	/// Note that a given messages has been received as duplicate.
+	fn note_duplicate(&self, _sender: &PeerId, _data: &[u8]) {
+	}
+
 	/// Validate consensus message.
 	fn validate(
 		&self,

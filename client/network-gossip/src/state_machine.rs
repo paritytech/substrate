@@ -360,6 +360,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 					"Ignored already known message",
 				);
 				network.report_peer(who.clone(), rep::DUPLICATE_GOSSIP);
+
+				let validator = self.validator.clone();
+				validator.note_duplicate(&who, &message);
+
 				continue;
 			}
 
@@ -398,13 +402,13 @@ impl<B: BlockT> ConsensusGossip<B> {
 			};
 
 			network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
-			peer.known_messages.insert(message_hash);
 			to_forward.push((topic, TopicNotification {
 				message: message.clone(),
 				sender: Some(who.clone())
 			}));
 
 			if keep {
+				peer.known_messages.insert(message_hash);
 				self.register_message_hashed(
 					message_hash,
 					topic,

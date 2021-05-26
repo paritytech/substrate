@@ -54,6 +54,7 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 
+#![feature(map_first_last)]
 #![warn(missing_docs)]
 
 use futures::{

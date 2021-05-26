@@ -113,6 +113,7 @@ const CATCH_UP_THRESHOLD: u64 = 2;
 const PROPAGATION_ALL: u32 = 4; //in rounds;
 const PROPAGATION_ALL_AUTHORITIES: u32 = 2; //in rounds;
 const PROPAGATION_SOME_NON_AUTHORITIES: u32 = 3; //in rounds;
+// const ROUND_DURATION: u32 = 5; // measured in gossip durations
 const ROUND_DURATION: u32 = 2; // measured in gossip durations
 
 const MIN_LUCKY: usize = 5;
@@ -693,6 +694,7 @@ impl CatchUpConfig {
 
 struct Inner<Block: BlockT> {
 	local_view: Option<LocalView<NumberFor<Block>>>,
+	stats: GossipStats,
 	peers: Peers<NumberFor<Block>>,
 	live_topics: KeepTopics<Block>,
 	authorities: Vec<AuthorityId>,
@@ -729,6 +731,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		Inner {
 			local_view: None,
+			stats: GossipStats::default(),
 			peers: Peers::default(),
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
@@ -736,6 +739,41 @@ impl<Block: BlockT> Inner<Block> {
 			pending_catch_up: PendingCatchUp::None,
 			catch_up_config,
 			config,
+		}
+	}
+
+	fn note_duplicate(&mut self, who: &PeerId, mut data: &[u8]) {
+		let set_id = match self.local_view {
+			Some(ref view) => view.set_id,
+			_ => return,
+		};
+
+		let from_authority = match self.peers.peer(who) {
+			Some(peer) => matches!(peer.roles, ObservedRole::Authority),
+			_ => return,
+		};
+
+		match GossipMessage::<Block>::decode(&mut data) {
+			Ok(GossipMessage::Vote(ref vote)) => {
+				match vote.message.message {
+					finality_grandpa::Message::Prevote(_) => {
+						self.stats.note_duplicate_prevote_message(vote.round, set_id, from_authority);
+					},
+					finality_grandpa::Message::Precommit(_) => {
+						self.stats.note_duplicate_precommit_message(vote.round, set_id, from_authority);
+					},
+					_ => {},
+				}
+			},
+			Ok(GossipMessage::Commit(ref message)) => {
+				self.stats.note_duplicate_commit_message(message.round, set_id, from_authority);
+			},
+			Ok(GossipMessage::Neighbor(_) | GossipMessage::CatchUp(_) | GossipMessage::CatchUpRequest(_)) => {
+				unreachable!("neighbor, catchup and catchup-request messages are always discarded, \
+							  so should never be duplicate."
+				);
+			}
+			Err(_) => {},
 		}
 	}
 
@@ -755,6 +793,9 @@ impl<Block: BlockT> Inner<Block> {
 
 			debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
 				self.config.name(), (round, set_id));
+
+			self.stats.print(self.peers.connected_authorities(), self.peers.connected_full());
+			self.stats.note_round(round, set_id);
 
 			local_view.update_round(round);
 
@@ -793,6 +834,7 @@ impl<Block: BlockT> Inner<Block> {
 			};
 
 			local_view.update_set(set_id);
+			self.stats.note_set(set_id);
 			self.live_topics.push(Round(1), set_id);
 			self.authorities = authorities;
 		}
@@ -1329,6 +1371,127 @@ impl Metrics {
 	}
 }
 
+#[derive(Default)]
+struct GossipRoundStats {
+	duplicate_prevote_messages: (usize, usize),
+	duplicate_precommit_messages: (usize, usize),
+	duplicate_commit_messages: (usize, usize),
+}
+
+impl GossipRoundStats {
+	fn percentage_duplicate_prevotes_from_authorities(&self) -> usize {
+		(self.duplicate_prevote_messages.0 as f64 / self.duplicate_prevote_messages() as f64 * 100f64) as usize
+	}
+
+	fn percentage_duplicate_precommits_from_authorities(&self) -> usize {
+		(self.duplicate_prevote_messages.0 as f64 / self.duplicate_prevote_messages() as f64 * 100f64) as usize
+	}
+
+	fn percentage_duplicate_commits_from_authorities(&self) -> usize {
+		(self.duplicate_prevote_messages.0 as f64 / self.duplicate_prevote_messages() as f64 * 100f64) as usize
+	}
+
+	fn duplicate_prevote_messages(&self) -> usize {
+		self.duplicate_prevote_messages.0 + self.duplicate_prevote_messages.1
+	}
+
+	fn duplicate_precommit_messages(&self) -> usize {
+		self.duplicate_precommit_messages.0 + self.duplicate_precommit_messages.1
+	}
+
+	fn duplicate_commit_messages(&self) -> usize {
+		self.duplicate_commit_messages.0 + self.duplicate_commit_messages.1
+	}
+}
+
+struct GossipStats {
+	set_id: SetId,
+	stats: std::collections::BTreeMap<Round, GossipRoundStats>,
+}
+
+impl Default for GossipStats {
+	fn default() -> GossipStats {
+		GossipStats {
+			set_id: SetId(0),
+			stats: Default::default(),
+		}
+	}
+}
+
+impl GossipStats {
+	fn note_set(&mut self, set_id: SetId) {
+		if self.set_id >= set_id {
+			return;
+		}
+
+		self.set_id = set_id;
+		self.stats.clear();
+	}
+
+	fn note_round(&mut self, round: Round, set_id: SetId) {
+		self.note_set(set_id);
+		self.stats.entry(round).or_default();
+
+		while self.stats.len() > KEEP_RECENT_ROUNDS * 3 {
+			self.stats.pop_first();
+		}
+	}
+
+	fn note_duplicate_prevote_message(&mut self, round: Round, set_id: SetId, from_authority: bool) {
+		self.note_round(round, set_id);
+
+		if let Some(stats) = self.stats.get_mut(&round) {
+			if from_authority {
+				stats.duplicate_prevote_messages.0 += 1;
+			} else {
+				stats.duplicate_prevote_messages.1 += 1;
+			}
+		}
+	}
+
+	fn note_duplicate_precommit_message(&mut self, round: Round, set_id: SetId, from_authority: bool) {
+		self.note_round(round, set_id);
+
+		if let Some(stats) = self.stats.get_mut(&round) {
+			if from_authority {
+				stats.duplicate_precommit_messages.0 += 1;
+			} else {
+				stats.duplicate_precommit_messages.1 += 1;
+			}
+		}
+	}
+
+	fn note_duplicate_commit_message(&mut self, round: Round, set_id: SetId, from_authority: bool) {
+		self.note_round(round, set_id);
+
+		if let Some(stats) = self.stats.get_mut(&round) {
+			if from_authority {
+				stats.duplicate_commit_messages.0 += 1;
+			} else {
+				stats.duplicate_commit_messages.1 += 1;
+			}
+		}
+	}
+
+	fn print(&self, connected_authorities: usize, connected_full: usize) {
+		println!("*** gossip stats ***");
+		println!("*** current set id: {}", self.set_id.0);
+		println!("*** connected authorities: {}, full: {}", connected_authorities, connected_full);
+		for (round, stats) in &self.stats {
+			println!("*** round: {}, prevotes: {} ({}%), precommits: {} ({}%), commits: {} ({}%)",
+				round.0,
+				stats.duplicate_prevote_messages(),
+				stats.percentage_duplicate_prevotes_from_authorities(),
+				stats.duplicate_precommit_messages(),
+				stats.percentage_duplicate_precommits_from_authorities(),
+				stats.duplicate_commit_messages(),
+				stats.percentage_duplicate_commits_from_authorities(),
+			);
+		}
+		println!("*** *** *** *** ***");
+	}
+}
+
 /// A validator for GRANDPA gossip messages.
 pub(super) struct GossipValidator<Block: BlockT> {
 	inner: parking_lot::RwLock<Inner<Block>>,
@@ -1527,6 +1690,10 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<Block>, who: &PeerId) {
 		self.inner.write().peers.peer_disconnected(who);
+	}
+
+	fn note_duplicate(&self, who: &PeerId, data: &[u8]) {
+		self.inner.write().note_duplicate(who, data);
 	}
 
 	fn validate(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, data: &[u8])
