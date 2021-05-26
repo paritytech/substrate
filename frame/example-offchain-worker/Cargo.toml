@@ -23,7 +23,6 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../../primit
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 lite-json = { version = "0.1", default-features = false }
 log = { version = "0.4.14", default-features = false }
-max-encoded-len = { version = "3.0.0", default-features = false, path = "../../max-encoded-len", features = [ "derive" ] }
 
 [features]
 default = ["std"]
@@ -38,6 +37,5 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"log/std",
-	"max-encoded-len/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
