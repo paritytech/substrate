@@ -15,7 +15,10 @@ use test_runtime::{
     AccountId, Balances, Contracts, CURRENT_METRICS_CONTRACT_ID, DdcMetricsOffchainWorker, Origin, System, Timestamp, Test,
 };
 
-use crate::{METRICS_CONTRACT_ADDR, METRICS_CONTRACT_ID, REPORT_METRICS_SELECTOR};
+use crate::{
+    METRICS_CONTRACT_ADDR, METRICS_CONTRACT_ID,
+    REPORT_METRICS_SELECTOR, CURRENT_PERIOD_MS, FINALIZE_METRIC_PERIOD
+};
 use sp_core::bytes::from_hex;
 use hex_literal::hex;
 
@@ -43,9 +46,28 @@ fn test_contract_api() {
     let report_metrics = messages.iter().find(|msg|
         msg.pointer("/name/0").unwrap().as_str().unwrap() == "report_metrics"
     ).unwrap();
-    // Check the selector.
+    
+    // Check the selector for report_metrics
     let selector = from_hex(report_metrics.get("selector").unwrap().as_str().unwrap()).unwrap();
     assert_eq!(REPORT_METRICS_SELECTOR.to_vec(), selector);
+
+    // Find the get_current_period_ms function.
+    let get_current_period_ms = messages.iter().find(|msg|
+        msg.pointer("/name/0").unwrap().as_str().unwrap() == "get_current_period_ms"
+    ).unwrap();
+    
+    // Check the selector for get_current_period_ms
+    let selector_get_current_period_ms = from_hex(get_current_period_ms.get("selector").unwrap().as_str().unwrap()).unwrap();
+    assert_eq!(CURRENT_PERIOD_MS.to_vec(), selector_get_current_period_ms);
+
+    // Find the finalize_metric_period function.
+    let finalize_metric_period = messages.iter().find(|msg|
+        msg.pointer("/name/0").unwrap().as_str().unwrap() == "finalize_metric_period"
+    ).unwrap();
+    
+    // Check the selector for finalize_metric_period
+    let selector_finalize_metric_period = from_hex(finalize_metric_period.get("selector").unwrap().as_str().unwrap()).unwrap();
+    assert_eq!(FINALIZE_METRIC_PERIOD.to_vec(), selector_finalize_metric_period);
 }
 
 #[test]
