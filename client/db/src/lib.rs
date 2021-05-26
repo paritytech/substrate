@@ -727,6 +727,39 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			}
 		}
 	}
+
+	fn apply_new_state(
+		&mut self,
+		storage: Storage,
+	) -> ClientResult<Block::Hash> {
+		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
+			return Err(sp_blockchain::Error::GenesisInvalid.into());
+		}
+
+		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)|(
+				&child_content.child_info,
+				child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
+		));
+
+		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
+		let (root, transaction) = self.old_state.full_storage_root(
+			storage.top.iter().map(|(k, v)| {
+				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
+					changes_trie_config = Some(
+						Decode::decode(&mut &v[..])
+						.expect("changes trie configuration is encoded properly at genesis")
+					);
+				}
+				(&k[..], Some(&v[..]))
+			}),
+			child_delta
+		);
+
+		self.db_updates = transaction;
+		self.changes_trie_config_update = Some(changes_trie_config);
+		Ok(root)
+	}
+
 }
 
 impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
@@ -768,33 +801,18 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 	fn reset_storage(
 		&mut self,
 		storage: Storage,
+	) -> ClientResult<Block::Hash> {
+		let root = self.apply_new_state(storage)?;
+		self.commit_state = true;
+		Ok(root)
+	}
+
+	fn set_genesis_state(
+		&mut self,
+		storage: Storage,
 		commit: bool,
 	) -> ClientResult<Block::Hash> {
-		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
-			return Err(sp_blockchain::Error::GenesisInvalid.into());
-		}
-
-		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)|(
-			&child_content.child_info,
-			child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
-		));
-
-		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.iter().map(|(k, v)| {
-				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
-					changes_trie_config = Some(
-						Decode::decode(&mut &v[..])
-							.expect("changes trie configuration is encoded properly at genesis")
-					);
-				}
-				(&k[..], Some(&v[..]))
-			}),
-			child_delta
-		);
-
-		self.db_updates = transaction;
-		self.changes_trie_config_update = Some(changes_trie_config);
+		let root = self.apply_new_state(storage)?;
 		self.commit_state = commit;
 		Ok(root)
 	}
@@ -1267,13 +1285,13 @@ impl<Block: BlockT> Backend<Block> {
 			let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
 			let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
 			meta_updates.push(self.finalize_block_with_transaction(
-					&mut transaction,
-					&block_hash,
-					&block_header,
-					Some(last_finalized_hash),
-					justification,
-					&mut changes_trie_cache_ops,
-					&mut finalization_displaced_leaves,
+				&mut transaction,
+				&block_hash,
+				&block_header,
+				Some(last_finalized_hash),
+				justification,
+				&mut changes_trie_cache_ops,
+				&mut finalization_displaced_leaves,
 			)?);
 			last_finalized_hash = block_hash;
 			last_finalized_num = block_header.number().clone();
@@ -1332,8 +1350,8 @@ impl<Block: BlockT> Backend<Block> {
 				}
 
 				if !operation.commit_state {
-					// When we don't want to commit the genesis state, we still preserve it in memory.
-					// It is queried for an initial list of authorities, etc.
+					// When we don't want to commit the genesis state, we still preserve it in memory
+					// to bootstrap consensus. It is queried for an initial list of authorities, etc.
 					*self.genesis_state.write() = Some(Arc::new(DbGenesisStorage::new(
 						pending_block.header.state_root().clone(),
 						operation.db_updates.clone()

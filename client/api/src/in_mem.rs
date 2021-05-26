@@ -526,6 +526,32 @@ pub struct BlockImportOperation<Block: BlockT> {
 	set_head: Option<BlockId<Block>>,
 }
 
+impl<Block: BlockT> BlockImportOperation<Block> where
+	Block::Hash: Ord,
+{
+	fn apply_storage(&mut self, storage: Storage, commit: bool) -> sp_blockchain::Result<Block::Hash> {
+		check_genesis_storage(&storage)?;
+
+		let child_delta = storage.children_default.iter()
+			.map(|(_storage_key, child_content)|
+				(
+					&child_content.child_info,
+					child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())))
+				)
+			);
+
+		let (root, transaction) = self.old_state.full_storage_root(
+			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
+			child_delta,
+		);
+
+		if commit {
+			self.new_state = Some(transaction);
+		}
+		Ok(root)
+	}
+}
+
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> where
 	Block::Hash: Ord,
 {
@@ -567,26 +593,12 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, storage: Storage, commit: bool) -> sp_blockchain::Result<Block::Hash> {
-		check_genesis_storage(&storage)?;
+	fn set_genesis_state(&mut self, storage: Storage, commit: bool) -> sp_blockchain::Result<Block::Hash> {
+		self.apply_storage(storage, commit)
+	}
 
-		let child_delta = storage.children_default.iter()
-			.map(|(_storage_key, child_content)|
-				 (
-					 &child_content.child_info,
-					 child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())))
-				 )
-			);
-
-		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
-			child_delta,
-		);
-
-		if commit {
-			self.new_state = Some(transaction);
-		}
-		Ok(root)
+	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
+		self.apply_storage(storage, true)
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> sp_blockchain::Result<()>

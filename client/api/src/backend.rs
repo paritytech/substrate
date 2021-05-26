@@ -162,8 +162,12 @@ pub trait BlockImportOperation<Block: BlockT> {
 		update: TransactionForSB<Self::State, Block>,
 	) -> sp_blockchain::Result<()>;
 
+	/// Set genesis state. If `commit` is `false` the state is saved in memory, but is not written
+	/// to the database.
+	fn set_genesis_state(&mut self, storage: Storage, commit: bool) -> sp_blockchain::Result<Block::Hash>;
+
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage(&mut self, storage: Storage, commit: bool) -> sp_blockchain::Result<Block::Hash>;
+	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Set storage changes.
 	fn update_storage(

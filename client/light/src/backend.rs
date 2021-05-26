@@ -321,7 +321,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, input: Storage, commit: bool) -> ClientResult<Block::Hash> {
+	fn set_genesis_state(&mut self, input: Storage, commit: bool) -> ClientResult<Block::Hash> {
 		check_genesis_storage(&input)?;
 
 		// changes trie configuration
@@ -352,6 +352,10 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		}
 
 		Ok(storage_root)
+	}
+
+	fn reset_storage(&mut self, _input: Storage) -> ClientResult<Block::Hash> {
+		Err(ClientError::NotAvailableOnLightClient)
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> ClientResult<()>

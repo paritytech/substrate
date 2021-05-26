@@ -338,7 +338,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let genesis_storage = build_genesis_storage.build_storage()
 				.map_err(sp_blockchain::Error::Storage)?;
 			let mut op = backend.begin_operation()?;
-			let state_root = op.reset_storage(genesis_storage, !config.no_genesis)?;
+			let state_root = op.set_genesis_state(genesis_storage, !config.no_genesis)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!("🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
 				genesis_block.header().state_root(),
@@ -804,7 +804,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							children_default: Default::default(),
 						};
 
-						let state_root = operation.op.reset_storage(storage, true)?;
+						let state_root = operation.op.reset_storage(storage)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in safe fast sync mode,
 							// but may happen in unsafe mode.
