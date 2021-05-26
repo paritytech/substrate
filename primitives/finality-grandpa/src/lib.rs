@@ -311,6 +311,8 @@ where
 	}
 }
 
+// Set of types used for the accountable safety subsystem.
+// WIP: these need to be consolidated with the similar types already existing
 pub mod acc_safety {
 	use super::{
 		Encode, Decode,
@@ -322,16 +324,16 @@ pub mod acc_safety {
 		vec::Vec,
 	};
 
-	#[derive(Encode, Decode, PartialEq, Eq)]
+	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct StoredAccountableSafetyState<N> {
-		block_not_included: N,
-		round_for_block_not_included: N,
-		commit_for_block_not_included: N,
-		querying_rounds: BTreeMap<RoundNumber, QueryState<N>>,
-		prevote_queries: BTreeMap<RoundNumber, QueryState<N>>,
+		pub block_not_included: N,
+		pub round_for_block_not_included: N,
+		pub commit_for_block_not_included: Commit<N>,
+		pub querying_rounds: BTreeMap<RoundNumber, QueryState<N>>,
+		pub prevote_queries: BTreeMap<RoundNumber, QueryState<N>>,
 	}
 
-	#[derive(Encode, Decode, PartialEq, Eq)]
+	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct QueryState<N> {
 		round: N,
 		voters: Vec<AuthorityId>,
@@ -339,32 +341,38 @@ pub mod acc_safety {
 		equivocations: Vec<EquivocationDetected<N>>,
 	}
 
-	#[derive(Encode, Decode, Eq, PartialEq)]
+	#[derive(Debug, Encode, Decode, Eq, PartialEq)]
 	pub enum QueryResponse<N> {
 		Prevotes(Vec<Prevote<N>>),
 		Precommits(Vec<Precommit<N>>),
 	}
 
-	#[derive(Encode, Decode, PartialEq, Eq)]
+	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct Prevote<N>  {
-		target_number: N,
-		id: AuthorityId,
+		pub target_number: N,
+		pub id: AuthorityId,
 	}
 
-	#[derive(Encode, Decode, PartialEq, Eq)]
+	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct Precommit<N>  {
-		target_number: N,
-		id: AuthorityId,
+		pub target_number: N,
+		pub id: AuthorityId,
 	}
 
-	#[derive(Encode, Decode, PartialEq, Eq)]
+	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+	pub struct Commit<N> {
+		pub target_number: N,
+		pub precommits: Vec<Precommit<N>>,
+	}
+
+	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 	pub enum EquivocationDetected<N> {
 		Prevote(Vec<Equivocation<N>>),
 		Precommit(Vec<Equivocation<N>>),
 		InvalidResponse(AuthorityId),
 	}
 
-	#[derive(Encode, Decode, PartialEq, Eq)]
+	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct Equivocation<N> {
 		voter: AuthorityId,
 		blocks: Vec<N>,

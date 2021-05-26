@@ -949,11 +949,10 @@ fn accountable_safety_basic() {
 	new_test_ext_raw_authorities(authorities).execute_with(|| {
 		start_era(1);
 
-		let authorities = Grandpa::grandpa_authorities();
-		dbg!(&authorities);
-
 		let state = Grandpa::accountable_safety_state();
+		dbg!(&state);
 		Grandpa::start_accountable_safety_protocol();
 		let state = Grandpa::accountable_safety_state();
+		dbg!(&state);
 	});
 }

@@ -15,9 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Pallet, Config};
-use crate::BlockNotIncluded;
+use sp_std::collections::btree_map::BTreeMap;
+
+use sp_finality_grandpa::acc_safety::StoredAccountableSafetyState;
 use sp_runtime::traits::Saturating;
+
+use crate::AccountableSafetyState;
+
+use super::{Pallet, Config, BlockNotIncluded};
 
 pub trait AccountableSafety<T: Config> {
 	/// Update the accountable safety state machine(s), if there are any active.
@@ -58,7 +63,24 @@ impl<T: Config> AccountableSafety<T> for AccountableSafetyHandler {
 	}
 
 	fn start_accountable_safety_protocol() {
-		todo!();
+		// TODO: setup data structures
+		let commit_for_block_not_included = sp_finality_grandpa::acc_safety::Commit::<T::BlockNumber> {
+			target_number: 0u32.into(),
+			precommits: Vec::new(),
+		};
+
+		let querying_rounds = BTreeMap::new();
+		let prevote_queries = BTreeMap::new();
+
+		let acc_state = StoredAccountableSafetyState {
+			block_not_included: 0u32.into(),
+			round_for_block_not_included: 0u32.into(),
+			commit_for_block_not_included,
+			querying_rounds,
+			prevote_queries,
+		};
+
+		<AccountableSafetyState<T>>::put(acc_state);
 	}
 
 	fn state() -> Option<()> {
