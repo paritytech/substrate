@@ -49,7 +49,7 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX, MetaHasher};
 pub use hash_db::NoMeta;
 
 /// Meta use by trie state.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct TrieMeta {
 	// range of encoded value or hashed value.
 	pub range: Option<core::ops::Range<usize>>,
