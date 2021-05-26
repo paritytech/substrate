@@ -311,9 +311,13 @@ pub enum Phase<Bn> {
 	/// advising validators not to bother running the unsigned offchain worker.
 	///
 	/// As validator nodes are free to edit their OCW code, they could simply ignore this advisory
-	/// and always compute their own solution. However, by default, when the unsigned phase is passive,
-	/// the offchain workers will not bother running.
+	/// and always compute their own solution. However, by default, when the unsigned phase is
+	/// passive, the offchain workers will not bother running.
 	Unsigned((bool, Bn)),
+	/// The emergency phase. This is enabled upon a failing call to `T::ElectionProvider::elect`.
+	/// After that, the only way to leave this phase is through a successful
+	/// `T::ElectionProvider::elect`.
+	Emergency,
 }
 
 impl<Bn> Default for Phase<Bn> {
@@ -323,6 +327,11 @@ impl<Bn> Default for Phase<Bn> {
 }
 
 impl<Bn: PartialEq + Eq> Phase<Bn> {
+	/// Whether the phase is emergency or not.
+	pub fn is_emergency(&self) -> bool {
+		matches!(self, Phase::Emergency)
+	}
+
 	/// Whether the phase is signed or not.
 	pub fn is_signed(&self) -> bool {
 		matches!(self, Phase::Signed)
@@ -579,6 +588,9 @@ pub mod pallet {
 		/// Configuration for the fallback
 		type Fallback: Get<FallbackStrategy>;
 
+		/// Origin that can control this pallet.
+		type ForceOrigin: EnsureOrigin<Self::Origin>;
+
 		/// The configuration of benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
 
@@ -773,6 +785,40 @@ pub mod pallet {
 
 			Ok(None.into())
 		}
+
+		/// Set a new value for `MinimumUntrustedScore`.
+		///
+		/// Dispatch origin must be aligned with `T::ForceOrigin`.
+		///
+		/// This check can be turned off by setting the value to `None`.
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		fn set_minimum_untrusted_score(
+			origin: OriginFor<T>,
+			maybe_next_score: Option<ElectionScore>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			<MinimumUntrustedScore<T>>::set(maybe_next_score);
+			Ok(())
+		}
+
+		/// Set a solution in the queue, to be handed out to the client of this pallet in the next
+		/// call to `ElectionProvider::elect`.
+		///
+		/// This can only be set by `T::ForceOrigin`, and only when the phase is `Emergency`.
+		///
+		/// The solution is not checked for any feasibility and is assumed to be trustworthy, as any
+		/// feasibility check itself can in principle cause the election process to fail (due to
+		/// memory/weight constrains).
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		fn set_emergency_election_result(
+			origin: OriginFor<T>,
+			solution: ReadySolution<T::AccountId>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
+			<QueuedSolution<T>>::put(solution);
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -808,6 +854,8 @@ pub mod pallet {
 		PreDispatchWeakSubmission,
 		/// OCW submitted solution for wrong round
 		OcwCallWrongEra,
+		/// The call is now allowed at this point.
+		CallNotAllowed,
 	}
 
 	#[pallet::origin]
@@ -1125,14 +1173,14 @@ impl<T: Config> Pallet<T> {
 	/// 1. Increment round.
 	/// 2. Change phase to [`Phase::Off`]
 	/// 3. Clear all snapshot data.
-	fn post_elect() {
-		// inc round
+	fn rotate_round() {
+		// inc round.
 		<Round<T>>::mutate(|r| *r = *r + 1);
 
-		// change phase
+		// phase is off now.
 		<CurrentPhase<T>>::put(Phase::Off);
 
-		// kill snapshots
+		// kill snapshots.
 		Self::kill_snapshot();
 	}
 
@@ -1182,10 +1230,18 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
-		let outcome_and_weight = Self::do_elect();
-		// IMPORTANT: regardless of if election was `Ok` or `Err`, we shall do some cleanup.
-		Self::post_elect();
-		outcome_and_weight
+		match Self::do_elect() {
+			Ok((supports, weight)) => {
+				// all went okay, put sign to be Off, clean snapshot, etc.
+				Self::rotate_round();
+				Ok((supports, weight))
+			},
+			Err(why) => {
+				log!(error, "Entering emergency mode.");
+				<CurrentPhase<T>>::put(Phase::Emergency);
+				Err(why)
+			}
+		}
 	}
 }
 
