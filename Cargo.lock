@@ -6669,6 +6669,8 @@ dependencies = [
  "jsonrpsee-ws-client",
  "log",
  "parity-scale-codec",
+ "serde",
+ "serde_json",
  "sp-core",
  "sp-io",
  "sp-runtime",

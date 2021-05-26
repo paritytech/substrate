@@ -114,12 +114,13 @@ use sp_core::{
 };
 use codec::{Encode, Decode};
 use sp_runtime::traits::Block as BlockT;
-use jsonrpsee_ws_client::{WsClientBuilder, WsClient};
+use jsonrpsee_ws_client::{WsClientBuilder, WsClient, v2::params::JsonRpcParams, traits::Client};
 
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
+const BATCH_SIZE: usize = 512;
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi<B: BlockT> {
@@ -333,16 +334,28 @@ impl<B: BlockT> Builder<B> {
 		info!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
 
 		let mut key_values: Vec<KeyPair> = vec![];
-		for key in keys {
-			let value =
-				RpcApi::<B>::get_storage(self.as_online().rpc_client(), key.clone(), Some(at))
-					.await
-					.map_err(|e| {
-						error!(target: LOG_TARGET, "Error = {:?}", e);
-						"rpc get_storage failed"
-					})?;
-			key_values.push((key, value));
-			if key_values.len() % 1000 == 0 {
+		let client = self.as_online().rpc_client();
+		for chunk_keys in keys.chunks(BATCH_SIZE) {
+			let batch = chunk_keys
+				.iter()
+				.cloned()
+				.map(|key| {
+					assert!(key.0.len() == 32);
+					(
+						"state_getStorage",
+						JsonRpcParams::Array(vec![serde_json::to_value(key).unwrap()]),
+					)
+				})
+				.collect::<Vec<_>>();
+			log::trace!(target: LOG_TARGET, "sending batch: {:?}", batch);
+			let values = client.batch_request::<StorageData>(batch).await.unwrap();
+			assert_eq!(chunk_keys.len(), values.len());
+			for (idx, key) in chunk_keys.into_iter().enumerate() {
+				let value = values[idx].clone();
+				key_values.push((key.clone(), value));
+			}
+
+			if key_values.len() % (10 * BATCH_SIZE) == 0 {
 				let ratio: f64 = key_values.len() as f64 / keys_count as f64;
 				debug!(
 					target: LOG_TARGET,
@@ -529,7 +542,21 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				modules: vec!["Proxy".to_owned()],
+				modules: vec!["System".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect("Can't reach the remote node. Is it running?")
+			.execute_with(|| {});
+	}
+
+	#[tokio::test]
+	async fn can_build_few_pallet() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				modules: vec!["Proxy".to_owned(), "Multisig".to_owned(), "Balances".to_owned()],
 				..Default::default()
 			}))
 			.build()
