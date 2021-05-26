@@ -75,6 +75,7 @@ use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use sp_consensus::{SelectChain, BlockImport};
 use sp_core::{
 	crypto::Public,
+	traits::SpawnEssentialNamed,
 };
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_application_crypto::AppKey;
@@ -706,6 +707,7 @@ pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 	grandpa_params: GrandpaParams<Block, C, N, SC, VR>,
+	spawn_handle: Box<dyn SpawnEssentialNamed>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static>
 where
 	Block::Hash: Ord,
@@ -795,7 +797,7 @@ where
 	let voter_work = VoterWork::new(
 		client,
 		config,
-		network,
+		network.clone(),
 		select_chain,
 		voting_rule,
 		persistent_data,
@@ -816,6 +818,8 @@ where
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
 	let telemetry_task = telemetry_task
 		.then(|_| future::pending::<()>());
+
+	spawn_handle.spawn_essential_blocking("grandpa-network-bridge", Box::pin(network.map(drop)));
 
 	Ok(future::select(voter_work, telemetry_task).map(drop))
 }
@@ -1124,7 +1128,7 @@ where
 			}
 		}
 
-		Future::poll(Pin::new(&mut self.network), cx)
+		Poll::Pending
 	}
 }
 
