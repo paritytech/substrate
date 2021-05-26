@@ -45,16 +45,16 @@ pub use tests::MockExt;
 /// # Note
 ///
 /// This data structure is mostly immutable once created and stored. The exceptions that
-/// can be changed by calling a contract are `refcount`, `schedule_version` and `code`.
+/// can be changed by calling a contract are `refcount`, `instruction_weights_version` and `code`.
 /// `refcount` can change when a contract instantiates a new contract or self terminates.
-/// `schedule_version` and `code` when a contract with an outdated instrumention is called.
-/// Therefore one must be careful when holding any in-memory representation of this type while
-/// calling into a contract as those fields can get out of date.
+/// `instruction_weights_version` and `code` when a contract with an outdated instrumention is
+/// called. Therefore one must be careful when holding any in-memory representation of this
+/// type while calling into a contract as those fields can get out of date.
 #[derive(Clone, Encode, Decode)]
 pub struct PrefabWasmModule<T: Config> {
-	/// Version of the schedule with which the code was instrumented.
+	/// Version of the instruction weights with which the code was instrumented.
 	#[codec(compact)]
-	schedule_version: u32,
+	instruction_weights_version: u32,
 	/// Initial memory size of a contract's sandbox.
 	#[codec(compact)]
 	initial: u32,
@@ -139,6 +139,12 @@ where
 	#[cfg(test)]
 	pub fn refcount(&self) -> u64 {
 		self.refcount
+	}
+
+	/// Decrement instruction_weights_version by 1. Panics if it is already 0.
+	#[cfg(test)]
+	pub fn decrement_version(&mut self) {
+		self.instruction_weights_version = self.instruction_weights_version.checked_sub(1).unwrap();
 	}
 }
 
@@ -241,6 +247,7 @@ mod tests {
 			RentParams, ExecError, ErrorOrigin,
 		},
 		gas::GasMeter,
+		rent::RentStatus,
 		tests::{Test, Call, ALICE, BOB},
 	};
 	use std::collections::HashMap;
@@ -297,6 +304,7 @@ mod tests {
 		schedule: Schedule<Test>,
 		rent_params: RentParams<Test>,
 		gas_meter: GasMeter<Test>,
+		debug_buffer: Vec<u8>,
 	}
 
 	impl Default for MockExt {
@@ -312,6 +320,7 @@ mod tests {
 				schedule: Default::default(),
 				rent_params: Default::default(),
 				gas_meter: GasMeter::new(10_000_000_000),
+				debug_buffer: Default::default(),
 			}
 		}
 	}
@@ -444,8 +453,15 @@ mod tests {
 		fn rent_params(&self) -> &RentParams<Self::T> {
 			&self.rent_params
 		}
+		fn rent_status(&mut self, _at_refcount: u32) -> RentStatus<Self::T> {
+			Default::default()
+		}
 		fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
+		}
+		fn append_debug_buffer(&mut self, msg: &str) -> bool {
+			self.debug_buffer.extend(msg.as_bytes());
+			true
 		}
 	}
 
@@ -1805,9 +1821,14 @@ mod tests {
 		);
 	}
 
-	const CODE_RENT_PARAMS: &str = r#"
+
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn rent_params_work() {
+		const CODE_RENT_PARAMS: &str = r#"
 (module
-	(import "seal0" "seal_rent_params" (func $seal_rent_params (param i32 i32)))
+	(import "__unstable__" "seal_rent_params" (func $seal_rent_params (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -1834,9 +1855,6 @@ mod tests {
 	(func (export "deploy"))
 )
 "#;
-
-	#[test]
-	fn rent_params_work() {
 		let output = execute(
 			CODE_RENT_PARAMS,
 			vec![],
@@ -1844,5 +1862,116 @@ mod tests {
 		).unwrap();
 		let rent_params = Bytes(<RentParams<Test>>::default().encode());
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_params });
+	}
+
+
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn rent_status_works() {
+		const CODE_RENT_STATUS: &str = r#"
+(module
+	(import "__unstable__" "seal_rent_status" (func $seal_rent_status (param i32 i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0, 4) buffer size = 128 bytes
+	(data (i32.const 0) "\80")
+
+	;; [4; inf) buffer where the result is copied
+
+	(func (export "call")
+		;; Load the rent params into memory
+		(call $seal_rent_status
+			(i32.const 1)		;; at_refcount
+			(i32.const 4)		;; Pointer to the output buffer
+			(i32.const 0)		;; Pointer to the size of the buffer
+		)
+
+		;; Return the contents of the buffer
+		(call $seal_return
+			(i32.const 0)				;; return flags
+			(i32.const 4)				;; buffer pointer
+			(i32.load (i32.const 0))	;; buffer size
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+		let output = execute(
+			CODE_RENT_STATUS,
+			vec![],
+			MockExt::default(),
+		).unwrap();
+		let rent_status = Bytes(<RentStatus<Test>>::default().encode());
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_status });
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn debug_message_works() {
+		const CODE_DEBUG_MESSAGE: &str = r#"
+(module
+	(import "__unstable__" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(data (i32.const 0) "Hello World!")
+
+	(func (export "call")
+		(call $seal_debug_message
+			(i32.const 0)	;; Pointer to the text buffer
+			(i32.const 12)	;; The size of the buffer
+		)
+		drop
+	)
+
+	(func (export "deploy"))
+)
+"#;
+		let mut ext = MockExt::default();
+		execute(
+			CODE_DEBUG_MESSAGE,
+			vec![],
+			&mut ext,
+		).unwrap();
+
+		assert_eq!(std::str::from_utf8(&ext.debug_buffer).unwrap(), "Hello World!");
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn debug_message_invalid_utf8_fails() {
+		const CODE_DEBUG_MESSAGE_FAIL: &str = r#"
+(module
+	(import "__unstable__" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(data (i32.const 0) "\fc")
+
+	(func (export "call")
+		(call $seal_debug_message
+			(i32.const 0)	;; Pointer to the text buffer
+			(i32.const 1)	;; The size of the buffer
+		)
+		drop
+	)
+
+	(func (export "deploy"))
+)
+"#;
+		let mut ext = MockExt::default();
+		let result = execute(
+			CODE_DEBUG_MESSAGE_FAIL,
+			vec![],
+			&mut ext,
+		);
+		assert_eq!(
+			result,
+			Err(ExecError {
+				error: Error::<Test>::DebugMessageInvalidUTF8.into(),
+				origin: ErrorOrigin::Caller,
+			})
+		);
 	}
 }

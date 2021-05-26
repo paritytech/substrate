@@ -41,7 +41,7 @@ use sp_core::{
 	traits::TaskExecutorExt,
 	testing::TaskExecutor,
 };
-use sp_externalities::{Extensions, Extension};
+use sp_externalities::{Extensions, Extension, ExtensionStore};
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
@@ -271,6 +271,26 @@ impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 		} else {
 			Err(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
 		}
+	}
+}
+
+impl<H, N> sp_externalities::ExternalitiesExt for TestExternalities<H, N>
+	where
+		H: Hasher,
+		H::Out: Ord + codec::Codec,
+		N: ChangesTrieBlockNumber,
+{
+	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
+		self.extension_by_type_id(TypeId::of::<T>())
+			.and_then(<dyn Any>::downcast_mut)
+	}
+
+	fn register_extension<T: Extension>(&mut self, ext: T) -> Result<(), sp_externalities::Error> {
+		self.register_extension_with_type_id(TypeId::of::<T>(), Box::new(ext))
+	}
+
+	fn deregister_extension<T: Extension>(&mut self) -> Result<(), sp_externalities::Error> {
+		self.deregister_extension_by_type_id(TypeId::of::<T>())
 	}
 }
 

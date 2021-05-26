@@ -32,10 +32,28 @@ use codec::{Encode, Decode};
 /// B-Trees represent a fundamental compromise between cache-efficiency and actually minimizing
 /// the amount of work performed in a search. See [`BTreeSet`] for more details.
 ///
-/// Unlike a standard `BTreeSet`, there is a static, enforced upper limit to the number of items
-/// in the set. All internal operations ensure this bound is respected.
-#[derive(Encode, Decode)]
+/// Unlike a standard `BTreeSet`, there is an enforced upper limit to the number of items in the
+/// set. All internal operations ensure this bound is respected.
+#[derive(Encode)]
 pub struct BoundedBTreeSet<T, S>(BTreeSet<T>, PhantomData<S>);
+
+impl<T, S> Decode for BoundedBTreeSet<T, S>
+where
+	BTreeSet<T>: Decode,
+	S: Get<u32>,
+{
+	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+		let inner = BTreeSet::<T>::decode(input)?;
+		if inner.len() > S::get() as usize {
+			return Err("BoundedBTreeSet exceeds its limit".into());
+		}
+		Ok(Self(inner, PhantomData))
+	}
+
+	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
+		BTreeSet::<T>::skip(input)
+	}
+}
 
 impl<T, S> BoundedBTreeSet<T, S>
 where
@@ -57,44 +75,6 @@ where
 	/// Does not allocate.
 	pub fn new() -> Self {
 		BoundedBTreeSet(BTreeSet::new(), PhantomData)
-	}
-
-	/// Create `Self` from a primitive `BTreeSet` without any checks.
-	unsafe fn unchecked_from(set: BTreeSet<T>) -> Self {
-		Self(set, Default::default())
-	}
-
-	/// Create `Self` from a primitive `BTreeSet` without any checks.
-	///
-	/// Logs warnings if the bound is not being respected. The scope is mentioned in the log message
-	/// to indicate where overflow is happening.
-	///
-	/// # Example
-	///
-	/// ```
-	/// # use sp_std::collections::btree_set::BTreeSet;
-	/// # use frame_support::{parameter_types, storage::bounded_btree_set::BoundedBTreeSet};
-	/// parameter_types! {
-	/// 	pub const Size: u32 = 5;
-	/// }
-	/// let mut set = BTreeSet::new();
-	/// set.insert("foo");
-	/// set.insert("bar");
-	/// let bounded_set = unsafe {BoundedBTreeSet::<_, Size>::force_from(set, "demo")};
-	/// ```
-	pub unsafe fn force_from<Scope>(set: BTreeSet<T>, scope: Scope) -> Self
-	where
-		Scope: Into<Option<&'static str>>,
-	{
-		if set.len() > Self::bound() {
-			log::warn!(
-				target: crate::LOG_TARGET,
-				"length of a bounded btreeset in scope {} is not respected.",
-				scope.into().unwrap_or("UNKNOWN"),
-			);
-		}
-
-		Self::unchecked_from(set)
 	}
 
 	/// Consume self, and return the inner `BTreeSet`.
@@ -403,5 +383,14 @@ pub mod test {
 	fn btree_map_eq_works() {
 		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
 		assert_eq!(bounded, map_from_keys(&[1, 2, 3, 4, 5, 6]));
+	}
+
+	#[test]
+	fn too_big_fail_to_decode() {
+		let v: Vec<u32> = vec![1, 2, 3, 4, 5];
+		assert_eq!(
+			BoundedBTreeSet::<u32, Four>::decode(&mut &v.encode()[..]),
+			Err("BoundedBTreeSet exceeds its limit".into()),
+		);
 	}
 }

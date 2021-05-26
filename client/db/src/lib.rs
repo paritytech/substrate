@@ -262,7 +262,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.as_trie_backend()
 	}
 
-	fn register_overlay_stats(&mut self, stats: &StateMachineStats) {
+	fn register_overlay_stats(&self, stats: &StateMachineStats) {
 		self.state.register_overlay_stats(stats);
 	}
 
@@ -342,10 +342,7 @@ impl DatabaseSettingsSrc {
 	}
 	/// Check if database supports internal ref counting for state data.
 	pub fn supports_ref_counting(&self) -> bool {
-		match self {
-			DatabaseSettingsSrc::ParityDb { .. } => true,
-			_ => false,
-		}
+		matches!(self, DatabaseSettingsSrc::ParityDb { .. })
 	}
 }
 
