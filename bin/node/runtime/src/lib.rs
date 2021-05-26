@@ -554,6 +554,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type CompactSolution = NposCompactSolution16;
 	type Fallback = Fallback;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Runtime>;
+	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type BenchmarkingConfig = ();
 }
 
