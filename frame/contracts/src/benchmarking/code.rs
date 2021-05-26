@@ -24,7 +24,7 @@
 //! we define this simple definition of a contract that can be passed to `create_code` that
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
-use crate::{Config, CurrentSchedule};
+use crate::Config;
 use parity_wasm::elements::{
 	Instruction, Instructions, FuncBody, ValueType, BlockType, Section, CustomSection,
 };
@@ -33,6 +33,7 @@ use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
 use sp_std::{prelude::*, convert::TryFrom, borrow::ToOwned};
+use frame_support::traits::Get;
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///
@@ -102,6 +103,7 @@ impl ImportedMemory {
 }
 
 pub struct ImportedFunction {
+	pub module: &'static str,
 	pub name: &'static str,
 	pub params: Vec<ValueType>,
 	pub return_type: Option<ValueType>,
@@ -170,7 +172,7 @@ where
 				.build_sig();
 			let sig = contract.push_signature(sig);
 			contract = contract.import()
-				.module("seal0")
+				.module(func.module)
 				.field(func.name)
 				.with_external(parity_wasm::elements::External::Function(sig))
 				.build();
@@ -223,7 +225,7 @@ where
 		if def.inject_stack_metering {
 			code = inject_limiter(
 				code,
-				<CurrentSchedule<T>>::get().limits.stack_height
+				T::Schedule::get().limits.stack_height
 			)
 			.unwrap();
 		}
@@ -291,6 +293,7 @@ where
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: getter_name,
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -320,6 +323,7 @@ where
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name,
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -503,5 +507,5 @@ where
 	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	<CurrentSchedule<T>>::get().limits.memory_pages
+	T::Schedule::get().limits.memory_pages
 }

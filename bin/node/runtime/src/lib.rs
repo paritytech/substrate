@@ -105,6 +105,7 @@ pub fn wasm_binary_unwrap() -> &'static [u8] {
 }
 
 /// Runtime version.
+#[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
@@ -553,6 +554,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type CompactSolution = NposCompactSolution16;
 	type Fallback = Fallback;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Runtime>;
+	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type BenchmarkingConfig = ();
 }
 
@@ -792,7 +794,7 @@ parameter_types! {
 			<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(1) -
 			<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(0)
 		)) / 5) as u32;
-	pub MaxCodeSize: u32 = 128 * 1024;
+	pub Schedule: pallet_contracts::Schedule<Runtime> = Default::default();
 }
 
 impl pallet_contracts::Config for Runtime {
@@ -809,13 +811,12 @@ impl pallet_contracts::Config for Runtime {
 	type RentFraction = RentFraction;
 	type SurchargeReward = SurchargeReward;
 	type CallStack = [pallet_contracts::Frame<Self>; 31];
-	type MaxValueSize = MaxValueSize;
 	type WeightPrice = pallet_transaction_payment::Module<Self>;
 	type WeightInfo = pallet_contracts::weights::SubstrateWeight<Self>;
 	type ChainExtension = ();
 	type DeletionQueueDepth = DeletionQueueDepth;
 	type DeletionWeightLimit = DeletionWeightLimit;
-	type MaxCodeSize = MaxCodeSize;
+	type Schedule = Schedule;
 }
 
 impl pallet_sudo::Config for Runtime {
@@ -1019,7 +1020,7 @@ impl pallet_mmr::Config for Runtime {
 
 parameter_types! {
 	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
-	pub const MaxCalls: usize = 10;
+	pub const MaxCalls: u32 = 10;
 	pub const MaxGenerateRandom: u32 = 10;
 }
 
@@ -1113,7 +1114,7 @@ construct_runtime!(
 		TechnicalMembership: pallet_membership::<Instance1>::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event, ValidateUnsigned},
 		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
-		Contracts: pallet_contracts::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
 		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
 		ImOnline: pallet_im_online::{Pallet, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		AuthorityDiscovery: pallet_authority_discovery::{Pallet, Call, Config},
@@ -1353,7 +1354,7 @@ impl_runtime_apis! {
 			gas_limit: u64,
 			input_data: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractExecResult {
-			Contracts::bare_call(origin, dest, value, gas_limit, input_data)
+			Contracts::bare_call(origin, dest, value, gas_limit, input_data, true)
 		}
 
 		fn instantiate(
@@ -1365,7 +1366,7 @@ impl_runtime_apis! {
 			salt: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, BlockNumber>
 		{
-			Contracts::bare_instantiate(origin, endowment, gas_limit, code, data, salt, true)
+			Contracts::bare_instantiate(origin, endowment, gas_limit, code, data, salt, true, true)
 		}
 
 		fn get_storage(

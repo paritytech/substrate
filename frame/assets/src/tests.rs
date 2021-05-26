@@ -23,10 +23,6 @@ use sp_runtime::TokenError;
 use frame_support::{assert_ok, assert_noop, traits::Currency};
 use pallet_balances::Error as BalancesError;
 
-fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-}
-
 #[test]
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
@@ -401,10 +397,7 @@ fn transferring_less_than_one_unit_is_fine() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 0));
-		assert_eq!(
-			last_event(),
-			mock::Event::pallet_assets(crate::Event::Transferred(0, 1, 2, 0)),
-		);
+		System::assert_last_event(mock::Event::pallet_assets(crate::Event::Transferred(0, 1, 2, 0)));
 	});
 }
 
@@ -603,7 +596,7 @@ fn force_asset_status_should_work(){
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 50));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 150));
 
-		//force asset status to change min_balance > balance 
+		//force asset status to change min_balance > balance
 		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 100, true, false));
 		assert_eq!(Assets::balance(0, 1), 50);
 
