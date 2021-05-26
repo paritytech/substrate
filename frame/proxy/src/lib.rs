@@ -154,9 +154,6 @@ pub mod pallet {
 		type AnnouncementDepositFactor: Get<BalanceOf<Self>>;
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Dispatch the given `call` from an account that the sender is authorised for through
