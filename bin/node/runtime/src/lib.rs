@@ -940,21 +940,11 @@ impl pallet_erc20::Trait for Runtime {
 }
 
 parameter_types! {
-	pub MetricsContractId: AccountId = {
-		AccountId::from(pallet_ddc_metrics_offchain_worker::get_contract_id())
-	};
-
 	pub const OcwBlockInterval: u32 = pallet_ddc_metrics_offchain_worker::BLOCK_INTERVAL;
-
-	pub DdcUrl: Vec<u8> = {
-		pallet_ddc_metrics_offchain_worker::get_ddc_url_or_default("https://node-0.ddc.stage.cere.network")
-	};
 }
 
 impl pallet_ddc_metrics_offchain_worker::Trait for Runtime {
-	type ContractId = MetricsContractId;
 	type BlockInterval = OcwBlockInterval;
-	type DdcUrl = DdcUrl;
 
 	type CT = Self;
 	type CST = Self;
