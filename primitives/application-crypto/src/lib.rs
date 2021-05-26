@@ -196,13 +196,13 @@ macro_rules! app_crypto_public_full_crypto {
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
-				Clone, Default, Eq, PartialEq, Ord, PartialOrd,
+				Clone, Default, Eq, Hash, PartialEq, PartialOrd, Ord,
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
 				$crate::max_encoded_len::MaxEncodedLen,
 			)]
-			#[derive(Hash)]
+			#[max_encoded_len_crate($crate::max_encoded_len)]
 			pub struct Public($public);
 		}
 
