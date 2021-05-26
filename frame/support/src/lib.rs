@@ -397,7 +397,6 @@ macro_rules! parameter_types {
 }
 
 #[cfg(not(feature = "std"))]
-#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	( $( $any:tt )* ) => {
@@ -406,7 +405,6 @@ macro_rules! parameter_types_impl_thread_local {
 }
 
 #[cfg(feature = "std")]
-#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	(
