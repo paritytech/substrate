@@ -113,6 +113,8 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 struct ProofRecorderInner<Hash> {
 	/// All the records that we have stored so far.
 	records: HashMap<Hash, Option<(DBValue, TrieMeta)>>,
+	/// Is inner hash in proof.
+	flagged_inner_hash: bool,
 	/// The encoded size of all recorded values.
 	encoded_size: usize,
 }
@@ -128,22 +130,24 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	pub fn record<H: Hasher>(&self, key: Hash, mut val: Option<(DBValue, TrieMeta)>) {
 		let mut inner = self.inner.write();
 
-		let ProofRecorderInner { encoded_size, records } = &mut *inner;
+		let ProofRecorderInner { encoded_size, records, flagged_inner_hash } = &mut *inner;
 		records.entry(key).or_insert_with(|| {
 			if let Some(val) = val.as_mut() {
+				if val.1.recorded_do_value_hash {
+					*flagged_inner_hash = true;
+				}
 				val.1.set_accessed_value(false);
 				sp_trie::resolve_encoded_meta::<H>(val);
 				*encoded_size += sp_trie::estimate_entry_size(val, H::LENGTH);
 			}
 			val
 		});
-
 	}
 
 	/// Record actual trie level value access.
 	pub fn access_from(&self, key: &Hash, hash_len: usize) {
 		let mut inner = self.inner.write();
-		let ProofRecorderInner { encoded_size, records } = &mut *inner;
+		let ProofRecorderInner { encoded_size, records, .. } = &mut *inner;
 		records.entry(key.clone())
 			.and_modify(|entry| {
 				if let Some(entry) = entry.as_mut() {
@@ -175,13 +179,19 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof<H: Hasher>(&self) -> StorageProof {
-		let trie_nodes = self.inner.read()
+		let inner = self.inner.read();
+		let trie_nodes = inner
 			.records
 			.iter()
 			.filter_map(|(_k, v)| v.as_ref().map(|v| {
+				let mut meta = v.1.clone();
+				if !inner.flagged_inner_hash {
+					// Remove the old hash meta.
+					meta.old_hash = false;
+				}
 				<
 					<Layout::<H> as sp_trie::TrieLayout>::MetaHasher as hash_db::MetaHasher<H, _>
-				>::stored_value(v.0.as_slice(), v.1.clone())
+				>::stored_value(v.0.as_slice(), meta)
 			}))
 			.collect();
 
