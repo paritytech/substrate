@@ -19,7 +19,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../../sup
 frame-system = { version = "3.0.0", default-features = false, path = "../../system" }
 pallet-babe = { version = "3.0.0", default-features = false, path = "../../babe" }
 pallet-balances = { version = "3.0.0", default-features = false, path = "../../balances" }
-pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../grandpa" }
+pallet-grandpa = { version = "3.1.0", default-features = false, path = "../../grandpa" }
 pallet-im-online = { version = "3.0.0", default-features = false, path = "../../im-online" }
 pallet-offences = { version = "3.0.0", default-features = false, features = ["runtime-benchmarks"], path = "../../offences" }
 pallet-session = { version = "3.0.0", default-features = false, path = "../../session" }
