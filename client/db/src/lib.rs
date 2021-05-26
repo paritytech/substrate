@@ -259,7 +259,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.as_trie_backend()
 	}
 
-	fn register_overlay_stats(&mut self, stats: &StateMachineStats) {
+	fn register_overlay_stats(&self, stats: &StateMachineStats) {
 		self.state.register_overlay_stats(stats);
 	}
 
