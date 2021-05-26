@@ -381,7 +381,7 @@ pub fn new_full_base(
 		name: Some(name),
 		observer_enabled: false,
 		keystore,
-		is_authority: role.is_authority(),
+		local_role: role,
 		telemetry: telemetry.as_ref().map(|x| x.handle()),
 	};
 
@@ -478,7 +478,7 @@ pub fn new_light_base(
 		on_demand.clone(),
 	));
 
-	let (grandpa_block_import, _) = grandpa::block_import(
+	let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
@@ -529,11 +529,33 @@ pub fn new_light_base(
 			on_demand: Some(on_demand.clone()),
 			block_announce_validator_builder: None,
 		})?;
-	network_starter.start_network();
+
+	let enable_grandpa = !config.disable_grandpa;
+	if enable_grandpa {
+		let name = config.network.node_name.clone();
+
+		let config = grandpa::Config {
+			gossip_duration: std::time::Duration::from_millis(333),
+			justification_period: 512,
+			name: Some(name),
+			observer_enabled: false,
+			keystore: None,
+			local_role: config.role.clone(),
+			telemetry: telemetry.as_ref().map(|x| x.handle()),
+		};
+
+		task_manager.spawn_handle().spawn_blocking(
+			"grandpa-observer",
+			grandpa::run_grandpa_observer(config, grandpa_link, network.clone())?,
+		);
+	}
 
 	if config.offchain_worker.enabled {
 		sc_service::build_offchain_workers(
-			&config, task_manager.spawn_handle(), client.clone(), network.clone(),
+			&config,
+			task_manager.spawn_handle(),
+			client.clone(),
+			network.clone(),
 		);
 	}
 
@@ -560,6 +582,7 @@ pub fn new_light_base(
 			telemetry: telemetry.as_mut(),
 		})?;
 
+	network_starter.start_network();
 	Ok((
 		task_manager,
 		rpc_handlers,

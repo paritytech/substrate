@@ -7470,6 +7470,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.25",
+ "wasm-timer",
 ]
 
 [[package]]
