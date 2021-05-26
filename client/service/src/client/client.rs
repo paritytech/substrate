@@ -806,7 +806,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 						let state_root = operation.op.reset_storage(storage, true)?;
 						if state_root != *import_headers.post().state_root() {
-							// State root mismatch when importing state. This should not happe in safe fast sync mode,
+							// State root mismatch when importing state. This should not happen in safe fast sync mode,
 							// but may happen in unsafe mode.
 							warn!("Error imporing state: State root mismatch.");
 							return Err(Error::InvalidStateRoot);
