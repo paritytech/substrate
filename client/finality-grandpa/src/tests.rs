@@ -45,6 +45,7 @@ use sp_core::H256;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_finality_grandpa::{
 	GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof,
+	acc_safety::StoredAccountableSafetyState,
 };
 
 use authorities::AuthoritySet;
@@ -222,7 +223,7 @@ sp_api::mock_impl_runtime_apis! {
 		fn submit_start_accountable_safety_protocol_extrinsic() {
 		}
 
-		fn accountable_safety_state() -> Option<()> {
+		fn accountable_safety_state() -> Option<StoredAccountableSafetyState<NumberFor<Block>>> {
 			None
 		}
 

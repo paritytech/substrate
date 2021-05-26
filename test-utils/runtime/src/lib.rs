@@ -859,7 +859,7 @@ cfg_if! {
 					todo!();
 				}
 
-				fn accountable_safety_state() -> Option<sp_finality_grandpa::accountable_safety::StoredAccountableSafetyState<NumberFor<Block>>> {
+				fn accountable_safety_state() -> Option<sp_finality_grandpa::acc_safety::StoredAccountableSafetyState<NumberFor<Block>>> {
 					todo!();
 				}
 

@@ -31,16 +31,13 @@
 // re-export since this is necessary for `impl_apis` in runtime.
 pub use sp_finality_grandpa as fg_primitives;
 
-use sp_std::{
-	prelude::*,
-	collections::btree_map::BTreeMap,
-};
+use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use fg_primitives::{
 	ConsensusLog, EquivocationProof, GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID,
-	RoundNumber, ScheduledChange, SetId,
+	ScheduledChange, SetId,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -359,7 +356,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn get_accountable_safety_state)]
-	pub(super) type AccountableSafetyState<T: Config> = StorageValue<_, fg_primitives::accountable_safety::StoredAccountableSafetyState<T::BlockNumber>>;
+	pub(super) type AccountableSafetyState<T: Config> = StorageValue<_, fg_primitives::acc_safety::StoredAccountableSafetyState<T::BlockNumber>>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
@@ -641,7 +638,7 @@ impl<T: Config> Pallet<T> {
 		T::AccountableSafety::start_accountable_safety_protocol()
 	}
 
-	pub fn accountable_safety_state() -> Option<fg_primitives::accountable_safety::StoredAccountableSafetyState<T::BlockNumber>> {
+	pub fn accountable_safety_state() -> Option<fg_primitives::acc_safety::StoredAccountableSafetyState<T::BlockNumber>> {
 		Self::get_accountable_safety_state()
 		// T::AccountableSafety::state()
 	}

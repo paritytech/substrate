@@ -436,7 +436,7 @@ impl_runtime_apis! {
 
 		fn submit_start_accountable_safety_protocol_extrinsic() {}
 
-		fn accountable_safety_state() -> Option<fg_primitives::accountable_safety::StoredAccountableSafetyState<NumberFor<Block>>> {
+		fn accountable_safety_state() -> Option<fg_primitives::acc_safety::StoredAccountableSafetyState<NumberFor<Block>>> {
 			None
 		}
 
