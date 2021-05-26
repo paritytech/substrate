@@ -7,6 +7,6 @@ error[E0277]: can't compare `Foo<T>` with `Foo<T>`
    ::: $RUST/core/src/cmp.rs
     |
     | pub trait Eq: PartialEq<Self> {
-    |               --------------- required by this bound in `std::cmp::Eq`
+    |               --------------- required by this bound in `Eq`
     |
     = help: the trait `PartialEq` is not implemented for `Foo<T>`
