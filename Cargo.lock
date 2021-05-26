@@ -7590,7 +7590,7 @@ dependencies = [
  "assert_matches",
  "async-std",
  "async-trait",
- "asynchronous-codec 0.5.0",
+ "asynchronous-codec 0.6.0",
  "bitflags",
  "bs58",
  "bytes 1.0.1",
