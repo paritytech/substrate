@@ -379,12 +379,16 @@ pub mod tests {
 	}
 
 	#[test]
-	fn storage_root_transaction_is_empty() {
-		storage_root_transaction_is_empty_inner(false);
-		storage_root_transaction_is_empty_inner(true);
-	}
-	fn storage_root_transaction_is_empty_inner(flagged: bool) {
-		assert!(test_trie(flagged).storage_root(iter::empty(), false).1.drain().is_empty());
+	fn storage_root_transaction_state_root_update() {
+		// a drop a insert of same hash: rc is 0
+		assert_eq!(test_trie(false).storage_root(iter::empty(), false).1.drain()
+			.into_iter().filter(|v| (v.1).1 != 0).count(), 0);
+		// a drop a insert
+		assert_eq!(test_trie(false).storage_root(iter::empty(), true).1.drain()
+			.into_iter().filter(|v| (v.1).1 != 0).count(), 2);
+		// a drop a insert of same hash: rc is 0
+		assert_eq!(test_trie(true).storage_root(iter::empty(), true).1.drain()
+			.into_iter().filter(|v| (v.1).1 != 0).count(), 0);
 	}
 
 	#[test]
