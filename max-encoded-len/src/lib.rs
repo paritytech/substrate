@@ -24,6 +24,27 @@ use impl_trait_for_tuples::impl_for_tuples;
 use core::{mem, marker::PhantomData};
 use primitive_types::{H160, H256, H512};
 
+/// Derive macro for `MaxEncodedLen`.
+///
+/// ```
+/// # use max_encoded_len::MaxEncodedLen;
+/// # use codec::Encode;
+/// #[derive(Encode, MaxEncodedLen)]
+/// struct Example;
+/// ```
+///
+/// Sometimes the `MaxEncodedLen` trait and macro are accessed without explicitly importing its
+/// crate, notably via the `frame_support::max_encoded_len` re-binding. In these circumstances,
+/// the derive macro needs some help to understand where its crate should be:
+///
+/// ```
+/// # use codec::Encode;
+/// use frame_support::max_encoded_len::MaxEncodedLen;
+///
+/// #[derive(Encode, MaxEncodedLen)]
+/// #[max_encoded_len_crate(frame_support::max_encoded_len)]
+/// struct Example;
+/// ```
 #[cfg(feature = "derive")]
 pub use max_encoded_len_derive::MaxEncodedLen;
 

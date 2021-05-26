@@ -17,6 +17,7 @@ primitive-types = { version = "0.9.0", default-features = false, features = ["co
 
 [dev-dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [ "derive" ] }
+frame-support = { path = "../frame/support" }
 rustversion = "1.0.4"
 trybuild = "1.0.42"
 

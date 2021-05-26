@@ -3727,6 +3727,7 @@ dependencies = [
 name = "max-encoded-len"
 version = "3.0.0"
 dependencies = [
+ "frame-support",
  "impl-trait-for-tuples",
  "max-encoded-len-derive",
  "parity-scale-codec",
@@ -5668,9 +5669,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "731f4d179ed52b1c7eeb29baf29c604ea9301b889b23ce93660220a5465d5c6f"
+checksum = "e0f518afaa5a47d0d6386229b0a6e01e86427291d643aa4cabb4992219f504f8"
 dependencies = [
  "arrayvec 0.7.0",
  "bitvec",
