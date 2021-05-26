@@ -146,7 +146,7 @@ fn test_blocks(genesis_config: &GenesisConfig, executor: &NativeExecutor<Executo
 	let mut block1_extrinsics = vec![
 		CheckedExtrinsic {
 			signed: None,
-			function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
+			function: Call::Timestamp(pallet_timestamp::Call::set(0)),
 		},
 	];
 	block1_extrinsics.extend((0..20).map(|i| {
