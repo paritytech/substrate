@@ -108,7 +108,7 @@ fn bench_ed25519(c: &mut Criterion) {
 }
 
 fn bench_sr25519(c: &mut Criterion) {
-	let mut group = c.benchmark_group("ed25519");
+	let mut group = c.benchmark_group("sr25519");
 
 	for msg_size in vec![32, 1024, 1024 * 1024] {
 		let msg = (0..msg_size)
