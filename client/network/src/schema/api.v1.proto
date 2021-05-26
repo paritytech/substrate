@@ -72,9 +72,9 @@ message BlockData {
 message StateRequest {
 	// Block header hash.
 	bytes block = 1;
-	// Start from this key.
+	// Start from this key. Equivalent to <empty bytes> if omitted.
 	bytes start = 2; // optional
-	// Include proof.
+	// Whether to include proof in the response.
 	bool proof = 3;
 }
 
@@ -83,7 +83,7 @@ message StateResponse {
 	// A collection of keys.
 	repeated bytes keys = 1;
 	// If `proof` is true in request, this contains proof nodes.
-	// Otherwise it contains values mathcing `keys`
+	// Otherwise it contains values matching `keys`
 	repeated bytes values = 2;
 	// Set to true when there are no more keys to return.
 	bool complete = 3;
