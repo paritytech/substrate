@@ -283,8 +283,12 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		// TODO set flag on layout???
-		Layout::<Blake2Hasher>::default().trie_root(self.inner.top.clone()).as_ref().into()
+		let layout = if self.inner.flag_hashed_value {
+			Layout::<Blake2Hasher>::with_inner_hashing()
+		} else {
+			Layout::<Blake2Hasher>::default()
+		};
+		layout.trie_root(self.inner.top.clone()).as_ref().into()
 	}
 
 	fn child_storage_root(
