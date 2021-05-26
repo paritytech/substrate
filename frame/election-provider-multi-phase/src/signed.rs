@@ -34,13 +34,13 @@ use sp_std::{cmp::Ordering, vec::Vec};
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
 	/// Who submitted this solution.
-	pub(crate) who: AccountId,
+	pub who: AccountId,
 	/// The deposit reserved for storing this solution.
-	pub(crate) deposit: Balance,
+	pub deposit: Balance,
 	/// The reward that should be given to this solution, if chosen the as the final one.
-	pub(crate) reward: Balance,
+	pub reward: Balance,
 	/// The raw solution itself.
-	pub(crate) solution: RawSolution<CompactSolution>,
+	pub solution: RawSolution<CompactSolution>,
 }
 
 pub(crate) type BalanceOf<T> =
