@@ -601,14 +601,16 @@ where
 		let transfer_failed = Error::<E::T>::TransferFailed.into();
 		let not_funded = Error::<E::T>::NewContractNotFunded.into();
 		let no_code = Error::<E::T>::CodeNotFound.into();
-		let invalid_contract = Error::<E::T>::NotCallable.into();
+		let not_found = Error::<E::T>::ContractNotFound.into();
+		let is_tombstone = Error::<E::T>::ContractIsTombstone.into();
+		let rent_not_paid = Error::<E::T>::RentNotPaid.into();
 
 		match from {
 			x if x == below_sub => Ok(BelowSubsistenceThreshold),
 			x if x == transfer_failed => Ok(TransferFailed),
 			x if x == not_funded => Ok(NewContractNotFunded),
 			x if x == no_code => Ok(CodeNotFound),
-			x if x == invalid_contract => Ok(NotCallable),
+			x if (x == not_found || x == is_tombstone || x == rent_not_paid) => Ok(NotCallable),
 			err => Err(err)
 		}
 	}

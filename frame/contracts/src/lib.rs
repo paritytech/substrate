@@ -388,7 +388,7 @@ pub mod pallet {
 		/// producer fails to do so, a regular users will be allowed to claim the reward.
 		///
 		/// In case of a successful eviction no fees are charged from the sender. However, the
-		/// reward is capped by the total amount of rent that was payed by the contract while
+		/// reward is capped by the total amount of rent that was paid by the contract while
 		/// it was alive.
 		///
 		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
@@ -421,10 +421,10 @@ pub mod pallet {
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			match Rent::<T, PrefabWasmModule<T>>::try_eviction(&dest, handicap)? {
-				(Some(rent_payed), code_len) => {
+				(Some(rent_paid), code_len) => {
 					T::Currency::deposit_into_existing(
 						&rewarded,
-						T::SurchargeReward::get().min(rent_payed),
+						T::SurchargeReward::get().min(rent_paid),
 					)
 					.map(|_| PostDispatchInfo {
 						actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),
@@ -535,9 +535,20 @@ pub mod pallet {
 		/// Performing a call was denied because the calling depth reached the limit
 		/// of what is specified in the schedule.
 		MaxCallDepthReached,
-		/// The contract that was called is either no contract at all (a plain account)
-		/// or is a tombstone.
-		NotCallable,
+		/// No contract was found at the specified address.
+		ContractNotFound,
+		/// A tombstone exist at the specified address.
+		///
+		/// Tombstone cannot be called. Anyone can use `seal_restore_to` in order to revive
+		/// the contract, though.
+		ContractIsTombstone,
+		/// The called contract does not have enough balance to pay for its storage.
+		///
+		/// The contract ran out of balance and is therefore eligible for eviction into a
+		/// tombstone. Anyone can evict the contract by submitting a `claim_surcharge`
+		/// extrinsic. Alternatively, a plain balance transfer can be used in order to
+		/// increase the contracts funds so that it can be called again.
+		RentNotPaid,
 		/// The code supplied to `instantiate_with_code` exceeds the limit specified in the
 		/// current schedule.
 		CodeTooLarge,
