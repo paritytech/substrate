@@ -129,7 +129,7 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 			inner: Storage {
 				top: hashmap,
 				children_default: Default::default(),
-				flag_hashed_value: false,
+				flag_hashed_value: true,
 			},
 			extensions: Default::default(),
 		}

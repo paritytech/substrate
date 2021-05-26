@@ -385,7 +385,7 @@ mod tests {
 					}
 				],
 				children_default: map![],
-				flag_hashed_value: false, // TODO test with true variant
+				flag_hashed_value: true,
 			},
 		)
 	}

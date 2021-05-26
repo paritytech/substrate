@@ -1461,6 +1461,18 @@ mod tests {
 			assert_eq!(storage::get(b"hello"), None);
 			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec()));
 		});
+
+		let value = vec![7u8; 35];
+		t = BasicExternalities::new(Storage {
+			top: map![b"foo00".to_vec() => value.clone()],
+			children_default: map![],
+			flag_hashed_value: true,
+		});
+
+		t.execute_with(|| {
+			assert_eq!(storage::get(b"hello"), None);
+			assert_eq!(storage::get(b"foo00"), Some(value.clone()));
+		});
 	}
 
 	#[test]

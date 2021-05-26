@@ -377,30 +377,6 @@ impl<H, KF, MH> Consolidate for sp_trie::GenericMemoryDB<H, KF, MH>
 }
 
 /// Insert input pairs into memory db.
-/// TODO unused remove?
-#[cfg(test)]
-pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut sp_trie::MemoryDB<H>, input: I) -> Option<H::Out>
-	where
-		H: Hasher,
-		I: IntoIterator<Item=(StorageKey, StorageValue)>,
-{
-	use sp_trie::{TrieMut, trie_types::TrieDBMut};
-
-	let mut root = <H as Hasher>::Out::default();
-	{
-		let mut trie = TrieDBMut::<H>::new(mdb, &mut root);
-		for (key, value) in input {
-			if let Err(e) = trie.insert(&key, &value) {
-				log::warn!(target: "trie", "Failed to write to trie: {}", e);
-				return None;
-			}
-		}
-	}
-
-	Some(root)
-}
-
-/// Insert input pairs into memory db.
 #[cfg(test)]
 pub(crate) fn insert_into_memory_db_no_meta<H, I>(mdb: &mut sp_trie::MemoryDBNoMeta<H>, input: I) -> Option<H::Out>
 	where
