@@ -26,6 +26,7 @@ use sc_service::NativeExecutionDispatch;
 use sp_state_machine::StateMachine;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::storage::{StorageData, StorageKey, well_known_keys};
+use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig};
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub enum Command {
@@ -41,7 +42,7 @@ pub struct OnRuntimeUpgradeCmd {
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct OffchainWorkerCmd {
-	#[structopt(short, long, multiple = false, parse(try_from_str = parse_hash))]
+	#[structopt(short, long, multiple = false, parse(try_from_str = util::parse_hash))]
 	pub header_at: String,
 
 	#[structopt(subcommand)]
@@ -76,9 +77,9 @@ pub struct SharedParams {
 	pub wasm_method: WasmExecutionMethod,
 }
 
-/// Various commands to try out the new runtime, over configurable states.
+/// Various commands to try out against runtime state at a specific block.
 ///
-/// For now this only assumes running the `on_runtime_upgrade` hooks.
+/// NOTE: For now this only assumes running the `on_runtime_upgrade` hooks. // TOOD wut dis mean?
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct TryRuntimeCmd {
 	#[structopt(flatten)]
@@ -88,23 +89,23 @@ pub struct TryRuntimeCmd {
 	pub command: Command,
 }
 
-/// The state to use for a migration dry-run. // TODO: terminology is fucked here.
+/// The source of runtime state to try operations against.
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub enum State {
-	/// Use a state snapshot as state to run the migration.
+	/// Use a state snapshot as the source of runtime state.
 	Snap {
 		snapshot_path: PathBuf,
 	},
 
-	/// Use a live chain to run the migration.
+	/// Use a live chain as the source of runtime state.
 	Live {
-		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
+		/// An optional state snapshot file to WRITE to.
 		#[structopt(short, long)]
 		snapshot_path: Option<PathBuf>,
 
 		/// The block hash at which to connect.
 		/// Will be latest finalized head if not provided.
-		#[structopt(short, long, multiple = false, parse(try_from_str = parse_hash))]
+		#[structopt(short, long, multiple = false, parse(try_from_str = util::parse_hash))]
 		block_at: Option<String>,
 
 		/// The modules to scrape. If empty, entire chain state will be scraped.
@@ -112,35 +113,9 @@ pub enum State {
 		modules: Option<Vec<String>>,
 
 		/// The url to connect to.
-		#[structopt(default_value = "ws://localhost:9944", parse(try_from_str = parse_url))]
+		#[structopt(default_value = "ws://localhost:9944", parse(try_from_str = util::parse_url))]
 		url: String,
 	},
-}
-
-fn parse_hash(block_number: &str) -> Result<String, String> {
-	let block_number = if block_number.starts_with("0x") {
-		&block_number[2..]
-	} else {
-		block_number
-	};
-
-	if let Some(pos) = block_number.chars().position(|c| !c.is_ascii_hexdigit()) {
-		Err(format!(
-			"Expected block hash, found illegal hex character at position: {}",
-			2 + pos,
-		))
-	} else {
-		Ok(block_number.into())
-	}
-}
-
-fn parse_url(s: &str) -> Result<String, &'static str> {
-	if s.starts_with("ws://") || s.starts_with("wss://") {
-		// could use Url crate as well, but lets keep it simple for now.
-		Ok(s.to_string())
-	} else {
-		Err("not a valid WS(S) url: must start with 'ws://' or 'wss://'")
-	}
 }
 
 async fn on_runtime_upgrade<B, ExecDispatch>(shared: SharedParams, command: OnRuntimeUpgradeCmd, config: Configuration) -> sc_cli::Result<()>
@@ -178,7 +153,6 @@ where
 	);
 
 	let ext = {
-		use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig};
 		let builder = match command.state {
 			State::Snap { snapshot_path } => {
 				Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
@@ -253,34 +227,42 @@ where
 		max_runtime_instances,
 	);
 
-	let ext = {
-		use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig};
-		let builder = match command.state {
-			State::Snap { snapshot_path } => {
-				Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
-					state_snapshot: SnapshotConfig::new(snapshot_path),
-				}))
-			},
+	let (online_config, url) = match command.state {
 			State::Live {
 				url,
 				snapshot_path,
 				block_at,
 				modules
-			} => Builder::<B>::new().mode(Mode::Online(OnlineConfig {
+			} => {
+				let online_config = OnlineConfig {
 				transport: url.to_owned().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
 				at: block_at.as_ref()
 					.map(|b| b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))).transpose()?,
 				..Default::default()
-			})),
-		};
+				};
+
+				(online_config, url)
+			},
+			_ => {
+				panic!("Only live state is supported");
+			}
+	};
+
+	let ext = {
+		let builder =  Builder::<B>::new().mode(Mode::Online(online_config));
 
 		builder.build().await?
 	};
 
 	let header_hash: B::Hash = command.header_at.parse().unwrap();
-	let header = remote_externalities::get_header::<B, _>("http://localhost:9933", header_hash).await;
+	// TODO should this be ws to the arg url??
+	log::info!("ws url: {}", url);
+	let header = remote_externalities::get_header::<B, _>(
+		url,
+		header_hash
+	).await;
 
 	let _ = StateMachine::<_, _, NumberFor<B>, _>::new(
 		&ext.backend,
@@ -333,5 +315,33 @@ impl CliConfiguration for TryRuntimeCmd {
 			Some(ref chain) => chain.clone(),
 			None => "dev".into(),
 		})
+	}
+}
+
+mod util {
+	pub fn parse_hash(block_number: &str) -> Result<String, String> {
+		let block_number = if block_number.starts_with("0x") {
+			&block_number[2..]
+		} else {
+			block_number
+		};
+
+		if let Some(pos) = block_number.chars().position(|c| !c.is_ascii_hexdigit()) {
+			Err(format!(
+				"Expected block hash, found illegal hex character at position: {}",
+				2 + pos,
+			))
+		} else {
+			Ok(block_number.into())
+		}
+	}
+
+	pub fn parse_url(s: &str) -> Result<String, &'static str> {
+		if s.starts_with("ws://") || s.starts_with("wss://") {
+			// could use Url crate as well, but lets keep it simple for now.
+			Ok(s.to_string())
+		} else {
+			Err("not a valid WS(S) url: must start with 'ws://' or 'wss://'")
+		}
 	}
 }
