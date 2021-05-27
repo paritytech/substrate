@@ -170,7 +170,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS, CIDP>(
 		CS: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
 		TransactionFor<C, B>: 'static,
-		CIDP: CreateInherentDataProviders<B, Arc<C>>,
+		CIDP: CreateInherentDataProviders<B, ()>,
 {
 	while let Some(command) = commands_stream.next().await {
 		match command {
@@ -237,7 +237,7 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, CIDP>(
 		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
 		SC: SelectChain<B> + 'static,
 		TransactionFor<C, B>: 'static,
-		CIDP: CreateInherentDataProviders<B, Arc<C>>,
+		CIDP: CreateInherentDataProviders<B, ()>,
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.

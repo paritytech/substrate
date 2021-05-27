@@ -89,7 +89,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 			TaskManager,
 			Box<dyn CreateInherentDataProviders<
 				Self::Block,
-				Arc<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>>,
+				(),
 				InherentDataProviders = Self::InherentDataProviders
 			>>,
 			Option<
@@ -138,14 +138,17 @@ impl ChainInfo for NodeTemplateChainInfo {
 			.expect("failed to create ConsensusDataProvider");
 
 		Ok((
-			client,
+			client.clone(),
 			backend,
 			keystore.sync_keystore(),
 			task_manager,
-			Box::new(|_, client| async move {
-				let provider = SlotTimestampProvider::new(client).map_err(|err| format!("{:?}", err))?;
-				let babe = sp_consensus_babe::inherents::InherentDataProvider::new(provider.slot().into());
-				Ok((provider, babe))
+			Box::new(move |_, _| {
+				let client = client.clone();
+				async move {
+					let timestamp = SlotTimestampProvider::new(client.clone()).map_err(|err| format!("{:?}", err))?;
+					let babe = sp_consensus_babe::inherents::InherentDataProvider::new(timestamp.slot().into());
+					Ok((timestamp, babe))
+				}
 			}),
 			Some(Box::new(consensus_data_provider)),
 			select_chain,
