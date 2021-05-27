@@ -158,8 +158,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		)
 	);
 
-	let (network, network_status_sinks, system_rpc_tx, network_starter) =
-
 	let (network, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
