@@ -47,6 +47,7 @@ fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>)
 		allow_missing_state: false,
 		import_existing: false,
 		state: None,
+		skip_execution: false,
 	})
 }
 

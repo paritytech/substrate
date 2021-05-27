@@ -509,7 +509,16 @@ impl<B: BlockT> ChainSync<B> {
 		match self.mode {
 			SyncMode::Full => BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
 			SyncMode::Light => BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
-			SyncMode::LightState { .. } => BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
+			SyncMode::LightState { .. } =>
+				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
+		}
+	}
+
+	fn skip_execution(&self) -> bool {
+		match self.mode {
+			SyncMode::Full => false,
+			SyncMode::Light => true,
+			SyncMode::LightState { .. } => true,
 		}
 	}
 
@@ -906,6 +915,7 @@ impl<B: BlockT> ChainSync<B> {
 										origin: block_data.origin,
 										allow_missing_state: true,
 										import_existing: self.import_existing,
+										skip_execution: self.skip_execution(),
 										state: None,
 									}
 								}).collect()
@@ -929,6 +939,7 @@ impl<B: BlockT> ChainSync<B> {
 									origin: Some(who.clone()),
 									allow_missing_state: true,
 									import_existing: self.import_existing,
+									skip_execution: self.skip_execution(),
 									state: None,
 								}
 							}).collect()
@@ -1043,6 +1054,7 @@ impl<B: BlockT> ChainSync<B> {
 							origin: Some(who.clone()),
 							allow_missing_state: true,
 							import_existing: false,
+							skip_execution: true,
 							state: None,
 						}
 					}).collect()
@@ -1093,6 +1105,7 @@ impl<B: BlockT> ChainSync<B> {
 					origin: None,
 					allow_missing_state: true,
 					import_existing: true,
+					skip_execution: self.skip_execution(),
 					state: Some(state),
 				};
 				debug!(target: "sync", "State sync is complete. Import is queued");
@@ -1740,6 +1753,7 @@ impl<B: BlockT> ChainSync<B> {
 					origin: block_data.origin,
 					allow_missing_state: true,
 					import_existing: false,
+					skip_execution: self.skip_execution(),
 					state: None,
 				}
 			}).collect();

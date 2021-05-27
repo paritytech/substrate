@@ -92,7 +92,7 @@ use parking_lot::Mutex;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider, InherentData};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
-	BlockImport, Environment, Proposer, BlockCheckParams,
+	BlockImport, Environment, Proposer, BlockCheckParams, StateAction,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 	SelectChain, SlotData, import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId},
 };
@@ -763,7 +763,9 @@ where
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(digest_item);
 			import_block.body = Some(body);
-			import_block.storage_changes = Some(sp_consensus::StorageChanges::Raw(storage_changes));
+			import_block.state_action = StateAction::ApplyChanges(
+				sp_consensus::StorageChanges::Changes(storage_changes)
+			);
 			import_block.intermediates.insert(
 				Cow::from(INTERMEDIATE_KEY),
 				Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,

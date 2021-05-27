@@ -34,7 +34,7 @@ use crate::{
 	error::Error as ConsensusError,
 	block_import::{
 		BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
-		BlockCheckParams, ImportedState,
+		BlockCheckParams, ImportedState, StateAction,
 	},
 	metrics::Metrics,
 };
@@ -74,6 +74,8 @@ pub struct IncomingBlock<B: BlockT> {
 	pub origin: Option<Origin>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
+	/// Skip block exection and state verification.
+	pub skip_execution: bool,
 	/// Re-validate existing block.
 	pub import_existing: bool,
 	/// Do not compute new state, but rather set it to the given set.
@@ -266,11 +268,14 @@ pub(crate) async fn import_single_block_metered<B: BlockT, V: Verifier<B>, Trans
 	if let Some(keys) = maybe_keys {
 		cache.extend(keys.into_iter());
 	}
-	import_block.allow_missing_state = block.allow_missing_state;
 	import_block.import_existing = block.import_existing;
 	let mut import_block = import_block.convert_transaction();
 	if let Some(state) = block.state {
-		import_block.storage_changes = Some(crate::StorageChanges::Import(state));
+		import_block.state_action = StateAction::ApplyChanges(crate::StorageChanges::Import(state));
+	} else if block.skip_execution {
+		import_block.state_action = StateAction::Skip;
+	} else if block.allow_missing_state {
+		import_block.state_action = StateAction::ExecuteIfPossible;
 	}
 
 	let imported = import_handle.import_block(import_block, cache).await;

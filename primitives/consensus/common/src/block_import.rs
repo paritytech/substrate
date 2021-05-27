@@ -114,7 +114,7 @@ pub struct BlockCheckParams<Block: BlockT> {
 /// Precomputed storage.
 pub enum StorageChanges<Block: BlockT, Transaction> {
 	/// Changes coming from block execution.
-	Raw(sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>),
+	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>),
 	/// Whole new state.
 	Import(ImportedState<Block>),
 }
@@ -134,6 +134,17 @@ impl<B: BlockT> std::fmt::Debug for ImportedState<B> {
 			.field("block", &self.block)
 			.finish()
 	}
+}
+
+pub enum StateAction<Block: BlockT, Transaction> {
+	/// Apply precomputed changes coming from block execution or state sync.
+	ApplyChanges(StorageChanges<Block, Transaction>),
+	/// Execute block body (required) and compute state.
+	Execute,
+	/// Execute block body if parent state is available and compute state.
+	ExecuteIfPossible,
+	/// Don't execute or import state.
+	Skip,
 }
 
 /// Data required to import a Block.
@@ -160,9 +171,8 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	pub post_digests: Vec<DigestItemFor<Block>>,
 	/// The body of the block.
 	pub body: Option<Vec<Block::Extrinsic>>,
-	/// The changes to the storage to create the state for the block. If this is `Some(_)`,
-	/// the block import will not need to re-execute the block for importing it.
-	pub storage_changes: Option<StorageChanges<Block, Transaction>>,
+	/// Specify how the new state is computed.
+	pub state_action: StateAction<Block, Transaction>,
 	/// Is this block finalized already?
 	/// `true` implies instant finality.
 	pub finalized: bool,
@@ -181,8 +191,6 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// to modify it. If `None` is passed all the way down to bottom block
 	/// importer, the import fails with an `IncompletePipeline` error.
 	pub fork_choice: Option<ForkChoiceStrategy>,
-	/// Allow importing the block skipping state verification if parent state is missing.
-	pub allow_missing_state: bool,
 	/// Re-validate existing block.
 	pub import_existing: bool,
 	/// Cached full header hash (with post-digests applied).
@@ -200,12 +208,11 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			justifications: None,
 			post_digests: Vec::new(),
 			body: None,
-			storage_changes: None,
+			state_action: StateAction::Execute,
 			finalized: false,
 			intermediates: HashMap::new(),
 			auxiliary: Vec::new(),
 			fork_choice: None,
-			allow_missing_state: false,
 			import_existing: false,
 			post_hash: None,
 		}
@@ -236,13 +243,17 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 
 	/// Auxiliary function for "converting" the transaction type.
 	///
-	/// Actually this just sets Raw `storage_changes` to `None` and makes rustc think that `Self` now
+	/// Actually this just sets Changes `storage_changes` to `None` and makes rustc think that `Self` now
 	/// uses a different transaction type.
 	pub fn convert_transaction<Transaction2>(self) -> BlockImportParams<Block, Transaction2> {
 		// Preserve imported state.
-		let state = match self.storage_changes {
-			Some(StorageChanges::Import(state)) => Some(state),
-			Some(StorageChanges::Raw(_)) | None => None,
+		let state_action = match self.state_action {
+			StateAction::ApplyChanges(StorageChanges::Import(state)) =>
+				StateAction::ApplyChanges(StorageChanges::Import(state)),
+			StateAction::ApplyChanges(StorageChanges::Changes(_)) => StateAction::Skip,
+			StateAction::Execute => StateAction::Execute,
+			StateAction::ExecuteIfPossible => StateAction::ExecuteIfPossible,
+			StateAction::Skip => StateAction::Skip,
 		};
 		BlockImportParams {
 			origin: self.origin,
@@ -250,11 +261,10 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 			justifications: self.justifications,
 			post_digests: self.post_digests,
 			body: self.body,
-			storage_changes: state.map(StorageChanges::Import),
+			state_action,
 			finalized: self.finalized,
 			auxiliary: self.auxiliary,
 			intermediates: self.intermediates,
-			allow_missing_state: self.allow_missing_state,
 			fork_choice: self.fork_choice,
 			import_existing: self.import_existing,
 			post_hash: self.post_hash,

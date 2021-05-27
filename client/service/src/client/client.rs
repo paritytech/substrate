@@ -57,7 +57,7 @@ use sp_state_machine::{
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
-	ImportResult, BlockOrigin, ForkChoiceStrategy,
+	ImportResult, BlockOrigin, ForkChoiceStrategy, StateAction,
 };
 use sp_blockchain::{
 	self as blockchain,
@@ -775,7 +775,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let storage_changes = match storage_changes {
 			Some(storage_changes) => {
 				let storage_changes = match storage_changes {
-					sp_consensus::StorageChanges::Raw(storage_changes) => {
+					sp_consensus::StorageChanges::Changes(storage_changes) => {
 						self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
 						let (
 							main_sc,
@@ -912,16 +912,21 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	{
 		let parent_hash = import_block.header.parent_hash();
 		let at = BlockId::Hash(*parent_hash);
-		let enact_state = match self.block_status(&at)? {
-			BlockStatus::Unknown => return Ok(PrepareStorageChangesResult::Discard(ImportResult::UnknownParent)),
-			BlockStatus::InChainWithState | BlockStatus::Queued => true,
-			BlockStatus::InChainPruned if import_block.allow_missing_state =>
-				matches!(import_block.storage_changes, Some(sp_consensus::StorageChanges::Import(_))),
-			BlockStatus::InChainPruned => return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
-			BlockStatus::KnownBad => return Ok(PrepareStorageChangesResult::Discard(ImportResult::KnownBad)),
+		let state_action = std::mem::replace(&mut import_block.state_action, StateAction::Skip);
+		let (enact_state, storage_changes) = match (self.block_status(&at)?, state_action) {
+			(BlockStatus::Unknown, _) => return Ok(PrepareStorageChangesResult::Discard(ImportResult::UnknownParent)),
+			(BlockStatus::KnownBad, _) => return Ok(PrepareStorageChangesResult::Discard(ImportResult::KnownBad)),
+			(_, StateAction::Skip) => (false, None),
+			(BlockStatus::InChainPruned, StateAction::ApplyChanges(sp_consensus::StorageChanges::Changes(_))) =>
+			 	return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
+			(BlockStatus::InChainPruned, StateAction::Execute) =>
+				return Ok(PrepareStorageChangesResult::Discard(ImportResult::MissingState)),
+			(BlockStatus::InChainPruned, StateAction::ExecuteIfPossible) => (false, None),
+			(_, StateAction::Execute) => (true, None),
+			(_, StateAction::ExecuteIfPossible) => (true, None),
+			(_, StateAction::ApplyChanges(changes)) => (true, Some(changes)),
 		};
 
-		let storage_changes = import_block.storage_changes.take();
 		let storage_changes = match (enact_state, storage_changes, &import_block.body) {
 			// We have storage changes and should enact the state, so we don't need to do anything
 			// here
@@ -959,7 +964,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				{
 					return Err(Error::InvalidStateRoot)
 				}
-				Some(sp_consensus::StorageChanges::Raw(gen_storage_changes))
+				Some(sp_consensus::StorageChanges::Changes(gen_storage_changes))
 			},
 			// No block body, no storage changes
 			(true, None, None) => None,
