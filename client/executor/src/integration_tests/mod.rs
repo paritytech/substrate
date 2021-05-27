@@ -807,45 +807,6 @@ fn state_hashing_update(wasm_method: WasmExecutionMethod) {
 	).unwrap();
 	let root2 = ext.storage_root();
 
+	// Note that in this case all the value did switch (in memory changes).
 	assert!(root1 != root2);
-
-	// Same value update do not change root.
-	let output = call_in_wasm(
-		"test_data_in",
-		&b"Hello world".to_vec().encode(),
-		wasm_method,
-		&mut ext,
-	).unwrap();
-
-	assert_eq!(output, b"all ok!".to_vec().encode());
-
-	let root3 = ext.storage_root();
-	assert!(root2 == root3);
-
-	// change does
-	let output = call_in_wasm(
-		"test_data_in",
-		&b"Hello".to_vec().encode(),
-		wasm_method,
-		&mut ext,
-	).unwrap();
-
-	assert_eq!(output, b"all ok!".to_vec().encode());
-
-	let root3 = ext.storage_root();
-	assert!(root2 != root3);
-
-	// restore is different from original
-	let output = call_in_wasm(
-		"test_data_in",
-		&b"Hello world".to_vec().encode(),
-		wasm_method,
-		&mut ext,
-	).unwrap();
-
-	assert_eq!(output, b"all ok!".to_vec().encode());
-
-	let root4 = ext.storage_root();
-	assert!(root2 != root4);
-	assert!(root3 != root4);
 }

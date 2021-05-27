@@ -275,7 +275,7 @@ pub mod tests {
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
 
-	fn test_db(hashed_value: bool) -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
+	pub(crate) fn test_db(hashed_value: bool) -> (PrefixedMemoryDB<BlakeTwo256>, H256) {
 		let child_info = ChildInfo::new_default(CHILD_KEY_1);
 		let mut root = H256::default();
 		let mut mdb = PrefixedMemoryDB::<BlakeTwo256>::default();

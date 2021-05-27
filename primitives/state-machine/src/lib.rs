@@ -1494,6 +1494,106 @@ mod tests {
 	}
 
 	#[test]
+	fn inner_state_hashing_switch_proofs() {
+
+		let (mut mdb, mut root) = trie_backend::tests::test_db(false);
+		{
+			let mut trie = TrieDBMut::from_existing_with_layout(
+				&mut mdb,
+				&mut root,
+				Layout::default(),
+			).unwrap();
+			trie.insert(b"foo", vec![1u8; 1_000].as_slice()) // big inner hash
+				.expect("insert failed");
+			trie.insert(b"foo2", vec![3u8; 16].as_slice()) // no inner hash
+				.expect("insert failed");
+			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
+				.expect("insert failed");
+		}
+		
+		let check_proof = |mdb, root| -> StorageProof {
+			let remote_backend = TrieBackend::new(mdb, root);
+			let remote_root = remote_backend.storage_root(::std::iter::empty(), false).0;
+			let remote_proof = prove_read(remote_backend, &[b"foo222"]).unwrap();
+			// check proof locally
+			let local_result1 = read_proof_check::<BlakeTwo256, _>(
+				remote_root,
+				remote_proof.clone(),
+				&[b"foo222"],
+			).unwrap();
+			// check that results are correct
+			assert_eq!(
+				local_result1.into_iter().collect::<Vec<_>>(),
+				vec![(b"foo222".to_vec(), Some(vec![5u8; 100]))],
+			);
+			remote_proof
+		};
+
+		let remote_proof = check_proof(mdb.clone(), root.clone());
+
+		// check full values in proof
+		assert!(remote_proof.encode().len() > 1_100);
+		assert!(remote_proof.encoded_size() > 1_100);
+		let root1 = root.clone();
+
+
+		// trigger switch
+		{
+			let mut trie = TrieDBMut::from_existing_with_layout(
+				&mut mdb,
+				&mut root,
+				Layout::with_inner_hashing(),
+			).unwrap();
+			trie.force_layout_meta()
+				.expect("failed forced layout change");
+		}
+		let root2 = root.clone();
+		assert!(root1 != root2);
+		let remote_proof = check_proof(mdb.clone(), root.clone());
+		// nodes are still with old hashing.
+		assert!(remote_proof.encode().len() > 1_100);
+		assert!(remote_proof.encoded_size() > 1_100);
+		assert_eq!(remote_proof.encode().len(),
+			remote_proof.encoded_size());
+
+		// update with same value do not change
+		{
+			let mut trie = TrieDBMut::from_existing_with_layout(
+				&mut mdb,
+				&mut root,
+				Layout::default(),
+			).unwrap();
+			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
+				.expect("insert failed");
+		}
+		let root3 = root.clone();
+		assert!(root2 == root3);
+		// different value then same is enough to update
+		// from triedbmut persipective (do not
+		// work with state machine as only changes do makes
+		// it to payload (would require a special host function).
+		{
+			let mut trie = TrieDBMut::from_existing_with_layout(
+				&mut mdb,
+				&mut root,
+				Layout::default(),
+			).unwrap();
+			trie.insert(b"foo222", vec![4u8].as_slice()) // inner hash
+				.expect("insert failed");
+			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
+				.expect("insert failed");
+		}
+		let root3 = root.clone();
+		assert!(root2 != root3);
+		let remote_proof = check_proof(mdb.clone(), root.clone());
+		// nodes foo is replaced by its hashed value form.
+		assert!(remote_proof.encode().len() < 1000);
+		assert!(remote_proof.encoded_size() < 1000);
+		assert_eq!(remote_proof.encode().len(),
+			remote_proof.encoded_size());
+	}
+
+	#[test]
 	fn child_storage_uuid() {
 
 		let child_info_1 = ChildInfo::new_default(b"sub_test1");
