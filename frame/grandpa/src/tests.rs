@@ -22,7 +22,7 @@
 use super::{Call, Event, *};
 use crate::mock::*;
 use codec::Encode;
-use fg_primitives::{ScheduledChange, acc_safety::StoredAccountableSafetyState};
+use fg_primitives::{ScheduledChange, acc_safety::{QueryState, StoredAccountableSafetyState}};
 use frame_support::{
 	assert_err, assert_ok, assert_noop,
 	traits::{Currency, OnFinalize, OneSessionHandler},
@@ -32,6 +32,7 @@ use frame_system::{EventRecord, Phase};
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::testing::Digest;
+use sp_std::collections::btree_map::BTreeMap;
 
 #[test]
 fn authorities_change_logged() {
@@ -951,28 +952,44 @@ fn accountable_safety_start() {
 
 		assert_eq!(Grandpa::accountable_safety_state(), None);
 
-		let commit_for_new_block = ASCommit {
-			target_number: 8,
-			precommits: Default::default(),
-		};
-		let commit_for_block_not_included = ASCommit {
-			target_number: 2,
-			precommits: Default::default(),
-		};
-		let round_for_block_not_included = 2;
+		let new_block = (
+			ASCommit {
+				target_number: 8,
+				precommits: Default::default(),
+			},
+			4,
+		);
+		let block_not_included = (
+			ASCommit {
+				target_number: 2,
+				precommits: Default::default(),
+			},
+			2,
+		);
 
 		Grandpa::start_accountable_safety_protocol(
-			commit_for_new_block,
-			(commit_for_block_not_included.clone(), round_for_block_not_included),
+			new_block.clone(),
+			block_not_included.clone(),
 		);
+
+		let mut querying_rounds = BTreeMap::new();
+		querying_rounds.insert(4, QueryState::<<Test as frame_system::Config>::BlockNumber> {
+			voters: new_block.0.voters().cloned().collect(),
+			responses: Default::default(),
+			equivocations: Default::default(),
+		});
 
 		assert_eq!(
 			Grandpa::accountable_safety_state(),
 			Some(StoredAccountableSafetyState {
-				block_not_included: (commit_for_block_not_included, round_for_block_not_included),
-				querying_rounds: Default::default(),
+				block_not_included,
+				querying_rounds,
 				prevote_queries: Default::default(),
 			}),
 		);
+
+		Grandpa::on_finalize(3);
+
+
 	});
 }

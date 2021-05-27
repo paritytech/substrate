@@ -126,6 +126,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_finalize(block_number: T::BlockNumber) {
+			dbg!(&block_number);
 			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {
 				// emit signal if we're at the block that scheduled the change
@@ -636,7 +637,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn start_accountable_safety_protocol(
-		new_block: ASCommit::<T::BlockNumber>,
+		new_block: (ASCommit::<T::BlockNumber>, RoundNumber),
 		block_not_included: (ASCommit::<T::BlockNumber>, RoundNumber),
 	) {
 		T::AccountableSafety::start_accountable_safety_protocol(

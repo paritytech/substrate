@@ -333,9 +333,9 @@ pub mod acc_safety {
 
 	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct QueryState<N> {
-		voters: Vec<AuthorityId>,
-		responses: BTreeMap<AuthorityId, QueryResponse<N>>,
-		equivocations: Vec<EquivocationDetected<N>>,
+		pub voters: Vec<AuthorityId>,
+		pub responses: BTreeMap<AuthorityId, QueryResponse<N>>,
+		pub equivocations: Vec<EquivocationDetected<N>>,
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, Eq, PartialEq)]
@@ -360,6 +360,14 @@ pub mod acc_safety {
 	pub struct Commit<N> {
 		pub target_number: N,
 		pub precommits: Vec<Precommit<N>>,
+	}
+
+	impl<N> Commit<N> {
+		pub fn voters(&self) -> impl Iterator<Item = &AuthorityId> {
+			self.precommits
+				.iter()
+				.map(|prec| &prec.id)
+		}
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]

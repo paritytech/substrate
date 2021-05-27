@@ -19,7 +19,7 @@ use sp_std::collections::btree_map::BTreeMap;
 
 use sp_finality_grandpa::{
 	RoundNumber,
-	acc_safety::{StoredAccountableSafetyState, Commit as ASCommit},
+	acc_safety::{StoredAccountableSafetyState, Commit as ASCommit, QueryState},
 };
 use sp_runtime::traits::Saturating;
 
@@ -34,7 +34,7 @@ pub trait AccountableSafety<T: Config> {
 	/// Initiate the accountable safety protocol. This will be called when mutually inconsistent
 	/// finalized blocks are detected.
 	fn start_accountable_safety_protocol(
-		new_block: ASCommit::<T::BlockNumber>,
+		new_block: (ASCommit::<T::BlockNumber>, RoundNumber),
 		block_not_included: (ASCommit::<T::BlockNumber>, RoundNumber),
 	);
 
@@ -52,7 +52,7 @@ pub trait AccountableSafety<T: Config> {
 impl<T: Config> AccountableSafety<T> for () {
 	fn update() {}
 	fn start_accountable_safety_protocol(
-		_new_block: ASCommit::<T::BlockNumber>,
+		_new_block: (ASCommit::<T::BlockNumber>, RoundNumber),
 		_block_not_included: (ASCommit::<T::BlockNumber>, RoundNumber),
 	) {}
 	fn state() -> Option<()> { None }
@@ -65,20 +65,30 @@ pub struct AccountableSafetyHandler;
 impl<T: Config> AccountableSafety<T> for AccountableSafetyHandler {
 	fn update() {
 		// WIP: update the accountable safety state
+		println!("AS: update");
 	}
 
 	fn start_accountable_safety_protocol(
-		new_block: ASCommit::<T::BlockNumber>,
+		new_block: (ASCommit::<T::BlockNumber>, RoundNumber),
 		block_not_included: (ASCommit::<T::BlockNumber>, RoundNumber),
 	) {
-		let acc_state = StoredAccountableSafetyState {
+		let mut acc_state = StoredAccountableSafetyState {
 			block_not_included,
 			querying_rounds: Default::default(),
 			prevote_queries: Default::default(),
 		};
-		<AccountableSafetyState<T>>::put(acc_state);
 
-		// WIP: use `new_block` to start the protocol
+		// Use `new_block` to start the protocol
+		acc_state.querying_rounds.insert(
+			new_block.1,
+			QueryState {
+				voters: new_block.0.voters().cloned().collect(),
+				responses: Default::default(),
+				equivocations: Default::default(),
+			},
+		);
+
+		<AccountableSafetyState<T>>::put(acc_state);
 	}
 
 	fn state() -> Option<()> {
