@@ -1478,7 +1478,13 @@ decl_module! {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < T::MinBond::get() {
+			let is_validator = Validators::<T>::contains_key(&stash);
+
+			// The minimum bond allowed for a stash before we clean it up.
+			// Requirements to be a validator are likely higher than normal.
+			let min_bond = if is_validator { T::MinValidatorBond::get() } else { T::MinBond::get() };
+
+			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < min_bond {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
