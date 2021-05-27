@@ -567,8 +567,7 @@ pub mod pallet {
 
 			let f = DebitFlags { keep_alive: false, ignore_freezer: false };
 			let amount = amount.min(Self::reducible_balance(id, &who, f)?);
-			let burned = Self::do_burn(id, &who, amount, Some(origin), f)?;
-			Self::deposit_event(Event::Burned(id, who, burned));
+			let _ = Self::do_burn(id, &who, amount, Some(origin), f)?;
 			Ok(())
 		}
 
