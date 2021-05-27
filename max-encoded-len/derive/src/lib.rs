@@ -111,7 +111,7 @@ fn max_encoded_len_trait(input: &DeriveInput) -> syn::Result<TraitBound> {
 				};
 				Ok(path)
 			})
-			.collect::<Result<Vec<_>, _>>()?);
+			.collect::<Result<_, _>>()?);
 
 		// we have to return `Result<Ident, Error>` here in order to satisfy the trait
 		// bounds for `.or_else` for `generate_crate_access_2018`, even though `Option<Ident>`
