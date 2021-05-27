@@ -944,14 +944,28 @@ fn valid_equivocation_reports_dont_pay_fees() {
 }
 
 #[test]
-fn accountable_safety_basic() {
+fn accountable_safety_start() {
 	let authorities = test_authorities();
 	new_test_ext_raw_authorities(authorities).execute_with(|| {
 		start_era(1);
 
-		let state = Grandpa::accountable_safety_state();
-		dbg!(&state);
-		Grandpa::start_accountable_safety_protocol();
+		assert_eq!(Grandpa::accountable_safety_state(), None);
+
+		let commit_for_new_block = ASCommit {
+			target_number: 8,
+			precommits: Default::default(),
+		};
+		let commit_for_block_not_included = ASCommit {
+			target_number: 2,
+			precommits: Default::default(),
+		};
+		let round_for_block_not_included = 2;
+
+		Grandpa::start_accountable_safety_protocol(
+			commit_for_new_block,
+			(commit_for_block_not_included, round_for_block_not_included),
+		);
+
 		let state = Grandpa::accountable_safety_state();
 		dbg!(&state);
 	});

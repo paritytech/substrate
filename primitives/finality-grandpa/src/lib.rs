@@ -326,16 +326,13 @@ pub mod acc_safety {
 
 	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct StoredAccountableSafetyState<N> {
-		pub block_not_included: N,
-		pub round_for_block_not_included: N,
-		pub commit_for_block_not_included: Commit<N>,
+		pub block_not_included: (Commit<N>, RoundNumber),
 		pub querying_rounds: BTreeMap<RoundNumber, QueryState<N>>,
 		pub prevote_queries: BTreeMap<RoundNumber, QueryState<N>>,
 	}
 
 	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct QueryState<N> {
-		round: N,
 		voters: Vec<AuthorityId>,
 		responses: BTreeMap<AuthorityId, QueryResponse<N>>,
 		equivocations: Vec<EquivocationDetected<N>>,

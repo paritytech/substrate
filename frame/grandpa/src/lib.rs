@@ -37,7 +37,8 @@ use codec::{self as codec, Decode, Encode};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use fg_primitives::{
 	ConsensusLog, EquivocationProof, GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID,
-	ScheduledChange, SetId,
+	ScheduledChange, SetId, RoundNumber,
+	acc_safety::Commit as ASCommit,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -634,13 +635,18 @@ impl<T: Config> Pallet<T> {
 		<Stalled<T>>::put((further_wait, median));
 	}
 
-	pub fn start_accountable_safety_protocol() {
-		T::AccountableSafety::start_accountable_safety_protocol()
+	pub fn start_accountable_safety_protocol(
+		new_block: ASCommit::<T::BlockNumber>,
+		block_not_included: (ASCommit::<T::BlockNumber>, RoundNumber),
+	) {
+		T::AccountableSafety::start_accountable_safety_protocol(
+			new_block,
+			block_not_included,
+		)
 	}
 
 	pub fn accountable_safety_state() -> Option<fg_primitives::acc_safety::StoredAccountableSafetyState<T::BlockNumber>> {
 		Self::get_accountable_safety_state()
-		// T::AccountableSafety::state()
 	}
 
 	pub fn add_response() {
