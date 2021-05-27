@@ -777,3 +777,32 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 
 	assert!(format!("{}", error_result).contains("Spawned task"));
 }
+
+test_wasm_execution!(state_hashing_update);
+fn state_hashing_update(wasm_method: WasmExecutionMethod) {
+	// use externalities without storage flag.
+	let mut ext = TestExternalities::new(Default::default());
+
+	let mut ext = ext.ext();
+	ext.set_storage(b"foo".to_vec(), vec![1u8; 1_000]); // big inner hash
+	ext.set_storage(b"foo2".to_vec(), vec![3u8; 16]); // no inner hash
+	ext.set_storage(b"foo222".to_vec(), vec![5u8; 100]); // inner hash
+
+	let output = call_in_wasm(
+		"test_data_in",
+		&b"Hello world".to_vec().encode(),
+		wasm_method,
+		&mut ext,
+	).unwrap();
+
+	assert_eq!(output, b"all ok!".to_vec().encode());
+
+	// TODO new call in wasm to flag state.
+
+	// TODO Query check
+
+	// TODO update values with same value (same root likely).
+
+
+	// TODO update values with same value (same root likely).
+}

@@ -236,7 +236,12 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N>
 	where
 		H::Out: Ord + 'static + codec::Codec,
 {
-	fn default() -> Self { Self::new(Default::default()) }
+	fn default() -> Self {
+		// default to inner hashed.
+		let mut storage = Storage::default();
+		storage.flag_hashed_value = true;
+		Self::new(storage)
+	}
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H, N>
