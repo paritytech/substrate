@@ -2114,8 +2114,23 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 								meta_keys::FINALIZED_BLOCK,
 								key.clone()
 							);
-							transaction.remove(columns::META, meta_keys::FINALIZED_STATE);
+
 							reverted_finalized.insert(removed_hash);
+							if let Some((hash, _)) = self.blockchain.info().finalized_state {
+								if hash == best_hash {
+									if !best_number.is_zero()
+										&& self.have_state_at(&prev_hash, best_number - One::one())
+									{
+										let lookup_key = utils::number_and_hash_to_lookup_key(
+											best_number - One::one(),
+											prev_hash
+										)?;
+										transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key);
+									} else {
+										transaction.remove(columns::META, meta_keys::FINALIZED_STATE);
+									}
+								}
+							}
 						}
 						transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, key);
 						transaction.remove(columns::KEY_LOOKUP, removed.hash().as_ref());
