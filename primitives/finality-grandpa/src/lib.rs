@@ -355,12 +355,35 @@ pub mod acc_safety {
 			let responders: BTreeSet<AuthorityId> = self.responses.keys().cloned().collect();
 			voters.difference(&responders).into_iter().cloned().collect()
 		}
+
+		pub fn authorities_in_responses(&self) -> Vec<AuthorityId> {
+			self.responses
+				.values()
+				.map(|response| {
+					response.authorities()
+				})
+				.flatten()
+				.collect()
+		}
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, Eq, PartialEq)]
 	pub enum QueryResponse<N> {
 		Prevotes(Vec<Prevote<N>>),
 		Precommits(Vec<Precommit<N>>),
+	}
+
+	impl<N> QueryResponse<N> {
+		pub fn authorities(&self) -> Vec<AuthorityId> {
+			match self {
+				QueryResponse::Prevotes(prevotes) => {
+					prevotes.iter().map(|prevote| prevote.id.clone()).collect()
+				},
+				QueryResponse::Precommits(precommits) => {
+					precommits.iter().map(|precommit| precommit.id.clone()).collect()
+				},
+			}
+		}
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]

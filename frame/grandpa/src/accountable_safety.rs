@@ -64,8 +64,10 @@ pub struct AccountableSafetyHandler;
 
 impl<T: Config> AccountableSafety<T> for AccountableSafetyHandler {
 	fn update() {
-		// WIP: update the accountable safety state
-		println!("AS: update");
+		// Check replies
+		if let Some(state) = Pallet::<T>::accountable_safety_state() {
+			let a = state.querying_rounds;
+		}
 	}
 
 	fn start_accountable_safety_protocol(
