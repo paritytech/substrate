@@ -205,7 +205,6 @@ members = [
 	# temp deps
 	"max-encoded-len",
 	"max-encoded-len/derive",
-	"max-encoded-len/derive/tools",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates

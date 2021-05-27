@@ -15,8 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-temp-procedural-tools = { version = "3.0.0", path = "tools" }
 proc-macro2 = "1.0.6"
+proc-macro-crate = "1.0.0"
 quote = "1.0.3"
 syn = { version = "1.0.58", features = ["full"] }
 

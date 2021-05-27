@@ -15,12 +15,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use temp_procedural_tools::generate_crate_access_2018;
 use quote::{quote, quote_spanned};
 use syn::{
 	Data, DeriveInput, Error, Fields, GenericParam, Generics, Meta, TraitBound, Type,
 	TypeParamBound, parse_quote, spanned::Spanned,
 };
+use proc_macro_crate::{crate_name, FoundCrate};
+use proc_macro2::{Ident, Span};
+
+/// Generate the crate access for the crate using 2018 syntax.
+fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Ident, Error> {
+	match crate_name(def_crate) {
+		Ok(FoundCrate::Itself) => {
+			let name = def_crate.to_string().replace("-", "_");
+			Ok(syn::Ident::new(&name, Span::call_site()))
+		},
+		Ok(FoundCrate::Name(name)) => {
+			Ok(Ident::new(&name, Span::call_site()))
+		},
+		Err(e) => {
+			Err(Error::new(Span::call_site(), e))
+		}
+	}
+}
 
 /// Derive `MaxEncodedLen`.
 #[proc_macro_derive(MaxEncodedLen, attributes(max_encoded_len_crate))]
