@@ -184,7 +184,7 @@ pub struct InstructionWeights<T: Config> {
 	/// Should be incremented whenever any instruction weight is changed. The
 	/// reason is that changes to instruction weights require a re-instrumentation
 	/// in order to apply the changes to an already deployed code. The re-instrumentation
-	/// is triggered by comparing the version of the current schedule with the the code was
+	/// is triggered by comparing the version of the current schedule with the version the code was
 	/// instrumented with. Changes usually happen when pallet_contracts is re-benchmarked.
 	///
 	/// Changes to other parts of the schedule should not increment the version in
