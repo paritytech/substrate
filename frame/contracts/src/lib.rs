@@ -562,7 +562,7 @@ pub mod pallet {
 		ContractTrapped,
 		/// The size defined in `T::MaxValueSize` was exceeded.
 		ValueTooLarge,
-		/// Termination of a conteact is not allowed while the contract is already
+		/// Termination of a contract is not allowed while the contract is already
 		/// on the call stack. Can be triggered by `seal_terminate` or `seal_restore_to.
 		TerminatedWhileReentrant,
 		/// `seal_call` forwarded this contracts input. It therefore no longer available.
