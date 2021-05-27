@@ -26,6 +26,7 @@ use sp_runtime::traits::Block as BlockT;
 use crate::{columns, utils::DatabaseType};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use codec::{Decode, Encode};
+use log::info;
 
 /// Version file name.
 const VERSION_FILE_NAME: &'static str = "db_version";
@@ -102,11 +103,16 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 /// Migration from version3 to version4:
 /// - Trie state meta for state that could be hashed internaly.
 fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
+
+	info!("Starting trie node migration.");
+	let	start_time = std::time::Instant::now();
 	let db_path = db_path.to_str()
 		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 	let db_cfg = DatabaseConfig::with_columns(V2_NUM_COLUMNS);
 	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
 
+	let mut nb_node_prefixed = 0;
+	let mut nb_node_seen = 0;
 	let batch_size = 10_000; // TODO use bigger size (need to iterate all each time).
 	loop {
 		let mut full_batch = false;
@@ -116,8 +122,10 @@ fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 		// Note that every batch will restart full iter, could use
 		// a `iter_from` function.
 		for entry in db.iter(columns::STATE) {
+			nb_node_seen += 1;
 			if let Some(new_val) = sp_trie::tag_old_hashes::<sp_runtime::traits::HashFor<Block>>(&entry.1) {
 				transaction.put_vec(columns::STATE, &entry.0, new_val);
+				nb_node_prefixed += 1;
 				size += 1;
 				if size == batch_size {
 					full_batch = true;
@@ -125,11 +133,14 @@ fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 				}
 			}
 		}
+		info!("Committing batch, currently processed: {} of {} read nodes", nb_node_prefixed, nb_node_seen);
 		db.write(transaction).map_err(db_err)?;
 		if !full_batch {
 			break;
 		}
 	}
+	info!("Trie node migration finished in {:?} ms.", start_time.elapsed().as_millis());
+	info!("{:?} nodes prefixed for {:?} node.", nb_node_prefixed, nb_node_seen);
 	Ok(())
 }
 
