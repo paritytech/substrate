@@ -7535,6 +7535,7 @@ version = "0.9.0"
 dependencies = [
  "ansi_term 0.12.1",
  "futures 0.3.13",
+ "futures-timer 3.0.2",
  "log",
  "parity-util-mem",
  "sc-client-api",
@@ -7542,7 +7543,6 @@ dependencies = [
  "sp-blockchain",
  "sp-runtime",
  "sp-transaction-pool",
- "sp-utils",
  "wasm-timer",
 ]
 
