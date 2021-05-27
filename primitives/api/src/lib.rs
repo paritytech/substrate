@@ -489,31 +489,9 @@ pub trait ApiExt<Block: BlockT> {
 	> where Self: Sized;
 }
 
-/// Before calling any runtime api function, the runtime need to be initialized
-/// at the requested block. However, some functions like `execute_block` or
-/// `initialize_block` itself don't require to have the runtime initialized
-/// at the requested block.
-///
-/// `call_api_at` is instructed by this enum to do the initialization or to skip
-/// it.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy)]
-pub enum InitializeBlock<'a, Block: BlockT> {
-	/// Skip initializing the runtime for a given block.
-	///
-	/// This is used by functions who do the initialization by themselves or don't require it.
-	Skip,
-	/// Initialize the runtime for a given block.
-	///
-	/// If the stored `BlockId` is `Some(_)`, the runtime is currently initialized at this block.
-	Do(&'a RefCell<Option<BlockId<Block>>>),
-}
-
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashFor<Block>>> {
-	/// A reference to something that implements the [`Core`] api.
-	pub core_api: &'a C,
+pub struct CallApiAtParams<'a, Block: BlockT, NC, Backend: StateBackend<HashFor<Block>>> {
 	/// The block id that determines the state that should be setup when calling the function.
 	pub at: &'a BlockId<Block>,
 	/// The name of the function that should be called.
@@ -529,9 +507,6 @@ pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashF
 	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
 	/// The cache for storage transactions.
 	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
-	/// Determines if the function requires that `initialize_block` should be called before calling
-	/// the actual function.
-	pub initialize_block: InitializeBlock<'a, Block>,
 	/// The context this function is executed in.
 	pub context: ExecutionContext,
 	/// The optional proof recorder for recording storage accesses.
@@ -550,10 +525,9 @@ pub trait CallApiAt<Block: BlockT> {
 		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, ApiError> + UnwindSafe,
-		C: Core<Block>,
 	>(
 		&self,
-		params: CallApiAtParams<'a, Block, C, NC, Self::StateBackend>,
+		params: CallApiAtParams<'a, Block, NC, Self::StateBackend>,
 	) -> Result<NativeOrEncoded<R>, ApiError>;
 
 	/// Returns the runtime version at the given block.
@@ -704,12 +678,9 @@ decl_runtime_apis! {
 		#[changed_in(3)]
 		fn version() -> OldRuntimeVersion;
 		/// Execute the given block.
-		#[skip_initialize_block]
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
 		#[renamed("initialise_block", 2)]
-		#[skip_initialize_block]
-		#[initialize_block]
 		fn initialize_block(header: &<Block as BlockT>::Header);
 	}
 

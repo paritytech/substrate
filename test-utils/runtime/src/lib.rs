@@ -343,9 +343,6 @@ cfg_if! {
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
 				fn take_block_number() -> Option<u64>;
-				/// Returns if no block was initialized.
-				#[skip_initialize_block]
-				fn without_initialize_block() -> bool;
 				/// Test that `ed25519` crypto works in the runtime.
 				///
 				/// Returns the signature generated for the message `ed25519` and the public key.
@@ -396,9 +393,6 @@ cfg_if! {
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
 				fn take_block_number() -> Option<u64>;
-				/// Returns if no block was initialized.
-				#[skip_initialize_block]
-				fn without_initialize_block() -> bool;
 				/// Test that `ed25519` crypto works in the runtime.
 				///
 				/// Returns the signature generated for the message `ed25519` and the public key.
@@ -720,10 +714,6 @@ cfg_if! {
 					system::get_block_number().expect("Block number is initialized")
 				}
 
-				fn without_initialize_block() -> bool {
-					system::get_block_number().is_none()
-				}
-
 				fn take_block_number() -> Option<u64> {
 					system::take_block_number()
 				}
@@ -975,10 +965,6 @@ cfg_if! {
 
 				fn get_block_number() -> u64 {
 					system::get_block_number().expect("Block number is initialized")
-				}
-
-				fn without_initialize_block() -> bool {
-					system::get_block_number().is_none()
 				}
 
 				fn take_block_number() -> Option<u64> {
