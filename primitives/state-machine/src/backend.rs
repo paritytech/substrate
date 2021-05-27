@@ -98,6 +98,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Warning, this fails at first error when usual iteration skips errors.
 	/// If `allow_missing` is true, iteration stops when it reaches a missing trie node.
 	/// Otherwise an error is produced.
+	/// Return `true` if trie end is reached.
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
 		&self,
 		child_info: Option<&ChildInfo>,
@@ -105,7 +106,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		start_at: Option<&[u8]>,
 		f: F,
 		allow_missing: bool,
-	) -> Result<(), Self::Error>;
+	) -> Result<bool, Self::Error>;
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.

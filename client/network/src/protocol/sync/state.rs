@@ -86,7 +86,7 @@ impl<B: BlockT> StateSync<B> {
 				response.proof.len(),
 			);
 			let proof_size = response.proof.iter().map(|v| v.len()).sum::<usize>() as u64;
-			let values = match self.client.verify_read_proof(
+			let (values, complete) = match self.client.verify_range_proof(
 				self.target_root,
 				StorageProof::new(response.proof),
 				&self.last_key
@@ -106,7 +106,6 @@ impl<B: BlockT> StateSync<B> {
 			if let Some(last) = values.last().map(|(k, _)| k) {
 				self.last_key = last.clone();
 			}
-			let complete = !values.is_empty();
 
 			for (key, value) in values {
 				self.imported_bytes += key.len() as u64;

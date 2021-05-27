@@ -202,8 +202,9 @@ impl<B: BlockT> StateRequestHandler<B> {
 
 			log::trace!(
 				target: LOG_TARGET,
-				"StateResponse contains {} keys, complete={}, from {:?} to {:?}",
+				"StateResponse contains {} keys, {}, proof nodes, complete={}, from {:?} to {:?}",
 				response.entries.len(),
+				response.proof.len(),
 				response.complete,
 				response.entries.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
 				response.entries.last().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),

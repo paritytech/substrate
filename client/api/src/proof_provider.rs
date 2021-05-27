@@ -90,10 +90,11 @@ pub trait ProofProvider<Block: BlockT> {
 	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>>;
 
 	/// Verify read storage proof for a set of keys.
-	fn verify_read_proof(
+	/// Returns collected key-value paris and a flag indicating if iteration is complete.
+	fn verify_range_proof(
 		&self,
 		root: Block::Hash,
 		proof: StorageProof,
 		start_key: &[u8],
-	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>>;
+	) -> sp_blockchain::Result<(Vec<(Vec<u8>, Vec<u8>)>, bool)>;
 }

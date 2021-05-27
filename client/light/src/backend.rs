@@ -474,7 +474,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		start_at: Option<&[u8]>,
 		action: A,
 		allow_missing: bool,
-	) -> ClientResult<()> {
+	) -> ClientResult<bool> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
 				Ok(state.apply_to_key_values_while(child_info, prefix, start_at, action, allow_missing)

@@ -612,7 +612,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		start_at: Option<&[u8]>,
 		f: F,
 		allow_missing: bool,
-	) -> Result<(), Self::Error> {
+	) -> Result<bool, Self::Error> {
 		self.state.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
 	}
 
@@ -805,7 +805,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		start_at: Option<&[u8]>,
 		f: F,
 		allow_missing: bool,
-	) -> Result<(), Self::Error> {
+	) -> Result<bool, Self::Error> {
 		self.caching_state().apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
 	}
 

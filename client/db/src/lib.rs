@@ -212,7 +212,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		start_at: Option<&[u8]>,
 		f: F,
 		allow_missing: bool,
-	) -> Result<(), Self::Error> {
+	) -> Result<bool, Self::Error> {
 		self.state.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
 	}
 

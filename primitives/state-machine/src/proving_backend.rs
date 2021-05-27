@@ -275,7 +275,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		start_at: Option<&[u8]>,
 		f: F,
 		allow_missing: bool,
-	) -> Result<(), Self::Error> {
+	) -> Result<bool, Self::Error> {
 		self.0.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
 	}
 

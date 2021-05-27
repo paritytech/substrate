@@ -860,7 +860,7 @@ mod execution {
 		prefix: Option<&[u8]>,
 		count: Option<u32>,
 		start_at: Option<&[u8]>,
-	) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Box<dyn Error>>
+	) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Box<dyn Error>>
 	where
 		H: Hasher,
 		H::Out: Ord + Codec,
@@ -934,22 +934,22 @@ mod execution {
 		prefix: Option<&[u8]>,
 		count: Option<u32>,
 		start_at: Option<&[u8]>,
-	) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Box<dyn Error>>
+	) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Box<dyn Error>>
 	where
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
 		let mut values = Vec::new();
-		let result =  proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |key, value| {
+		let result = proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |key, value| {
 			if count.as_ref().map_or(false, |c| values.len() as u32 == *c) {
 				return false;
 			}
 			values.push((key.to_vec(), value.to_vec()));
 			true
 		}, true);
-		match (result, count) {
-			(Ok(()), _) => Ok(values),
-			(Err(e), _) => Err(Box::new(e) as Box<dyn Error>),
+		match result {
+			Ok(completed) => Ok((values, completed)),
+			Err(e) => Err(Box::new(e) as Box<dyn Error>),
 		}
 	}
 }
@@ -1558,11 +1558,12 @@ mod tests {
 		// Alwasys contains at least some nodes.
 		assert_eq!(proof.into_nodes().len(), 3);
 		assert_eq!(count, 1);
+
 		let remote_backend = trie_backend::tests::test_trie();
 		let (proof, count) = prove_range_read_with_size(remote_backend, None, None, 800, Some(&[])).unwrap();
 		assert_eq!(proof.clone().into_nodes().len(), 9);
 		assert_eq!(count, 85);
-		let results = read_range_proof_check::<BlakeTwo256>(
+		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
 			remote_root,
 			proof.clone(),
 			None,
@@ -1571,8 +1572,9 @@ mod tests {
 			None,
 		).unwrap();
 		assert_eq!(results.len() as u32, count);
+		assert_eq!(completed, false);
 		// When checking without count limit, proof may actually contain extra values.
-		let results = read_range_proof_check::<BlakeTwo256>(
+		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
 			remote_root,
 			proof,
 			None,
@@ -1581,6 +1583,22 @@ mod tests {
 			None,
 		).unwrap();
 		assert_eq!(results.len() as u32, 101);
+		assert_eq!(completed, false);
+
+		let remote_backend = trie_backend::tests::test_trie();
+		let (proof, count) = prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
+		assert_eq!(proof.clone().into_nodes().len(), 11);
+		assert_eq!(count, 132);
+		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
+			remote_root,
+			proof.clone(),
+			None,
+			None,
+			None,
+			None,
+		).unwrap();
+		assert_eq!(results.len() as u32, count);
+		assert_eq!(completed, true);
 	}
 
 	#[test]

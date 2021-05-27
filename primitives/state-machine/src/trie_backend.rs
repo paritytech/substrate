@@ -120,7 +120,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		start_at: Option<&[u8]>,
 		f: F,
 		allow_missing: bool,
-	) -> Result<(), Self::Error> {
+	) -> Result<bool, Self::Error> {
 		self.essence.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
 	}
 

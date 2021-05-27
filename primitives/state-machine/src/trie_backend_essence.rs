@@ -198,7 +198,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		start_at: Option<&[u8]>,
 		f: impl FnMut(Vec<u8>, Vec<u8>) -> bool,
 		allow_missing_nodes: bool,
-	) -> Result<()> {
+	) -> Result<bool> {
 		let mut child_root;
 		let root = if let Some(child_info) = child_info.as_ref() {
 			if let Some(fetched_child_root) = self.child_root(child_info)? {
@@ -208,7 +208,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 				&child_root
 			} else {
-				return Ok(());
+				return Ok(true);
 			}
 		} else {
 			&self.root
@@ -291,8 +291,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: Option<&ChildInfo>,
 		start_at: Option<&[u8]>,
 		allow_missing_nodes: bool,
-	) -> Result<()> {
-		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
+	) -> Result<bool> {
+		let mut iter = move |db| -> sp_std::result::Result<bool, Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
 
 			let iterator = if let Some(start_at) = start_at {
@@ -306,11 +306,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 				debug_assert!(key.starts_with(prefix));
 
 				if !f(key, value) {
-					break;
+					return Ok(false)
 				}
 			}
 
-			Ok(())
+			Ok(true)
 		};
 
 		let result = if let Some(child_info) = child_info {
@@ -320,8 +320,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			iter(self)
 		};
 		match result {
-			Ok(()) => Ok(()),
-			Err(e) if matches!(*e, TrieError::IncompleteDatabase(_)) && allow_missing_nodes => Ok(()),
+			Ok(completed) => Ok(completed),
+			Err(e) if matches!(*e, TrieError::IncompleteDatabase(_)) && allow_missing_nodes => Ok(false),
 			Err(e) => Err(format!("TrieDB iteration error: {}", e)),
 		}
 	}

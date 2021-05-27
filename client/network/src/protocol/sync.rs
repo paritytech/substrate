@@ -1261,7 +1261,7 @@ impl<B: BlockT> ChainSync<B> {
 					}
 					let state_sync_complete = self.state_sync.as_ref().map_or(false, |s| s.target() == hash);
 					if state_sync_complete {
-						debug!(target: "sync", "State sync complete, restarting block sync.");
+						info!(target: "sync", "State sync is complete, restarting block sync.");
 						self.state_sync = None;
 						self.mode = SyncMode::Full;
 						output.extend(self.restart());

@@ -1390,12 +1390,12 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 
 	}
 
-	fn verify_read_proof(
+	fn verify_range_proof(
 		&self,
 		root: Block::Hash,
 		proof: StorageProof,
 		start_key: &[u8],
-	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	) -> sp_blockchain::Result<(Vec<(Vec<u8>, Vec<u8>)>, bool)> {
 		Ok(read_range_proof_check::<HashFor<Block>>(
 				root,
 				proof,
