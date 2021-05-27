@@ -65,15 +65,6 @@ impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, Deposi
 	}
 }
 
-/// A pair to act as a key for the approval storage map.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub struct ApprovalKey<AccountId> {
-	/// The owner of the funds that are being approved.
-	pub(super) owner: AccountId,
-	/// The party to whom transfer of the funds is being delegated.
-	pub(super) delegate: AccountId,
-}
-
 /// Data concerning an approval.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
 pub struct Approval<Balance, DepositBalance> {

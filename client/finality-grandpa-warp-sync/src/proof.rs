@@ -91,7 +91,10 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		let mut proofs_encoded_len = 0;
 		let mut proof_limit_reached = false;
 
-		for (_, last_block) in set_changes.iter_from(begin_number) {
+		let set_changes = set_changes.iter_from(begin_number)
+			.ok_or(HandleRequestError::MissingData)?;
+
+		for (_, last_block) in set_changes {
 			let header = blockchain.header(BlockId::Number(*last_block))?.expect(
 				"header number comes from previously applied set changes; must exist in db; qed.",
 			);

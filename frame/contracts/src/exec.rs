@@ -17,7 +17,7 @@
 
 use crate::{
 	CodeHash, Event, Config, Pallet as Contracts,
-	BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::Storage,
+	BalanceOf, ContractInfo, gas::GasMeter, rent::{Rent, RentStatus}, storage::Storage,
 	Error, ContractInfoOf, Schedule, AliveContractInfo, AccountCounter,
 };
 use sp_core::crypto::UncheckedFrom;
@@ -32,7 +32,7 @@ use frame_support::{
 	storage::{with_transaction, TransactionOutcome},
 	traits::{ExistenceRequirement, Currency, Time, Randomness, Get},
 	weights::Weight,
-	ensure,
+	ensure, DefaultNoBound,
 };
 use pallet_contracts_primitives::{ExecReturnValue};
 use smallvec::{SmallVec, Array};
@@ -82,7 +82,7 @@ impl<T: Into<DispatchError>> From<T> for ExecError {
 }
 
 /// Information needed for rent calculations that can be requested by a contract.
-#[derive(codec::Encode)]
+#[derive(codec::Encode, DefaultNoBound)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct RentParams<T: Config> {
 	/// The total balance of the contract. Includes the balance transferred from the caller.
@@ -138,27 +138,6 @@ where
 			code_size: executable.aggregate_code_len(),
 			code_refcount: executable.refcount(),
 			_reserved: None,
-		}
-	}
-}
-
-/// We cannot derive `Default` because `T` does not necessarily implement `Default`.
-#[cfg(test)]
-impl<T: Config> Default for RentParams<T> {
-	fn default() -> Self {
-		Self {
-			total_balance: Default::default(),
-			free_balance: Default::default(),
-			subsistence_threshold: Default::default(),
-			deposit_per_contract: Default::default(),
-			deposit_per_storage_byte: Default::default(),
-			deposit_per_storage_item: Default::default(),
-			rent_allowance: Default::default(),
-			rent_fraction: Default::default(),
-			storage_size: Default::default(),
-			code_size: Default::default(),
-			code_refcount: Default::default(),
-			_reserved: Default::default(),
 		}
 	}
 }
@@ -312,6 +291,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Information needed for rent calculations.
 	fn rent_params(&self) -> &RentParams<Self::T>;
+
+	/// Information about the required deposit and resulting rent.
+	fn rent_status(&mut self, at_refcount: u32) -> RentStatus<Self::T>;
 
 	/// Get a mutable reference to the nested gas meter.
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T>;
@@ -704,8 +686,11 @@ where
 					contract
 				} else {
 					<ContractInfoOf<T>>::get(&dest)
-						.and_then(|contract| contract.get_alive())
-						.ok_or((Error::<T>::NotCallable.into(), 0))?
+						.ok_or((<Error<T>>::ContractNotFound.into(), 0))
+						.and_then(|contract|
+							contract.get_alive()
+								.ok_or((<Error<T>>::ContractIsTombstone.into(), 0))
+						)?
 				};
 
 				let executable = E::from_storage(contract.code_hash, schedule, gas_meter)
@@ -719,7 +704,7 @@ where
 				let contract = Rent::<T, E>
 					::charge(&dest, contract, executable.occupied_storage())
 					.map_err(|e| (e.into(), executable.code_len()))?
-					.ok_or((Error::<T>::NotCallable.into(), executable.code_len()))?;
+					.ok_or((Error::<T>::RentNotPaid.into(), executable.code_len()))?;
 				(dest, contract, executable, ExportedFunction::Call)
 			}
 			FrameArgs::Instantiate{sender, trie_seed, executable, salt} => {
@@ -809,7 +794,7 @@ where
 			let code_len = executable.code_len();
 
 			// Every call or instantiate also optionally transferres balance.
-			self.initial_transfer().map_err(|e| (ExecError::from(e), 0))?;
+			self.initial_transfer().map_err(|e| (ExecError::from(e), code_len))?;
 
 			// Call into the wasm blob.
 			let output = executable.execute(
@@ -909,11 +894,11 @@ where
 				}
 			}
 		} else {
-			if let Some(message) = &self.debug_message {
+			if let Some((msg, false)) = self.debug_message.as_ref().map(|m| (m, m.is_empty())) {
 				log::debug!(
 					target: "runtime::contracts",
-					"Debug Message: {}",
-					core::str::from_utf8(message).unwrap_or("<Invalid UTF8>"),
+					"Execution finished with debug buffer: {}",
+					core::str::from_utf8(msg).unwrap_or("<Invalid UTF8>"),
 				);
 			}
 			// Write back to the root gas meter.
@@ -972,12 +957,23 @@ where
 
 	// The transfer as performed by a call or instantiate.
 	fn initial_transfer(&self) -> DispatchResult {
+		let frame = self.top_frame();
+		let value = frame.value_transferred;
+		let subsistence_threshold = <Contracts<T>>::subsistence_threshold();
+
+		// If the value transferred to a new contract is less than the subsistence threshold
+		// we can error out early. This avoids executing the constructor in cases where
+		// we already know that the contract has too little balance.
+		if frame.entry_point == ExportedFunction::Constructor && value < subsistence_threshold {
+			return Err(<Error<T>>::NewContractNotFunded.into());
+		}
+
 		Self::transfer(
 			self.caller_is_origin(),
 			false,
 			self.caller(),
-			&self.top_frame().account_id,
-			self.top_frame().value_transferred,
+			&frame.account_id,
+			value,
 		)
 	}
 
@@ -1238,6 +1234,20 @@ where
 
 	fn rent_params(&self) -> &RentParams<Self::T> {
 		&self.top_frame().rent_params
+	}
+
+	fn rent_status(&mut self, at_refcount: u32) -> RentStatus<Self::T> {
+		let frame = self.top_frame_mut();
+		let balance = T::Currency::free_balance(&frame.account_id);
+		let code_size = frame.rent_params.code_size;
+		let refcount = frame.rent_params.code_refcount;
+		<Rent<T, E>>::rent_status(
+			&balance,
+			&frame.contract_info(),
+			code_size,
+			refcount,
+			at_refcount,
+		)
 	}
 
 	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
@@ -2009,7 +2019,7 @@ mod tests {
 					ctx.ext.instantiate(
 						0,
 						dummy_ch,
-						15u64,
+						Contracts::<Test>::subsistence_threshold(),
 						vec![],
 						&[],
 					),
@@ -2195,6 +2205,48 @@ mod tests {
 	}
 
 	#[test]
+	fn rent_status_works() {
+		let code_hash = MockLoader::insert(Call, |ctx, _| {
+			assert_eq!(ctx.ext.rent_status(0), RentStatus {
+				max_deposit: 80000,
+				current_deposit: 80000,
+				custom_refcount_deposit: None,
+				max_rent: 32,
+				current_rent: 32,
+				custom_refcount_rent: None,
+				_reserved: None,
+			});
+			assert_eq!(ctx.ext.rent_status(1), RentStatus {
+				max_deposit: 80000,
+				current_deposit: 80000,
+				custom_refcount_deposit: Some(80000),
+				max_rent: 32,
+				current_rent: 32,
+				custom_refcount_rent: Some(32),
+				_reserved: None,
+			});
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, subsistence * 10);
+			place_contract(&BOB, code_hash);
+			MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			).unwrap();
+		});
+	}
+
+	#[test]
 	fn in_memory_changes_not_discarded() {
 		// Call stack: BOB -> CHARLIE (trap) -> BOB' (success)
 		// This tests verfies some edge case of the contract info cache:
@@ -2248,7 +2300,7 @@ mod tests {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
 				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![]),
-				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::NotCallable.into()
+				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::ContractNotFound.into()
 			);
 			exec_success()
 		});
