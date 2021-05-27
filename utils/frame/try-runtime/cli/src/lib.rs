@@ -257,8 +257,6 @@ where
 	};
 
 	let header_hash: B::Hash = command.header_at.parse().unwrap();
-	// TODO should this be ws to the arg url??
-	log::info!("ws url: {}", url);
 	let header = remote_externalities::get_header::<B, _>(
 		url,
 		header_hash

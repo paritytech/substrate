@@ -104,6 +104,7 @@
 use std::{
 	fs,
 	path::{Path, PathBuf},
+	error,
 };
 use log::*;
 use sp_core::hashing::twox_128;
@@ -438,7 +439,6 @@ impl<B: BlockT> Builder<B> {
 		let ws_client = WsClientBuilder::default()
 			.max_request_body_size(u32::MAX)
 			.build(&online.transport.uri)
-			.await
 			.map_err(|e| "failed to build ws client")?;
 		online.transport.client = Some(ws_client);
 
