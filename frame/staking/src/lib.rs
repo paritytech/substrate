@@ -791,6 +791,12 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// The maximum number of nominators.
 	type MaxNominators: Get<u32>;
 
+	/// The minimum bonded to be a validator.
+	type MinValidatorBond: Get<BalanceOf<Self>>;
+
+	/// The minimum bond.
+	type MinBond: Get<BalanceOf<Self>>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -1302,8 +1308,8 @@ decl_module! {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 
-			// reject a bond which is considered to be _dust_.
-			if value < T::Currency::minimum_balance() {
+			// reject a bond which is too low.
+			if value < T::MinBond::get() {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
@@ -1364,8 +1370,8 @@ decl_module! {
 				let extra = extra.min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
-				// last check: the new active amount of ledger must be more than ED.
-				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+				// last check: the new active amount of ledger must be at least min bond.
+				ensure!(ledger.active >= T::MinBond::get(), Error::<T>::InsufficientValue);
 
 				Self::deposit_event(RawEvent::Bonded(stash, extra));
 				Self::update_ledger(&controller, &ledger);
@@ -1374,7 +1380,7 @@ decl_module! {
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
-		/// T::Currency::minimum_balance(), then it is increased to the full amount.
+		/// T::MinBond::get(), then it is increased to the full amount.
 		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
@@ -1393,7 +1399,7 @@ decl_module! {
 		/// # <weight>
 		/// - Independent of the arguments. Limited but potentially exploitable complexity.
 		/// - Contains a limited number of reads.
-		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance`)
+		/// - Each call (requires the remainder of the bonded balance to be above `MinBond`)
 		///   will cause a new entry to be inserted into a vector (`Ledger.unlocking`) kept in storage.
 		///   The only way to clean the aforementioned storage item is also user-controlled via
 		///   `withdraw_unbonded`.
@@ -1418,8 +1424,8 @@ decl_module! {
 			if !value.is_zero() {
 				ledger.active -= value;
 
-				// Avoid there being a dust balance left in the staking system.
-				if ledger.active < T::Currency::minimum_balance() {
+				// Avoid there being a less than a minimum bond left in the staking system.
+				if ledger.active < T::MinBond::get() {
 					value += ledger.active;
 					ledger.active = Zero::zero();
 				}
@@ -1472,7 +1478,7 @@ decl_module! {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
+			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < T::MinBond::get() {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
@@ -1521,6 +1527,7 @@ decl_module! {
 		pub fn validate(origin, prefs: ValidatorPrefs) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(ledger.active >= T::MinValidatorBond::get(), Error::<T>::InsufficientValue);
 			ensure!(ValidatorsCount::get() < T::MaxValidators::get(), Error::<T>::TooManyValidators);
 
 			let stash = &ledger.stash;
@@ -1888,8 +1895,8 @@ decl_module! {
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let ledger = ledger.rebond(value);
-			// last check: the new active amount of ledger must be more than ED.
-			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+			// last check: the new active amount of ledger must be more than the min bond.
+			ensure!(ledger.active >= T::MinBond::get(), Error::<T>::InsufficientValue);
 
 			Self::update_ledger(&controller, &ledger);
 			Ok(Some(
@@ -2692,7 +2699,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
-				.unwrap_or(T::Currency::minimum_balance() * 100u32.into());
+				.unwrap_or(T::MinBond::get() * 100u32.into());
 			<Bonded<T>>::insert(v.clone(), v.clone());
 			<Ledger<T>>::insert(
 				v.clone(),
