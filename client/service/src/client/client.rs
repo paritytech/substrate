@@ -1263,10 +1263,11 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		count: u32,
+		value_size: u32,
 		start_at: Option<&[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
 		self.state_at(id)
-			.and_then(|state| prove_range_read(state, child_info, prefix, count, start_at)
+			.and_then(|state| prove_range_read(state, child_info, prefix, count, value_size, start_at)
 				.map_err(Into::into))
 	}
 

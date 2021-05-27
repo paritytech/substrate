@@ -771,6 +771,7 @@ impl<B: Block> Request<B> {
 					prefix: request.prefix.clone()
 						.unwrap_or_else(Default::default),
 					count: request.count.clone(),
+					value_size: request.value_size.clone(),
 					start_key: request.start_key.clone()
 						.unwrap_or_else(Default::default),
 				};
@@ -1353,6 +1354,7 @@ mod tests {
 			child_trie_key: None,
 			prefix: None,
 			count: 5,
+			value_size: 0,
 			start_key: None,
 			retry_count: None,
 		};

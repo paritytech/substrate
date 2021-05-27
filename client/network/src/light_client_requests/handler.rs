@@ -55,7 +55,11 @@ const LOG_TARGET: &str = "light-client-request-handler";
 /// Hard coded limit to range request size.
 /// This is defined to be the same limit as
 /// `sc_rpc::state::STORAGE_KEYS_PAGED_MAX_COUNT`.
-const MAX_LIGHT_RANGE_COUNT: u32 = 1000;
+const MAX_LIGHT_RANGE_COUNT: u32 = 1_000;
+
+/// Hard coded limit to total value size
+/// in a range proof.
+const VALUE_SIZE_LIGHT_RANGE_TRESHOLD: u32 = 16 * 1024 * 1024;
 
 /// Handler for incoming light client requests from a remote peer.
 pub struct LightClientRequestHandler<B: Block> {
@@ -300,17 +304,19 @@ impl<B: Block> LightClientRequestHandler<B> {
 		peer: &PeerId,
 		request: &schema::v1::light::RemoteReadRangeRequest,
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
-		if request.count > MAX_LIGHT_RANGE_COUNT {
+		if request.count > MAX_LIGHT_RANGE_COUNT 
+			|| request.value_size > VALUE_SIZE_LIGHT_RANGE_TRESHOLD {
 			log::debug!("Invalid remote range read request sent by {}.", peer);
 			return Err(HandleRequestError::BadRequest("Range read request too big."))
 		}
 
 		log::trace!(
-			"Remote read range request from {} ({} {} {:?} {} at {:?}).",
+			"Remote read range request from {} ({} {} {:?} {:?} {} at {:?}).",
 			peer,
 			HexDisplay::from(&request.child_trie_key),
 			HexDisplay::from(&request.prefix),
 			&request.count,
+			&request.value_size,
 			HexDisplay::from(&request.start_key),
 			request.block,
 		);
@@ -318,7 +324,14 @@ impl<B: Block> LightClientRequestHandler<B> {
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
 		let prefix = (request.prefix.len() == 0).then(|| request.prefix.as_slice());
-		let count = request.count.clone();
+		let mut count = request.count.clone();
+		if count == 0 {
+			count = MAX_LIGHT_RANGE_COUNT;
+		}
+		let mut value_treshold = request.value_size.clone();
+		if value_treshold == 0 {
+			value_treshold = VALUE_SIZE_LIGHT_RANGE_TRESHOLD;
+		}
 		let start_key = (request.start_key.len() == 0).then(|| request.start_key.as_slice());
 		let child_info = if request.child_trie_key.len() == 0 {
 			Ok(None)
@@ -334,16 +347,18 @@ impl<B: Block> LightClientRequestHandler<B> {
 			child_info.as_ref(),
 			prefix,
 			count,
+			value_treshold,
 			start_key,
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!(
-					"remote read range request from {} ({} {} {:?} {} at {:?}) failed with: {}",
+					"remote read range request from {} ({} {} {:?} {:?} {} at {:?}) failed with: {}",
 					peer,
 					HexDisplay::from(&request.child_trie_key),
 					HexDisplay::from(&request.prefix),
 					&request.count,
+					&request.value_size,
 					HexDisplay::from(&request.start_key),
 					request.block,
 					error,

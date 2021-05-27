@@ -278,6 +278,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 			child_info.as_ref(),
 			request.prefix.as_ref().map(Vec::as_slice),
 			request.count,
+			request.value_size,
 			request.start_key.as_ref().map(Vec::as_slice),
 		).map_err(|e| ClientError::from(e))
 	}

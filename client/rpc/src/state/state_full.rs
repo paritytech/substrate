@@ -291,7 +291,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 						&BlockId::Hash(block), prefix.as_ref(), start_key.as_ref()
 					)
 				)
-				.map(|v| v.take(count as usize).collect())
+				.map(|keys_iter| keys_iter.take(count as usize).collect())
 				.map_err(client_err)))
 	}
 

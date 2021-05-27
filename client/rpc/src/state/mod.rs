@@ -46,6 +46,9 @@ use sc_client_api::{
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
+/// For light client the value size in proof will be limited to
+/// this value.
+const DEFAULT_VALUE_SIZE_RANGE_TRESHOLD: u32 = 16 * 1024 * 1024;
 
 /// State backend API.
 pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
@@ -273,7 +276,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 	fn storage_keys_paged(
 		&self,
 		prefix: Option<StorageKey>,
-		count: u32,
+		mut count: u32,
 		start_key: Option<StorageKey>,
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<StorageKey>> {
@@ -284,6 +287,9 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 					max: STORAGE_KEYS_PAGED_MAX_COUNT,
 				}
 			)));
+		}
+		if count == 0 {
+			count = STORAGE_KEYS_PAGED_MAX_COUNT;
 		}
 		self.backend.storage_keys_paged(block, prefix, count, start_key)
 	}

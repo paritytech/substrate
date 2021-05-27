@@ -50,6 +50,7 @@ pub trait ProofProvider<Block: BlockT> {
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		count: u32,
+		value_size: u32,
 		start_at: Option<&[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
 

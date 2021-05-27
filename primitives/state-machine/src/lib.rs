@@ -750,6 +750,7 @@ mod execution {
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		count: u32,
+		value_size: u32,
 		start_at: Option<&[u8]>,
 	) -> Result<StorageProof, Box<dyn Error>>
 	where
@@ -760,7 +761,7 @@ mod execution {
 		let trie_backend = backend.as_trie_backend()
 			.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
 
-		prove_range_read_on_trie_backend(trie_backend, child_info, prefix, count, start_at)
+		prove_range_read_on_trie_backend(trie_backend, child_info, prefix, count, value_size, start_at)
 	}
 
 	/// Generate storage read proof on pre-created trie backend.
@@ -812,6 +813,7 @@ mod execution {
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		mut count: u32,
+		value_size: u32,
 		start_at: Option<&[u8]>,
 	) -> Result<StorageProof, Box<dyn Error>>
 	where
@@ -819,12 +821,14 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
+		let mut total_value_size = 0usize;
 		let proving_backend = proving_backend::ProvingBackend::<S, H>::new(trie_backend);
-		proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |_key, _value| {
-			if count == 0 {
+		proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |_key, value| {
+			if count == 0 || total_value_size > value_size as usize {
 				return false;
 			}
 			count -= 1;
+			total_value_size += value.len();
 			true
 		}).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 		Ok(proving_backend.extract_proof())
@@ -884,6 +888,7 @@ mod execution {
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		count: u32,
+		value_size: u32,
 		start_at: Option<&[u8]>,
 	) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Box<dyn Error>>
 	where
@@ -896,6 +901,7 @@ mod execution {
 			child_info,
 			prefix,
 			count,
+			value_size,
 			start_at,
 		)
 	}
@@ -932,18 +938,21 @@ mod execution {
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		count: u32,
+		value_size: u32,
 		start_at: Option<&[u8]>,
 	) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Box<dyn Error>>
 	where
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
+		let mut total_value_size = 0usize;
 		let mut result = Vec::new();
 		proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |key, value| {
-			if result.len() as u32 == count {
+			if result.len() as u32 == count || total_value_size > value_size as usize {
 				return false;
 			}
 			result.push((key.to_vec(), value.to_vec()));
+			total_value_size += value.len();
 			true
 		}).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 		Ok(result)
@@ -1576,10 +1585,18 @@ mod tests {
 			next_count_in_proof: Option<u32>,
 			mut expected_result: &[(Vec<u8>, Vec<u8>)],
 		| -> () {
+			let value_size = 10_000; // bigger value than any tests.
+
 			let remote_backend = trie_backend::tests::test_trie();
 			let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-			let remote_proof = prove_range_read(remote_backend, child_info, prefix, count, start_at)
-				.unwrap();
+			let remote_proof = prove_range_read(
+				remote_backend,
+				child_info,
+				prefix,
+				count,
+				value_size,
+				start_at,
+			).unwrap();
 			// check proof locally
 			let local_result_1 = read_range_proof_check::<BlakeTwo256>(
 				remote_root.clone(),
@@ -1587,6 +1604,7 @@ mod tests {
 				child_info,
 				prefix,
 				count,
+				value_size,
 				start_at,
 			).unwrap();
 			let local_result_2 = read_range_proof_check::<BlakeTwo256>(
@@ -1595,6 +1613,7 @@ mod tests {
 				child_info,
 				prefix,
 				count - 1,
+				value_size,
 				start_at,
 			).unwrap();
 			assert_eq!(local_result_1.as_slice(), expected_result);
@@ -1609,6 +1628,7 @@ mod tests {
 					child_info,
 					prefix,
 					count + next_count_in_proof + 1,
+					value_size,
 					start_at,
 				);
 				// check that results are correct
@@ -1623,6 +1643,28 @@ mod tests {
 		test(None, Some(b"valu"), 3, Some(b"value111"), None, &values[4..].to_vec());
 		test(Some(child_info), None, 1, None, None, &child_values[..1].to_vec());
 		test(Some(child_info), None, 8, None, None, &child_values[..].to_vec());
+
+		let remote_backend = trie_backend::tests::test_trie();
+		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_proof_value_treshold = prove_range_read(
+			remote_backend,
+			None,
+			None,
+			100_000,
+			1, // smal value size to be immediatly above threshold.
+			None,
+		).unwrap();
+		let local_result = read_range_proof_check::<BlakeTwo256>(
+			remote_root,
+			remote_proof_value_treshold,
+			None,
+			None,
+			100_000,
+			1, // smal value size to be immediatly above threshold.
+			None,
+		).unwrap();
+		// ensure this is a threshold limit value.
+		assert_eq!(local_result.len(), 1);
 	}
 
 	#[test]

@@ -220,6 +220,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 			None,
 			prefix.map(|key| key.0),
 			count,
+			super::DEFAULT_VALUE_SIZE_RANGE_TRESHOLD,
 			start_key.map(|key| key.0),
 		).boxed().compat().map(move |key_values| key_values.into_iter()
 			.map(|key_value| key_value.0)
@@ -656,6 +657,7 @@ fn storage_range<Block: BlockT, F: Fetcher<Block>>(
 	child_trie_key: Option<PrefixedStorageKey>,
 	prefix: Option<Vec<u8>>,
 	count: u32,
+	value_size: u32,
 	start_key: Option<Vec<u8>>,
 ) -> impl std::future::Future<Output = Result<Vec<(StorageKey, StorageData)>, Error>> {
 	resolve_header(remote_blockchain, &*fetcher, block)
@@ -666,6 +668,7 @@ fn storage_range<Block: BlockT, F: Fetcher<Block>>(
 				child_trie_key,
 				prefix,
 				count,
+				value_size,
 				start_key,
 				retry_count: Default::default(),
 			}).then(|result| ready(result
