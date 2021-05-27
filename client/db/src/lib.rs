@@ -397,6 +397,14 @@ impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 	}
 }
 
+struct MetaUpdate<Block: BlockT> {
+	pub hash: Block::Hash,
+	pub number: NumberFor<Block>,
+	pub is_best: bool,
+	pub is_finalized: bool,
+	pub with_state: bool,
+}
+
 fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 	cache: &mut LinkedHashMap<Hash, Option<Header>>,
 	hash: Hash,
@@ -1213,7 +1221,7 @@ impl<Block: BlockT> Backend<Block> {
 		justification: Option<Justification>,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
-	) -> ClientResult<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool, bool)> {
+	) -> ClientResult<MetaUpdate<Block>> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
@@ -1236,7 +1244,13 @@ impl<Block: BlockT> Backend<Block> {
 				Justifications::from(justification).encode(),
 			);
 		}
-		Ok((*hash, number, false, true, with_state))
+		Ok(MetaUpdate {
+			hash: *hash,
+			number,
+			is_best: false,
+			is_finalized: true,
+			with_state,
+		})
 	}
 
 	// performs forced canonicalization with a delay after importing a non-finalized block.
@@ -1431,7 +1445,13 @@ impl<Block: BlockT> Backend<Block> {
 					let commit = self.storage.state_db.canonicalize_block(&hash)
 						.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 					apply_state_commit(&mut transaction, commit);
-					meta_updates.push((hash, number, false, true, true));
+					meta_updates.push(MetaUpdate {
+						hash,
+						number,
+						is_best: false,
+						is_finalized: true,
+						with_state: true,
+					});
 				}
 
 
@@ -1514,7 +1534,13 @@ impl<Block: BlockT> Backend<Block> {
 					children,
 				);
 
-				meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized, operation.commit_state));
+				meta_updates.push(MetaUpdate {
+					hash,
+					number,
+					is_best: pending_block.leaf_state.is_best(),
+					is_finalized: finalized,
+					with_state: operation.commit_state,
+				});
 
 				Some((pending_block.header, number, hash, enacted, retracted, displaced_leaf, is_best, cache))
 			} else {
@@ -1534,7 +1560,13 @@ impl<Block: BlockT> Backend<Block> {
 					hash.clone(),
 					(number.clone(), hash.clone())
 				)?;
-				meta_updates.push((hash, *number, true, false, false));
+				meta_updates.push(MetaUpdate {
+					hash,
+					number: *number,
+					is_best: true,
+					is_finalized: false,
+					with_state: false,
+				});
 				Some((enacted, retracted))
 			} else {
 				return Err(sp_blockchain::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
@@ -1585,8 +1617,8 @@ impl<Block: BlockT> Backend<Block> {
 			self.shared_cache.lock().sync(&enacted, &retracted);
 		}
 
-		for (hash, number, is_best, is_finalized, with_state) in meta_updates {
-			self.blockchain.update_meta(hash, number, is_best, is_finalized, with_state);
+		for m in meta_updates {
+			self.blockchain.update_meta(m.hash, m.number, m.is_best, m.is_finalized, m.with_state);
 		}
 
 		Ok(())
@@ -1915,7 +1947,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let mut displaced = None;
 
 		let mut changes_trie_cache_ops = None;
-		let (hash, number, is_best, is_finalized, with_state) = self.finalize_block_with_transaction(
+		let m = self.finalize_block_with_transaction(
 			&mut transaction,
 			&hash,
 			&header,
@@ -1925,7 +1957,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			&mut displaced,
 		)?;
 		self.storage.db.commit(transaction)?;
-		self.blockchain.update_meta(hash, number, is_best, is_finalized, with_state);
+		self.blockchain.update_meta(m.hash, m.number, m.is_best, m.is_finalized, m.with_state);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		Ok(())
 	}
