@@ -22,7 +22,7 @@
 use super::{Call, Event, *};
 use crate::mock::*;
 use codec::Encode;
-use fg_primitives::ScheduledChange;
+use fg_primitives::{ScheduledChange, acc_safety::StoredAccountableSafetyState};
 use frame_support::{
 	assert_err, assert_ok, assert_noop,
 	traits::{Currency, OnFinalize, OneSessionHandler},
@@ -963,10 +963,16 @@ fn accountable_safety_start() {
 
 		Grandpa::start_accountable_safety_protocol(
 			commit_for_new_block,
-			(commit_for_block_not_included, round_for_block_not_included),
+			(commit_for_block_not_included.clone(), round_for_block_not_included),
 		);
 
-		let state = Grandpa::accountable_safety_state();
-		dbg!(&state);
+		assert_eq!(
+			Grandpa::accountable_safety_state(),
+			Some(StoredAccountableSafetyState {
+				block_not_included: (commit_for_block_not_included, round_for_block_not_included),
+				querying_rounds: Default::default(),
+				prevote_queries: Default::default(),
+			}),
+		);
 	});
 }

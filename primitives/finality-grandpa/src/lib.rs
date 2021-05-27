@@ -324,52 +324,52 @@ pub mod acc_safety {
 		vec::Vec,
 	};
 
-	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct StoredAccountableSafetyState<N> {
 		pub block_not_included: (Commit<N>, RoundNumber),
 		pub querying_rounds: BTreeMap<RoundNumber, QueryState<N>>,
 		pub prevote_queries: BTreeMap<RoundNumber, QueryState<N>>,
 	}
 
-	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct QueryState<N> {
 		voters: Vec<AuthorityId>,
 		responses: BTreeMap<AuthorityId, QueryResponse<N>>,
 		equivocations: Vec<EquivocationDetected<N>>,
 	}
 
-	#[derive(Debug, Encode, Decode, Eq, PartialEq)]
+	#[derive(Clone, Debug, Encode, Decode, Eq, PartialEq)]
 	pub enum QueryResponse<N> {
 		Prevotes(Vec<Prevote<N>>),
 		Precommits(Vec<Precommit<N>>),
 	}
 
-	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct Prevote<N>  {
 		pub target_number: N,
 		pub id: AuthorityId,
 	}
 
-	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct Precommit<N>  {
 		pub target_number: N,
 		pub id: AuthorityId,
 	}
 
-	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct Commit<N> {
 		pub target_number: N,
 		pub precommits: Vec<Precommit<N>>,
 	}
 
-	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 	pub enum EquivocationDetected<N> {
 		Prevote(Vec<Equivocation<N>>),
 		Precommit(Vec<Equivocation<N>>),
 		InvalidResponse(AuthorityId),
 	}
 
-	#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct Equivocation<N> {
 		voter: AuthorityId,
 		blocks: Vec<N>,

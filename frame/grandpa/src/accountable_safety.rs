@@ -64,11 +64,7 @@ pub struct AccountableSafetyHandler;
 
 impl<T: Config> AccountableSafety<T> for AccountableSafetyHandler {
 	fn update() {
-		let a = Pallet::<T>::block_not_included();
-		log::info!("JON: a: {:?}", a);
-
-		let a = a.unwrap_or(1u32.into());
-		<BlockNotIncluded<T>>::put(a.saturating_add(1u32.into()));
+		// WIP: update the accountable safety state
 	}
 
 	fn start_accountable_safety_protocol(
