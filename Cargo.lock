@@ -5010,7 +5010,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-grandpa"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "finality-grandpa",
  "frame-benchmarking",
@@ -7470,6 +7470,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.25",
+ "wasm-timer",
 ]
 
 [[package]]

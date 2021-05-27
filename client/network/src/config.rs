@@ -141,6 +141,11 @@ impl Role {
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Role::Authority { .. })
 	}
+
+	/// True for `Role::Light`
+	pub fn is_light(&self) -> bool {
+		matches!(self, Role::Light { .. })
+	}
 }
 
 impl fmt::Display for Role {
