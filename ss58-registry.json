@@ -488,13 +488,31 @@
 			"website": "https://sora.org"
 		},
 		{
+			"prefix": 77,
+			"network": "manta",
+			"displayName": "Manta network",
+			"symbols": ["MA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://manta.network"
+		},
+		{
+			"prefix": 78,
+			"network": "calamari",
+			"displayName": "Calamari: Manta Canary Network",
+			"symbols": ["KMA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://manta.network"
+		},
+		{
 			"prefix": 84,
 			"network": "bholdus",
 			"displayName": "BHoldus Network",
 			"symbols": ["BHO"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": "https://bholdus.com"
+			"website": "https://bholdus.com"			
 		},
 		{
 			"prefix": 252,
@@ -504,6 +522,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://social.network"
+		},
+		{
+			"prefix": 10041,
+			"network": "basilisk",
+			"displayName": "Basilisk",
+			"symbols": ["BSX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://bsx.fi"
 		}
 	]
 }
