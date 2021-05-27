@@ -23,6 +23,8 @@ use sc_client_api::StorageProof;
 use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
 use crate::chain::{Client, ImportedState};
 
+//! State sync support.
+
 /// State sync state machine. Accumulates partial state data until it
 /// is ready to be imported.
 pub struct StateSync<B: BlockT> {
