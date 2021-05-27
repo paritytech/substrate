@@ -340,6 +340,7 @@ impl<B: BlockT> Builder<B> {
 				.iter()
 				.cloned()
 				.map(|key| {
+					log::debug!("key.0.len() == {}", key.0.len());
 					assert!(key.0.len() == 32);
 					(
 						"state_getStorage",
