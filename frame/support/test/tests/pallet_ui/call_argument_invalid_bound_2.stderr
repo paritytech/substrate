@@ -10,6 +10,7 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeDecode` is
     |                  ----- required by this bound in `pallet::_::_parity_scale_codec::Decode::decode`
     |
     = note: required because of the requirements on the impl of `Decode` for `<T as pallet::Config>::Bar`
+
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is not satisfied
    --> $DIR/call_argument_invalid_bound_2.rs:20:37
     |
@@ -22,6 +23,7 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is
     |                     ------ required by this bound in `encode_to`
     |
     = note: required because of the requirements on the impl of `pallet::_::_parity_scale_codec::Encode` for `<T as pallet::Config>::Bar`
+
 error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Config>::Bar`
   --> $DIR/call_argument_invalid_bound_2.rs:20:37
    |
@@ -32,6 +34,7 @@ help: consider further restricting this bound
    |
 17 |     #[pallet::call + std::cmp::PartialEq]
    |                    ^^^^^^^^^^^^^^^^^^^^^
+
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
   --> $DIR/call_argument_invalid_bound_2.rs:20:37
    |
@@ -39,6 +42,7 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfi
    |                                           ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
    |
    = note: required by `clone`
+
 error[E0277]: `<T as pallet::Config>::Bar` doesn't implement `std::fmt::Debug`
   --> $DIR/call_argument_invalid_bound_2.rs:20:37
    |
