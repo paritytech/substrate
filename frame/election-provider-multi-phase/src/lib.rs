@@ -816,6 +816,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
+
+			// Note: we don't `rotate_phase` at this point; the next call to
+			// `ElectionProvider::elect` will not succeed and take care of that.
+
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
 		}
