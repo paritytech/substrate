@@ -1066,10 +1066,10 @@ impl<B: BlockT> ChainSync<B> {
 		let import_result = if let Some(sync) = &mut self.state_sync {
 			debug!(
 				target: "sync",
-				"Importing state data from {} with {} keys, {} values.",
+				"Importing state data from {} with {} keys, {} proof nodes.",
 				who,
-				response.keys.len(),
-				response.values.len(),
+				response.entries.len(),
+				response.proof.len(),
 			);
 			sync.import(response)
 		} else {

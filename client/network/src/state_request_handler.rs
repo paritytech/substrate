@@ -18,10 +18,10 @@
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
 use codec::{Decode};
-use crate::chain::{Client, StorageKey};
+use crate::chain::Client;
 use crate::config::ProtocolId;
 use crate::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
-use crate::schema::v1::{StateResponse, StateRequest};
+use crate::schema::v1::{StateResponse, StateRequest, StateEntry};
 use crate::{PeerId, ReputationChange};
 use futures::channel::{mpsc, oneshot};
 use futures::stream::StreamExt;
@@ -168,46 +168,45 @@ impl<B: BlockT> StateRequestHandler<B> {
 
 		log::trace!(
 			target: LOG_TARGET,
-			"Handling state request from {}: Block {:?}, Starting at {:?}, proof={}",
+			"Handling state request from {}: Block {:?}, Starting at {:?}, with_proof={}",
 			peer,
 			sp_core::hexdisplay::HexDisplay::from(&request.block),
 			sp_core::hexdisplay::HexDisplay::from(&request.start),
-			request.proof,
+			request.with_proof,
 		);
 
 		let result = if reputation_changes.is_empty() {
 			let mut response = StateResponse::default();
 
-			if request.proof {
-				let (keys, proof) = self.client.read_proof_collection(
+			if request.with_proof {
+				let (proof, count) = self.client.read_proof_collection(
 					&BlockId::hash(block),
-					&StorageKey(request.start),
+					&request.start,
 					MAX_RESPONSE_BYTES,
 				)?;
-				response.keys = keys;
-				response.values = proof.into_nodes();
+				response.proof = proof.into_nodes();
+				if count == 0 {
+					response.complete = true;
+				}
 			} else {
 				let entries = self.client.storage_collection(
 					&BlockId::hash(block),
-					&StorageKey(request.start),
+					&request.start,
 					MAX_RESPONSE_BYTES,
 				)?;
-				for (k, v) in entries {
-					response.keys.push(k);
-					response.values.push(v);
+				response.entries = entries.into_iter().map(|(key, value)| StateEntry { key, value }).collect();
+				if response.entries.is_empty() {
+					response.complete = true;
 				}
-			}
-			if response.keys.is_empty() {
-				response.complete = true;
 			}
 
 			log::trace!(
 				target: LOG_TARGET,
 				"StateResponse contains {} keys, complete={}, from {:?} to {:?}",
-				response.keys.len(),
+				response.entries.len(),
 				response.complete,
-				response.keys.first().map(sp_core::hexdisplay::HexDisplay::from),
-				response.keys.last().map(sp_core::hexdisplay::HexDisplay::from),
+				response.entries.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
+				response.entries.last().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
 			);
 			if let Some(value) = self.seen_requests.get_mut(&key) {
 				// If this is the first time we have processed this request, we need to change

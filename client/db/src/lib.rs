@@ -205,6 +205,17 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.for_key_values_with_prefix(prefix, f)
 	}
 
+	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+		allow_missing: bool,
+	) -> Result<(), Self::Error> {
+		self.state.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
+	}
+
 	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
@@ -2166,26 +2177,29 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
-		if let BlockId::Number(n) = &block {
-			if n.is_zero() {
-				if let Some(genesis_state) = &*self.genesis_state.read() {
-					let root = genesis_state.root.clone();
-					let db_state = DbState::<Block>::new(genesis_state.clone(), root);
-					let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-					let caching_state = CachingState::new(
-						state,
-						self.shared_cache.clone(),
-						None,
-					);
-					let mut state = SyncingCachingState::new(
-						caching_state,
-						self.state_usage.clone(),
-						self.blockchain.meta.clone(),
-						self.import_lock.clone(),
-					);
-					state.disable_syncing();
-					return Ok(state)
-				}
+		let is_genesis = match &block {
+			BlockId::Number(n) if n.is_zero() => true,
+			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash => true,
+			_ => false,
+		};
+		if is_genesis {
+			if let Some(genesis_state) = &*self.genesis_state.read() {
+				let root = genesis_state.root.clone();
+				let db_state = DbState::<Block>::new(genesis_state.clone(), root);
+				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
+				let caching_state = CachingState::new(
+					state,
+					self.shared_cache.clone(),
+					None,
+				);
+				let mut state = SyncingCachingState::new(
+					caching_state,
+					self.state_usage.clone(),
+					self.blockchain.meta.clone(),
+					self.import_lock.clone(),
+				);
+				state.disable_syncing();
+				return Ok(state)
 			}
 		}
 
@@ -2433,7 +2447,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-			}, true).unwrap();
+			}).unwrap();
 			op.set_block_data(
 				header.clone(),
 				Some(vec![]),
@@ -2516,7 +2530,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: Default::default(),
 				children_default: Default::default(),
-			}, true).unwrap();
+			}).unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(
@@ -2963,7 +2977,7 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-			}, true).unwrap();
+			}).unwrap();
 			op.set_block_data(
 				header.clone(),
 				Some(vec![]),

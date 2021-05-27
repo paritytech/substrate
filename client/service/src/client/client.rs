@@ -52,7 +52,7 @@ use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
-	prove_read_with_size, read_proof_check,
+	prove_range_read_with_size, read_range_proof_check,
 };
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
@@ -344,6 +344,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				genesis_block.header().state_root(),
 				genesis_block.header().hash()
 			);
+			// Genesis may be written after some blocks have been imported and finalized.
+			// So we only finalize it when the database is empty.
 			let block_state = if info.best_hash == Default::default() {
 				NewBlockState::Final
 			} else {
@@ -1345,21 +1347,27 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 	fn read_proof_collection(
 		&self,
 		id: &BlockId<Block>,
-		start_key: &StorageKey,
+		start_key: &[u8],
 		size_limit: usize,
-	) -> sp_blockchain::Result<(Vec<Vec<u8>>, StorageProof)> {
+	) -> sp_blockchain::Result<(StorageProof, u32)> {
 		let state = self.state_at(id)?;
-		Ok(prove_read_with_size::<_, HashFor<Block>, _>(state, start_key, size_limit)?)
+		Ok(prove_range_read_with_size::<_, HashFor<Block>>(
+				state,
+				None,
+				None,
+				size_limit,
+				Some(start_key)
+		)?)
 	}
 
 	fn storage_collection(
 		&self,
 		id: &BlockId<Block>,
-		start_key: &StorageKey,
+		start_key: &[u8],
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>> {
 		let state = self.state_at(id)?;
-		let mut current_key = start_key.as_ref().to_vec();
+		let mut current_key = start_key.to_vec();
 		let mut total_size = 0;
 		let mut entries = Vec::new();
 		while let Some(next_key) = state
@@ -1384,11 +1392,18 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 
 	fn verify_read_proof(
 		&self,
-		keys: &[Vec<u8>],
 		root: Block::Hash,
 		proof: StorageProof,
-	) -> sp_blockchain::Result<HashMap<Vec<u8>, Option<Vec<u8>>>> {
-		Ok(read_proof_check::<HashFor<Block>, _>(root, proof, keys)?)
+		start_key: &[u8],
+	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>> {
+		Ok(read_range_proof_check::<HashFor<Block>>(
+				root,
+				proof,
+				None,
+				None,
+				None,
+				Some(start_key),
+		)?)
 	}
 }
 

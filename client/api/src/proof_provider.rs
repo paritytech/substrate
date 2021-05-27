@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Proof utilities
-use std::collections::HashMap;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT},
@@ -73,28 +72,28 @@ pub trait ProofProvider<Block: BlockT> {
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 
 	/// Given a `BlockId` iterate over all storage values starting at `start_key`,
-	/// building proofs until size limit is reached. Returns collected keys and a combined proof.
+	/// building proofs until size limit is reached. Returns combined proof and the number of collected keys.
 	fn read_proof_collection(
 		&self,
 		id: &BlockId<Block>,
-		start_key: &StorageKey,
+		start_key: &[u8],
 		size_limit: usize,
-	) -> sp_blockchain::Result<(Vec<Vec<u8>>, StorageProof)>;
+	) -> sp_blockchain::Result<(StorageProof, u32)>;
 
 	/// Given a `BlockId` iterate over all storage values starting at `start_key`.
 	/// Returns collected keys and values.
 	fn storage_collection(
 		&self,
 		id: &BlockId<Block>,
-		start_key: &StorageKey,
+		start_key: &[u8],
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>>;
 
 	/// Verify read storage proof for a set of keys.
 	fn verify_read_proof(
 		&self,
-		keys: &[Vec<u8>],
 		root: Block::Hash,
 		proof: StorageProof,
-	) -> sp_blockchain::Result<HashMap<Vec<u8>, Option<Vec<u8>>>>;
+		start_key: &[u8],
+	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>>;
 }

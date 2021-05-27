@@ -20,7 +20,7 @@ use std::sync::Arc;
 use codec::Encode;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sc_client_api::StorageProof;
-use crate::schema::v1::{StateRequest, StateResponse};
+use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
 use crate::chain::{Client, ImportedState};
 
 /// State sync state machine. Accumulates partial state data until it
@@ -65,29 +65,31 @@ impl<B: BlockT> StateSync<B> {
 
 	///  Validate and import a state reponse.
 	pub fn import(&mut self, response: StateResponse) -> ImportResult<B> {
-		if response.keys.is_empty() && !response.complete {
+		if response.entries.is_empty() && response.proof.is_empty() && !response.complete {
 			log::debug!(
 				target: "sync",
 				"Bad state response",
 			);
 			return ImportResult::BadResponse;
 		}
-		if let Some(key) = response.keys.last() {
-			self.last_key = key.clone();
+		if self.request_proof && response.proof.is_empty() {
+			log::debug!(
+				target: "sync",
+				"Missing proof",
+			);
+			return ImportResult::BadResponse;
 		}
-		log::debug!(
-			target: "sync",
-			"Importing state, {:?} to {:?}",
-			sp_core::hexdisplay::HexDisplay::from(&self.last_key),
-			response.keys.first().map(sp_core::hexdisplay::HexDisplay::from),
-		);
-
-		if self.request_proof {
-			let proof_size = response.values.iter().map(|v| v.len()).sum::<usize>() as u64;
+		let complete = if self.request_proof {
+			log::debug!(
+				target: "sync",
+				"Importing state from {} trie nodes",
+				response.proof.len(),
+			);
+			let proof_size = response.proof.iter().map(|v| v.len()).sum::<usize>() as u64;
 			let values = match self.client.verify_read_proof(
-				&response.keys,
 				self.target_root,
-				StorageProof::new(response.values),
+				StorageProof::new(response.proof),
+				&self.last_key
 			) {
 				Err(e) => {
 					log::debug!(
@@ -99,24 +101,37 @@ impl<B: BlockT> StateSync<B> {
 				},
 				Ok(values) => values,
 			};
+			log::debug!(target: "sync", "Imported with {} keys", values.len());
+
+			if let Some(last) = values.last().map(|(k, _)| k) {
+				self.last_key = last.clone();
+			}
+			let complete = !values.is_empty();
+
 			for (key, value) in values {
-				if let Some(value) = value {
-					self.imported_bytes += key.len() as u64;
-					self.state.push((key, value))
-				}
+				self.imported_bytes += key.len() as u64;
+				self.state.push((key, value))
 			};
 			self.imported_bytes += proof_size;
+			complete
 		} else {
-			if response.keys.len() != response.values.len() {
-				log::debug!(target: "sync", "Bad state response. Keys/values mismatch");
-				return ImportResult::BadResponse;
+			log::debug!(
+				target: "sync",
+				"Importing state from {:?} to {:?}",
+				response.entries.last().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
+				response.entries.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
+			);
+
+			if let Some(e) = response.entries.last() {
+				self.last_key = e.key.clone();
 			}
-			for (k, v) in response.keys.into_iter().zip(response.values.into_iter()) {
-				self.imported_bytes += (k.len() + v.len()) as u64;
-				self.state.push((k, v))
+			for StateEntry { key, value } in response.entries {
+				self.imported_bytes += (key.len() + value.len()) as u64;
+				self.state.push((key, value))
 			}
-		}
-		if response.complete {
+			response.complete
+		};
+		if complete {
 			self.complete = true;
 			ImportResult::Import(self.target_block.clone(), self.target_header.clone(), ImportedState {
 				block: self.target_block.clone(),
@@ -132,7 +147,7 @@ impl<B: BlockT> StateSync<B> {
 		StateRequest {
 			block: self.target_block.encode(),
 			start: self.last_key.clone(),
-			proof: self.request_proof,
+			with_proof: self.request_proof,
 		}
 	}
 

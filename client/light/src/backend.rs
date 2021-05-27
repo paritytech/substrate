@@ -467,6 +467,22 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
+	fn apply_to_key_values_while<A: FnMut(Vec<u8>, Vec<u8>) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		action: A,
+		allow_missing: bool,
+	) -> ClientResult<()> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.apply_to_key_values_while(child_info, prefix, start_at, action, allow_missing)
+					.expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
 	fn apply_to_child_keys_while<A: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
