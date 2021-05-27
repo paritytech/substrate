@@ -739,6 +739,7 @@ where
 	}
 
 	fn flag_hash_value(&mut self) {
+		self.mark_dirty();
 		self.overlay.set_flag_hash_value()
 	}
 }

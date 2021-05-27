@@ -797,12 +797,55 @@ fn state_hashing_update(wasm_method: WasmExecutionMethod) {
 
 	assert_eq!(output, b"all ok!".to_vec().encode());
 
-	// TODO new call in wasm to flag state.
+	let root1 = ext.storage_root();
+	// flag state.
+	let _ = call_in_wasm(
+		"test_switch_state",
+		Default::default(),
+		wasm_method,
+		&mut ext,
+	).unwrap();
+	let root2 = ext.storage_root();
 
-	// TODO Query check
+	assert!(root1 != root2);
 
-	// TODO update values with same value (same root likely).
+	// Same value update do not change root.
+	let output = call_in_wasm(
+		"test_data_in",
+		&b"Hello world".to_vec().encode(),
+		wasm_method,
+		&mut ext,
+	).unwrap();
 
+	assert_eq!(output, b"all ok!".to_vec().encode());
 
-	// TODO update values with same value (same root likely).
+	let root3 = ext.storage_root();
+	assert!(root2 == root3);
+
+	// change does
+	let output = call_in_wasm(
+		"test_data_in",
+		&b"Hello".to_vec().encode(),
+		wasm_method,
+		&mut ext,
+	).unwrap();
+
+	assert_eq!(output, b"all ok!".to_vec().encode());
+
+	let root3 = ext.storage_root();
+	assert!(root2 != root3);
+
+	// restore is different from original
+	let output = call_in_wasm(
+		"test_data_in",
+		&b"Hello world".to_vec().encode(),
+		wasm_method,
+		&mut ext,
+	).unwrap();
+
+	assert_eq!(output, b"all ok!".to_vec().encode());
+
+	let root4 = ext.storage_root();
+	assert!(root2 != root4);
+	assert!(root3 != root4);
 }

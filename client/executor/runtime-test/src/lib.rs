@@ -62,6 +62,13 @@ sp_core::wasm_export_functions! {
 		b"all ok!".to_vec()
 	}
 
+	fn test_switch_state() {
+		print("switch_state");
+		storage::flag_hash_value();
+		print("switched!");
+	}
+
+
 	fn test_clear_prefix(input: Vec<u8>) -> Vec<u8> {
 		storage::clear_prefix(&input);
 		b"all ok!".to_vec()
