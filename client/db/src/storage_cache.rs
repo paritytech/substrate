@@ -683,7 +683,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.as_trie_backend()
 	}
 
-	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
+	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {
 		self.overlay_stats.add(stats);
 	}
 
@@ -868,7 +868,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 			.as_trie_backend()
 	}
 
-	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
+	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {
 		self.caching_state().register_overlay_stats(stats);
 	}
 

@@ -269,7 +269,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		name: Some(name),
 		observer_enabled: false,
 		keystore,
-		is_authority: role.is_authority(),
+		local_role: role,
 		telemetry: telemetry.as_ref().map(|x| x.handle()),
 	};
 
@@ -337,7 +337,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		on_demand.clone(),
 	));
 
-	let (grandpa_block_import, _) = sc_finality_grandpa::block_import(
+	let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
@@ -387,6 +387,26 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		);
 	}
 
+	let enable_grandpa = !config.disable_grandpa;
+	if enable_grandpa {
+		let name = config.network.node_name.clone();
+
+		let config = sc_finality_grandpa::Config {
+			gossip_duration: std::time::Duration::from_millis(333),
+			justification_period: 512,
+			name: Some(name),
+			observer_enabled: false,
+			keystore: None,
+			local_role: config.role.clone(),
+			telemetry: telemetry.as_ref().map(|x| x.handle()),
+		};
+
+		task_manager.spawn_handle().spawn_blocking(
+			"grandpa-observer",
+			sc_finality_grandpa::run_grandpa_observer(config, grandpa_link, network.clone())?,
+		);
+	}
+
 	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 		remote_blockchain: Some(backend.remote_blockchain()),
 		transaction_pool,
@@ -404,6 +424,5 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 	})?;
 
 	network_starter.start_network();
-
 	Ok(task_manager)
 }
