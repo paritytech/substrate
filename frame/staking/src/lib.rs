@@ -306,7 +306,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
-		AtLeast32BitUnsigned,
+		AtLeast32BitUnsigned, One,
 	},
 };
 use sp_staking::{
@@ -1051,8 +1051,8 @@ pub mod migrations {
 
 		pub fn migrate<T: Config>() -> Weight {
 			log!(info, "Migrating staking to Releases::V6_1_0");
-			let validator_count = <Validators<T>>::iter().count() as u32;
-			let nominator_count = <Nominators<T>>::iter().count() as u32;
+			let validator_count = Validators::<T>::iter().count() as u32;
+			let nominator_count = Nominators::<T>::iter().count() as u32;
 
 			ValidatorsCount::put(validator_count);
 			NominatorsCount::put(nominator_count);
@@ -1514,9 +1514,13 @@ decl_module! {
 			let stash = &ledger.stash;
 			if Nominators::<T>::contains_key(stash) {
 				Nominators::<T>::remove(stash);
-				NominatorsCount::mutate(|x| x = x.saturating_sub(One::one()));
+				NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
 			}
-			<Validators<T>>::insert(stash, prefs);
+			if !Validators::<T>::contains_key(stash) {
+				ValidatorsCount::mutate(|x| *x = x.saturating_add(One::one()));
+			}
+
+			Validators::<T>::insert(stash, prefs);
 		}
 
 		/// Declare the desire to nominate `targets` for the origin controller.
@@ -1564,8 +1568,15 @@ decl_module! {
 				suppressed: false,
 			};
 
-			<Validators<T>>::remove(stash);
-			<Nominators<T>>::insert(stash, &nominations);
+			if Validators::<T>::contains_key(stash) {
+				Validators::<T>::remove(stash);
+				ValidatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+			}
+			if !Nominators::<T>::contains_key(stash) {
+				NominatorsCount::mutate(|x| *x = x.saturating_add(One::one()));
+			}
+
+			Nominators::<T>::insert(stash, &nominations);
 		}
 
 		/// Declare no desire to either validate or nominate.
@@ -2123,8 +2134,14 @@ impl<T: Config> Module<T> {
 
 	/// Chill a stash account.
 	fn chill_stash(stash: &T::AccountId) {
-		<Validators<T>>::remove(stash);
-		<Nominators<T>>::remove(stash);
+		if Validators::<T>::contains_key(stash) {
+			Validators::<T>::remove(stash);
+			ValidatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+		}
+		if Nominators::<T>::contains_key(stash) {
+			Nominators::<T>::remove(stash);
+			NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+		}
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -2441,8 +2458,14 @@ impl<T: Config> Module<T> {
 		<Ledger<T>>::remove(&controller);
 
 		<Payee<T>>::remove(stash);
-		<Validators<T>>::remove(stash);
-		<Nominators<T>>::remove(stash);
+		if Validators::<T>::contains_key(stash) {
+			Validators::<T>::remove(stash);
+			ValidatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+		}
+		if Nominators::<T>::contains_key(stash) {
+			Nominators::<T>::remove(stash);
+			NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+		}
 
 		system::Pallet::<T>::dec_consumers(stash);
 
@@ -2536,7 +2559,7 @@ impl<T: Config> Module<T> {
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_voters = Vec::new();
 
-		for (validator, _) in <Validators<T>>::iter() {
+		for (validator, _) in Validators::<T>::iter() {
 			// append self vote
 			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
@@ -2545,7 +2568,7 @@ impl<T: Config> Module<T> {
 		// collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
-		for (nominator, nominations) in <Nominators<T>>::iter() {
+		for (nominator, nominations) in Nominators::<T>::iter() {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
 
 			// Filter out nomination targets which were nominated before the most recent
@@ -2564,7 +2587,7 @@ impl<T: Config> Module<T> {
 	}
 
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
-		<Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>()
+		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
 	}
 }
 
@@ -2659,7 +2682,11 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 					claimed_rewards: vec![],
 				},
 			);
-			<Validators<T>>::insert(
+			if !Validators::<T>::contains_key(&v) {
+				ValidatorsCount::mutate(|x| *x = x.saturating_add(One::one()))
+			}
+
+			Validators::<T>::insert(
 				v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
 			);
@@ -2680,7 +2707,11 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 					claimed_rewards: vec![],
 				},
 			);
-			<Nominators<T>>::insert(
+			if !Nominators::<T>::contains_key(&v) {
+				NominatorsCount::mutate(|x| *x = x.saturating_add(One::one()))
+			}
+
+			Nominators::<T>::insert(
 				v,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },
 			);
