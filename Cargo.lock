@@ -5029,7 +5029,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-grandpa"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "finality-grandpa",
  "frame-benchmarking",
@@ -7489,6 +7489,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.25",
+ "wasm-timer",
 ]
 
 [[package]]
@@ -7553,6 +7554,7 @@ version = "0.9.0"
 dependencies = [
  "ansi_term 0.12.1",
  "futures 0.3.13",
+ "futures-timer 3.0.2",
  "log",
  "parity-util-mem",
  "sc-client-api",
@@ -7560,7 +7562,6 @@ dependencies = [
  "sp-blockchain",
  "sp-runtime",
  "sp-transaction-pool",
- "sp-utils",
  "wasm-timer",
 ]
 
