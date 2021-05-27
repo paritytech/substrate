@@ -30,7 +30,9 @@ const SEED: u32 = 0;
 /// This function removes all validators and nominators from storage.
 pub fn clear_validators_and_nominators<T: Config>() {
 	Validators::<T>::remove_all();
+	ValidatorsCount::kill();
 	Nominators::<T>::remove_all();
+	NominatorsCount::kill();
 }
 
 /// Grab a funded user.

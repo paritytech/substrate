@@ -241,6 +241,12 @@ impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
+
+parameter_types! {
+	pub const MaxValidators: u32 = 100;
+	pub const MaxNominators: u32 = 1000;
+}
+
 impl Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
@@ -259,6 +265,8 @@ impl Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type MaxNominators = MaxNominators;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 

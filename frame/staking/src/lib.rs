@@ -785,6 +785,12 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
 
+	/// The maximum number of validators.
+	type MaxValidators: Get<u32>;
+
+	/// The maximum number of nominators.
+	type MaxNominators: Get<u32>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -1184,6 +1190,10 @@ decl_error! {
 		TooManyTargets,
 		/// A nomination target was supplied that was blocked or otherwise not a validator.
 		BadTarget,
+		/// Too many nominators are in the system.
+		TooManyNominators,
+		/// Too many validators are in the system.
+		TooManyValidators,
 	}
 }
 
@@ -1511,6 +1521,8 @@ decl_module! {
 		pub fn validate(origin, prefs: ValidatorPrefs) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(ValidatorsCount::get() < T::MaxValidators::get(), Error::<T>::TooManyValidators);
+
 			let stash = &ledger.stash;
 			if Nominators::<T>::contains_key(stash) {
 				Nominators::<T>::remove(stash);
@@ -1549,6 +1561,7 @@ decl_module! {
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
+			ensure!(NominatorsCount::get() < T::MaxNominators::get(), Error::<T>::TooManyValidators);
 
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
 
@@ -1670,6 +1683,7 @@ decl_module! {
 		#[weight = T::WeightInfo::set_validator_count()]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
+			ensure!(new <= T::MaxValidators::get(), Error::<T>::TooManyValidators);
 			ValidatorCount::put(new);
 		}
 
@@ -1683,7 +1697,11 @@ decl_module! {
 		#[weight = T::WeightInfo::set_validator_count()]
 		fn increase_validator_count(origin, #[compact] additional: u32) {
 			ensure_root(origin)?;
-			ValidatorCount::mutate(|n| *n += additional);
+			ValidatorCount::try_mutate(|n| -> DispatchResult {
+				*n += additional;
+				ensure!(*n <= T::MaxValidators::get(), Error::<T>::TooManyValidators);
+				Ok(())
+			})?;
 		}
 
 		/// Scale up the ideal number of validators by a factor.
@@ -1696,7 +1714,11 @@ decl_module! {
 		#[weight = T::WeightInfo::set_validator_count()]
 		fn scale_validator_count(origin, factor: Percent) {
 			ensure_root(origin)?;
-			ValidatorCount::mutate(|n| *n += factor * *n);
+			ValidatorCount::try_mutate(|n| -> DispatchResult {
+				*n += factor * *n;
+				ensure!(*n <= T::MaxValidators::get(), Error::<T>::TooManyValidators);
+				Ok(())
+			})?;
 		}
 
 		/// Force there to be no new eras indefinitely.
