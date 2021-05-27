@@ -41,14 +41,14 @@ pub mod example {
 
 	decl_module! {
 		pub struct Module<T: Config> for enum Call where origin: <T as frame_system::Config>::Origin {
-			#[weight = *weight]
-			fn noop(_origin, weight: Weight) { }
+			#[weight = *_weight]
+			fn noop(_origin, _weight: Weight) { }
 
-			#[weight = *start_weight]
+			#[weight = *_start_weight]
 			fn foobar(
 				origin,
 				err: bool,
-				start_weight: Weight,
+				_start_weight: Weight,
 				end_weight: Option<Weight>,
 			) -> DispatchResultWithPostInfo {
 				let _ = ensure_signed(origin)?;
