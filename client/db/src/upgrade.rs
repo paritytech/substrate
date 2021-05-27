@@ -113,10 +113,11 @@ fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 
 	let mut nb_node_prefixed = 0;
 	let mut nb_node_seen = 0;
-	let batch_size = 10_000; // TODO use bigger size (need to iterate all each time).
+	let batch_size = 50_000; // TODO use bigger size (need to iterate all each time).
 	loop {
 		let mut full_batch = false;
 		let mut size = 0;
+		let mut last = vec![0u8, 0u8, 0u8, 0u8];
 		let mut transaction = db.transaction();
 		// Get all the keys we need to update.
 		// Note that every batch will restart full iter, could use
@@ -129,11 +130,19 @@ fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 				size += 1;
 				if size == batch_size {
 					full_batch = true;
+					if entry.0.len() > 3 {
+						last.copy_from_slice(&entry.0[..4]);
+					}
 					break;
 				}
 			}
 		}
-		info!("Committing batch, currently processed: {} of {} read nodes", nb_node_prefixed, nb_node_seen);
+		info!(
+			"Committing batch, currently processed: {} of {} read nodes at {:?}",
+			nb_node_prefixed,
+			nb_node_seen,
+			last,
+		);
 		db.write(transaction).map_err(db_err)?;
 		if !full_batch {
 			break;
