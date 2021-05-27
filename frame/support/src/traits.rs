@@ -29,7 +29,10 @@ pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
 pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};
 
 mod members;
-pub use members::{Contains, ContainsLengthBound, InitializeMembers, ChangeMembers};
+pub use members::{
+	Contains, ContainsLengthBound, SortedMembers, InitializeMembers, ChangeMembers, All, IsInVec,
+	AsContains,
+};
 
 mod validation;
 pub use validation::{
@@ -46,7 +49,8 @@ pub use filter::{
 mod misc;
 pub use misc::{
 	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
-	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker,
+	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing, ExtrinsicCall,
+	EnsureInherentsAreFirst, ConstU32,
 };
 
 mod stored_map;
@@ -57,7 +61,7 @@ pub use randomness::Randomness;
 mod metadata;
 pub use metadata::{
 	CallMetadata, GetCallMetadata, GetCallName, PalletInfo, PalletVersion, GetPalletVersion,
-	PALLET_VERSION_STORAGE_KEY_POSTFIX,
+	PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletInfoAccess,
 };
 
 mod hooks;
@@ -69,10 +73,41 @@ pub use hooks::GenesisBuild;
 
 pub mod schedule;
 mod storage;
-pub use storage::{Instance, StorageInstance};
+pub use storage::{Instance, StorageInstance, StorageInfo, StorageInfoTrait};
 
 mod dispatch;
 pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 
 mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+
+mod max_encoded_len;
+// This looks like an overlapping import/export, but it isn't:
+// macros and traits live in distinct namespaces.
+pub use max_encoded_len::MaxEncodedLen;
+/// Derive [`MaxEncodedLen`][max_encoded_len::MaxEncodedLen].
+///
+/// # Examples
+///
+/// ```
+/// # use codec::Encode;
+/// # use frame_support::traits::MaxEncodedLen;
+/// #[derive(Encode, MaxEncodedLen)]
+/// struct TupleStruct(u8, u32);
+///
+/// assert_eq!(TupleStruct::max_encoded_len(), u8::max_encoded_len() + u32::max_encoded_len());
+/// ```
+///
+/// ```
+/// # use codec::Encode;
+/// # use frame_support::traits::MaxEncodedLen;
+/// #[derive(Encode, MaxEncodedLen)]
+/// enum GenericEnum<T> {
+/// 	A,
+/// 	B(T),
+/// }
+///
+/// assert_eq!(GenericEnum::<u8>::max_encoded_len(), u8::max_encoded_len() + u8::max_encoded_len());
+/// assert_eq!(GenericEnum::<u128>::max_encoded_len(), u8::max_encoded_len() + u128::max_encoded_len());
+/// ```
+pub use frame_support_procedural::MaxEncodedLen;

@@ -246,6 +246,13 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
+	fn remove_leaf_block(
+		&self,
+		_hash: &Block::Hash,
+	) -> ClientResult<()> {
+		Err(ClientError::NotAvailableOnLightClient)
+	}
+
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
@@ -534,7 +541,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &sp_state_machine::StateMachineStats) { }
+	fn register_overlay_stats(&self, _stats: &sp_state_machine::StateMachineStats) { }
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		sp_state_machine::UsageInfo::empty()

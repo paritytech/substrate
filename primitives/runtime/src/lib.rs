@@ -158,14 +158,6 @@ impl From<Justification> for Justifications {
 
 use traits::{Verify, Lazy};
 
-/// A module identifier. These are per module and should be stored in a registry somewhere.
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
-pub struct ModuleId(pub [u8; 8]);
-
-impl TypeId for ModuleId {
-	const TYPE_ID: [u8; 4] = *b"modl";
-}
-
 #[cfg(feature = "std")]
 pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::traits::IdentifyAccount;
@@ -476,6 +468,8 @@ pub enum DispatchError {
 	NoProviders,
 	/// An error to do with tokens.
 	Token(TokenError),
+	/// An arithmetic error.
+	Arithmetic(ArithmeticError),
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -550,10 +544,6 @@ pub enum TokenError {
 	UnknownAsset,
 	/// Funds exist but are frozen.
 	Frozen,
-	/// An underflow would occur.
-	Underflow,
-	/// An overflow would occur.
-	Overflow,
 }
 
 impl From<TokenError> for &'static str {
@@ -565,8 +555,6 @@ impl From<TokenError> for &'static str {
 			TokenError::CannotCreate => "Account cannot be created",
 			TokenError::UnknownAsset => "The asset in question is unknown",
 			TokenError::Frozen => "Funds exist but are frozen",
-			TokenError::Underflow => "An underflow would occur",
-			TokenError::Overflow => "An overflow would occur",
 		}
 	}
 }
@@ -574,6 +562,34 @@ impl From<TokenError> for &'static str {
 impl From<TokenError> for DispatchError {
 	fn from(e: TokenError) -> DispatchError {
 		Self::Token(e)
+	}
+}
+
+/// Arithmetic errors.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum ArithmeticError {
+	/// Underflow.
+	Underflow,
+	/// Overflow.
+	Overflow,
+	/// Division by zero.
+	DivisionByZero,
+}
+
+impl From<ArithmeticError> for &'static str {
+	fn from(e: ArithmeticError) -> &'static str {
+		match e {
+			ArithmeticError::Underflow => "An underflow would occur",
+			ArithmeticError::Overflow => "An overflow would occur",
+			ArithmeticError::DivisionByZero => "Division by zero",
+		}
+	}
+}
+
+impl From<ArithmeticError> for DispatchError {
+	fn from(e: ArithmeticError) -> DispatchError {
+		Self::Arithmetic(e)
 	}
 }
 
@@ -593,6 +609,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
 			DispatchError::Token(e) => e.into(),
+			DispatchError::Arithmetic(e) => e.into(),
 		}
 	}
 }
@@ -624,6 +641,10 @@ impl traits::Printable for DispatchError {
 			Self::Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();
+			},
+			Self::Arithmetic(e) => {
+				"Arithmetic error: ".print();
+				<&'static str>::from(*e).print();
 			}
 		}
 	}
@@ -651,6 +672,7 @@ impl PartialEq for DispatchError {
 
 			(Token(l), Token(r)) => l == r,
 			(Other(l), Other(r)) => l == r,
+			(Arithmetic(l), Arithmetic(r)) => l == r,
 
 			(
 				Module { index: index_l, error: error_l, .. },
@@ -911,6 +933,15 @@ mod tests {
 			Module { index: 2, error: 1, message: None },
 			ConsumerRemaining,
 			NoProviders,
+			Token(TokenError::NoFunds),
+			Token(TokenError::WouldDie),
+			Token(TokenError::BelowMinimum),
+			Token(TokenError::CannotCreate),
+			Token(TokenError::UnknownAsset),
+			Token(TokenError::Frozen),
+			Arithmetic(ArithmeticError::Overflow),
+			Arithmetic(ArithmeticError::Underflow),
+			Arithmetic(ArithmeticError::DivisionByZero),
 		];
 		for (i, variant) in variants.iter().enumerate() {
 			for (j, other_variant) in variants.iter().enumerate() {

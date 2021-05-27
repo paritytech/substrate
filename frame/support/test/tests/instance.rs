@@ -26,8 +26,8 @@ use frame_support::{
 		StorageEntryMetadata, StorageHasher,
 	},
 	StorageValue, StorageMap, StorageDoubleMap,
+	inherent::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError},
 };
-use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
 use sp_core::{H256, sr25519};
 
 mod system;
@@ -112,7 +112,7 @@ mod module1 {
 		T::BlockNumber: From<u32>
 	{
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<sp_inherents::Error>;
+		type Error = MakeFatalError<()>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -120,6 +120,10 @@ mod module1 {
 		}
 
 		fn check_inherent(_: &Self::Call, _: &InherentData) -> std::result::Result<(), Self::Error> {
+			unimplemented!();
+		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
 			unimplemented!();
 		}
 	}
@@ -172,7 +176,7 @@ mod module2 {
 
 	impl<T: Config<I>, I: Instance> ProvideInherent for Module<T, I> {
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<sp_inherents::Error>;
+		type Error = MakeFatalError<()>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -180,6 +184,10 @@ mod module2 {
 		}
 
 		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
+			unimplemented!();
+		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
 			unimplemented!();
 		}
 	}

@@ -13,18 +13,20 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0" }
-jsonrpc-core = "15.1.0"
-jsonrpc-core-client = "15.1.0"
-jsonrpc-derive = "15.1.0"
+codec = { package = "parity-scale-codec", version = "2" }
+jsonrpc-core = "15"
+jsonrpc-core-client = "15"
+jsonrpc-derive = "15"
+serde = { version = "1", features = ["derive"] }
+
+# Substrate Dependencies
+pallet-contracts-primitives = { version = "3.0.0", path = "../common" }
+pallet-contracts-rpc-runtime-api = { version = "3.0.0", path = "./runtime-api" }
+sp-api = { version = "3.0.0", path = "../../../primitives/api" }
 sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-rpc = { version = "3.0.0", path = "../../../primitives/rpc" }
-serde = { version = "1.0.101", features = ["derive"] }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-pallet-contracts-primitives = { version = "3.0.0", path = "../common" }
-pallet-contracts-rpc-runtime-api = { version = "3.0.0", path = "./runtime-api" }
 
 [dev-dependencies]
-serde_json = "1.0.41"
+serde_json = "1"

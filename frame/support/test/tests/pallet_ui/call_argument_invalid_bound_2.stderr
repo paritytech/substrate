@@ -1,24 +1,28 @@
-error[E0277]: the trait bound `pallet::Call<T>: Decode` is not satisfied
-  --> $DIR/call_argument_invalid_bound_2.rs:17:12
-   |
-17 |     #[pallet::call]
-   |               ^^^^ the trait `Decode` is not implemented for `pallet::Call<T>`
-   |
-  ::: $WORKSPACE/frame/support/src/dispatch.rs
-   |
-   |     type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
-   |                                         ----- required by this bound in `frame_support::Callable::Call`
+error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeDecode` is not satisfied
+   --> $DIR/call_argument_invalid_bound_2.rs:20:37
+    |
+20  |         fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
+    |                                           ^ the trait `WrapperTypeDecode` is not implemented for `<T as pallet::Config>::Bar`
+    |
+   ::: /usr/local/cargo/registry/src/github.com-1ecc6299db9ec823/parity-scale-codec-2.1.0/src/codec.rs:277:18
+    |
+277 |     fn decode<I: Input>(input: &mut I) -> Result<Self, Error>;
+    |                  ----- required by this bound in `pallet::_::_parity_scale_codec::Decode::decode`
+    |
+    = note: required because of the requirements on the impl of `Decode` for `<T as pallet::Config>::Bar`
 
-error[E0277]: the trait bound `pallet::Call<T>: pallet::_::_parity_scale_codec::Encode` is not satisfied
-  --> $DIR/call_argument_invalid_bound_2.rs:17:12
-   |
-17 |     #[pallet::call]
-   |               ^^^^ the trait `pallet::_::_parity_scale_codec::Encode` is not implemented for `pallet::Call<T>`
-   |
-  ::: $WORKSPACE/frame/support/src/dispatch.rs
-   |
-   |     type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
-   |                                         ----- required by this bound in `frame_support::Callable::Call`
+error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is not satisfied
+   --> $DIR/call_argument_invalid_bound_2.rs:20:37
+    |
+20  |         fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
+    |                                           ^ the trait `WrapperTypeEncode` is not implemented for `<T as pallet::Config>::Bar`
+    |
+   ::: /usr/local/cargo/registry/src/github.com-1ecc6299db9ec823/parity-scale-codec-2.1.0/src/codec.rs:216:21
+    |
+216 |     fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
+    |                     ------ required by this bound in `encode_to`
+    |
+    = note: required because of the requirements on the impl of `pallet::_::_parity_scale_codec::Encode` for `<T as pallet::Config>::Bar`
 
 error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Config>::Bar`
   --> $DIR/call_argument_invalid_bound_2.rs:20:37

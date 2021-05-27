@@ -87,7 +87,7 @@ use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	Parameter, storage,
 	traits::{
-		Contains, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
+		SortedMembers, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
 		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
@@ -655,7 +655,7 @@ pub mod pallet {
 	}
 }
 
-mod migrations {
+pub mod migrations {
 	use super::*;
 
 	#[allow(dead_code)]
@@ -870,7 +870,7 @@ impl<
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-	Who: Contains<AccountId>,
+	Who: SortedMembers<AccountId>,
 	AccountId: PartialEq + Clone + Ord + Default,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
@@ -1447,6 +1447,18 @@ impl<T: Config> Pallet<T> {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();
 		<EventTopics<T>>::remove_all();
+	}
+
+	/// Assert the given `event` exists.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	pub fn assert_has_event(event: T::Event) {
+		assert!(Self::events().iter().any(|record| record.event == event))
+	}
+
+	/// Assert the last event equal to the given `event`.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	pub fn assert_last_event(event: T::Event) {
+		assert_eq!(Self::events().last().expect("events expected").event, event);
 	}
 
 	/// Return the chain's current runtime version.
