@@ -105,37 +105,37 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.next_child_storage_key(child_info, key)
 	}
 
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+	fn for_keys_with_prefix(&self, prefix: &[u8], f: impl FnMut(Vec<u8>)) {
 		self.essence.for_keys_with_prefix(prefix, f)
 	}
 
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+	fn for_key_values_with_prefix(&self, prefix: &[u8], f: impl FnMut(Vec<u8>, Vec<u8>)) {
 		self.essence.for_key_values_with_prefix(prefix, f)
 	}
 
-	fn apply_to_key_values_while<F: FnMut(&[u8], &[u8]) -> bool>(
+	fn apply_to_key_values_while(
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		start_at: Option<&[u8]>,
-		f: F,
+		f: impl FnMut(Vec<u8>, Vec<u8>) -> bool,
 	) -> Result<(), Self::Error> {
 		self.essence.apply_to_key_values_while(child_info, prefix, start_at, f)
 	}
 
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
+	fn apply_to_child_keys_while(
 		&self,
 		child_info: &ChildInfo,
-		f: F,
+		f: impl FnMut(Vec<u8>) -> bool,
 	) {
 		self.essence.apply_to_child_keys_while(child_info, f)
 	}
 
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+	fn for_child_keys_with_prefix(
 		&self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-		f: F,
+		f: impl FnMut(Vec<u8>),
 	) {
 		self.essence.for_child_keys_with_prefix(child_info, prefix, f)
 	}

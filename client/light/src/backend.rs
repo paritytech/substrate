@@ -447,26 +447,26 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, prefix: &[u8], action: A) {
+	fn for_keys_with_prefix(&self, prefix: &[u8], action: impl FnMut(Vec<u8>)) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => state.for_keys_with_prefix(prefix, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
 
-	fn for_key_values_with_prefix<A: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], action: A) {
+	fn for_key_values_with_prefix(&self, prefix: &[u8], action: impl FnMut(Vec<u8>, Vec<u8>)) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => state.for_key_values_with_prefix(prefix, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
 
-	fn apply_to_key_values_while<A: FnMut(&[u8], &[u8]) -> bool>(
+	fn apply_to_key_values_while(
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		start_at: Option<&[u8]>,
-		action: A,
+		action: impl FnMut(Vec<u8>, Vec<u8>) -> bool,
 	) -> ClientResult<()> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
@@ -476,10 +476,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn apply_to_child_keys_while<A: FnMut(&[u8]) -> bool>(
+	fn apply_to_child_keys_while(
 		&self,
 		child_info: &ChildInfo,
-		action: A,
+		action: impl FnMut(Vec<u8>) -> bool,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
@@ -488,11 +488,11 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn for_child_keys_with_prefix<A: FnMut(&[u8])>(
+	fn for_child_keys_with_prefix(
 		&self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-		action: A,
+		action: impl FnMut(Vec<u8>),
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
