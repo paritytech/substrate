@@ -320,7 +320,7 @@ pub mod acc_safety {
 		AuthorityId,
 	};
 	use sp_std::{
-		collections::btree_map::BTreeMap,
+		collections::{btree_set::BTreeSet, btree_map::BTreeMap},
 		vec::Vec,
 	};
 
@@ -331,11 +331,30 @@ pub mod acc_safety {
 		pub prevote_queries: BTreeMap<RoundNumber, QueryState<N>>,
 	}
 
+	impl<N> StoredAccountableSafetyState<N> {
+		pub fn open_queries(&self) -> Vec<(RoundNumber, Vec<AuthorityId>)> {
+			self.querying_rounds
+				.iter()
+				.map(|(round_number, query_state)| {
+					(*round_number, query_state.open_queries())
+				})
+				.collect()
+		}
+	}
+
 	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 	pub struct QueryState<N> {
 		pub voters: Vec<AuthorityId>,
 		pub responses: BTreeMap<AuthorityId, QueryResponse<N>>,
 		pub equivocations: Vec<EquivocationDetected<N>>,
+	}
+
+	impl<N> QueryState<N> {
+		pub fn open_queries(&self) -> Vec<AuthorityId> {
+			let voters: BTreeSet<AuthorityId> = self.voters.iter().cloned().collect();
+			let responders: BTreeSet<AuthorityId> = self.responses.keys().cloned().collect();
+			voters.difference(&responders).into_iter().cloned().collect()
+		}
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, Eq, PartialEq)]

@@ -990,6 +990,9 @@ fn accountable_safety_start() {
 
 		Grandpa::on_finalize(3);
 
-
+		// Authorities query the state to determine if their responses are required
+		let state = Grandpa::accountable_safety_state().unwrap();
+		let open_queries = state.open_queries();
+		dbg!(&open_queries);
 	});
 }
