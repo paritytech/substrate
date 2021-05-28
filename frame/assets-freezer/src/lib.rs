@@ -273,7 +273,7 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 	) -> Result<BalanceOf<T>, DispatchError> {
 		// Can't create the account with just a chunk of held balance - there needs to already be
 		// the minimum deposit.
-		let min_balance = <Self as fungibles::Inspect<_>> ::minimum_balance(asset);
+		let min_balance = <Self as fungibles::Inspect<_>>::minimum_balance(asset);
 		let dest_balance = <Self as fungibles::Inspect<_>>::balance(asset, dest);
 		ensure!(!on_hold || dest_balance >= min_balance, TokenError::CannotCreate);
 		Self::balance_on_hold(asset, dest).checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
