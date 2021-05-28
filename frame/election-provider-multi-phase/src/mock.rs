@@ -263,7 +263,6 @@ parameter_types! {
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
-	pub static SignedRewardFactor: Perbill = Perbill::zero();
 	pub static SignedRewardMax: Balance = 10;
 	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxIterations: u32 = 5;
@@ -368,7 +367,6 @@ impl crate::Config for Runtime {
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
-	type SignedRewardFactor = SignedRewardFactor;
 	type SignedRewardMax = SignedRewardMax;
 	type SignedDepositBase = SignedDepositBase;
 	type SignedDepositByte = ();
@@ -485,9 +483,8 @@ impl ExtBuilder {
 		<SignedDepositWeight>::set(weight);
 		self
 	}
-	pub fn reward(self, base: u64, factor: Perbill, max: u64) -> Self {
+	pub fn reward(self, base: u64, max: u64) -> Self {
 		<SignedRewardBase>::set(base);
-		<SignedRewardFactor>::set(factor);
 		<SignedRewardMax>::set(max);
 		self
 	}

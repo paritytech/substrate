@@ -571,9 +571,6 @@ pub mod pallet {
 		/// Base reward for a signed solution
 		#[pallet::constant]
 		type SignedRewardBase: Get<BalanceOf<Self>>;
-		/// Per-score reward for a signed solution.
-		#[pallet::constant]
-		type SignedRewardFactor: Get<Perbill>;
 		/// Maximum cap for a signed solution.
 		#[pallet::constant]
 		type SignedRewardMax: Get<Option<BalanceOf<Self>>>;

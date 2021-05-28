@@ -202,7 +202,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// add to the designated spot. If the length is too much, remove one.
-		let reward = Self::reward_for(&solution);
+		let reward = Self::reward_for();
 		let deposit = Self::deposit_for(&solution, size);
 		let submission =
 			SignedSubmission { who: who.clone(), deposit, reward, solution };
@@ -256,9 +256,8 @@ impl<T: Config> Pallet<T> {
 
 	/// The reward for this solution, if successfully chosen as the best one at the end of the
 	/// signed phase.
-	pub fn reward_for(solution: &RawSolution<CompactOf<T>>) -> BalanceOf<T> {
-		let raw_reward = T::SignedRewardBase::get()
-			+ T::SignedRewardFactor::get() * solution.score[0].saturated_into::<BalanceOf<T>>();
+	pub fn reward_for() -> BalanceOf<T> {
+		let raw_reward = T::SignedRewardBase::get();
 
 		match T::SignedRewardMax::get() {
 			Some(cap) => raw_reward.min(cap),
@@ -357,7 +356,7 @@ mod tests {
 
 	#[test]
 	fn reward_is_capped() {
-		ExtBuilder::default().reward(5, Perbill::from_percent(25), 10).build_and_execute(|| {
+		ExtBuilder::default().reward(5, 10).build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_signed());
 
@@ -369,11 +368,11 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			assert!(MultiPhase::finalize_signed_phase().0);
-			// expected reward is 5 + 10
-			assert_eq!(balances(&99), (100 + 10, 0));
+			// expected reward is 5
+			assert_eq!(balances(&99), (100 + 5, 0));
 		});
 
-		ExtBuilder::default().reward(5, Perbill::from_percent(25), 20).build_and_execute(|| {
+		ExtBuilder::default().reward(5, 20).build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_signed());
 
@@ -385,8 +384,8 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			assert!(MultiPhase::finalize_signed_phase().0);
-			// expected reward is 5 + 10
-			assert_eq!(balances(&99), (100 + 15, 0));
+			// expected reward is 5
+			assert_eq!(balances(&99), (100 + 5, 0));
 		});
 	}
 
