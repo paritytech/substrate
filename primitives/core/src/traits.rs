@@ -27,8 +27,8 @@ pub use sp_externalities::{Externalities, ExternalitiesExt};
 /// Default num of pages for the heap is 64 MB.
 const INIT_HEAP_PAGES: u64 = 1024;
 
-/// Maximum is 3 GB worth of heap.
-const MAX_HEAP_PAGES: u64 = 3 * 1024 * 1024 * 1024 / (64 * 1024);
+/// Maximum is 2 GB worth of heap.
+const MAX_HEAP_PAGES: u64 = 2 * 1024 * 1024 * 1024 / (64 * 1024);
 
 /// Code execution engine.
 pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'static {

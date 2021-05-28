@@ -230,7 +230,7 @@ impl RuntimeCache {
 				let code = runtime_code.fetch_runtime_code().ok_or(WasmError::CodeNotFound)?;
 
 				#[cfg(not(target_os = "unknown"))]
-					let time = std::time::Instant::now();
+				let time = std::time::Instant::now();
 
 				let result = create_versioned_wasm_runtime(
 					&code,
