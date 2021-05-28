@@ -6669,6 +6669,10 @@ dependencies = [
  "jsonrpsee-ws-client",
  "log",
  "parity-scale-codec",
+<<<<<<< HEAD
+=======
+ "serde_json",
+>>>>>>> 59b2fac1b... emergency mode: allow governance origin to provide solution to election in case of failure
  "sp-core",
  "sp-io",
  "sp-runtime",
