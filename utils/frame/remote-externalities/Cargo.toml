@@ -29,6 +29,8 @@ sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 tokio = { version = "1.6.0", features = ["macros", "rt"] }
+pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "4.0.0" }
+frame-support = { path = "../../../frame/support", version = "3.0.0" }
 
 [features]
 remote-test = []

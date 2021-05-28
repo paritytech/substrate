@@ -572,6 +572,41 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
+	async fn sanity_check_decoding() {
+		use pallet_elections_phragmen::SeatHolder;
+		use sp_core::crypto::Ss58Codec;
+		type AccountId = sp_runtime::AccountId32;
+		type Balance = u128;
+		frame_support::generate_storage_alias!(
+			PhragmenElection,
+			Members =>
+			Value<Vec<SeatHolder<AccountId, Balance>>>
+		);
+
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				modules: vec!["PhragmenElection".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect("Can't reach the remote node. Is it running?")
+			.execute_with(|| {
+				// Gav's polkadot account. 99% this will be in the council.
+				let gav_polkadot =
+					AccountId::from_ss58check("13RDY9nrJpyTDBSUdBw12dGwhk19sGwsrVZ2bxkzYHBSagP2")
+						.unwrap();
+				let members = Members::get().unwrap();
+				assert!(members
+					.iter()
+					.map(|s| s.who.clone())
+					.find(|a| a == &gav_polkadot)
+					.is_some());
+			});
+	}
+
+	#[tokio::test]
 	async fn can_create_state_snapshot() {
 		init_logger();
 		Builder::<Block>::new()
