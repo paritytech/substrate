@@ -682,7 +682,7 @@ where
 			self.overlay.rollback_transaction().expect(BENCHMARKING_FN);
 		}
 		self.overlay.drain_storage_changes(
-			&self.backend,
+			self.backend,
 			#[cfg(feature = "std")]
 			None,
 			Default::default(),
@@ -700,7 +700,7 @@ where
 			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
 		}
 		let changes = self.overlay.drain_storage_changes(
-			&self.backend,
+			self.backend,
 			#[cfg(feature = "std")]
 			None,
 			Default::default(),
