@@ -56,9 +56,9 @@ fi
 # consensus-critical logic that has changed. the runtime wasm blobs must be
 # rebuilt.
 
-add_spec_version="$(git diff "tags/release...${CI_COMMIT_SHA}" "${VERSIONS_FILE}" \
+add_spec_version="$(git diff tags/release ${CI_COMMIT_SHA} -- "${VERSIONS_FILE}" \
 	| sed -n -r "s/^\+[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
-sub_spec_version="$(git diff "tags/release...${CI_COMMIT_SHA}" "${VERSIONS_FILE}" \
+sub_spec_version="$(git diff tags/release ${CI_COMMIT_SHA} -- "${VERSIONS_FILE}" \
 	| sed -n -r "s/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
 
 
@@ -79,9 +79,9 @@ else
 	# check for impl_version updates: if only the impl versions changed, we assume
 	# there is no consensus-critical logic that has changed.
 
-	add_impl_version="$(git diff "tags/release...${CI_COMMIT_SHA}" "${VERSIONS_FILE}" \
+	add_impl_version="$(git diff tags/release ${CI_COMMIT_SHA} -- "${VERSIONS_FILE}" \
 		| sed -n -r 's/^\+[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
-	sub_impl_version="$(git diff "tags/release...${CI_COMMIT_SHA}" "${VERSIONS_FILE}" \
+	sub_impl_version="$(git diff tags/release ${CI_COMMIT_SHA} -- "${VERSIONS_FILE}" \
 		| sed -n -r 's/^\-[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
 
 

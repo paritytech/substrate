@@ -26,8 +26,7 @@ use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
 use frame_support::{DefaultNoBound, weights::Weight};
 use sp_std::{marker::PhantomData, vec::Vec};
 use codec::{Encode, Decode};
-use parity_wasm::elements;
-use pwasm_utils::rules;
+use pwasm_utils::{parity_wasm::elements, rules};
 use sp_runtime::RuntimeDebug;
 
 /// How many API calls are executed in a single batch. The reason for increasing the amount
@@ -635,7 +634,7 @@ impl<T: Config> Schedule<T> {
 
 impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
 	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32> {
-		use parity_wasm::elements::Instruction::*;
+		use self::elements::Instruction::*;
 		let w = &self.schedule.instruction_weights;
 		let max_params = self.schedule.limits.parameters;
 
