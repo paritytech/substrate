@@ -214,10 +214,11 @@ impl<T: Trait> Module<T> {
             return Ok(());
         }
 
-        let day_start_ms = Self::sc_get_current_period_ms(contract_address.clone()).map_err(|err| {
-            error!("[OCW] Contract error occurred: {:?}", err);
-            "Could not call get_current_period_ms TX"
-        })?;
+        let day_start_ms =
+            Self::sc_get_current_period_ms(contract_address.clone()).map_err(|err| {
+                error!("[OCW] Contract error occurred: {:?}", err);
+                "Could not call get_current_period_ms TX"
+            })?;
 
         let day_end_ms = day_start_ms + MS_PER_DAY;
 
@@ -226,19 +227,26 @@ impl<T: Trait> Module<T> {
             "could not fetch metrics"
         })?;
 
-        Self::send_metrics_to_sc(contract_address.clone(), &signer, day_start_ms, aggregated_metrics)
-            .map_err(|err| {
-                error!("[OCW] Contract error occurred: {:?}", err);
-                "could not submit report_metrics TX"
-            })?;
+        Self::send_metrics_to_sc(
+            contract_address.clone(),
+            &signer,
+            day_start_ms,
+            aggregated_metrics,
+        )
+        .map_err(|err| {
+            error!("[OCW] Contract error occurred: {:?}", err);
+            "could not submit report_metrics TX"
+        })?;
 
         let block_timestamp = sp_io::offchain::timestamp().unix_millis();
 
         if day_end_ms < block_timestamp {
-            Self::finalize_metric_period(contract_address.clone(), &signer, day_start_ms).map_err(|err| {
-                error!("[OCW] Contract error occurred: {:?}", err);
-                "could not call finalize_metric_period TX"
-            })?;
+            Self::finalize_metric_period(contract_address.clone(), &signer, day_start_ms).map_err(
+                |err| {
+                    error!("[OCW] Contract error occurred: {:?}", err);
+                    "could not call finalize_metric_period TX"
+                },
+            )?;
         }
 
         Ok(())
