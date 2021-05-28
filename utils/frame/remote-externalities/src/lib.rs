@@ -282,7 +282,7 @@ impl<B: BlockT> Builder<B> {
 	async fn get_keys_paged(
 		&self,
 		prefix: StorageKey,
-		hash: B::Hash,
+		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
 		const PAGE: u32 = 512;
 		let mut last_key: Option<StorageKey> = None;
@@ -293,7 +293,7 @@ impl<B: BlockT> Builder<B> {
 				Some(prefix.clone()),
 				PAGE,
 				last_key.clone(),
-				Some(hash),
+				Some(at),
 			)
 			.await
 			.map_err(|e| {
@@ -346,7 +346,10 @@ impl<B: BlockT> Builder<B> {
 					(
 						"state_getStorage",
 						JsonRpcParams::Array(
-							vec![to_value(key).expect("json serialization will work; qed.")]
+							vec![
+								to_value(key).expect("json serialization will work; qed."),
+								to_value(at).expect("json serialization will work; qed."),
+							]
 						),
 					)
 				})
