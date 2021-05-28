@@ -619,7 +619,7 @@ mod tests {
 			}
 		}
 
-		impl<T: Config> sp_inherents::ProvideInherent for Module<T> {
+		impl<T: Config> frame_support::inherent::ProvideInherent for Module<T> {
 			type Call = Call<T>;
 			type Error = sp_inherents::MakeFatalError<()>;
 			const INHERENT_IDENTIFIER: [u8; 8] = *b"test1234";

@@ -502,6 +502,8 @@ pub enum FeasibilityError {
 	InvalidScore,
 	/// The provided round is incorrect.
 	InvalidRound,
+	/// Comparison against `MinimumUntrustedScore` failed.
+	UntrustedScoreTooLow,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -579,6 +581,9 @@ pub mod pallet {
 		/// Configuration for the fallback
 		type Fallback: Get<FallbackStrategy>;
 
+		/// Origin that can set the minimum score.
+		type ForceOrigin: EnsureOrigin<Self::Origin>;
+
 		/// The configuration of benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
 
@@ -653,38 +658,24 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
-			match Self::current_phase() {
-				Phase::Unsigned((true, opened)) if opened == now => {
-					// mine a new solution, cache it, and attempt to submit it
-					let initial_output = Self::try_acquire_offchain_lock(now)
-						.and_then(|_| Self::mine_check_save_submit());
-					log!(info, "initial OCW output at {:?}: {:?}", now, initial_output);
+			use sp_runtime::offchain::storage_lock::{StorageLock, BlockAndTime};
+
+			// create a lock with the maximum deadline of number of blocks in the unsigned phase.
+			// This should only come useful in an **abrupt** termination of execution, otherwise the
+			// guard will be dropped upon successful execution.
+			let mut lock = StorageLock::<BlockAndTime<frame_system::Pallet::<T>>>::with_block_deadline(
+				unsigned::OFFCHAIN_LOCK,
+				T::UnsignedPhase::get().saturated_into(),
+			);
+
+			match lock.try_lock() {
+				Ok(_guard) => {
+					Self::do_synchronized_offchain_worker(now);
+				},
+				Err(deadline) => {
+					log!(debug, "offchain worker lock not released, deadline is {:?}", deadline);
 				}
-				Phase::Unsigned((true, opened)) if opened < now => {
-					// keep trying to submit solutions. worst case, we note that the stored solution
-					// is better than our cached/computed one, and decide not to submit after all.
-					//
-					// the offchain_lock prevents us from spamming submissions too often.
-					let resubmit_output = Self::try_acquire_offchain_lock(now)
-						.and_then(|_| Self::restore_or_compute_then_maybe_submit());
-					log!(info, "resubmit OCW output at {:?}: {:?}", now, resubmit_output);
-				}
-				_ => {}
-			}
-			// after election finalization, clear OCW solution storage
-			if <frame_system::Pallet<T>>::events()
-				.into_iter()
-				.filter_map(|event_record| {
-					let local_event = <T as Config>::Event::from(event_record.event);
-					local_event.try_into().ok()
-				})
-				.find(|event| {
-					matches!(event, Event::ElectionFinalized(_))
-				})
-				.is_some()
-			{
-				unsigned::kill_ocw_solution::<T>();
-			}
+			};
 		}
 
 		fn integrity_test() {
@@ -786,6 +777,21 @@ pub mod pallet {
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Unsigned));
 
 			Ok(None.into())
+		}
+
+		/// Set a new value for `MinimumUntrustedScore`.
+		///
+		/// Dispatch origin must be aligned with `T::ForceOrigin`.
+		///
+		/// This check can be turned off by setting the value to `None`.
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		fn set_minimum_untrusted_score(
+			origin: OriginFor<T>,
+			maybe_next_score: Option<ElectionScore>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			<MinimumUntrustedScore<T>>::set(maybe_next_score);
+			Ok(())
 		}
 	}
 
@@ -923,19 +929,65 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
+	/// The minimum score that each 'untrusted' solution must attain in order to be considered
+	/// feasible.
+	///
+	/// Can be set via `set_minimum_untrusted_score`.
+	#[pallet::storage]
+	#[pallet::getter(fn minimum_untrusted_score)]
+	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
 impl<T: Config> Pallet<T> {
+	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
+	/// acquired with success.
+	fn do_synchronized_offchain_worker(now: T::BlockNumber) {
+		log!(trace, "lock for offchain worker acquired.");
+		match Self::current_phase() {
+			Phase::Unsigned((true, opened)) if opened == now => {
+				// mine a new solution, cache it, and attempt to submit it
+				let initial_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
+					Self::mine_check_save_submit()
+				});
+				log!(debug, "initial offchain thread output: {:?}", initial_output);
+			}
+			Phase::Unsigned((true, opened)) if opened < now => {
+				// try and resubmit the cached solution, and recompute ONLY if it is not
+				// feasible.
+				let resubmit_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
+					Self::restore_or_compute_then_maybe_submit()
+				});
+				log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
+			}
+			_ => {}
+		}
+
+		// after election finalization, clear OCW solution storage.
+		if <frame_system::Pallet<T>>::events()
+			.into_iter()
+			.filter_map(|event_record| {
+				let local_event = <T as Config>::Event::from(event_record.event);
+				local_event.try_into().ok()
+			})
+			.any(|event| {
+				matches!(event, Event::ElectionFinalized(_))
+			})
+		{
+			unsigned::kill_ocw_solution::<T>();
+		}
+	}
+
 	/// Logic for [`<Pallet as Hooks>::on_initialize`] when signed phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation.
 	///
 	/// Returns `Ok(snapshot_weight)` if success, where `snapshot_weight` is the weight that
 	/// needs to recorded for the creation of snapshot.
-	pub(crate) fn on_initialize_open_signed() -> Result<Weight, ElectionError> {
+	pub fn on_initialize_open_signed() -> Result<Weight, ElectionError> {
 		let weight = Self::create_snapshot()?;
 		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
@@ -948,7 +1000,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(snapshot_weight)` if success, where `snapshot_weight` is the weight that
 	/// needs to recorded for the creation of snapshot.
-	pub(crate) fn on_initialize_open_unsigned(
+	pub fn on_initialize_open_unsigned(
 		need_snapshot: bool,
 		enabled: bool,
 		now: T::BlockNumber,
@@ -973,7 +1025,7 @@ impl<T: Config> Pallet<T> {
 	/// 3. [`DesiredTargets`]
 	///
 	/// Returns `Ok(consumed_weight)` if operation is okay.
-	pub(crate) fn create_snapshot() -> Result<Weight, ElectionError> {
+	pub fn create_snapshot() -> Result<Weight, ElectionError> {
 		let target_limit = <CompactTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 		let voter_limit = <CompactVoterIndexOf<T>>::max_value().saturated_into::<usize>();
 
@@ -1027,6 +1079,15 @@ impl<T: Config> Pallet<T> {
 		// already checked this in `unsigned_per_dispatch_checks`. The signed path *could* check it
 		// upon arrival, thus we would then remove it here. Given overlay it is cheap anyhow
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
+
+		// ensure that the solution's score can pass absolute min-score.
+		let submitted_score = solution.score.clone();
+		ensure!(
+			Self::minimum_untrusted_score().map_or(true, |min_score|
+				sp_npos_elections::is_score_better(submitted_score, min_score, Perbill::zero())
+			),
+			FeasibilityError::UntrustedScoreTooLow
+		);
 
 		// read the entire snapshot.
 		let RoundSnapshot { voters: snapshot_voters, targets: snapshot_targets } =
@@ -1569,6 +1630,31 @@ mod tests {
 			roll_to(29);
 			let (supports, _) = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
+		})
+	}
+
+	#[test]
+	fn untrusted_score_verification_is_respected() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+
+			let (solution, _) = MultiPhase::mine_solution(2).unwrap();
+			// default solution has a score of [50, 100, 5000].
+			assert_eq!(solution.score, [50, 100, 5000]);
+
+			<MinimumUntrustedScore<Runtime>>::put([49, 0, 0]);
+			assert_ok!(MultiPhase::feasibility_check(solution.clone(), ElectionCompute::Signed));
+
+			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
+			assert_noop!(
+				MultiPhase::feasibility_check(
+					solution,
+					ElectionCompute::Signed
+				),
+				FeasibilityError::UntrustedScoreTooLow,
+			);
 		})
 	}
 

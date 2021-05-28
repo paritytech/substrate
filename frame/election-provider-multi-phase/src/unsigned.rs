@@ -15,26 +15,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The unsigned phase implementation.
+//! The unsigned phase, and its miner.
 
 use crate::{
-	helpers, Call, CompactAccuracyOf, CompactOf, Config,
-	ElectionCompute, Error, FeasibilityError, Pallet, RawSolution, ReadySolution, RoundSnapshot,
-	SolutionOrSnapshotSize, Weight, WeightInfo,
+	helpers, Call, CompactAccuracyOf, CompactOf, Config, ElectionCompute, Error, FeasibilityError,
+	Pallet, RawSolution, ReadySolution, RoundSnapshot, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Encode, Decode};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
 use sp_npos_elections::{
-	CompactSolution, ElectionResult, ElectionScore, assignment_ratio_to_staked_normalized,
+	CompactSolution, ElectionResult, assignment_ratio_to_staked_normalized,
 	assignment_staked_to_ratio_normalized, is_score_better, seq_phragmen,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput, SaturatedConversion};
 use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec};
 
-/// Storage key used to store the persistent offchain worker status.
-pub(crate) const OFFCHAIN_LOCK: &[u8] = b"parity/multi-phase-unsigned-election";
+/// Storage key used to store the last block number at which offchain worker ran.
+pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
+/// Storage key used to store the offchain worker running status.
+pub(crate) const OFFCHAIN_LOCK: &[u8] = b"parity/multi-phase-unsigned-election/lock";
 
 /// Storage key used to cache the solution `call`.
 pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-election/call";
@@ -72,8 +73,6 @@ pub enum MinerError {
 	Lock(&'static str),
 	/// Cannot restore a solution that was not stored.
 	NoStoredSolution,
-	/// Cached solution does not match the current round.
-	SolutionOutOfDate,
 	/// Cached solution is not a `submit_unsigned` call.
 	SolutionCallInvalid,
 	/// Failed to store a solution.
@@ -96,15 +95,16 @@ impl From<FeasibilityError> for MinerError {
 
 /// Save a given call into OCW storage.
 fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
+	log!(debug, "saving a call to the offchain storage.");
 	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
 		Ok(Ok(_)) => Ok(()),
 		Ok(Err(_)) => Err(MinerError::FailedToStoreSolution),
 		Err(_) => {
-			// this branch should be unreachable according to the definition of `StorageValueRef::mutate`:
-			// that function should only ever `Err` if the closure we pass it return an error.
-			// however, for safety in case the definition changes, we do not optimize the branch away
-			// or panic.
+			// this branch should be unreachable according to the definition of
+			// `StorageValueRef::mutate`: that function should only ever `Err` if the closure we
+			// pass it returns an error. however, for safety in case the definition changes, we do
+			// not optimize the branch away or panic.
 			Err(MinerError::FailedToStoreSolution)
 		},
 	}
@@ -120,8 +120,18 @@ fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
 
 /// Clear a saved solution from OCW storage.
 pub(super) fn kill_ocw_solution<T: Config>() {
+	log!(debug, "clearing offchain call cache storage.");
 	let mut storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 	storage.clear();
+}
+
+/// Clear the offchain repeat storage.
+///
+/// After calling this, the next offchain worker is guaranteed to work, with respect to the
+/// frequency repeat.
+fn clear_offchain_repeat_frequency() {
+	let mut last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+	last_block.clear();
 }
 
 /// `true` when OCW storage contains a solution
@@ -137,54 +147,59 @@ impl<T: Config> Pallet<T> {
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
 	/// if our call's score is greater than that of the cached solution.
 	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError> {
-		log!(
-			debug,
-			"OCW attempting to restore or compute an unsigned solution for the current election"
-		);
+		log!(debug,"miner attempting to restore or compute an unsigned solution.");
 
 		let call = restore_solution::<T>()
-			.and_then(|call| {
-				// ensure the cached call is still current before submitting
-				if let Call::submit_unsigned(solution, _) = &call {
-					// prevent errors arising from state changes in a forkful chain
-					Self::basic_checks(solution, "restored")?;
-					Ok(call)
-				} else {
-					Err(MinerError::SolutionCallInvalid)
-				}
-			})
-			.or_else::<MinerError, _>(|_| {
-				// if not present or cache invalidated, regenerate
-				let (call, _) = Self::mine_checked_call()?;
-				save_solution(&call)?;
+		.and_then(|call| {
+			// ensure the cached call is still current before submitting
+			if let Call::submit_unsigned(solution, _) = &call {
+				// prevent errors arising from state changes in a forkful chain
+				Self::basic_checks(solution, "restored")?;
 				Ok(call)
-			})?;
+			} else {
+				Err(MinerError::SolutionCallInvalid)
+			}
+		}).or_else::<MinerError, _>(|error| {
+			log!(debug, "restoring solution failed due to {:?}", error);
+			match error {
+				MinerError::NoStoredSolution => {
+					log!(trace, "mining a new solution.");
+					// if not present or cache invalidated due to feasibility, regenerate.
+					// note that failing `Feasibility` can only mean that the solution was
+					// computed over a snapshot that has changed due to a fork.
+					let call = Self::mine_checked_call()?;
+					save_solution(&call)?;
+					Ok(call)
+				}
+				MinerError::Feasibility(_) => {
+					log!(trace, "wiping infeasible solution.");
+					// kill the infeasible solution, hopefully in the next runs (whenever they
+					// may be) we mine a new one.
+					kill_ocw_solution::<T>();
+					clear_offchain_repeat_frequency();
+					Err(error)
+				},
+				_ => {
+					// nothing to do. Return the error as-is.
+					Err(error)
+				}
+			}
+		})?;
 
-		// the runtime will catch it and reject the transaction if the phase is wrong, but it's
-		// cheap and easy to check it here to ease the workload on the runtime, so:
-		if !Self::current_phase().is_unsigned_open() {
-			// don't bother submitting; it's not an error, we're just too late.
-			return Ok(());
-		}
-
-		// in case submission fails for any reason, `submit_call` kills the stored solution
 		Self::submit_call(call)
 	}
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
 	pub fn mine_check_save_submit() -> Result<(), MinerError> {
-		log!(
-			debug,
-			"OCW attempting to compute an unsigned solution for the current election"
-		);
+		log!(debug, "miner attempting to compute an unsigned solution.");
 
-		let (call, _) = Self::mine_checked_call()?;
+		let call = Self::mine_checked_call()?;
 		save_solution(&call)?;
 		Self::submit_call(call)
 	}
 
 	/// Mine a new solution as a call. Performs all checks.
-	fn mine_checked_call() -> Result<(Call<T>, ElectionScore), MinerError> {
+	pub fn mine_checked_call() -> Result<Call<T>, MinerError> {
 		let iters = Self::get_balancing_iters();
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
@@ -194,38 +209,35 @@ impl<T: Config> Pallet<T> {
 
 		log!(
 			debug,
-			"OCW mined a solution with score {:?} and size {}",
+			"mined a solution with score {:?} and size {}",
 			score,
 			call.using_encoded(|b| b.len())
 		);
 
-		Ok((call, score))
+		Ok(call)
 	}
 
 	fn submit_call(call: Call<T>) -> Result<(), MinerError> {
-		log!(
-			debug,
-			"OCW submitting a solution as an unsigned transaction",
-		);
+		log!(debug, "miner submitting a solution as an unsigned transaction");
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
-			.map_err(|_| {
-				kill_ocw_solution::<T>();
-				MinerError::PoolSubmissionFailed
-			})
+			.map_err(|_| MinerError::PoolSubmissionFailed)
 	}
 
 	// perform basic checks of a solution's validity
 	//
 	// Performance: note that it internally clones the provided solution.
-	fn basic_checks(raw_solution: &RawSolution<CompactOf<T>>, solution_type: &str) -> Result<(), MinerError> {
+	pub fn basic_checks(
+		raw_solution: &RawSolution<CompactOf<T>>,
+		solution_type: &str,
+	) -> Result<(), MinerError> {
 		Self::unsigned_pre_dispatch_checks(raw_solution).map_err(|err| {
-			log!(warn, "pre-dispatch checks fialed for {} solution: {:?}", solution_type, err);
+			log!(debug, "pre-dispatch checks failed for {} solution: {:?}", solution_type, err);
 			MinerError::PreDispatchChecksFailed
 		})?;
 
 		Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(|err| {
-			log!(warn, "feasibility check failed for {} solution: {:?}", solution_type, err);
+			log!(debug, "feasibility check failed for {} solution: {:?}", solution_type, err);
 			err
 		})?;
 
@@ -392,7 +404,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
 	/// much or remove a winner, then the solution must be discarded **after** this step.
-	fn trim_assignments_weight(
+	pub fn trim_assignments_weight(
 		desired_targets: u32,
 		size: SolutionOrSnapshotSize,
 		max_weight: Weight,
@@ -426,7 +438,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The score must be computed **after** this step. If this step reduces the score too much,
 	/// then the solution must be discarded.
-	pub(crate) fn trim_assignments_length(
+	pub fn trim_assignments_length(
 		max_allowed_length: u32,
 		assignments: &mut Vec<IndexAssignmentOf<T>>,
 		encoded_size_of: impl Fn(&[IndexAssignmentOf<T>]) -> Result<usize, sp_npos_elections::Error>,
@@ -437,6 +449,11 @@ impl<T: Config> Pallet<T> {
 		let mut high = assignments.len();
 		let mut low = 0;
 
+		// not much we can do if assignments are already empty.
+		if high == low {
+			return Ok(());
+		}
+
 		while high - low > 1 {
 			let test = (high + low) / 2;
 			if encoded_size_of(&assignments[..test])? <= max_allowed_length {
@@ -446,13 +463,13 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		let maximum_allowed_voters =
-			if encoded_size_of(&assignments[..low + 1])? <= max_allowed_length {
+			if low < assignments.len() && encoded_size_of(&assignments[..low + 1])? <= max_allowed_length {
 				low + 1
 			} else {
 				low
 			};
 
-		// ensure our postconditions are correct
+		// ensure our post-conditions are correct
 		debug_assert!(
 			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap() <= max_allowed_length
 		);
@@ -556,18 +573,18 @@ impl<T: Config> Pallet<T> {
 	/// Checks if an execution of the offchain worker is permitted at the given block number, or
 	/// not.
 	///
-	/// This essentially makes sure that we don't run on previous blocks in case of a re-org, and we
-	/// don't run twice within a window of length `threshold`.
+	/// This makes sure that
+	/// 1. we don't run on previous blocks in case of a re-org
+	/// 2. we don't run twice within a window of length `T::OffchainRepeat`.
 	///
-	/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
-	pub(crate) fn try_acquire_offchain_lock(
-		now: T::BlockNumber,
-	) -> Result<(), MinerError> {
+	/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If `Ok()`
+	/// is returned, `now` is written in storage and will be used in further calls as the baseline.
+	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError> {
 		let threshold = T::OffchainRepeat::get();
-		let storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+		let last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
-		let mutate_stat =
-			storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
+		let mutate_stat = last_block.mutate::<_, &'static str, _>(
+			|maybe_head: Option<Option<T::BlockNumber>>| {
 				match maybe_head {
 					Some(Some(head)) if now < head => Err("fork."),
 					Some(Some(head)) if now >= head && now <= head + threshold => {
@@ -582,7 +599,8 @@ impl<T: Config> Pallet<T> {
 						Ok(now)
 					}
 				}
-			});
+			},
+		);
 
 		match mutate_stat {
 			// all good
@@ -601,7 +619,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// NOTE: Ideally, these tests should move more and more outside of this and more to the miner's
 	/// code, so that we do less and less storage reads here.
-	pub(crate) fn unsigned_pre_dispatch_checks(
+	pub fn unsigned_pre_dispatch_checks(
 		solution: &RawSolution<CompactOf<T>>,
 	) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
@@ -726,11 +744,13 @@ mod tests {
 		mock::{
 			Call as OuterCall, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin, Runtime,
 			TestCompact, TrimHelpers, roll_to, roll_to_with_ocw, trim_helpers, witness,
+			UnsignedPhase, BlockNumber, System,
 		},
 	};
 	use frame_benchmarking::Zero;
 	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
 	use sp_npos_elections::IndexAssignment;
+	use sp_runtime::offchain::storage_lock::{StorageLock, BlockAndTime};
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
 
 	type Assignment = crate::unsigned::Assignment<Runtime>;
@@ -1047,7 +1067,7 @@ mod tests {
 	}
 
 	#[test]
-	fn ocw_check_prevent_duplicate() {
+	fn ocw_lock_prevents_frequent_execution() {
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
@@ -1056,19 +1076,86 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// first execution -- okay.
-			assert!(MultiPhase::try_acquire_offchain_lock(25).is_ok());
+			assert!(MultiPhase::ensure_offchain_repeat_frequency(25).is_ok());
 
 			// next block: rejected.
-			assert_noop!(MultiPhase::try_acquire_offchain_lock(26), MinerError::Lock("recently executed."));
+			assert_noop!(
+				MultiPhase::ensure_offchain_repeat_frequency(26),
+				MinerError::Lock("recently executed.")
+			);
 
 			// allowed after `OFFCHAIN_REPEAT`
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat).into()).is_ok());
+			assert!(
+				MultiPhase::ensure_offchain_repeat_frequency((26 + offchain_repeat).into()).is_ok()
+			);
 
 			// a fork like situation: re-execute last 3.
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 3).into()).is_err());
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 2).into()).is_err());
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 1).into()).is_err());
+			assert!(MultiPhase::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat - 3).into()
+			)
+			.is_err());
+			assert!(MultiPhase::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat - 2).into()
+			)
+			.is_err());
+			assert!(MultiPhase::ensure_offchain_repeat_frequency(
+				(26 + offchain_repeat - 1).into()
+			)
+			.is_err());
 		})
+	}
+
+	#[test]
+	fn ocw_lock_released_after_successful_execution() {
+		// first, ensure that a successful execution releases the lock
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			let guard = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
+
+			roll_to(25);
+			assert!(MultiPhase::current_phase().is_unsigned());
+
+			// initially, the lock is not set.
+			assert!(guard.get::<bool>().is_none());
+
+			// a successful a-z execution.
+			MultiPhase::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 1);
+
+			// afterwards, the lock is not set either..
+			assert!(guard.get::<bool>().is_none());
+			assert_eq!(last_block.get::<BlockNumber>().unwrap().unwrap(), 25);
+		});
+	}
+
+	#[test]
+	fn ocw_lock_prevents_overlapping_execution() {
+		// ensure that if the guard is in hold, a new execution is not allowed.
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
+			assert!(MultiPhase::current_phase().is_unsigned());
+
+			// artificially set the value, as if another thread is mid-way.
+			let mut lock = StorageLock::<BlockAndTime<System>>::with_block_deadline(
+				OFFCHAIN_LOCK,
+				UnsignedPhase::get().saturated_into(),
+			);
+			let guard = lock.lock();
+
+			// nothing submitted.
+			MultiPhase::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 0);
+			MultiPhase::offchain_worker(26);
+			assert_eq!(pool.read().transactions.len(), 0);
+
+			drop(guard);
+
+			// 🎉 !
+			MultiPhase::offchain_worker(25);
+			assert_eq!(pool.read().transactions.len(), 1);
+		});
 	}
 
 	#[test]
@@ -1080,7 +1167,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
 			MultiPhase::offchain_worker(24);
 			assert!(pool.read().transactions.len().is_zero());
@@ -1107,7 +1194,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 			storage.clear();
 
 			assert!(!ocw_solution_exists::<Runtime>(), "no solution should be present before we mine one");
@@ -1138,7 +1225,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
 			MultiPhase::offchain_worker(block_plus(-1));
 			assert!(pool.read().transactions.len().is_zero());
@@ -1176,7 +1263,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
 			MultiPhase::offchain_worker(block_plus(-1));
 			assert!(pool.read().transactions.len().is_zero());
@@ -1256,8 +1343,7 @@ mod tests {
 
 	#[test]
 	fn trim_assignments_length_does_not_modify_when_short_enough() {
-		let mut ext = ExtBuilder::default().build();
-		ext.execute_with(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
 
 			// given
@@ -1281,8 +1367,7 @@ mod tests {
 
 	#[test]
 	fn trim_assignments_length_modifies_when_too_long() {
-		let mut ext = ExtBuilder::default().build();
-		ext.execute_with(|| {
+		ExtBuilder::default().build().execute_with(|| {
 			roll_to(25);
 
 			// given
@@ -1307,8 +1392,7 @@ mod tests {
 
 	#[test]
 	fn trim_assignments_length_trims_lowest_stake() {
-		let mut ext = ExtBuilder::default().build();
-		ext.execute_with(|| {
+		ExtBuilder::default().build().execute_with(|| {
 			roll_to(25);
 
 			// given
@@ -1340,13 +1424,59 @@ mod tests {
 		});
 	}
 
+	#[test]
+	fn trim_assignments_length_wont_panic() {
+		// we shan't panic if assignments are initially empty.
+		ExtBuilder::default().build_and_execute(|| {
+			let encoded_size_of = Box::new(|assignments: &[IndexAssignmentOf<Runtime>]| {
+				CompactOf::<Runtime>::try_from(assignments).map(|compact| compact.encoded_size())
+			});
+
+			let mut assignments = vec![];
+
+			// since we have 16 fields, we need to store the length fields of 16 vecs, thus 16 bytes
+			// minimum.
+			let min_compact_size = encoded_size_of(&assignments).unwrap();
+			assert_eq!(min_compact_size, CompactOf::<Runtime>::LIMIT);
+
+			// all of this should not panic.
+			MultiPhase::trim_assignments_length(0, &mut assignments, encoded_size_of.clone())
+				.unwrap();
+			MultiPhase::trim_assignments_length(1, &mut assignments, encoded_size_of.clone())
+				.unwrap();
+			MultiPhase::trim_assignments_length(
+				min_compact_size as u32,
+				&mut assignments,
+				encoded_size_of,
+			)
+			.unwrap();
+		});
+
+		// or when we trim it to zero.
+		ExtBuilder::default().build_and_execute(|| {
+			// we need snapshot for `trim_helpers` to work.
+			roll_to(25);
+			let TrimHelpers { mut assignments, encoded_size_of, .. } = trim_helpers();
+			assert!(assignments.len() > 0);
+
+			// trim to min compact size.
+			let min_compact_size = CompactOf::<Runtime>::LIMIT as u32;
+			MultiPhase::trim_assignments_length(
+				min_compact_size,
+				&mut assignments,
+				encoded_size_of,
+			)
+			.unwrap();
+			assert_eq!(assignments.len(), 0);
+		});
+	}
+
 	// all the other solution-generation functions end up delegating to `mine_solution`, so if we
 	// demonstrate that `mine_solution` solutions are all trimmed to an acceptable length, then
 	// we know that higher-level functions will all also have short-enough solutions.
 	#[test]
 	fn mine_solution_solutions_always_within_acceptable_length() {
-		let mut ext = ExtBuilder::default().build();
-		ext.execute_with(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
 
 			// how long would the default solution be?

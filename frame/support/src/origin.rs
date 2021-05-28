@@ -349,13 +349,13 @@ macro_rules! impl_outer_origin {
 			}
 		}
 
-		impl Into<$crate::sp_std::result::Result<$system::Origin<$runtime>, $name>> for $name {
+		impl From<$name> for $crate::sp_std::result::Result<$system::Origin<$runtime>, $name>{
 			/// NOTE: converting to pallet origin loses the origin filter information.
-			fn into(self) -> $crate::sp_std::result::Result<$system::Origin<$runtime>, Self> {
-				if let $caller_name::system(l) = self.caller {
+			fn from(val: $name) -> Self {
+				if let $caller_name::system(l) = val.caller {
 					Ok(l)
 				} else {
-					Err(self)
+					Err(val)
 				}
 			}
 		}
