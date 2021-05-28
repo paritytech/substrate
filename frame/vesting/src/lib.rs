@@ -474,7 +474,6 @@ mod tests {
 		type AccountStore = System;
 		type MaxLocks = MaxLocks;
 		type MaxUsers = ();
-	type MaxUsers = ();
 		type WeightInfo = ();
 	}
 	parameter_types! {
