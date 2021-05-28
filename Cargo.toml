@@ -182,6 +182,7 @@ members = [
 	"primitives/trie",
 	"primitives/utils",
 	"primitives/version",
+	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
 	"test-utils/client",
 	"test-utils/derive",
