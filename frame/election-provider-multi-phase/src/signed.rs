@@ -245,7 +245,8 @@ impl<T: Config> Pallet<T> {
 		solution: &RawSolution<CompactOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
-		let encoded_len: BalanceOf<T> = solution.using_encoded(|e| e.len() as u32).into();
+		let encoded_len: u32 = solution.encoded_size().saturated_into();
+		let encoded_len: BalanceOf<T> = encoded_len.into();
 		let feasibility_weight = Self::feasibility_weight_of(solution, size);
 
 		let len_deposit = T::SignedDepositByte::get() * encoded_len;
