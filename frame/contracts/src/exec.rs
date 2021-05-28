@@ -2485,7 +2485,7 @@ mod tests {
 			place_contract(&BOB, code_bob);
 			place_contract(&CHARLIE, code_charlie);
 
-			// Calling another contract should succeed
+			// BOB -> CHARLIE -> BOB fails as BOB denies reentry.
 			assert_err!(
 				MockStack::run_call(
 					ALICE,
