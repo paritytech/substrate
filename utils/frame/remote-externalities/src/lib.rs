@@ -126,8 +126,6 @@ const BATCH_SIZE: usize = 512;
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi<B: BlockT> {
-		#[rpc(method = "state_getStorage", positional_params)]
-		fn get_storage(prefix: StorageKey, hash: Option<B::Hash>) -> StorageData;
 		#[rpc(method = "state_getKeysPaged", positional_params)]
 		fn get_keys_paged(
 			prefix: Option<StorageKey>,
