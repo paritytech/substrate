@@ -43,12 +43,42 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
 	pub solution: RawSolution<CompactSolution>,
 }
 
-pub(crate) type BalanceOf<T> =
+impl<AccountId, Balance, CompactSolution> Ord
+	for SignedSubmission<AccountId, Balance, CompactSolution>
+where
+	AccountId: Ord,
+	Balance: Ord + HasCompact,
+	CompactSolution: Ord,
+{
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.solution
+			.score
+			.cmp(&other.solution.score)
+			.and_then(|| self.solution.cmp(&other.solution))
+			.and_then(|| self.deposit.cmp(&other.deposit))
+			.and_then(|| self.reward.cmp(&other.reward))
+			.and_then(|| self.who.cmp(&other.who))
+	}
+}
+
+impl<AccountId, Balance, CompactSolution> PartialOrd
+	for SignedSubmission<AccountId, Balance, CompactSolution>
+where
+	AccountId: Ord,
+	Balance: Ord + HasCompact,
+	CompactSolution: Ord,
+{
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-pub(crate) type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
+pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::PositiveImbalance;
-pub(crate) type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 

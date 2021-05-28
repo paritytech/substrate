@@ -518,7 +518,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, storage::bounded_btree_set::BoundedBTreeSet};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
@@ -562,6 +562,7 @@ pub mod pallet {
 		/// Maximum number of signed submissions that can be queued.
 		#[pallet::constant]
 		type SignedMaxSubmissions: Get<u32>;
+
 		/// Maximum weight of a signed solution.
 		///
 		/// This should probably be similar to [`Config::MinerMaxWeight`].
@@ -1039,12 +1040,15 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
-	/// Sorted (worse -> best) list of unchecked, signed solutions.
+	/// Sorted set of unchecked, signed solutions.
 	#[pallet::storage]
 	#[pallet::getter(fn signed_submissions)]
 	pub type SignedSubmissions<T: Config> = StorageValue<
 		_,
-		Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
+		BoundedBTreeSet<
+			SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>,
+			T::SignedMaxSubmissions,
+		>,
 		ValueQuery,
 	>;
 
