@@ -8,6 +8,7 @@
 mod tests;
 
 use alt_serde::{de::DeserializeOwned, Deserialize, Deserializer};
+use codec::{Decode, Encode};
 use frame_support::traits::Get;
 use frame_support::{
     debug::{error, info, warn},
@@ -17,7 +18,6 @@ use frame_system::offchain::{
     AppCrypto, CreateSignedTransaction, SendSignedTransaction, Signer, SigningTypes,
 };
 
-use codec::{Decode, Encode};
 use hex_literal::hex;
 use pallet_contracts;
 use sp_core::crypto::KeyTypeId;

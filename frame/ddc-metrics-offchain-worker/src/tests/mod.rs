@@ -1,6 +1,5 @@
 use frame_support::traits::{Currency, OffchainWorker};
 use frame_system::Trait as FST;
-use hex_literal::hex;
 use pallet_contracts::Gas;
 use pallet_contracts::{self as contracts, ContractAddressFor, Trait as CT};
 use sp_core::{
