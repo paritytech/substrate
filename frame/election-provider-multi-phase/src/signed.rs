@@ -315,7 +315,7 @@ mod tests {
 
 			// now try and cheat by passing a lower queue length
 			assert_noop!(
-				MultiPhase::submit(Origin::signed(99), solution, 0,),
+				MultiPhase::submit(Origin::signed(99), solution, 0),
 				Error::<Runtime>::SignedInvalidWitness,
 			);
 		})
