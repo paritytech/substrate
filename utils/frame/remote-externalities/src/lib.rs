@@ -115,7 +115,7 @@ use sp_core::{
 use codec::{Encode, Decode};
 use sp_runtime::traits::Block as BlockT;
 use jsonrpsee_ws_client::{
-	WsClientBuilder, WsClient, JsonValue, v2::params::JsonRpcParams, traits::Client,
+	WsClientBuilder, WsClient, v2::params::JsonRpcParams, traits::Client,
 };
 
 type KeyPair = (StorageKey, StorageData);
@@ -352,7 +352,7 @@ impl<B: BlockT> Builder<B> {
 					)
 				})
 				.collect::<Vec<_>>();
-			let values = client.batch_request::<JsonValue>(batch)
+			let values = client.batch_request::<Option<StorageData>>(batch)
 				.await
 				.map_err(|e| {
 					log::error!(target: LOG_TARGET, "failed to execute batch {:?} due to {:?}", chunk_keys, e);
@@ -360,32 +360,22 @@ impl<B: BlockT> Builder<B> {
 				})?;
 			assert_eq!(chunk_keys.len(), values.len());
 			for (idx, key) in chunk_keys.into_iter().enumerate() {
-				let value = values[idx].clone();
-				let value = match value {
-					JsonValue::String(s) => {
-						StorageData(hex::decode(&s[2..]).map_err(|e| {
-							println!("Error in {:?} => {:?}", s, e);
-							e
-						}).expect("failed to decode non-empty hex."))
-					},
-					JsonValue::Null => {
-						log::warn!(target: LOG_TARGET, "key {:?} had null corresponding value.", key);
-						StorageData(vec![])
-					}
-					_ => panic!("expected response {:?}", value),
-				};
+				let maybe_value = values[idx].clone();
+				let value = maybe_value.unwrap_or_else(|| {
+					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
+					StorageData(vec![])
+				});
 				key_values.push((key.clone(), value));
-			}
-
-			if key_values.len() % (10 * BATCH_SIZE) == 0 {
-				let ratio: f64 = key_values.len() as f64 / keys_count as f64;
-				debug!(
-					target: LOG_TARGET,
-					"progress = {:.2} [{} / {}]",
-					ratio,
-					key_values.len(),
-					keys_count,
-				);
+				if key_values.len() % (10 * BATCH_SIZE) == 0 {
+					let ratio: f64 = key_values.len() as f64 / keys_count as f64;
+					debug!(
+						target: LOG_TARGET,
+						"progress = {:.2} [{} / {}]",
+						ratio,
+						key_values.len(),
+						keys_count,
+					);
+				}
 			}
 		}
 
