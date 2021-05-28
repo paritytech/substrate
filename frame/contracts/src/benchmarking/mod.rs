@@ -39,7 +39,7 @@ use self::{
 use codec::Encode;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use frame_system::{Pallet as System, RawOrigin};
-use parity_wasm::elements::{Instruction, ValueType, BlockType};
+use pwasm_utils::parity_wasm::elements::{Instruction, ValueType, BlockType, BrTableData};
 use sp_runtime::traits::{Hash, Bounded, Zero};
 use sp_std::{default::Default, convert::{TryInto}, vec::Vec, vec};
 use pallet_contracts_primitives::RentProjection;
@@ -1934,7 +1934,7 @@ benchmarks! {
 	// 1 * w_param + 0.5 * 2 * w_param + 0.25 * 4 * w_param
 	instr_br_table {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let table = Box::new(parity_wasm::elements::BrTableData {
+		let table = Box::new(BrTableData {
 			table: Box::new([0, 1, 2]),
 			default: 1,
 		});
@@ -1968,7 +1968,7 @@ benchmarks! {
 			.cloned()
 			.cycle()
 			.take((e / 2) as usize).collect();
-		let table = Box::new(parity_wasm::elements::BrTableData {
+		let table = Box::new(BrTableData {
 			table: entry.into_boxed_slice(),
 			default: 0,
 		});

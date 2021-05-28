@@ -15,8 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 log = { version = "0.4", default-features = false }
-parity-wasm = { version = "0.42", default-features = false }
-pwasm-utils = { version = "0.17", default-features = false }
+pwasm-utils = { version = "0.18", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { version = "1", default-features = false, features = ["const_generics"] }
 wasmi-validation = { version = "0.4", default-features = false }
@@ -61,7 +60,6 @@ std = [
 	"sp-sandbox/std",
 	"frame-support/std",
 	"frame-system/std",
-	"parity-wasm/std",
 	"pwasm-utils/std",
 	"wasmi-validation/std",
 	"pallet-contracts-primitives/std",
