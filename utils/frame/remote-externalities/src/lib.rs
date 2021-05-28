@@ -329,6 +329,7 @@ impl<B: BlockT> Builder<B> {
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
+		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
 		info!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
@@ -340,15 +341,20 @@ impl<B: BlockT> Builder<B> {
 				.iter()
 				.cloned()
 				.map(|key| {
-					assert!(key.0.len() == 32);
 					(
 						"state_getStorage",
-						JsonRpcParams::Array(vec![serde_json::to_value(key).unwrap()]),
+						JsonRpcParams::Array(
+							vec![to_value(key).expect("json serialization will work; qed.")]
+						),
 					)
 				})
 				.collect::<Vec<_>>();
-			log::trace!(target: LOG_TARGET, "sending batch: {:?}", batch);
-			let values = client.batch_request::<StorageData>(batch).await.unwrap();
+			let values = client.batch_request::<StorageData>(batch)
+				.await
+				.map_err(|e| {
+					log::error!(target: LOG_TARGET, "failed to execute batch {:?} due to {:?}", chunk_keys, e);
+					"batch failed."
+				})?;
 			assert_eq!(chunk_keys.len(), values.len());
 			for (idx, key) in chunk_keys.into_iter().enumerate() {
 				let value = values[idx].clone();
