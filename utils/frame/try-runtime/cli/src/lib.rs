@@ -20,7 +20,7 @@
 use parity_scale_codec::Decode;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 use sc_service::Configuration;
-use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{CliConfiguration, WasmExecutionMethod};
 use sc_executor::NativeExecutor;
 use sc_service::NativeExecutionDispatch;
 use sp_state_machine::StateMachine;
@@ -36,16 +36,6 @@ pub struct TryRuntimeCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,
-
-	/// The execution strategy that should be used for benchmarks
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-		default_value = "Native",
-	)]
-	pub execution: ExecutionStrategy,
 
 	/// Method for executing Wasm runtime code.
 	#[structopt(

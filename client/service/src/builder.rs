@@ -49,7 +49,7 @@ use sp_runtime::traits::{
 	Block as BlockT, HashFor, Zero, BlockIdTo,
 };
 use sp_api::{ProvideRuntimeApi, CallApiAt};
-use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
+use sc_executor::{WasmExecutor, RuntimeInfo};
 use std::sync::Arc;
 use wasm_timer::SystemTime;
 use sc_telemetry::{
@@ -138,25 +138,17 @@ impl<R> From<R> for NoopRpcExtensionBuilder<R> where
 
 
 /// Full client type.
-pub type TFullClient<TBl, TRtApi, TExecDisp> = Client<
-	TFullBackend<TBl>,
-	TFullCallExecutor<TBl, TExecDisp>,
-	TBl,
-	TRtApi,
->;
+pub type TFullClient<TBl, TRtApi> = Client<TFullBackend<TBl>, TBl, TRtApi>;
 
 /// Full client backend type.
 pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 
 /// Full client call executor type.
-pub type TFullCallExecutor<TBl, TExecDisp> = crate::client::LocalCallExecutor<
-	sc_client_db::Backend<TBl>,
-	NativeExecutor<TExecDisp>,
->;
+pub type TFullCallExecutor<TBl> = crate::client::LocalCallExecutor<sc_client_db::Backend<TBl>>;
 
 /// Light client type.
 pub type TLightClient<TBl, TRtApi, TExecDisp> = TLightClientWithBackend<
-	TBl, TRtApi, TExecDisp, TLightBackend<TBl>
+	TBl, TRtApi, TLightBackend<TBl>
 >;
 
 /// Light client backend type.
@@ -176,7 +168,6 @@ pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
 			sc_client_db::light::LightStorage<TBl>,
 			HashFor<TBl>
 		>,
-		NativeExecutor<TExecDisp>
 	>,
 >;
 
@@ -187,8 +178,8 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TaskManager,
 );
 
-type TLightParts<TBl, TRtApi, TExecDisp> = (
-	Arc<TLightClient<TBl, TRtApi, TExecDisp>>,
+type TLightParts<TBl, TRtApi> = (
+	Arc<TLightClient<TBl, TRtApi>>,
 	Arc<TLightBackend<TBl>>,
 	KeystoreContainer,
 	TaskManager,
@@ -202,11 +193,11 @@ pub type TLightBackendWithHash<TBl, THash> = sc_light::Backend<
 >;
 
 /// Light client type with a specific backend.
-pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
+pub type TLightClientWithBackend<TBl, TRtApi, TBackend> = Client<
 	TBackend,
 	sc_light::GenesisCallExecutor<
 		TBackend,
-		crate::client::LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>,
+		crate::client::LocalCallExecutor<TBackend>,
 	>,
 	TBl,
 	TRtApi,
@@ -294,7 +285,6 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	telemetry: Option<TelemetryHandle>,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	new_full_parts(config, telemetry).map(|parts| parts.0)
 }
@@ -305,7 +295,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	telemetry: Option<TelemetryHandle>,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
@@ -314,7 +303,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
-	let executor = NativeExecutor::<TExecDisp>::new(
+	let executor = WasmExecutor::new(
 		config.wasm_method,
 		config.max_runtime_instances,
 	);
@@ -377,12 +366,11 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 }
 
 /// Create the initial parts of a light node.
-pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
+pub fn new_light_parts<TBl, TRtApi>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-) -> Result<TLightParts<TBl, TRtApi, TExecDisp>, Error> where
+) -> Result<TLightParts<TBl, TRtApi>, Error> where
 	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
@@ -390,7 +378,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
-	let executor = NativeExecutor::<TExecDisp>::new(
+	let executor = WasmExecutor::new(
 		config.wasm_method,
 		config.max_runtime_instances,
 	);

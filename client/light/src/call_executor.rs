@@ -24,15 +24,15 @@ use std::{
 
 use codec::{Encode, Decode};
 use sp_core::{
-	convert_hash, NativeOrEncoded, traits::{CodeExecutor, SpawnNamed},
+	convert_hash, traits::{CodeExecutor, SpawnNamed},
 };
 use sp_runtime::{
 	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HashFor},
 };
 use sp_externalities::Extensions;
 use sp_state_machine::{
-	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof,
+	self, Backend as StateBackend, OverlayedChanges, create_proof_check_backend,
+	execution_proof_check_on_trie_backend, StorageProof,
 };
 use hash_db::Hasher;
 
@@ -87,7 +87,6 @@ impl<Block, B, Local> CallExecutor<Block> for
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
 	) -> ClientResult<Vec<u8>> {
 		match self.backend.is_local_state_available(id) {
@@ -100,9 +99,9 @@ impl<Block, B, Local> CallExecutor<Block> for
 		'a,
 		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
+			Result<Vec<u8>, Self::Error>,
+			Result<Vec<u8>, Self::Error>
+		) -> Result<Vec<u8>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 	>(
 		&self,
@@ -116,7 +115,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 		_manager: ExecutionManager<EM>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
+	) -> ClientResult<Vec<u8>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
 
@@ -124,9 +123,9 @@ impl<Block, B, Local> CallExecutor<Block> for
 			true => CallExecutor::contextual_call::<
 				_,
 				fn(
-					Result<NativeOrEncoded<R>, Local::Error>,
-					Result<NativeOrEncoded<R>, Local::Error>,
-				) -> Result<NativeOrEncoded<R>, Local::Error>,
+					Result<Vec<u8>, Local::Error>,
+					Result<Vec<u8>, Local::Error>,
+				) -> Result<Vec<u8>, Local::Error>,
 				_
 			>(
 				&self.local,

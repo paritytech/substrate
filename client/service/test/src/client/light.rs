@@ -40,11 +40,11 @@ use substrate_test_runtime_client::{
 use sp_api::{InitializeBlock, StorageTransactionCache, ProofRecorder};
 use sp_consensus::BlockOrigin;
 use sc_executor::{NativeExecutor, WasmExecutionMethod, RuntimeVersion, NativeVersion};
-use sp_core::{H256, NativeOrEncoded, testing::TaskExecutor};
+use sp_core::{H256, testing::TaskExecutor};
 use sc_client_api::{
 	blockchain::Info, backend::NewBlockState, Backend as ClientBackend, ProofProvider,
 	in_mem::{Backend as InMemBackend, Blockchain as InMemoryBlockchain}, ProvideChtRoots,
-	AuxStore, Storage, CallExecutor, cht, ExecutionStrategy, StorageProof, BlockImportOperation,
+	AuxStore, Storage, CallExecutor, cht, BackendTrustLevel, StorageProof, BlockImportOperation,
 	RemoteCallRequest, StorageProvider, ChangesProof, RemoteBodyRequest, RemoteReadRequest,
 	RemoteChangesRequest, FetchChecker, RemoteReadChildRequest, RemoteHeaderRequest, BlockBackend,
 };
@@ -201,7 +201,6 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_id: &BlockId<Block>,
 		_method: &str,
 		_call_data: &[u8],
-		_strategy: ExecutionStrategy,
 		_extensions: Option<Extensions>,
 	) -> Result<Vec<u8>, ClientError> {
 		Ok(vec![42])
@@ -211,9 +210,9 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		'a,
 		IB: Fn() -> ClientResult<()>,
 		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
+			Result<Vec<u8>, Self::Error>,
+			Result<Vec<u8>, Self::Error>
+		) -> Result<Vec<u8>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 	>(
 		&self,
@@ -232,7 +231,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_execution_manager: ExecutionManager<EM>,
 		_proof_recorder: &Option<ProofRecorder<Block>>,
 		_extensions: Option<Extensions>,
-	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
+	) -> ClientResult<Vec<u8>> where ExecutionManager<EM>: Clone {
 		unreachable!()
 	}
 
@@ -420,7 +419,6 @@ fn code_is_executed_at_genesis_only() {
 			&BlockId::Number(0),
 			"test_method",
 			&[],
-			ExecutionStrategy::NativeElseWasm,
 			None,
 		).unwrap(),
 		vec![42],
@@ -430,7 +428,6 @@ fn code_is_executed_at_genesis_only() {
 		&BlockId::Number(1),
 		"test_method",
 		&[],
-		ExecutionStrategy::NativeElseWasm,
 		None,
 	);
 

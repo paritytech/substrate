@@ -19,7 +19,7 @@ use std::sync::Arc;
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
-use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
+use sc_cli::{SharedParams, CliConfiguration, Result};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
 use sp_state_machine::StateMachine;
@@ -58,7 +58,6 @@ impl BenchmarkCmd {
 
 		let spec = config.chain_spec;
 		let wasm_method = self.wasm_method.into();
-		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();

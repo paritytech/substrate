@@ -334,12 +334,12 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
 					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 					&Option<#crate_::ProofRecorder<Block>>,
-				) -> std::result::Result<#crate_::NativeOrEncoded<R>, E>,
+				) -> std::result::Result<#crate_::Vec<u8>, E>,
 				E,
 			>(
 				&self,
 				call_api_at: F,
-			) -> std::result::Result<#crate_::NativeOrEncoded<R>, E> {
+			) -> std::result::Result<#crate_::Vec<u8>, E> {
 				if *self.commit_on_success.borrow() {
 					self.changes.borrow_mut().start_transaction();
 				}
@@ -473,7 +473,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 			// Generate the correct return type.
 			input.sig.output = parse_quote!(
-				-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>
+				-> std::result::Result<#crate_::Vec<u8>, #crate_::ApiError>
 			);
 
 			// Generate the new method implementation that calls into the runtime.

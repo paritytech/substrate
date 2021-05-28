@@ -28,10 +28,9 @@ use std::{
 	path::PathBuf,
 };
 
-use sp_version::{NativeVersion, RuntimeVersion};
+use sp_version::RuntimeVersion;
 use codec::{Decode, Encode};
 use sp_core::{
-	NativeOrEncoded,
 	traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawnExt, RuntimeSpawn},
 };
 use log::trace;
@@ -69,23 +68,6 @@ pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Resul
 			})
 		},
 	)
-}
-
-/// Delegate for dispatching a CodeExecutor call.
-///
-/// By dispatching we mean that we execute a runtime function specified by it's name.
-pub trait NativeExecutionDispatch: Send + Sync {
-	/// Host functions for custom runtime interfaces that should be callable from within the runtime
-	/// besides the default Substrate runtime interfaces.
-	type ExtendHostFunctions: HostFunctions;
-
-	/// Dispatch a method in the runtime.
-	///
-	/// If the method with the specified name doesn't exist then `Err` is returned.
-	fn dispatch(ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
-
-	/// Provide native runtime version.
-	fn native_version() -> NativeVersion;
 }
 
 /// An abstraction over Wasm code executor. Supports selecting execution backend and
@@ -224,8 +206,8 @@ impl WasmExecutor {
 			preregister_builtin_ext(module.clone());
 			instance.call_export(export_name, call_data)
 		})
-		.and_then(|r| r)
-		.map_err(|e| e.to_string())
+			.and_then(|r| r)
+			.map_err(|e| e.to_string())
 	}
 }
 
@@ -260,80 +242,6 @@ impl sp_core::traits::ReadRuntimeVersion for WasmExecutor {
 			true,
 			"Core_version",
 			&[],
-		)
-	}
-}
-
-/// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
-/// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
-pub struct NativeExecutor<D> {
-	/// Dummy field to avoid the compiler complaining about us not using `D`.
-	_dummy: std::marker::PhantomData<D>,
-	/// Native runtime version info.
-	native_version: NativeVersion,
-	/// Fallback wasm executor.
-	wasm: WasmExecutor,
-}
-
-impl<D: NativeExecutionDispatch> NativeExecutor<D> {
-	/// Create new instance.
-	///
-	/// # Parameters
-	///
-	/// `fallback_method` - Method used to execute fallback Wasm code.
-	///
-	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
-	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
-	pub fn new(
-		fallback_method: WasmExecutionMethod,
-		max_runtime_instances: usize,
-	) -> Self {
-		let extended =  D::ExtendHostFunctions::host_functions();
-		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions()
-			.into_iter()
-			// filter out any host function overrides provided.
-			.filter(|host_fn| {
-				extended.iter()
-					.find(|ext_host_fn| host_fn.name() == ext_host_fn.name())
-					.is_none()
-			})
-			.collect::<Vec<_>>();
-
-
-		// Add the custom host functions provided by the user.
-		host_functions.extend(extended);
-		let wasm_executor = WasmExecutor::new(
-			fallback_method,
-			host_functions,
-			max_runtime_instances,
-			None,
-		);
-
-		NativeExecutor {
-			_dummy: Default::default(),
-			native_version: D::native_version(),
-			wasm: wasm_executor,
-		}
-	}
-}
-
-impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
-	fn native_version(&self) -> &NativeVersion {
-		&self.native_version
-	}
-
-	fn runtime_version(
-		&self,
-		ext: &mut dyn Externalities,
-		runtime_code: &RuntimeCode,
-	) -> Result<RuntimeVersion> {
-		self.wasm.with_instance(
-			runtime_code,
-			DEFAULT_HEAP_PAGES,
-			ext,
-			false,
-			|_module, _instance, version, _ext|
-				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into()))),
 		)
 	}
 }
@@ -469,194 +377,4 @@ fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
 			}
 		}
 	});
-}
-
-impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
-	type Error = Error;
-
-	fn do_call<
-		R: Decode + Encode + PartialEq,
-	>(
-		&self,
-		ext: &mut dyn Externalities,
-		heap_pages: u64,
-		runtime_code: &RuntimeCode,
-		method: &str,
-		data: &[u8],
-		use_native: bool,
-	) -> (Result<NativeOrEncoded<R>>, bool) {
-		let used_native = false;
-		let result = self.wasm.with_instance(
-			runtime_code,
-			heap_pages,
-			ext,
-			false,
-			|module, instance, onchain_version, mut ext| {
-				let onchain_version = onchain_version.ok_or_else(
-					|| Error::ApiError("Unknown version".into())
-				)?;
-
-				let can_call_with = onchain_version.can_call_with(&self.native_version.runtime_version);
-
-				if !use_native || !can_call_with {
-					if !can_call_with {
-						trace!(
-							target: "executor",
-							"Request for native execution failed (native: {}, chain: {})",
-							self.native_version.runtime_version,
-							onchain_version,
-						);
-					}
-
-					with_externalities_safe(
-						&mut **ext,
-						move || {
-							preregister_builtin_ext(module.clone());
-							instance.call_export(method, data)
-						}
-					)
-				} else {
-					trace!(
-						target: "executor",
-						"Request for native execution succeeded (native: {}, chain: {})",
-						self.native_version.runtime_version,
-						onchain_version
-					);
-
-					Ok(D::dispatch(&mut **ext, method, data))
-				}
-			}
-		);
-		(result.map(NativeOrEncoded::Encoded), used_native)
-	}
-}
-
-impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
-	fn clone(&self) -> Self {
-		NativeExecutor {
-			_dummy: Default::default(),
-			native_version: D::native_version(),
-			wasm: self.wasm.clone(),
-		}
-	}
-}
-
-impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeExecutor<D> {
-	fn read_runtime_version(
-		&self,
-		wasm_code: &[u8],
-		ext: &mut dyn Externalities,
-	) -> std::result::Result<Vec<u8>, String> {
-		self.wasm.read_runtime_version(wasm_code, ext)
-	}
-}
-
-/// Implements a `NativeExecutionDispatch` for provided parameters.
-///
-/// # Example
-///
-/// ```
-/// sc_executor::native_executor_instance!(
-///     pub MyExecutor,
-///     substrate_test_runtime::api::dispatch,
-///     substrate_test_runtime::native_version,
-/// );
-/// ```
-///
-/// # With custom host functions
-///
-/// When you want to use custom runtime interfaces from within your runtime, you need to make the
-/// executor aware of the host functions for these interfaces.
-///
-/// ```
-/// # use sp_runtime_interface::runtime_interface;
-///
-/// #[runtime_interface]
-/// trait MyInterface {
-///     fn say_hello_world(data: &str) {
-///         println!("Hello world from: {}", data);
-///     }
-/// }
-///
-/// sc_executor::native_executor_instance!(
-///     pub MyExecutor,
-///     substrate_test_runtime::api::dispatch,
-///     substrate_test_runtime::native_version,
-///     my_interface::HostFunctions,
-/// );
-/// ```
-///
-/// When you have multiple interfaces, you can give the host functions as a tuple e.g.:
-/// `(my_interface::HostFunctions, my_interface2::HostFunctions)`
-///
-#[macro_export]
-macro_rules! native_executor_instance {
-	( $pub:vis $name:ident, $dispatcher:path, $version:path $(,)?) => {
-		/// A unit struct which implements `NativeExecutionDispatch` feeding in the
-		/// hard-coded runtime.
-		$pub struct $name;
-		$crate::native_executor_instance!(IMPL $name, $dispatcher, $version, ());
-	};
-	( $pub:vis $name:ident, $dispatcher:path, $version:path, $custom_host_functions:ty $(,)?) => {
-		/// A unit struct which implements `NativeExecutionDispatch` feeding in the
-		/// hard-coded runtime.
-		$pub struct $name;
-		$crate::native_executor_instance!(
-			IMPL $name, $dispatcher, $version, $custom_host_functions
-		);
-	};
-	(IMPL $name:ident, $dispatcher:path, $version:path, $custom_host_functions:ty) => {
-		impl $crate::NativeExecutionDispatch for $name {
-			type ExtendHostFunctions = $custom_host_functions;
-
-			fn dispatch(
-				ext: &mut dyn $crate::Externalities,
-				method: &str,
-				data: &[u8]
-			) -> $crate::error::Result<Vec<u8>> {
-				$crate::with_externalities_safe(ext, move || $dispatcher(method, data))?
-					.ok_or_else(|| $crate::error::Error::MethodNotFound(method.to_owned()))
-			}
-
-			fn native_version() -> $crate::NativeVersion {
-				$version()
-			}
-		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use sp_runtime_interface::runtime_interface;
-
-	#[runtime_interface]
-	trait MyInterface {
-		fn say_hello_world(data: &str) {
-			println!("Hello world from: {}", data);
-		}
-	}
-
-	native_executor_instance!(
-		pub MyExecutor,
-		substrate_test_runtime::api::dispatch,
-		substrate_test_runtime::native_version,
-		(my_interface::HostFunctions, my_interface::HostFunctions),
-	);
-
-	#[test]
-	fn native_executor_registers_custom_interface() {
-		let executor = NativeExecutor::<MyExecutor>::new(
-			WasmExecutionMethod::Interpreted,
-			8,
-		);
-		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
-			assert_eq!(
-				executor.wasm.host_functions.iter().filter(|f| f == &function).count(),
-				2,
-			);
-		});
-
-		my_interface::say_hello_world("hey");
-	}
 }

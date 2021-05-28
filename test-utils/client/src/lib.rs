@@ -21,10 +21,7 @@
 
 pub mod client_ext;
 
-pub use sc_client_api::{
-	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
-	ForkBlocks, BadBlocks,
-};
+pub use sc_client_api::{execution_extensions::ExecutionExtensions, ForkBlocks, BadBlocks};
 pub use sc_client_db::{Backend, self};
 pub use sp_consensus;
 pub use sc_executor::{NativeExecutor, WasmExecutionMethod, self};
@@ -35,7 +32,6 @@ pub use sp_keyring::{
 };
 pub use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 pub use sp_runtime::{Storage, StorageChild};
-pub use sp_state_machine::ExecutionStrategy;
 pub use sc_service::{RpcHandlers, RpcSession, client};
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
@@ -69,7 +65,6 @@ impl GenesisInit for () {
 
 /// A builder for creating a test client instance.
 pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
-	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
 	/// The key is an unprefixed storage key, this only contains
 	/// default child trie content.
@@ -108,7 +103,6 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 	pub fn with_backend(backend: Arc<Backend>) -> Self {
 		TestClientBuilder {
 			backend,
-			execution_strategies: ExecutionStrategies::default(),
 			child_storage_extension: Default::default(),
 			genesis_init: Default::default(),
 			_executor: Default::default(),
@@ -152,21 +146,6 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		self
 	}
 
-	/// Set the execution strategy that should be used by all contexts.
-	pub fn set_execution_strategy(
-		mut self,
-		execution_strategy: ExecutionStrategy
-	) -> Self {
-		self.execution_strategies = ExecutionStrategies {
-			syncing: execution_strategy,
-			importing: execution_strategy,
-			block_construction: execution_strategy,
-			offchain_worker: execution_strategy,
-			other: execution_strategy,
-		};
-		self
-	}
-
 	/// Sets custom block rules.
 	pub fn set_block_rules(mut self,
 		fork_blocks: ForkBlocks<Block>,
@@ -183,20 +162,18 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		self
 	}
 
-	/// Build the test client with the given native executor.
+	/// Build the test client with the given executor.
 	pub fn build_with_executor<RuntimeApi>(
 		self,
 		executor: Executor,
 	) -> (
 		client::Client<
 			Backend,
-			Executor,
 			Block,
 			RuntimeApi,
 		>,
 		sc_consensus::LongestChain<Backend, Block>,
 	) where
-		Executor: sc_client_api::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
@@ -239,43 +216,6 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		let longest_chain = sc_consensus::LongestChain::new(self.backend);
 
 		(client, longest_chain)
-	}
-}
-
-impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
-	Block,
-	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
-	Backend,
-	G,
-> {
-	/// Build the test client with the given native executor.
-	pub fn build_with_native_executor<RuntimeApi, I>(
-		self,
-		executor: I,
-	) -> (
-		client::Client<
-			Backend,
-			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
-			Block,
-			RuntimeApi
-		>,
-		sc_consensus::LongestChain<Backend, Block>,
-	) where
-		I: Into<Option<NativeExecutor<E>>>,
-		E: sc_executor::NativeExecutionDispatch + 'static,
-		Backend: sc_client_api::backend::Backend<Block> + 'static,
-	{
-		let executor = executor.into().unwrap_or_else(||
-			NativeExecutor::new(WasmExecutionMethod::Interpreted, 8)
-		);
-		let executor = LocalCallExecutor::new(
-			self.backend.clone(),
-			executor,
-			Box::new(sp_core::testing::TaskExecutor::new()),
-			Default::default(),
-		).expect("Creates LocalCallExecutor");
-
-		self.build_with_executor(executor)
 	}
 }
 

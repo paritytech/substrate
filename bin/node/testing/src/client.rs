@@ -63,7 +63,6 @@ pub trait TestClientBuilderExt: Sized {
 
 impl TestClientBuilderExt for substrate_test_client::TestClientBuilder<
 	node_primitives::Block,
-	client::LocalCallExecutor<Backend, Executor>,
 	Backend,
 	GenesisParameters,
 > {
@@ -72,7 +71,7 @@ impl TestClientBuilderExt for substrate_test_client::TestClientBuilder<
 	}
 
 	fn build(self) -> Client {
-		self.build_with_native_executor(None).0
+		self.build_with_executor(None).0
 	}
 }
 

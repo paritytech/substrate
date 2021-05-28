@@ -64,7 +64,7 @@ use log::{debug, error, info};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	LockImportRun, BlockchainEvents, CallExecutor,
-	ExecutionStrategy, Finalizer, TransactionFor, ExecutorProvider,
+	Finalizer, TransactionFor, ExecutorProvider,
 };
 use parity_scale_codec::{Decode, Encode};
 use prometheus_endpoint::{PrometheusError, Registry};
@@ -487,7 +487,6 @@ impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block> for Arc<dyn ExecutorPr
 				&BlockId::Number(Zero::zero()),
 				"GrandpaApi_grandpa_authorities",
 				&[],
-				ExecutionStrategy::NativeElseWasm,
 				None,
 			)
 			.and_then(|call_result| {

@@ -22,13 +22,13 @@ use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, HashFor, NumberFor},
 };
 use sp_state_machine::{
-	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, StorageProof,
+	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, backend::Backend as _, StorageProof,
+	BackendTrustLevel,
 };
-use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
+use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion, WasmExecutor};
 use sp_externalities::Extensions;
 use sp_core::{
-	NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, SpawnNamed, RuntimeCode},
+	traits::{CodeExecutor, SpawnNamed, RuntimeCode},
 };
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
@@ -36,22 +36,19 @@ use super::{client::ClientConfig, wasm_override::WasmOverride};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
-pub struct LocalCallExecutor<B, E> {
+pub struct LocalCallExecutor<B> {
 	backend: Arc<B>,
-	executor: E,
+	executor: WasmExecutor,
 	wasm_override: Option<WasmOverride<E>>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig,
 }
 
-impl<B, E> LocalCallExecutor<B, E>
-where
-	E: CodeExecutor + RuntimeInfo + Clone + 'static
-{
+impl<B> LocalCallExecutor<B> {
 	/// Creates new instance of local call executor.
 	pub fn new(
 		backend: Arc<B>,
-		executor: E,
+		executor: WasmExecutor,
 		spawn_handle: Box<dyn SpawnNamed>,
 		client_config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
@@ -104,7 +101,7 @@ where
 	}
 }
 
-impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
+impl<B> Clone for LocalCallExecutor<B> {
 	fn clone(&self) -> Self {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
@@ -116,13 +113,12 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 	}
 }
 
-impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
+impl<B, Block> CallExecutor<Block> for LocalCallExecutor<B>
 where
 	B: backend::Backend<Block>,
-	E: CodeExecutor + RuntimeInfo + Clone + 'static,
 	Block: BlockT,
 {
-	type Error = E::Error;
+	type Error = WasmExecutor::Error;
 
 	type Backend = B;
 
@@ -131,7 +127,7 @@ where
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		strategy: ExecutionStrategy,
+		trust_level: BackendTrustLevel,
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
@@ -154,21 +150,17 @@ where
 			extensions.unwrap_or_default(),
 			&runtime_code,
 			self.spawn_handle.clone(),
-		).execute_using_consensus_failure_handler::<_, NeverNativeValue>(
-			strategy.get_manager(),
-		)?;
-
-		Ok(return_data.into_encoded())
+		).execute(trust_level)?;
+		Ok(return_data)
 	}
 
 	fn contextual_call<
 		'a,
 		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
+			Result<Vec<u8>, Self::Error>,
+			Result<Vec<u8>, Self::Error>
+		) -> Result<Vec<u8>, Self::Error>,
 	>(
 		&self,
 		initialize_block_fn: IB,
@@ -180,10 +172,10 @@ where
 			StorageTransactionCache<Block, B::State>
 		>>,
 		initialize_block: InitializeBlock<'a, Block>,
-		execution_manager: ExecutionManager<EM>,
+		trust_level: BackendTrustLevel,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
+	) -> Result<Vec<u8>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
 			InitializeBlock::Do(ref init_block)
 				if init_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) => {
@@ -232,9 +224,7 @@ where
 				);
 				// TODO: https://github.com/paritytech/substrate/issues/4455
 				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-				state_machine.execute_using_consensus_failure_handler(
-					execution_manager,
-				)
+				state_machine.execute(trust_level)
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
@@ -253,9 +243,7 @@ where
 					&runtime_code,
 					self.spawn_handle.clone(),
 				).with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c));
-				state_machine.execute_using_consensus_failure_handler(
-					execution_manager,
-				)
+				state_machine.execute(trust_level)
 			}
 		}.map_err(Into::into)
 	}
@@ -309,7 +297,7 @@ where
 	}
 }
 
-impl<B, E, Block> sp_version::GetRuntimeVersion<Block> for LocalCallExecutor<B, E>
+impl<B, Block> sp_version::GetRuntimeVersion<Block> for LocalCallExecutor<B>
 	where
 		B: backend::Backend<Block>,
 		E: CodeExecutor + RuntimeInfo + Clone + 'static,

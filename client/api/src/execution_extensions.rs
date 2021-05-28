@@ -33,36 +33,9 @@ use sp_runtime::{
 	generic::BlockId,
 	traits,
 };
-use sp_state_machine::{ExecutionStrategy, ExecutionManager, DefaultHandler};
+use sp_state_machine::DefaultHandler;
 use sp_externalities::Extensions;
 use parking_lot::RwLock;
-
-/// Execution strategies settings.
-#[derive(Debug, Clone)]
-pub struct ExecutionStrategies {
-	/// Execution strategy used when syncing.
-	pub syncing: ExecutionStrategy,
-	/// Execution strategy used when importing blocks.
-	pub importing: ExecutionStrategy,
-	/// Execution strategy used when constructing blocks.
-	pub block_construction: ExecutionStrategy,
-	/// Execution strategy used for offchain workers.
-	pub offchain_worker: ExecutionStrategy,
-	/// Execution strategy used in other cases.
-	pub other: ExecutionStrategy,
-}
-
-impl Default for ExecutionStrategies {
-	fn default() -> ExecutionStrategies {
-		ExecutionStrategies {
-			syncing: ExecutionStrategy::NativeElseWasm,
-			importing: ExecutionStrategy::NativeElseWasm,
-			block_construction: ExecutionStrategy::AlwaysWasm,
-			offchain_worker: ExecutionStrategy::NativeWhenPossible,
-			other: ExecutionStrategy::NativeElseWasm,
-		}
-	}
-}
 
 /// Generate the starting set of ExternalitiesExtensions based upon the given capabilities
 pub trait ExtensionsFactory: Send + Sync {
@@ -94,7 +67,6 @@ impl<T: offchain::DbExternalities + Clone + Sync + Send + 'static> DbExternaliti
 /// and is responsible for producing a correct `Extensions` object.
 /// for each call, based on required `Capabilities`.
 pub struct ExecutionExtensions<Block: traits::Block> {
-	strategies: ExecutionStrategies,
 	keystore: Option<SyncCryptoStorePtr>,
 	offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
 	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
@@ -120,26 +92,19 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 }
 
 impl<Block: traits::Block> ExecutionExtensions<Block> {
-	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
+	/// Create new `ExecutionExtensions` given a `keystore`.
 	pub fn new(
-		strategies: ExecutionStrategies,
 		keystore: Option<SyncCryptoStorePtr>,
 		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
 		let extensions_factory = Box::new(());
 		Self {
-			strategies,
 			keystore,
 			offchain_db,
 			extensions_factory: RwLock::new(extensions_factory),
 			transaction_pool,
 		}
-	}
-
-	/// Get a reference to the execution strategies.
-	pub fn strategies(&self) -> &ExecutionStrategies {
-		&self.strategies
 	}
 
 	/// Set the new extensions_factory

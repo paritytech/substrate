@@ -43,13 +43,12 @@ pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'stat
 		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
-		use_native: bool,
-	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool) {
+	) -> Result<crate::Vec<u8>, Self::Error> {
 		let mut heap_pages = INIT_HEAP_PAGES;
 		loop {
-			let (r, used_native) = self.do_call(ext, heap_pages, runtime_code, method, data, use_native);
-			if r.is_ok() || used_native || heap_pages == MAX_HEAP_PAGES {
-				return (r, used_native)
+			let r = self.do_call(ext, heap_pages, runtime_code, method, data);
+			if r.is_ok() || heap_pages == MAX_HEAP_PAGES {
+				return r
 			}
 			heap_pages = (heap_pages * 2).min(MAX_HEAP_PAGES);
 		}
@@ -64,8 +63,7 @@ pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'stat
 		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
-		use_native: bool,
-	) -> (Result<crate::NativeOrEncoded<R>, Self::Error>, bool);
+	) -> Result<Vec<u8>, Self::Error>;
 }
 
 /// Something that can fetch the runtime `:code`.
@@ -157,8 +155,8 @@ pub trait ReadRuntimeVersion: Send + Sync {
 	///
 	/// `ext` is only needed in case the calling into runtime happens. Otherwise it is ignored.
 	///
-	/// Compressed wasm blobs are supported and will be decompressed if needed. If uncompression fails,
-	/// the error is returned.
+	/// Compressed wasm blobs are supported and will be decompressed if needed. If decompression
+	/// fails, the error is returned.
 	///
 	/// # Errors
 	///

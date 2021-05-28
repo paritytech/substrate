@@ -129,7 +129,7 @@ fn implement_common_api_traits(
 				_: #crate_::ExecutionContext,
 				_: Option<()>,
 				_: Vec<u8>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<#crate_::RuntimeVersion>, #crate_::ApiError> {
+			) -> std::result::Result<#crate_::Vec<u8>, #crate_::ApiError> {
 				unimplemented!("Not required for testing!")
 			}
 
@@ -139,7 +139,7 @@ fn implement_common_api_traits(
 				_: #crate_::ExecutionContext,
 				_: Option<#block_type>,
 				_: Vec<u8>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<()>, #crate_::ApiError> {
+			) -> std::result::Result<#crate_::Vec<u8>, #crate_::ApiError> {
 				unimplemented!("Not required for testing!")
 			}
 
@@ -149,7 +149,7 @@ fn implement_common_api_traits(
 				_: #crate_::ExecutionContext,
 				_: Option<&<#block_type as #crate_::BlockT>::Header>,
 				_: Vec<u8>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<()>, #crate_::ApiError> {
+			) -> std::result::Result<#crate_::Vec<u8>, #crate_::ApiError> {
 				unimplemented!("Not required for testing!")
 			}
 		}
@@ -286,19 +286,19 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 
 				// Generate the correct return type.
 				input.sig.output = parse_quote!(
-					-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>
+					-> std::result::Result<#crate_::Vec<u8>, #crate_::ApiError>
 				);
 			}
 
 			let orig_block = input.block.clone();
 
 			let construct_return_value = if is_advanced {
-				quote!( (move || #orig_block)() )
+				quote!( (move || #orig_block)().encode() )
 			} else {
 				quote! {
 					let __fn_implementation__ = move || #orig_block;
 
-					Ok(#crate_::NativeOrEncoded::Native(__fn_implementation__()))
+					Ok(__fn_implementation__().encode())
 				}
 			};
 

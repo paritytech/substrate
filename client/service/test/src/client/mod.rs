@@ -18,7 +18,7 @@
 
 use parity_scale_codec::{Encode, Decode, Joiner};
 use sc_executor::native_executor_instance;
-use sp_state_machine::{StateMachine, OverlayedChanges, ExecutionStrategy, InMemoryBackend};
+use sp_state_machine::{StateMachine, OverlayedChanges, BackendTrustLevel, InMemoryBackend};
 use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{
@@ -180,9 +180,7 @@ fn construct_block(
 		Default::default(),
 		&runtime_code,
 		task_executor.clone() as Box<_>,
-	).execute(
-		ExecutionStrategy::NativeElseWasm,
-	).unwrap();
+	).execute(BackendTrustLevel::Trusted).unwrap();
 
 	for tx in transactions.iter() {
 		StateMachine::new(
@@ -195,9 +193,7 @@ fn construct_block(
 			Default::default(),
 			&runtime_code,
 			task_executor.clone() as Box<_>,
-		).execute(
-			ExecutionStrategy::NativeElseWasm,
-		).unwrap();
+		).execute(BackendTrustLevel::Trusted).unwrap();
 	}
 
 	let ret_data = StateMachine::new(
@@ -210,9 +206,7 @@ fn construct_block(
 		Default::default(),
 		&runtime_code,
 		task_executor.clone() as Box<_>,
-	).execute(
-		ExecutionStrategy::NativeElseWasm,
-	).unwrap();
+	).execute(BackendTrustLevel::Trusted).unwrap();
 	header = Header::decode(&mut &ret_data[..]).unwrap();
 
 	(vec![].and(&Block { header, extrinsics: transactions }), hash)
@@ -262,9 +256,7 @@ fn construct_genesis_should_work_with_native() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
-	).execute(
-		ExecutionStrategy::NativeElseWasm,
-	).unwrap();
+	).execute(BackendTrustLevel::Trusted).unwrap();
 }
 
 #[test]
@@ -296,9 +288,7 @@ fn construct_genesis_should_work_with_wasm() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
-	).execute(
-		ExecutionStrategy::AlwaysWasm,
-	).unwrap();
+	).execute(BackendTrustLevel::Trusted).unwrap();
 }
 
 #[test]
@@ -330,9 +320,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		Default::default(),
 		&runtime_code,
 		TaskExecutor::new(),
-	).execute(
-		ExecutionStrategy::NativeElseWasm,
-	);
+	).execute(BackendTrustLevel::Trusted);
 	assert!(r.is_err());
 }
 

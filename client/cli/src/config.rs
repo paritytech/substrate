@@ -26,7 +26,6 @@ use crate::{
 };
 use log::warn;
 use names::{Generator, Name};
-use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
 	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
 	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
@@ -305,21 +304,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		self.import_params()
 			.map(|x| x.wasm_runtime_overrides())
 			.unwrap_or_default()
-	}
-
-	/// Get the execution strategies.
-	///
-	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
-	/// `ExecutionStrategies::default()`.
-	fn execution_strategies(
-		&self,
-		is_dev: bool,
-		is_validator: bool,
-	) -> Result<ExecutionStrategies> {
-		Ok(self
-			.import_params()
-			.map(|x| x.execution_strategies(is_dev, is_validator))
-			.unwrap_or_default())
 	}
 
 	/// Get the RPC HTTP address (`None` if disabled).

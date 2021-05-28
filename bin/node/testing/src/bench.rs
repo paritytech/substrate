@@ -54,10 +54,7 @@ use sp_core::{ExecutionContext, blake2_256, traits::SpawnNamed, Pair, Public, sr
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
-use sc_client_api::{
-	ExecutionStrategy, BlockBackend,
-	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
-};
+use sc_client_api::execution_extensions::ExecutionExtensions;
 use sc_block_builder::BlockBuilderProvider;
 use futures::executor;
 
@@ -623,27 +620,6 @@ pub enum Profile {
 	Native,
 	/// As wasm as possible.
 	Wasm,
-}
-
-impl Profile {
-	fn into_execution_strategies(self) -> ExecutionStrategies {
-		match self {
-			Profile::Wasm => ExecutionStrategies {
-				syncing: ExecutionStrategy::AlwaysWasm,
-				importing: ExecutionStrategy::AlwaysWasm,
-				block_construction: ExecutionStrategy::AlwaysWasm,
-				offchain_worker: ExecutionStrategy::AlwaysWasm,
-				other: ExecutionStrategy::AlwaysWasm,
-			},
-			Profile::Native => ExecutionStrategies {
-				syncing: ExecutionStrategy::NativeElseWasm,
-				importing: ExecutionStrategy::NativeElseWasm,
-				block_construction: ExecutionStrategy::NativeElseWasm,
-				offchain_worker: ExecutionStrategy::NativeElseWasm,
-				other: ExecutionStrategy::NativeElseWasm,
-			}
-		}
-	}
 }
 
 struct Guard(tempfile::TempDir);

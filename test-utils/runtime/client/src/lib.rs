@@ -149,9 +149,8 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 }
 
 /// A `TestClient` with `test-runtime` builder.
-pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
+pub type TestClientBuilder<B> = substrate_test_client::TestClientBuilder<
 	substrate_test_runtime::Block,
-	E,
 	B,
 	GenesisParameters,
 >;
@@ -159,7 +158,7 @@ pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
 /// Test client type with `LocalExecutor` and generic Backend.
 pub type Client<B> = client::Client<
 	B,
-	client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
+	client::LocalCallExecutor<B>,
 	substrate_test_runtime::Block,
 	substrate_test_runtime::RuntimeApi,
 >;
@@ -255,12 +254,12 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	}
 
 	fn build_with_longest_chain(self) -> (Client<B>, sc_consensus::LongestChain<B, substrate_test_runtime::Block>) {
-		self.build_with_native_executor(None)
+		self.build_with_executor(None)
 	}
 
 	fn build_with_backend(self) -> (Client<B>, Arc<B>) {
 		let backend = self.backend();
-		(self.build_with_native_executor(None).0, backend)
+		(self.build_with_executor(None).0, backend)
 	}
 }
 
@@ -356,7 +355,7 @@ pub fn new_light() -> (
 	let storage = sc_client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(sc_light::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain));
-	let executor = new_native_executor();
+	let executor = new_executor();
 	let local_call_executor = client::LocalCallExecutor::new(
 		backend.clone(),
 		executor,
@@ -381,7 +380,7 @@ pub fn new_light_fetcher() -> LightFetcher {
 	LightFetcher::default()
 }
 
-/// Create a new native executor.
-pub fn new_native_executor() -> sc_executor::NativeExecutor<LocalExecutor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, 8)
+/// Create a new executor.
+pub fn new_executor() -> sc_executor::WasmExecutor {
+	sc_executor::WasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, 8)
 }

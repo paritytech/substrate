@@ -23,12 +23,9 @@ use codec::{Encode, Decode};
 use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, HashFor},
 };
-use sp_state_machine::{
-	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
-};
-use sc_executor::{RuntimeVersion, NativeVersion};
+use sp_state_machine::{OverlayedChanges, StorageProof};
+use sc_executor::RuntimeVersion;
 use sp_externalities::Extensions;
-use sp_core::NativeOrEncoded;
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use crate::execution_extensions::ExecutionExtensions;
@@ -61,7 +58,6 @@ pub trait CallExecutor<B: BlockT> {
 		id: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
-		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
 	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
@@ -74,9 +70,9 @@ pub trait CallExecutor<B: BlockT> {
 		'a,
 		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
+			Result<Vec<u8>, Self::Error>,
+			Result<Vec<u8>, Self::Error>
+		) -> Result<Vec<u8>, Self::Error>,
 		R: Encode + Decode + PartialEq,
 	>(
 		&self,
@@ -92,7 +88,7 @@ pub trait CallExecutor<B: BlockT> {
 		execution_manager: ExecutionManager<EM>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		extensions: Option<Extensions>,
-	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
+	) -> sp_blockchain::Result<Vec<u8>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
 	///
@@ -126,7 +122,4 @@ pub trait CallExecutor<B: BlockT> {
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
-
-	/// Get runtime version if supported.
-	fn native_runtime_version(&self) -> Option<&NativeVersion>;
 }

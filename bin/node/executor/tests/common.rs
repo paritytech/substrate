@@ -21,7 +21,6 @@ use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sp_consensus_babe::{BABE_ENGINE_ID, Slot, digests::{PreDigest, SecondaryPlainPreDigest}};
 use sp_core::{
-	NeverNativeValue, NativeOrEncoded,
 	crypto::KeyTypeId,
 	sr25519::Signature,
 	traits::{CodeExecutor, RuntimeCode},
@@ -34,7 +33,7 @@ use sp_runtime::{
 	DigestItem,
 	traits::{Header as HeaderT, BlakeTwo256},
 };
-use sc_executor::{NativeExecutor, WasmExecutionMethod};
+use sc_executor::{WasmExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;
 
 use node_executor::Executor;
@@ -96,8 +95,8 @@ pub fn from_block_number(n: u32) -> Header {
 	Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 }
 
-pub fn executor() -> NativeExecutor<Executor> {
-	NativeExecutor::new(WasmExecutionMethod::Interpreted, 8)
+pub fn executor() -> WasmExecutor<Executor> {
+	WasmExecutor::new(WasmExecutionMethod::Interpreted, 8)
 }
 
 pub fn executor_call<
@@ -106,8 +105,7 @@ pub fn executor_call<
 	t: &mut TestExternalities<BlakeTwo256>,
 	method: &str,
 	data: &[u8],
-	use_native: bool,
-) -> (Result<NativeOrEncoded<R>>, bool) {
+) -> (Result<Vec<u8>>, bool) {
 	let mut t = t.ext();
 
 	let code = t.storage(sp_core::storage::well_known_keys::CODE).unwrap();
@@ -123,7 +121,6 @@ pub fn executor_call<
 		&runtime_code,
 		method,
 		data,
-		use_native,
 	)
 }
 
@@ -177,11 +174,10 @@ pub fn construct_block(
 	};
 
 	// execute the block to get the real header.
-	executor_call::<NeverNativeValue>(
+	executor_call::<()>(
 		env,
 		"Core_initialize_block",
 		&header.encode(),
-		true,
 	).0.unwrap();
 
 	for extrinsic in extrinsics.iter() {
@@ -191,7 +187,6 @@ pub fn construct_block(
 			env,
 			"BlockBuilder_apply_extrinsic",
 			&extrinsic.encode(),
-			true,
 		).0.expect("application of an extrinsic failed").into_encoded();
 		match ApplyExtrinsicResult::decode(&mut &r[..]).expect("apply result deserialization failed") {
 			Ok(_) => {},
@@ -199,15 +194,12 @@ pub fn construct_block(
 		}
 	}
 
-	let header = match executor_call::<NeverNativeValue>(
+	let encoded_header = executor_call::<()>(
 		env,
 		"BlockBuilder_finalize_block",
 		&[0u8;0],
-		true,
-	).0.unwrap() {
-		NativeOrEncoded::Native(_) => unreachable!(),
-		NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
-	};
+	).0.unwrap();
+	let header = Header::decode(&mut &encoded_header[..]).unwrap();
 
 	let hash = header.blake2_256();
 	(Block { header, extrinsics }.encode(), hash.into())

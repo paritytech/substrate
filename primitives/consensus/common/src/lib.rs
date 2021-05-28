@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, DigestFor, NumberFor, HashFor},
+	generic::BlockId, traits::{Block as BlockT, DigestFor, NumberFor, HashFor, Contains},
 };
 use futures::prelude::*;
 use sp_state_machine::StorageProof;
@@ -56,6 +56,7 @@ pub use select_chain::SelectChain;
 pub use sp_state_machine::Backend as StateBackend;
 pub use import_queue::DefaultImportQueue;
 pub use sp_inherents::InherentData;
+use sp_version::RuntimeVersion;
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
@@ -262,28 +263,15 @@ pub trait CanAuthorWith<Block: BlockT> {
 /// Checks if the node can author blocks by using
 /// [`NativeVersion::can_author_with`](sp_version::NativeVersion::can_author_with).
 #[derive(Clone)]
-pub struct CanAuthorWithNativeVersion<T>(T);
+pub struct ContainsRuntime<M>(sp_std::marker::PhantomData<M>);
 
-impl<T> CanAuthorWithNativeVersion<T> {
-	/// Creates a new instance of `Self`.
-	pub fn new(inner: T) -> Self {
-		Self(inner)
-	}
-}
-
-impl<T: sp_version::GetRuntimeVersion<Block>, Block: BlockT> CanAuthorWith<Block>
-	for CanAuthorWithNativeVersion<T>
-{
+impl<Block: BlockT, M: Contains<RuntimeVersion>> CanAuthorWith<Block> for ContainsRuntime<M> {
 	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String> {
-		match self.0.runtime_version(at) {
-			Ok(version) => self.0.native_version().can_author_with(&version),
-			Err(e) => {
-				Err(format!(
-					"Failed to get runtime version at `{}` and will disable authoring. Error: {}",
-					at,
-					e,
-				))
-			}
+		let version = self.0.runtime_version(at)?;
+		if M::contains(&version) {
+			Ok(())
+		} else {
+			Err("Cannot author block with this node".into())
 		}
 	}
 }

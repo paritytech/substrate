@@ -17,14 +17,12 @@
 
 use codec::{Decode, Encode};
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use node_executor::Executor;
 use node_primitives::{BlockNumber, Hash};
 use node_runtime::{
 	Block, BuildStorage, Call, CheckedExtrinsic, GenesisConfig, Header, UncheckedExtrinsic,
 };
 use node_runtime::constants::currency::*;
 use node_testing::keyring::*;
-use sp_core::{NativeOrEncoded, NeverNativeValue};
 use sp_core::storage::well_known_keys;
 use sp_core::traits::{CodeExecutor, RuntimeCode};
 use frame_support::Hashable;
@@ -50,12 +48,6 @@ const SPEC_VERSION: u32 = node_runtime::VERSION.spec_version;
 const HEAP_PAGES: u64 = 20;
 
 type TestExternalities<H> = CoreTestExternalities<H, u64>;
-
-#[derive(Debug)]
-enum ExecutionMethod {
-	Native,
-	Wasm(WasmExecutionMethod),
-}
 
 fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 	node_testing::keyring::sign(xt, SPEC_VERSION, TRANSACTION_VERSION, GENESIS_HASH)
@@ -103,7 +95,7 @@ fn construct_block<E: Externalities>(
 	};
 
 	// execute the block to get the real header.
-	executor.call::<NeverNativeValue, fn() -> _>(
+	executor.call(
 		ext,
 		&runtime_code,
 		"Core_initialize_block",
@@ -113,7 +105,7 @@ fn construct_block<E: Externalities>(
 	).0.unwrap();
 
 	for i in extrinsics.iter() {
-		executor.call::<NeverNativeValue, fn() -> _>(
+		executor.call(
 			ext,
 			&runtime_code,
 			"BlockBuilder_apply_extrinsic",
@@ -123,17 +115,15 @@ fn construct_block<E: Externalities>(
 		).0.unwrap();
 	}
 
-	let header = match executor.call::<NeverNativeValue, fn() -> _>(
+	let encoded_header = executor.call(
 		ext,
 		&runtime_code,
 		"BlockBuilder_finalize_block",
 		&[0u8;0],
 		true,
 		None,
-	).0.unwrap() {
-		NativeOrEncoded::Native(_) => unreachable!(),
-		NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
-	};
+	).0.unwrap();
+	let header = Header::decode(&mut &encoded_header[..]).unwrap();
 
 	let hash = header.blake2_256();
 	(Block { header, extrinsics }.encode(), hash.into())

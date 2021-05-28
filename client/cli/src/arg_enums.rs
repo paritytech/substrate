@@ -129,44 +129,6 @@ arg_enum! {
 }
 
 arg_enum! {
-	/// How to execute blocks
-	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-	pub enum ExecutionStrategy {
-		// Execute with native build (if available, WebAssembly otherwise).
-		Native,
-		// Only execute with the WebAssembly build.
-		Wasm,
-		// Execute with both native (where available) and WebAssembly builds.
-		Both,
-		// Execute with the native build if possible; if it fails, then execute with WebAssembly.
-		NativeElseWasm,
-	}
-}
-
-impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
-	fn into(self) -> sc_client_api::ExecutionStrategy {
-		match self {
-			ExecutionStrategy::Native => sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			ExecutionStrategy::Wasm => sc_client_api::ExecutionStrategy::AlwaysWasm,
-			ExecutionStrategy::Both => sc_client_api::ExecutionStrategy::Both,
-			ExecutionStrategy::NativeElseWasm => sc_client_api::ExecutionStrategy::NativeElseWasm,
-		}
-	}
-}
-
-impl ExecutionStrategy {
-	/// Returns the variant as `'&static str`.
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Native => "Native",
-			Self::Wasm => "Wasm",
-			Self::Both => "Both",
-			Self::NativeElseWasm => "NativeElseWasm",
-		}
-	}
-}
-
-arg_enum! {
 	/// Available RPC methods.
 	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq)]
@@ -231,16 +193,3 @@ arg_enum! {
 		WhenValidating,
 	}
 }
-
-/// Default value for the `--execution-syncing` parameter.
-pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
-/// Default value for the `--execution-import-block` parameter.
-pub const DEFAULT_EXECUTION_IMPORT_BLOCK: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
-/// Default value for the `--execution-import-block` parameter when the node is a validator.
-pub const DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR: ExecutionStrategy = ExecutionStrategy::Wasm;
-/// Default value for the `--execution-block-construction` parameter.
-pub const DEFAULT_EXECUTION_BLOCK_CONSTRUCTION: ExecutionStrategy = ExecutionStrategy::Wasm;
-/// Default value for the `--execution-offchain-worker` parameter.
-pub const DEFAULT_EXECUTION_OFFCHAIN_WORKER: ExecutionStrategy = ExecutionStrategy::Native;
-/// Default value for the `--execution-other` parameter.
-pub const DEFAULT_EXECUTION_OTHER: ExecutionStrategy = ExecutionStrategy::Native;

@@ -26,7 +26,6 @@ use sc_network::{multiaddr, config::{NetworkConfiguration, TransportConfig, Role
 use sc_informant::OutputFormat;
 use sc_service::config::KeystoreConfig;
 use sc_executor::WasmExecutionMethod;
-use sc_client_api::execution_extensions::ExecutionStrategies;
 
 /// Base db path gotten from env
 pub fn base_path() -> BasePath {
@@ -113,13 +112,6 @@ pub fn default_config(task_executor: TaskExecutor, mut chain_spec: Box<dyn Chain
 		state_cache_child_ratio: None,
 		chain_spec,
 		wasm_method: WasmExecutionMethod::Interpreted,
-		execution_strategies: ExecutionStrategies {
-			syncing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-			importing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-			block_construction: sc_client_api::ExecutionStrategy::AlwaysWasm,
-			offchain_worker: sc_client_api::ExecutionStrategy::AlwaysWasm,
-			other: sc_client_api::ExecutionStrategy::AlwaysWasm,
-		},
 		rpc_http: None,
 		rpc_ws: None,
 		rpc_ipc: None,

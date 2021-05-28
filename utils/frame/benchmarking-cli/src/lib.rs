@@ -18,7 +18,7 @@
 mod command;
 mod writer;
 
-use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::WasmExecutionMethod;
 use std::fmt::Debug;
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be used
@@ -104,15 +104,6 @@ pub struct BenchmarkCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,
-
-	/// The execution strategy that should be used for benchmarks
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-	)]
-	pub execution: Option<ExecutionStrategy>,
 
 	/// Method for executing Wasm runtime code.
 	#[structopt(

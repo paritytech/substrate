@@ -200,61 +200,15 @@ impl RuntimeVersion {
 	}
 }
 
-#[cfg(feature = "std")]
-#[derive(Debug)]
-pub struct NativeVersion {
-	/// Basic runtime version info.
-	pub runtime_version: RuntimeVersion,
-	/// Authoring runtimes that this native runtime supports.
-	pub can_author_with: HashSet<u32>,
-}
-
-#[cfg(feature = "std")]
-impl NativeVersion {
-	/// Check if this version matches other version for authoring blocks.
-	///
-	/// # Return
-	///
-	/// - Returns `Ok(())` when authoring is supported.
-	/// - Returns `Err(_)` with a detailed error when authoring is not supported.
-	pub fn can_author_with(&self, other: &RuntimeVersion) -> Result<(), String> {
-		if self.runtime_version.spec_name != other.spec_name {
-			Err(format!(
-				"`spec_name` does not match `{}` vs `{}`",
-				self.runtime_version.spec_name,
-				other.spec_name,
-			))
-		} else if self.runtime_version.authoring_version != other.authoring_version
-			&& !self.can_author_with.contains(&other.authoring_version)
-		{
-			Err(format!(
-				"`authoring_version` does not match `{version}` vs `{other_version}` and \
-				`can_author_with` not contains `{other_version}`",
-				version = self.runtime_version.authoring_version,
-				other_version = other.authoring_version,
-			))
-		} else {
-			Ok(())
-		}
-	}
-}
-
 /// Something that can provide the runtime version at a given block and the native runtime version.
 #[cfg(feature = "std")]
 pub trait GetRuntimeVersion<Block: BlockT> {
-	/// Returns the version of the native runtime.
-	fn native_version(&self) -> &NativeVersion;
-
 	/// Returns the version of runtime at the given block.
 	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String>;
 }
 
 #[cfg(feature = "std")]
 impl<T: GetRuntimeVersion<Block>, Block: BlockT> GetRuntimeVersion<Block> for std::sync::Arc<T> {
-	fn native_version(&self) -> &NativeVersion {
-		(&**self).native_version()
-	}
-
 	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String> {
 		(&**self).runtime_version(at)
 	}

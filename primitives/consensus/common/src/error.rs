@@ -64,9 +64,6 @@ pub enum Error {
 	/// Authoring interface does not match the runtime.
 	#[error("Authoring for current runtime is not supported since it has no version.")]
 	RuntimeVersionMissing,
-	/// Authoring interface does not match the runtime.
-	#[error("Authoring in current build is not supported since it has no runtime.")]
-	NativeRuntimeMissing,
 	/// Justification requirements not met.
 	#[error("Invalid justification.")]
 	InvalidJustification,

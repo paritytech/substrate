@@ -21,7 +21,6 @@ use sp_api::{
 	ApiExt,
 };
 use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
-use sp_core::NativeOrEncoded;
 use substrate_test_runtime_client::runtime::Block;
 
 /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
@@ -105,7 +104,7 @@ mock_impl_runtime_apis! {
 		#[advanced]
 		fn same_name(_: &BlockId<Block>) ->
 			Result<
-				NativeOrEncoded<()>,
+				Vec<u8>,
 				ApiError
 			>
 		{
@@ -115,7 +114,7 @@ mock_impl_runtime_apis! {
 		#[advanced]
 		fn wild_card(at: &BlockId<Block>, _: u32) ->
 			Result<
-				NativeOrEncoded<()>,
+				Vec<u8>,
 				ApiError
 			>
 		{

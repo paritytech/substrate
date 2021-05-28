@@ -133,7 +133,7 @@ pub fn new_partial(
 		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
-		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
+		Default::default(), // TODO: can_author_with
 		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
@@ -298,8 +298,7 @@ pub fn new_full_base(
 			telemetry.as_ref().map(|x| x.handle()),
 		);
 
-		let can_author_with =
-			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
+		let can_author_with = true; // TODO: can_author_with
 
 		let client_clone = client.clone();
 		let slot_duration = babe_link.config().slot_duration();

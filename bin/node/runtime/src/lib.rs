@@ -61,8 +61,6 @@ use sp_runtime::traits::{
 	NumberFor,
 };
 use sp_version::RuntimeVersion;
-#[cfg(any(feature = "std", test))]
-use sp_version::NativeVersion;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_grandpa::fg_primitives;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
@@ -126,15 +124,6 @@ pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
 		c: PRIMARY_PROBABILITY,
 		allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryPlainSlots
 	};
-
-/// Native version.
-#[cfg(any(feature = "std", test))]
-pub fn native_version() -> NativeVersion {
-	NativeVersion {
-		runtime_version: VERSION,
-		can_author_with: Default::default(),
-	}
-}
 
 type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
 

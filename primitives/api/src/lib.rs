@@ -56,9 +56,6 @@ pub use sp_state_machine::{
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use sp_core::NativeOrEncoded;
-#[doc(hidden)]
-#[cfg(feature = "std")]
 pub use hash_db::Hasher;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
@@ -312,15 +309,14 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// attribute, the macro expects that the first parameter of the function is this `at` parameter.
 /// Besides that the macro also doesn't do the automatic return value rewrite, which means that full
 /// return value must be specified. The full return value is constructed like
-/// [`Result`]`<`[`NativeOrEncoded`](sp_api::NativeOrEncoded)`<ReturnValue>, Error>` while
-/// `ReturnValue` being the return value that is specified in the trait declaration.
+/// [`Result`]`<Vec<u8>, Error>` with the `Vec` being the encoded return value from the trait
+/// declaration.
 ///
 /// ## Example
 /// ```rust
 /// # use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 /// # use sp_test_primitives::Block;
-/// # use sp_core::NativeOrEncoded;
-/// # use codec;
+/// # use codec::{self, Encode};
 /// #
 /// # sp_api::decl_runtime_apis! {
 /// #     /// Declare the api trait.
@@ -338,18 +334,18 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// sp_api::mock_impl_runtime_apis! {
 ///     impl Balance<Block> for MockApi {
 ///         #[advanced]
-///         fn get_balance(&self, at: &BlockId<Block>) -> Result<NativeOrEncoded<u64>, sp_api::ApiError> {
+///         fn get_balance(&self, at: &BlockId<Block>) -> Result<Vec<u8>, sp_api::ApiError> {
 ///             println!("Being called at: {}", at);
 ///
-///             Ok(self.balance.into())
+///             Ok(self.balance.encode())
 ///         }
 ///         #[advanced]
-///         fn set_balance(at: &BlockId<Block>, val: u64) -> Result<NativeOrEncoded<()>, sp_api::ApiError> {
+///         fn set_balance(at: &BlockId<Block>, val: u64) -> Result<Vec<u8>, sp_api::ApiError> {
 ///             if let BlockId::Number(1) = at {
 ///                 println!("Being called to set balance to: {}", val);
 ///             }
 ///
-///             Ok(().into())
+///             Ok(Vec::new())
 ///         }
 ///     }
 /// }
@@ -539,14 +535,10 @@ pub trait CallApiAt<Block: BlockT> {
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.
-	fn call_api_at<
-		'a,
-		R: Encode + Decode + PartialEq,
-		C: Core<Block>,
-	>(
+	fn call_api_at<'a, C: Core<Block>>(
 		&self,
 		params: CallApiAtParams<'a, Block, C, Self::StateBackend>,
-	) -> Result<NativeOrEncoded<R>, ApiError>;
+	) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(

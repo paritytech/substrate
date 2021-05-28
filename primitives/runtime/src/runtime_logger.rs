@@ -70,8 +70,7 @@ impl log::Log for RuntimeLogger {
 #[cfg(test)]
 mod tests {
 	use substrate_test_runtime_client::{
-		ExecutionStrategy, TestClientBuilderExt, DefaultTestClientBuilderExt,
-		TestClientBuilder, runtime::TestAPI,
+		TestClientBuilderExt, DefaultTestClientBuilderExt, TestClientBuilder, runtime::TestAPI,
 	};
 	use sp_api::{ProvideRuntimeApi, BlockId};
 	use std::{env, str::FromStr};
@@ -82,8 +81,7 @@ mod tests {
 			sp_tracing::try_init_simple();
 			log::set_max_level(log::LevelFilter::from_str(&env::var("RUST_LOG").unwrap()).unwrap());
 
-			let client = TestClientBuilder::new()
-				.set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+			let client = TestClientBuilder::new().build();
 			let runtime_api = client.runtime_api();
 			let block_id = BlockId::Number(0);
 			runtime_api.do_trace_log(&block_id).expect("Logging should not fail");

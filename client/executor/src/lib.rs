@@ -39,9 +39,9 @@ mod integration_tests;
 
 pub use wasmi;
 pub use native_executor::{
-	with_externalities_safe, NativeExecutor, WasmExecutor, NativeExecutionDispatch,
+	with_externalities_safe, WasmExecutor, NativeExecutionDispatch,
 };
-pub use sp_version::{RuntimeVersion, NativeVersion};
+pub use sp_version::RuntimeVersion;
 pub use codec::Codec;
 #[doc(hidden)]
 pub use sp_core::traits::{Externalities};
@@ -54,9 +54,6 @@ pub use sc_executor_common::{error, sandbox};
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
-	/// Native runtime information.
-	fn native_version(&self) -> &NativeVersion;
-
 	/// Extract [`RuntimeVersion`](sp_version::RuntimeVersion) of the given `runtime_code`.
 	fn runtime_version(
 		&self,

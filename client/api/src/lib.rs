@@ -39,7 +39,7 @@ pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
 
-pub use sp_state_machine::{StorageProof, ExecutionStrategy};
+pub use sp_state_machine::StorageProof;
 
 /// Usage Information Provider interface
 ///

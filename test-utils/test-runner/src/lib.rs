@@ -55,7 +55,6 @@
 //! use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
 //! use sc_executor::WasmExecutionMethod;
 //! use sc_network::{multiaddr, config::TransportConfig};
-//! use sc_client_api::execution_extensions::ExecutionStrategies;
 //! use sc_informant::OutputFormat;
 //! use sp_api::TransactionFor;
 //!
@@ -186,13 +185,6 @@
 //! fn simple_balances_test() {
 //! 	// given
 //! 	let config = NodeConfig {
-//!			execution_strategies: ExecutionStrategies {
-//!				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//!				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
-//! 		},
 //! 		chain_spec: Box::new(development_config()),
 //! 		log_targets: vec![],
 //! 	};

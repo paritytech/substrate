@@ -1163,6 +1163,58 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 	}
 }
 
+/// A trait for querying whether a type can be said to "contain" a value.
+pub trait Contains<T> {
+	/// Return `true` if this "contains" the given value `t`.
+	fn contains(t: &T) -> bool;
+}
+
+/// A `Contains` implementation which always returns `true`.
+pub struct All<T>(PhantomData<T>);
+impl<T> Contains<T> for All<T> {
+	fn contains(_: &T) -> bool { true }
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<T> Contains<T> for Tuple {
+	fn contains(t: &T) -> bool {
+		for_tuples!( #(
+			if Tuple::contains(t) { return true }
+		)* );
+		false
+	}
+}
+
+/// Create a type which implements the `Contains` trait for a particular type with syntax similar
+/// to `matches!`.
+#[macro_export]
+macro_rules! match_type {
+	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat $( | $ptail:pat )* } ; ) => {
+		pub struct $n;
+		impl $crate::traits::Contains<$t> for $n {
+			fn contains(l: &$t) -> bool {
+				matches!(l, $phead $( | $ptail )* )
+			}
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	match_type! {
+		pub type OneOrTenToTwenty: impl Contains<u8> = { 1 | 10..=20 };
+	}
+
+	#[test]
+	fn match_type_works() {
+		for i in 0..=255 {
+			assert_eq!(OneOrTenToTwenty::contains(&i), i == 1 || i >= 10 && i <= 20);
+		}
+	}
+}
+
 /// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
 /// e.g.
 /// ```nocompile

@@ -425,7 +425,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				initialized_block: &std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 				context: #crate_::ExecutionContext,
 				recorder: &Option<#crate_::ProofRecorder<Block>>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<R>, #crate_::ApiError> {
+			) -> std::result::Result<#crate_::Vec<u8>, #crate_::ApiError> {
 				let version = call_runtime_at.runtime_version_at(at)?;
 				use #crate_::InitializeBlock;
 				let initialize_block = if #skip_initialize_block {
@@ -628,7 +628,7 @@ impl<'a> ToClientSideDecl<'a> {
 					context: #crate_::ExecutionContext,
 					params: Option<( #( #param_types ),* )>,
 					params_encoded: Vec<u8>,
-				) -> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>;
+				) -> std::result::Result<#crate_::Vec<u8>, #crate_::ApiError>;
 			}
 		)
 	}
@@ -706,20 +706,13 @@ impl<'a> ToClientSideDecl<'a> {
 						#param_tuple,
 						runtime_api_impl_params_encoded,
 					).and_then(|r|
-						match r {
-							#crate_::NativeOrEncoded::Native(n) => {
-								#native_handling
-							},
-							#crate_::NativeOrEncoded::Encoded(r) => {
-								<#ret_type as #crate_::Decode>::decode(&mut &r[..])
-									.map_err(|err|
-										#crate_::ApiError::FailedToDecodeReturnValue {
-											function: #function_name,
-											error: err,
-										}
-									)
-							}
-						}
+						<#ret_type as #crate_::Decode>::decode(&mut &r[..])
+							.map_err(|err|
+								#crate_::ApiError::FailedToDecodeReturnValue {
+									function: #function_name,
+									error: err,
+								}
+							)
 					)
 				}
 			}

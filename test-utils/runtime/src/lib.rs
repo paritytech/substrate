@@ -49,8 +49,6 @@ use sp_runtime::{
 use sp_runtime::traits::NumberFor;
 use sp_version::RuntimeVersion;
 pub use sp_core::hash::H256;
-#[cfg(any(feature = "std", test))]
-use sp_version::NativeVersion;
 use frame_support::{
 	impl_outer_origin, parameter_types,
 	traits::KeyOwnerProofSystem,
@@ -105,15 +103,6 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 
 fn version() -> RuntimeVersion {
 	VERSION
-}
-
-/// Native version.
-#[cfg(any(feature = "std", test))]
-pub fn native_version() -> NativeVersion {
-	NativeVersion {
-		runtime_version: VERSION,
-		can_author_with: Default::default(),
-	}
 }
 
 /// Calls in transactions.
@@ -1225,7 +1214,7 @@ mod tests {
 	use sp_api::ProvideRuntimeApi;
 	use sp_runtime::generic::BlockId;
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
-	use sp_state_machine::ExecutionStrategy;
+	use sp_state_machine::BackendTrustLevel;
 	use codec::Encode;
 	use sc_block_builder::BlockBuilderProvider;
 
@@ -1234,10 +1223,7 @@ mod tests {
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 
 		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
-		let mut client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-			.set_heap_pages(8)
-			.build();
+		let mut client = TestClientBuilder::new().set_heap_pages(8).build();
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
@@ -1264,9 +1250,7 @@ mod tests {
 
 	#[test]
 	fn test_storage() {
-		let client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::Both)
-			.build();
+		let client = TestClientBuilder::new().build();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
@@ -1293,9 +1277,7 @@ mod tests {
 			root,
 		);
 		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
-		let client = TestClientBuilder::new()
-			.set_execution_strategy(ExecutionStrategy::Both)
-			.build();
+		let client = TestClientBuilder::new().build();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
