@@ -435,7 +435,7 @@ fn should_handle_non_linear_session_progress() {
 		// if we have a valid current session progress then we'll heartbeat as soon
 		// as we're past 50% of the session regardless of the block number
 		MOCK_CURRENT_SESSION_PROGRESS
-			.with(|p| *p.borrow_mut() = Some(Some(Percent::from_percent(51))));
+			.with(|p| *p.borrow_mut() = Some(Some(Permill::from_percent(51))));
 
 		assert!(ImOnline::send_heartbeats(2).ok().is_some());
 	});
