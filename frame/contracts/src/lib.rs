@@ -561,7 +561,7 @@ pub mod pallet {
 		/// Termination of a contract is not allowed while the contract is already
 		/// on the call stack. Can be triggered by `seal_terminate` or `seal_restore_to.
 		TerminatedWhileReentrant,
-		/// `seal_call` forwarded this contracts input. It therefore no longer available.
+		/// `seal_call` forwarded this contracts input. It therefore is no longer available.
 		InputForwarded,
 		/// The subject passed to `seal_random` exceeds the limit.
 		RandomSubjectTooLong,
