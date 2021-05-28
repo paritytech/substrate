@@ -1223,12 +1223,7 @@ pub mod pallet {
 					.checked_sub(&amount)
 					.ok_or(Error::<T, I>::Unapproved)?;
 
-				let f = TransferFlags {
-					keep_alive: false,
-					best_effort: false,
-					burn_dust: false
-				};
-				Self::do_transfer(id, &owner, &destination, amount, None, f)?;
+				Self::do_transfer(id, &owner, &destination, amount, None, WhenDust::Credit)?;
 
 				if remaining.is_zero() {
 					T::Currency::unreserve(&owner, approved.deposit);
