@@ -809,6 +809,8 @@ pub mod pallet {
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
+			let ejected_a_solution = signed_submissions.len()
+				== T::SignedMaxSubmissions::get().saturated_into::<usize>();
 			let index = Self::insert_submission(&who, &mut signed_submissions, solution, size)
 				.ok_or(Error::<T>::SignedQueueFull)?;
 
@@ -825,7 +827,7 @@ pub mod pallet {
 
 			// store the new signed submission.
 			<SignedSubmissions<T>>::put(signed_submissions);
-			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed));
+			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
 			Ok(())
 		}
 
@@ -875,8 +877,12 @@ pub mod pallet {
 
 			// store the newly received solution.
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
+			let ejected_a_solution = <QueuedSolution<T>>::exists();
 			<QueuedSolution<T>>::put(ready);
-			Self::deposit_event(Event::SolutionStored(ElectionCompute::Unsigned));
+			Self::deposit_event(Event::SolutionStored(
+				ElectionCompute::Unsigned,
+				ejected_a_solution,
+			));
 
 			Ok(None.into())
 		}
@@ -905,7 +911,9 @@ pub mod pallet {
 		///
 		/// If the solution is signed, this means that it hasn't yet been processed. If the
 		/// solution is unsigned, this means that it has also been processed.
-		SolutionStored(ElectionCompute),
+		///
+		/// The `bool` is `true` when a previous solution was ejected to make room for this one.
+		SolutionStored(ElectionCompute, bool),
 		/// The election has been finalized, with `Some` of the given computation, or else if the
 		/// election failed, `None`.
 		ElectionFinalized(Option<ElectionCompute>),
