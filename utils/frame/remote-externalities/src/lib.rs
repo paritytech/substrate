@@ -578,7 +578,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				modules: vec!["Proxy".to_owned(), "Multisig".to_owned(), "Balances".to_owned()],
+				modules: vec!["Proxy".to_owned(), "Multisig".to_owned(), "PhragmenElection".to_owned()],
 				..Default::default()
 			}))
 			.build()
