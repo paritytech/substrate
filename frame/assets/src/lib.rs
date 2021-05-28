@@ -138,14 +138,15 @@ mod functions;
 mod types;
 pub use types::*;
 
-use sp_std::{prelude::*, borrow::Borrow};
+use sp_std::{prelude::*, borrow::Borrow, convert::TryInto};
 use sp_runtime::{
-	RuntimeDebug, TokenError, ArithmeticError, traits::{
+	TokenError, ArithmeticError,
+	traits::{
 		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded,
 		StoredMapError,
 	}
 };
-use codec::{Encode, Decode, HasCompact};
+use codec::HasCompact;
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
 use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
 use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
@@ -165,6 +166,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -174,10 +176,10 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The units in which we record balances.
-		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
+		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + MaxEncodedLen;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member + Parameter + Default + Copy + HasCompact;
+		type AssetId: Member + Parameter + Default + Copy + HasCompact + MaxEncodedLen;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -207,7 +209,7 @@ pub mod pallet {
 		type Freezer: FrozenBalance<Self::AssetId, Self::AccountId, Self::Balance>;
 
 		/// Additional data to be stored with an account's asset balance.
-		type Extra: Member + Parameter + Default;
+		type Extra: Member + Parameter + Default + MaxEncodedLen;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -232,6 +234,8 @@ pub mod pallet {
 		T::AccountId,
 		AssetBalance<T::Balance, T::Extra>,
 		ValueQuery,
+		GetDefault,
+		ConstU32<300_000>,
 	>;
 
 	#[pallet::storage]
@@ -247,6 +251,8 @@ pub mod pallet {
 		),
 		Approval<T::Balance, DepositBalanceOf<T, I>>,
 		OptionQuery,
+		GetDefault,
+		ConstU32<300_000>,
 	>;
 
 	#[pallet::storage]
@@ -255,8 +261,10 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AssetId,
-		AssetMetadata<DepositBalanceOf<T, I>>,
+		AssetMetadata<DepositBalanceOf<T, I>, BoundedVec<u8, T::StringLimit>>,
 		ValueQuery,
+		GetDefault,
+		ConstU32<300_000>,
 	>;
 
 	#[pallet::event]
@@ -899,8 +907,14 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
-			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
+			let bounded_name: BoundedVec<u8, T::StringLimit> = name
+				.clone()
+				.try_into()
+				.map_err(|_| Error::<T, I>::BadMetadata)?;
+			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol
+				.clone()
+				.try_into()
+				.map_err(|_| Error::<T, I>::BadMetadata)?;
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(&origin == &d.owner, Error::<T, I>::NoPermission);
@@ -924,8 +938,8 @@ pub mod pallet {
 
 				*metadata = Some(AssetMetadata {
 					deposit: new_deposit,
-					name: name.clone(),
-					symbol: symbol.clone(),
+					name: bounded_name,
+					symbol: bounded_symbol,
 					decimals,
 					is_frozen: false,
 				});
@@ -989,16 +1003,23 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
-			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
+			let bounded_name: BoundedVec<u8, T::StringLimit> = name
+				.clone()
+				.try_into()
+				.map_err(|_| Error::<T, I>::BadMetadata)?;
+
+			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol
+				.clone()
+				.try_into()
+				.map_err(|_| Error::<T, I>::BadMetadata)?;
 
 			ensure!(Asset::<T, I>::contains_key(id), Error::<T, I>::Unknown);
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 				let deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				*metadata = Some(AssetMetadata {
 					deposit,
-					name: name.clone(),
-					symbol: symbol.clone(),
+					name: bounded_name,
+					symbol: bounded_symbol,
 					decimals,
 					is_frozen,
 				});

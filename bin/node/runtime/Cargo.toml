@@ -87,6 +87,8 @@ pallet-transaction-payment = { version = "3.0.0", default-features = false, path
 pallet-transaction-payment-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 pallet-vesting = { version = "3.0.0", default-features = false, path = "../../../frame/vesting" }
 
+max-encoded-len = { version = "3.0.0", default-features = false, path = "../../../max-encoded-len", features = [ "derive" ] }
+
 [build-dependencies]
 substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builder" }
 
@@ -159,6 +161,7 @@ std = [
 	"log/std",
 	"frame-try-runtime/std",
 	"sp-npos-elections/std",
+	"max-encoded-len/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

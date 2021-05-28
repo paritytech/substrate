@@ -40,6 +40,7 @@ parity-util-mem = { version = "0.9.0", default-features = false, features = ["pr
 futures = { version = "0.3.1", optional = true }
 dyn-clonable = { version = "0.9.0", optional = true }
 thiserror = { version = "1.0.21", optional = true }
+max-encoded-len = { version = "3.0.0", default-features = false, path = "../../max-encoded-len", features = [ "derive" ] }
 
 # full crypto
 ed25519-dalek = { version = "1.0.1", default-features = false, features = ["u64_backend", "alloc"], optional = true }
@@ -114,6 +115,7 @@ std = [
 	"futures/thread-pool",
 	"libsecp256k1/std",
 	"dyn-clonable",
+	"max-encoded-len/std",
 ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers

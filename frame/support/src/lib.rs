@@ -76,7 +76,7 @@ pub use self::hash::{
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StorageNMap, StoragePrefixedMap,
 	IterableStorageMap, IterableStorageDoubleMap, IterableStorageNMap, migration,
-	bounded_vec::{self, BoundedVec},
+	bounded_vec::BoundedVec, weak_bounded_vec::WeakBoundedVec,
 };
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
@@ -1239,7 +1239,7 @@ pub mod pallet_prelude {
 		RuntimeDebug, storage,
 		traits::{
 			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
-			ConstU32, GetDefault,
+			ConstU32, GetDefault, MaxEncodedLen,
 		},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
@@ -2339,3 +2339,7 @@ pub mod pallet_prelude {
 /// * use the newest nightly possible.
 ///
 pub use frame_support_procedural::pallet;
+
+/// The `max_encoded_len` module contains the `MaxEncodedLen` trait and derive macro, which is
+/// useful for computing upper bounds on storage size.
+pub use max_encoded_len;
