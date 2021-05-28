@@ -658,13 +658,14 @@ pub mod pallet {
 						//
 						// Notes:
 						//
-						//   - If the signed phase produced a viable solution, we disable the unsigned
-						//     phase. We want to prioritize signed solutions whenever they're available.
 						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This is
 						//     a guard against the case that `elect` is called prematurely. This adds
 						//     a small amount of overhead, but that is unfortunately unavoidable.
-						let (success, weight) = Self::finalize_signed_phase();
-						(false, !success, weight)
+						let (_success, weight) = Self::finalize_signed_phase();
+						// In the future we can consider disabling the unsigned phase if the signed
+						// phase completes successfully, but for now we're enabling it unconditionally
+						// as a defensive measure.
+						(false, true, weight)
 					} else {
 						// no signed phase: create a new snapshot, definitely `enable` the unsigned
 						// phase.
