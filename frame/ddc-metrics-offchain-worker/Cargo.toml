@@ -25,7 +25,7 @@ pallet-contracts  = { version = '2.0.0', default-features = false, path = "../co
 lite-json = { version = "0.1", default-features = false }
 alt_serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, git = "https://github.com/Cerebellum-Network/json", branch = "no-std-cere", features = ["alloc"] }
-pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../contracts/rpc/runtime-api/" }
+# pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../contracts/rpc/runtime-api/" }
 hex-literal = "^0.3.1"
 hex = { version = "0.4", default-features = false }
 
