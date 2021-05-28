@@ -113,7 +113,7 @@ fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 
 	let mut nb_node_prefixed = 0;
 	let mut nb_node_seen = 0;
-	let batch_size = 50_000; // TODO use bigger size (need to iterate all each time).
+	let batch_size = 250_000;
 	loop {
 		let mut full_batch = false;
 		let mut size = 0;
