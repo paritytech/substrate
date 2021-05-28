@@ -122,7 +122,6 @@ type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
-// const DEFAULT_TARGET: &str = "ws://127.0.0.1:9999";
 const BATCH_SIZE: usize = 512;
 
 jsonrpsee_proc_macros::rpc_client_api! {
