@@ -187,6 +187,8 @@ parameter_types! {
 		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
 		.build_or_panic();
 	pub const SS58Prefix: u8 = 42;
+	// The expected max number of users for benchmarking the size of storage maps.
+	pub const MaxUsers: Option<u32> = Some(300_000);
 }
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
@@ -379,7 +381,7 @@ parameter_types! {
 
 impl pallet_balances::Config for Runtime {
 	type MaxLocks = MaxLocks;
-	type MaxUsers = ();
+	type MaxUsers = MaxUsers;
 	type Balance = Balance;
 	type DustRemoval = ();
 	type Event = Event;
@@ -1059,6 +1061,7 @@ impl pallet_assets::Config for Runtime {
 	type StringLimit = StringLimit;
 	type Freezer = ();
 	type Extra = ();
+	type MaxUsers = MaxUsers;
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 }
 
