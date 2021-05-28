@@ -517,7 +517,7 @@ pub mod pallet {
 		/// - `beneficiary`: The account to be credited with the minted assets.
 		/// - `amount`: The amount of the asset to be minted.
 		///
-		/// Emits `Destroyed` event when successful.
+		/// Emits `Issued` event when successful.
 		///
 		/// Weight: `O(1)`
 		/// Modes: Pre-existing balance of `beneficiary`; Account pre-existence of `beneficiary`.
@@ -531,7 +531,6 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 			Self::do_mint(id, &beneficiary, amount, Some(origin))?;
-			Self::deposit_event(Event::Issued(id, beneficiary, amount));
 			Ok(())
 		}
 
@@ -561,8 +560,7 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 
 			let f = DebitFlags { keep_alive: false, best_effort: true };
-			let burned = Self::do_burn(id, &who, amount, Some(origin), f)?;
-			Self::deposit_event(Event::Burned(id, who, burned));
+			let _ = Self::do_burn(id, &who, amount, Some(origin), f)?;
 			Ok(())
 		}
 
