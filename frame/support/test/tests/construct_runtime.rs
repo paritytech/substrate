@@ -176,7 +176,7 @@ pub mod module3 {
 	}
 
 	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
-	pub struct Origin;
+	pub struct Origin<T>(pub core::marker::PhantomData<T>);
 
 	frame_support::decl_event! {
 		pub enum Event {
@@ -231,7 +231,7 @@ frame_support::construct_runtime!(
 		Module2: module2::{Pallet, Call, Storage, Event, Origin},
 		Module1_2: module1::<Instance2>::{Pallet, Call, Storage, Event<T>, Origin<T>},
 		NestedModule3: nested::module3::{Pallet, Call, Config, Storage, Event, Origin},
-		Module3: module3::{Pallet, Call, Config, Storage, Event, Origin},
+		Module3: module3::{Pallet, Call, Config, Storage, Event, Origin<T>},
 		Module1_3: module1::<Instance3>::{Pallet, Storage} = 6,
 		Module1_4: module1::<Instance4>::{Pallet, Call} = 3,
 		Module1_5: module1::<Instance5>::{Pallet, Event<T>},
@@ -245,6 +245,82 @@ frame_support::construct_runtime!(
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+
+mod origin_test {
+	use frame_support::traits::{Filter, OriginTrait};
+	use super::{module3, nested, system, Block, UncheckedExtrinsic};
+
+	impl nested::module3::Config for RuntimeOriginTest {}
+	impl module3::Config for RuntimeOriginTest {}
+
+	pub struct BaseCallFilter;
+	impl Filter<Call> for BaseCallFilter {
+		fn filter(c: &Call) -> bool {
+			match c {
+				Call::NestedModule3(_) => true,
+				_ => false,
+			}
+		}
+	}
+
+	impl system::Config for RuntimeOriginTest {
+		type BaseCallFilter = BaseCallFilter;
+		type Hash = super::H256;
+		type Origin = Origin;
+		type BlockNumber = super::BlockNumber;
+		type AccountId = u32;
+		type Event = Event;
+		type PalletInfo = PalletInfo;
+		type Call = Call;
+		type DbWeight = ();
+	}
+
+	frame_support::construct_runtime!(
+		pub enum RuntimeOriginTest where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic
+		{
+			System: system::{Pallet, Event<T>, Origin<T>},
+			NestedModule3: nested::module3::{Pallet, Origin, Call},
+			Module3: module3::{Pallet, Origin<T>, Call},
+		}
+	);
+
+	#[test]
+	fn origin_default_filter() {
+		let accepted_call = nested::module3::Call::fail().into();
+		let rejected_call = module3::Call::fail().into();
+
+		assert_eq!(Origin::root().filter_call(&accepted_call), true);
+		assert_eq!(Origin::root().filter_call(&rejected_call), true);
+		assert_eq!(Origin::none().filter_call(&accepted_call), true);
+		assert_eq!(Origin::none().filter_call(&rejected_call), false);
+		assert_eq!(Origin::signed(0).filter_call(&accepted_call), true);
+		assert_eq!(Origin::signed(0).filter_call(&rejected_call), false);
+		assert_eq!(Origin::from(Some(0)).filter_call(&accepted_call), true);
+		assert_eq!(Origin::from(Some(0)).filter_call(&rejected_call), false);
+		assert_eq!(Origin::from(None).filter_call(&accepted_call), true);
+		assert_eq!(Origin::from(None).filter_call(&rejected_call), false);
+		assert_eq!(Origin::from(super::nested::module3::Origin).filter_call(&accepted_call), true);
+		assert_eq!(Origin::from(super::nested::module3::Origin).filter_call(&rejected_call), false);
+
+		let mut origin = Origin::from(Some(0));
+
+		origin.add_filter(|c| matches!(c, Call::Module3(_)));
+		assert_eq!(origin.filter_call(&accepted_call), false);
+		assert_eq!(origin.filter_call(&rejected_call), false);
+
+		origin.set_caller_from(Origin::root());
+		assert!(matches!(origin.caller, OriginCaller::system(super::system::RawOrigin::Root)));
+		assert_eq!(origin.filter_call(&accepted_call), false);
+		assert_eq!(origin.filter_call(&rejected_call), false);
+
+		origin.reset_filter();
+		assert_eq!(origin.filter_call(&accepted_call), true);
+		assert_eq!(origin.filter_call(&rejected_call), false);
+	}
+}
 
 #[test]
 fn check_modules_error_type() {
@@ -319,7 +395,7 @@ fn origin_codec() {
 	let origin = OriginCaller::nested_module3(nested::module3::Origin);
 	assert_eq!(origin.encode()[0], 34);
 
-	let origin = OriginCaller::module3(module3::Origin);
+	let origin = OriginCaller::module3(module3::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 35);
 
 	let origin = OriginCaller::module1_Instance6(module1::Origin(Default::default()));
