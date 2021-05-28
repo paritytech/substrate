@@ -87,13 +87,17 @@ impl pallet_transaction_payment::Config for Test {
 	type FeeMultiplierUpdate = ();
 }
 
+parameter_types! {
+	pub const MaxLocks: u32 = 10;
+}
+
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Pallet<Test>;
-	type MaxLocks = ();
+	type MaxLocks = MaxLocks;
 	type WeightInfo = ();
 }
 

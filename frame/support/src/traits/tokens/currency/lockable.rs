@@ -40,12 +40,15 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// the `Locks` vec in storage. Note that you can lock more funds than a user has.
 	///
 	/// If the lock `id` already exists, this will update it.
-	fn set_lock(
+	///
+	/// This function will return `Err` if adding a new lock would set a user to have
+	/// more than `MaxLocks`.
+	fn set_lock (
 		id: LockIdentifier,
 		who: &AccountId,
 		amount: Self::Balance,
 		reasons: WithdrawReasons,
-	);
+	) -> DispatchResult;
 
 	/// Changes a balance lock (selected by `id`) so that it becomes less liquid in all
 	/// parameters or creates a new one if it does not exist.
@@ -55,12 +58,15 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// with the new parameters. As in, `extend_lock` will set:
 	/// - maximum `amount`
 	/// - bitwise mask of all `reasons`
+	///
+	/// This function will return `Err` if adding a new lock would set a user to have
+	/// more than `MaxLocks`.
 	fn extend_lock(
 		id: LockIdentifier,
 		who: &AccountId,
 		amount: Self::Balance,
 		reasons: WithdrawReasons,
-	);
+	) -> DispatchResult;
 
 	/// Remove an existing lock.
 	fn remove_lock(

@@ -156,10 +156,10 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::prelude::*;
-use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
+use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::TryFrom};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	ensure, WeakBoundedVec,
+	ensure, BoundedVec,
 	traits::{
 		Currency, OnUnbalanced, TryDrop, StoredMap, MaxEncodedLen,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
@@ -409,6 +409,8 @@ pub mod pallet {
 		ExistingVestingSchedule,
 		/// Beneficiary account must pre-exist
 		DeadAccount,
+		/// Too many locks are trying to be added to the account.
+		TooManyLocks
 	}
 
 	/// The total units issued in the system.
@@ -438,7 +440,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		WeakBoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
+		BoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
 		ValueQuery,
 		GetDefault,
 		ConstU32<300_000>,
@@ -826,24 +828,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Update the account entry for `who`, given the locks.
-	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
-		let bounded_locks = WeakBoundedVec::<_, T::MaxLocks>::force_from(
-			locks.to_vec(),
-			Some("Balances Update Locks"),
-		);
-
-		if locks.len() as u32 > T::MaxLocks::get() {
-			log::warn!(
-				target: "runtime::balances",
-				"Warning: A user has more currency locks than expected. \
-				A runtime configuration adjustment may be needed."
-			);
-		}
+	fn update_locks(who: &T::AccountId, bounded_locks: &BoundedVec<BalanceLock<T::Balance>, T::MaxLocks>) {
 		// No way this can fail since we do not alter the existential balances.
 		let res = Self::mutate_account(who, |b| {
 			b.misc_frozen = Zero::zero();
 			b.fee_frozen = Zero::zero();
-			for l in locks.iter() {
+			for l in bounded_locks.iter() {
 				if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
 					b.misc_frozen = b.misc_frozen.max(l.amount);
 				}
@@ -855,7 +845,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		debug_assert!(res.is_ok());
 
 		let existed = Locks::<T, I>::contains_key(who);
-		if locks.is_empty() {
+		if bounded_locks.is_empty() {
 			Locks::<T, I>::remove(who);
 			if existed {
 				// TODO: use Locks::<T, I>::hashed_key
@@ -1663,8 +1653,8 @@ where
 		who: &T::AccountId,
 		amount: T::Balance,
 		reasons: WithdrawReasons,
-	) {
-		if amount.is_zero() || reasons.is_empty() { return }
+	) -> DispatchResult {
+		if amount.is_zero() || reasons.is_empty() { return Ok(()) }
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
 		let mut locks = Self::locks(who).into_iter()
 			.filter_map(|l| if l.id == id { new_lock.take() } else { Some(l) })
@@ -1672,7 +1662,11 @@ where
 		if let Some(lock) = new_lock {
 			locks.push(lock)
 		}
-		Self::update_locks(who, &locks[..]);
+		let bounded_locks = BoundedVec::<_, T::MaxLocks>::try_from(
+			locks.to_vec(),
+		).map_err(|_| Error::<T, I>::TooManyLocks)?;
+		Self::update_locks(who, &bounded_locks);
+		Ok(())
 	}
 
 	// Extend a lock on the balance of `who`.
@@ -1682,8 +1676,8 @@ where
 		who: &T::AccountId,
 		amount: T::Balance,
 		reasons: WithdrawReasons,
-	) {
-		if amount.is_zero() || reasons.is_empty() { return }
+	) -> DispatchResult {
+		if amount.is_zero() || reasons.is_empty() { return Ok(()) }
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
 		let mut locks = Self::locks(who).into_iter().filter_map(|l|
 			if l.id == id {
@@ -1700,7 +1694,11 @@ where
 		if let Some(lock) = new_lock {
 			locks.push(lock)
 		}
-		Self::update_locks(who, &locks[..]);
+		let bounded_locks = BoundedVec::<_, T::MaxLocks>::try_from(
+			locks.to_vec(),
+		).map_err(|_| Error::<T, I>::TooManyLocks)?;
+		Self::update_locks(who, &bounded_locks);
+		Ok(())
 	}
 
 	fn remove_lock(
@@ -1709,6 +1707,6 @@ where
 	) {
 		let mut locks = Self::locks(who);
 		locks.retain(|l| l.id != id);
-		Self::update_locks(who, &locks[..]);
+		Self::update_locks(who, &locks);
 	}
 }
