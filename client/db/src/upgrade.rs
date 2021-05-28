@@ -117,31 +117,34 @@ fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 	loop {
 		let mut full_batch = false;
 		let mut size = 0;
-		let mut last = vec![0u8, 0u8, 0u8, 0u8];
+		let mut last = Vec::new();
 		let mut transaction = db.transaction();
 		// Get all the keys we need to update.
-		// Note that every batch will restart full iter, could use
-		// a `iter_from` function.
+		// Note that every batch will restart full iter,
+		// if this prove to slow for archive node, this could be
+		// switch to a `iter_from` function but would require
+		// to upstream change to our rocksdb crate.
 		for entry in db.iter(columns::STATE) {
-			nb_node_seen += 1;
-			if let Some(new_val) = sp_trie::tag_old_hashes::<sp_runtime::traits::HashFor<Block>>(&entry.1) {
-				transaction.put_vec(columns::STATE, &entry.0, new_val);
-				nb_node_prefixed += 1;
-				size += 1;
-				if size == batch_size {
-					full_batch = true;
-					if entry.0.len() > 3 {
-						last.copy_from_slice(&entry.0[..4]);
+			if &entry.1[..] > last.as_slice() {
+				nb_node_seen += 1;
+				if let Some(new_val) = sp_trie::tag_old_hashes::<sp_runtime::traits::HashFor<Block>>(&entry.1) {
+					transaction.put_vec(columns::STATE, &entry.0, new_val);
+					nb_node_prefixed += 1;
+					size += 1;
+					if size == batch_size {
+						full_batch = true;
+						last = entry.0.to_vec();
+						break;
 					}
-					break;
 				}
 			}
 		}
 		info!(
-			"Committing batch, currently processed: {} of {} read nodes at {:?}",
+			"Committing batch, currently processed: {} of {} read nodes at {:?}, {:?}",
 			nb_node_prefixed,
 			nb_node_seen,
 			last,
+			start_time.elapsed().as_millis(),
 		);
 		db.write(transaction).map_err(db_err)?;
 		if !full_batch {
