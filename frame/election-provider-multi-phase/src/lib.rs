@@ -783,7 +783,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			solution: RawSolution<CompactOf<T>>,
 			witness_data: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			// ensure witness data is correct.
@@ -826,7 +826,7 @@ pub mod pallet {
 			// store the new signed submission.
 			<SignedSubmissions<T>>::put(signed_submissions);
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed));
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Submit a solution for the unsigned phase.

@@ -266,12 +266,12 @@ mod tests {
 			SignedMaxSubmissions, SignedMaxWeight,
 		},
 	};
-	use frame_support::{dispatch::DispatchResultWithPostInfo, assert_noop, assert_ok};
+	use frame_support::{dispatch::DispatchResult, assert_noop, assert_ok};
 
 	fn submit_with_witness(
 		origin: Origin,
 		solution: RawSolution<CompactOf<Runtime>>,
-	) -> DispatchResultWithPostInfo {
+	) -> DispatchResult {
 		MultiPhase::submit(origin, solution, MultiPhase::signed_submissions().len() as u32)
 	}
 
