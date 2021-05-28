@@ -94,6 +94,7 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Pallet<Test>;
 	type MaxLocks = ();
+	type MaxUsers = ();
 	type WeightInfo = ();
 }
 

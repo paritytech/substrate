@@ -80,6 +80,7 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
+	type MaxUsers = ();
 }
 
 parameter_types! {
@@ -102,6 +103,7 @@ impl Config for Test {
 	type ApprovalDeposit = ApprovalDeposit;
 	type StringLimit = StringLimit;
 	type Freezer = TestFreezer;
+	type MaxUsers = ();
 	type WeightInfo = ();
 	type Extra = ();
 }

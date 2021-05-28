@@ -83,6 +83,7 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type MaxLocks = ();
+	type MaxUsers = ();
 	type WeightInfo = ();
 }
 parameter_types! {

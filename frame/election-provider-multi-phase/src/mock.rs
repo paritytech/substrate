@@ -237,6 +237,7 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type MaxLocks = ();
+	type MaxUsers = ();
 	type WeightInfo = ();
 }
 

@@ -379,6 +379,7 @@ parameter_types! {
 
 impl pallet_balances::Config for Runtime {
 	type MaxLocks = MaxLocks;
+	type MaxUsers = ();
 	type Balance = Balance;
 	type DustRemoval = ();
 	type Event = Event;

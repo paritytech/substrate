@@ -103,6 +103,7 @@ impl Config for Test {
 		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
+	type MaxUsers = ();
 	type WeightInfo = ();
 }
 

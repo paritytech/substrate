@@ -244,6 +244,7 @@ parameter_types! {
 
 impl pallet_balances::Config for Runtime {
 	type MaxLocks = MaxLocks;
+	type MaxUsers = ();
 	/// The type for recording an account's balance.
 	type Balance = Balance;
 	/// The ubiquitous event type.

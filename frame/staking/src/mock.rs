@@ -155,6 +155,7 @@ impl frame_system::Config for Test {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
+	type MaxUsers = ();
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();

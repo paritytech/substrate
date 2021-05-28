@@ -211,6 +211,9 @@ pub mod pallet {
 		/// Additional data to be stored with an account's asset balance.
 		type Extra: Member + Parameter + Default + MaxEncodedLen;
 
+		/// Maximum number of expected users holding an asset.
+		type MaxUsers: Get<Option<u32>>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -235,7 +238,7 @@ pub mod pallet {
 		AssetBalance<T::Balance, T::Extra>,
 		ValueQuery,
 		GetDefault,
-		ConstU32<300_000>,
+		T::MaxUsers,
 	>;
 
 	#[pallet::storage]
@@ -252,7 +255,7 @@ pub mod pallet {
 		Approval<T::Balance, DepositBalanceOf<T, I>>,
 		OptionQuery,
 		GetDefault,
-		ConstU32<300_000>,
+		T::MaxUsers,
 	>;
 
 	#[pallet::storage]
@@ -264,7 +267,7 @@ pub mod pallet {
 		AssetMetadata<DepositBalanceOf<T, I>, BoundedVec<u8, T::StringLimit>>,
 		ValueQuery,
 		GetDefault,
-		ConstU32<300_000>,
+		T::MaxUsers,
 	>;
 
 	#[pallet::event]

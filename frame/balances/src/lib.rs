@@ -214,6 +214,9 @@ pub mod pallet {
 		/// The maximum number of locks that should exist on an account.
 		/// Not strictly enforced, but used for weight estimation.
 		type MaxLocks: Get<u32>;
+
+		/// The maximum number of users which will have a balance.
+		type MaxUsers: Get<Option<u32>>;
 	}
 
 	#[pallet::pallet]
@@ -427,7 +430,7 @@ pub mod pallet {
 		AccountData<T::Balance>,
 		ValueQuery,
 		GetDefault,
-		ConstU32<300_000>,
+		T::MaxUsers,
 	>;
 
 	/// Any liquidity locks on some account balances.
@@ -441,7 +444,7 @@ pub mod pallet {
 		WeakBoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
 		ValueQuery,
 		GetDefault,
-		ConstU32<300_000>,
+		T::MaxUsers,
 	>;
 
 	/// Storage version of the pallet.

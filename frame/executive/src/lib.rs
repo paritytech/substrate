@@ -721,6 +721,7 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type MaxLocks = ();
+		type MaxUsers = ();
 		type WeightInfo = ();
 	}
 
