@@ -114,12 +114,15 @@ use sp_core::{
 };
 use codec::{Encode, Decode};
 use sp_runtime::traits::Block as BlockT;
-use jsonrpsee_ws_client::{WsClientBuilder, WsClient, v2::params::JsonRpcParams, traits::Client};
+use jsonrpsee_ws_client::{
+	WsClientBuilder, WsClient, JsonValue, v2::params::JsonRpcParams, traits::Client,
+};
 
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
+// const DEFAULT_TARGET: &str = "ws://127.0.0.1:9999";
 const BATCH_SIZE: usize = 512;
 
 jsonrpsee_proc_macros::rpc_client_api! {
@@ -349,7 +352,7 @@ impl<B: BlockT> Builder<B> {
 					)
 				})
 				.collect::<Vec<_>>();
-			let values = client.batch_request::<StorageData>(batch)
+			let values = client.batch_request::<JsonValue>(batch)
 				.await
 				.map_err(|e| {
 					log::error!(target: LOG_TARGET, "failed to execute batch {:?} due to {:?}", chunk_keys, e);
@@ -358,6 +361,19 @@ impl<B: BlockT> Builder<B> {
 			assert_eq!(chunk_keys.len(), values.len());
 			for (idx, key) in chunk_keys.into_iter().enumerate() {
 				let value = values[idx].clone();
+				let value = match value {
+					JsonValue::String(s) => {
+						StorageData(hex::decode(&s[2..]).map_err(|e| {
+							println!("Error in {:?} => {:?}", s, e);
+							e
+						}).expect("failed to decode non-empty hex."))
+					},
+					JsonValue::Null => {
+						log::warn!(target: LOG_TARGET, "key {:?} had null corresponding value.", key);
+						StorageData(vec![])
+					}
+					_ => panic!("expected response {:?}", value),
+				};
 				key_values.push((key.clone(), value));
 			}
 
