@@ -302,12 +302,6 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    // fn get_start_of_day_ms() -> u64 {
-    //     let now = sp_io::offchain::timestamp();
-    //     let day_start_ms = (now.unix_millis() / MS_PER_DAY) * MS_PER_DAY;
-    //     day_start_ms
-    // }
-
     fn get_signer() -> ResultStr<Signer::<T::CST, T::AuthorityId>> {
         let signer = Signer::<_, _>::any_account();
         if !signer.can_sign() {
@@ -353,25 +347,23 @@ impl<T: Trait> Module<T> {
         ) -> ResultStr<()> {
         let contract_id = T::ContractId::get();
 
-        let call_data = Self::encode_finalize_metric_period(in_day_start_ms);
-        let results = signer.send_signed_transaction(
-            |account| {
-                info!("[OCW] Sending transactions with in_day_start_ms {:?}", in_day_start_ms);
+        let _call_data = Self::encode_finalize_metric_period(in_day_start_ms);
 
-                let call_data = Self::encode_finalize_metric_period(in_day_start_ms);
+        let results = signer.send_signed_transaction(
+            |_account| {
 
                 pallet_contracts::Call::call(
                     contract_id.clone(),
                     0u32.into(),
                     100_000_000_000,
-                    call_data,
+                    _call_data.clone(),
                 )
             }
         );
 
         match &results {
             None | Some((_, Err(()))) =>
-                return Err("Error while submitting TX to SC"),
+                return Err("Error while submitting finalize_metric_period TX to SC"),
             Some((_, Ok(()))) => {}
         }
 

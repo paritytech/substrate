@@ -86,6 +86,23 @@ fn test_encode_report_metrics() {
     ]);
 }
 
+#[test]
+fn test_encode_get_current_period_ms() {
+    let call_data = DdcMetricsOffchainWorker::encode_get_current_period_ms();
+    assert_eq!(call_data, vec![
+        172, 228, 236, 179, // Selector
+    ]);
+}
+
+#[test]
+fn test_encode_finalize_metric_period() {
+    let call_data = DdcMetricsOffchainWorker::encode_finalize_metric_period(INIT_TIME_MS);
+    assert_eq!(call_data, vec![
+        178, 105, 213, 87, // Selector
+        80, 152, 94, 120, 118, 1, 0, 0, // 8 bytes, in_day_start_ms
+    ]);
+}
+
 fn build_ext() -> sp_io::TestExternalities {
     build_ext_for_contracts()
 }
@@ -180,7 +197,7 @@ fn should_submit_signed_transaction_on_chain() {
         // Get the transaction from the worker.
         let transactions = pool_state.read().transactions.clone();
         eprintln!("Transactions: {:?}\n", transactions);
-        assert_eq!(transactions.len(), 2);
+        assert_eq!(transactions.len(), 3);
 
         // Check metrics of an app based on ddc_metrics_node-0.json and ddc_metrics_node-3.json.
         let app_id = AccountId32::from(hex!("00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830"));
@@ -199,6 +216,10 @@ fn should_submit_signed_transaction_on_chain() {
             100,
             200);
         assert!(transactions[1].ends_with(&expected_call), "Expected a specific call to the report_metrics function");
+
+        // Check finalize_metric_period.
+        let expected_call = DdcMetricsOffchainWorker::encode_finalize_metric_period(INIT_DAY_MS);
+        assert!(transactions[2].ends_with(&expected_call), "Expected a specific call to the finalize_metric_period function");
     });
 }
 
