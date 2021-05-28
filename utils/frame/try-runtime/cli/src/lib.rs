@@ -79,7 +79,7 @@ pub struct SharedParams {
 
 /// Various commands to try out against runtime state at a specific block.
 ///
-/// NOTE: For now this only assumes running the `on_runtime_upgrade` hooks. // TOOD wut dis mean?
+/// NOTE: For now this only assumes running the `on_runtime_upgrade` hooks
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct TryRuntimeCmd {
 	#[structopt(flatten)]
@@ -98,6 +98,10 @@ pub enum State {
 	},
 
 	/// Use a live chain as the source of runtime state.
+	///
+	/// NOTE: There currently is a bug when connecting via WS to localhost. To get around run the
+	/// node with `--rpc-cors=all`
+	/// https://github.com/paritytech/jsonrpsee/issues/346
 	Live {
 		/// An optional state snapshot file to WRITE to.
 		#[structopt(short, long)]
@@ -275,7 +279,7 @@ where
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade' due to {:?}", e))?;
+	.map_err(|e| format!("failed to execute 'OffchainWorkerApi_offchain_worker' due to {:?}", e))?;
 
 	log::info!("OffchainWorkerApi_offchain_worker executed without errors.");
 	Ok(())
