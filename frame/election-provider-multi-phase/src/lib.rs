@@ -114,7 +114,24 @@
 //! good solution is queued, then the fallback strategy [`pallet::Config::Fallback`] is used to
 //! determine what needs to be done. The on-chain election is slow, and contains no balancing or
 //! reduction post-processing. See [`onchain::OnChainSequentialPhragmen`]. The
-//! [`FallbackStrategy::Nothing`] should probably only be used for testing, and returns an error.
+//! [`FallbackStrategy::Nothing`] just returns an error, and enables the [`Phase::Emergency`].
+//!
+//! ### Emergency Phase
+//!
+//! If, for any of the below reasons:
+//!
+//! 1. No signed and unsigned solution submitted
+//! 2. Internal error
+//! 3. Fallback being `None`
+//!
+//! A call to `T::ElectionProvider::elect` is made, and `Ok(_)` cannot be returned, then the pallet
+//! proceeds to the [`Phase::Emergency`]. During this phase, any solution can be submitted from
+//! [`T::ForceOrigin`], without any checking. Once submitted, the forced solution is kept in
+//! [`QueuedSolution`] until the next call to `T::ElectionProvider::elect`, where it is returned and
+//! [`Phase`] goes back to `Off`.
+//!
+//! This implies that the user of this pallet (i.e. a staking pallet) should re-try calling
+//! `T::ElectionProvider::elect` in case of error until `OK(_)` is returned.
 //!
 //! ## Feasible Solution (correct solution)
 //!
@@ -611,7 +628,13 @@ pub mod pallet {
 			let remaining = next_election - now;
 			let current_phase = Self::current_phase();
 
-			log!(trace, "current phase {:?}, next election {:?}", current_phase, next_election);
+			log!(
+				trace,
+				"current phase {:?}, next election {:?}, metadata: {:?}",
+				current_phase,
+				next_election,
+				Self::snapshot_metadata()
+			);
 			match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
@@ -1254,17 +1277,27 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
-		match Self::do_elect() {
-			Ok((supports, weight)) => {
-				// all went okay, put sign to be Off, clean snapshot, etc.
-				Self::rotate_round();
-				Ok((supports, weight))
-			},
-			Err(why) => {
-				log!(error, "Entering emergency mode.");
-				<CurrentPhase<T>>::put(Phase::Emergency);
-				Err(why)
+		if Self::round() > 1 {
+			match Self::do_elect() {
+				Ok((supports, weight)) => {
+					// all went okay, put sign to be Off, clean snapshot, etc.
+					Self::rotate_round();
+					Ok((supports, weight))
+				}
+				Err(why) => {
+					log!(error, "Entering emergency mode.");
+					<CurrentPhase<T>>::put(Phase::Emergency);
+					Err(why)
+				}
 			}
+		} else {
+			// first round, always run on-chain.
+			// TODO: move all of this into a new trait like `GenesisElectionProvide`, or a new
+			// function in the same trait.
+			let result = Self::onchain_fallback();
+			log!(info, "Finalized initial election round with onchain compute.");
+			Self::rotate_round();
+			result
 		}
 	}
 }
