@@ -2142,7 +2142,6 @@ impl<T: Config> Module<T> {
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
-
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
 				.unwrap_or_else(|| {
 					frame_support::print("Error: start_session_index must be set for current_era");
@@ -2166,16 +2165,15 @@ impl<T: Config> Module<T> {
 				},
 			}
 
-			// new era.
-			let new_era_validators = Self::try_trigger_new_era(session_index);
-
-			if new_era_validators.is_some() && matches!(ForceEra::get(), Forcing::ForceNew) {
+			// New era.
+			let maybe_new_era_validators = Self::try_trigger_new_era(session_index);
+			if maybe_new_era_validators.is_some() && matches!(ForceEra::get(), Forcing::ForceNew) {
 				ForceEra::kill();
 			}
 
-			new_era_validators
+			maybe_new_era_validators
 		} else {
-			// Set initial era
+			// Set initial era.
 			log!(debug, "Starting the first era.");
 			Self::try_trigger_new_era(session_index)
 		}
@@ -2346,13 +2344,10 @@ impl<T: Config> Module<T> {
 			}
 
 			Self::deposit_event(RawEvent::StakingElectionFailed);
-
 			return None
 		}
 
 		Self::deposit_event(RawEvent::StakingElection);
-
-
 		Some(Self::new_era(start_session_index, exposures))
 	}
 

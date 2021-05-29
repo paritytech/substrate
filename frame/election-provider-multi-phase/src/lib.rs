@@ -611,6 +611,7 @@ pub mod pallet {
 			let remaining = next_election - now;
 			let current_phase = Self::current_phase();
 
+			log!(trace, "current phase {:?}, next election {:?}", current_phase, next_election);
 			match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
