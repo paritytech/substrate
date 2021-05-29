@@ -40,6 +40,7 @@ pub use sp_arithmetic::traits::{
 use sp_application_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
 use crate::DispatchResult;
+use max_encoded_len::MaxEncodedLen;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -386,7 +387,7 @@ impl<T:
 pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq + Hasher<Out = <Self as Hash>::Output> {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
+		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode + MaxEncodedLen;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
@@ -1183,31 +1184,9 @@ macro_rules! count {
 	};
 }
 
-/// Implement `OpaqueKeys` for a described struct.
-///
-/// Every field type must implement [`BoundToRuntimeAppPublic`](crate::BoundToRuntimeAppPublic).
-/// `KeyTypeIdProviders` is set to the types given as fields.
-///
-/// ```rust
-/// use sp_runtime::{
-/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, app_crypto::{sr25519, ed25519}
-/// };
-///
-/// pub struct KeyModule;
-/// impl BoundToRuntimeAppPublic for KeyModule { type Public = ed25519::AppPublic; }
-///
-/// pub struct KeyModule2;
-/// impl BoundToRuntimeAppPublic for KeyModule2 { type Public = sr25519::AppPublic; }
-///
-/// impl_opaque_keys! {
-/// 	pub struct Keys {
-/// 		pub key_module: KeyModule,
-/// 		pub key_module2: KeyModule2,
-/// 	}
-/// }
-/// ```
+#[doc(hidden)]
 #[macro_export]
-macro_rules! impl_opaque_keys {
+macro_rules! impl_opaque_keys_inner {
 	(
 		$( #[ $attr:meta ] )*
 		pub struct $name:ident {
@@ -1217,24 +1196,18 @@ macro_rules! impl_opaque_keys {
 			)*
 		}
 	) => {
-		$crate::paste::paste! {
-			#[cfg(feature = "std")]
-			use $crate::serde as [< __opaque_keys_serde_import__ $name >];
-			$( #[ $attr ] )*
-				#[derive(
-					Default, Clone, PartialEq, Eq,
-					$crate::codec::Encode,
-					$crate::codec::Decode,
-					$crate::RuntimeDebug,
-				)]
-			#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
-			#[cfg_attr(feature = "std", serde(crate = "__opaque_keys_serde_import__" $name))]
-			pub struct $name {
-				$(
-					$( #[ $inner_attr ] )*
-						pub $field: <$type as $crate::BoundToRuntimeAppPublic>::Public,
-				)*
-			}
+		$( #[ $attr ] )*
+		#[derive(
+			Default, Clone, PartialEq, Eq,
+			$crate::codec::Encode,
+			$crate::codec::Decode,
+			$crate::RuntimeDebug,
+		)]
+		pub struct $name {
+			$(
+				$( #[ $inner_attr ] )*
+				pub $field: <$type as $crate::BoundToRuntimeAppPublic>::Public,
+			)*
 		}
 
 		impl $name {
@@ -1318,6 +1291,83 @@ macro_rules! impl_opaque_keys {
 			}
 		}
 	};
+}
+
+/// Implement `OpaqueKeys` for a described struct.
+///
+/// Every field type must implement [`BoundToRuntimeAppPublic`](crate::BoundToRuntimeAppPublic).
+/// `KeyTypeIdProviders` is set to the types given as fields.
+///
+/// ```rust
+/// use sp_runtime::{
+/// 	impl_opaque_keys, KeyTypeId, BoundToRuntimeAppPublic, app_crypto::{sr25519, ed25519}
+/// };
+///
+/// pub struct KeyModule;
+/// impl BoundToRuntimeAppPublic for KeyModule { type Public = ed25519::AppPublic; }
+///
+/// pub struct KeyModule2;
+/// impl BoundToRuntimeAppPublic for KeyModule2 { type Public = sr25519::AppPublic; }
+///
+/// impl_opaque_keys! {
+/// 	pub struct Keys {
+/// 		pub key_module: KeyModule,
+/// 		pub key_module2: KeyModule2,
+/// 	}
+/// }
+/// ```
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! impl_opaque_keys {
+	{
+		$( #[ $attr:meta ] )*
+		pub struct $name:ident {
+			$(
+				$( #[ $inner_attr:meta ] )*
+				pub $field:ident: $type:ty,
+			)*
+		}
+	} => {
+		$crate::paste::paste! {
+			use $crate::serde as [< __opaque_keys_serde_import__ $name >];
+
+			$crate::impl_opaque_keys_inner! {
+				$( #[ $attr ] )*
+				#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
+				#[serde(crate = "__opaque_keys_serde_import__" $name)]
+				pub struct $name {
+					$(
+						$( #[ $inner_attr ] )*
+						pub $field: $type,
+					)*
+				}
+			}
+		}
+	}
+}
+
+#[macro_export]
+#[cfg(not(feature = "std"))]
+macro_rules! impl_opaque_keys {
+	{
+		$( #[ $attr:meta ] )*
+		pub struct $name:ident {
+			$(
+				$( #[ $inner_attr:meta ] )*
+				pub $field:ident: $type:ty,
+			)*
+		}
+	} => {
+		$crate::impl_opaque_keys_inner! {
+			$( #[ $attr ] )*
+			pub struct $name {
+				$(
+					$( #[ $inner_attr ] )*
+					pub $field: $type,
+				)*
+			}
+		}
+	}
 }
 
 /// Trait for things which can be printed from the runtime.
