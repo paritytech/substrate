@@ -96,7 +96,11 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 
-pub use crate::{pallet::*, schedule::Schedule, exec::Frame};
+pub use crate::{
+	pallet::*,
+	schedule::{Schedule, Limits, InstructionWeights, HostFnWeights},
+	exec::Frame,
+};
 use crate::{
 	gas::GasMeter,
 	exec::{Stack as ExecStack, Executable},
