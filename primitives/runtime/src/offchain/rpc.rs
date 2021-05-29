@@ -21,8 +21,9 @@
 // ! ```rust,no_run
 // ! use sp_runtime::offchain::rpc::Request;
 // !
+// ! let client = Client::new();
 // ! let request = Request::new();
-// ! let rpc_result = request.send();
+// ! let rpc_result = client.send(&request);
 // !
 // ! match rpc_result {
 // ! 	Ok(response) => {
@@ -95,7 +96,12 @@ pub struct Request<'a> {
 	pub method: &'a str,
 	/// rpc request params
 	pub params: Vec<&'a str>,
-	/// rpc request timeout
+}
+
+/// A rpc client
+#[derive(Clone, RuntimeDebug)]
+pub struct Client<'a> {
+  /// rpc request timeout
 	pub timeout: u64,
 	/// rpc request url
 	pub url: &'a str,
@@ -108,6 +114,13 @@ impl<'a> Default for Request<'a> {
 			id: 1,
 			method: "chain_getFinalizedHead",
 			params: Vec::new(),
+		}
+	}
+}
+
+impl<'a> Default for Client<'a> {
+	fn default() -> Self {
+		Client {
 			timeout: 3_000,
 			url: "http://localhost:9933"
 		}
@@ -120,21 +133,9 @@ impl<'a> Request<'a> {
 		Request::default()
 	}
 
-	/// Change the URL for the Request
-	pub fn url(mut self, url: &'a str) -> Self {
-		self.url = url;
-		self
-	}
-
 	/// Change the Method for the Request
 	pub fn method(mut self, method: &'a str) -> Self {
 		self.method = method;
-		self
-	}
-
-	/// Change the Timeout for the Request
-	pub fn timeout(mut self, timeout: u64) -> Self {
-		self.timeout = timeout;
 		self
 	}
 
@@ -155,27 +156,46 @@ impl<'a> Request<'a> {
 		self.id = id;
 		self
 	}
+}
 
-	/// Send the request and return a RPC result.
+impl<'a> Client<'a> {
+	/// Create a new Client
+	pub fn new() -> Self {
+		Client::default()
+	}
+
+  /// Change the URL for the Client
+	pub fn url(mut self, url: &'a str) -> Self {
+		self.url = url;
+		self
+	}
+
+  /// Change the Timeout for the Client
+	pub fn timeout(mut self, timeout: u64) -> Self {
+		self.timeout = timeout;
+		self
+	}
+
+  /// Send the request and return a RPC result.
 	///
 	/// Err is returned in case there is a Http
 	/// or deserializing error.
-	pub fn send(&self) -> RpcResult {
+	pub fn send(&self, request: &'a Request) -> RpcResult {
 		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(self.timeout));
-		self.send_with_deadline(deadline)
+		self.send_with_deadline(deadline, request)
 	}
 
 	/// Send the request and return a RPC result.
 	/// Deadline is used instead of Timeout
 	/// Err is returned in case there is a Http
 	/// or deserializing error.
-	pub fn send_with_deadline(&self, deadline: Timestamp) -> RpcResult {
+	pub fn send_with_deadline(&self, deadline: Timestamp, request: &'a Request) -> RpcResult {
 		// Construct http POST body
 		let request_body = json!({
-			"jsonrpc": self.jsonrpc,
-			"id": self.id,
-			"method": self.method,
-			"params": self.params
+			"jsonrpc": request.jsonrpc,
+			"id": request.id,
+			"method": request.method,
+			"params": request.params
 		});
 		let mut body: Vec<&[u8]> = Vec::new();
 		let request_body_slice: &[u8] = &(serde_json::to_vec(&request_body).unwrap())[..];
@@ -276,6 +296,7 @@ mod test {
 	/// Helper function to assess expected response
 	fn assess_response(
 		body: &Value,
+    client: &Client,
 		request: &Request,
 		response: &[u8],
 		expected_result: &RpcResult
@@ -304,7 +325,7 @@ mod test {
 		}
 
 		t.execute_with(|| {
-			let rpc_result = (*request).send();
+			let rpc_result = (*client).send(request);
 			assert_eq!(*expected_result, rpc_result);
 		})
 	}
@@ -331,9 +352,11 @@ mod test {
 		};
 
 		let expected_result = Ok(expected_response);
+
+    let client = Client::new();
 		let request = Request::new();
 
-		assess_response(&body, &request, &RESPONSE, &expected_result);
+		assess_response(&body, &client, &request, &RESPONSE, &expected_result);
 	}
 
 	#[test]
@@ -365,9 +388,11 @@ mod test {
 		};
 
 		let expected_result = Ok(expected_response);
+
+    let client = Client::new();
 		let request = Request::new().method(RPC_METHOD);
 
-		assess_response(&body, &request, RESPONSE, &expected_result);
+		assess_response(&body, &client, &request, RESPONSE, &expected_result);
 	}
 
 	#[test]
@@ -395,10 +420,12 @@ mod test {
 
 		let expected_response = Error::Deserializing;
 		let expected_result = Err(expected_response);
+
+    let client = Client::new();
 		let request = Request::new();
 
 		for response in RESPONSES.iter() {
-			assess_response(&body, &request, response, &expected_result);
+			assess_response(&body, &client, &request, response, &expected_result);
 		}
 	}
 }
