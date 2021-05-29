@@ -442,11 +442,12 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				assert!(
-					frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
-					"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
-					account,
-				);
+				if frame_system::Pallet::<T>::inc_consumers(&account).is_err() {
+					// This will lead a provider reference, however we assume that the user wants to
+					// do this since it's the only way a non-endowed account can contain a session
+					// key.
+					frame_system::Pallet::<T>::inc_providers(&account);
+				}
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
