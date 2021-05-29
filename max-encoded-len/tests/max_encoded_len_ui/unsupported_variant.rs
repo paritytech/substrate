@@ -1,5 +1,5 @@
 use codec::Encode;
-use frame_support::traits::MaxEncodedLen;
+use max_encoded_len::MaxEncodedLen;
 
 #[derive(Encode)]
 struct NotMel;
