@@ -6699,11 +6699,14 @@ name = "remote-externalities"
 version = "0.9.0"
 dependencies = [
  "env_logger 0.8.3",
- "hex-literal",
+ "frame-support",
+ "hex",
  "jsonrpsee-proc-macros",
  "jsonrpsee-ws-client",
  "log",
- "parity-scale-codec 2.0.1",
+ "pallet-elections-phragmen",
+ "parity-scale-codec",
+ "serde_json",
  "sp-core",
  "sp-io",
  "sp-runtime",

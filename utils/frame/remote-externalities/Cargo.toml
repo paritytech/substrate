@@ -16,10 +16,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 jsonrpsee-ws-client = { version = "=0.2.0-alpha.6", default-features = false }
 jsonrpsee-proc-macros = "=0.2.0-alpha.6"
 
-hex-literal = "0.3.1"
+hex = "0.4.0"
 env_logger = "0.8.2"
 log = "0.4.11"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
+
+serde_json = "1.0"
 
 sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
@@ -27,6 +29,8 @@ sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 tokio = { version = "1.6.0", features = ["macros", "rt"] }
+pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "4.0.0" }
+frame-support = { path = "../../../frame/support", version = "3.0.0" }
 
 [features]
 remote-test = []
