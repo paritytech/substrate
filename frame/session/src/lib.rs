@@ -443,7 +443,8 @@ decl_storage! {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
 				if frame_system::Pallet::<T>::inc_consumers(&account).is_err() {
-					// This will lead a provider reference, however we assume that the user wants to
+					// This will leak a provider reference, however it only happens once (at
+					// genesis) so it's really not a big deal and we assume that the user wants to
 					// do this since it's the only way a non-endowed account can contain a session
 					// key.
 					frame_system::Pallet::<T>::inc_providers(&account);
