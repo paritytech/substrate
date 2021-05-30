@@ -1647,8 +1647,7 @@ where
 	type MaxLocks = T::MaxLocks;
 
 	// Checks if `set_lock` or `extend_lock` would fail.
-	// Specifically if adding a lock with `id` would push us
-	// over the `MaxLocks` limit.
+	// Specifically if adding a lock with `id` would push us over the `MaxLocks` limit.
 	fn can_add_lock(id: LockIdentifier, who: &T::AccountId) -> bool {
 		let locks = Self::locks(who);
 		let length = locks.len();

@@ -2063,7 +2063,6 @@ impl<T: Config> Module<T> {
 	}
 
 	/// Does all the checks needed to ensure that `update_ledger` will succeed.
-	///
 	fn can_update_ledger(
 		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>
 	) -> bool {
