@@ -1650,20 +1650,13 @@ where
 	// Specifically if adding a lock with `id` would push us
 	// over the `MaxLocks` limit.
 	fn can_add_lock(id: LockIdentifier, who: &T::AccountId) -> bool {
-		let mut new_lock = Some(BalanceLock {
-			id,
-			amount: Default::default(),
-			reasons: Reasons::All,
-		});
-		let mut locks = Self::locks(who).into_iter()
-			.filter_map(|l| if l.id == id { new_lock.take() } else { Some(l) })
-			.collect::<Vec<_>>();
-		if let Some(lock) = new_lock {
-			locks.push(lock)
-		}
-		BoundedVec::<_, T::MaxLocks>::try_from(
-			locks.to_vec(),
-		).is_ok()
+		let locks = Self::locks(who);
+		let length = locks.len();
+		if length as u32 == u32::max_value() { return false }
+		let new_locks_len =  if Self::locks(who)
+			.into_iter()
+			.any(|l| l.id == id) { length } else { length + 1 };
+		new_locks_len as u32 <= T::MaxLocks::get()
 	}
 
 	// Set a lock on the balance of `who`.
