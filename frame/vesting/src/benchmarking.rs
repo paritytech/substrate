@@ -36,7 +36,8 @@ fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
 		let lock_id = [id; 8];
 		let locked = 100u32;
 		let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-		T::Currency::set_lock(lock_id, who, locked.into(), reasons);
+		T::Currency::set_lock(lock_id, who, locked.into(), reasons)
+			.expect("problem adding lock in vesting benchmarks");
 	}
 }
 
@@ -59,7 +60,7 @@ fn add_vesting_schedule<T: Config>(who: &T::AccountId) -> Result<(), &'static st
 
 benchmarks! {
 	vest_locked {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -83,7 +84,7 @@ benchmarks! {
 	}
 
 	vest_unlocked {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -107,7 +108,7 @@ benchmarks! {
 	}
 
 	vest_other_locked {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
@@ -134,7 +135,7 @@ benchmarks! {
 	}
 
 	vest_other_unlocked {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
@@ -161,7 +162,7 @@ benchmarks! {
 	}
 
 	vested_transfer {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -192,7 +193,7 @@ benchmarks! {
 	}
 
 	force_vested_transfer {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let source: T::AccountId = account("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
