@@ -535,7 +535,7 @@ mod tests {
 		},
 	};
 	use frame_support::{
-		assert_err, parameter_types,
+		assert_err, parameter_types, assert_ok,
 		weights::{Weight, RuntimeDbWeight, IdentityFee, WeightToFeePolynomial},
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons},
 	};
@@ -713,6 +713,7 @@ mod tests {
 	type Balance = u64;
 	parameter_types! {
 		pub const ExistentialDeposit: Balance = 1;
+		pub const MaxLocks: u32 = 10;
 	}
 	impl pallet_balances::Config for Runtime {
 		type Balance = Balance;
@@ -720,7 +721,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
-		type MaxLocks = ();
+		type MaxLocks = MaxLocks;
 		type WeightInfo = ();
 	}
 
@@ -1024,12 +1025,12 @@ mod tests {
 		let execute_with_lock = |lock: WithdrawReasons| {
 			let mut t = new_test_ext(1);
 			t.execute_with(|| {
-				<pallet_balances::Pallet<Runtime> as LockableCurrency<Balance>>::set_lock(
+				assert_ok!(<pallet_balances::Pallet<Runtime> as LockableCurrency<Balance>>::set_lock(
 					id,
 					&1,
 					110,
 					lock,
-				);
+				));
 				let xt = TestXt::new(
 					Call::System(SystemCall::remark(vec![1u8])),
 					sign_extra(1, 0, 0),
