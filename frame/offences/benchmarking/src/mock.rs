@@ -69,9 +69,10 @@ impl frame_system::Config for Test {
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
+	pub const MaxLocks: u32 = 10;
 }
 impl pallet_balances::Config for Test {
-	type MaxLocks = ();
+	type MaxLocks = MaxLocks;
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
