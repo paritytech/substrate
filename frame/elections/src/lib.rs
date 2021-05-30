@@ -898,7 +898,7 @@ impl<T: Config> Module<T> {
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),
-		).expect("can_add_lock returned true above");
+		).expect("can_add_lock returned true above, thus this cannot fail");
 
 		<VoterInfoOf<T>>::insert(
 			&who,

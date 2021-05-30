@@ -338,7 +338,7 @@ pub mod pallet {
 				&who,
 				locked_stake,
 				WithdrawReasons::all(),
-			).expect("can_add_lock returned true above");
+			).expect("can_add_lock returned true above, thus this cannot fail.");
 
 			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
 			Ok(None.into())

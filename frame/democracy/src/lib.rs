@@ -529,6 +529,8 @@ decl_error! {
 		InvalidWitness,
 		/// Maximum number of proposals reached.
 		TooManyProposals,
+		/// Could not add another lock to the user.
+		TooManyLocks,
 	}
 }
 
@@ -1023,7 +1025,7 @@ decl_module! {
 			.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))]
 		fn unlock(origin, target: T::AccountId) {
 			ensure_signed(origin)?;
-			Self::update_lock(&target);
+			Self::update_lock(&target)?;
 		}
 
 		/// Remove a vote for a referendum.
@@ -1243,6 +1245,7 @@ impl<T: Config> Module<T> {
 	fn try_vote(who: &T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>>) -> DispatchResult {
 		let mut status = Self::referendum_status(ref_index)?;
 		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
+		ensure!(T::Currency::can_add_lock(DEMOCRACY_ID, who), Error::<T>::TooManyLocks);
 		VotingOf::<T>::try_mutate(who, |voting| -> DispatchResult {
 			if let Voting::Direct { ref mut votes, delegations, .. } = voting {
 				match votes.binary_search_by_key(&ref_index, |i| i.0) {
@@ -1276,7 +1279,7 @@ impl<T: Config> Module<T> {
 			who,
 			vote.balance(),
 			WithdrawReasons::TRANSFER
-		);
+		).expect("can_add_lock returned true above, thus this cannot fail.");
 		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 		Ok(())
 	}
@@ -1379,6 +1382,7 @@ impl<T: Config> Module<T> {
 	) -> Result<u32, DispatchError> {
 		ensure!(who != target, Error::<T>::Nonsense);
 		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
+		ensure!(T::Currency::can_add_lock(DEMOCRACY_ID, &who), Error::<T>::TooManyLocks);
 		let votes = VotingOf::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
 			let mut old = Voting::Delegating {
 				balance,
@@ -1408,7 +1412,7 @@ impl<T: Config> Module<T> {
 				&who,
 				balance,
 				WithdrawReasons::TRANSFER
-			);
+			).expect("can_add_lock returned true above, thus this cannot fail.");
 			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated(who, target));
@@ -1450,16 +1454,19 @@ impl<T: Config> Module<T> {
 
 	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
 	/// a security hole) but may be reduced from what they are currently.
-	fn update_lock(who: &T::AccountId) {
-		let lock_needed = VotingOf::<T>::mutate(who, |voting| {
+	///
+	/// Can return error if we are unable to create a lock on an account.
+	fn update_lock(who: &T::AccountId) -> DispatchResult {
+		VotingOf::<T>::try_mutate(who, |voting| -> DispatchResult {
 			voting.rejig(system::Pallet::<T>::block_number());
-			voting.locked_balance()
-		});
-		if lock_needed.is_zero() {
-			T::Currency::remove_lock(DEMOCRACY_ID, who);
-		} else {
-			T::Currency::set_lock(DEMOCRACY_ID, who, lock_needed, WithdrawReasons::TRANSFER);
-		}
+			let lock_needed = voting.locked_balance();
+			if lock_needed.is_zero() {
+				T::Currency::remove_lock(DEMOCRACY_ID, who);
+			} else {
+				T::Currency::set_lock(DEMOCRACY_ID, who, lock_needed, WithdrawReasons::TRANSFER)?;
+			}
+			Ok(())
+		})
 	}
 
 	/// Start a referendum
