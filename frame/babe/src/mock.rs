@@ -151,10 +151,11 @@ impl pallet_timestamp::Config for Test {
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 1;
+	pub const MaxLocks: u32 = 10;
 }
 
 impl pallet_balances::Config for Test {
-	type MaxLocks = ();
+	type MaxLocks = MaxLocks;
 	type Balance = u128;
 	type DustRemoval = ();
 	type Event = Event;
