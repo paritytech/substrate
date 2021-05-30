@@ -572,6 +572,7 @@ build-rust-doc:
     # pass artifacts to the trigger-simnet job 
     - echo "IMAGE_NAME is ${IMAGE_NAME}"
     - echo "IMAGE_NAME=${IMAGE_NAME}" > ./artifacts/$PRODUCT/build.env
+    - VERSION="$(cat ./VERSION)"
     - echo "VERSION is ${VERSION}"
     - IMAGE_TAG="${VERSION}"
     - echo "IMAGE_TAG is ${IMAGE_TAG}"
