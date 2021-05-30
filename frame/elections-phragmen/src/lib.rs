@@ -310,6 +310,7 @@ pub mod pallet {
 			ensure!(votes.len() <= allowed_votes, Error::<T>::TooManyVotes);
 
 			ensure!(value > T::Currency::minimum_balance(), Error::<T>::LowBalance);
+			ensure!(T::Currency::can_add_lock(T::PalletId::get(), &who), Error::<T>::TooManyLocks);
 
 			// Reserve bond.
 			let new_deposit = Self::deposit_of(votes.len());
@@ -337,7 +338,7 @@ pub mod pallet {
 				&who,
 				locked_stake,
 				WithdrawReasons::all(),
-			);
+			).expect("can_add_lock returned true above");
 
 			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
 			Ok(None.into())
@@ -602,6 +603,8 @@ pub mod pallet {
 		InvalidRenouncing,
 		/// Prediction regarding replacement after member removal is wrong.
 		InvalidReplacement,
+		/// Can't add another lock to the account.
+		TooManyLocks,
 	}
 
 	/// The current elected members.
@@ -1150,6 +1153,7 @@ mod tests {
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
+		pub const MaxLocks: u32 = 10;
 	}
 
 	impl pallet_balances::Config for Test {
@@ -1158,7 +1162,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = frame_system::Pallet<Test>;
-		type MaxLocks = ();
+		type MaxLocks = MaxLocks;
 		type WeightInfo = ();
 	}
 

@@ -175,7 +175,7 @@ pub mod pallet {
 					starting_block: begin
 				});
 				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
+				T::Currency::set_lock(VESTING_ID, who, locked, reasons).expect("problem adding lock in vesting genesis");
 			}
 		}
 	}
@@ -340,7 +340,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::VestingCompleted(who));
 		} else {
 			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons);
+			T::Currency::set_lock(VESTING_ID, &who, locked_now, reasons)?;
 			Self::deposit_event(Event::<T>::VestingUpdated(who, locked_now));
 		}
 		Ok(())

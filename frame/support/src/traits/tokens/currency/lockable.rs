@@ -34,6 +34,12 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The maximum number of locks a user should have on their account.
 	type MaxLocks: Get<u32>;
 
+	/// Checks if a lock with `id` can be placed on account `who`.
+	///
+	/// This function returning `true` must imply that `set_lock` and `extend_lock`
+	/// cannot fail.
+	fn can_add_lock(id: LockIdentifier, who: &AccountId) -> bool;
+
 	/// Create a new balance lock on account `who`.
 	///
 	/// If the new lock is valid (i.e. not already expired), it will push the struct to
