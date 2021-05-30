@@ -576,6 +576,7 @@ build-rust-doc:
     - IMAGE_TAG="${VERSION}"
     - echo "IMAGE_TAG is ${IMAGE_TAG}"
     - echo "IMAGE_TAG=${IMAGE_TAG}" >> ./artifacts/$PRODUCT/build.env
+    - cat ./artifacts/$PRODUCT/build.env
 
 publish-docker-substrate:
   stage:                           publish
