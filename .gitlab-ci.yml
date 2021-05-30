@@ -585,7 +585,7 @@ publish-docker-substrate:
   <<:                              *build-push-docker-image
   <<:                              *build-refs
   needs:
-    #- job:                         build-linux-substrate
+    - job:                         build-linux-substrate
       artifacts:                   true
   variables:
     <<:                            *docker-build-vars
