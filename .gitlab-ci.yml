@@ -569,7 +569,7 @@ build-rust-doc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout "$IMAGE_NAME"
-    # pass artifacts to the trigger-simnet job
+    # pass artifacts to the trigger-simnet job 
     - echo "IMAGE_NAME is ${IMAGE_NAME}"
     - echo "${IMAGE_NAME}" > ./artifacts/$PRODUCT/build.env
     - echo "VERSION is ${VERSION}"
