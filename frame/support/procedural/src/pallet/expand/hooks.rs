@@ -19,13 +19,21 @@ use crate::pallet::Def;
 
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
+	let (where_clause, span, has_runtime_upgrade) = match def.hooks.as_ref() {
+		Some(hooks) => {
+			let where_clause = hooks.where_clause.clone();
+			let span = hooks.attr_span;
+			let has_runtime_upgrade = hooks.has_runtime_upgrade;
+			(where_clause, span, has_runtime_upgrade)
+		},
+		None => (None, def.pallet_struct.attr_span, false),
+	};
+
 	let frame_support = &def.frame_support;
-	let type_impl_gen = &def.type_impl_generics(def.hooks.attr_span);
-	let type_use_gen = &def.type_use_generics(def.hooks.attr_span);
+	let type_impl_gen = &def.type_impl_generics(span);
+	let type_use_gen = &def.type_use_generics(span);
 	let pallet_ident = &def.pallet_struct.pallet;
-	let where_clause = &def.hooks.where_clause;
 	let frame_system = &def.frame_system;
-	let has_runtime_upgrade = def.hooks.has_runtime_upgrade;
 
 	let log_runtime_upgrade = if has_runtime_upgrade {
 		// a migration is defined here.
@@ -49,7 +57,20 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	};
 
-	quote::quote_spanned!(def.hooks.attr_span =>
+	let hooks_impl = if def.hooks.is_none() {
+		let frame_system = &def.frame_system;
+		quote::quote!{
+			impl<#type_impl_gen>
+				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+				for Pallet<#type_use_gen> {}
+		}
+	} else {
+		proc_macro2::TokenStream::new()
+	};
+
+	quote::quote_spanned!(span =>
+		#hooks_impl
+
 		impl<#type_impl_gen>
 			#frame_support::traits::OnFinalize<<T as #frame_system::Config>::BlockNumber>
 			for #pallet_ident<#type_use_gen> #where_clause

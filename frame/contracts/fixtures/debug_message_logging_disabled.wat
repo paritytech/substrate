@@ -1,6 +1,6 @@
 ;; Emit a "Hello World!" debug message but assume that logging is disabled.
 (module
-	(import "seal0" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "__unstable__" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(data (i32.const 0) "Hello World!")
