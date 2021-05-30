@@ -291,7 +291,6 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::{
 		Weight, WithPostDispatchInfo,
-		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
 	},
 	storage::IterableStorageMap,
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
@@ -1149,6 +1148,8 @@ decl_error! {
 		TooManyTargets,
 		/// A nomination target was supplied that was blocked or otherwise not a validator.
 		BadTarget,
+		/// Too cannot add another lock to the account.
+		TooManyLocks,
 	}
 }
 
@@ -1247,20 +1248,31 @@ decl_module! {
 		) {
 			let stash = ensure_signed(origin)?;
 
-			if <Bonded<T>>::contains_key(&stash) {
-				Err(Error::<T>::AlreadyBonded)?
-			}
+			ensure!(!<Bonded<T>>::contains_key(&stash), Error::<T>::AlreadyBonded);
 
 			let controller = T::Lookup::lookup(controller)?;
 
-			if <Ledger<T>>::contains_key(&controller) {
-				Err(Error::<T>::AlreadyPaired)?
-			}
+			ensure!(!<Ledger<T>>::contains_key(&controller), Error::<T>::AlreadyPaired);
 
 			// reject a bond which is considered to be _dust_.
-			if value < T::Currency::minimum_balance() {
-				Err(Error::<T>::InsufficientValue)?
-			}
+			ensure!(value >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+
+			let current_era = CurrentEra::get().unwrap_or(0);
+			let history_depth = Self::history_depth();
+			let last_reward_era = current_era.saturating_sub(history_depth);
+
+			let stash_balance = T::Currency::free_balance(&stash);
+			let value = value.min(stash_balance);
+			let item = StakingLedger {
+				stash: stash.clone(),
+				total: value,
+				active: value,
+				unlocking: vec![],
+				claimed_rewards: (last_reward_era..current_era).collect(),
+			};
+
+			// Check that `update_ledger` call below will absolutely succeed.
+			ensure!(Self::can_update_ledger(&item), Error::<T>::TooManyLocks);
 
 			system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
@@ -1269,21 +1281,8 @@ decl_module! {
 			<Bonded<T>>::insert(&stash, &controller);
 			<Payee<T>>::insert(&stash, payee);
 
-			let current_era = CurrentEra::get().unwrap_or(0);
-			let history_depth = Self::history_depth();
-			let last_reward_era = current_era.saturating_sub(history_depth);
-
-			let stash_balance = T::Currency::free_balance(&stash);
-			let value = value.min(stash_balance);
+			Self::update_ledger(&controller, &item).expect("can_update_ledger returned true");
 			Self::deposit_event(RawEvent::Bonded(stash.clone(), value));
-			let item = StakingLedger {
-				stash,
-				total: value,
-				active: value,
-				unlocking: vec![],
-				claimed_rewards: (last_reward_era..current_era).collect(),
-			};
-			Self::update_ledger(&controller, &item);
 		}
 
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up
@@ -1322,8 +1321,8 @@ decl_module! {
 				// last check: the new active amount of ledger must be more than ED.
 				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
+				Self::update_ledger(&controller, &ledger)?;
 				Self::deposit_event(RawEvent::Bonded(stash, extra));
-				Self::update_ledger(&controller, &ledger);
 			}
 		}
 
@@ -1382,7 +1381,7 @@ decl_module! {
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
-				Self::update_ledger(&controller, &ledger);
+				Self::update_ledger(&controller, &ledger)?;
 				Self::deposit_event(RawEvent::Unbonded(ledger.stash, value));
 			}
 		}
@@ -1438,7 +1437,7 @@ decl_module! {
 				None
 			} else {
 				// This was the consequence of a partial unbond. just update the ledger and move on.
-				Self::update_ledger(&controller, &ledger);
+				Self::update_ledger(&controller, &ledger)?;
 
 				// This is only an update, so we use less overall weight.
 				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
@@ -1820,12 +1819,8 @@ decl_module! {
 			// last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
-			Self::update_ledger(&controller, &ledger);
-			Ok(Some(
-				35 * WEIGHT_PER_MICROS
-				+ 50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight)
-				+ T::DbWeight::get().reads_writes(3, 2)
-			).into())
+			Self::update_ledger(&controller, &ledger)?;
+			Ok(Some(T::WeightInfo::rebond(ledger.unlocking.len() as u32)).into())
 		}
 
 		/// Set `HistoryDepth` value. This function will delete any history information
@@ -2067,20 +2062,35 @@ impl<T: Config> Module<T> {
 		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
 
+	/// Does all the checks needed to ensure that `update_ledger` will succeed.
+	///
+	fn can_update_ledger(
+		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>
+	) -> bool {
+		T::Currency::can_add_lock(
+			STAKING_ID,
+			&ledger.stash,
+		)
+	}
+
 	/// Update the ledger for a controller.
 	///
 	/// This will also update the stash lock.
+	///
+	/// Will return err if too many locks are present on the account. This can
+	/// be prevented by checking `can_update_ledger` first.
 	fn update_ledger(
 		controller: &T::AccountId,
 		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>
-	) {
+	) -> DispatchResult {
 		T::Currency::set_lock(
 			STAKING_ID,
 			&ledger.stash,
 			ledger.total,
 			WithdrawReasons::all(),
-		);
+		)?;
 		<Ledger<T>>::insert(controller, ledger);
+		Ok(())
 	}
 
 	/// Chill a stash account.
@@ -2106,7 +2116,15 @@ impl<T: Config> Module<T> {
 					l.active += amount;
 					l.total += amount;
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
-					Self::update_ledger(&controller, &l);
+					// Best effort we try to update the ledger... but if it fails, not much we can do.
+					// Not a major issue since we did give the account the funds it wanted, just weren't
+					// able to re-stake it.
+					//
+					// Although, this should always work because the only thing that can cause the ledger
+					// update to fail is adding too many locks to an account, and this operation should only
+					// update an existing lock.
+					let res = Self::update_ledger(&controller, &l);
+					debug_assert!(res.is_ok(), "failed to update ledger when rewarding to staked");
 					r
 				}),
 			RewardDestination::Account(dest_account) => {

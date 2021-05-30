@@ -603,7 +603,14 @@ pub fn do_slash<T: Config>(
 			*reward_payout = reward_payout.saturating_sub(missing);
 		}
 
-		<Module<T>>::update_ledger(&controller, &ledger);
+		// This ledger update should never fail since the user being slashed
+		// has a ledger (as noted above), and ledger update can only fail when
+		// adding a NEW lock, not updating an existing one. However, we def do
+		// not want to panic or stop the slashing event, so we will just absorb
+		// the error here.
+		if <Module<T>>::update_ledger(&controller, &ledger).is_err() {
+			crate::log!(warn, "couldn't update ledger after slashing! controller: {:?}", controller)
+		}
 
 		// trigger the event
 		<Module<T>>::deposit_event(
