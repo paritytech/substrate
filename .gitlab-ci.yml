@@ -355,6 +355,7 @@ test-frame-examples-compile-to-wasm:
 
 test-linux-stable-int:
   <<:                              *test-linux
+  stage:                           test
   script:
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
@@ -696,7 +697,7 @@ trigger-simnet:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                        # PRs
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
