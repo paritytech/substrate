@@ -570,7 +570,11 @@ build-rust-doc:
   after_script:
     - buildah logout "$IMAGE_NAME"
     # pass artifacts to the trigger-simnet job
-    - echo "IMAGE_NAME=${IMAGE_NAME}" > ./artifacts/$PRODUCT/build.env
+    - echo "IMAGE_NAME is ${IMAGE_NAME}"
+    - echo "${IMAGE_NAME}" > ./artifacts/$PRODUCT/build.env
+    - echo "VERSION is ${VERSION}"
+    - IMAGE_TAG="${VERSION}"
+    - echo "IMAGE_TAG is ${IMAGE_TAG}"
     - echo "IMAGE_TAG=${VERSION}" >> ./artifacts/$PRODUCT/build.env
 
 publish-docker-substrate:
