@@ -341,6 +341,8 @@ decl_error! {
 		ZeroCandidates,
 		/// No approval changes during presentation period.
 		ApprovalPresentation,
+		/// Could not create a new lock for an account.
+		TooManyLocks,
 	}
 }
 
@@ -833,6 +835,8 @@ impl<T: Config> Module<T> {
 		);
 		ensure!(value >= T::MinimumVotingLock::get(), Error::<T>::InsufficientLockedValue);
 
+		ensure!(T::Currency::can_add_lock(T::PalletId::get(), &who), Error::<T>::TooManyLocks);
+
 		// Amount to be locked up.
 		let mut locked_balance = value.min(T::Currency::total_balance(&who));
 		let mut pot_to_set = Zero::zero();
@@ -894,7 +898,7 @@ impl<T: Config> Module<T> {
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),
-		);
+		).expect("can_add_lock returned true above");
 
 		<VoterInfoOf<T>>::insert(
 			&who,
