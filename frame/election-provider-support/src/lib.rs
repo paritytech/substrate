@@ -191,7 +191,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// It is assumed that this function will only consume a notable amount of weight, when it
 	/// returns `Ok(_)`.
-	fn targets(maybe_max_len: Option<u32>) -> data_provider::Result<(Vec<AccountId>, Weight)>;
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)>;
 
 	/// All possible voters for the election.
 	///
@@ -203,7 +203,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// It is assumed that this function will only consume a notable amount of weight, when it
 	/// returns `Ok(_)`.
 	fn voters(
-		maybe_max_len: Option<u32>,
+		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)>;
 
 	/// The number of targets to elect.
@@ -231,11 +231,11 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
-	fn targets(_maybe_max_len: Option<u32>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
+	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
 		Ok(Default::default())
 	}
 	fn voters(
-		_maybe_max_len: Option<u32>,
+		_maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
 		Ok(Default::default())
 	}

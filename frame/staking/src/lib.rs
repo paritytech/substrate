@@ -305,7 +305,7 @@ use sp_runtime::{
 	Percent, Perbill, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
-		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
+		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
 		AtLeast32BitUnsigned,
 	},
 };
@@ -1514,7 +1514,7 @@ decl_module! {
 			let stash = &ledger.stash;
 			if Nominators::<T>::contains_key(stash) {
 				Nominators::<T>::remove(stash);
-				NominatorsCount::mutate(|x| x = x.saturating_sub(One::one()));
+				NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
 			}
 			<Validators<T>>::insert(stash, prefs);
 		}
@@ -2577,14 +2577,14 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	}
 
 	fn voters(
-		maybe_max_len: Option<u32>,
+		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
 		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
 		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
 		// report weight in failures.
 		let nominator_count = NominatorsCount::get();
 		let validator_count = ValidatorsCount::get();
-		let voter_count = nominator_count.saturating_add(validator_count);
+		let voter_count = nominator_count.saturating_add(validator_count) as usize;
 
 		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
 			return Err("Voter snapshot too big");
@@ -2599,8 +2599,8 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		Ok((Self::get_npos_voters(), weight))
 	}
 
-	fn targets(maybe_max_len: Option<u32>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
-		let target_count = ValidatorsCount::get();
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+		let target_count = ValidatorsCount::get() as usize;
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
 			return Err("Target snapshot too big");
