@@ -1652,6 +1652,7 @@ where
 		let locks = Self::locks(who);
 		let length = locks.len();
 		if length as u32 == u32::max_value() { return false }
+		if length < T::MaxLocks::get() { return true }
 		let new_locks_len = if locks
 			.into_iter()
 			.any(|l| l.id == id) { length } else { length + 1 };
