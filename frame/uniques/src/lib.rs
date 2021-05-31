@@ -965,7 +965,7 @@ pub mod pallet {
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset class whose instance's metadata to set.
-		/// - `instance`: The identifier of the asset instance whose metadata to set.
+		/// - `maybe_instance`: The identifier of the asset instance whose metadata to set.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
 		///
