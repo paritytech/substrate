@@ -197,11 +197,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, network: &mut dyn Network<B>, who: PeerId, role: ObservedRole) {
-		// light nodes are not valid targets for consensus gossip messages
-		if role.is_light() {
-			return;
-		}
-
 		tracing::trace!(
 			target:"gossip",
 			%who,

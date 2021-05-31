@@ -20,6 +20,7 @@
 // end::description[]
 
 use crate::{sr25519, ed25519};
+use max_encoded_len::MaxEncodedLen;
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
 use sp_std::str;
@@ -579,8 +580,14 @@ ss58_address_format!(
 		(67, "equilibrium", "Equilibrium Network, standard account (*25519).")
 	SoraAccount =>
 		(69, "sora", "SORA Network, standard account (*25519).")
+	MantaAccount =>
+		(77, "manta", "Manta Network, standard account (*25519).")
+	CalamariAccount =>
+		(78, "calamari", "Manta Canary Network, standard account (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
+	BasiliskAccount =>
+		(10041, "basilisk", "Basilisk standard account (*25519).")
 
 	// Note: 16384 and above are reserved.
 );
@@ -683,7 +690,7 @@ pub trait Public:
 }
 
 /// An opaque 32-byte cryptographic identifier.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
