@@ -10,9 +10,9 @@ The Uniques module provides functionality for asset management of non-fungible a
 * Asset Transfer
 * Asset Destruction
 
-To use it in your runtime, you need to implement the assets [`assets::Trait`](https://docs.rs/pallet-assets/latest/pallet_assets/trait.Trait.html).
+To use it in your runtime, you need to implement the assets [`uniques::Config`](https://docs.rs/pallet-uniques/latest/pallet_uniques/pallet/trait.Config.html).
 
-The supported dispatchable functions are documented in the [`assets::Call`](https://docs.rs/pallet-assets/latest/pallet_assets/enum.Call.html) enum.
+The supported dispatchable functions are documented in the [`uniques::Call`](https://docs.rs/pallet-uniques/latest/pallet_uniques/pallet/enum.Call.html) enum.
 
 ### Terminology
 
