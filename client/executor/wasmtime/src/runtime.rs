@@ -150,7 +150,13 @@ impl WasmInstance for WasmtimeInstance {
 				globals_snapshot.apply(&**instance_wrapper);
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator)
+				let result = perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator);
+
+				// Signal to the OS that we are done with the linear memory and that it can be
+				// reclaimed.
+				instance_wrapper.decommit();
+
+				result
 			}
 			Strategy::RecreateInstance(instance_creator) => {
 				let instance_wrapper = instance_creator.instantiate()?;

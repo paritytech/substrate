@@ -47,7 +47,7 @@ const TRANSACTION_VERSION: u32 = node_runtime::VERSION.transaction_version;
 
 const SPEC_VERSION: u32 = node_runtime::VERSION.spec_version;
 
-const HEAP_PAGES: u64 = 20;
+const HEAP_PAGES: u64 = 2048;
 
 type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
