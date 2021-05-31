@@ -800,8 +800,8 @@ pub mod pallet {
 			// because could do just decode_len. But we can create abstractions to do this.
 
 			// build size. Note: this is not needed for weight calc, thus not input.
-			// defensive-only: if phase is signed, snapshot will exist.
-			let size = Self::snapshot_metadata().unwrap_or_default();
+			// unlikely to ever return an error: if phase is signed, snapshot will exist.
+			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
 			ensure!(
 				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
@@ -816,8 +816,10 @@ pub mod pallet {
 				.ok_or(Error::<T>::SignedQueueFull)?;
 
 			// collect deposit. Thereafter, the function cannot fail.
-			// Defensive -- index is valid.
-			let deposit = signed_submissions.get(index).map(|s| s.deposit).unwrap_or_default();
+			let deposit = signed_submissions
+				.get(index)
+				.map(|s| s.deposit)
+				.ok_or(Error::<T>::InvalidSubmissionIndex)?;
 			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 
 			log!(
@@ -947,6 +949,10 @@ pub mod pallet {
 		SignedTooMuchWeight,
 		/// OCW submitted solution for wrong round
 		OcwCallWrongEra,
+		/// Snapshot metadata should exist but didn't.
+		MissingSnapshotMetadata,
+		/// `Self::insert_submission` returned an invalid index.
+		InvalidSubmissionIndex,
 	}
 
 	#[pallet::origin]

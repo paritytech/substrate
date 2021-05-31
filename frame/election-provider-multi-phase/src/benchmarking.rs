@@ -270,7 +270,7 @@ frame_benchmarking::benchmarks! {
 			..Default::default()
 		};
 
-		<CurrentPhase<T>>::put(Phase::Signed);
+		MultiPhase::<T>::on_initialize_open_signed().expect("should be ok to start signed phase");
 		<Round<T>>::put(1);
 
 		<SignedSubmissions<T>>::mutate(|queue| {
