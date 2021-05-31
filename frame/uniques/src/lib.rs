@@ -92,7 +92,7 @@ pub mod pallet {
 		/// either "normal" metadata or attribute metadata.
 		type DepositPerByte: Get<DepositBalanceOf<Self, I>>;
 
-		/// The maximum length of a name or symbol stored on-chain.
+		/// The maximum length of data stored on-chain.
 		type StringLimit: Get<u32>;
 
 		/// The maximum length of an attribute key.
