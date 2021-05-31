@@ -138,6 +138,11 @@ impl Subscriber for BlockSubscriber {
 		}
 	}
 
+	fn record_follows_from(&self, _span: &Id, _follows: &Id) {
+		// Not currently used
+		unimplemented!("record_follows_from is not implemented");
+	}
+
 	fn event(&self, event: &tracing::Event<'_>) {
 		let mut values = crate::Values::default();
 		event.record(&mut values);
