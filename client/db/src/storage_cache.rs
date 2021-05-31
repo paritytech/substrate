@@ -74,6 +74,14 @@ struct LRUOrderedKeys<K> {
 	oldest: Option<NonNull<KeyOrderedEntry<K>>>,
 }
 
+#[derive(Default)]
+struct LocalOrderedKeys<K: Ord> {
+	/// We use a BTreeMap for storage internally.
+	intervals: BTreeMap<K, CachedInterval>,
+	/// Intervals for child storages.
+	child_intervals: HashMap<Vec<u8>, BTreeMap<K, CachedInterval>>,
+}
+	
 struct KeyOrderedEntry<K> {
 	/// Entry accessed before.
 	prev: Option<NonNull<KeyOrderedEntry<K>>>,
@@ -367,6 +375,8 @@ struct LocalCache<H: Hasher> {
 	///
 	/// `None` indicates that key is known to be missing.
 	child_storage: HashMap<ChildStorageKey, Option<StorageValue>>,
+	/// `next_storage_key` calls cache.
+	next_keys: LocalOrderedKeys<StorageKey>,
 }
 
 /// Cache changes.
@@ -546,6 +556,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 					storage: Default::default(),
 					hashes: Default::default(),
 					child_storage: Default::default(),
+					next_keys: Default::default(),
 				}),
 				parent_hash,
 			},
