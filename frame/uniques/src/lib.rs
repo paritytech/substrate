@@ -1195,7 +1195,7 @@ pub mod pallet {
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset whose metadata to update.
-		/// - `info`: The general information of this asset. Limited in length by `StringLimit`.
+		/// - `data`: The general information of this asset. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
 		///
 		/// Emits `ClassMetadataSet`.
