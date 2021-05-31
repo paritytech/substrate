@@ -482,11 +482,6 @@ impl ExtBuilder {
 		<SignedDepositWeight>::set(weight);
 		self
 	}
-	pub fn reward(self, base: u64, max: u64) -> Self {
-		<SignedRewardBase>::set(base);
-		<SignedRewardMax>::set(max);
-		self
-	}
 	pub fn signed_weight(self, weight: Weight) -> Self {
 		<SignedMaxWeight>::set(weight);
 		self
