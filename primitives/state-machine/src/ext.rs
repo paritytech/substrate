@@ -330,16 +330,16 @@ where
 			(_, None) => next_backend_key,
 			(Some(_), Some(_)) => {
 				while let Some(overlay_key) = overlay_changes.next() {
-					let cmp = next_backend_key.as_deref().cmp(&Some(overlay_key.0));
+					let cmp = next_backend_key.as_deref().map(|v| v.cmp(&overlay_key.0));
 
 					// If `backend_key` is less than the `overlay_key`, we found out next key.
-					if cmp == Ordering::Less {
+					if cmp == Some(Ordering::Less) {
 						return next_backend_key
 					} else if overlay_key.1.value().is_some() {
 						// If there exists a value for the `overlay_key` in the overlay
 						// (aka the key is still valid), it means we have found our next key.
 						return Some(overlay_key.0.to_vec())
-					} else if cmp == Ordering::Equal {
+					} else if cmp == Some(Ordering::Equal) {
 						// If the `backend_key` and `overlay_key` are equal, it means that we need
 						// to search for the next backend key, because the overlay has overwritten
 						// this key.
@@ -353,7 +353,7 @@ where
 			},
 			(None, Some(_)) => {
 				// Find the next overlay key that has a value attached.
-				overlay_changes.find_map(|k| k.1.value().is_some().then(|| k.0.to_vec()))
+				overlay_changes.find_map(|k| k.1.value().as_ref().map(|_| k.0.to_vec()))
 			},
 		}
 	}
@@ -375,16 +375,16 @@ where
 			(_, None) => next_backend_key,
 			(Some(_), Some(_)) => {
 				while let Some(overlay_key) = overlay_changes.next() {
-					let cmp = next_backend_key.as_deref().cmp(&Some(overlay_key.0));
+					let cmp = next_backend_key.as_deref().map(|v| v.cmp(&overlay_key.0));
 
 					// If `backend_key` is less than the `overlay_key`, we found out next key.
-					if cmp == Ordering::Less {
+					if cmp == Some(Ordering::Less) {
 						return next_backend_key
 					} else if overlay_key.1.value().is_some() {
 						// If there exists a value for the `overlay_key` in the overlay
 						// (aka the key is still valid), it means we have found our next key.
 						return Some(overlay_key.0.to_vec())
-					} else if cmp == Ordering::Equal {
+					} else if cmp == Some(Ordering::Equal) {
 						// If the `backend_key` and `overlay_key` are equal, it means that we need
 						// to search for the next backend key, because the overlay has overwritten
 						// this key.
@@ -399,7 +399,7 @@ where
 			},
 			(None, Some(_)) => {
 				// Find the next overlay key that has a value attached.
-				overlay_changes.find_map(|k| k.1.value().is_some().then(|| k.0.to_vec()))
+				overlay_changes.find_map(|k| k.1.value().as_ref().map(|_| k.0.to_vec()))
 			},
 		}
 	}
