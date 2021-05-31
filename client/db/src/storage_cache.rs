@@ -125,36 +125,27 @@ impl<K: Ord> LocalOrderedKeys<K> {
 			&self.intervals
 		};
 		let mut iter = intervals.range(key..);
-		enum Next<K> {
-			MatchContain,
-			AfterCanContain(K),
-			LastCanContain,
-			None,
-		}
-		let state = match iter.next() {
-			Some((next_key, CachedInterval::Prev)) if next_key == key => Next::None,
-			Some((next_key, _)) if next_key == key => Next::MatchContain,
-			Some((_next_key, CachedInterval::Next)) => Next::None,
-			Some((next_key, _)) => Next::AfterCanContain(next_key),
-			None => Next::LastCanContain,
-		};
-		match state {
-			Next::MatchContain => match iter.next() {
-				Some((next_key, CachedInterval::Prev))
-				| Some((next_key, CachedInterval::Both)) => Some(Some(next_key)),
-				_ => None, // Should be unreachable
-			},
-			Next::AfterCanContain(next_key) => match iter.next_back() {
+		match iter.next() {
+			Some((next_key, CachedInterval::Next))
+			| Some((next_key, CachedInterval::Both)) if next_key == key => {
+				match iter.next() {
+					Some((next_key, CachedInterval::Prev))
+					| Some((next_key, CachedInterval::Both)) => Some(Some(next_key)),
+					_ => None, // Should be unreachable
+				}
+			}
+			Some((next_key, CachedInterval::Prev)) if next_key == key => None,
+			Some((_next_key, CachedInterval::Next)) => None,
+			Some((next_key, _)) => match iter.next_back() {
 				Some((_prev_key, CachedInterval::Next))
 				| Some((_prev_key, CachedInterval::Both)) => Some(Some(next_key)),
 				_ => None, // Should be unreachable
 			},
-			Next::LastCanContain => match iter.next_back() {
+			None => match iter.next_back() {
 				Some((_prev_key, CachedInterval::Next))
 				| Some((_prev_key, CachedInterval::Both)) => Some(None),
 				_ => None,
 			},
-			Next::None => None,
 		}
 	}
 
