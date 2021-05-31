@@ -249,10 +249,10 @@ impl<T: Config> Pallet<T> {
 		let encoded_len: BalanceOf<T> = encoded_len.into();
 		let feasibility_weight = Self::feasibility_weight_of(solution, size);
 
-		let len_deposit = T::SignedDepositByte::get() * encoded_len;
-		let weight_deposit = T::SignedDepositWeight::get() * feasibility_weight.saturated_into();
+		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
+		let weight_deposit = T::SignedDepositWeight::get().saturating_mul(feasibility_weight.saturated_into());
 
-		T::SignedDepositBase::get() + len_deposit + weight_deposit
+		T::SignedDepositBase::get().saturating_add(len_deposit).saturating_add(weight_deposit)
 	}
 }
 
