@@ -4,8 +4,7 @@ A simple, secure module for dealing with non-fungible assets.
 
 ## Overview
 
-The Assets module provides functionality for asset management of fungible asset classes
-with a fixed supply, including:
+The Uniques module provides functionality for asset management of non-fungible asset classes, including:
 
 * Asset Issuance
 * Asset Transfer
