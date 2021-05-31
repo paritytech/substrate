@@ -822,12 +822,6 @@ pub mod pallet {
 				.ok_or(Error::<T>::InvalidSubmissionIndex)?;
 			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 
-			log!(
-				info,
-				"queued signed solution with (claimed) score {:?}",
-				signed_submissions.get(index).map(|s| s.solution.score).unwrap_or_default()
-			);
-
 			// store the new signed submission.
 			<SignedSubmissions<T>>::put(signed_submissions);
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
