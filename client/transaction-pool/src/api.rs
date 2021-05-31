@@ -31,6 +31,7 @@ use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
 	transaction_validity::{TransactionValidity, TransactionSource},
 };
+use sp_core::traits::SpawnNamed;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use prometheus_endpoint::Registry as PrometheusRegistry;
@@ -38,19 +39,19 @@ use prometheus_endpoint::Registry as PrometheusRegistry;
 use crate::{metrics::{ApiMetrics, ApiMetricsExt}, error::{self, Error}};
 
 /// The transaction pool logic for full client.
-pub struct FullChainApi<Client, Block, Spawner> {
+pub struct FullChainApi<Client, Block> {
 	client: Arc<Client>,
-	spawner: Spawner,
+	spawner: Box<dyn SpawnNamed>,
 	_marker: PhantomData<Block>,
 	metrics: Option<Arc<ApiMetrics>>,
 }
 
-impl<Client, Block, Spawner> FullChainApi<Client, Block, Spawner> {
+impl<Client, Block> FullChainApi<Client, Block> {
 	/// Create new transaction pool logic.
 	pub fn new(
 		client: Arc<Client>,
 		prometheus: Option<&PrometheusRegistry>,
-		spawner: Spawner,
+		spawner: impl SpawnNamed + 'static,
 	) -> Self {
 		let metrics = prometheus.map(ApiMetrics::register).and_then(|r| {
 			match r {
@@ -70,18 +71,17 @@ impl<Client, Block, Spawner> FullChainApi<Client, Block, Spawner> {
 			client,
 			_marker: Default::default(),
 			metrics,
-			spawner,
+			spawner: Box::new(spawner) ,
 		}
 	}
 }
 
-impl<Client, Block, Spawner> sc_transaction_graph::ChainApi for FullChainApi<Client, Block, Spawner>
+impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	Spawner: sp_core::traits::SpawnNamed,
 {
 	type Block = Block;
 	type Error = error::Error;
@@ -110,7 +110,7 @@ where
 		self.spawner.spawn_blocking(
 			"validate-transaction",
 			Box::pin(async move {
-				let res = validate_transaction_blocking::<_, _, Spawner>(&*client, &at, source, uxt);
+				let res = validate_transaction_blocking(&*client, &at, source, uxt);
 				if let Err(e) = tx.send(res) {
 					log::warn!("Unable to send a validate transaction result: {:?}", e);
 				}
@@ -152,18 +152,17 @@ where
 
 /// Helper function to validate a transaction using a full chain API.
 /// This method will call into the runtime to perform the validation.
-fn validate_transaction_blocking<Client, Block, Spawner>(
+fn validate_transaction_blocking<Client, Block>(
 	client: &Client,
 	at: &BlockId<Block>,
 	source: TransactionSource,
-	uxt: sc_transaction_graph::ExtrinsicFor<FullChainApi<Client, Block, Spawner>>,
+	uxt: sc_transaction_graph::ExtrinsicFor<FullChainApi<Client, Block>>,
 ) -> error::Result<TransactionValidity>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	Spawner: sp_core::traits::SpawnNamed,
 {
 	sp_tracing::within_span!(sp_tracing::Level::TRACE, "validate_transaction";
 	{
@@ -189,13 +188,12 @@ where
 	})
 }
 
-impl<Client, Block, Spawner> FullChainApi<Client, Block, Spawner>
+impl<Client, Block> FullChainApi<Client, Block>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	Spawner: sp_core::traits::SpawnNamed,
 {
 	/// Validates a transaction by calling into the runtime, same as
 	/// `validate_transaction` but blocks the current thread when performing
@@ -207,7 +205,7 @@ where
 		source: TransactionSource,
 		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> error::Result<TransactionValidity> {
-		validate_transaction_blocking::<_, _, Spawner>(&*self.client, at, source, uxt)
+		validate_transaction_blocking(&*self.client, at, source, uxt)
 	}
 }
 

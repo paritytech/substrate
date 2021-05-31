@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
-use sc_service::{error::Error as ServiceError, Configuration, TaskManager, SpawnTaskHandle};
+use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
@@ -28,7 +28,7 @@ type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
-	sc_transaction_pool::FullPool<Block, FullClient, SpawnTaskHandle>,
+	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
 		sc_finality_grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>,
 		sc_finality_grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
