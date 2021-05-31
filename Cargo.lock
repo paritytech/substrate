@@ -2013,9 +2013,9 @@ dependencies = [
 
 [[package]]
 name = "futures-channel"
-version = "0.3.13"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c2dd2df839b57db9ab69c2c9d8f3e8c81984781937fe2807dc6dcf3b2ad2939"
+checksum = "e682a68b29a882df0545c143dc3646daefe80ba479bcdede94d5a703de2871e2"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -2023,9 +2023,9 @@ dependencies = [
 
 [[package]]
 name = "futures-core"
-version = "0.3.13"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15496a72fabf0e62bdc3df11a59a3787429221dd0710ba8ef163d6f7a9112c94"
+checksum = "0402f765d8a89a26043b889b26ce3c4679d268fa6bb22cd7c6aad98340e179d1"
 
 [[package]]
 name = "futures-cpupool"
@@ -2067,9 +2067,9 @@ dependencies = [
 
 [[package]]
 name = "futures-io"
-version = "0.3.13"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d71c2c65c57704c32f5241c1223167c2c3294fd34ac020c807ddbe6db287ba59"
+checksum = "acc499defb3b348f8d8f3f66415835a9131856ff7714bf10dadfc4ec4bdb29a1"
 
 [[package]]
 name = "futures-lite"
@@ -2088,10 +2088,11 @@ dependencies = [
 
 [[package]]
 name = "futures-macro"
-version = "0.3.13"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea405816a5139fb39af82c2beb921d52143f556038378d6db21183a5c37fbfb7"
+checksum = "a4c40298486cdf52cc00cd6d6987892ba502c7656a16a4192a9992b1ccedd121"
 dependencies = [
+ "autocfg",
  "proc-macro-hack",
  "proc-macro2",
  "quote",
@@ -2111,15 +2112,15 @@ dependencies = [
 
 [[package]]
 name = "futures-sink"
-version = "0.3.13"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85754d98985841b7d4f5e8e6fbfa4a4ac847916893ec511a2917ccd8525b8bb3"
+checksum = "a57bead0ceff0d6dde8f465ecd96c9338121bb7717d3e7b108059531870c4282"
 
 [[package]]
 name = "futures-task"
-version = "0.3.13"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa189ef211c15ee602667a6fcfe1c1fd9e07d42250d2156382820fba33c9df80"
+checksum = "8a16bef9fc1a4dddb5bee51c989e3fbba26569cbb0e31f5b303c184e3dd33dae"
 
 [[package]]
 name = "futures-timer"
@@ -2139,10 +2140,11 @@ dependencies = [
 
 [[package]]
 name = "futures-util"
-version = "0.3.13"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1812c7ab8aedf8d6f2701a43e1243acdbcc2b36ab26e2ad421eb99ac963d96d1"
+checksum = "feb5c238d27e2bf94ffdfd27b2c29e3df4a68c4193bb6427384259e2bf191967"
 dependencies = [
+ "autocfg",
  "futures 0.1.31",
  "futures-channel",
  "futures-core",
@@ -2956,8 +2958,8 @@ dependencies = [
  "fnv",
  "hyper 0.13.10",
  "hyper-rustls",
- "jsonrpsee-types 0.2.0-alpha.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "jsonrpsee-utils 0.2.0-alpha.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-types 0.2.0-alpha.6",
+ "jsonrpsee-utils 0.2.0-alpha.6",
  "log",
  "serde",
  "serde_json",
@@ -2996,8 +2998,8 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.2.0-alpha.6"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#a60896e16c192b2fb4f3efea166ebcb4d9d1ba3b"
+version = "0.2.0-alpha.7"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#4a29388a6d221d8ddfa45f6881cbffefb914e35d"
 dependencies = [
  "async-trait",
  "beef",
@@ -3007,7 +3009,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "soketto",
+ "soketto 0.5.0",
  "thiserror",
 ]
 
@@ -3019,17 +3021,17 @@ checksum = "d63cf4d423614e71fd144a8691208539d2b23d8373e069e2fbe023c5eba5e922"
 dependencies = [
  "futures-util",
  "hyper 0.13.10",
- "jsonrpsee-types 0.2.0-alpha.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-types 0.2.0-alpha.6",
 ]
 
 [[package]]
 name = "jsonrpsee-utils"
-version = "0.2.0-alpha.6"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#a60896e16c192b2fb4f3efea166ebcb4d9d1ba3b"
+version = "0.2.0-alpha.7"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#4a29388a6d221d8ddfa45f6881cbffefb914e35d"
 dependencies = [
  "futures-channel",
  "futures-util",
- "jsonrpsee-types 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.2.0-alpha.7",
  "log",
  "parking_lot 0.11.1",
  "rand 0.8.3",
@@ -3041,18 +3043,18 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-server"
-version = "0.2.0-alpha.6"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#a60896e16c192b2fb4f3efea166ebcb4d9d1ba3b"
+version = "0.2.0-alpha.7"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#4a29388a6d221d8ddfa45f6881cbffefb914e35d"
 dependencies = [
  "futures-channel",
  "futures-util",
- "jsonrpsee-types 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
- "jsonrpsee-utils 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.2.0-alpha.7",
+ "jsonrpsee-utils 0.2.0-alpha.7",
  "log",
  "rustc-hash",
  "serde",
  "serde_json",
- "soketto",
+ "soketto 0.5.0",
  "thiserror",
  "tokio 1.3.0",
  "tokio-stream",
@@ -3618,7 +3620,7 @@ dependencies = [
  "log",
  "quicksink",
  "rw-stream-sink",
- "soketto",
+ "soketto 0.4.2",
  "url 2.2.1",
  "webpki-roots",
 ]
@@ -4246,7 +4248,7 @@ dependencies = [
  "sc-transaction-pool",
  "serde",
  "serde_json",
- "soketto",
+ "soketto 0.4.2",
  "sp-authority-discovery",
  "sp-authorship",
  "sp-consensus",
@@ -7867,7 +7869,7 @@ dependencies = [
  "hash-db",
  "jsonrpc-core",
  "jsonrpc-pubsub",
- "jsonrpsee-types 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.2.0-alpha.7",
  "jsonrpsee-ws-server",
  "lazy_static",
  "log",
@@ -7912,7 +7914,7 @@ dependencies = [
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "jsonrpc-pubsub",
- "jsonrpsee-types 0.2.0-alpha.6 (git+https://github.com/paritytech/jsonrpsee?branch=master)",
+ "jsonrpsee-types 0.2.0-alpha.7",
  "log",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -8616,6 +8618,21 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.7.3",
+ "sha-1 0.9.4",
+]
+
+[[package]]
+name = "soketto"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4919971d141dbadaa0e82b5d369e2d7666c98e4625046140615ca363e50d4daa"
+dependencies = [
+ "base64 0.13.0",
+ "bytes 1.0.1",
+ "futures 0.3.13",
+ "httparse",
+ "log",
+ "rand 0.8.3",
  "sha-1 0.9.4",
 ]
 
@@ -10638,7 +10655,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04f8ab788026715fa63b31960869617cba39117e520eb415b0139543e325ab59"
 dependencies = [
  "cfg-if 0.1.10",
- "rand 0.7.3",
+ "rand 0.3.23",
  "static_assertions",
 ]
 
