@@ -25,7 +25,7 @@ use codec::{Encode, Decode, HasCompact};
 use frame_support::traits::{Currency, Get, OnUnbalanced, ReservableCurrency};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution};
-use sp_runtime::{Perbill, RuntimeDebug, traits::Zero};
+use sp_runtime::{Perbill, RuntimeDebug, traits::{Saturating, Zero}};
 use sp_std::{cmp::Ordering, vec::Vec};
 
 /// A raw, unchecked signed submission.
