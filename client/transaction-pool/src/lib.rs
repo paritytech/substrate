@@ -65,7 +65,7 @@ type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolApi>> + Send>>;
 
 /// A transaction pool for a full node.
-pub type FullPool<Block, Client> = BasicPool<FullChainApi<Client, Block>, Block>;
+pub type FullPool<Block, Client, Spawner> = BasicPool<FullChainApi<Client, Block, Spawner>, Block>;
 /// A transaction pool for a light node.
 pub type LightPool<Block, Client, Fetcher> = BasicPool<LightChainApi<Client, Fetcher, Block>, Block>;
 
@@ -352,7 +352,7 @@ where
 	}
 }
 
-impl<Block, Client> FullPool<Block, Client>
+impl<Block, Client, Spawner> FullPool<Block, Client, Spawner>
 where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
@@ -360,16 +360,17 @@ where
 		+ sp_runtime::traits::BlockIdTo<Block>,
 	Client: sc_client_api::ExecutorProvider<Block> + Send + Sync + 'static,
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
+	Spawner: SpawnNamed + Clone + 'static,
 {
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
 		options: sc_transaction_graph::Options,
 		is_validator: txpool::IsValidator,
 		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed,
+		spawner: Spawner,
 		client: Arc<Client>,
 	) -> Arc<Self> {
-		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
+		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus, spawner.clone()));
 		let pool = Arc::new(Self::with_revalidation_type(
 			options, is_validator, pool_api, prometheus, RevalidationType::Full, spawner
 		));
@@ -381,8 +382,8 @@ where
 	}
 }
 
-impl<Block, Client> sp_transaction_pool::LocalTransactionPool
-	for BasicPool<FullChainApi<Client, Block>, Block>
+impl<Block, Client, Spawner> sp_transaction_pool::LocalTransactionPool
+	for BasicPool<FullChainApi<Client, Block, Spawner>, Block>
 where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
@@ -390,10 +391,11 @@ where
 		+ sp_runtime::traits::BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
+	Spawner: SpawnNamed,
 {
 	type Block = Block;
-	type Hash = sc_transaction_graph::ExtrinsicHash<FullChainApi<Client, Block>>;
-	type Error = <FullChainApi<Client, Block> as ChainApi>::Error;
+	type Hash = sc_transaction_graph::ExtrinsicHash<FullChainApi<Client, Block, Spawner>>;
+	type Error = <FullChainApi<Client, Block, Spawner> as ChainApi>::Error;
 
 	fn submit_local(
 		&self,

@@ -26,6 +26,7 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
 	config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager,
+	SpawnTaskHandle,
 };
 use sc_network::{Event, NetworkService};
 use sp_runtime::traits::Block as BlockT;
@@ -47,7 +48,7 @@ pub fn new_partial(
 ) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
-	sc_transaction_pool::FullPool<Block, FullClient>,
+	sc_transaction_pool::FullPool<Block, FullClient, SpawnTaskHandle>,
 	(
 		impl Fn(
 			node_rpc::DenyUnsafe,
@@ -204,7 +205,7 @@ pub struct NewFullBase {
 	pub task_manager: TaskManager,
 	pub client: Arc<FullClient>,
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
-	pub transaction_pool: Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
+	pub transaction_pool: Arc<sc_transaction_pool::FullPool<Block, FullClient, SpawnTaskHandle>>,
 }
 
 /// Creates a full service from the configuration.

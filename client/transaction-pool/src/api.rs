@@ -21,7 +21,7 @@
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use codec::{Decode, Encode};
 use futures::{
-	channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready, Ready},
+	channel::oneshot, future::{Future, FutureExt, ready, Ready},
 };
 
 use sc_client_api::{
@@ -38,18 +38,19 @@ use prometheus_endpoint::Registry as PrometheusRegistry;
 use crate::{metrics::{ApiMetrics, ApiMetricsExt}, error::{self, Error}};
 
 /// The transaction pool logic for full client.
-pub struct FullChainApi<Client, Block> {
+pub struct FullChainApi<Client, Block, Spawner> {
 	client: Arc<Client>,
-	pool: ThreadPool,
+	spawner: Spawner,
 	_marker: PhantomData<Block>,
 	metrics: Option<Arc<ApiMetrics>>,
 }
 
-impl<Client, Block> FullChainApi<Client, Block> {
+impl<Client, Block, Spawner> FullChainApi<Client, Block, Spawner> {
 	/// Create new transaction pool logic.
 	pub fn new(
 		client: Arc<Client>,
 		prometheus: Option<&PrometheusRegistry>,
+		spawner: Spawner,
 	) -> Self {
 		let metrics = prometheus.map(ApiMetrics::register).and_then(|r| {
 			match r {
@@ -67,23 +68,20 @@ impl<Client, Block> FullChainApi<Client, Block> {
 
 		FullChainApi {
 			client,
-			pool: ThreadPoolBuilder::new()
-				.pool_size(2)
-				.name_prefix("txpool-verifier")
-				.create()
-				.expect("Failed to spawn verifier threads, that are critical for node operation."),
 			_marker: Default::default(),
 			metrics,
+			spawner,
 		}
 	}
 }
 
-impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block>
+impl<Client, Block, Spawner> sc_transaction_graph::ChainApi for FullChainApi<Client, Block, Spawner>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
+	Spawner: sp_core::traits::SpawnNamed,
 {
 	type Block = Block;
 	type Error = error::Error;
@@ -109,13 +107,16 @@ where
 		let metrics = self.metrics.clone();
 		metrics.report(|m| m.validations_scheduled.inc());
 
-		self.pool.spawn_ok(async move {
-			let res = validate_transaction_blocking(&*client, &at, source, uxt);
-			if let Err(e) = tx.send(res) {
-				log::warn!("Unable to send a validate transaction result: {:?}", e);
-			}
-			metrics.report(|m| m.validations_finished.inc());
-		});
+		self.spawner.spawn_blocking(
+			"validate-transaction",
+			Box::pin(async move {
+				let res = validate_transaction_blocking::<_, _, Spawner>(&*client, &at, source, uxt);
+				if let Err(e) = tx.send(res) {
+					log::warn!("Unable to send a validate transaction result: {:?}", e);
+				}
+				metrics.report(|m| m.validations_finished.inc());
+			},
+		));
 
 		Box::pin(async move {
 			match rx.await {
@@ -151,17 +152,18 @@ where
 
 /// Helper function to validate a transaction using a full chain API.
 /// This method will call into the runtime to perform the validation.
-fn validate_transaction_blocking<Client, Block>(
+fn validate_transaction_blocking<Client, Block, Spawner>(
 	client: &Client,
 	at: &BlockId<Block>,
 	source: TransactionSource,
-	uxt: sc_transaction_graph::ExtrinsicFor<FullChainApi<Client, Block>>,
+	uxt: sc_transaction_graph::ExtrinsicFor<FullChainApi<Client, Block, Spawner>>,
 ) -> error::Result<TransactionValidity>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
+	Spawner: sp_core::traits::SpawnNamed,
 {
 	sp_tracing::within_span!(sp_tracing::Level::TRACE, "validate_transaction";
 	{
@@ -187,12 +189,13 @@ where
 	})
 }
 
-impl<Client, Block> FullChainApi<Client, Block>
+impl<Client, Block, Spawner> FullChainApi<Client, Block, Spawner>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
+	Spawner: sp_core::traits::SpawnNamed,
 {
 	/// Validates a transaction by calling into the runtime, same as
 	/// `validate_transaction` but blocks the current thread when performing
@@ -204,7 +207,7 @@ where
 		source: TransactionSource,
 		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> error::Result<TransactionValidity> {
-		validate_transaction_blocking(&*self.client, at, source, uxt)
+		validate_transaction_blocking::<_, _, Spawner>(&*self.client, at, source, uxt)
 	}
 }
 
