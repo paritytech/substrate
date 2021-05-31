@@ -1,6 +1,6 @@
 # Uniques Module
 
-A simple, secure module for dealing with fungible assets.
+A simple, secure module for dealing with non-fungible assets.
 
 ## Overview
 
