@@ -32,6 +32,19 @@ mod type_value;
 use crate::pallet::{Def, parse::helper::get_doc_literals};
 use quote::ToTokens;
 
+/// Counter to generate a relatively unique identifier for macros querying for the existence of
+/// pallet parts. This is necessary because declarative macros gets hoisted to the crate root,
+/// which shares the namespace with other pallets containing the very same query macros.
+struct Counter(u64);
+
+impl Counter {
+	fn inc(&mut self) -> u64 {
+		let ret = self.0;
+		self.0 += 1;
+		ret
+	}
+}
+
 /// Merge where clause together, `where` token span is taken from the first not none one.
 pub fn merge_where_clauses(clauses: &[&Option<syn::WhereClause>]) -> Option<syn::WhereClause> {
 	let mut clauses = clauses.iter().filter_map(|f| f.as_ref());

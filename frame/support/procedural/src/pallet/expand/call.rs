@@ -18,22 +18,10 @@
 use crate::pallet::Def;
 use frame_support_procedural_tools::clean_type_string;
 use std::cell::RefCell;
+use super::Counter;
 use syn::spanned::Spanned;
 
-struct Counter(u64);
-
-impl Counter {
-	fn inc(&mut self) -> u64 {
-		let ret = self.0;
-		self.0 += 1;
-		ret
-	}
-}
-
 thread_local!{
-	/// Counter to generate a relatively unique identifier for __is_call_part_defined macro.
-	/// This is necessary because declarative macros gets hoisted to the crate root, which may
-	/// clash with other pallets' __is_call_part_defined macro.
 	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
 }
 
@@ -109,7 +97,11 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let maybe_compile_error = if def.call.is_none() {
 		quote::quote!{
-			compile_error!("Pallet does not have #[pallet::call] defined. Did you forget to include it?");
+			compile_error!(concat!(
+				"`",
+				stringify!($pallet_name),
+				"` does not have #[pallet::call] defined, perhaps you should remove `Call` from construct_runtime?",
+			));
 		}
 	} else {
 		proc_macro2::TokenStream::new()
@@ -121,7 +113,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	quote::quote_spanned!(span =>
 		#[macro_export]
 		macro_rules! #macro_ident {
-			() => {
+			($pallet_name:ident) => {
 				#maybe_compile_error
 			};
 		}

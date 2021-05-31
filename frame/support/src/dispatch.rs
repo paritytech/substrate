@@ -2173,7 +2173,7 @@ macro_rules! impl_outer_dispatch {
 			)*
 		}
 	) => {
-		$($module::__is_call_part_defined!();)*
+		$($module::__is_call_part_defined!($camelcase);)*
 		$(#[$attr])*
 		#[derive(
 			Clone, PartialEq, Eq,
