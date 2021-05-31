@@ -779,17 +779,17 @@ pub mod pallet {
 		/// # <weight>
 		/// Queue size must be provided as witness data.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::submit(*witness_data))]
+		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
 		pub fn submit(
 			origin: OriginFor<T>,
 			solution: RawSolution<CompactOf<T>>,
-			witness_data: u32,
+			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			// ensure witness data is correct.
 			ensure!(
-				witness_data >= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
+				num_signed_submissions >= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
 				Error::<T>::SignedInvalidWitness,
 			);
 
