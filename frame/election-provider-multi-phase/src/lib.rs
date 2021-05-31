@@ -766,68 +766,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Submit a solution for the signed phase.
-		///
-		/// The dispatch origin fo this call must be __signed__.
-		///
-		/// The solution is potentially queued, based on the claimed score and processed at the end
-		/// of the signed phase.
-		///
-		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
-		/// might be rewarded, slashed, or get all or a part of the deposit back.
-		///
-		/// # <weight>
-		/// Queue size must be provided as witness data.
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
-		pub fn submit(
-			origin: OriginFor<T>,
-			solution: RawSolution<CompactOf<T>>,
-			num_signed_submissions: u32,
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-
-			// ensure witness data is correct.
-			ensure!(
-				num_signed_submissions >= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
-				Error::<T>::SignedInvalidWitness,
-			);
-
-			// ensure solution is timely.
-			ensure!(Self::current_phase().is_signed(), Error::<T>::PreDispatchEarlySubmission);
-
-			// NOTE: this is the only case where having separate snapshot would have been better
-			// because could do just decode_len. But we can create abstractions to do this.
-
-			// build size. Note: this is not needed for weight calc, thus not input.
-			// unlikely to ever return an error: if phase is signed, snapshot will exist.
-			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
-
-			ensure!(
-				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
-				Error::<T>::SignedTooMuchWeight,
-			);
-
-			// ensure solution claims is better.
-			let mut signed_submissions = Self::signed_submissions();
-			let ejected_a_solution = signed_submissions.len()
-				== T::SignedMaxSubmissions::get().saturated_into::<usize>();
-			let index = Self::insert_submission(&who, &mut signed_submissions, solution, size)
-				.ok_or(Error::<T>::SignedQueueFull)?;
-
-			// collect deposit. Thereafter, the function cannot fail.
-			let deposit = signed_submissions
-				.get(index)
-				.map(|s| s.deposit)
-				.ok_or(Error::<T>::InvalidSubmissionIndex)?;
-			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
-
-			// store the new signed submission.
-			<SignedSubmissions<T>>::put(signed_submissions);
-			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
-			Ok(())
-		}
-
 		/// Submit a solution for the unsigned phase.
 		///
 		/// The dispatch origin fo this call must be __none__.
@@ -896,6 +834,68 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			<MinimumUntrustedScore<T>>::set(maybe_next_score);
+			Ok(())
+		}
+
+		/// Submit a solution for the signed phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// The solution is potentially queued, based on the claimed score and processed at the end
+		/// of the signed phase.
+		///
+		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
+		/// might be rewarded, slashed, or get all or a part of the deposit back.
+		///
+		/// # <weight>
+		/// Queue size must be provided as witness data.
+		/// # </weight>
+		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
+		pub fn submit(
+			origin: OriginFor<T>,
+			solution: RawSolution<CompactOf<T>>,
+			num_signed_submissions: u32,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			// ensure witness data is correct.
+			ensure!(
+				num_signed_submissions >= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
+				Error::<T>::SignedInvalidWitness,
+			);
+
+			// ensure solution is timely.
+			ensure!(Self::current_phase().is_signed(), Error::<T>::PreDispatchEarlySubmission);
+
+			// NOTE: this is the only case where having separate snapshot would have been better
+			// because could do just decode_len. But we can create abstractions to do this.
+
+			// build size. Note: this is not needed for weight calc, thus not input.
+			// unlikely to ever return an error: if phase is signed, snapshot will exist.
+			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
+
+			ensure!(
+				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
+				Error::<T>::SignedTooMuchWeight,
+			);
+
+			// ensure solution claims is better.
+			let mut signed_submissions = Self::signed_submissions();
+			let ejected_a_solution = signed_submissions.len()
+				== T::SignedMaxSubmissions::get().saturated_into::<usize>();
+			let index = Self::insert_submission(&who, &mut signed_submissions, solution, size)
+				.ok_or(Error::<T>::SignedQueueFull)?;
+
+			// collect deposit. Thereafter, the function cannot fail.
+			let deposit = signed_submissions
+				.get(index)
+				.map(|s| s.deposit)
+				.ok_or(Error::<T>::InvalidSubmissionIndex)?;
+			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+
+			// store the new signed submission.
+			<SignedSubmissions<T>>::put(signed_submissions);
+			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
 			Ok(())
 		}
 	}
