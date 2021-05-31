@@ -137,7 +137,7 @@ impl From<UnknownTransaction> for &'static str {
 
 /// Errors that can occur while checking the validity of a transaction.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionValidityError {
 	/// The transaction is invalid.
 	Invalid(InvalidTransaction),
