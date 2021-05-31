@@ -92,7 +92,7 @@ pub mod pallet {
 		/// either "normal" metadata or attribute metadata.
 		type DepositPerByte: Get<DepositBalanceOf<Self, I>>;
 
-		/// The maximum length of a name or symbol stored on-chain.
+		/// The maximum length of data stored on-chain.
 		type StringLimit: Get<u32>;
 
 		/// The maximum length of an attribute key.
@@ -965,7 +965,7 @@ pub mod pallet {
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset class whose instance's metadata to set.
-		/// - `instance`: The identifier of the asset instance whose metadata to set.
+		/// - `maybe_instance`: The identifier of the asset instance whose metadata to set.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
 		///
@@ -1075,7 +1075,7 @@ pub mod pallet {
 		/// asset `class`.
 		///
 		/// If the origin is Signed, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + DepositPerByte * (name.len + info.len)` taking into
+		/// `MetadataDepositBase + DepositPerByte * data.len` taking into
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset class whose instance's metadata to set.
@@ -1191,11 +1191,11 @@ pub mod pallet {
 		/// the asset `class`.
 		///
 		/// If the origin is `Signed`, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + DepositPerByte * name.len` taking into
+		/// `MetadataDepositBase + DepositPerByte * data.len` taking into
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset whose metadata to update.
-		/// - `info`: The general information of this asset. Limited in length by `StringLimit`.
+		/// - `data`: The general information of this asset. Limited in length by `StringLimit`.
 		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
 		///
 		/// Emits `ClassMetadataSet`.
