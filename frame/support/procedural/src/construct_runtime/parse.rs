@@ -19,6 +19,7 @@ use frame_support_procedural_tools::syn_ext as ext;
 use proc_macro2::{Span, TokenStream};
 use std::collections::HashSet;
 use syn::{
+	ext::IdentExt,
 	parse::{Parse, ParseStream},
 	punctuated::Punctuated,
 	spanned::Spanned,
@@ -213,6 +214,19 @@ impl Parse for PalletPath {
 		let mut lookahead = input.lookahead1();
 		let mut segments = Punctuated::new();
 
+		if lookahead.peek(Token![crate])
+			|| lookahead.peek(Token![self])
+			|| lookahead.peek(Token![super])
+			|| lookahead.peek(Ident)
+		{
+			let ident = input.call(Ident::parse_any)?;
+			segments.push(PathSegment { ident, arguments: PathArguments::None });
+			let _: Token![::] = input.parse()?;
+			lookahead = input.lookahead1();
+		} else {
+			return Err(lookahead.error());
+		}
+
 		while lookahead.peek(Ident) {
 			let ident = input.parse()?;
 			segments.push(PathSegment { ident, arguments: PathArguments::None });
@@ -237,8 +251,17 @@ impl PalletPath {
 	/// Return the snake-cased module name for this path.
 	pub fn mod_name(&self) -> Ident {
 		let mut iter = self.inner.segments.iter();
-		let mut mod_name =
-			iter.next().expect("Path should always have 1 segment; qed").ident.clone();
+		let mut mod_name = match &iter.next().expect("Path should always have 1 segment; qed").ident {
+			ident if ident == "self" || ident == "super" || ident == "crate" => {
+				// Skip `crate`, `self` and `super` quasi-keywords when creating the module name
+				iter.next()
+					.expect("There must be a path segment pointing to a pallet following \
+						`crate`, `self` or `super`; qed")
+					.ident
+					.clone()
+			}
+			ident => ident.clone(),
+		};
 
 		for segment in iter {
 			mod_name = quote::format_ident!("{}_{}", mod_name, segment.ident);
