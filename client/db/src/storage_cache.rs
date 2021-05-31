@@ -108,6 +108,69 @@ impl<K: Ord> LRUOrderedKeys<K> {
 			oldest: None,
 		}
 	}
+	fn next_storage_key(&mut self, key: &K, child: Option<&ChildInfo>) -> Option<Option<&K>> {
+		unimplemented!()
+	}
+}
+
+impl<K: Ord> LocalOrderedKeys<K> {
+	fn next_storage_key(&self, key: &K, child: Option<&ChildInfo>) -> Option<Option<&K>> {
+		let intervals = if let Some(info) = child {
+			if let Some(intervals) = self.child_intervals.get(info.storage_key()) {
+				intervals
+			} else {
+				return None;
+			}
+		} else {
+			&self.intervals
+		};
+		let mut iter = intervals.range(key..);
+		enum Next<K> {
+			MatchContain,
+			AfterCanContain(K),
+			LastCanContain,
+			None,
+		}
+		let state = match iter.next() {
+			Some((next_key, CachedInterval::Prev)) if next_key == key => Next::None,
+			Some((next_key, _)) if next_key == key => Next::MatchContain,
+			Some((_next_key, CachedInterval::Next)) => Next::None,
+			Some((next_key, _)) => Next::AfterCanContain(next_key),
+			None => Next::LastCanContain,
+		};
+		match state {
+			Next::MatchContain => match iter.next() {
+				Some((next_key, CachedInterval::Prev))
+				| Some((next_key, CachedInterval::Both)) => Some(Some(next_key)),
+				_ => None, // Should be unreachable
+			},
+			Next::AfterCanContain(next_key) => match iter.next_back() {
+				Some((_prev_key, CachedInterval::Next))
+				| Some((_prev_key, CachedInterval::Both)) => Some(Some(next_key)),
+				_ => None, // Should be unreachable
+			},
+			Next::LastCanContain => match iter.next_back() {
+				Some((_prev_key, CachedInterval::Next))
+				| Some((_prev_key, CachedInterval::Both)) => Some(None),
+				_ => None,
+			},
+			Next::None => None,
+		}
+	}
+
+	fn insert(&mut self, key: K, child: Option<&ChildInfo>, next: Option<Vec<u8>>) {
+		let intervals = if let Some(info) = child {
+			if let Some(intervals) = self.child_intervals.get_mut(info.storage_key()) {
+				intervals
+			} else {
+				self.child_intervals.insert(info.storage_key().to_vec(), Default::default());
+				return self.insert(key, child, next);
+			}
+		} else {
+			&mut self.intervals
+		};
+		unimplemented!()
+	}
 }
 
 enum CachedInterval {
@@ -362,7 +425,7 @@ struct BlockChanges<B: Header> {
 	child_storage: HashSet<ChildStorageKey>,
 	/// A set of modified child storage keys.
 	/// A set of modified storage keys.
-	/// TODO consider merging with storage
+	/// TODO consider merging with child storage
 	ordered_child_storage: HashMap<Vec<u8>, BTreeSet<StorageKey>>,
 	/// Block is part of the canonical chain.
 	is_canon: bool,
@@ -509,7 +572,7 @@ impl<B: BlockT> CacheChanges<B> {
 			let mut ordered_storage = BTreeSet::new();
 			let mut ordered_child_storage: HashMap<Vec<u8>, BTreeSet<StorageKey>> = Default::default();
 			child_changes.into_iter().for_each(|(sk, changes)| {
-				let mut ordered_entry = ordered_child_storage.entry(sk.clone()).or_default();
+				let ordered_entry = ordered_child_storage.entry(sk.clone()).or_default();
 				for (k, v) in changes.into_iter() {
 					ordered_entry.insert(k.clone());
 					let k = (sk.clone(), k);
@@ -524,7 +587,7 @@ impl<B: BlockT> CacheChanges<B> {
 					cache.lru_hashes.remove(&k);
 					cache.lru_storage.add(k.clone(), v);
 				}
-				ordered_storage.insert(k);
+				ordered_storage.insert(k.clone());
 				modifications.insert(k);
 			}
 
@@ -627,7 +690,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 	/// Check if the next key can be returned from cache by matching current block parent hash against canonical
 	/// state and filtering out entries with modification in their resulting range.
 	fn is_allowed_interval(
-		range: (Vec<u8>, Option<Vec<u8>>),
+		range: (&Vec<u8>, Option<&Vec<u8>>),
 		child_info: Option<&ChildInfo>,
 		parent_hash: &B::Hash,
 		modifications: &VecDeque<BlockChanges<B::Header>>
@@ -654,10 +717,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 			} else {
 				&m.ordered_storage
 			};
-			let range = if let Some(end) = range.1 {
-				storage.range(range.0 .. end)
+			let mut range = if let Some(end) = range.1.as_ref() {
+				storage.range::<Vec<u8>, _>(range.0 .. end)
 			} else {
-				storage.range(range.0 ..)
+				storage.range::<Vec<u8>, _>(range.0 ..)
 			};
 			if let Some(hash) = range.next() {
 				trace!("Cache range lookup skipped for {:?} modified in a later block", HexDisplay::from(&hash.as_slice()));
@@ -770,22 +833,24 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let local_cache = self.cache.local_cache.upgradable_read();
-		if let Some(entry) = local_cache.next_keys.next_storage_key(key, None).cloned() {
+		let key = key.to_vec();
+		if let Some(entry) = local_cache.next_keys.next_storage_key(&key, None) {
 			trace!("Found next storage key in local cache: {:?}", HexDisplay::from(&key));
-			return Ok(entry)
+			return Ok(entry.cloned())
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if let Some(parent) = self.cache.parent_hash.as_ref() {
-			if let Some(entry) = cache.next_keys.next_storage_key(key, None).map(|a| a.0.clone()) {
-				if Self::is_allowed_interval((key, entry), None, parent, &cache.modifications) {
+			if let Some(entry) = cache.lru_next_keys.next_storage_key(&key, None).map(|a| a.clone()) {
+				let entry = entry.cloned();
+				if Self::is_allowed_interval((&key, entry.as_ref()), None, parent, &cache.modifications) {
 					trace!("Found next key in shared cache: {:?}", HexDisplay::from(&key));
 					return Ok(entry)
 				}
 			}
 		}
 		trace!("Cache hash miss: {:?}", HexDisplay::from(&key));
-		let next  = self.state.next_storage_key(key)?;
-		RwLockUpgradableReadGuard::upgrade(local_cache).next_keys.insert(key.to_vec(), None, next);
+		let next  = self.state.next_storage_key(&key)?;
+		RwLockUpgradableReadGuard::upgrade(local_cache).next_keys.insert(key, None, next.clone());
 		Ok(next)
 	}
 
