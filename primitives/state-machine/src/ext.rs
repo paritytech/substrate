@@ -32,7 +32,7 @@ use sp_externalities::{
 };
 use codec::{Decode, Encode, EncodeAppend};
 
-use sp_std::{fmt, any::{Any, TypeId}, vec::Vec, vec, boxed::Box};
+use sp_std::{fmt, any::{Any, TypeId}, vec::Vec, vec, boxed::Box, cmp::Ordering};
 use crate::{warn, trace, log_error};
 #[cfg(feature = "std")]
 use crate::changes_trie::State as ChangesTrieState;
@@ -323,16 +323,37 @@ where
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
+		let mut next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let mut overlay_changes = self.overlay.iter_after(key).peekable();
 
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_storage_key(&overlay_key.0[..])
+		match (&next_backend_key, overlay_changes.peek()) {
+			(_, None) => next_backend_key,
+			(Some(_), Some(_)) => {
+				while let Some(overlay_key) = overlay_changes.next() {
+					let cmp = next_backend_key.as_deref().map(|v| v.cmp(&overlay_key.0));
+
+					// If `backend_key` is less than the `overlay_key`, we found out next key.
+					if cmp == Some(Ordering::Less) {
+						return next_backend_key
+					} else if overlay_key.1.value().is_some() {
+						// If there exists a value for the `overlay_key` in the overlay
+						// (aka the key is still valid), it means we have found our next key.
+						return Some(overlay_key.0.to_vec())
+					} else if cmp == Some(Ordering::Equal) {
+						// If the `backend_key` and `overlay_key` are equal, it means that we need
+						// to search for the next backend key, because the overlay has overwritten
+						// this key.
+						next_backend_key = self.backend.next_storage_key(
+							&overlay_key.0,
+						).expect(EXT_NOT_ALLOWED_TO_FAIL);
+					}
+				}
+
+				next_backend_key
+			},
+			(None, Some(_)) => {
+				// Find the next overlay key that has a value attached.
+				overlay_changes.find_map(|k| k.1.value().as_ref().map(|_| k.0.to_vec()))
 			},
 		}
 	}
@@ -342,24 +363,43 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
-		let next_backend_key = self.backend
+		let mut next_backend_key = self.backend
 			.next_child_storage_key(child_info, key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
-		let next_overlay_key_change = self.overlay.next_child_storage_key_change(
+		let mut overlay_changes = self.overlay.child_iter_after(
 			child_info.storage_key(),
 			key
-		);
+		).peekable();
 
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_child_storage_key(
-					child_info,
-					&overlay_key.0[..],
-				)
+		match (&next_backend_key, overlay_changes.peek()) {
+			(_, None) => next_backend_key,
+			(Some(_), Some(_)) => {
+				while let Some(overlay_key) = overlay_changes.next() {
+					let cmp = next_backend_key.as_deref().map(|v| v.cmp(&overlay_key.0));
+
+					// If `backend_key` is less than the `overlay_key`, we found out next key.
+					if cmp == Some(Ordering::Less) {
+						return next_backend_key
+					} else if overlay_key.1.value().is_some() {
+						// If there exists a value for the `overlay_key` in the overlay
+						// (aka the key is still valid), it means we have found our next key.
+						return Some(overlay_key.0.to_vec())
+					} else if cmp == Some(Ordering::Equal) {
+						// If the `backend_key` and `overlay_key` are equal, it means that we need
+						// to search for the next backend key, because the overlay has overwritten
+						// this key.
+						next_backend_key = self.backend.next_child_storage_key(
+							child_info,
+							&overlay_key.0,
+						).expect(EXT_NOT_ALLOWED_TO_FAIL);
+					}
+				}
+
+				next_backend_key
+			},
+			(None, Some(_)) => {
+				// Find the next overlay key that has a value attached.
+				overlay_changes.find_map(|k| k.1.value().as_ref().map(|_| k.0.to_vec()))
 			},
 		}
 	}
@@ -969,6 +1009,34 @@ mod tests {
 
 		// next_overlay exist but next_backend doesn't exist
 		assert_eq!(ext.next_storage_key(&[40]), Some(vec![50]));
+	}
+
+	#[test]
+	fn next_storage_key_works_with_a_lot_empty_values_in_overlay() {
+		let mut cache = StorageTransactionCache::default();
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_storage(vec![20], None);
+		overlay.set_storage(vec![21], None);
+		overlay.set_storage(vec![22], None);
+		overlay.set_storage(vec![23], None);
+		overlay.set_storage(vec![24], None);
+		overlay.set_storage(vec![25], None);
+		overlay.set_storage(vec![26], None);
+		overlay.set_storage(vec![27], None);
+		overlay.set_storage(vec![28], None);
+		overlay.set_storage(vec![29], None);
+		let backend = Storage {
+			top: map![
+				vec![30] => vec![30]
+			],
+			children_default: map![]
+		}.into();
+
+		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
+
+		assert_eq!(ext.next_storage_key(&[5]), Some(vec![30]));
+
+		drop(ext);
 	}
 
 	#[test]
