@@ -52,7 +52,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode, PassByInner)]
+#[derive(Clone, Encode, Decode, PassByInner, max_encoded_len::MaxEncodedLen)]
 pub struct Public(pub [u8; 33]);
 
 impl PartialOrd for Public {
