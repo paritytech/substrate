@@ -1646,17 +1646,17 @@ where
 
 	type MaxLocks = T::MaxLocks;
 
-	// Checks if `set_lock` or `extend_lock` would fail.
-	// Specifically if adding a lock with `id` would push us over the `MaxLocks` limit.
+	// Checks if `set_lock` or `extend_lock` would fail. Specifically if adding a lock with `id`
+	// would push us over the `MaxLocks` limit.
 	fn can_add_lock(id: LockIdentifier, who: &T::AccountId) -> bool {
 		let locks = Self::locks(who);
 		let length = locks.len();
-		if length as u32 == u32::max_value() { return false }
-		if length < T::MaxLocks::get() { return true }
-		let new_locks_len = if locks
-			.into_iter()
-			.any(|l| l.id == id) { length } else { length + 1 };
-		new_locks_len as u32 <= T::MaxLocks::get()
+		// If length < MaxLocks, we can always add one more new lock
+		if (length as u32) < T::MaxLocks::get() { return true }
+		// If `length == T::MaxLocks::get()`, and we check if this id is already used, which
+		// means we can "add" this lock since it would update an existing id.
+		if locks.into_iter().any(|l| l.id == id) { return true }
+		return false
 	}
 
 	// Set a lock on the balance of `who`.
