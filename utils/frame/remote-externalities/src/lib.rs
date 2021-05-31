@@ -104,7 +104,6 @@
 use std::{
 	fs,
 	path::{Path, PathBuf},
-	error,
 };
 use log::*;
 use sp_core::hashing::twox_128;
@@ -112,11 +111,12 @@ pub use sp_io::TestExternalities;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{StorageKey, StorageData},
+	offchain::{OffchainWorkerExt, OffchainDbExt, testing::TestOffchainExt},
 };
 use codec::{Encode, Decode};
 use sp_runtime::traits::Block as BlockT;
 use jsonrpsee_ws_client::{
-	WsClientBuilder, WsClient, v2::params::JsonRpcParams, traits::Client,
+	WsClientBuilder, WsClient, v2::params::JsonRpcParams,
 };
 
 type KeyPair = (StorageKey, StorageData);
@@ -154,7 +154,8 @@ impl<B: BlockT> Default for Mode<B> {
 	}
 }
 
-/// configuration of the online execution.
+// TODO are there instructions for creating a snapshot
+/// Configuration of the offline execution.
 ///
 /// A state snapshot config must be present.
 #[derive(Clone)]
@@ -163,7 +164,7 @@ pub struct OfflineConfig {
 	pub state_snapshot: SnapshotConfig,
 }
 
-/// Description of the transport protocol.
+/// Description of the transport protocol (for online execution).
 #[derive(Debug)]
 pub struct Transport {
 	uri: String,
@@ -209,7 +210,9 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 }
 
 // TODO
-pub async fn get_header<B: BlockT, S: AsRef<str>>(from: S, at: B::Hash) -> B::Header where B::Header: serde::de::DeserializeOwned {
+pub async fn get_header<B: BlockT, S: AsRef<str>>(from: S, at: B::Hash) -> B::Header
+	where B::Header: serde::de::DeserializeOwned
+{
 	use jsonrpsee_ws_client::traits::Client;
 	let params = vec![serde_json::to_value(at).unwrap()];
 	let client = WsClientBuilder::default()
@@ -353,6 +356,7 @@ impl<B: BlockT> Builder<B> {
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
+		use jsonrpsee_ws_client::traits::Client;
 		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
@@ -465,7 +469,7 @@ impl<B: BlockT> Builder<B> {
 			.max_request_body_size(u32::MAX)
 			.build(&online.transport.uri)
 			.await
-			.map_err(|e| "failed to build ws client")?;
+			.map_err(|_| "failed to build ws client")?;
 		online.transport.client = Some(ws_client);
 
 		// Then, if `at` is not set, set it.
@@ -525,12 +529,18 @@ impl<B: BlockT> Builder<B> {
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
 		let kv = self.pre_build().await?;
 		let mut ext = TestExternalities::new_empty();
+		let (offchain, _offchain_state) = TestOffchainExt::new();
+
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
 
 		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
 		for (k, v) in kv {
 			let (k, v) = (k.0, v.0);
+			// Insert the key,value pair into the test trie backend
 			ext.insert(k, v);
 		}
+
 		Ok(ext)
 	}
 }
