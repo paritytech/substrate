@@ -1075,7 +1075,7 @@ pub mod pallet {
 		/// asset `class`.
 		///
 		/// If the origin is Signed, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + DepositPerByte * (name.len + info.len)` taking into
+		/// `MetadataDepositBase + DepositPerByte * data.len` taking into
 		/// account any already reserved funds.
 		///
 		/// - `class`: The identifier of the asset class whose instance's metadata to set.
