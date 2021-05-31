@@ -230,7 +230,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				Err(err)
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
-				self.listener.write().invalid(&hash, false);
+				self.listener.write().invalid(&hash);
 				Err(err)
 			},
 		}
@@ -415,7 +415,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 					Status::Future => listener.future(&hash),
 					Status::Ready => listener.ready(&hash, None),
 					Status::Dropped => listener.dropped(&hash, None),
-					Status::Failed => listener.invalid(&hash, initial_status.is_some()),
+					Status::Failed => listener.invalid(&hash),
 				}
 			}
 		}
@@ -423,10 +423,12 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 	/// For each extrinsic, returns tags that it provides (if known), or None (if it is unknown).
 	pub fn extrinsics_tags(&self, hashes: &[ExtrinsicHash<B>]) -> Vec<Option<Vec<Tag>>> {
-		self.pool.read().by_hashes(&hashes)
+		self.pool.read()
+			.by_hashes(&hashes)
 			.into_iter()
-			.map(|existing_in_pool| existing_in_pool
-				.map(|transaction| transaction.provides.to_vec()))
+			.map(|existing_in_pool|
+				existing_in_pool.map(|transaction| transaction.provides.to_vec())
+			)
 			.collect()
 	}
 
@@ -599,7 +601,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 		let mut listener = self.listener.write();
 		for tx in &invalid {
-			listener.invalid(&tx.hash, true);
+			listener.invalid(&tx.hash);
 		}
 
 		invalid
@@ -645,15 +647,9 @@ fn fire_events<H, B, Ex>(
 	match *imported {
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
 			listener.ready(hash, None);
-			for f in failed {
-				listener.invalid(f, true);
-			}
-			for r in removed {
-				listener.dropped(&r.hash, Some(hash));
-			}
-			for p in promoted {
-				listener.ready(p, None);
-			}
+			failed.into_iter().for_each(|f| listener.invalid(f));
+			removed.into_iter().for_each(|r| listener.dropped(&r.hash, Some(hash)));
+			promoted.into_iter().for_each(|p| listener.ready(p, None));
 		},
 		base::Imported::Future { ref hash } => {
 			listener.future(hash)
