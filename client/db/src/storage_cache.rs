@@ -20,7 +20,7 @@
 //! Tracks changes over the span of a few recent blocks and handles forks
 //! by tracking/removing cache entries for conflicting changes.
 
-use std::collections::{VecDeque, HashSet, HashMap, BTreeMap};
+use std::collections::{VecDeque, HashSet, BTreeSet, HashMap, BTreeMap};
 use std::sync::Arc;
 use std::hash::Hash as StdHash;
 use std::ptr::NonNull;
@@ -355,8 +355,15 @@ struct BlockChanges<B: Header> {
 	parent: B::Hash,
 	/// A set of modified storage keys.
 	storage: HashSet<StorageKey>,
+	/// A set of modified storage keys.
+	/// TODO consider merging with storage
+	ordered_storage: BTreeSet<StorageKey>,
 	/// A set of modified child storage keys.
 	child_storage: HashSet<ChildStorageKey>,
+	/// A set of modified child storage keys.
+	/// A set of modified storage keys.
+	/// TODO consider merging with storage
+	ordered_child_storage: HashMap<Vec<u8>, BTreeSet<StorageKey>>,
 	/// Block is part of the canonical chain.
 	is_canon: bool,
 }
@@ -499,27 +506,34 @@ impl<B: BlockT> CacheChanges<B> {
 			}
 			let mut modifications = HashSet::new();
 			let mut child_modifications = HashSet::new();
-			child_changes.into_iter().for_each(|(sk, changes)|
+			let mut ordered_storage = BTreeSet::new();
+			let mut ordered_child_storage: HashMap<Vec<u8>, BTreeSet<StorageKey>> = Default::default();
+			child_changes.into_iter().for_each(|(sk, changes)| {
+				let mut ordered_entry = ordered_child_storage.entry(sk.clone()).or_default();
 				for (k, v) in changes.into_iter() {
+					ordered_entry.insert(k.clone());
 					let k = (sk.clone(), k);
 					if is_best {
 						cache.lru_child_storage.add(k.clone(), v);
 					}
 					child_modifications.insert(k);
 				}
-			);
+			});
 			for (k, v) in changes.into_iter() {
 				if is_best {
 					cache.lru_hashes.remove(&k);
 					cache.lru_storage.add(k.clone(), v);
 				}
+				ordered_storage.insert(k);
 				modifications.insert(k);
 			}
 
 			// Save modified storage. These are ordered by the block number in reverse.
 			let block_changes = BlockChanges {
 				storage: modifications,
+				ordered_storage,
 				child_storage: child_modifications,
+				ordered_child_storage,
 				number: *number,
 				hash: hash.clone(),
 				is_canon: is_best,
@@ -607,6 +621,49 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 			"Cache lookup skipped for {:?}: parent hash is unknown",
 			key.as_ref().map(HexDisplay::from),
 		);
+		false
+	}
+
+	/// Check if the next key can be returned from cache by matching current block parent hash against canonical
+	/// state and filtering out entries with modification in their resulting range.
+	fn is_allowed_interval(
+		range: (Vec<u8>, Option<Vec<u8>>),
+		child_info: Option<&ChildInfo>,
+		parent_hash: &B::Hash,
+		modifications: &VecDeque<BlockChanges<B::Header>>
+	) -> bool {
+		let mut parent = parent_hash;
+		// Ignore all storage entries modified in later blocks.
+		// Modifications contains block ordered by the number
+		// We search for our parent in that list first and then for
+		// all its parents until we hit the canonical block,
+		// checking against all the intermediate modifications.
+		for m in modifications {
+			if &m.hash == parent {
+				if m.is_canon {
+					return true;
+				}
+				parent = &m.parent;
+			}
+			let storage = if let Some(info) = child_info {
+				if let Some(storage) = m.ordered_child_storage.get(info.storage_key()) {
+					storage
+				} else {
+					continue;
+				}
+			} else {
+				&m.ordered_storage
+			};
+			let range = if let Some(end) = range.1 {
+				storage.range(range.0 .. end)
+			} else {
+				storage.range(range.0 ..)
+			};
+			if let Some(hash) = range.next() {
+				trace!("Cache range lookup skipped for {:?} modified in a later block", HexDisplay::from(&hash.as_slice()));
+				return false;
+			}
+		}
 		false
 	}
 }
@@ -712,7 +769,24 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_storage_key(key)
+		let local_cache = self.cache.local_cache.upgradable_read();
+		if let Some(entry) = local_cache.next_keys.next_storage_key(key, None).cloned() {
+			trace!("Found next storage key in local cache: {:?}", HexDisplay::from(&key));
+			return Ok(entry)
+		}
+		let mut cache = self.cache.shared_cache.lock();
+		if let Some(parent) = self.cache.parent_hash.as_ref() {
+			if let Some(entry) = cache.next_keys.next_storage_key(key, None).map(|a| a.0.clone()) {
+				if Self::is_allowed_interval((key, entry), None, parent, &cache.modifications) {
+					trace!("Found next key in shared cache: {:?}", HexDisplay::from(&key));
+					return Ok(entry)
+				}
+			}
+		}
+		trace!("Cache hash miss: {:?}", HexDisplay::from(&key));
+		let next  = self.state.next_storage_key(key)?;
+		RwLockUpgradableReadGuard::upgrade(local_cache).next_keys.insert(key.to_vec(), None, next);
+		Ok(next)
 	}
 
 	fn next_child_storage_key(
