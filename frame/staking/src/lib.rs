@@ -785,6 +785,18 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
 
+	/// The maximum number of validators.
+	type MaxValidators: Get<u32>;
+
+	/// The maximum number of nominators.
+	type MaxNominators: Get<u32>;
+
+	/// The minimum bonded to be a validator.
+	type MinValidatorBond: Get<BalanceOf<Self>>;
+
+	/// The minimum bond.
+	type MinBond: Get<BalanceOf<Self>>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -1051,8 +1063,8 @@ pub mod migrations {
 
 		pub fn migrate<T: Config>() -> Weight {
 			log!(info, "Migrating staking to Releases::V6_1_0");
-			let validator_count = <Validators<T>>::iter().count() as u32;
-			let nominator_count = <Nominators<T>>::iter().count() as u32;
+			let validator_count = Validators::<T>::iter().count() as u32;
+			let nominator_count = Nominators::<T>::iter().count() as u32;
 
 			ValidatorsCount::put(validator_count);
 			NominatorsCount::put(nominator_count);
@@ -1184,6 +1196,10 @@ decl_error! {
 		TooManyTargets,
 		/// A nomination target was supplied that was blocked or otherwise not a validator.
 		BadTarget,
+		/// Too many nominators are in the system.
+		TooManyNominators,
+		/// Too many validators are in the system.
+		TooManyValidators,
 	}
 }
 
@@ -1292,8 +1308,8 @@ decl_module! {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 
-			// reject a bond which is considered to be _dust_.
-			if value < T::Currency::minimum_balance() {
+			// reject a bond which is too low.
+			if value < T::MinBond::get() {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
@@ -1354,8 +1370,8 @@ decl_module! {
 				let extra = extra.min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
-				// last check: the new active amount of ledger must be more than ED.
-				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+				// last check: the new active amount of ledger must be at least min bond.
+				ensure!(ledger.active >= T::MinBond::get(), Error::<T>::InsufficientValue);
 
 				Self::deposit_event(RawEvent::Bonded(stash, extra));
 				Self::update_ledger(&controller, &ledger);
@@ -1364,7 +1380,7 @@ decl_module! {
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
-		/// T::Currency::minimum_balance(), then it is increased to the full amount.
+		/// T::MinBond::get(), then it is increased to the full amount.
 		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
@@ -1383,7 +1399,7 @@ decl_module! {
 		/// # <weight>
 		/// - Independent of the arguments. Limited but potentially exploitable complexity.
 		/// - Contains a limited number of reads.
-		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance`)
+		/// - Each call (requires the remainder of the bonded balance to be above `MinBond`)
 		///   will cause a new entry to be inserted into a vector (`Ledger.unlocking`) kept in storage.
 		///   The only way to clean the aforementioned storage item is also user-controlled via
 		///   `withdraw_unbonded`.
@@ -1408,8 +1424,8 @@ decl_module! {
 			if !value.is_zero() {
 				ledger.active -= value;
 
-				// Avoid there being a dust balance left in the staking system.
-				if ledger.active < T::Currency::minimum_balance() {
+				// Avoid there being a less than a minimum bond left in the staking system.
+				if ledger.active < T::MinBond::get() {
 					value += ledger.active;
 					ledger.active = Zero::zero();
 				}
@@ -1462,7 +1478,13 @@ decl_module! {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
+			let is_validator = Validators::<T>::contains_key(&stash);
+
+			// The minimum bond allowed for a stash before we clean it up.
+			// Requirements to be a validator are likely higher than normal.
+			let min_bond = if is_validator { T::MinValidatorBond::get() } else { T::MinBond::get() };
+
+			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < min_bond {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
@@ -1511,12 +1533,18 @@ decl_module! {
 		pub fn validate(origin, prefs: ValidatorPrefs) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(ledger.active >= T::MinValidatorBond::get(), Error::<T>::InsufficientValue);
+			ensure!(ValidatorsCount::get() < T::MaxValidators::get(), Error::<T>::TooManyValidators);
+
 			let stash = &ledger.stash;
 			if Nominators::<T>::contains_key(stash) {
 				Nominators::<T>::remove(stash);
 				NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
 			}
-			<Validators<T>>::insert(stash, prefs);
+			if !Validators::<T>::contains_key(stash) {
+				ValidatorsCount::mutate(|x| *x = x.saturating_add(One::one()));
+			}
+			Validators::<T>::insert(stash, prefs);
 		}
 
 		/// Declare the desire to nominate `targets` for the origin controller.
@@ -1545,6 +1573,7 @@ decl_module! {
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
+			ensure!(NominatorsCount::get() < T::MaxNominators::get(), Error::<T>::TooManyValidators);
 
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
 
@@ -1564,8 +1593,15 @@ decl_module! {
 				suppressed: false,
 			};
 
-			<Validators<T>>::remove(stash);
-			<Nominators<T>>::insert(stash, &nominations);
+			if Validators::<T>::contains_key(stash) {
+				Validators::<T>::remove(stash);
+				ValidatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+			}
+			if !Nominators::<T>::contains_key(stash) {
+				NominatorsCount::mutate(|x| *x = x.saturating_add(One::one()));
+			}
+
+			Nominators::<T>::insert(stash, &nominations);
 		}
 
 		/// Declare no desire to either validate or nominate.
@@ -1659,6 +1695,7 @@ decl_module! {
 		#[weight = T::WeightInfo::set_validator_count()]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
+			ensure!(new <= T::MaxValidators::get(), Error::<T>::TooManyValidators);
 			ValidatorCount::put(new);
 		}
 
@@ -1672,7 +1709,11 @@ decl_module! {
 		#[weight = T::WeightInfo::set_validator_count()]
 		fn increase_validator_count(origin, #[compact] additional: u32) {
 			ensure_root(origin)?;
-			ValidatorCount::mutate(|n| *n += additional);
+			ValidatorCount::try_mutate(|n| -> DispatchResult {
+				*n += additional;
+				ensure!(*n <= T::MaxValidators::get(), Error::<T>::TooManyValidators);
+				Ok(())
+			})?;
 		}
 
 		/// Scale up the ideal number of validators by a factor.
@@ -1685,7 +1726,11 @@ decl_module! {
 		#[weight = T::WeightInfo::set_validator_count()]
 		fn scale_validator_count(origin, factor: Percent) {
 			ensure_root(origin)?;
-			ValidatorCount::mutate(|n| *n += factor * *n);
+			ValidatorCount::try_mutate(|n| -> DispatchResult {
+				*n += factor * *n;
+				ensure!(*n <= T::MaxValidators::get(), Error::<T>::TooManyValidators);
+				Ok(())
+			})?;
 		}
 
 		/// Force there to be no new eras indefinitely.
@@ -1855,8 +1900,8 @@ decl_module! {
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let ledger = ledger.rebond(value);
-			// last check: the new active amount of ledger must be more than ED.
-			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+			// last check: the new active amount of ledger must be more than the min bond.
+			ensure!(ledger.active >= T::MinBond::get(), Error::<T>::InsufficientValue);
 
 			Self::update_ledger(&controller, &ledger);
 			Ok(Some(
@@ -2123,8 +2168,14 @@ impl<T: Config> Module<T> {
 
 	/// Chill a stash account.
 	fn chill_stash(stash: &T::AccountId) {
-		<Validators<T>>::remove(stash);
-		<Nominators<T>>::remove(stash);
+		if Validators::<T>::contains_key(stash) {
+			Validators::<T>::remove(stash);
+			ValidatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+		}
+		if Nominators::<T>::contains_key(stash) {
+			Nominators::<T>::remove(stash);
+			NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+		}
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -2441,8 +2492,14 @@ impl<T: Config> Module<T> {
 		<Ledger<T>>::remove(&controller);
 
 		<Payee<T>>::remove(stash);
-		<Validators<T>>::remove(stash);
-		<Nominators<T>>::remove(stash);
+		if Validators::<T>::contains_key(stash) {
+			Validators::<T>::remove(stash);
+			ValidatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+		}
+		if Nominators::<T>::contains_key(stash) {
+			Nominators::<T>::remove(stash);
+			NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+		}
 
 		system::Pallet::<T>::dec_consumers(stash);
 
@@ -2536,7 +2593,7 @@ impl<T: Config> Module<T> {
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_voters = Vec::new();
 
-		for (validator, _) in <Validators<T>>::iter() {
+		for (validator, _) in Validators::<T>::iter() {
 			// append self vote
 			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
@@ -2545,7 +2602,7 @@ impl<T: Config> Module<T> {
 		// collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
-		for (nominator, nominations) in <Nominators<T>>::iter() {
+		for (nominator, nominations) in Nominators::<T>::iter() {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
 
 			// Filter out nomination targets which were nominated before the most recent
@@ -2564,7 +2621,7 @@ impl<T: Config> Module<T> {
 	}
 
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
-		<Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>()
+		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
 	}
 }
 
@@ -2647,7 +2704,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
-				.unwrap_or(T::Currency::minimum_balance() * 100u32.into());
+				.unwrap_or(T::MinBond::get() * 100u32.into());
 			<Bonded<T>>::insert(v.clone(), v.clone());
 			<Ledger<T>>::insert(
 				v.clone(),
@@ -2659,7 +2716,11 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 					claimed_rewards: vec![],
 				},
 			);
-			<Validators<T>>::insert(
+			if !Validators::<T>::contains_key(&v) {
+				ValidatorsCount::mutate(|x| *x = x.saturating_add(One::one()))
+			}
+
+			Validators::<T>::insert(
 				v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
 			);
@@ -2680,7 +2741,11 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 					claimed_rewards: vec![],
 				},
 			);
-			<Nominators<T>>::insert(
+			if !Nominators::<T>::contains_key(&v) {
+				NominatorsCount::mutate(|x| *x = x.saturating_add(One::one()))
+			}
+
+			Nominators::<T>::insert(
 				v,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },
 			);

@@ -29,7 +29,6 @@ pub use frame_benchmarking::{
 
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
-const MAX_VALIDATORS: u32 = 1000;
 const MAX_SLASHES: u32 = 1000;
 
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
@@ -300,7 +299,7 @@ benchmarks! {
 	}
 
 	set_validator_count {
-		let validator_count = MAX_VALIDATORS;
+		let validator_count = T::MaxValidators::get();
 	}: _(RawOrigin::Root, validator_count)
 	verify {
 		assert_eq!(ValidatorCount::get(), validator_count);
@@ -317,7 +316,7 @@ benchmarks! {
 
 	// Worst case scenario, the list of invulnerables is very long.
 	set_invulnerables {
-		let v in 0 .. MAX_VALIDATORS;
+		let v in 0 .. T::MaxValidators::get();
 		let mut invulnerables = Vec::new();
 		for i in 0 .. v {
 			invulnerables.push(account("invulnerable", i, SEED));
@@ -562,9 +561,9 @@ benchmarks! {
 
 	get_npos_voters {
 		// number of validator intention.
-		let v in 200 .. 400;
+		let v in (T::MaxValidators::get() / 2) .. T::MaxValidators::get();
 		// number of nominator intention.
-		let n in 200 .. 400;
+		let n in (T::MaxNominators::get() / 2) .. T::MaxNominators::get();
 		// total number of slashing spans. Assigned to validators randomly.
 		let s in 1 .. 20;
 
@@ -583,9 +582,9 @@ benchmarks! {
 
 	get_npos_targets {
 		// number of validator intention.
-		let v in 200 .. 400;
+		let v in (T::MaxValidators::get() / 2) .. T::MaxValidators::get();
 		// number of nominator intention.
-		let n = 500;
+		let n = T::MaxNominators::get();
 
 		let _ = create_validators_with_nominators_for_era::<T>(v, n, T::MAX_NOMINATIONS as usize, false, None)?;
 	}: {
