@@ -109,16 +109,13 @@ where
 		let metrics = self.metrics.clone();
 		metrics.report(|m| m.validations_scheduled.inc());
 
-		self.pool.spawn_ok(futures_diagnose::diagnose(
-			"validate-transaction",
-			async move {
-				let res = validate_transaction_blocking(&*client, &at, source, uxt);
-				if let Err(e) = tx.send(res) {
-					log::warn!("Unable to send a validate transaction result: {:?}", e);
-				}
-				metrics.report(|m| m.validations_finished.inc());
-			},
-		));
+		self.pool.spawn_ok(async move {
+			let res = validate_transaction_blocking(&*client, &at, source, uxt);
+			if let Err(e) = tx.send(res) {
+				log::warn!("Unable to send a validate transaction result: {:?}", e);
+			}
+			metrics.report(|m| m.validations_finished.inc());
+		});
 
 		Box::pin(async move {
 			match rx.await {
