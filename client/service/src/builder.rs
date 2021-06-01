@@ -252,7 +252,7 @@ impl KeystoreContainer {
 	/// Should be called right away at startup and not at runtime:
 	/// even though this overrides any previously set remote store, it
 	/// does not reset any references previously handed out - they will
-	/// stick araound.
+	/// stick around.
 	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
 		where T: CryptoStore + SyncCryptoStore + 'static
 	{
@@ -268,7 +268,7 @@ impl KeystoreContainer {
 		}
 	}
 
-	/// Returns the synchrnous keystore wrapper
+	/// Returns the synchronous keystore wrapper
 	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
 		if let Some(c) = self.remote.as_ref() {
 			c.sync_keystore_ref()
@@ -850,7 +850,7 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub import_queue: TImpQu,
 	/// An optional, shared data fetcher for light clients.
 	pub on_demand: Option<Arc<OnDemand<TBl>>>,
-	/// A block annouce validator builder.
+	/// A block announce validator builder.
 	pub block_announce_validator_builder: Option<Box<
 		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
