@@ -121,6 +121,7 @@ impl Config for Test {
 	>;
 	type MaxLocks = MaxLocks;
 	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
 

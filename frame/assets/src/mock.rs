@@ -81,6 +81,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type MaxLocks = ();
 	type MaxReserves = ();
+	ype ReserveIdentifier = [u8; 8];
 }
 
 parameter_types! {

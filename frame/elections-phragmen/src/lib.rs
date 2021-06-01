@@ -1160,6 +1160,7 @@ mod tests {
 		type AccountStore = frame_system::Pallet<Test>;
 		type MaxLocks = ();
 		type MaxReserves = ();
+		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
 	}
 

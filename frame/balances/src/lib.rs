@@ -218,6 +218,9 @@ pub mod pallet {
 
 		/// The maximum number of named reserves that can exist on an account.
 		type MaxReserves: Get<u32>;
+
+		/// The id type for named reserves.
+		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 	}
 
 	#[pallet::pallet]
@@ -457,7 +460,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<ReserveData<T::Balance>, T::MaxReserves>,
+		BoundedVec<ReserveData<T::ReserveIdentifier, T::Balance>, T::MaxReserves>,
 		ValueQuery
 	>;
 
@@ -577,11 +580,9 @@ pub struct BalanceLock<Balance> {
 	pub reasons: Reasons,
 }
 
-pub type ReserveIdentifier = [u8; 8];
-
 /// Store named reserved balance
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
-pub struct ReserveData<Balance> {
+pub struct ReserveData<ReserveIdentifier, Balance> {
 	/// The identifier for the named reserve
 	pub id: ReserveIdentifier,
 	/// The amount of the named reserve
@@ -1680,9 +1681,9 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<T, I>  where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
-	type ReserveIdentifier = ReserveIdentifier;
+	type ReserveIdentifier = T::ReserveIdentifier;
 
-	fn reserved_balance_named(id: &ReserveIdentifier, who: &T::AccountId) -> Self::Balance {
+	fn reserved_balance_named(id: &Self::ReserveIdentifier, who: &T::AccountId) -> Self::Balance {
 		let reserves = Self::reserves(who);
 		reserves
 			.binary_search_by_key(id, |data| data.id)
@@ -1693,7 +1694,7 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 	/// Move `value` from the free balance from `who` to their reserved balance.
 	///
 	/// Is a no-op if value to be reserved is zero.
-	fn reserve_named(id: &ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> DispatchResult {
+	fn reserve_named(id: &Self::ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> DispatchResult {
 		Reserves::<T, I>::try_mutate(who, |reserves| -> DispatchResult {
 			match reserves.binary_search_by_key(id, |data| data.id) {
 				Ok(index) => {
@@ -1715,7 +1716,7 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 	/// Unreserve some funds, returning any amount that was unable to be unreserved.
 	///
 	/// Is a no-op if the value to be unreserved is zero.
-	fn unreserve_named(id: &ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> Self::Balance {
+	fn unreserve_named(id: &Self::ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() { return Zero::zero() }
 
 		Reserves::<T, I>::mutate_exists(who, |maybe_reserves| -> Self::Balance {
@@ -1759,7 +1760,7 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 	///
 	/// Is a no-op if the value to be slashed is zero.
 	fn slash_reserved_named(
-		id: &ReserveIdentifier,
+		id: &Self::ReserveIdentifier,
 		who: &T::AccountId,
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance) {
@@ -1794,7 +1795,7 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 	/// - the value to be moved is zero; or
 	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
 	fn repatriate_reserved_named(
-		id: &ReserveIdentifier,
+		id: &Self::ReserveIdentifier,
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: Self::Balance,

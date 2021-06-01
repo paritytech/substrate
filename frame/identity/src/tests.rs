@@ -84,6 +84,7 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type MaxLocks = ();
 	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
 parameter_types! {
