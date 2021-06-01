@@ -457,7 +457,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		Vec<ReserveData<T::Balance>>,
+		BoundedVec<ReserveData<T::Balance>, T::MaxReserves>,
 		ValueQuery
 	>;
 
@@ -578,7 +578,7 @@ pub struct BalanceLock<Balance> {
 }
 
 /// Store named reserved balance
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub struct ReserveData<Balance> {
 	/// The identifier for the named reserve
 	pub id: ReserveIdentifier,
@@ -1697,11 +1697,10 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 					reserves[index].amount = reserves[index].amount.saturating_add(value);
 				},
 				Err(index) => {
-					ensure!((reserves.len() as u32) < T::MaxReserves::get(), Error::<T, I>::TooManyReserves);
-					reserves.insert(index, ReserveData {
+					reserves.try_insert(index, ReserveData {
 						id: id.clone(),
 						amount: value
-					});
+					}).map_err(|_| Error::<T, I>::TooManyReserves)?;
 				},
 			};
 			<Self as ReservableCurrency<_>>::reserve(who, value)?;
@@ -1827,17 +1826,15 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 									Ok(actual)
 								},
 								Err(index) => {
-									ensure!((reserves.len() as u32) < T::MaxReserves::get(), Error::<T, I>::TooManyReserves);
-
 									let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
 
 									// remain should always be zero but just to be defensive here
 									let actual = to_change.saturating_sub(remain);
 
-									reserves.insert(index, ReserveData {
+									reserves.try_insert(index, ReserveData {
 										id: id.clone(),
 										amount: actual
-									});
+									}).map_err(|_| Error::<T, I>::TooManyReserves)?;
 
 									Ok(actual)
 								},
