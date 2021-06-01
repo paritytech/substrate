@@ -22,4 +22,4 @@ sp-runtime = { version = "3.0.0", path = "../../runtime" }
 sp-core = { version = "3.0.0", path = "../../core" }
 sp-io = { version = "3.0.0", path = "../../io" }
 tracing = "0.1.25"
-tracing-core = "0.1.17"
+tracing-core = "0.1.18"
