@@ -165,7 +165,7 @@ use frame_support::{
 		Currency, OnUnbalanced, TryDrop, StoredMap, MaxEncodedLen,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::{AllowDeath, KeepAlive},
-		ReserveIdentifier, NamedReservableCurrency,
+		NamedReservableCurrency,
 		tokens::{fungible, DepositConsequence, WithdrawConsequence, BalanceStatus as Status},
 	}
 };
@@ -576,6 +576,8 @@ pub struct BalanceLock<Balance> {
 	/// If true, then the lock remains in effect even for payment of transaction fees.
 	pub reasons: Reasons,
 }
+
+pub type ReserveIdentifier = [u8; 8];
 
 /// Store named reserved balance
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
@@ -1678,6 +1680,8 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<T, I>  where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
+	type ReserveIdentifier = ReserveIdentifier;
+
 	fn reserved_balance_named(id: &ReserveIdentifier, who: &T::AccountId) -> Self::Balance {
 		let reserves = Self::reserves(who);
 		reserves

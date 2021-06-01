@@ -82,17 +82,17 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	) -> Result<Self::Balance, DispatchError>;
 }
 
-/// An identifier for a reserve. Used for disambiguating different reserves so that
-/// they can be individually replaced or removed.
-pub type ReserveIdentifier = [u8; 8];
-
 pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
+	/// An identifier for a reserve. Used for disambiguating different reserves so that
+	/// they can be individually replaced or removed.
+	type ReserveIdentifier;
+
 	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If the reserve balance of `who`
 	/// is less than `value`, then a non-zero second item will be returned.
 	fn slash_reserved_named(
-		id: &ReserveIdentifier,
+		id: &Self::ReserveIdentifier,
 		who: &AccountId,
 		value: Self::Balance
 	) -> (Self::NegativeImbalance, Self::Balance);
@@ -108,13 +108,13 @@ pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
 	///
 	/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-	fn reserved_balance_named(id: &ReserveIdentifier, who: &AccountId) -> Self::Balance;
+	fn reserved_balance_named(id: &Self::ReserveIdentifier, who: &AccountId) -> Self::Balance;
 
 	/// Moves `value` from balance to reserved balance.
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
 	/// be returned to notify of this. This is different behavior than `unreserve`.
-	fn reserve_named(id: &ReserveIdentifier, who: &AccountId, value: Self::Balance) -> DispatchResult;
+	fn reserve_named(id: &Self::ReserveIdentifier, who: &AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// Moves up to `value` from reserved balance to free balance. This function cannot fail.
 	///
@@ -126,7 +126,7 @@ pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
 	/// - This is different from `reserve`.
 	/// - If the remaining reserved balance is less than `ExistentialDeposit`, it will
 	/// invoke `on_reserved_too_low` and could reap the account.
-	fn unreserve_named(id: &ReserveIdentifier, who: &AccountId, value: Self::Balance) -> Self::Balance;
+	fn unreserve_named(id: &Self::ReserveIdentifier, who: &AccountId, value: Self::Balance) -> Self::Balance;
 
 	/// Moves up to `value` from reserved balance of account `slashed` to balance of account
 	/// `beneficiary`. `beneficiary` must exist for this to succeed. If it does not, `Err` will be
@@ -136,7 +136,7 @@ pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then `Ok(non_zero)` will be returned.
 	fn repatriate_reserved_named(
-		id: &ReserveIdentifier,
+		id: &Self::ReserveIdentifier,
 		slashed: &AccountId,
 		beneficiary: &AccountId,
 		value: Self::Balance,

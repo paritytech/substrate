@@ -24,7 +24,7 @@ pub use tokens::fungible;
 pub use tokens::fungibles;
 pub use tokens::currency::{
 	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, NamedReservableCurrency,
-	ReserveIdentifier, VestingSchedule,
+	VestingSchedule,
 };
 pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
 pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};

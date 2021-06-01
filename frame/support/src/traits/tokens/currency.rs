@@ -25,7 +25,7 @@ use super::imbalance::{Imbalance, SignedImbalance};
 use frame_support::traits::MaxEncodedLen;
 
 mod reservable;
-pub use reservable::{ReservableCurrency, NamedReservableCurrency, ReserveIdentifier};
+pub use reservable::{ReservableCurrency, NamedReservableCurrency};
 mod lockable;
 pub use lockable::{LockableCurrency, VestingSchedule, LockIdentifier};
 
