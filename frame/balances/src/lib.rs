@@ -165,7 +165,8 @@ use frame_support::{
 		Currency, OnUnbalanced, TryDrop, StoredMap, MaxEncodedLen,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::{AllowDeath, KeepAlive},
-		ReserveIdentifier, NamedReservableCurrency, tokens::{fungible, DepositConsequence, WithdrawConsequence, BalanceStatus as Status},
+		ReserveIdentifier, NamedReservableCurrency,
+		tokens::{fungible, DepositConsequence, WithdrawConsequence, BalanceStatus as Status},
 	}
 };
 #[cfg(feature = "std")]
