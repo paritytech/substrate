@@ -26,7 +26,7 @@ use sc_service::NativeExecutionDispatch;
 use sp_state_machine::StateMachine;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::storage::{StorageData, StorageKey, well_known_keys};
-use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig};
+use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig, rpc_api};
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub enum Command {
@@ -42,7 +42,7 @@ pub struct OnRuntimeUpgradeCmd {
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct OffchainWorkerCmd {
-	#[structopt(short, long, multiple = false, parse(try_from_str = util::parse_hash))]
+	#[structopt(short, long, multiple = false, parse(try_from_str = parse::hash))]
 	pub header_at: String,
 
 	#[structopt(subcommand)]
@@ -109,7 +109,7 @@ pub enum State {
 
 		/// The block hash at which to connect.
 		/// Will be latest finalized head if not provided.
-		#[structopt(short, long, multiple = false, parse(try_from_str = util::parse_hash))]
+		#[structopt(short, long, multiple = false, parse(try_from_str = parse::hash))]
 		block_at: Option<String>,
 
 		/// The modules to scrape. If empty, entire chain state will be scraped.
@@ -117,7 +117,7 @@ pub enum State {
 		modules: Option<Vec<String>>,
 
 		/// The url to connect to.
-		#[structopt(default_value = "ws://localhost:9944", parse(try_from_str = util::parse_url))]
+		#[structopt(default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
 		url: String,
 	},
 }
@@ -209,7 +209,11 @@ where
 	Ok(())
 }
 
-async fn offchain_worker<B, ExecDispatch>(shared: SharedParams, command: OffchainWorkerCmd, config: Configuration) -> sc_cli::Result<()>
+async fn offchain_worker<B, ExecDispatch>(
+	shared: SharedParams,
+	command: OffchainWorkerCmd,
+	config: Configuration,
+)-> sc_cli::Result<()>
 where
 	B: BlockT,
 	B::Hash: FromStr,
@@ -261,7 +265,7 @@ where
 	};
 
 	let header_hash: B::Hash = command.header_at.parse().unwrap();
-	let header = remote_externalities::get_header::<B, _>(
+	let header = rpc_api::get_header::<B, _>(
 		url,
 		header_hash
 	).await;
@@ -320,8 +324,9 @@ impl CliConfiguration for TryRuntimeCmd {
 	}
 }
 
-mod util {
-	pub fn parse_hash(block_number: &str) -> Result<String, String> {
+// Utils for parsing user input
+mod parse {
+	pub fn hash(block_number: &str) -> Result<String, String> {
 		let block_number = if block_number.starts_with("0x") {
 			&block_number[2..]
 		} else {
@@ -338,7 +343,7 @@ mod util {
 		}
 	}
 
-	pub fn parse_url(s: &str) -> Result<String, &'static str> {
+	pub fn url(s: &str) -> Result<String, &'static str> {
 		if s.starts_with("ws://") || s.starts_with("wss://") {
 			// could use Url crate as well, but lets keep it simple for now.
 			Ok(s.to_string())
@@ -347,3 +352,4 @@ mod util {
 		}
 	}
 }
+

@@ -154,7 +154,6 @@ impl<B: BlockT> Default for Mode<B> {
 	}
 }
 
-// TODO are there instructions for creating a snapshot
 /// Configuration of the offline execution.
 ///
 /// A state snapshot config must be present.
@@ -198,6 +197,13 @@ pub struct OnlineConfig<B: BlockT> {
 	pub transport: Transport,
 }
 
+impl<B: BlockT> OnlineConfig<B> {
+	/// Return rpc (ws) client.
+	fn rpc_client(&self) -> &WsClient {
+		self.transport.client.as_ref().expect("ws client must have been initialized by now; qed.")
+	}
+}
+
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
@@ -209,36 +215,6 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 	}
 }
 
-// TODO
-pub async fn get_header<B: BlockT, S: AsRef<str>>(from: S, at: B::Hash) -> B::Header
-	where B::Header: serde::de::DeserializeOwned
-{
-	use jsonrpsee_ws_client::traits::Client;
-	let params = vec![serde_json::to_value(at).unwrap()];
-	let client = WsClientBuilder::default()
-		.max_request_body_size(u32::MAX)
-		.build(from.as_ref())
-		.await
-		.unwrap();
-	client.request::<B::Header>("chain_getHeader", JsonRpcParams::Array(params)).await.unwrap()
-}
-
-pub async fn get_finalized_head<B: BlockT, S: AsRef<str>>(from: S) -> B::Hash {
-	use jsonrpsee_ws_client::traits::Client;
-	let client = WsClientBuilder::default()
-		.max_request_body_size(u32::MAX)
-		.build(from.as_ref())
-		.await
-		.unwrap();
-	client.request::<B::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams).await.unwrap()
-}
-
-impl<B: BlockT> OnlineConfig<B> {
-	/// Return rpc (ws) client.
-	fn rpc_client(&self) -> &WsClient {
-		self.transport.client.as_ref().expect("ws client must have been initialized by now; qed.")
-	}
-}
 
 /// Configuration of the state snapshot.
 #[derive(Clone)]
@@ -531,6 +507,7 @@ impl<B: BlockT> Builder<B> {
 		let mut ext = TestExternalities::new_empty();
 		let (offchain, _offchain_state) = TestOffchainExt::new();
 
+		// Register externality extensions in order to provide host interface for OCW to the runtime
 		ext.register_extension(OffchainDbExt::new(offchain.clone()));
 		ext.register_extension(OffchainWorkerExt::new(offchain));
 
@@ -542,6 +519,36 @@ impl<B: BlockT> Builder<B> {
 		}
 
 		Ok(ext)
+	}
+}
+
+/// WS RPC API for one RPC calls to a substrate node.
+pub mod rpc_api {
+	use super::*;
+	/// Get the header of the block identified by `at`
+	pub async fn get_header<B: BlockT, S: AsRef<str>>(from: S, at: B::Hash) -> B::Header
+	where
+		B::Header: serde::de::DeserializeOwned,
+	{
+		use jsonrpsee_ws_client::traits::Client;
+		let params = vec![serde_json::to_value(at).unwrap()];
+		let client = WsClientBuilder::default()
+			.max_request_body_size(u32::MAX)
+			.build(from.as_ref())
+			.await
+			.unwrap();
+		client.request::<B::Header>("chain_getHeader", JsonRpcParams::Array(params)).await.unwrap()
+	}
+
+	/// Get the finalized head
+	pub async fn get_finalized_head<B: BlockT, S: AsRef<str>>(from: S) -> B::Hash {
+		use jsonrpsee_ws_client::traits::Client;
+		let client = WsClientBuilder::default()
+			.max_request_body_size(u32::MAX)
+			.build(from.as_ref())
+			.await
+			.unwrap();
+		client.request::<B::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams).await.unwrap()
 	}
 }
 
