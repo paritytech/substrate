@@ -227,13 +227,13 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl Into<#scrate::sp_std::result::Result<#system_path::Origin<#runtime>, Origin>> for Origin {
+		impl From<Origin> for #scrate::sp_std::result::Result<#system_path::Origin<#runtime>, Origin> {
 			/// NOTE: converting to pallet origin loses the origin filter information.
-			fn into(self) -> #scrate::sp_std::result::Result<#system_path::Origin<#runtime>, Self> {
-				if let OriginCaller::system(l) = self.caller {
+			fn from(val: Origin) -> Self {
+				if let OriginCaller::system(l) = val.caller {
 					Ok(l)
 				} else {
-					Err(self)
+					Err(val)
 				}
 			}
 		}
@@ -314,13 +314,13 @@ fn expand_origin_pallet_conversions(
 			}
 		}
 
-		impl Into<#scrate::sp_std::result::Result<#pallet_origin, Origin>> for Origin {
+		impl From<Origin> for #scrate::sp_std::result::Result<#pallet_origin, Origin> {
 			/// NOTE: converting to pallet origin loses the origin filter information.
-			fn into(self) -> #scrate::sp_std::result::Result<#pallet_origin, Self> {
-				if let OriginCaller::#variant(l) = self.caller {
+			fn from(val: Origin) -> Self {
+				if let OriginCaller::#variant(l) = val.caller {
 					Ok(l)
 				} else {
-					Err(self)
+					Err(val)
 				}
 			}
 		}
