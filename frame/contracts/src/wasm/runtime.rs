@@ -24,7 +24,7 @@ use crate::{
 	wasm::env_def::ConvertibleToWasm,
 	schedule::HostFnWeights,
 };
-use parity_wasm::elements::ValueType;
+use pwasm_utils::parity_wasm::elements::ValueType;
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
 use sp_std::prelude::*;
 use codec::{Decode, DecodeAll, Encode};

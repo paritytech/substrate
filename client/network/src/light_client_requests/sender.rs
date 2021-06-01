@@ -25,7 +25,7 @@
 //! 2. Forward the request to [`crate::request_responses::RequestResponsesBehaviour`] via
 //! [`OutEvent::SendRequest`].
 //!
-//! 3. Wait for the response and forward the response via the [`oneshot::Sender`] provided earlier
+//! 3. Wait for the response and forward the response via the [`futures::channel::oneshot::Sender`] provided earlier
 //! with [`LightClientRequestSender::send_request`].
 
 use codec::{self, Encode, Decode};
@@ -552,7 +552,7 @@ pub enum OutEvent {
 		target: PeerId,
 		/// The encoded request.
 		request: Vec<u8>,
-		/// The [`onehsot::Sender`] channel to pass the response to.
+		/// The [`oneshot::Sender`] channel to pass the response to.
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		/// The name of the protocol to use to send the request.
 		protocol_name: String,

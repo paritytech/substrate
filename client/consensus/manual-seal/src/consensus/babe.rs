@@ -268,7 +268,7 @@ impl SlotTimestampProvider {
 
 		// looks like this isn't the first block, rehydrate the fake time.
 		// otherwise we'd be producing blocks for older slots.
-		let duration = if info.best_number != Zero::zero() {
+		let time = if info.best_number != Zero::zero() {
 			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
 			let slot = find_pre_digest::<B>(&header).unwrap().slot();
 			// add the slot duration so there's no collision of slots
@@ -282,9 +282,14 @@ impl SlotTimestampProvider {
 		};
 
 		Ok(Self {
-			time: atomic::AtomicU64::new(duration),
+			time: atomic::AtomicU64::new(time),
 			slot_duration,
 		})
+	}
+
+	/// Get the current slot number
+	pub fn slot(&self) -> u64 {
+		self.time.load(atomic::Ordering::SeqCst) / self.slot_duration
 	}
 }
 
