@@ -113,20 +113,27 @@ use sp_core::{
 	storage::{StorageKey, StorageData},
 };
 use codec::{Encode, Decode};
-use jsonrpsee_http_client::{HttpClient, HttpClientBuilder};
-
 use sp_runtime::traits::Block as BlockT;
+use jsonrpsee_ws_client::{
+	WsClientBuilder, WsClient, v2::params::JsonRpcParams, traits::Client,
+};
 
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
-const TARGET: &str = "http://localhost:9933";
+const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
+const BATCH_SIZE: usize = 512;
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi<B: BlockT> {
-		#[rpc(method = "state_getPairs", positional_params)]
-		fn storage_pairs(prefix: StorageKey, hash: Option<B::Hash>) -> Vec<(StorageKey, StorageData)>;
-		#[rpc(method = "chain_getFinalizedHead")]
+		#[rpc(method = "state_getKeysPaged", positional_params)]
+		fn get_keys_paged(
+			prefix: Option<StorageKey>,
+			count: u32,
+			start_key: Option<StorageKey>,
+			hash: Option<B::Hash>,
+		) -> Vec<StorageKey>;
+		#[rpc(method = "chain_getFinalizedHead", positional_params)]
 		fn finalized_head() -> B::Hash;
 	}
 }
@@ -140,6 +147,12 @@ pub enum Mode<B: BlockT> {
 	Offline(OfflineConfig),
 }
 
+impl<B: BlockT> Default for Mode<B> {
+	fn default() -> Self {
+		Mode::Online(OnlineConfig::default())
+	}
+}
+
 /// configuration of the online execution.
 ///
 /// A state snapshot config must be present.
@@ -149,32 +162,55 @@ pub struct OfflineConfig {
 	pub state_snapshot: SnapshotConfig,
 }
 
+/// Description of the transport protocol.
+#[derive(Debug)]
+pub struct Transport {
+	uri: String,
+	client: Option<WsClient>,
+}
+
+impl Clone for Transport {
+	fn clone(&self) -> Self {
+		Self { uri: self.uri.clone(), client: None }
+	}
+}
+
+impl From<String> for Transport {
+	fn from(t: String) -> Self {
+		Self { uri: t, client: None }
+	}
+}
+
 /// Configuration of the online execution.
 ///
 /// A state snapshot config may be present and will be written to in that case.
 #[derive(Clone)]
 pub struct OnlineConfig<B: BlockT> {
-	/// The HTTP uri to use.
-	pub uri: String,
 	/// The block number at which to connect. Will be latest finalized head if not provided.
 	pub at: Option<B::Hash>,
 	/// An optional state snapshot file to WRITE to, not for reading. Not written if set to `None`.
 	pub state_snapshot: Option<SnapshotConfig>,
 	/// The modules to scrape. If empty, entire chain state will be scraped.
 	pub modules: Vec<String>,
+	/// Transport config.
+	pub transport: Transport,
 }
 
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
-		Self { uri: TARGET.to_owned(), at: None, state_snapshot: None, modules: Default::default() }
+		Self {
+			transport: Transport { uri: DEFAULT_TARGET.to_string(), client: None },
+			at: None,
+			state_snapshot: None,
+			modules: vec![],
+		}
 	}
 }
 
 impl<B: BlockT> OnlineConfig<B> {
-	/// Return a new http rpc client.
-	fn rpc(&self) -> HttpClient {
-		HttpClientBuilder::default().max_request_body_size(u32::MAX).build(&self.uri)
-			.expect("valid HTTP url; qed")
+	/// Return rpc (ws) client.
+	fn rpc_client(&self) -> &WsClient {
+		self.transport.client.as_ref().expect("ws client must have been initialized by now; qed.")
 	}
 }
 
@@ -199,16 +235,17 @@ impl Default for SnapshotConfig {
 
 /// Builder for remote-externalities.
 pub struct Builder<B: BlockT> {
+	/// Pallets to inject their prefix into the externalities.
 	inject: Vec<KeyPair>,
+	/// connectivity mode, online or offline.
 	mode: Mode<B>,
 }
 
+// NOTE: ideally we would use `DefaultNoBound` here, but not worth bringing in frame-support for
+// that.
 impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
-		Self {
-			inject: Default::default(),
-			mode: Mode::Online(OnlineConfig::default()),
-		}
+		Self { inject: Default::default(), mode: Default::default() }
 	}
 }
 
@@ -233,25 +270,116 @@ impl<B: BlockT> Builder<B> {
 impl<B: BlockT> Builder<B> {
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		RpcApi::<B>::finalized_head(&self.as_online().rpc()).await.map_err(|e| {
+		RpcApi::<B>::finalized_head(self.as_online().rpc_client()).await.map_err(|e| {
 			error!("Error = {:?}", e);
 			"rpc finalized_head failed."
 		})
 	}
 
-	/// Relay the request to `state_getPairs` rpc endpoint.
+	/// Get all the keys at `prefix` at `hash` using the paged, safe RPC methods.
+	async fn get_keys_paged(
+		&self,
+		prefix: StorageKey,
+		at: B::Hash,
+	) -> Result<Vec<StorageKey>, &'static str> {
+		const PAGE: u32 = 512;
+		let mut last_key: Option<StorageKey> = None;
+		let mut all_keys: Vec<StorageKey> = vec![];
+		let keys = loop {
+			let page = RpcApi::<B>::get_keys_paged(
+				self.as_online().rpc_client(),
+				Some(prefix.clone()),
+				PAGE,
+				last_key.clone(),
+				Some(at),
+			)
+			.await
+			.map_err(|e| {
+				error!(target: LOG_TARGET, "Error = {:?}", e);
+				"rpc get_keys failed"
+			})?;
+			let page_len = page.len();
+			all_keys.extend(page);
+
+			if page_len < PAGE as usize {
+				debug!(target: LOG_TARGET, "last page received: {}", page_len);
+				break all_keys;
+			} else {
+				let new_last_key =
+					all_keys.last().expect("all_keys is populated; has .last(); qed");
+				debug!(
+					target: LOG_TARGET,
+					"new total = {}, full page received: {:?}",
+					all_keys.len(),
+					HexDisplay::from(new_last_key)
+				);
+				last_key = Some(new_last_key.clone());
+			}
+		};
+
+		Ok(keys)
+	}
+
+	/// Synonym of `rpc_get_pairs_unsafe` that uses paged queries to first get the keys, and then
+	/// map them to values one by one.
 	///
-	/// Note that this is an unsafe RPC.
-	async fn rpc_get_pairs(
+	/// This can work with public nodes. But, expect it to be darn slow.
+	pub(crate) async fn rpc_get_pairs_paged(
 		&self,
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
-		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-		RpcApi::<B>::storage_pairs(&self.as_online().rpc(), prefix, Some(at)).await.map_err(|e| {
-			error!("Error = {:?}", e);
-			"rpc storage_pairs failed"
-		})
+		use serde_json::to_value;
+		let keys = self.get_keys_paged(prefix, at).await?;
+		let keys_count = keys.len();
+		info!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
+
+		let mut key_values: Vec<KeyPair> = vec![];
+		let client = self.as_online().rpc_client();
+		for chunk_keys in keys.chunks(BATCH_SIZE) {
+			let batch = chunk_keys
+				.iter()
+				.cloned()
+				.map(|key| {
+					(
+						"state_getStorage",
+						JsonRpcParams::Array(
+							vec![
+								to_value(key).expect("json serialization will work; qed."),
+								to_value(at).expect("json serialization will work; qed."),
+							]
+						),
+					)
+				})
+				.collect::<Vec<_>>();
+			let values = client.batch_request::<Option<StorageData>>(batch)
+				.await
+				.map_err(|e| {
+					log::error!(target: LOG_TARGET, "failed to execute batch {:?} due to {:?}", chunk_keys, e);
+					"batch failed."
+				})?;
+			assert_eq!(chunk_keys.len(), values.len());
+			for (idx, key) in chunk_keys.into_iter().enumerate() {
+				let maybe_value = values[idx].clone();
+				let value = maybe_value.unwrap_or_else(|| {
+					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
+					StorageData(vec![])
+				});
+				key_values.push((key.clone(), value));
+				if key_values.len() % (10 * BATCH_SIZE) == 0 {
+					let ratio: f64 = key_values.len() as f64 / keys_count as f64;
+					debug!(
+						target: LOG_TARGET,
+						"progress = {:.2} [{} / {}]",
+						ratio,
+						key_values.len(),
+						keys_count,
+					);
+				}
+			}
+		}
+
+		Ok(key_values)
 	}
 }
 
@@ -279,13 +407,13 @@ impl<B: BlockT> Builder<B> {
 			.at
 			.expect("online config must be initialized by this point; qed.")
 			.clone();
-		info!(target: LOG_TARGET, "scraping keypairs from remote node {} @ {:?}", config.uri, at);
+		info!(target: LOG_TARGET, "scraping keypairs from remote @ {:?}", at);
 
 		let keys_and_values = if config.modules.len() > 0 {
 			let mut filtered_kv = vec![];
 			for f in config.modules.iter() {
 				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
-				let module_kv = self.rpc_get_pairs(hashed_prefix.clone(), at).await?;
+				let module_kv = self.rpc_get_pairs_paged(hashed_prefix.clone(), at).await?;
 				info!(
 					target: LOG_TARGET,
 					"downloaded data for module {} (count: {} / prefix: {:?}).",
@@ -298,22 +426,34 @@ impl<B: BlockT> Builder<B> {
 			filtered_kv
 		} else {
 			info!(target: LOG_TARGET, "downloading data for all modules.");
-			self.rpc_get_pairs(StorageKey(vec![]), at).await?.into_iter().collect::<Vec<_>>()
+			self.rpc_get_pairs_paged(StorageKey(vec![]), at).await?
 		};
 
 		Ok(keys_and_values)
 	}
 
-	async fn init_remote_client(&mut self) -> Result<(), &'static str> {
-		info!(target: LOG_TARGET, "initializing remote client to {:?}", self.as_online().uri);
+	pub(crate) async fn init_remote_client(&mut self) -> Result<(), &'static str> {
+		let mut online = self.as_online_mut();
+		info!(target: LOG_TARGET, "initializing remote client to {:?}", online.transport.uri);
+
+		// First, initialize the ws client.
+		let ws_client = WsClientBuilder::default()
+			.max_request_body_size(u32::MAX)
+			.build(&online.transport.uri)
+			.await
+			.map_err(|_| "failed to build ws client")?;
+		online.transport.client = Some(ws_client);
+
+		// Then, if `at` is not set, set it.
 		if self.as_online().at.is_none() {
 			let at = self.rpc_get_head().await?;
 			self.as_online_mut().at = Some(at);
 		}
+
 		Ok(())
 	}
 
-	async fn pre_build(mut self) -> Result<Vec<KeyPair>, &'static str> {
+	pub(crate) async fn pre_build(mut self) -> Result<Vec<KeyPair>, &'static str> {
 		let mut base_kv = match self.mode.clone() {
 			Mode::Offline(config) => self.load_state_snapshot(&config.state_snapshot.path)?,
 			Mode::Online(config) => {
@@ -380,8 +520,9 @@ mod test_prelude {
 
 	pub(crate) fn init_logger() {
 		let _ = env_logger::Builder::from_default_env()
-			.format_module_path(false)
+			.format_module_path(true)
 			.format_level(true)
+			.filter_module(LOG_TARGET, log::LevelFilter::Debug)
 			.try_init();
 	}
 }
@@ -395,7 +536,7 @@ mod tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Offline(OfflineConfig {
-				state_snapshot: SnapshotConfig { path: "test_data/proxy_test".into() },
+				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
 			}))
 			.build()
 			.await
@@ -413,7 +554,7 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				modules: vec!["Proxy".into()],
+				modules: vec!["System".to_owned()],
 				..Default::default()
 			}))
 			.build()
@@ -423,23 +564,69 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	async fn can_create_state_snapshot() {
+	async fn can_build_few_pallet() {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				state_snapshot: Some(SnapshotConfig {
-					name: "test_snapshot_to_remove.bin".into(),
-					..Default::default()
-				}),
+				modules: vec!["Proxy".to_owned(), "Multisig".to_owned(), "PhragmenElection".to_owned()],
 				..Default::default()
 			}))
 			.build()
 			.await
 			.expect("Can't reach the remote node. Is it running?")
-			.unwrap()
+			.execute_with(|| {});
+	}
+
+	#[tokio::test]
+	async fn sanity_check_decoding() {
+		use pallet_elections_phragmen::SeatHolder;
+		use sp_core::crypto::Ss58Codec;
+		type AccountId = sp_runtime::AccountId32;
+		type Balance = u128;
+		frame_support::generate_storage_alias!(
+			PhragmenElection,
+			Members =>
+			Value<Vec<SeatHolder<AccountId, Balance>>>
+		);
+
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				modules: vec!["PhragmenElection".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect("Can't reach the remote node. Is it running?")
+			.execute_with(|| {
+				// Gav's polkadot account. 99% this will be in the council.
+				let gav_polkadot =
+					AccountId::from_ss58check("13RDY9nrJpyTDBSUdBw12dGwhk19sGwsrVZ2bxkzYHBSagP2")
+						.unwrap();
+				let members = Members::get().unwrap();
+				assert!(members
+					.iter()
+					.map(|s| s.who.clone())
+					.find(|a| a == &gav_polkadot)
+					.is_some());
+			});
+	}
+
+	#[tokio::test]
+	async fn can_create_state_snapshot() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				state_snapshot: Some(SnapshotConfig::new("test_snapshot_to_remove.bin")),
+				modules: vec!["Balances".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect("Can't reach the remote node. Is it running?")
 			.execute_with(|| {});
 
-		let to_delete = std::fs::read_dir(SnapshotConfig::default().directory)
+		let to_delete = std::fs::read_dir(SnapshotConfig::default().path)
 			.unwrap()
 			.into_iter()
 			.map(|d| d.unwrap())
@@ -454,7 +641,7 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	async fn can_build_all() {
+	async fn can_fetch_all() {
 		init_logger();
 		Builder::<Block>::new()
 			.build()

@@ -20,10 +20,19 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../std" }
 sp-io = { version = "3.0.0", default-features = false, path = "../io" }
+max-encoded-len = { version = "3.0.0", default-features = false, path = "../../max-encoded-len", features = [ "derive" ] }
 
 [features]
 default = [ "std" ]
-std = [ "full_crypto", "sp-core/std", "codec/std", "serde", "sp-std/std", "sp-io/std" ]
+std = [
+	"full_crypto",
+	"sp-core/std",
+	"codec/std",
+	"serde",
+	"sp-std/std",
+	"sp-io/std",
+	"max-encoded-len/std",
+]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
 # or Intel SGX.
