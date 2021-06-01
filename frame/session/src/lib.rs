@@ -238,12 +238,19 @@ pub trait SessionManager<ValidatorId> {
 	/// `new_session(session)` is guaranteed to be called before `end_session(session-1)`. In other
 	/// words, a new session must always be planned before an ongoing one can be finished.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
+	/// Same as `new_session`, but it this should only be called at genesis.
+	///
+	/// The session manager might decide to treat this in a different way. Default impl is simply
+	/// using [`new_session`].
+	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<ValidatorId>> {
+		Self::new_session(new_index)
+	}
 	/// End the session.
 	///
 	/// Because the session pallet can queue validator set the ending session can be lower than the
 	/// last new session index.
 	fn end_session(end_index: SessionIndex);
-	/// Start the session.
+	/// Start an already planned the session.
 	///
 	/// The session start to be used for validation.
 	fn start_session(start_index: SessionIndex);
@@ -451,7 +458,7 @@ decl_storage! {
 				}
 			}
 
-			let initial_validators_0 = T::SessionManager::new_session(0)
+			let initial_validators_0 = T::SessionManager::new_session_genesis(0)
 				.unwrap_or_else(|| {
 					frame_support::print("No initial validator provided by `SessionManager`, use \
 						session config keys to generate initial validator set.");
@@ -459,7 +466,7 @@ decl_storage! {
 				});
 			assert!(!initial_validators_0.is_empty(), "Empty validator set for session 0 in genesis block!");
 
-			let initial_validators_1 = T::SessionManager::new_session(1)
+			let initial_validators_1 = T::SessionManager::new_session_genesis(1)
 				.unwrap_or_else(|| initial_validators_0.clone());
 			assert!(!initial_validators_1.is_empty(), "Empty validator set for session 1 in genesis block!");
 

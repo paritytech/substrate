@@ -738,6 +738,13 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 		DataProvider = Module<Self>,
 	>;
 
+	/// Something that provides the election functionality at genesis.
+	type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
+		Self::AccountId,
+		Self::BlockNumber,
+		DataProvider = Module<Self>,
+	>;
+
 	/// Maximum number of nominations per nominator.
 	const MAX_NOMINATIONS: u32;
 
@@ -2139,7 +2146,7 @@ impl<T: Config> Module<T> {
 	}
 
 	/// Plan a new session potentially trigger a new era.
-	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
@@ -2166,7 +2173,7 @@ impl<T: Config> Module<T> {
 			}
 
 			// New era.
-			let maybe_new_era_validators = Self::try_trigger_new_era(session_index);
+			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
 			if maybe_new_era_validators.is_some() && matches!(ForceEra::get(), Forcing::ForceNew) {
 				ForceEra::kill();
 			}
@@ -2175,7 +2182,7 @@ impl<T: Config> Module<T> {
 		} else {
 			// Set initial era.
 			log!(debug, "Starting the first era.");
-			Self::try_trigger_new_era(session_index)
+			Self::try_trigger_new_era(session_index, is_genesis)
 		}
 	}
 
@@ -2306,13 +2313,19 @@ impl<T: Config> Module<T> {
 	/// In case election result has more than [`MinimumValidatorCount`] validator trigger a new era.
 	///
 	/// In case a new era is planned, the new validator set is returned.
-	fn try_trigger_new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		let (election_result, weight) = T::ElectionProvider::elect()
-			.map_err(|e| {
+	fn try_trigger_new_era(start_session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
+		let (election_result, weight) = if is_genesis {
+			T::GenesisElectionProvider::elect().map_err(|e| {
+				log!(warn, "genesis election provider failed due to {:?}", e);
+				Self::deposit_event(RawEvent::StakingElectionFailed);
+			})
+		} else {
+			T::ElectionProvider::elect().map_err(|e| {
 				log!(warn, "election provider failed due to {:?}", e);
 				Self::deposit_event(RawEvent::StakingElectionFailed);
 			})
-			.ok()?;
+		}
+		.ok()?;
 
 		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
 			weight,
@@ -2707,16 +2720,20 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		log!(trace, "planning new_session({})", new_index);
+		log!(trace, "planning new session {}", new_index);
 		CurrentPlannedSession::put(new_index);
-		Self::new_session(new_index)
+		Self::new_session(new_index, false)
+	}
+	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+		log!(trace, "planning new session {} at genesis", new_index);
+		Self::new_session(new_index, true)
 	}
 	fn start_session(start_index: SessionIndex) {
-		log!(trace, "starting start_session({})", start_index);
+		log!(trace, "starting session {}", start_index);
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
-		log!(trace, "ending end_session({})", end_index);
+		log!(trace, "ending session {}", end_index);
 		Self::end_session(end_index)
 	}
 }

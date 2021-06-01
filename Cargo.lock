@@ -4316,6 +4316,7 @@ name = "node-runtime"
 version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
+ "frame-election-provider-support",
  "frame-executive",
  "frame-support",
  "frame-system",
