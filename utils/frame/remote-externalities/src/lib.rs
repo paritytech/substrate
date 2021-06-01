@@ -157,7 +157,7 @@ pub struct Builder<B: BlockT> {
 	/// Custom key-pairs to be injected into the externalities.
 	inject: Vec<KeyPair>,
 	/// Storage entry key prefixes to be injected into the externalities. The raw prefix must be given.
-	raw_prefixes: Vec<Vec<u8>>,
+	hashed_prefixes: Vec<Vec<u8>>,
 	/// connectivity mode, online or offline.
 	mode: Mode<B>,
 }
@@ -166,7 +166,7 @@ pub struct Builder<B: BlockT> {
 // that.
 impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
-		Self { inject: Default::default(), mode: Default::default(), raw_prefixes: Default::default() }
+		Self { inject: Default::default(), mode: Default::default(), hashed_prefixes: Default::default() }
 	}
 }
 
@@ -350,7 +350,7 @@ impl<B: BlockT> Builder<B> {
 			self.rpc_get_pairs_paged(StorageKey(vec![]), at).await?
 		};
 
-		for prefix in &self.raw_prefixes {
+		for prefix in &self.hashed_prefixes {
 			info!(target: LOG_TARGET, "adding data for raw prefix: {:?}", HexDisplay::from(prefix));
 			let additional_key_values = self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at).await?;
 			keys_and_values.extend(additional_key_values);
@@ -418,9 +418,9 @@ impl<B: BlockT> Builder<B> {
 		self
 	}
 
-	/// Inject a manual raw prefixes
-	pub fn raw_prefix(mut self, raw: &[u8]) -> Self {
-		self.raw_prefixes.push(raw.to_vec());
+	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed. 
+	pub fn inject_hashed_prefix(mut self, hashed: &[u8]) -> Self {
+		self.hashed_prefixes.push(hashed.to_vec());
 		self
 	}
 
