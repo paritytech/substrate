@@ -20,7 +20,7 @@
 //! Tracks changes over the span of a few recent blocks and handles forks
 //! by tracking/removing cache entries for conflicting changes.
 
-use std::collections::{VecDeque, HashSet, BTreeSet, HashMap, BTreeMap, Bound};
+use std::collections::{VecDeque, HashSet, BTreeSet, HashMap, BTreeMap};
 use std::sync::Arc;
 use std::hash::Hash as StdHash;
 use std::ptr::NonNull;
@@ -100,7 +100,7 @@ struct KeyOrderedEntry<K> {
 unsafe impl<K: Send> Send for LRUOrderedKeys<K> {}
 unsafe impl<K: Sync> Sync for LRUOrderedKeys<K> {}
 
-impl<K: Ord> LRUOrderedKeys<K> {
+impl<K: Ord + Clone + 'static> LRUOrderedKeys<K> {
 	fn new(limit: usize) -> Self {
 		LRUOrderedKeys {
 			intervals: BTreeMap::new(),
@@ -113,6 +113,25 @@ impl<K: Ord> LRUOrderedKeys<K> {
 	}
 	fn next_storage_key(&mut self, key: &K, child: Option<&ChildInfo>) -> Option<Option<&K>> {
 		unimplemented!()
+	}
+	// new value added to state from change.
+	// Since we do not know if added or removed we just invalidate.
+	fn enact_value_changes<'a>(&mut self, key: impl Iterator<Item = (&'a K, bool)>, child: Option<&Vec<u8>>) {
+		unimplemented!()
+	}
+	fn merge_local_cache(&mut self, local: &mut LocalOrderedKeys<K>) {
+		unimplemented!()
+	}
+	fn retract_value_changes<'a>(&mut self, key: impl Iterator<Item = &'a K>, child: Option<&Vec<u8>>) {
+		// Note that enact is keeping value by inserting in existing interval, but retract cannot
+		// as we do not know if previous enact did insert or was an already existing value.
+		unimplemented!()
+	}
+	fn clear(&mut self) {
+		unimplemented!()
+	}
+	fn used_size(&self) -> usize {
+		self.used_size
 	}
 }
 
@@ -241,7 +260,8 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 	}
 
 	// removal is mainly for lru, but both cache shares implementation and
-	// this function is used in tests. TODO cfg(test)? 
+	// this function is used in tests.
+	#[cfg(test)]
 	fn remove(&mut self, key: K, child: Option<&ChildInfo>) {
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info.storage_key()) {
@@ -414,6 +434,7 @@ impl<B: BlockT> Cache<B> {
 	pub fn used_storage_cache_size(&self) -> usize {
 		self.lru_storage.used_size()
 			+ self.lru_child_storage.used_size()
+			+ self.lru_next_keys.used_size()
 			//  ignore small hashes storage and self.lru_hashes.used_size()
 	}
 
@@ -437,9 +458,13 @@ impl<B: BlockT> Cache<B> {
 						self.lru_storage.remove(a);
 						self.lru_hashes.remove(a);
 					}
+					self.lru_next_keys.retract_value_changes(m.ordered_storage.iter(), None);
 					for a in &m.child_storage {
 						trace!("Reverting enacted child key {:?}", a);
 						self.lru_child_storage.remove(a);
+					}
+					for (child_key, ordered_storage) in m.ordered_child_storage.iter() {
+						self.lru_next_keys.retract_value_changes(ordered_storage.iter(), Some(child_key));
 					}
 					false
 				} else {
@@ -458,9 +483,13 @@ impl<B: BlockT> Cache<B> {
 						self.lru_storage.remove(a);
 						self.lru_hashes.remove(a);
 					}
+					self.lru_next_keys.retract_value_changes(m.ordered_storage.iter(), None);
 					for a in &m.child_storage {
 						trace!("Retracted child key {:?}", a);
 						self.lru_child_storage.remove(a);
+					}
+					for (child_key, ordered_storage) in m.ordered_child_storage.iter() {
+						self.lru_next_keys.retract_value_changes(ordered_storage.iter(), Some(child_key));
 					}
 					false
 				} else {
@@ -473,6 +502,7 @@ impl<B: BlockT> Cache<B> {
 			trace!("Wiping cache");
 			self.lru_storage.clear();
 			self.lru_child_storage.clear();
+			self.lru_next_keys.clear();
 			self.lru_hashes.clear();
 			self.modifications.clear();
 		}
@@ -678,6 +708,7 @@ impl<B: BlockT> CacheChanges<B> {
 				for (k, v) in local_cache.storage.drain() {
 					cache.lru_storage.add(k, v);
 				}
+				cache.lru_next_keys.merge_local_cache(&mut local_cache.next_keys);
 				for (k, v) in local_cache.child_storage.drain() {
 					cache.lru_child_storage.add(k, v);
 				}
@@ -700,6 +731,12 @@ impl<B: BlockT> CacheChanges<B> {
 			let mut ordered_child_storage: HashMap<Vec<u8>, BTreeSet<StorageKey>> = Default::default();
 			child_changes.into_iter().for_each(|(sk, changes)| {
 				let ordered_entry = ordered_child_storage.entry(sk.clone()).or_default();
+				if is_best {
+					cache.lru_next_keys.enact_value_changes(
+						changes.iter().map(|(k, v)| (k, v.is_some())),
+						Some(&sk),
+					);
+				}
 				for (k, v) in changes.into_iter() {
 					ordered_entry.insert(k.clone());
 					let k = (sk.clone(), k);
@@ -709,6 +746,12 @@ impl<B: BlockT> CacheChanges<B> {
 					child_modifications.insert(k);
 				}
 			});
+			if is_best {
+				cache.lru_next_keys.enact_value_changes(
+					changes.iter().map(|(k, v)| (k, v.is_some())),
+					None,
+				);
+			}
 			for (k, v) in changes.into_iter() {
 				if is_best {
 					cache.lru_hashes.remove(&k);
@@ -986,7 +1029,26 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_child_storage_key(child_info, key)
+		let local_cache = self.cache.local_cache.upgradable_read();
+		let key = key.to_vec();
+		if let Some(entry) = local_cache.next_keys.next_storage_key(&key, Some(child_info)) {
+			trace!("Found next storage key in local cache: {:?}", HexDisplay::from(&key));
+			return Ok(entry.cloned())
+		}
+		let mut cache = self.cache.shared_cache.lock();
+		if let Some(parent) = self.cache.parent_hash.as_ref() {
+			if let Some(entry) = cache.lru_next_keys.next_storage_key(&key, Some(child_info)).map(|a| a.clone()) {
+				let entry = entry.cloned();
+				if Self::is_allowed_interval((&key, entry.as_ref()), None, parent, &cache.modifications) {
+					trace!("Found next key in shared cache: {:?}", HexDisplay::from(&key));
+					return Ok(entry)
+				}
+			}
+		}
+		trace!("Cache hash miss: {:?}", HexDisplay::from(&key));
+		let next  = self.state.next_child_storage_key(child_info, &key)?;
+		RwLockUpgradableReadGuard::upgrade(local_cache).next_keys.insert(key, Some(child_info), next.clone());
+		Ok(next)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -1840,8 +1902,10 @@ mod tests {
 
 	#[test]
 	fn interval_map_works() {
+		let nb_test = 100;
 		let layout = [1, 3, 7, 8];
 		let query_range = 10;
+		let seed = 0;
 
 		let next_layout = |v: usize| -> Option<usize> {
 			for a in layout.iter() {
@@ -1852,9 +1916,7 @@ mod tests {
 			None
 		};
 		use rand::{SeedableRng, Rng};
-		let seed = 0;
 		let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
-		let nb_test = 100;
 
 		for _ in 0..nb_test {
 
