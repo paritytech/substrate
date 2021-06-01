@@ -366,10 +366,10 @@ where
 		options: sc_transaction_graph::Options,
 		is_validator: txpool::IsValidator,
 		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed + Clone + 'static,
+		spawner: impl SpawnNamed,
 		client: Arc<Client>,
 	) -> Arc<Self> {
-		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus, spawner.clone()));
+		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
 		let pool = Arc::new(Self::with_revalidation_type(
 			options, is_validator, pool_api, prometheus, RevalidationType::Full, spawner
 		));
