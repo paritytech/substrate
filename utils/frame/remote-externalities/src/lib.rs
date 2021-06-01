@@ -156,7 +156,7 @@ impl Default for SnapshotConfig {
 pub struct Builder<B: BlockT> {
 	/// Custom key-pairs to be injected into the externalities.
 	inject: Vec<KeyPair>,
-	/// Storage entry key prefixes to be injected into the externalities. The raw prefix must be given.
+	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must be given.
 	hashed_prefixes: Vec<Vec<u8>>,
 	/// connectivity mode, online or offline.
 	mode: Mode<B>,
@@ -351,7 +351,7 @@ impl<B: BlockT> Builder<B> {
 		};
 
 		for prefix in &self.hashed_prefixes {
-			info!(target: LOG_TARGET, "adding data for raw prefix: {:?}", HexDisplay::from(prefix));
+			info!(target: LOG_TARGET, "adding data for hashed prefix: {:?}", HexDisplay::from(prefix));
 			let additional_key_values = self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at).await?;
 			keys_and_values.extend(additional_key_values);
 		}
