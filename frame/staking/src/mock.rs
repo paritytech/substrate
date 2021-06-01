@@ -260,8 +260,32 @@ impl Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
-	type GenesisElectionProvider = Self::ElectionProvider;
+	type GenesisElectionProvider = GenesisElectionProviderMock;
 	type WeightInfo = ();
+}
+
+thread_local! {
+	pub static GENESIS_ERA: RefCell<Option<Supports<AccountId>>> = RefCell::new(None);
+}
+
+pub struct GenesisElectionProviderMock;
+
+impl ElectionProvider<AccountId, BlockNumber> for GenesisElectionProviderMock {
+	type Error = <
+		<Test as Config>::ElectionProvider as ElectionProvider<AccountId, BlockNumber>
+	>::Error;
+
+	type DataProvider = <
+		<Test as Config>::ElectionProvider as ElectionProvider<AccountId, BlockNumber>
+	>::DataProvider;
+
+	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error> {
+		if let Some(genesis_era) = GENESIS_ERA.with(|genesis_era| genesis_era.borrow().clone()) {
+			Ok((genesis_era, 0))
+		} else {
+			<Test as Config>::ElectionProvider::elect()
+		}
+	}
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
@@ -349,6 +373,9 @@ impl ExtBuilder {
 		PERIOD.with(|v| *v.borrow_mut() = length);
 		self
 	}
+	/// with stakers: some validators, nominators and idle staker are generated.
+	/// without stakers: the first era will elect the validator who have configured keys, without
+	/// any exposure.
 	pub fn has_stakers(mut self, has: bool) -> Self {
 		self.has_stakers = has;
 		self
@@ -427,6 +454,14 @@ impl ExtBuilder {
 				// nominator
 				(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated))
 			];
+		} else {
+			GENESIS_ERA.with(|genesis_era| {
+				*genesis_era.borrow_mut() = Some(
+					validators.iter()
+						.map(|x| (*x, Default::default()))
+						.collect()
+				);
+			});
 		}
 		let _ = staking::GenesisConfig::<Test>{
 			stakers: stakers,
