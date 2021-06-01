@@ -890,6 +890,7 @@ pub mod pallet {
 			// `ElectionProvider::elect` will not succeed and take care of that.
 
 			<QueuedSolution<T>>::put(solution);
+			Ok(())
 		}
 
 		/// Submit a solution for the signed phase.
