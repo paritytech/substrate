@@ -246,7 +246,7 @@ pub enum BasePath {
 	#[cfg(not(target_os = "unknown"))]
 	Temporary(TempDir),
 	/// A path on the disk.
-	Permanenent(PathBuf),
+	Permanent(PathBuf),
 }
 
 impl BasePath {
@@ -267,7 +267,7 @@ impl BasePath {
 	/// Note: this function will not ensure that the directory exist nor create the directory. It
 	/// will also not delete the directory when the instance is dropped.
 	pub fn new<P: AsRef<Path>>(path: P) -> BasePath {
-		BasePath::Permanenent(path.as_ref().to_path_buf())
+		BasePath::Permanent(path.as_ref().to_path_buf())
 	}
 
 	/// Create a base path from values describing the project.
@@ -285,7 +285,7 @@ impl BasePath {
 		match self {
 			#[cfg(not(target_os = "unknown"))]
 			BasePath::Temporary(temp_dir) => temp_dir.path(),
-			BasePath::Permanenent(path) => path.as_path(),
+			BasePath::Permanent(path) => path.as_path(),
 		}
 	}
 
