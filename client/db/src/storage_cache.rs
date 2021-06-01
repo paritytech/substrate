@@ -20,7 +20,7 @@
 //! Tracks changes over the span of a few recent blocks and handles forks
 //! by tracking/removing cache entries for conflicting changes.
 
-use std::collections::{VecDeque, HashSet, BTreeSet, HashMap, BTreeMap};
+use std::collections::{VecDeque, HashSet, BTreeSet, HashMap, BTreeMap, Bound};
 use std::sync::Arc;
 use std::hash::Hash as StdHash;
 use std::ptr::NonNull;
@@ -134,17 +134,18 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 				match iter.next() {
 					Some((next_key, CachedInterval::Prev))
 					| Some((next_key, CachedInterval::Both)) => Some(Some(next_key)),
-					_ => None, // Should be unreachable
+					Some((next_key, CachedInterval::Next)) => None, // Should be unreachable
+					None => Some(None),
 				}
 			},
 			Some((next_key, CachedInterval::Prev)) if next_key == key => None,
 			Some((_next_key, CachedInterval::Next)) => None,
-			Some((next_key, _)) => match iter.next_back() {
+			Some((next_key, _)) => match intervals.range(..key).next_back() {
 				Some((_prev_key, CachedInterval::Next))
 				| Some((_prev_key, CachedInterval::Both)) => Some(Some(next_key)),
 				_ => None, // Should be unreachable
 			},
-			None => match iter.next_back() {
+			None => match intervals.range(..key).next_back() {
 				Some((_prev_key, CachedInterval::Next))
 				| Some((_prev_key, CachedInterval::Both)) => Some(None),
 				_ => None,
@@ -163,9 +164,29 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 		} else {
 			&mut self.intervals
 		};
+		let process_end_interval = |next_key: Option<(&K, &mut CachedInterval)>| -> (Option<K>, bool) {
+			match next_key {
+				Some(next_key) if next.is_none() || Some(next_key.0) < next.as_ref() => {
+					// having prev would mean we did cache a different interval.
+					debug_assert!(next_key.1.clone() == CachedInterval::Next);
+					(Some(next_key.0.clone()), false)
+				},
+				Some(next_key) if Some(next_key.0) == next.as_ref() => {
+					if next_key.1.clone() != CachedInterval::Prev {
+						*next_key.1 = CachedInterval::Both;
+					}
+					(None, false)
+				},
+				_ =>  {
+					// next is before or we did not have next, so just insert.
+					(None, true)
+				},
+			}
+		};
+
 		let mut iter = intervals.range_mut(&key..);
 		// handle start of interval
-		let (insert_start, next_key) = match iter.next() {
+		let (insert_start, (remove_end, insert_end)) = match iter.next() {
 			// Match key
 			Some((cur_key, CachedInterval::Next))
 			| Some((cur_key, CachedInterval::Both)) if cur_key == &key => {
@@ -181,53 +202,29 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 			},
 			Some(cur_key) if cur_key.0 == &key => {
 				*cur_key.1 = CachedInterval::Both;
-				(false, iter.next())
+				(false, process_end_interval(iter.next()))
 			},
 			// Before interval
-			next_key => match iter.next_back() {
-				Some((prev_key, CachedInterval::Prev)) if prev_key < &key => {
-					// no overlap
-					(true, next_key)
-				},
-				Some(prev_key) if prev_key.1.clone() == CachedInterval::Prev => {
-					// prev_key == key (cannot be >)
-					*prev_key.1 = CachedInterval::Both;
-					(false, next_key)
-				},
-				Some(_) => {
-					// start in or on an existing interval, so end does match.
-					debug_assert!(next.as_ref() == next_key.as_ref().map(|n| n.0));
-					debug_assert!(match next_key.map(|n| n.1.clone()).unwrap_or(CachedInterval::Prev) {
-						CachedInterval::Next => false,
-						_ => true,
-					});
-					return;
-				},
-				None => {
-					// first key
-					(true, next_key)
-				},
-			},
-		};
-		// we know we have start iterval to this next key.
-		// Then insert befor if next is not refering to previous.
-		// Then remove next is it is a next (not existing so we got a larger interval here).
-		// Do nothing if same as existing.
-		let (remove_end, insert_end) = match next_key {
-			Some(next_key) if next.is_none() || Some(next_key.0) < next.as_ref() => {
-				// having prev would mean we did cache a different interval.
-				debug_assert!(next_key.1.clone() == CachedInterval::Next);
-				(Some(next_key.0.clone()), false)
-			},
-			Some(next_key) if Some(next_key.0) == next.as_ref() => {
-				if next_key.1.clone() != CachedInterval::Prev {
-					*next_key.1 = CachedInterval::Both;
+			next_key => {
+				let processed_next = process_end_interval(next_key);
+				match intervals.range_mut(..&key).next_back() {
+					Some((prev_key, CachedInterval::Prev)) if prev_key < &key => {
+						// no overlap
+						(true, processed_next)
+					},
+					Some(prev_key) if prev_key.1.clone() == CachedInterval::Prev => {
+						// prev_key == key (cannot be >)
+						*prev_key.1 = CachedInterval::Both;
+						(false, processed_next)
+					},
+					Some(_) => {
+						(false, processed_next)
+					},
+					None => {
+						// first key
+						(true, processed_next)
+					},
 				}
-				(None, false)
-			},
-			_ =>  {
-				// next is before or we did not have next, so just insert.
-				(None, true)
 			},
 		};
 		if insert_start {
@@ -260,7 +257,7 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 			let rem_next = if siblings == CachedInterval::Next || siblings == CachedInterval::Both {
 				match iter.next() {
 					Some((k, CachedInterval::Prev)) => {
-						Some(k)
+						Some(k.clone())
 					},
 					Some(k) => {
 						debug_assert!(k.1.clone() == CachedInterval::Both);
@@ -273,7 +270,7 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 				None
 			};
 			let rem_prev = if siblings == CachedInterval::Prev || siblings == CachedInterval::Both {
-				match iter.next_back() {
+				match intervals.range_mut(..&key).next_back() {
 					Some((k, CachedInterval::Next)) => {
 						Some(k)
 					},
@@ -287,7 +284,7 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 			} else {
 				None
 			};
-			(rem_prev.cloned(), rem_next.cloned())
+			(rem_prev.cloned(), rem_next)
 		} else {
 			return;
 		};
@@ -302,7 +299,7 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 
 // Could be Copy, but is not for the
 // sake of assigning to &mut without surprise.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 enum CachedInterval {
 	/// Next key is next key in cache.
 	/// The current key could be an undefined key.
@@ -1839,6 +1836,71 @@ mod tests {
 			true,
 		);
 		assert_eq!(s.storage(&key).unwrap(), None);
+	}
+
+	#[test]
+	fn interval_map_works() {
+		let layout = [1, 3, 7, 8];
+		let query_range = 10;
+
+		let next_layout = |v: usize| -> Option<usize> {
+			for a in layout.iter() {
+				if *a > v {
+					return Some(*a)
+				}
+			}
+			None
+		};
+		use rand::{SeedableRng, Rng};
+		let seed = 0;
+		let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
+		let nb_test = 100;
+
+		for _ in 0..nb_test {
+
+			let mut l = LocalOrderedKeys::<usize>::default();
+
+			let mut ixs: Vec<_> = (0..query_range).collect();
+			while ixs.len() > 0 {
+				let ix = ixs.remove(rng.gen::<usize>() % ixs.len());
+				l.insert(ix, None, next_layout(ix));
+				if ixs.len() == query_range / 2 {
+					// middle check
+					let mut ixs: Vec<_> = (0..query_range).collect();
+					while ixs.len() > 0 {
+						let ix = ixs.remove(rng.gen::<usize>() % ixs.len());
+						let next = l.next_storage_key(&ix, None);
+						if let Some(next) = next {
+							// not remove from cache
+							assert_eq!(next, next_layout(ix).as_ref());
+						}
+					}
+				}
+			}
+			let mut ixs: Vec<_> = (0..query_range).collect();
+			while ixs.len() > 0 {
+				let ix = ixs.remove(rng.gen::<usize>() % ixs.len());
+				let next = l.next_storage_key(&ix, None);
+				// all in cache
+				assert!(next.is_some());
+				let next = next.unwrap();
+				assert_eq!(next, next_layout(ix).as_ref());
+			}
+			let mut ixs: Vec<_> = (0..(query_range / 2)).collect();
+			while ixs.len() > 0 {
+				let ix = ixs.remove(rng.gen::<usize>() % ixs.len());
+				l.remove(ix, None);
+			}
+			let mut ixs: Vec<_> = (0..query_range).collect();
+			while ixs.len() > 0 {
+				let ix = ixs.remove(rng.gen::<usize>() % ixs.len());
+				let next = l.next_storage_key(&ix, None);
+				if let Some(next) = next {
+					// not remove from cache
+					assert_eq!(next, next_layout(ix).as_ref());
+				}
+			}
+		}
 	}
 }
 
