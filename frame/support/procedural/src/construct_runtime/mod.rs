@@ -145,7 +145,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
 	let pallet_to_index = decl_pallet_runtime_setup(&pallets, &scrate);
 
-	let dispatch = decl_outer_dispatch(&name, pallets.iter(), &scrate);
+	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
 	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
 	let inherent = decl_outer_inherent(
@@ -241,29 +241,6 @@ fn decl_outer_inherent<'a>(
 				#(#pallets_tokens)*
 			}
 		);
-	)
-}
-
-fn decl_outer_dispatch<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations
-		.filter(|pallet_declaration| pallet_declaration.exists_part("Call"))
-		.map(|pallet_declaration| {
-			let pallet = &pallet_declaration.pallet.inner.segments.last().unwrap();
-			let name = &pallet_declaration.name;
-			let index = pallet_declaration.index;
-			quote!(#[codec(index = #index)] #pallet::#name)
-		});
-
-	quote!(
-		#scrate::impl_outer_dispatch! {
-			pub enum Call for #runtime where origin: Origin {
-				#(#pallets_tokens,)*
-			}
-		}
 	)
 }
 

@@ -15,11 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
+mod calls;
 mod config;
 mod event;
 mod metadata;
 mod origin;
 
+pub use calls::expand_outer_dispatch;
 pub use config::expand_outer_config;
 pub use event::expand_outer_event;
 pub use metadata::expand_runtime_metadata;
