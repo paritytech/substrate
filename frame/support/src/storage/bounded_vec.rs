@@ -94,6 +94,12 @@ impl<T, S> BoundedVec<T, S> {
 	}
 }
 
+impl<T, S: Get<u32>> From<BoundedVec<T, S>> for Vec<T> {
+	fn from(x: BoundedVec<T, S>) -> Vec<T> {
+		x.0
+	}
+}
+
 impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// Get the bound of the type in `usize`.
 	pub fn bound() -> usize {
