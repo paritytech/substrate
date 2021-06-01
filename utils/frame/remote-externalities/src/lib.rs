@@ -156,7 +156,7 @@ impl Default for SnapshotConfig {
 pub struct Builder<B: BlockT> {
 	/// certain custom key-pairs to be injected into the externalities.
 	inject: Vec<KeyPair>,
-	/// Certain prefixes the be injected as well. The raw prefix must be given.
+	/// Storage entry key prefixes to be injected into the externalities. The raw prefix must be given.
 	raw_prefixes: Vec<Vec<u8>>,
 	/// connectivity mode, online or offline.
 	mode: Mode<B>,
