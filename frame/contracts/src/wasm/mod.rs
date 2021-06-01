@@ -619,7 +619,7 @@ mod tests {
 	fn contract_call_forward_input() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_call" (func $seal_call (param i32 i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
@@ -627,10 +627,8 @@ mod tests {
 			(call $seal_call
 				(i32.const 1) ;; Set FORWARD_INPUT bit
 				(i32.const 4)  ;; Pointer to "callee" address.
-				(i32.const 32)  ;; Length of "callee" address.
 				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
 				(i32.const 36) ;; Pointer to the buffer with value to transfer
-				(i32.const 8)  ;; Length of the buffer with value to transfer.
 				(i32.const 44) ;; Pointer to input data buffer address
 				(i32.const 4)  ;; Length of input data buffer
 				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
@@ -681,7 +679,7 @@ mod tests {
 	fn contract_call_clone_input() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_call" (func $seal_call (param i32 i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -690,10 +688,8 @@ mod tests {
 			(call $seal_call
 				(i32.const 11) ;; Set FORWARD_INPUT | CLONE_INPUT | ALLOW_REENTRY bits
 				(i32.const 4)  ;; Pointer to "callee" address.
-				(i32.const 32)  ;; Length of "callee" address.
 				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
 				(i32.const 36) ;; Pointer to the buffer with value to transfer
-				(i32.const 8)  ;; Length of the buffer with value to transfer.
 				(i32.const 44) ;; Pointer to input data buffer address
 				(i32.const 4)  ;; Length of input data buffer
 				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
@@ -744,17 +740,15 @@ mod tests {
 	fn contract_call_tail_call() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_call" (func $seal_call (param i32 i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
 			(call $seal_call
 				(i32.const 5) ;; Set FORWARD_INPUT | TAIL_CALL bit
 				(i32.const 4)  ;; Pointer to "callee" address.
-				(i32.const 32)  ;; Length of "callee" address.
 				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
 				(i32.const 36) ;; Pointer to the buffer with value to transfer
-				(i32.const 8)  ;; Length of the buffer with value to transfer.
 				(i32.const 0) ;; Pointer to input data buffer address
 				(i32.const 0)  ;; Length of input data buffer
 				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
@@ -2003,24 +1997,17 @@ mod tests {
 "#;
 
 	#[test]
-	fn contract_decode_failure() {
+	fn contract_decode_length_ignored() {
 		let mut mock_ext = MockExt::default();
 		let result = execute(
 			CODE_DECODE_FAILURE,
 			vec![],
 			&mut mock_ext,
 		);
-
-		assert_eq!(
-			result,
-			Err(ExecError {
-				error: Error::<Test>::DecodingFailed.into(),
-				origin: ErrorOrigin::Caller,
-			})
-		);
+		// AccountID implements `MaxEncodeLen` and therefore the supplied length is
+		// no longer needed nor used to determine how much is read from contract memory.
+		assert_ok!(result);
 	}
-
-
 
 	#[test]
 	#[cfg(feature = "unstable-interface")]

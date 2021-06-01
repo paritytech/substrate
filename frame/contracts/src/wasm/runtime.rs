@@ -26,7 +26,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use pwasm_utils::parity_wasm::elements::ValueType;
-use frame_support::{dispatch::DispatchError, ensure, weights::Weight};
+use frame_support::{dispatch::DispatchError, ensure, weights::Weight, traits::MaxEncodedLen};
 use sp_std::prelude::*;
 use codec::{Decode, DecodeAll, Encode};
 use sp_core::{Bytes, crypto::UncheckedFrom};
@@ -213,8 +213,6 @@ pub enum RuntimeCosts {
 	HashBlake128(u32),
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(u64),
-	/// Weight charged for copying data from the sandbox.
-	CopyIn(u32),
 }
 
 impl RuntimeCosts {
@@ -275,7 +273,6 @@ impl RuntimeCosts {
 			HashBlake128(len) => s.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			ChainExtension(amount) => amount,
-			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -486,6 +483,21 @@ where
 		self.memory.get(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
 	}
 
+	/// Reads and decodes a type with a size fixed at compile time from contract memory.
+	///
+	/// # Note
+	///
+	/// The weight of reading a fixed value is included in the overall weight of any
+	/// contract callable function.
+	pub fn read_sandbox_memory_as<D: Decode + MaxEncodedLen>(&self, ptr: u32)
+	-> Result<D, DispatchError>
+	{
+		let buf = self.read_sandbox_memory(ptr, D::max_encoded_len() as u32)?;
+		let decoded = D::decode_all(&mut &buf[..])
+			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
+		Ok(decoded)
+	}
+
 	/// Read designated chunk from the sandbox memory and attempt to decode into the specified type.
 	///
 	/// Returns `Err` if one of the following conditions occurs:
@@ -495,25 +507,14 @@ where
 	///
 	/// # Note
 	///
-	/// It is safe to forgo benchmarking and charging weight relative to `len` for fixed
-	/// size types (basically everything not containing a heap collection):
-	/// Despite the fact that we are usually about to read the encoding of a fixed size
-	/// type, we cannot know the encoded size of that type. We therefore are required to
-	/// use the length provided by the contract. This length is untrusted and therefore
-	/// we charge weight relative to the provided size upfront that covers the copy costs.
-	/// On success this cost is refunded as the copying was already covered in the
-	/// overall cost of the host function. This is different from `read_sandbox_memory`
-	/// where the size is dynamic and the costs resulting from that dynamic size must
-	/// be charged relative to this dynamic size anyways (before reading) by constructing
-	/// the benchmark for that.
-	pub fn read_sandbox_memory_as<D: Decode>(&mut self, ptr: u32, len: u32)
+	/// There must be an extra benchmark for determining the influence of `len` with
+	/// regard to the overall weight.
+	pub fn read_sandbox_memory_as_unbounded<D: Decode>(&self, ptr: u32, len: u32)
 	-> Result<D, DispatchError>
 	{
-		let amount = self.charge_gas(RuntimeCosts::CopyIn(len))?;
 		let buf = self.read_sandbox_memory(ptr, len)?;
 		let decoded = D::decode_all(&mut &buf[..])
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
-		self.ext.gas_meter().refund(amount);
 		Ok(decoded)
 	}
 
@@ -550,7 +551,7 @@ where
 		}
 
 		let buf_len = buf.len() as u32;
-		let len: u32 = self.read_sandbox_memory_as(out_len_ptr, 4)?;
+		let len: u32 = self.read_sandbox_memory_as(out_len_ptr)?;
 
 		if len < buf_len {
 			Err(Error::<E::T>::OutputBufferTooSmall)?
@@ -650,10 +651,8 @@ where
 		&mut self,
 		flags: CallFlags,
 		callee_ptr: u32,
-		callee_len: u32,
 		gas: u64,
 		value_ptr: u32,
-		value_len: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
 		output_ptr: u32,
@@ -661,8 +660,8 @@ where
 	) -> Result<ReturnCode, TrapReason> {
 		self.charge_gas(RuntimeCosts::CallBase(input_data_len))?;
 		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
-			self.read_sandbox_memory_as(callee_ptr, callee_len)?;
-		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr, value_len)?;
+			self.read_sandbox_memory_as(callee_ptr)?;
+		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
 		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
 			self.input_data.as_ref().ok_or_else(|| Error::<E::T>::InputForwarded)?.clone()
 		} else if flags.contains(CallFlags::FORWARD_INPUT) {
@@ -805,15 +804,15 @@ define_env!(Env, <E: Ext>,
 	[seal0] seal_transfer(
 		ctx,
 		account_ptr: u32,
-		account_len: u32,
+		_account_len: u32,
 		value_ptr: u32,
-		value_len: u32
+		_value_len: u32
 	) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::Transfer)?;
 		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
-			ctx.read_sandbox_memory_as(account_ptr, account_len)?;
+			ctx.read_sandbox_memory_as(account_ptr)?;
 		let value: BalanceOf<<E as Ext>::T> =
-			ctx.read_sandbox_memory_as(value_ptr, value_len)?;
+			ctx.read_sandbox_memory_as(value_ptr)?;
 
 		let result = ctx.ext.transfer(&callee, value);
 		match result {
@@ -832,10 +831,10 @@ define_env!(Env, <E: Ext>,
 	[seal0] seal_call(
 		ctx,
 		callee_ptr: u32,
-		callee_len: u32,
+		_callee_len: u32,
 		gas: u64,
 		value_ptr: u32,
-		value_len: u32,
+		_value_len: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
 		output_ptr: u32,
@@ -844,10 +843,8 @@ define_env!(Env, <E: Ext>,
 		ctx.call(
 			CallFlags::ALLOW_REENTRY,
 			callee_ptr,
-			callee_len,
 			gas,
 			value_ptr,
-			value_len,
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -866,11 +863,9 @@ define_env!(Env, <E: Ext>,
 	// - flags: See [`CallFlags`] for a documenation of the supported flags.
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
-	// - callee_len: length of the address buffer.
 	// - gas: how much gas to devote to the execution.
 	// - value_ptr: a pointer to the buffer with value, how much value to send.
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
-	// - value_len: length of the value buffer.
 	// - input_data_ptr: a pointer to a buffer to be used as input data to the callee.
 	// - input_data_len: length of the input data buffer.
 	// - output_ptr: a pointer where the output buffer is copied to.
@@ -891,10 +886,8 @@ define_env!(Env, <E: Ext>,
 		ctx,
 		flags: u32,
 		callee_ptr: u32,
-		callee_len: u32,
 		gas: u64,
 		value_ptr: u32,
-		value_len: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
 		output_ptr: u32,
@@ -903,10 +896,8 @@ define_env!(Env, <E: Ext>,
 		ctx.call(
 			CallFlags::from_bits(flags).ok_or_else(|| "used rerved bit in CallFlags")?,
 			callee_ptr,
-			callee_len,
 			gas,
 			value_ptr,
-			value_len,
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -962,10 +953,10 @@ define_env!(Env, <E: Ext>,
 	[seal0] seal_instantiate(
 		ctx,
 		code_hash_ptr: u32,
-		code_hash_len: u32,
+		_code_hash_len: u32,
 		gas: u64,
 		value_ptr: u32,
-		value_len: u32,
+		_value_len: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
 		address_ptr: u32,
@@ -976,9 +967,8 @@ define_env!(Env, <E: Ext>,
 		salt_len: u32
 	) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::InstantiateBase {input_data_len, salt_len})?;
-		let code_hash: CodeHash<<E as Ext>::T> =
-			ctx.read_sandbox_memory_as(code_hash_ptr, code_hash_len)?;
-		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr, value_len)?;
+		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
+		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr)?;
 		let input_data = ctx.read_sandbox_memory(input_data_ptr, input_data_len)?;
 		let salt = ctx.read_sandbox_memory(salt_ptr, salt_len)?;
 		let ext = &mut ctx.ext;
@@ -1015,11 +1005,11 @@ define_env!(Env, <E: Ext>,
 	[seal0] seal_terminate(
 		ctx,
 		beneficiary_ptr: u32,
-		beneficiary_len: u32
+		_beneficiary_len: u32
 	) => {
 		ctx.charge_gas(RuntimeCosts::Terminate)?;
 		let beneficiary: <<E as Ext>::T as frame_system::Config>::AccountId =
-			ctx.read_sandbox_memory_as(beneficiary_ptr, beneficiary_len)?;
+			ctx.read_sandbox_memory_as(beneficiary_ptr)?;
 		ctx.ext.terminate(&beneficiary)?;
 		Err(TrapReason::Termination)
 	},
@@ -1302,21 +1292,21 @@ define_env!(Env, <E: Ext>,
 	[seal0] seal_restore_to(
 		ctx,
 		dest_ptr: u32,
-		dest_len: u32,
+		_dest_len: u32,
 		code_hash_ptr: u32,
-		code_hash_len: u32,
+		_code_hash_len: u32,
 		rent_allowance_ptr: u32,
-		rent_allowance_len: u32,
+		_rent_allowance_len: u32,
 		delta_ptr: u32,
 		delta_count: u32
 	) => {
 		ctx.charge_gas(RuntimeCosts::RestoreTo(delta_count))?;
 		let dest: <<E as Ext>::T as frame_system::Config>::AccountId =
-			ctx.read_sandbox_memory_as(dest_ptr, dest_len)?;
+			ctx.read_sandbox_memory_as(dest_ptr)?;
 		let code_hash: CodeHash<<E as Ext>::T> =
-			ctx.read_sandbox_memory_as(code_hash_ptr, code_hash_len)?;
+			ctx.read_sandbox_memory_as(code_hash_ptr)?;
 		let rent_allowance: BalanceOf<<E as Ext>::T> =
-			ctx.read_sandbox_memory_as(rent_allowance_ptr, rent_allowance_len)?;
+			ctx.read_sandbox_memory_as(rent_allowance_ptr)?;
 		let delta = {
 			const KEY_SIZE: usize = 32;
 
@@ -1389,7 +1379,7 @@ define_env!(Env, <E: Ext>,
 
 		let mut topics: Vec::<TopicOf<<E as Ext>::T>> = match topics_len {
 			0 => Vec::new(),
-			_ => ctx.read_sandbox_memory_as(topics_ptr, topics_len)?,
+			_ => ctx.read_sandbox_memory_as_unbounded(topics_ptr, topics_len)?,
 		};
 
 		// If there are more than `event_topics`, then trap.
@@ -1416,10 +1406,9 @@ define_env!(Env, <E: Ext>,
 	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
-	[seal0] seal_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
+	[seal0] seal_set_rent_allowance(ctx, value_ptr: u32, _value_len: u32) => {
 		ctx.charge_gas(RuntimeCosts::SetRentAllowance)?;
-		let value: BalanceOf<<E as Ext>::T> =
-			ctx.read_sandbox_memory_as(value_ptr, value_len)?;
+		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr)?;
 		ctx.ext.set_rent_allowance(value);
 
 		Ok(())
