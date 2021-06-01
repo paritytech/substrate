@@ -259,16 +259,14 @@ where
 	};
 
 	let ext = {
-		let builder =  Builder::<B>::new().mode(Mode::Online(online_config));
-
-		builder.build().await?
+		Builder::<B>::new()
+			.mode(Mode::Online(online_config))
+			.build()
+			.await?
 	};
 
 	let header_hash: B::Hash = command.header_at.parse().unwrap();
-	let header = rpc_api::get_header::<B, _>(
-		url,
-		header_hash
-	).await;
+	let header = rpc_api::get_header::<B, _>(url,header_hash).await;
 
 	let _ = StateMachine::<_, _, NumberFor<B>, _>::new(
 		&ext.backend,
@@ -286,6 +284,7 @@ where
 	.map_err(|e| format!("failed to execute 'OffchainWorkerApi_offchain_worker' due to {:?}", e))?;
 
 	log::info!("OffchainWorkerApi_offchain_worker executed without errors.");
+
 	Ok(())
 }
 
