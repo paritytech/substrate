@@ -2060,22 +2060,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "futures-diagnose"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdcef58a173af8148b182684c9f2d5250875adbcaff7b5794073894f9d8634a9"
-dependencies = [
- "futures 0.1.31",
- "futures 0.3.13",
- "lazy_static",
- "log",
- "parking_lot 0.9.0",
- "pin-project 0.4.27",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "futures-executor"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8116,7 +8100,6 @@ version = "3.0.0"
 dependencies = [
  "assert_matches",
  "futures 0.3.13",
- "futures-diagnose",
  "hex",
  "intervalier",
  "log",

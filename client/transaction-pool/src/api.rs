@@ -21,7 +21,7 @@
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use codec::{Decode, Encode};
 use futures::{
-	channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready, Ready},
+	channel::oneshot, future::{Future, FutureExt, ready, Ready},
 };
 
 use sc_client_api::{
@@ -31,6 +31,7 @@ use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
 	transaction_validity::{TransactionValidity, TransactionSource},
 };
+use sp_core::traits::SpawnNamed;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use prometheus_endpoint::Registry as PrometheusRegistry;
@@ -40,7 +41,7 @@ use crate::{metrics::{ApiMetrics, ApiMetricsExt}, error::{self, Error}};
 /// The transaction pool logic for full client.
 pub struct FullChainApi<Client, Block> {
 	client: Arc<Client>,
-	pool: ThreadPool,
+	spawner: Box<dyn SpawnNamed>,
 	_marker: PhantomData<Block>,
 	metrics: Option<Arc<ApiMetrics>>,
 }
@@ -50,6 +51,7 @@ impl<Client, Block> FullChainApi<Client, Block> {
 	pub fn new(
 		client: Arc<Client>,
 		prometheus: Option<&PrometheusRegistry>,
+		spawner: impl SpawnNamed + 'static,
 	) -> Self {
 		let metrics = prometheus.map(ApiMetrics::register).and_then(|r| {
 			match r {
@@ -67,13 +69,9 @@ impl<Client, Block> FullChainApi<Client, Block> {
 
 		FullChainApi {
 			client,
-			pool: ThreadPoolBuilder::new()
-				.pool_size(2)
-				.name_prefix("txpool-verifier")
-				.create()
-				.expect("Failed to spawn verifier threads, that are critical for node operation."),
 			_marker: Default::default(),
 			metrics,
+			spawner: Box::new(spawner) ,
 		}
 	}
 }
@@ -109,9 +107,9 @@ where
 		let metrics = self.metrics.clone();
 		metrics.report(|m| m.validations_scheduled.inc());
 
-		self.pool.spawn_ok(futures_diagnose::diagnose(
+		self.spawner.spawn_blocking(
 			"validate-transaction",
-			async move {
+			Box::pin(async move {
 				let res = validate_transaction_blocking(&*client, &at, source, uxt);
 				if let Err(e) = tx.send(res) {
 					log::warn!("Unable to send a validate transaction result: {:?}", e);
