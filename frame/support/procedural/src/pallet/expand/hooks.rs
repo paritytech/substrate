@@ -19,13 +19,21 @@ use crate::pallet::Def;
 
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
+	let (where_clause, span, has_runtime_upgrade) = match def.hooks.as_ref() {
+		Some(hooks) => {
+			let where_clause = hooks.where_clause.clone();
+			let span = hooks.attr_span;
+			let has_runtime_upgrade = hooks.has_runtime_upgrade;
+			(where_clause, span, has_runtime_upgrade)
+		},
+		None => (None, def.pallet_struct.attr_span, false),
+	};
+
 	let frame_support = &def.frame_support;
-	let type_impl_gen = &def.type_impl_generics(def.hooks.attr_span);
-	let type_use_gen = &def.type_use_generics(def.hooks.attr_span);
+	let type_impl_gen = &def.type_impl_generics(span);
+	let type_use_gen = &def.type_use_generics(span);
 	let pallet_ident = &def.pallet_struct.pallet;
-	let where_clause = &def.hooks.where_clause;
 	let frame_system = &def.frame_system;
-	let has_runtime_upgrade = def.hooks.has_runtime_upgrade;
 
 	let log_runtime_upgrade = if has_runtime_upgrade {
 		// a migration is defined here.
@@ -49,12 +57,28 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	};
 
-	quote::quote_spanned!(def.hooks.attr_span =>
+	let hooks_impl = if def.hooks.is_none() {
+		let frame_system = &def.frame_system;
+		quote::quote!{
+			impl<#type_impl_gen>
+				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+				for Pallet<#type_use_gen> {}
+		}
+	} else {
+		proc_macro2::TokenStream::new()
+	};
+
+	quote::quote_spanned!(span =>
+		#hooks_impl
+
 		impl<#type_impl_gen>
 			#frame_support::traits::OnFinalize<<T as #frame_system::Config>::BlockNumber>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_finalize(n: <T as #frame_system::Config>::BlockNumber) {
+				#frame_support::sp_tracing::enter_span!(
+					#frame_support::sp_tracing::trace_span!("on_finalize")
+				);
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
@@ -86,6 +110,9 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			fn on_initialize(
 				n: <T as #frame_system::Config>::BlockNumber
 			) -> #frame_support::weights::Weight {
+				#frame_support::sp_tracing::enter_span!(
+					#frame_support::sp_tracing::trace_span!("on_initialize")
+				);
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
@@ -99,6 +126,10 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_runtime_upgrade() -> #frame_support::weights::Weight {
+				#frame_support::sp_tracing::enter_span!(
+					#frame_support::sp_tracing::trace_span!("on_runtime_update")
+				);
+
 				// log info about the upgrade.
 				let new_storage_version = #frame_support::crate_to_pallet_version!();
 				let pallet_name = <

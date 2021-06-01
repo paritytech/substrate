@@ -17,8 +17,8 @@
 
 //! # Aura Module
 //!
-//! - [`aura::Config`](./trait.Config.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Pallet`]
 //!
 //! ## Overview
 //!
@@ -86,9 +86,6 @@ pub mod pallet {
 			}
 		}
 	}
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
 
 	/// The current authority set.
 	#[pallet::storage]

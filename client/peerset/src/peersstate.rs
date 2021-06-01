@@ -272,15 +272,16 @@ impl PeersState {
 			})
 			.map(|(peer_id, _)| peer_id.clone());
 
-		if let Some(peer_id) = outcome {
-			Some(NotConnectedPeer {
+		outcome.map(move |peer_id| NotConnectedPeer {
 				state: self,
 				set,
 				peer_id: Cow::Owned(peer_id),
 			})
-		} else {
-			None
-		}
+	}
+
+	/// Returns `true` if there is a free outgoing slot available related to this set.
+	pub fn has_free_outgoing_slot(&self, set: usize) -> bool {
+		self.sets[set].num_out < self.sets[set].max_out
 	}
 
 	/// Add a node to the list of nodes that don't occupy slots.
@@ -506,9 +507,7 @@ impl<'a> NotConnectedPeer<'a> {
 
 		// Note that it is possible for num_out to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
-		if self.state.sets[self.set].num_out >= self.state.sets[self.set].max_out
-			&& !is_no_slot_occupy
-		{
+		if !self.state.has_free_outgoing_slot(self.set) && !is_no_slot_occupy {
 			return Err(self);
 		}
 

@@ -24,6 +24,11 @@ tracing = { version = "0.1.25", default-features = false }
 tracing-core = { version = "0.1.17", default-features = false }
 log = { version = "0.4.8", optional = true }
 tracing-subscriber = { version = "0.2.15", optional = true, features = ["tracing-log"] }
+parking_lot = { version = "0.10.0", optional = true }
+erased-serde = { version = "0.3.9", optional = true }
+serde = { version = "1.0.101", optional = true }
+serde_json = { version = "1.0.41", optional = true }
+slog = { version = "2.5.2", features = ["nested-values"], optional = true }
 
 [features]
 default = [ "std" ]
@@ -39,4 +44,9 @@ std = [
 	"sp-std/std",
 	"log",
 	"tracing-subscriber",
+	"parking_lot",
+	"erased-serde",
+	"serde",
+	"serde_json",
+	"slog"
 ]

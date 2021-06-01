@@ -225,6 +225,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
@@ -265,7 +266,7 @@ mod test {
 	fn metadata() {
 		let metadata = Runtime::metadata();
 		let modules = match metadata.1 {
-			frame_metadata::RuntimeMetadata::V12(frame_metadata::RuntimeMetadataV12 {
+			frame_metadata::RuntimeMetadata::V13(frame_metadata::RuntimeMetadataV13 {
 				modules: frame_metadata::DecodeDifferent::Encode(m),
 				..
 			}) => m,

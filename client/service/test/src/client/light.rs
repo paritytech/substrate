@@ -375,11 +375,11 @@ fn execution_proof_is_generated_and_checked() {
 	for i in 1u32..3u32 {
 		let mut digest = Digest::default();
 		digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
-		remote_client.import_justified(
+		futures::executor::block_on(remote_client.import_justified(
 			BlockOrigin::Own,
 			remote_client.new_block(digest).unwrap().build().unwrap().block,
 			Justifications::from((*b"TEST", Default::default())),
-		).unwrap();
+		)).unwrap();
 	}
 
 	// check method that doesn't requires environment
@@ -540,7 +540,7 @@ fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Heade
 	let mut local_headers_hashes = Vec::new();
 	for i in 0..4 {
 		let block = remote_client.new_block(Default::default()).unwrap().build().unwrap().block;
-		remote_client.import(BlockOrigin::Own, block).unwrap();
+		futures::executor::block_on(remote_client.import(BlockOrigin::Own, block)).unwrap();
 		local_headers_hashes.push(
 			remote_client.block_hash(i + 1)
 				.map_err(|_| ClientError::Backend("TestError".into()))

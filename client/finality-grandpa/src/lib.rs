@@ -122,10 +122,12 @@ mod until_imported;
 mod voting_rule;
 
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
-pub use finality_proof::{FinalityProof, FinalityProofProvider, FinalityProofError};
-pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
-pub use import::{find_scheduled_change, find_forced_change, GrandpaBlockImport};
+pub use aux_schema::best_justification;
+pub use finality_proof::{FinalityProof, FinalityProofError, FinalityProofProvider};
+pub use import::{find_forced_change, find_scheduled_change, GrandpaBlockImport};
 pub use justification::GrandpaJustification;
+pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
+pub use observer::run_grandpa_observer;
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRuleResult,
 	VotingRulesBuilder,
@@ -133,9 +135,9 @@ pub use voting_rule::{
 pub use finality_grandpa::voter::report;
 
 use aux_schema::PersistentData;
+use communication::{Network as NetworkT, NetworkBridge};
 use environment::{Environment, VoterSetState};
 use until_imported::UntilGlobalMessageBlocksImported;
-use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthoritySignature, SetId};
 
 // Re-export these two because it's just so damn convenient.
@@ -264,8 +266,8 @@ pub struct Config {
 	/// protocol (we will only issue catch-up requests to authorities when the
 	/// observer protocol is enabled).
 	pub observer_enabled: bool,
-	/// Whether the node is running as an authority (i.e. running the full GRANDPA protocol).
-	pub is_authority: bool,
+	/// The role of the local node (i.e. authority, full-node or light).
+	pub local_role: sc_network::config::Role,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
@@ -689,6 +691,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 	sc_network::config::NonDefaultSetConfig {
 		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
+		fallback_names: Vec::new(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
@@ -1019,7 +1022,7 @@ where
 					// set changed (not where the signal happened!) as the base.
 					let set_state = VoterSetState::live(
 						new.set_id,
-						&*self.env.authority_set.inner().read(),
+						&*self.env.authority_set.inner(),
 						(new.canon_hash, new.canon_number),
 					);
 
@@ -1133,13 +1136,12 @@ fn local_authority_id(
 	voters: &VoterSet<AuthorityId>,
 	keystore: Option<&SyncCryptoStorePtr>,
 ) -> Option<AuthorityId> {
-	match keystore {
-		Some(keystore) => voters
-			.iter()
-			.find(|(p, _)| {
-				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
-			})
-			.map(|(p, _)| p.clone()),
-		None => None,
-	}
+	keystore.and_then(|keystore| {
+		voters
+		.iter()
+		.find(|(p, _)| {
+			SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
+		})
+		.map(|(p, _)| p.clone())
+	})
 }

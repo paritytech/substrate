@@ -16,10 +16,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 futures = { version = "0.3", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
-libp2p-wasm-ext = { version = "0.27", features = ["websocket"] }
+libp2p-wasm-ext = { version = "0.28.1", features = ["websocket"] }
 console_error_panic_hook = "0.1.6"
 js-sys = "0.3.34"
-wasm-bindgen = "0.2.57"
+wasm-bindgen = "0.2.73"
 wasm-bindgen-futures = "0.4.18"
 kvdb-web = "0.9.0"
 sp-database = { version = "3.0.0", path = "../../primitives/database" }

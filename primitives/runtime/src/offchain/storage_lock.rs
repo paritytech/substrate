@@ -66,6 +66,7 @@ use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
+use sp_std::fmt;
 
 /// Default expiry duration for time based locks in milliseconds.
 const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION: Duration = Duration::from_millis(20_000);
@@ -158,7 +159,7 @@ impl<B: BlockNumberProvider> Clone for BlockAndTimeDeadline<B> {
 	fn clone(&self) -> Self {
 		Self {
 			block_number: self.block_number.clone(),
-			timestamp: self.timestamp.clone(),
+			timestamp: self.timestamp,
 		}
 	}
 }
@@ -170,6 +171,17 @@ impl<B: BlockNumberProvider> Default for BlockAndTimeDeadline<B> {
 			block_number: B::current_block_number() + STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS.into(),
 			timestamp: offchain::timestamp().add(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION),
 		}
+	}
+}
+
+impl<B: BlockNumberProvider> fmt::Debug for BlockAndTimeDeadline<B>
+	where <B as BlockNumberProvider>::BlockNumber: fmt::Debug
+{
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("BlockAndTimeDeadline")
+			.field("block_number", &self.block_number)
+			.field("timestamp", &self.timestamp)
+			.finish()
 	}
 }
 
@@ -202,7 +214,7 @@ impl<B: BlockNumberProvider> Default for BlockAndTime<B> {
 impl<B: BlockNumberProvider> Clone for BlockAndTime<B> {
 	fn clone(&self) -> Self {
 		Self {
-			expiration_block_number_offset: self.expiration_block_number_offset.clone(),
+			expiration_block_number_offset: self.expiration_block_number_offset,
 			expiration_duration: self.expiration_duration,
 			_phantom: core::marker::PhantomData::<B>,
 		}
@@ -386,7 +398,7 @@ impl<'a> StorageLock<'a, Time> {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
 			lockable: Time {
-				expiration_duration: expiration_duration,
+				expiration_duration,
 			},
 		}
 	}
