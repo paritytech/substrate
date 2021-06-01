@@ -25,7 +25,7 @@ use codec::{Encode, Decode, HasCompact};
 use frame_support::traits::{Currency, Get, OnUnbalanced, ReservableCurrency};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution};
-use sp_runtime::{Perbill, RuntimeDebug, traits::Zero};
+use sp_runtime::{Perbill, RuntimeDebug, traits::{Saturating, Zero}};
 use sp_std::{cmp::Ordering, vec::Vec};
 
 /// A raw, unchecked signed submission.
@@ -111,6 +111,7 @@ impl<T: Config> Pallet<T> {
 
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
+		let discarded = all_submissions.len();
 		for not_processed in all_submissions {
 			let SignedSubmission { who, deposit, .. } = not_processed;
 			let _remaining = T::Currency::unreserve(&who, deposit);
@@ -118,6 +119,7 @@ impl<T: Config> Pallet<T> {
 			debug_assert!(_remaining.is_zero());
 		};
 
+		log!(debug, "closed signed phase, found solution? {}, discarded {}", found_solution, discarded);
 		(found_solution, weight)
 	}
 
@@ -249,10 +251,10 @@ impl<T: Config> Pallet<T> {
 		let encoded_len: BalanceOf<T> = encoded_len.into();
 		let feasibility_weight = Self::feasibility_weight_of(solution, size);
 
-		let len_deposit = T::SignedDepositByte::get() * encoded_len;
-		let weight_deposit = T::SignedDepositWeight::get() * feasibility_weight.saturated_into();
+		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
+		let weight_deposit = T::SignedDepositWeight::get().saturating_mul(feasibility_weight.saturated_into());
 
-		T::SignedDepositBase::get() + len_deposit + weight_deposit
+		T::SignedDepositBase::get().saturating_add(len_deposit).saturating_add(weight_deposit)
 	}
 }
 
