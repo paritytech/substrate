@@ -113,7 +113,7 @@ impl<K: Ord> LRUOrderedKeys<K> {
 	}
 }
 
-impl<K: Ord> LocalOrderedKeys<K> {
+impl<K: Ord + Clone> LocalOrderedKeys<K> {
 	fn next_storage_key(&self, key: &K, child: Option<&ChildInfo>) -> Option<Option<&K>> {
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get(info.storage_key()) {
@@ -133,7 +133,7 @@ impl<K: Ord> LocalOrderedKeys<K> {
 					| Some((next_key, CachedInterval::Both)) => Some(Some(next_key)),
 					_ => None, // Should be unreachable
 				}
-			}
+			},
 			Some((next_key, CachedInterval::Prev)) if next_key == key => None,
 			Some((_next_key, CachedInterval::Next)) => None,
 			Some((next_key, _)) => match iter.next_back() {
@@ -149,7 +149,7 @@ impl<K: Ord> LocalOrderedKeys<K> {
 		}
 	}
 
-	fn insert(&mut self, key: K, child: Option<&ChildInfo>, next: Option<Vec<u8>>) {
+	fn insert(&mut self, key: K, child: Option<&ChildInfo>, next: Option<K>) {
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info.storage_key()) {
 				intervals
@@ -160,10 +160,88 @@ impl<K: Ord> LocalOrderedKeys<K> {
 		} else {
 			&mut self.intervals
 		};
-		unimplemented!()
+		let mut iter = intervals.range_mut(&key..);
+		// handle start of interval
+		let (insert_start, next_key) = match iter.next() {
+			// Match key
+			Some((cur_key, CachedInterval::Next))
+			| Some((cur_key, CachedInterval::Both)) if cur_key == &key => {
+				debug_assert!({
+					match iter.next() {
+						Some((_next_key, CachedInterval::Next)) => false,
+						Some((next_key, _)) => Some(next_key) == next.as_ref(),
+						None => next.is_none(),
+					}
+				});
+				// we already got end of interval 
+				return;
+			},
+			Some(cur_key) if cur_key.0 == &key => {
+				*cur_key.1 = CachedInterval::Both;
+				(false, iter.next())
+			},
+			// Before interval
+			next_key => match iter.next_back() {
+				Some((prev_key, CachedInterval::Prev)) if prev_key < &key => {
+					// no overlap
+					(true, next_key)
+				},
+				Some(prev_key) if prev_key.1.clone() == CachedInterval::Prev => {
+					// prev_key == key (cannot be >)
+					*prev_key.1 = CachedInterval::Both;
+					(false, next_key)
+				},
+				Some(_) => {
+					// start in or on an existing interval, so end does match.
+					debug_assert!(next.as_ref() == next_key.as_ref().map(|n| n.0));
+					debug_assert!(match next_key.map(|n| n.1.clone()).unwrap_or(CachedInterval::Prev) {
+						CachedInterval::Next => false,
+						_ => true,
+					});
+					return;
+				},
+				None => {
+					// first key
+					(true, next_key)
+				},
+			},
+		};
+		// we know we have start iterval to this next key.
+		// Then insert befor if next is not refering to previous.
+		// Then remove next is it is a next (not existing so we got a larger interval here).
+		// Do nothing if same as existing.
+		let (remove_end, insert_end) = match next_key {
+			Some(next_key) if next.is_none() || Some(next_key.0) < next.as_ref() => {
+				// having prev would mean we did cache a different interval.
+				debug_assert!(next_key.1.clone() == CachedInterval::Next);
+				(Some(next_key.0.clone()), false)
+			},
+			Some(next_key) if Some(next_key.0) == next.as_ref() => {
+				if next_key.1.clone() != CachedInterval::Prev {
+					*next_key.1 = CachedInterval::Both;
+				}
+				(None, false)
+			},
+			_ =>  {
+				// next is before or we did not have next, so just insert.
+				(None, true)
+			},
+		};
+		if insert_start {
+			intervals.insert(key, CachedInterval::Next);
+		}
+		if insert_end {
+			if let Some(key) = next {
+				intervals.insert(key, CachedInterval::Prev);
+			}
+		}
+		if let Some(key) = remove_end {
+			intervals.remove(&key);
+		}
 	}
 }
 
+#[derive(PartialEq, Eq, Clone)]
 enum CachedInterval {
 	/// Next key is next key in cache.
 	/// The current key could be an undefined key.
