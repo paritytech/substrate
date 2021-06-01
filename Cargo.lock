@@ -10599,6 +10599,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-externalities",
+ "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
  "structopt",

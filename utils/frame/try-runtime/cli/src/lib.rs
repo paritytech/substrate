@@ -18,14 +18,21 @@
 //! `Structopt`-ready structs for `try-runtime`.
 
 use parity_scale_codec::{Decode, Encode};
-use std::{fmt::Debug, path::PathBuf, str::FromStr};
+use std::{fmt::Debug, path::PathBuf, str::FromStr, sync::Arc};
 use sc_service::Configuration;
 use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
 use sc_executor::NativeExecutor;
 use sc_service::NativeExecutionDispatch;
 use sp_state_machine::StateMachine;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use sp_core::storage::{StorageData, StorageKey, well_known_keys};
+use sp_core::{
+	offchain::{
+		OffchainWorkerExt, OffchainDbExt, TransactionPoolExt,
+		testing::{TestOffchainExt, TestTransactionPoolExt}
+	},
+	storage::{StorageData, StorageKey, well_known_keys},
+};
+use sp_keystore::{KeystoreExt, testing::KeyStore};
 use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig, rpc_api};
 
 #[derive(Debug, Clone, structopt::StructOpt)]
@@ -92,16 +99,13 @@ pub struct TryRuntimeCmd {
 /// The source of runtime state to try operations against.
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub enum State {
-	/// Use a state snapshot as the source of runtime state.
+	/// Use a state snapshot as the source of runtime state. NOTE: at the moment this is only
+	/// paritially supported for offchain-worker.
 	Snap {
 		snapshot_path: PathBuf,
 	},
 
 	/// Use a live chain as the source of runtime state.
-	///
-	/// NOTE: There currently is a bug when connecting via WS to localhost. To get around run the
-	/// node with `--rpc-cors=all`
-	/// https://github.com/paritytech/jsonrpsee/issues/346
 	Live {
 		/// An optional state snapshot file to WRITE to.
 		#[structopt(short, long)]
@@ -122,7 +126,11 @@ pub enum State {
 	},
 }
 
-async fn on_runtime_upgrade<B, ExecDispatch>(shared: SharedParams, command: OnRuntimeUpgradeCmd, config: Configuration) -> sc_cli::Result<()>
+async fn on_runtime_upgrade<B, ExecDispatch>(
+	shared: SharedParams,
+	command: OnRuntimeUpgradeCmd,
+	config: Configuration
+) -> sc_cli::Result<()>
 where
 	B: BlockT,
 	B::Hash: FromStr,
@@ -235,7 +243,7 @@ where
 		max_runtime_instances,
 	);
 
-	let (online_config, url) = match command.state {
+	let (mode, url) = match command.state {
 			State::Live {
 				url,
 				snapshot_path,
@@ -251,19 +259,37 @@ where
 				..Default::default()
 				};
 
-				(online_config, url)
+				(Mode::Online(online_config), url)
 			},
-			_ => {
-				panic!("Only live state is supported");
+			State::Snap { snapshot_path } => {
+				// This is a temporary hack; the url is used just to get the header. We should try
+				// and get the header out of state, OR use an arbitrary header if thats ok, OR allow
+				// the user to feed in a header via file.
+				// This assumes you have a node running on local host default
+				let url = "ws://127.0.0.1:9944".to_string();
+				let mode = Mode::Offline(OfflineConfig {
+					state_snapshot: SnapshotConfig::new(snapshot_path),
+				});
+
+				(mode, url)
 			}
 	};
+	let mut ext = Builder::<B>::new()
+		.mode(mode)
+		.build()
+		.await?;
+	// Register externality extensions in order to provide host interface for OCW to the runtime
+	let (offchain, _offchain_state) = TestOffchainExt::new();
+	let (pool, _pool_state) = TestTransactionPoolExt::new();
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
+	let keystore_ptr = Arc::new(KeyStore::new());
+	ext.register_extension(KeystoreExt(keystore_ptr));
+	ext.register_extension(TransactionPoolExt::new(pool));
 
-	let ext = {
-		Builder::<B>::new()
-			.mode(Mode::Online(online_config))
-			.build()
-			.await?
-	};
+
+	// inject the code into this ext.
+	// builder.inject(&[(code_key, code)]).build().await?;
 
 	let header_hash: B::Hash = command.header_at.parse().unwrap();
 	let header = rpc_api::get_header::<B, _>(url,header_hash).await;

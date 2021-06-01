@@ -111,7 +111,7 @@ pub use sp_io::TestExternalities;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{StorageKey, StorageData},
-	offchain::{OffchainWorkerExt, OffchainDbExt, testing::TestOffchainExt},
+	// offchain::{OffchainWorkerExt, OffchainDbExt, testing::TestOffchainExt},
 };
 use codec::{Encode, Decode};
 use sp_runtime::traits::Block as BlockT;
@@ -247,7 +247,10 @@ pub struct Builder<B: BlockT> {
 // that.
 impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
-		Self { inject: Default::default(), mode: Default::default() }
+		Self {
+			inject: Default::default(),
+			mode: Default::default(),
+		}
 	}
 }
 
@@ -505,11 +508,6 @@ impl<B: BlockT> Builder<B> {
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
 		let kv = self.pre_build().await?;
 		let mut ext = TestExternalities::new_empty();
-		let (offchain, _offchain_state) = TestOffchainExt::new();
-
-		// Register externality extensions in order to provide host interface for OCW to the runtime
-		ext.register_extension(OffchainDbExt::new(offchain.clone()));
-		ext.register_extension(OffchainWorkerExt::new(offchain));
 
 		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
 		for (k, v) in kv {
@@ -522,7 +520,7 @@ impl<B: BlockT> Builder<B> {
 	}
 }
 
-/// WS RPC API for one RPC calls to a substrate node.
+/// WS RPC API for one off RPC calls to a substrate node.
 pub mod rpc_api {
 	use super::*;
 	/// Get the header of the block identified by `at`
