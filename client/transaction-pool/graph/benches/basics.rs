@@ -23,7 +23,7 @@ use sc_transaction_graph::*;
 use codec::Encode;
 use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 use sp_runtime::{
-	generic::BlockId,
+	generic::BlockId, traits::Block as BlockT,
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionTag as Tag,
 		TransactionSource,

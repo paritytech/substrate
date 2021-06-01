@@ -696,15 +696,6 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 						move || Box::new(extra_pool.validated_pool().ready()),
 					);
 
-					// if let Err(e) = pool.validated_pool().clear_stale(&id) {
-					// 	log::debug!(
-					// 		target: "txpool",
-					// 		"Error while clearing stale transaction at {:?}: {:?}",
-					// 		e,
-					// 		id,
-					// 	);
-					// }
-
 					if next_action.revalidate {
 						let hashes = pool.validated_pool()
 							.ready()
