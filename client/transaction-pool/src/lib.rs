@@ -578,7 +578,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 				async move {
 					// We keep track of everything we prune so that later we won't add
-					// tranactions with those hashes from the retracted blocks.
+					// transactions with those hashes from the retracted blocks.
 					let mut pruned_log = HashSet::<ExtrinsicHash<PoolApi>>::new();
 
 					// If there is a tree route, we use this to prune known tx based on the enacted
