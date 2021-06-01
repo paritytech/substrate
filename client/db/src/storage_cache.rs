@@ -90,6 +90,9 @@ struct KeyOrderedEntry<K> {
 	/// Used to remove from btreemap.
 	/// Specialized lru struct would not need it.
 	key: K,
+	/// When intervals are in child cache (also only use
+	/// to remove from cache).
+	child_storage_key: Option<Vec<u8>>,
 	/// Actual content.
 	state: CachedInterval,
 }
@@ -239,8 +242,66 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 			intervals.remove(&key);
 		}
 	}
+
+	// removal is mainly for lru, but both cache shares implementation and
+	// this function is used in tests. TODO cfg(test)? 
+	fn remove(&mut self, key: K, child: Option<&ChildInfo>) {
+		let intervals = if let Some(info) = child {
+			if let Some(intervals) = self.child_intervals.get_mut(info.storage_key()) {
+				intervals
+			} else {
+				return;
+			}
+		} else {
+			&mut self.intervals
+		};
+		let (rem_prev, rem_next) = if let Some(siblings) = intervals.remove(&key) {
+			let mut iter = intervals.range_mut(&key..);
+			let rem_next = if siblings == CachedInterval::Next || siblings == CachedInterval::Both {
+				match iter.next() {
+					Some((k, CachedInterval::Prev)) => {
+						Some(k)
+					},
+					Some(k) => {
+						debug_assert!(k.1.clone() == CachedInterval::Both);
+						*k.1 = CachedInterval::Next;
+						None
+					},
+					_ => None,
+				}
+			} else {
+				None
+			};
+			let rem_prev = if siblings == CachedInterval::Prev || siblings == CachedInterval::Both {
+				match iter.next_back() {
+					Some((k, CachedInterval::Next)) => {
+						Some(k)
+					},
+					Some(k) => {
+						debug_assert!(k.1.clone() == CachedInterval::Both);
+						*k.1 = CachedInterval::Prev;
+						None
+					},
+					_ => None,
+				}
+			} else {
+				None
+			};
+			(rem_prev.cloned(), rem_next.cloned())
+		} else {
+			return;
+		};
+		if let Some(rem) = rem_prev {
+			let _ = intervals.remove(&rem);
+		}
+		if let Some(rem) = rem_next {
+			let _ = intervals.remove(&rem);
+		}
+	}
 }
 
+// Could be Copy, but is not for the
+// sake of assigning to &mut without surprise.
 #[derive(PartialEq, Eq, Clone)]
 enum CachedInterval {
 	/// Next key is next key in cache.
