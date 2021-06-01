@@ -142,4 +142,55 @@ pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
 		value: Self::Balance,
 		status: BalanceStatus,
 	) -> Result<Self::Balance, DispatchError>;
+
+	/// Ensure the reserved balance is equal to `value`.
+	///
+	/// This will reserve extra amount of current reserved balance is less than `value`.
+	/// And unreserve if current reserved balance is greater than `value`.
+	fn ensure_reserved_named(id: &Self::ReserveIdentifier, who: &AccountId, value: Self::Balance) -> DispatchResult {
+		let current = Self::reserved_balance_named(id, who);
+ 		if current > value {
+			// we always have enough balance to unreserve here
+			Self::unreserve_named(id, who, current - value);
+			Ok(())
+		} else if value > current {
+			// we checked value > current
+			Self::reserve_named(id, who, value - current)
+		} else { // current == value
+			Ok(())
+		}
+	}
+
+	/// Unreserve all the named reserved balances, returning unreserved amount.
+	///
+	/// Is a no-op if the value to be unreserved is zero.
+	fn unreserve_all_named(id: &Self::ReserveIdentifier, who: &AccountId) -> Self::Balance {
+		let value = Self::reserved_balance_named(id, who);
+		Self::slash_reserved_named(id, who, value);
+		value
+	}
+
+	/// Slash all the reserved balance, returning the negative imbalance created.
+	///
+	/// Is a no-op if the value to be slashed is zero.
+	fn slash_all_reserved_named(id: &Self::ReserveIdentifier, who: &AccountId) -> Self::NegativeImbalance {
+		let value = Self::reserved_balance_named(id, who);
+		Self::slash_reserved_named(id, who, value).0
+	}
+
+	/// Move all the named reserved balance of one account into the balance of another, according to `status`.
+	/// If `status` is `Reserved`, the balance will be reserved with given `id`.
+	///
+	/// Is a no-op if:
+	/// - the value to be moved is zero; or
+	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+	fn repatriate_all_reserved_named(
+		id: &Self::ReserveIdentifier,
+		slashed: &AccountId,
+		beneficiary: &AccountId,
+		status: BalanceStatus,
+	) -> DispatchResult {
+		let value = Self::reserved_balance_named(id, slashed);
+		Self::repatriate_reserved_named(id, slashed, beneficiary, value, status).map(|_| ())
+	}
 }
