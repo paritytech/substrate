@@ -259,7 +259,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.as_trie_backend()
 	}
 
-	fn register_overlay_stats(&mut self, stats: &StateMachineStats) {
+	fn register_overlay_stats(&self, stats: &StateMachineStats) {
 		self.state.register_overlay_stats(stats);
 	}
 
@@ -335,10 +335,7 @@ impl DatabaseSettingsSrc {
 	}
 	/// Check if database supports internal ref counting for state data.
 	pub fn supports_ref_counting(&self) -> bool {
-		match self {
-			DatabaseSettingsSrc::ParityDb { .. } => true,
-			_ => false,
-		}
+		matches!(self, DatabaseSettingsSrc::ParityDb { .. })
 	}
 }
 
@@ -561,10 +558,10 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 
 	fn justifications(&self, id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATIONS, id)? {
-			Some(justification) => match Decode::decode(&mut &justification[..]) {
-				Ok(justification) => Ok(Some(justification)),
+			Some(justifications) => match Decode::decode(&mut &justifications[..]) {
+				Ok(justifications) => Ok(Some(justifications)),
 				Err(err) => return Err(sp_blockchain::Error::Backend(
-					format!("Error decoding justification: {}", err)
+					format!("Error decoding justifications: {}", err)
 				)),
 			}
 			None => Ok(None),
@@ -623,6 +620,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 	}
 
 	fn remove_header_metadata(&self, hash: Block::Hash) {
+		self.header_cache.lock().remove(&hash);
 		self.header_metadata_cache.remove_header_metadata(hash);
 	}
 }
@@ -699,7 +697,9 @@ pub struct BlockImportOperation<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
+		let mut count = 0;
 		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain(..) {
+			count += 1;
 			let key = crate::offchain::concatenate_prefix_and_key(&prefix, &key);
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) =>
@@ -707,6 +707,10 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 				OffchainOverlayedChange::Remove =>
 					transaction.remove(columns::OFFCHAIN, &key),
 			}
+		}
+
+		if count > 0 {
+			log::debug!(target: "sc_offchain", "Applied {} offchain indexing changes.", count);
 		}
 	}
 
@@ -1966,6 +1970,59 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok((reverted, reverted_finalized))
 	}
 
+	fn remove_leaf_block(
+		&self,
+		hash: &Block::Hash,
+	) -> ClientResult<()> {
+		let best_hash = self.blockchain.info().best_hash;
+
+		if best_hash == *hash {
+			return Err(
+				sp_blockchain::Error::Backend(
+					format!("Can't remove best block {:?}", hash)
+				)
+			)
+		}
+
+		let hdr = self.blockchain.header_metadata(hash.clone())?;
+		if !self.have_state_at(&hash, hdr.number) {
+			return Err(
+				sp_blockchain::Error::UnknownBlock(
+					format!("State already discarded for {:?}", hash)
+				)
+			)
+		}
+
+		let mut leaves = self.blockchain.leaves.write();
+		if !leaves.contains(hdr.number, *hash) {
+			return Err(
+				sp_blockchain::Error::Backend(
+					format!("Can't remove non-leaf block {:?}", hash)
+				)
+			)
+		}
+
+		let mut transaction = Transaction::new();
+		if let Some(commit) = self.storage.state_db.remove(hash) {
+			apply_state_commit(&mut transaction, commit);
+		}
+		transaction.remove(columns::KEY_LOOKUP, hash.as_ref());
+		let changes_trie_cache_ops = self.changes_tries_storage.revert(
+			&mut transaction,
+			&cache::ComplexBlockId::new(
+				*hash,
+				hdr.number,
+			),
+		)?;
+
+		self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
+		leaves.revert(hash.clone(), hdr.number);
+		leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
+		self.storage.db.commit(transaction)?;
+		self.blockchain().remove_header_metadata(*hash);
+		Ok(())
+	}
+
 	fn blockchain(&self) -> &BlockchainDb<Block> {
 		&self.blockchain
 	}
@@ -2745,6 +2802,100 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn storage_hash_is_cached_correctly() {
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let hash0 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
+			let mut header = Header {
+				number: 0,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage = vec![(b"test".to_vec(), b"test".to_vec())];
+
+			header.state_root = op.old_state.storage_root(storage
+				.iter()
+				.map(|(x, y)| (&x[..], Some(&y[..])))
+			).0.into();
+			let hash = header.hash();
+
+			op.reset_storage(Storage {
+				top: storage.into_iter().collect(),
+				children_default: Default::default(),
+			}).unwrap();
+			op.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			hash
+		};
+
+		let block0_hash = backend.state_at(BlockId::Hash(hash0))
+			.unwrap()
+			.storage_hash(&b"test"[..])
+			.unwrap();
+
+		let hash1 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Number(0)).unwrap();
+			let mut header = Header {
+				number: 1,
+				parent_hash: hash0,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage = vec![(b"test".to_vec(), Some(b"test2".to_vec()))];
+
+			let (root, overlay) = op.old_state.storage_root(
+				storage.iter()
+					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			);
+			op.update_db_storage(overlay).unwrap();
+			header.state_root = root.into();
+			let hash = header.hash();
+
+			op.update_storage(storage, Vec::new()).unwrap();
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Normal,
+			).unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			hash
+		};
+
+		{
+			let header = backend.blockchain().header(BlockId::Hash(hash1)).unwrap().unwrap();
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(hash0)).unwrap();
+			op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
+			backend.commit_operation(op).unwrap();
+		}
+
+		let block1_hash = backend.state_at(BlockId::Hash(hash1))
+			.unwrap()
+			.storage_hash(&b"test"[..])
+			.unwrap();
+
+		assert_ne!(block0_hash, block1_hash);
+	}
+
+	#[test]
 	fn test_finalize_non_sequential() {
 		let backend = Backend::<Block>::new_test(10, 10);
 
@@ -2907,5 +3058,37 @@ pub(crate) mod tests {
 				assert!(bc.indexed_transaction(&x1_hash).unwrap().is_none());
 			}
 		}
+	}
+
+	#[test]
+	fn remove_leaf_block_works() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(
+			2,
+			10,
+			TransactionStorageMode::StorageChain
+		);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+		for i in 0 .. 2 {
+			let hash = insert_block(&backend, i, prev_hash, None, Default::default(), vec![i.into()], None);
+			blocks.push(hash);
+			prev_hash = hash;
+		}
+
+		// insert a fork at block 2, which becomes best block
+		let best_hash = insert_block(
+			&backend,
+			1,
+			blocks[0],
+			None,
+			sp_core::H256::random(),
+			vec![42.into()],
+			None
+		);
+		assert!(backend.remove_leaf_block(&best_hash).is_err());
+		assert!(backend.have_state_at(&prev_hash, 1));
+		backend.remove_leaf_block(&prev_hash).unwrap();
+		assert_eq!(None, backend.blockchain().header(BlockId::hash(prev_hash.clone())).unwrap());
+		assert!(!backend.have_state_at(&prev_hash, 1));
 	}
 }

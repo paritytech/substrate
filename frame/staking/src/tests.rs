@@ -20,12 +20,14 @@
 use super::*;
 use mock::*;
 use sp_runtime::{
-	assert_eq_error_rate, traits::BadOrigin,
+	assert_eq_error_rate,
+	traits::{BadOrigin, Dispatchable},
 };
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop, StorageMap,
 	traits::{Currency, ReservableCurrency, OnInitialize},
+	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use pallet_balances::Error as BalancesError;
 use substrate_test_utils::assert_eq_uvec;
@@ -435,7 +437,8 @@ fn no_candidate_emergency_condition() {
 			<Staking as crate::Store>::MinimumValidatorCount::put(10);
 
 			// try to chill
-			let _ = Staking::chill(Origin::signed(10));
+			let res = Staking::chill(Origin::signed(10));
+			assert_ok!(res);
 
 			// trigger era
 			mock::start_active_era(1);
@@ -2004,7 +2007,7 @@ fn reward_from_authorship_event_handler_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		use pallet_authorship::EventHandler;
 
-		assert_eq!(<pallet_authorship::Module<Test>>::author(), 11);
+		assert_eq!(<pallet_authorship::Pallet<Test>>::author(), 11);
 
 		<Module<Test>>::note_author(11);
 		<Module<Test>>::note_uncle(21, 1);
@@ -2976,6 +2979,9 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 	// * an invalid era to claim doesn't update last_reward
 	// * double claim of one era fails
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
+		// Consumed weight for all payout_stakers dispatches that fail
+		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
+
 		let init_balance_10 = Balances::total_balance(&10);
 		let init_balance_100 = Balances::total_balance(&100);
 
@@ -3021,19 +3027,19 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		assert_noop!(
 			Staking::payout_stakers(Origin::signed(1337), 11, 0),
 			// Fail: Era out of history
-			Error::<Test>::InvalidEraToReward
+			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 2));
 		assert_noop!(
 			Staking::payout_stakers(Origin::signed(1337), 11, 2),
 			// Fail: Double claim
-			Error::<Test>::AlreadyClaimed
+			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
 			Staking::payout_stakers(Origin::signed(1337), 11, active_era),
 			// Fail: Era not finished yet
-			Error::<Test>::InvalidEraToReward
+			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 
 		// Era 0 can't be rewarded anymore and current era can't be rewarded yet
@@ -3287,6 +3293,9 @@ fn test_payout_stakers() {
 fn payout_stakers_handles_basic_errors() {
 	// Here we will test payouts handle all errors.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		// Consumed weight for all payout_stakers dispatches that fail
+		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
+
 		// Same setup as the test above
 		let balance = 1000;
 		bond_validator(11, 10, balance); // Default(64)
@@ -3305,9 +3314,15 @@ fn payout_stakers_handles_basic_errors() {
 		mock::start_active_era(2);
 
 		// Wrong Era, too big
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 2), Error::<Test>::InvalidEraToReward);
+		assert_noop!(
+			Staking::payout_stakers(Origin::signed(1337), 11, 2),
+			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+		);
 		// Wrong Staker
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 10, 1), Error::<Test>::NotStash);
+		assert_noop!(
+			Staking::payout_stakers(Origin::signed(1337), 10, 1),
+			Error::<Test>::NotStash.with_weight(err_weight)
+		);
 
 		for i in 3..100 {
 			Staking::reward_by_ids(vec![(11, 1)]);
@@ -3317,14 +3332,134 @@ fn payout_stakers_handles_basic_errors() {
 		}
 		// We are at era 99, with history depth of 84
 		// We should be able to payout era 15 through 98 (84 total eras), but not 14 or 99.
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 14), Error::<Test>::InvalidEraToReward);
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 99), Error::<Test>::InvalidEraToReward);
+		assert_noop!(
+			Staking::payout_stakers(Origin::signed(1337), 11, 14),
+			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+		);
+		assert_noop!(
+			Staking::payout_stakers(Origin::signed(1337), 11, 99),
+			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+		);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 15));
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 98));
 
 		// Can't claim again
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 15), Error::<Test>::AlreadyClaimed);
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 98), Error::<Test>::AlreadyClaimed);
+		assert_noop!(
+			Staking::payout_stakers(Origin::signed(1337), 11, 15),
+			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+		);
+		assert_noop!(
+			Staking::payout_stakers(Origin::signed(1337), 11, 98),
+			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+		);
+	});
+}
+
+#[test]
+fn payout_stakers_handles_weight_refund() {
+	// Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
+	// `payout_stakers` to calculate the weight of each payout op.
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		let max_nom_rewarded = <Test as Config>::MaxNominatorRewardedPerValidator::get();
+		// Make sure the configured value is meaningful for our use.
+		assert!(max_nom_rewarded >= 4);
+		let half_max_nom_rewarded = max_nom_rewarded / 2;
+		// Sanity check our max and half max nominator quantities.
+		assert!(half_max_nom_rewarded > 0);
+		assert!(max_nom_rewarded > half_max_nom_rewarded);
+
+		let max_nom_rewarded_weight
+			= <Test as Config>::WeightInfo::payout_stakers_alive_staked(max_nom_rewarded);
+		let half_max_nom_rewarded_weight
+			= <Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded);
+		let zero_nom_payouts_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
+		assert!(zero_nom_payouts_weight > 0);
+		assert!(half_max_nom_rewarded_weight > zero_nom_payouts_weight);
+		assert!(max_nom_rewarded_weight > half_max_nom_rewarded_weight);
+
+		let balance = 1000;
+		bond_validator(11, 10, balance);
+
+		/* Era 1 */
+		start_active_era(1);
+
+		// Reward just the validator.
+		Staking::reward_by_ids(vec![(11, 1)]);
+
+		// Add some `half_max_nom_rewarded` nominators who will start backing the validator in the
+		// next era.
+		for i in 0..half_max_nom_rewarded {
+			bond_nominator((1000 + i).into(), (100 + i).into(), balance + i as Balance, vec![11]);
+		}
+
+		/* Era 2 */
+		start_active_era(2);
+
+		// Collect payouts when there are no nominators
+		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 1));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(20));
+		assert_ok!(result);
+		assert_eq!(
+			extract_actual_weight(&result, &info),
+			zero_nom_payouts_weight
+		);
+
+		// The validator is not rewarded in this era; so there will be zero payouts to claim for this era.
+
+		/* Era 3 */
+		start_active_era(3);
+
+		// Collect payouts for an era where the validator did not receive any points.
+		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 2));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(20));
+		assert_ok!(result);
+		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
+
+		// Reward the validator and its nominators.
+		Staking::reward_by_ids(vec![(11, 1)]);
+
+		/* Era 4 */
+		start_active_era(4);
+
+		// Collect payouts when the validator has `half_max_nom_rewarded` nominators.
+		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 3));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(20));
+		assert_ok!(result);
+		assert_eq!(extract_actual_weight(&result, &info), half_max_nom_rewarded_weight);
+
+		// Add enough nominators so that we are at the limit. They will be active nominators
+		// in the next era.
+		for i in half_max_nom_rewarded..max_nom_rewarded {
+			bond_nominator((1000 + i).into(), (100 + i).into(), balance + i as Balance, vec![11]);
+		}
+
+		/* Era 5 */
+		start_active_era(5);
+		// We now have `max_nom_rewarded` nominators actively nominating our validator.
+
+		// Reward the validator so we can collect for everyone in the next era.
+		Staking::reward_by_ids(vec![(11, 1)]);
+
+		/* Era 6 */
+		start_active_era(6);
+
+		// Collect payouts when the validator had `half_max_nom_rewarded` nominators.
+		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 5));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(20));
+		assert_ok!(result);
+		assert_eq!(extract_actual_weight(&result, &info), max_nom_rewarded_weight);
+
+		// Try and collect payouts for an era that has already been collected.
+		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 5));
+		let info = call.get_dispatch_info();
+		let result = call.dispatch(Origin::signed(20));
+		assert!(result.is_err());
+		// When there is an error the consumed weight == weight when there are 0 nominator payouts.
+		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
 	});
 }
 
@@ -3375,7 +3510,7 @@ fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
 		let zero_offence_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1);
-		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), Ok(zero_offence_weight));
+		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), zero_offence_weight);
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
 		let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
@@ -3388,7 +3523,7 @@ fn offences_weight_calculated_correctly() {
 					reporters: vec![],
 				}
 			).collect();
-		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), Ok(n_offence_unapplied_weight));
+		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), n_offence_unapplied_weight);
 
 		// On Offence with one offenders, Applied
 		let one_offender = [
@@ -3409,7 +3544,7 @@ fn offences_weight_calculated_correctly() {
 			// `reward_cost` * reporters (1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
 
-		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), Ok(one_offence_unapplied_weight));
+		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), one_offence_unapplied_weight);
 	});
 }
 
@@ -3691,6 +3826,14 @@ fn do_not_die_when_active_is_ed() {
 				}
 			);
 		})
+}
+
+#[test]
+fn on_finalize_weight_is_nonzero() {
+	ExtBuilder::default().build_and_execute(|| {
+		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
+		assert!(Staking::on_initialize(1) >= on_finalize_weight);
+	})
 }
 
 mod election_data_provider {

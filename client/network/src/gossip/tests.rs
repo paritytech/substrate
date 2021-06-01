@@ -47,8 +47,10 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 
 	#[derive(Clone)]
 	struct PassThroughVerifier(bool);
+
+	#[async_trait::async_trait]
 	impl<B: BlockT> sp_consensus::import_queue::Verifier<B> for PassThroughVerifier {
-		fn verify(
+		async fn verify(
 			&mut self,
 			origin: sp_consensus::BlockOrigin,
 			header: B::Header,
@@ -157,6 +159,7 @@ fn build_nodes_one_proto()
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: Default::default()
 			}
@@ -171,6 +174,7 @@ fn build_nodes_one_proto()
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
+				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
 					reserved_nodes: vec![config::MultiaddrWithPeerId {

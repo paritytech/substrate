@@ -46,10 +46,6 @@ use frame_system::RawOrigin;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-fn last_event() -> Event {
-	system::Pallet::<Test>::events().pop().expect("Event expected").event
-}
-
 frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
@@ -90,6 +86,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
@@ -104,7 +101,7 @@ impl pallet_transaction_payment::Config for Test {
 pub struct OnDustRemoval;
 impl OnUnbalanced<NegativeImbalance<Test>> for OnDustRemoval {
 	fn on_nonzero_unbalanced(amount: NegativeImbalance<Test>) {
-		let _ = Balances::resolve_into_existing(&1, amount);
+		assert_ok!(Balances::resolve_into_existing(&1, amount));
 	}
 }
 parameter_types! {
@@ -190,23 +187,8 @@ fn transfer_dust_removal_tst1_should_work() {
 			// Number of events expected is 8
 			assert_eq!(System::events().len(), 11);
 
-			assert!(
-				System::events().iter().any(
-					|er|
-					er.event == Event::pallet_balances(
-						crate::Event::Transfer(2, 3, 450),
-					),
-				),
-			);
-
-			assert!(
-				System::events().iter().any(
-					|er|
-					er.event == Event::pallet_balances(
-						crate::Event::DustLost(2, 50)
-					),
-				),
-			);
+			System::assert_has_event(Event::pallet_balances(crate::Event::Transfer(2, 3, 450)));
+			System::assert_has_event(Event::pallet_balances(crate::Event::DustLost(2, 50)));
 		}
 	);
 }
@@ -237,23 +219,8 @@ fn transfer_dust_removal_tst2_should_work() {
 			// Number of events expected is 8
 			assert_eq!(System::events().len(), 9);
 
-			assert!(
-				System::events().iter().any(
-					|er|
-					er.event == Event::pallet_balances(
-						crate::Event::Transfer(2, 1, 450),
-					),
-				),
-			);
-
-			assert!(
-				System::events().iter().any(
-					|er|
-					er.event == Event::pallet_balances(
-						crate::Event::DustLost(2, 50),
-					),
-				),
-			);
+			System::assert_has_event(Event::pallet_balances(crate::Event::Transfer(2, 1, 450)));
+			System::assert_has_event(Event::pallet_balances(crate::Event::DustLost(2, 50)));
 		}
 	);
 }
@@ -293,20 +260,11 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 			// Number of events expected is 10
 			assert_eq!(System::events().len(), 10);
 
-			assert!(
-				System::events().iter().any(
-					|er|
-					er.event == Event::pallet_balances(
-						crate::Event::ReserveRepatriated(2, 1, 450, Status::Free),
-					),
-				),
-			);
+			System::assert_has_event(Event::pallet_balances(
+				crate::Event::ReserveRepatriated(2, 1, 450, Status::Free),
+			));
 
-			assert_eq!(
-				last_event(),
-				Event::pallet_balances(crate::Event::DustLost(2, 50)),
-			);
-
+			System::assert_last_event(Event::pallet_balances(crate::Event::DustLost(2, 50)));
 		}
 	);
 }

@@ -46,7 +46,7 @@ frame_support::decl_module! {
 		const Foo: u32 = u32::max_value();
 
 		#[weight = 0]
-		fn accumulate_dummy(origin, increase_by: T::Balance) {
+		fn accumulate_dummy(_origin, _increase_by: T::Balance) {
 			unimplemented!();
 		}
 
@@ -67,18 +67,25 @@ impl<T: Trait> sp_runtime::traits::ValidateUnsigned for Module<T> {
 	}
 }
 
-pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"12345678";
+pub const INHERENT_IDENTIFIER: frame_support::inherent::InherentIdentifier = *b"12345678";
 
-impl<T: Trait> sp_inherents::ProvideInherent for Module<T> {
+impl<T: Trait> frame_support::inherent::ProvideInherent for Module<T> {
 	type Call = Call<T>;
-	type Error = sp_inherents::MakeFatalError<sp_inherents::Error>;
-	const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = INHERENT_IDENTIFIER;
+	type Error = frame_support::inherent::MakeFatalError<()>;
+	const INHERENT_IDENTIFIER: frame_support::inherent::InherentIdentifier = INHERENT_IDENTIFIER;
 
-	fn create_inherent(_data: &sp_inherents::InherentData) -> Option<Self::Call> {
+	fn create_inherent(_data: &frame_support::inherent::InherentData) -> Option<Self::Call> {
 		unimplemented!();
 	}
 
-	fn check_inherent(_: &Self::Call, _: &sp_inherents::InherentData) -> std::result::Result<(), Self::Error> {
+	fn check_inherent(
+		_: &Self::Call,
+		_: &frame_support::inherent::InherentData,
+	) -> std::result::Result<(), Self::Error> {
+		unimplemented!();
+	}
+
+	fn is_inherent(_call: &Self::Call) -> bool {
 		unimplemented!();
 	}
 }
@@ -141,6 +148,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	impl pallet_test::Trait for Runtime {

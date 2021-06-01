@@ -47,10 +47,16 @@
 //! induces. In order to be able to charge the correct weight for the functions defined
 //! by a chain extension benchmarks must be written, too. In the near future this crate
 //! will provide the means for easier creation of those specialized benchmarks.
+//!
+//! # Example
+//!
+//! The ink! repository maintains an
+//! [end-to-end example](https://github.com/paritytech/ink/tree/master/examples/rand-extension)
+//! on how to use a chain extension in order to provide new features to ink! contracts.
 
 use crate::{
 	Error,
-	wasm::{Runtime, RuntimeToken},
+	wasm::{Runtime, RuntimeCosts},
 };
 use codec::Decode;
 use frame_support::weights::Weight;
@@ -141,8 +147,8 @@ pub enum RetVal {
 
 /// Grants the chain extension access to its parameters and execution environment.
 ///
-/// It uses the typestate pattern to enforce the correct usage of the parameters passed
-/// to the chain extension.
+/// It uses [typestate programming](https://docs.rust-embedded.org/book/static-guarantees/typestate-programming.html)
+/// to enforce the correct usage of the parameters passed to the chain extension.
 pub struct Environment<'a, 'b, E: Ext, S: state::State> {
 	/// The actual data of this type.
 	inner: Inner<'a, 'b, E>,
@@ -165,7 +171,7 @@ where
 	///
 	/// Weight is synonymous with gas in substrate.
 	pub fn charge_weight(&mut self, amount: Weight) -> Result<()> {
-		self.inner.runtime.charge_gas(RuntimeToken::ChainExtension(amount)).map(|_| ())
+		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount)).map(|_| ())
 	}
 
 	/// Grants access to the execution environment of the current contract call.
@@ -343,7 +349,7 @@ where
 			buffer,
 			allow_skip,
 			|len| {
-				weight_per_byte.map(|w| RuntimeToken::ChainExtension(w.saturating_mul(len.into())))
+				weight_per_byte.map(|w| RuntimeCosts::ChainExtension(w.saturating_mul(len.into())))
 			},
 		)
 	}
@@ -376,6 +382,8 @@ mod state {
 	pub trait BufIn: State {}
 	pub trait BufOut: State {}
 
+	/// The initial state of an [`Environment`](`super::Environment`).
+	/// See [typestate programming](https://docs.rust-embedded.org/book/static-guarantees/typestate-programming.html).
 	pub enum Init {}
 	pub enum OnlyIn {}
 	pub enum PrimInBufOut {}

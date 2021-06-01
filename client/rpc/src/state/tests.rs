@@ -180,7 +180,7 @@ fn should_notify_about_storage_changes() {
 			nonce: 0,
 		}).unwrap();
 		let block = builder.build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	// assert notification sent to transport
@@ -222,7 +222,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 			nonce: 0,
 		}).unwrap();
 		let block = builder.build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	// assert initial values sent to transport
@@ -258,7 +258,7 @@ fn should_query_storage() {
 			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
 			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
-			client.import(BlockOrigin::Own, block).unwrap();
+			executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 			hash
 		};
 		let block1_hash = add_block(0);
@@ -467,7 +467,7 @@ fn should_return_runtime_version() {
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
-		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",2],[\"0x40fe3ad401f8959a\",4],\
+		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",2],[\"0x40fe3ad401f8959a\",5],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
 		\"transactionVersion\":1}";

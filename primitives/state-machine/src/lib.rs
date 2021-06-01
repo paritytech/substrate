@@ -46,7 +46,9 @@ pub use std_reexport::*;
 #[cfg(feature = "std")]
 pub use execution::*;
 #[cfg(feature = "std")]
-pub use log::{debug, warn, trace, error as log_error};
+pub use log::{debug, warn, error as log_error};
+#[cfg(feature = "std")]
+pub use tracing::trace;
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.
@@ -176,7 +178,7 @@ mod execution {
 	use codec::{Decode, Encode, Codec};
 	use sp_core::{
 		storage::ChildInfo, NativeOrEncoded, NeverNativeValue, hexdisplay::HexDisplay,
-		traits::{CodeExecutor, CallInWasmExt, RuntimeCode, SpawnNamed},
+		traits::{CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
 	};
 	use sp_externalities::Extensions;
 
@@ -337,7 +339,7 @@ mod execution {
 			runtime_code: &'a RuntimeCode,
 			spawn_handle: impl SpawnNamed + Send + 'static,
 		) -> Self {
-			extensions.register(CallInWasmExt::new(exec.clone()));
+			extensions.register(ReadRuntimeVersionExt::new(exec.clone()));
 			extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
 
 			Self {
@@ -941,15 +943,11 @@ mod tests {
 		}
 	}
 
-	impl sp_core::traits::CallInWasm for DummyCodeExecutor {
-		fn call_in_wasm(
+	impl sp_core::traits::ReadRuntimeVersion for DummyCodeExecutor {
+		fn read_runtime_version(
 			&self,
 			_: &[u8],
-			_: Option<Vec<u8>>,
-			_: &str,
-			_: &[u8],
 			_: &mut dyn Externalities,
-			_: sp_core::traits::MissingHostFunctions,
 		) -> std::result::Result<Vec<u8>, String> {
 			unimplemented!("Not required in tests.")
 		}

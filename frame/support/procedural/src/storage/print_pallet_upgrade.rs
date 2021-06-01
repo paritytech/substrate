@@ -239,6 +239,15 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 					comma_default_value_getter_name = comma_default_value_getter_name,
 				)
 			},
+			StorageLineTypeDef::NMap(map) => {
+				format!("StorageNMap<_, {keygen}, {value_type}{comma_query_kind}\
+					{comma_default_value_getter_name}>",
+					keygen = map.to_keygen_struct(&def.hidden_crate),
+					value_type = to_cleaned_string(&value_type),
+					comma_query_kind = comma_query_kind,
+					comma_default_value_getter_name = comma_default_value_getter_name,
+				)
+			}
 			StorageLineTypeDef::Simple(_) => {
 				format!("StorageValue<_, {value_type}{comma_query_kind}\
 					{comma_default_value_getter_name}>",

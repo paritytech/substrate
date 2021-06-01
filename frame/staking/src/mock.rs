@@ -96,6 +96,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: staking::{Pallet, Call, Config<T>, Storage, Event<T>},
@@ -150,6 +151,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
@@ -241,6 +243,7 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 }
 impl Config for Test {
+	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -269,6 +272,8 @@ where
 }
 
 pub type Extrinsic = TestXt<Call, ()>;
+pub(crate) type StakingCall = crate::Call<Test>;
+pub(crate) type TestRuntimeCall = <Test as frame_system::Config>::Call;
 
 pub struct ExtBuilder {
 	validator_pool: bool,
@@ -711,7 +716,7 @@ pub(crate) fn on_offence_in_era(
 	let bonded_eras = crate::BondedEras::get();
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
-			let _ = Staking::on_offence(offenders, slash_fraction, start_session).unwrap();
+			let _ = Staking::on_offence(offenders, slash_fraction, start_session);
 			return;
 		} else if bonded_era > era {
 			break;
@@ -724,7 +729,7 @@ pub(crate) fn on_offence_in_era(
 				offenders,
 				slash_fraction,
 				Staking::eras_start_session_index(era).unwrap()
-			).unwrap();
+			);
 	} else {
 		panic!("cannot slash in era {}", era);
 	}

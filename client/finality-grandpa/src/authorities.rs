@@ -18,18 +18,20 @@
 
 //! Utilities for dealing with authorities, authority sets, and handoffs.
 
+use std::cmp::Ord;
+use std::fmt::Debug;
+use std::ops::Add;
+
 use fork_tree::ForkTree;
-use parking_lot::RwLock;
+use parking_lot::MappedMutexGuard;
 use finality_grandpa::voter_set::VoterSet;
 use parity_scale_codec::{Encode, Decode};
 use log::debug;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList};
+use sc_consensus::shared_data::{SharedData, SharedDataLocked};
 
-use std::cmp::Ord;
-use std::fmt::Debug;
-use std::ops::Add;
-use std::sync::Arc;
+use crate::SetId;
 
 /// Error type returned on operations on the `AuthoritySet`.
 #[derive(Debug, derive_more::Display)]
@@ -70,19 +72,30 @@ impl<N, E: std::error::Error> From<E> for Error<N, E> {
 
 /// A shared authority set.
 pub struct SharedAuthoritySet<H, N> {
-	inner: Arc<RwLock<AuthoritySet<H, N>>>,
+	inner: SharedData<AuthoritySet<H, N>>,
 }
 
 impl<H, N> Clone for SharedAuthoritySet<H, N> {
 	fn clone(&self) -> Self {
-		SharedAuthoritySet { inner: self.inner.clone() }
+		SharedAuthoritySet {
+			inner: self.inner.clone(),
+		}
 	}
 }
 
 impl<H, N> SharedAuthoritySet<H, N> {
-	/// Acquire a reference to the inner read-write lock.
-	pub(crate) fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
-		&*self.inner
+	/// Returns access to the [`AuthoritySet`].
+	pub(crate) fn inner(&self) -> MappedMutexGuard<AuthoritySet<H, N>> {
+		self.inner.shared_data()
+	}
+
+	/// Returns access to the [`AuthoritySet`] and locks it.
+	///
+	/// For more information see [`SharedDataLocked`].
+	pub(crate) fn inner_locked(
+		&self,
+	) -> SharedDataLocked<AuthoritySet<H, N>> {
+		self.inner.shared_data_locked()
 	}
 }
 
@@ -93,17 +106,17 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	/// Get the earliest limit-block number that's higher or equal to the given
 	/// min number, if any.
 	pub(crate) fn current_limit(&self, min: N) -> Option<N> {
-		self.inner.read().current_limit(min)
+		self.inner().current_limit(min)
 	}
 
 	/// Get the current set ID. This is incremented every time the set changes.
 	pub fn set_id(&self) -> u64 {
-		self.inner.read().set_id
+		self.inner().set_id
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
 	pub fn current_authorities(&self) -> VoterSet<AuthorityId> {
-		VoterSet::new(self.inner.read().current_authorities.iter().cloned()).expect(
+		VoterSet::new(self.inner().current_authorities.iter().cloned()).expect(
 			"current_authorities is non-empty and weights are non-zero; \
 			 constructor and all mutating operations on `AuthoritySet` ensure this; \
 			 qed.",
@@ -112,18 +125,20 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 
 	/// Clone the inner `AuthoritySet`.
 	pub fn clone_inner(&self) -> AuthoritySet<H, N> {
-		self.inner.read().clone()
+		self.inner().clone()
 	}
 
 	/// Clone the inner `AuthoritySetChanges`.
 	pub fn authority_set_changes(&self) -> AuthoritySetChanges<N> {
-		self.inner.read().authority_set_changes.clone()
+		self.inner().authority_set_changes.clone()
 	}
 }
 
 impl<H, N> From<AuthoritySet<H, N>> for SharedAuthoritySet<H, N> {
 	fn from(set: AuthoritySet<H, N>) -> Self {
-		SharedAuthoritySet { inner: Arc::new(RwLock::new(set)) }
+		SharedAuthoritySet {
+			inner: SharedData::new(set),
+		}
 	}
 }
 
@@ -671,6 +686,20 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
 pub struct AuthoritySetChanges<N>(Vec<(u64, N)>);
 
+/// The response when querying for a set id for a specific block. Either we get a set id
+/// together with a block number for the last block in the set, or that the requested block is in the
+/// latest set, or that we don't know what set id the given block belongs to.
+#[derive(Debug, PartialEq)]
+pub enum AuthoritySetChangeId<N> {
+	/// The requested block is in the latest set.
+	Latest,
+	/// Tuple containing the set id and the last block number of that set.
+	Set(SetId, N),
+	/// We don't know which set id the request block belongs to (this can only happen due to missing
+	/// data).
+	Unknown,
+}
+
 impl<N> From<Vec<(u64, N)>> for AuthoritySetChanges<N> {
 	fn from(changes: Vec<(u64, N)>) -> AuthoritySetChanges<N> {
 		AuthoritySetChanges(changes)
@@ -686,42 +715,53 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 		self.0.push((set_id, block_number));
 	}
 
-	pub(crate) fn get_set_id(&self, block_number: N) -> Option<(u64, N)> {
+	pub(crate) fn get_set_id(&self, block_number: N) -> AuthoritySetChangeId<N> {
+		if self.0
+			.last()
+			.map(|last_auth_change| last_auth_change.1 < block_number)
+			.unwrap_or(false)
+		{
+			return AuthoritySetChangeId::Latest;
+		}
+
 		let idx = self.0
 			.binary_search_by_key(&block_number, |(_, n)| n.clone())
 			.unwrap_or_else(|b| b);
 
 		if idx < self.0.len() {
 			let (set_id, block_number) = self.0[idx].clone();
-			// To make sure we have the right set we need to check that the one before it also exists.
-			if idx > 0 {
-				let (prev_set_id, _) = self.0[idx - 1usize];
-				if set_id != prev_set_id + 1u64 {
-					// Without the preceding set_id we don't have a well-defined start.
-					return None;
-				}
-			} else if set_id != 0 {
-				// If this is the first index, yet not the first set id then it's not well-defined
-				// that we are in the right set id.
-				return None;
+
+			// if this is the first index but not the first set id then we are missing data.
+			if idx == 0 && set_id != 0 {
+				return AuthoritySetChangeId::Unknown;
 			}
-			Some((set_id, block_number))
+
+			AuthoritySetChangeId::Set(set_id, block_number)
 		} else {
-			None
+			AuthoritySetChangeId::Unknown
 		}
 	}
 
 	/// Returns an iterator over all historical authority set changes starting at the given block
 	/// number (excluded). The iterator yields a tuple representing the set id and the block number
 	/// of the last block in that set.
-	pub fn iter_from(&self, block_number: N) -> impl Iterator<Item = &(u64, N)> {
+	pub fn iter_from(&self, block_number: N) -> Option<impl Iterator<Item = &(u64, N)>> {
 		let idx = self.0.binary_search_by_key(&block_number, |(_, n)| n.clone())
 			// if there was a change at the given block number then we should start on the next
 			// index since we want to exclude the current block number
 			.map(|n| n + 1)
 			.unwrap_or_else(|b| b);
 
-		self.0[idx..].iter()
+		if idx < self.0.len() {
+			let (set_id, _) = self.0[idx].clone();
+
+			// if this is the first index but not the first set id then we are missing data.
+			if idx == 0 && set_id != 0 {
+				return None;
+			}
+		}
+
+		Some(self.0[idx..].iter())
 	}
 }
 
@@ -1647,11 +1687,11 @@ mod tests {
 		authority_set_changes.append(1, 81);
 		authority_set_changes.append(2, 121);
 
-		assert_eq!(authority_set_changes.get_set_id(20), Some((0, 41)));
-		assert_eq!(authority_set_changes.get_set_id(40), Some((0, 41)));
-		assert_eq!(authority_set_changes.get_set_id(41), Some((0, 41)));
-		assert_eq!(authority_set_changes.get_set_id(42), Some((1, 81)));
-		assert_eq!(authority_set_changes.get_set_id(141), None);
+		assert_eq!(authority_set_changes.get_set_id(20), AuthoritySetChangeId::Set(0, 41));
+		assert_eq!(authority_set_changes.get_set_id(40), AuthoritySetChangeId::Set(0, 41));
+		assert_eq!(authority_set_changes.get_set_id(41), AuthoritySetChangeId::Set(0, 41));
+		assert_eq!(authority_set_changes.get_set_id(42), AuthoritySetChangeId::Set(1, 81));
+		assert_eq!(authority_set_changes.get_set_id(141), AuthoritySetChangeId::Latest);
 	}
 
 	#[test]
@@ -1661,11 +1701,11 @@ mod tests {
 		authority_set_changes.append(3, 81);
 		authority_set_changes.append(4, 121);
 
-		assert_eq!(authority_set_changes.get_set_id(20), None);
-		assert_eq!(authority_set_changes.get_set_id(40), None);
-		assert_eq!(authority_set_changes.get_set_id(41), None);
-		assert_eq!(authority_set_changes.get_set_id(42), Some((3, 81)));
-		assert_eq!(authority_set_changes.get_set_id(141), None);
+		assert_eq!(authority_set_changes.get_set_id(20), AuthoritySetChangeId::Unknown);
+		assert_eq!(authority_set_changes.get_set_id(40), AuthoritySetChangeId::Unknown);
+		assert_eq!(authority_set_changes.get_set_id(41), AuthoritySetChangeId::Unknown);
+		assert_eq!(authority_set_changes.get_set_id(42), AuthoritySetChangeId::Set(3, 81));
+		assert_eq!(authority_set_changes.get_set_id(141), AuthoritySetChangeId::Latest);
 	}
 
 	#[test]
@@ -1673,26 +1713,38 @@ mod tests {
 		let mut authority_set_changes = AuthoritySetChanges::empty();
 		authority_set_changes.append(1, 41);
 		authority_set_changes.append(2, 81);
+
+		// we are missing the data for the first set, therefore we should return `None`
+		assert_eq!(
+			None,
+			authority_set_changes.iter_from(40).map(|it| it.collect::<Vec<_>>()),
+		);
+
+		// after adding the data for the first set the same query should work
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(0, 21);
+		authority_set_changes.append(1, 41);
+		authority_set_changes.append(2, 81);
 		authority_set_changes.append(3, 121);
 
 		assert_eq!(
-			vec![(1, 41), (2, 81), (3, 121)],
-			authority_set_changes.iter_from(40).cloned().collect::<Vec<_>>(),
+			Some(vec![(1, 41), (2, 81), (3, 121)]),
+			authority_set_changes.iter_from(40).map(|it| it.cloned().collect::<Vec<_>>()),
 		);
 
 		assert_eq!(
-			vec![(2, 81), (3, 121)],
-			authority_set_changes.iter_from(41).cloned().collect::<Vec<_>>(),
-		);
-
-		assert_eq!(
-			0,
-			authority_set_changes.iter_from(121).count(),
+			Some(vec![(2, 81), (3, 121)]),
+			authority_set_changes.iter_from(41).map(|it| it.cloned().collect::<Vec<_>>()),
 		);
 
 		assert_eq!(
 			0,
-			authority_set_changes.iter_from(200).count(),
+			authority_set_changes.iter_from(121).unwrap().count(),
+		);
+
+		assert_eq!(
+			0,
+			authority_set_changes.iter_from(200).unwrap().count(),
 		);
 	}
 }

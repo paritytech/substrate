@@ -36,7 +36,7 @@ use sc_executor_common::{
 	error::{Error, WasmError},
 	sandbox,
 };
-use sc_executor_common::util::{DataSegmentsSnapshot, WasmModuleInfo};
+use sc_executor_common::runtime_blob::{RuntimeBlob, DataSegmentsSnapshot};
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
@@ -641,18 +641,18 @@ impl WasmModule for WasmiRuntime {
 /// Create a new `WasmiRuntime` given the code. This function loads the module and
 /// stores it in the instance.
 pub fn create_runtime(
-	code: &[u8],
+	blob: RuntimeBlob,
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 ) -> Result<WasmiRuntime, WasmError> {
-	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
+	let data_segments_snapshot = DataSegmentsSnapshot::take(&blob)
+		.map_err(|e| WasmError::Other(e.to_string()))?;
 
-	// Extract the data segments from the wasm code.
-	//
-	// A return of this error actually indicates that there is a problem in logic, since
-	// we just loaded and validated the `module` above.
-	let (data_segments_snapshot, global_vals_snapshot) = {
+	let module = Module::from_parity_wasm_module(blob.into_inner())
+		.map_err(|_| WasmError::InvalidModule)?;
+
+	let global_vals_snapshot = {
 		let (instance, _, _) = instantiate_module(
 			heap_pages as usize,
 			&module,
@@ -660,15 +660,7 @@ pub fn create_runtime(
 			allow_missing_func_imports,
 		)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
-
-		let data_segments_snapshot = DataSegmentsSnapshot::take(
-			&WasmModuleInfo::new(code)
-				.ok_or_else(|| WasmError::Other("cannot deserialize module".to_string()))?,
-		)
-		.map_err(|e| WasmError::Other(e.to_string()))?;
-		let global_vals_snapshot = GlobalValsSnapshot::take(&instance);
-
-		(data_segments_snapshot, global_vals_snapshot)
+		GlobalValsSnapshot::take(&instance)
 	};
 
 	Ok(WasmiRuntime {

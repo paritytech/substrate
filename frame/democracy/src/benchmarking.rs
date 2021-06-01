@@ -21,10 +21,11 @@ use super::*;
 
 use frame_benchmarking::{benchmarks, account, whitelist_account, impl_benchmark_test_suite};
 use frame_support::{
-	IterableStorageMap,
-	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable, schedule::DispatchTime},
+	assert_noop, assert_ok, IterableStorageMap,
+	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable,
+        schedule::DispatchTime},
 };
-use frame_system::{RawOrigin, Pallet as System, self, EventRecord};
+use frame_system::{RawOrigin, Pallet as System, self};
 use sp_runtime::traits::{Bounded, One};
 
 use crate::Pallet as Democracy;
@@ -35,11 +36,7 @@ const MAX_SECONDERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = System::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
@@ -206,11 +203,14 @@ benchmarks! {
 		let origin = T::CancellationOrigin::successful_origin();
 		let referendum_index = add_referendum::<T>(0)?;
 		let call = Call::<T>::emergency_cancel(referendum_index);
-		assert!(Democracy::<T>::referendum_status(referendum_index).is_ok());
+		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// Referendum has been canceled
-		assert!(Democracy::<T>::referendum_status(referendum_index).is_err());
+		assert_noop!(
+			Democracy::<T>::referendum_status(referendum_index),
+			Error::<T>::ReferendumInvalid,
+		);
 	}
 
 	blacklist {
@@ -224,18 +224,23 @@ benchmarks! {
 
 		// Place our proposal in the external queue, too.
 		let hash = T::Hashing::hash_of(&0);
-		assert!(Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash.clone()).is_ok());
+		assert_ok!(
+            Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash.clone())
+        );
 
 		// Add a referendum of our proposal.
 		let referendum_index = add_referendum::<T>(0)?;
-		assert!(Democracy::<T>::referendum_status(referendum_index).is_ok());
+		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
 
 		let call = Call::<T>::blacklist(hash, Some(referendum_index));
 		let origin = T::BlacklistOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// Referendum has been canceled
-		assert!(Democracy::<T>::referendum_status(referendum_index).is_err());
+		assert_noop!(
+            Democracy::<T>::referendum_status(referendum_index),
+            Error::<T>::ReferendumInvalid
+        );
 	}
 
 	// Worst case scenario, we external propose a previously blacklisted proposal

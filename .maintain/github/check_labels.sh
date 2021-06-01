@@ -25,17 +25,18 @@ releasenotes_labels=(
 )
 
 criticality_labels=(
-  'C1-low'
-  'C3-medium'
-  'C7-high'
-  'C9-critical'
+  'C1-low 📌'
+  'C3-medium 📣'
+  'C7-high ❗️'
+  'C9-critical ‼️'
 )
 
 audit_labels=(
-  'D1-trivial'
-  'D1-audited👍'
-  'D5-nicetohaveaudit⚠️'
-  'D9-needsaudit👮'
+  'D1-audited 👍'
+  'D2-notlive 💤'
+  'D3-trivial 🧸'
+  'D5-nicetohaveaudit ⚠️'
+  'D9-needsaudit 👮'
 )
 
 echo "[+] Checking release notes (B) labels"
