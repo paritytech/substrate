@@ -111,6 +111,7 @@ impl<T: Config> Pallet<T> {
 
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
+		let discarded = all_submissions.len();
 		for not_processed in all_submissions {
 			let SignedSubmission { who, deposit, .. } = not_processed;
 			let _remaining = T::Currency::unreserve(&who, deposit);
@@ -118,6 +119,7 @@ impl<T: Config> Pallet<T> {
 			debug_assert!(_remaining.is_zero());
 		};
 
+		log!(debug, "closed signed phase, found solution? {}, discarded {}", found_solution, discarded);
 		(found_solution, weight)
 	}
 
