@@ -422,7 +422,7 @@ impl<FR> SandboxInstance<FR> {
 							let wasmer_result = DTH::initialize_thunk(&self.dispatch_thunk, || function.call(&args))
 								.map_err(|error| wasmi::Error::Function(error.to_string()))?;
 
-							if wasmer_result.len() < 2 {
+							if wasmer_result.len() > 1 {
 								return Err(wasmi::Error::Function(
 									"multiple return types are not supported yet".to_owned())
 								);
