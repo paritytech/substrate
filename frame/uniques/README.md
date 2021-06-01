@@ -16,101 +16,63 @@ The supported dispatchable functions are documented in the [`uniques::Call`](htt
 
 ### Terminology
 
-* **Asset issuance:** The creation of a new asset, whose total supply will belong to the
-  account that issues the asset.
-* **Asset transfer:** The action of transferring assets from one account to another.
-* **Asset destruction:** The process of an account removing its entire holding of an asset.
-* **Fungible asset:** An asset whose units are interchangeable.
-* **Non-fungible asset:** An asset for which each unit has unique characteristics.
+* **Asset issuance:** The creation of a new asset instance.
+* **Asset transfer:** The action of transferring an asset instance from one account to another.
+* **Asset burning:** The destruction of an asset instance.
+* **Non-fungible asset:** An asset for which each unit has unique characteristics. There is exactly
+  one instance of such an asset in existance and there is exactly one owning account.
 
 ### Goals
 
-The assets system in Substrate is designed to make the following possible:
+The Uniques pallet in Substrate is designed to make the following possible:
 
-* Issue a unique asset to its creator's account.
-* Move assets between accounts.
-* Remove an account's balance of an asset when requested by that account's owner and update
-  the asset's total supply.
+* Allow accounts to permissionlessly create asset classes (collections of asset instances).
+* Allow a named (permissioned) account to mint and burn unique assets within a class.
+* Move asset instances between accounts permissionlessly.
+* Allow a named (permissioned) account to freeze and unfreeze unique assets within a
+  class or the entire class.
+* Allow the owner of an asset instance to delegate the ability to transfer the asset to some
+  named third-party.
 
 ## Interface
 
-### Dispatchable Functions
+### Permissionless dispatchables
+* `create`: Create a new asset class by placing a deposit.
+* `transfer`: Transfer an asset instance to a new owner.
+* `redeposit`: Update the deposit amount of an asset instance, potentially freeing funds.
+* `approve_transfer`: Name a delegate who may authorise a transfer.
+* `cancel_approval`: Revert the effects of a previous `approve_transfer`.
 
-* `issue` - Issues the total supply of a new fungible asset to the account of the caller of the function.
-* `transfer` - Transfers an `amount` of units of fungible asset `id` from the balance of
-the function caller's account (`origin`) to a `target` account.
-* `destroy` - Destroys the entire holding of a fungible asset `id` associated with the account
-that called the function.
+### Permissioned dispatchables
+* `destroy`: Destroy an asset class.
+* `mint`: Mint a new asset instance within an asset class.
+* `burn`: Burn an asset instance within an asset class.
+* `freeze`: Prevent an individual asset from being transferred.
+* `thaw`: Revert the effects of a previous `freeze`.
+* `freeze_class`: Prevent all asset within a class from being transferred.
+* `thaw_class`: Revert the effects of a previous `freeze_class`.
+* `transfer_ownership`: Alter the owner of an asset class, moving all associated deposits.
+* `set_team`: Alter the permissioned accounts of an asset class.
 
-Please refer to the [`Call`](https://docs.rs/pallet-assets/latest/pallet_assets/enum.Call.html) enum and its associated variants for documentation on each function.
+### Metadata (permissioned) dispatchables
+* `set_attribute`: Set a metadata attribute of an asset instance or class.
+* `clear_attribute`: Remove a metadata attribute of an asset instance or class.
+* `set_metadata`: Set general metadata of an asset instance.
+* `clear_metadata`: Remove general metadata of an asset instance.
+* `set_class_metadata`: Set general metadata of an asset class.
+* `clear_class_metadata`: Remove general metadata of an asset class.
 
-### Public Functions
-<!-- Original author of descriptions: @gavofyork -->
+### Force (i.e. governance) dispatchables
+* `force_create`: Create a new asset class.
+* `force_asset_status`: Alter the underlying characteristics of an asset class.
 
-* `balance` - Get the asset `id` balance of `who`.
-* `total_supply` - Get the total supply of an asset `id`.
-
-Please refer to the [`Module`](https://docs.rs/pallet-assets/latest/pallet_assets/struct.Module.html) struct for details on publicly available functions.
-
-## Usage
-
-The following example shows how to use the Assets module in your runtime by exposing public functions to:
-
-* Issue a new fungible asset for a token distribution event (airdrop).
-* Query the fungible asset holding balance of an account.
-* Query the total supply of a fungible asset that has been issued.
-
-### Prerequisites
-
-Import the Assets module and types and derive your runtime's configuration traits from the Assets module trait.
-
-### Simple Code Snippet
-
-```rust
-use pallet_assets as assets;
-use frame_support::{decl_module, dispatch, ensure};
-use frame_system::ensure_signed;
-use sp_runtime::ArithmeticError;
-
-pub trait Config: assets::Config { }
-
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		pub fn issue_token_airdrop(origin) -> dispatch::DispatchResult {
-			let sender = ensure_signed(origin).map_err(|e| e.as_str())?;
-
-			const ACCOUNT_ALICE: u64 = 1;
-			const ACCOUNT_BOB: u64 = 2;
-			const COUNT_AIRDROP_RECIPIENTS: u64 = 2;
-			const TOKENS_FIXED_SUPPLY: u64 = 100;
-
-			ensure!(!COUNT_AIRDROP_RECIPIENTS.is_zero(), ArithmeticError::DivisionByZero);
-
-			let asset_id = Self::next_asset_id();
-
-			<NextAssetId<T>>::mutate(|asset_id| *asset_id += 1);
-			<Balances<T>>::insert((asset_id, &ACCOUNT_ALICE), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-			<Balances<T>>::insert((asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
-			<TotalSupply<T>>::insert(asset_id, TOKENS_FIXED_SUPPLY);
-
-			Self::deposit_event(RawEvent::Issued(asset_id, sender, TOKENS_FIXED_SUPPLY));
-			Ok(())
-		}
-	}
-}
-```
-
-## Assumptions
-
-Below are assumptions that must be held when using this module.  If any of
-them are violated, the behavior of this module is undefined.
-
-* The total count of assets should be less than
-  `Config::AssetId::max_value()`.
+Please refer to the [`Call`](https://docs.rs/pallet-assets/latest/pallet_assets/enum.Call.html) enum
+and its associated variants for documentation on each function.
 
 ## Related Modules
 
 * [`System`](https://docs.rs/frame-system/latest/frame_system/)
 * [`Support`](https://docs.rs/frame-support/latest/frame_support/)
+* [`Assets`](https://docs.rs/pallet-assets/latest/pallet_assetss/)
 
 License: Apache-2.0
