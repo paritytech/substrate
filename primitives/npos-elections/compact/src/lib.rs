@@ -421,7 +421,6 @@ fn check_compact_attr(input: ParseStream) -> Result<bool> {
 
 /// ```ignore
 /// `#[compact] pub struct CompactName::<VoterIndex = u32, TargetIndex = u32, Accuracy = u32>()`
-/// ```
 impl Parse for SolutionDef {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		// optional #[compact]
