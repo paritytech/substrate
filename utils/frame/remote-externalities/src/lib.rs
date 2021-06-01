@@ -154,7 +154,7 @@ impl Default for SnapshotConfig {
 
 /// Builder for remote-externalities.
 pub struct Builder<B: BlockT> {
-	/// certain custom key-pairs to be injected into the externalities.
+	/// Custom key-pairs to be injected into the externalities.
 	inject: Vec<KeyPair>,
 	/// Storage entry key prefixes to be injected into the externalities. The raw prefix must be given.
 	raw_prefixes: Vec<Vec<u8>>,
