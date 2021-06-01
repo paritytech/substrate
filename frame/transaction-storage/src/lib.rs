@@ -49,7 +49,7 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-/// Maximum bytes that can be storead in one transaction.
+/// Maximum bytes that can be stored in one transaction.
 // Increasing it further also requires raising the allocator limit.
 pub const MAX_DATA_SIZE: u32 = 8 * 1024 * 1024;
 
@@ -145,7 +145,7 @@ pub mod pallet {
 		pub(super) fn store(
 			origin: OriginFor<T>,
 			data: Vec<u8>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure!(data.len() > 0, Error::<T>::EmptyTransaction);
 			Self::apply_fee(origin, data.len() as u32)?;
 
@@ -165,7 +165,7 @@ pub mod pallet {
 				content_hash: content_hash.into(),
 			});
 			Self::deposit_event(Event::Stored(counter));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Renew previously stored data. Parameters are the block number that contains
