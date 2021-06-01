@@ -168,12 +168,16 @@ where
 		code_cache::store_decremented(self);
 	}
 
-	fn add_user(code_hash: CodeHash<T>) -> Result<u32, DispatchError> {
-		code_cache::increment_refcount::<T>(code_hash)
+	fn add_user(code_hash: CodeHash<T>, gas_meter: &mut GasMeter<T>)
+		-> Result<(), DispatchError>
+	{
+		code_cache::increment_refcount::<T>(code_hash, gas_meter)
 	}
 
-	fn remove_user(code_hash: CodeHash<T>) -> u32 {
-		code_cache::decrement_refcount::<T>(code_hash)
+	fn remove_user(code_hash: CodeHash<T>, gas_meter: &mut GasMeter<T>)
+		-> Result<(), DispatchError>
+	{
+		code_cache::decrement_refcount::<T>(code_hash, gas_meter)
 	}
 
 	fn execute<E: Ext<T = T>>(
@@ -349,14 +353,14 @@ mod tests {
 			value: u64,
 			data: Vec<u8>,
 			allows_reentry: bool,
-		) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
+		) -> Result<ExecReturnValue, ExecError> {
 			self.calls.push(CallEntry {
 				to,
 				value,
 				data,
 				allows_reentry,
 			});
-			Ok((ExecReturnValue { flags: ReturnFlags::empty(), data: call_return_data() }, 0))
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: call_return_data() })
 		}
 		fn instantiate(
 			&mut self,
@@ -365,7 +369,7 @@ mod tests {
 			endowment: u64,
 			data: Vec<u8>,
 			salt: &[u8],
-		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), (ExecError, u32)> {
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
@@ -379,7 +383,6 @@ mod tests {
 					flags: ReturnFlags::empty(),
 					data: Bytes(Vec::new()),
 				},
-				0,
 			))
 		}
 		fn transfer(
@@ -396,11 +399,11 @@ mod tests {
 		fn terminate(
 			&mut self,
 			beneficiary: &AccountIdOf<Self::T>,
-		) -> Result<u32, (DispatchError, u32)> {
+		) -> Result<(), DispatchError> {
 			self.terminations.push(TerminationEntry {
 				beneficiary: beneficiary.clone(),
 			});
-			Ok(0)
+			Ok(())
 		}
 		fn restore_to(
 			&mut self,
@@ -408,14 +411,14 @@ mod tests {
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(u32, u32), (DispatchError, u32, u32)> {
+		) -> Result<(), DispatchError> {
 			self.restores.push(RestoreEntry {
 				dest,
 				code_hash,
 				rent_allowance,
 				delta,
 			});
-			Ok((0, 0))
+			Ok(())
 		}
 		fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()

@@ -320,6 +320,25 @@ benchmarks! {
 		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
 	}
 
+	// The weight of loading and decoding of a contract's code per kilobyte.
+	code_load {
+		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
+		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_bytes(c * 1024);
+		Contracts::<T>::store_code_raw(code)?;
+	}: {
+		<PrefabWasmModule<T>>::from_storage_noinstr(hash)?;
+	}
+
+	// The weight of changing the refcount of a contract's code per kilobyte.
+	code_refcount {
+		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
+		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_bytes(c * 1024);
+		Contracts::<T>::store_code_raw(code)?;
+		let mut gas_meter = GasMeter::new(Weight::max_value());
+	}: {
+		<PrefabWasmModule<T>>::add_user(hash, &mut gas_meter)?;
+	}
+
 	// This constructs a contract that is maximal expensive to instrument.
 	// It creates a maximum number of metering blocks per byte.
 	// The size of the salt influences the runtime because is is hashed in order to
@@ -352,16 +371,14 @@ benchmarks! {
 	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
-	// `c`: Size of the code in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	instantiate {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
 		let endowment = caller_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_bytes(c * 1024);
+		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
 		Contracts::<T>::store_code_raw(code)?;
@@ -380,12 +397,10 @@ benchmarks! {
 	// won't call `seal_input` in its constructor to copy the data to contract memory.
 	// The dummy contract used here does not do this. The costs for the data copy is billed as
 	// part of `seal_input`.
-	// `c`: Size of the code in kilobytes.
 	call {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
 		let data = vec![42u8; 1024];
 		let instance = Contract::<T>::with_caller(
-			whitelisted_caller(), WasmModule::dummy_with_bytes(c * 1024), vec![], Endow::CollectRent
+			whitelisted_caller(), WasmModule::dummy(), vec![], Endow::CollectRent
 		)?;
 		let value = T::Currency::minimum_balance() * 100u32.into();
 		let origin = RawOrigin::Signed(instance.caller.clone());
@@ -720,43 +735,6 @@ benchmarks! {
 		}
 	}
 
-	seal_terminate_per_code_kb {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
-		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
-		let beneficiary_bytes = beneficiary.encode();
-		let beneficiary_len = beneficiary_bytes.len();
-		let code = WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_terminate",
-				params: vec![ValueType::I32, ValueType::I32],
-				return_type: None,
-			}],
-			data_segments: vec![
-				DataSegment {
-					offset: 0,
-					value: beneficiary_bytes,
-				},
-			],
-			call_body: Some(body::repeated(1, &[
-				Instruction::I32Const(0), // beneficiary_ptr
-				Instruction::I32Const(beneficiary_len as i32), // beneficiary_len
-				Instruction::Call(0),
-			])),
-			dummy_section: c * 1024,
-			.. Default::default()
-		});
-		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
-		assert_eq!(T::Currency::total_balance(&instance.account_id), Endow::max::<T>());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
-	verify {
-		assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
-		assert_eq!(T::Currency::total_balance(&beneficiary), Endow::max::<T>());
-	}
-
 	seal_restore_to {
 		let r in 0 .. 1;
 
@@ -836,18 +814,15 @@ benchmarks! {
 		}
 	}
 
-	// `c`: Code size of caller contract
-	// `t`: Code size of tombstone contract
 	// `d`: Number of supplied delta keys
-	seal_restore_to_per_code_kb_delta {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
-		let t in 0 .. T::Schedule::get().limits.code_len / 1024;
+	seal_restore_to_per_delta {
 		let d in 0 .. API_BENCHMARK_BATCHES;
-		let mut tombstone = ContractWithStorage::<T>::with_code(
-			WasmModule::<T>::dummy_with_bytes(t * 1024), 0, 0
-		)?;
+		let mut tombstone = ContractWithStorage::<T>::new(0, 0)?;
 		tombstone.evict()?;
-		let delta = create_storage::<T>(d * API_BENCHMARK_BATCH_SIZE, T::Schedule::get().limits.payload_len)?;
+		let delta = create_storage::<T>(
+			d * API_BENCHMARK_BATCH_SIZE,
+			T::Schedule::get().limits.payload_len,
+		)?;
 
 		let dest = tombstone.contract.account_id.encode();
 		let dest_len = dest.len();
@@ -909,7 +884,6 @@ benchmarks! {
 				Instruction::Call(0),
 				Instruction::End,
 			])),
-			dummy_section: c * 1024,
 			.. Default::default()
 		});
 
@@ -1393,8 +1367,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	seal_call_per_code_transfer_input_output_kb {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
+	seal_call_per_transfer_input_output_kb {
 		let t in 0 .. 1;
 		let i in 0 .. code::max_pages::<T>() * 64;
 		let o in 0 .. (code::max_pages::<T>() - 1) * 64;
@@ -1417,7 +1390,6 @@ benchmarks! {
 				Instruction::Call(0),
 				Instruction::End,
 			])),
-			dummy_section: c * 1024,
 			.. Default::default()
 		});
 		let callees = (0..API_BENCHMARK_BATCH_SIZE)
@@ -1593,8 +1565,7 @@ benchmarks! {
 		}
 	}
 
-	seal_instantiate_per_code_input_output_salt_kb {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
+	seal_instantiate_per_input_output_salt_kb {
 		let i in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let o in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
@@ -1617,7 +1588,6 @@ benchmarks! {
 				Instruction::Call(0),
 				Instruction::End,
 			])),
-			dummy_section: c * 1024,
 			.. Default::default()
 		});
 		let hash = callee_code.hash.clone();
