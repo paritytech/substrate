@@ -19,7 +19,6 @@
 use crate::*;
 use sp_transaction_pool::TransactionStatus;
 use futures::executor::{block_on, block_on_stream};
-use futures::future::BoxFuture;
 use txpool::{self, Pool};
 use sp_runtime::{
 	generic::BlockId,
@@ -36,25 +35,7 @@ use std::collections::BTreeSet;
 use sc_client_api::client::BlockchainEvents;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::BlockOrigin;
-
-#[derive(Clone)]
-struct ThreadPoolSpawner(futures::executor::ThreadPool);
-
-impl ThreadPoolSpawner {
-	fn new() -> Self {
-		Self(futures::executor::ThreadPool::new().unwrap())
-	}
-}
-
-impl sp_core::traits::SpawnNamed for ThreadPoolSpawner {
-	fn spawn_blocking(&self, _: &'static str, future: BoxFuture<'static, ()>) {
-		self.0.spawn_ok(future);
-	}
-
-	fn spawn(&self, _: &'static str, future: BoxFuture<'static, ()>) {
-		self.0.spawn_ok(future);
-	}
-}
+use sp_core::testing::TaskExecutor;
 
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), true.into(), TestApi::with_alice_nonce(209).into())
@@ -955,7 +936,7 @@ fn should_not_accept_old_signatures() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
-		BasicPool::new_test(Arc::new(FullChainApi::new(client, None, ThreadPoolSpawner::new()))).0
+		BasicPool::new_test(Arc::new(FullChainApi::new(client, None, TaskExecutor::new()))).0
 	);
 
 	let transfer = Transfer {
@@ -991,7 +972,7 @@ fn import_notification_to_pool_maintain_works() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
-		BasicPool::new_test(Arc::new(FullChainApi::new(client.clone(), None, ThreadPoolSpawner::new()))).0
+		BasicPool::new_test(Arc::new(FullChainApi::new(client.clone(), None, TaskExecutor::new()))).0
 	);
 
 	// Prepare the extrisic, push it to the pool and check that it was added.
