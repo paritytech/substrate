@@ -4400,7 +4400,6 @@ dependencies = [
  "lite-json",
  "pallet-balances",
  "pallet-contracts",
- "pallet-contracts-rpc-runtime-api",
  "pallet-randomness-collective-flip",
  "pallet-timestamp",
  "parity-scale-codec",

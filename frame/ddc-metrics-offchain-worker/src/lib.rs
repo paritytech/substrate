@@ -252,8 +252,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    fn get_contract_id() -> Option<<<T::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>
-    {
+    fn get_contract_id() -> Option<<T::CT as frame_system::Trait>::AccountId> {
         let value = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::sc_address").get();
 
         match value {
@@ -319,16 +318,12 @@ impl<T: Trait> Module<T> {
     }
 
     fn sc_get_current_period_ms(
-        contract_id: <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::Source,
+        contract_id: <T::CT as frame_system::Trait>::AccountId,
     ) -> ResultStr<u64> {
-        // let contract_id = T::ContractId::get();
-        let contract_idx =
-            <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::lookup(contract_id).unwrap();
-
         let call_data = Self::encode_get_current_period_ms();
         let (exec_result, _gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
             Default::default(),
-            contract_idx,
+            contract_id,
             0u32.into(),
             100_000_000_000,
             call_data,
@@ -354,17 +349,18 @@ impl<T: Trait> Module<T> {
     }
 
     fn finalize_metric_period(
-        contract_id: <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::Source,
+        contract_id: <T::CT as frame_system::Trait>::AccountId,
         signer: &Signer<T::CST, T::AuthorityId>,
         in_day_start_ms: u64,
     ) -> ResultStr<()> {
-        // let contract_id = T::ContractId::get();
+        let contract_id_unl =
+            <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::unlookup(contract_id);
 
         let _call_data = Self::encode_finalize_metric_period(in_day_start_ms);
 
         let results = signer.send_signed_transaction(|_account| {
             pallet_contracts::Call::call(
-                contract_id.clone(),
+                contract_id_unl.clone(),
                 0u32.into(),
                 100_000_000_000,
                 _call_data.clone(),
@@ -382,7 +378,7 @@ impl<T: Trait> Module<T> {
     }
 
     fn send_metrics_to_sc(
-        contract_id: <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::Source,
+        contract_id: <T::CT as frame_system::Trait>::AccountId,
         signer: &Signer<T::CST, T::AuthorityId>,
         day_start_ms: u64,
         metrics: Vec<MetricInfo>,
@@ -413,8 +409,13 @@ impl<T: Trait> Module<T> {
                     one_metric.requests,
                 );
 
+                let contract_id_unl =
+                    <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::unlookup(
+                        contract_id.clone(),
+                    );
+
                 pallet_contracts::Call::call(
-                    contract_id.clone(),
+                    contract_id_unl,
                     0u32.into(),
                     100_000_000_000,
                     call_data,
