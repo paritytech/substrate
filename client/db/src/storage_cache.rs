@@ -63,7 +63,7 @@ struct LRUOrderedKeys<K> {
 	/// We use a BTreeMap for storage internally.
 	intervals: BTreeMap<K, Box<KeyOrderedEntry<K>>>,
 	/// Intervals for child storages.
-	child_intervals: HashMap<Vec<u8>, BTreeMap<K, KeyOrderedEntry<K>>>,
+	child_intervals: HashMap<Vec<u8>, BTreeMap<K, Box<KeyOrderedEntry<K>>>>,
 	/// Current total size of contents.
 	used_size: usize,
 	/// Limit size of contents.
@@ -99,6 +99,34 @@ struct KeyOrderedEntry<K> {
 
 unsafe impl<K: Send> Send for LRUOrderedKeys<K> {}
 unsafe impl<K: Sync> Sync for LRUOrderedKeys<K> {}
+impl<K> KeyOrderedEntry<K> {
+	fn detach(
+		&mut self,
+	) -> Option<NonNull<KeyOrderedEntry<K>>> {
+		let mut result = None;
+		if let Some(mut prev) = self.prev.take() {
+			result = unsafe { prev.as_mut() }.next.take();
+			let old_next = self.next.take();
+			old_next.map(|mut o| unsafe { o.as_mut() }.prev = Some(prev));
+			unsafe { prev.as_mut() }.next = old_next; 
+		} else if let Some(mut next) = self.next.take() {
+			// no previous
+			result = unsafe { next.as_mut() }.prev.take();
+		}
+
+		result
+	}
+	fn lru_touched(
+		&mut self,
+		last: &mut Option<NonNull<KeyOrderedEntry<K>>>,
+		oldest: &mut Option<NonNull<KeyOrderedEntry<K>>>,
+	) {
+		if let Some(mut s) = self.detach() {
+			unsafe { s.as_mut() }.prev = last.take();
+			*last = Some(s);
+		}
+	}
+}
 
 impl<K: Ord + Clone + 'static> LRUOrderedKeys<K> {
 	fn new(limit: usize) -> Self {
@@ -111,8 +139,53 @@ impl<K: Ord + Clone + 'static> LRUOrderedKeys<K> {
 			oldest: None,
 		}
 	}
+
+	fn lru_touched(&mut self, entry: &mut Box<KeyOrderedEntry<K>>) {
+		entry.lru_touched(&mut self.last, &mut self.oldest)
+	}
+
 	fn next_storage_key(&mut self, key: &K, child: Option<&ChildInfo>) -> Option<Option<&K>> {
-		unimplemented!()
+		let intervals = if let Some(info) = child {
+			if let Some(intervals) = self.child_intervals.get_mut(info.storage_key()) {
+				intervals
+			} else {
+				return None;
+			}
+		} else {
+			&mut self.intervals
+		};
+		let mut iter = intervals.range(key..);
+		let n = iter.next().map(|(k, v)| (k, v.state.clone(), v));
+		match n {
+			Some((next_key, CachedInterval::Next, v))
+			| Some((next_key, CachedInterval::Both, v)) if next_key == key => {
+				let nn = iter.next().map(|(k, v)| (k, v.state.clone(), v));
+				match nn {
+					Some((next_key, CachedInterval::Prev, v))
+					| Some((next_key, CachedInterval::Both, v)) => Some(Some(next_key)),
+					Some((_next_key, CachedInterval::Next, v)) => None, // Should be unreachable
+					None => Some(None),
+				}
+			},
+			Some((next_key, CachedInterval::Prev, v)) if next_key == key => None,
+			Some((_next_key, CachedInterval::Next, v)) => None,
+			Some((next_key, _, v)) => {
+				let nb = intervals.range(..key).next_back().map(|(k, v)| (k, v.state.clone(), v));
+				match nb {
+				Some((_prev_key, CachedInterval::Next, v))
+				| Some((_prev_key, CachedInterval::Both, v)) => Some(Some(next_key)),
+				_ => None, // Should be unreachable
+				}
+			},
+			None => {
+				let nb = intervals.range(..key).next_back().map(|(k, v)| (k, v.state.clone(), v));
+				match nb {
+					Some((_prev_key, CachedInterval::Next, v))
+					| Some((_prev_key, CachedInterval::Both, v)) => Some(None),
+					_ => None,
+				}
+			},
+		}
 	}
 	// new value added to state from change.
 	// Since we do not know if added or removed we just invalidate.
@@ -153,7 +226,7 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 				match iter.next() {
 					Some((next_key, CachedInterval::Prev))
 					| Some((next_key, CachedInterval::Both)) => Some(Some(next_key)),
-					Some((next_key, CachedInterval::Next)) => None, // Should be unreachable
+					Some((_next_key, CachedInterval::Next)) => None, // Should be unreachable
 					None => Some(None),
 				}
 			},
