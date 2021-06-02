@@ -22,10 +22,16 @@ use crate::{
 	Weight, WeightInfo, QueuedSolution, SignedSubmissions,
 };
 use codec::{Encode, Decode, HasCompact};
-use frame_support::traits::{Currency, Get, OnUnbalanced, ReservableCurrency};
+use frame_support::{
+	storage::bounded_btree_set::BoundedBTreeSet,
+	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution};
-use sp_runtime::{Perbill, RuntimeDebug, traits::{Saturating, Zero}};
+use sp_runtime::{
+	RuntimeDebug,
+	traits::{Saturating, Zero},
+};
 use sp_std::{cmp::Ordering, vec::Vec};
 
 /// A raw, unchecked signed submission.
@@ -43,7 +49,6 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
 	pub solution: RawSolution<CompactSolution>,
 }
 
-<<<<<<< HEAD
 impl<AccountId, Balance, CompactSolution> Ord
 	for SignedSubmission<AccountId, Balance, CompactSolution>
 where
@@ -55,27 +60,23 @@ where
 		self.solution
 			.score
 			.cmp(&other.solution.score)
-			.and_then(|| self.solution.cmp(&other.solution))
-			.and_then(|| self.deposit.cmp(&other.deposit))
-			.and_then(|| self.reward.cmp(&other.reward))
-			.and_then(|| self.who.cmp(&other.who))
+			.then_with(|| self.solution.cmp(&other.solution))
+			.then_with(|| self.deposit.cmp(&other.deposit))
+			.then_with(|| self.reward.cmp(&other.reward))
+			.then_with(|| self.who.cmp(&other.who))
 	}
 }
 
 impl<AccountId, Balance, CompactSolution> PartialOrd
 	for SignedSubmission<AccountId, Balance, CompactSolution>
 where
-	AccountId: Ord,
-	Balance: Ord + HasCompact,
-	CompactSolution: Ord,
+	SignedSubmission<AccountId, Balance, CompactSolution>: Ord,
 {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
-=======
->>>>>>> origin/kiz-election-provider-3-signed-phase
 pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
@@ -190,68 +191,45 @@ impl<T: Config> Pallet<T> {
 
 	/// Insert a solution into the queue while maintaining an ordering by solution quality.
 	///
-	/// Solutions are ordered in reverse: strong solutions have low indices.
+	/// If insertion was successful, the required deposit amount is returned.
 	///
-	/// If insertion was successful, `Some(index)` is returned where index is the
-	/// index of the newly inserted item.
-	///
-	/// Note: this function maintains the invariant that `queue.len() <= T::SignedMaxSubmissions`.
-	/// In the event that insertion would violate that invariant, the weakest element is dropped.
-	///
-	/// Invariant: The returned index is always a valid index in `queue` and can safely be used to
-	/// inspect the newly inserted element.
+	/// Note: in the event that the queue is full, this function will drop the weakest element as
+	/// long as the new solution sufficiently improves on the weakest solution.
 	pub fn insert_submission(
 		who: &T::AccountId,
-		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
+		queue: &mut BoundedBTreeSet<
+			SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>,
+			T::SignedMaxSubmissions,
+		>,
 		solution: RawSolution<CompactOf<T>>,
 		size: SolutionOrSnapshotSize,
-	) -> Option<usize> {
-		// Let's ensure that our input is valid.
-		let max_submissions = T::SignedMaxSubmissions::get();
-		debug_assert!(queue.len() as u32 <= max_submissions);
+	) -> Result<BalanceOf<T>, crate::Error<T>> {
+		use crate::Error;
 
-		let threshold = T::SolutionImprovementThreshold::get();
-		// this insertion logic is a bit unusual in that a new solution which beats an existing
-		// solution by less than the threshold is sorted as "greater" than the existing solution.
-		// this means that the produced ordering depends on the order of insertion, and that
-		// attempts to produce a total ordering using this comparitor are highly unstable.
-		//
-		// this ordering prioritizes earlier solutions over slightly better later ones.
-		let insertion_position = queue.binary_search_by(|s| {
-			if is_score_better::<Perbill>(
-				solution.score,
-				s.solution.score,
-				threshold,
-			) {
-				Ordering::Greater
-			} else {
-				Ordering::Less
-			}
-		}).expect_err("comparitor function never returns Ordering::Equal; qed");
-
-		// if this solution is the worst one so far and the queue is full, don't insert
-		if insertion_position == queue.len() && queue.len() as u32 >= max_submissions {
-			return None;
-		}
-
-		// add to the designated spot. If the length is too much, remove one.
 		let reward = T::SignedRewardBase::get();
 		let deposit = Self::deposit_for(&solution, size);
-		let submission =
-			SignedSubmission { who: who.clone(), deposit, reward, solution };
-		queue.insert(insertion_position, submission);
+		let submission = SignedSubmission { who: who.clone(), deposit, reward, solution };
 
-		// Remove the weakest if queue is overflowing.
-		// This doesn't adjust insertion_position: in the event that it might have, we'd have short-
-		// circuited above.
-		if queue.len() as u32 > max_submissions {
-			if let Some(SignedSubmission { who, deposit, .. }) = queue.pop() {
-				let _remainder = T::Currency::unreserve(&who, deposit);
-				debug_assert!(_remainder.is_zero());
-			}
-		}
-		debug_assert!(queue.len() as u32 <= max_submissions);
-		Some(insertion_position)
+		queue
+			.try_insert(submission)
+			.or_else(|_| {
+				let threshold = T::SolutionImprovementThreshold::get();
+				// This shouldn't ever fail, becuase it means that the queue was simultaneously full
+				// and empty. It can still happen if the queue has a max size of 0, though.
+				let weakest = queue.iter().next().ok_or(Error::<T>::SignedQueueFull)?;
+				if is_score_better(solution.score, weakest.solution.score, threshold) {
+					// remove the previous weakest element and unreserve its deposit
+					queue.remove(weakest);
+					let _remainder = T::Currency::unreserve(&weakest.who, weakest.deposit);
+					debug_assert!(_remainder.is_zero);
+
+					// This should really never ever fail, because we've just removed an item, so
+					// inserting one should be totally ok. We're not going to take it for granted
+					// though.
+					queue.try_insert(submission).ok_or(Error::<T>::SignedQueueFull)
+				}
+			})
+			.map(|_| deposit)
 	}
 
 	/// The feasibility weight of the given raw solution.

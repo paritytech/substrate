@@ -604,6 +604,7 @@ pub mod pallet {
 			+ Eq
 			+ Clone
 			+ sp_std::fmt::Debug
+			+ Ord
 			+ CompactSolution;
 
 		/// Accuracy used for fallback on-chain election.
@@ -884,15 +885,13 @@ pub mod pallet {
 			let mut signed_submissions = Self::signed_submissions();
 			let ejected_a_solution = signed_submissions.len()
 				== T::SignedMaxSubmissions::get().saturated_into::<usize>();
-			let index = Self::insert_submission(&who, &mut signed_submissions, solution, size)
-				.ok_or(Error::<T>::SignedQueueFull)?;
+
+			let deposit_amount =
+				Self::insert_submission(&who, &mut signed_submissions, solution, size)?;
 
 			// collect deposit. Thereafter, the function cannot fail.
-			let deposit = signed_submissions
-				.get(index)
-				.map(|s| s.deposit)
-				.ok_or(Error::<T>::InvalidSubmissionIndex)?;
-			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+			T::Currency::reserve(&who, deposit_amount)
+				.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 
 			// store the new signed submission.
 			<SignedSubmissions<T>>::put(signed_submissions);
@@ -1052,7 +1051,13 @@ pub mod pallet {
 	/// Sorted set of unchecked, signed solutions.
 	#[pallet::storage]
 	#[pallet::getter(fn signed_submissions)]
-	pub type SignedSubmissions<T: Config> = StorageValue<
+	pub type SignedSubmissions<T: Config>
+	where
+		BoundedBTreeSet<
+			SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>,
+			T::SignedMaxSubmissions,
+		>: codec::Codec + Ord,
+	= StorageValue<
 		_,
 		BoundedBTreeSet<
 			SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>,
