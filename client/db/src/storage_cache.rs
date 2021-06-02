@@ -269,7 +269,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		keys: &BTreeMap<K, CachedInterval>,
 		child: Option<&Vec<u8>>,
 	) {
-		// No conflict of existing interval should happen if we correctly do `enact_value_change` of
+		// No conflict of existing interval should happen if we correctly do `enact_value_changes` of
 		// previous block.
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info) {
@@ -316,7 +316,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			*size = Some(entry.estimate_size());
 			entry
 		});
-		if size.is_some() {
+		if size.is_none() {
 			entry.state.merge(state);
 			entry.lru_touched(lru_bound);
 		}
@@ -745,6 +745,12 @@ trait EstimateSize {
 	/// Return a size estimation of additional size needed
 	/// to cache this struct (in bytes).
 	fn estimate_size(&self) -> usize;
+}
+
+impl EstimateSize for u32 {
+	fn estimate_size(&self) -> usize {
+		4
+	}
 }
 
 impl EstimateSize for Vec<u8> {
@@ -2364,6 +2370,35 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[test]
+	fn interval_lru_works() {
+		// estimate size for entry is 
+		// 4 * 2 + 1 + 2 * 4 + 1 = 18
+		let entry_size = 18;
+
+		let mut input = LocalOrderedKeys::<u32>::default();
+		input.insert(5, None, Some(6));
+
+		let mut cache = LRUOrderedKeys::<u32>::new(3 * entry_size);
+		cache.merge_local_cache(&mut input);
+		cache.merge_local_cache(&mut input);
+
+		assert!(cache.used_size == 2 * entry_size);
+		assert_eq!(None, cache.next_storage_key(&0, None));
+		assert_eq!(None, cache.next_storage_key(&6, None));
+		assert_eq!(Some(Some(6)), cache.next_storage_key(&5, None));
+
+		input.insert(6, None, Some(10));
+		cache.merge_local_cache(&mut input);
+		assert!(cache.used_size == 3 * entry_size);
+		assert_eq!(Some(Some(10)), cache.next_storage_key(&6, None));
+
+		// remove 6 to merge interval
+		cache.enact_value_changes(vec![(&6, false)].into_iter(), None);
+		assert!(cache.used_size == 2 * entry_size);
+		assert_eq!(Some(Some(10)), cache.next_storage_key(&5, None));
 	}
 }
 
