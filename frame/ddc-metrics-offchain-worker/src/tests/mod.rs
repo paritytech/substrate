@@ -8,12 +8,11 @@ use sp_core::{
     traits::KeystoreExt,
 };
 use sp_runtime::{traits::Hash, AccountId32, RuntimeAppPublic};
-use sp_std::str::FromStr;
 use test_runtime::{
     AccountId, Balances, Contracts, DdcMetricsOffchainWorker, Origin, System, Test, Timestamp,
 };
 
-use crate::REPORT_METRICS_SELECTOR;
+use crate::{CURRENT_PERIOD_MS, FINALIZE_METRIC_PERIOD, REPORT_METRICS_SELECTOR};
 use hex_literal::hex;
 use sp_core::bytes::from_hex;
 
@@ -37,9 +36,47 @@ fn test_contract_api() {
         .iter()
         .find(|msg| msg.pointer("/name/0").unwrap().as_str().unwrap() == "report_metrics")
         .unwrap();
+
     // Check the selector.
     let selector = from_hex(report_metrics.get("selector").unwrap().as_str().unwrap()).unwrap();
     assert_eq!(REPORT_METRICS_SELECTOR.to_vec(), selector);
+
+    // Find the get_current_period_ms function.
+    let get_current_period_ms = messages
+        .iter()
+        .find(|msg| msg.pointer("/name/0").unwrap().as_str().unwrap() == "get_current_period_ms")
+        .unwrap();
+
+    // Check the selector for get_current_period_ms
+    let selector_get_current_period_ms = from_hex(
+        get_current_period_ms
+            .get("selector")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(CURRENT_PERIOD_MS.to_vec(), selector_get_current_period_ms);
+
+    // Find the finalize_metric_period function.
+    let finalize_metric_period = messages
+        .iter()
+        .find(|msg| msg.pointer("/name/0").unwrap().as_str().unwrap() == "finalize_metric_period")
+        .unwrap();
+
+    // Check the selector for finalize_metric_period
+    let selector_finalize_metric_period = from_hex(
+        finalize_metric_period
+            .get("selector")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        FINALIZE_METRIC_PERIOD.to_vec(),
+        selector_finalize_metric_period
+    );
 }
 
 #[test]
@@ -59,6 +96,29 @@ fn test_encode_report_metrics() {
             3, 4, 0, 0, 0, 0, 0, 0, // 8 bytes, day_start_ms
             5, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, stored_bytes
             7, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, requests
+        ]
+    );
+}
+
+#[test]
+fn test_encode_get_current_period_ms() {
+    let call_data = DdcMetricsOffchainWorker::encode_get_current_period_ms();
+    assert_eq!(
+        call_data,
+        vec![
+        172, 228, 236, 179, // Selector
+    ]
+    );
+}
+
+#[test]
+fn test_encode_finalize_metric_period() {
+    let call_data = DdcMetricsOffchainWorker::encode_finalize_metric_period(INIT_TIME_MS);
+    assert_eq!(
+        call_data,
+        vec![
+            178, 105, 213, 87, // Selector
+            80, 152, 94, 120, 118, 1, 0, 0, // 8 bytes, in_day_start_ms
         ]
     );
 }
