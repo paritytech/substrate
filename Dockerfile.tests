@@ -4,6 +4,12 @@ LABEL description="This is the build stage to create the binary."
 WORKDIR /cerenetwork
 COPY . /cerenetwork
 
+# Copy smart-contract artifacts (cere01.wasm and metadata.json)
+ARG SMART_CONTRACT_VERSION=1.1.0
+FROM cere-enterprise-smart-contracts/smart-contracts:$SMART_CONTRACT_VERSION as smart-contracts
+COPY --from=smart-contracts /smart-contracts/cere01/target/ink/cere01.wasm /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data
+COPY --from=smart-contracts /smart-contracts/cere01/target/ink/metadata.json /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data
+
 RUN apt-get update && \
 	apt-get upgrade -y && \
 	apt-get install -y cmake pkg-config libssl-dev git clang
