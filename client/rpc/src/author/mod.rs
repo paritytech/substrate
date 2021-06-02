@@ -197,17 +197,11 @@ impl<P, Client> Author<P, Client>
 			|params, sink, ctx|
 		{
 			let xt: Bytes = params.one()?;
+			let best_block_hash = ctx.client.info().best_hash;
+			let dxt = TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| JsonRpseeError::Custom(e.to_string()))?;
 
 			let executor = ctx.executor.clone();
 			let fut = async move {
-				let best_block_hash = ctx.client.info().best_hash;
-				let dxt = match TransactionFor::<P>::decode(&mut &xt[..]) {
-					Ok(dxt) => dxt,
-					Err(e) => {
-						let _ = sink.send(&format!("Bad extrinsic received: {:?}; subscription useless", e));
-						return;
-					}
-				};
 				let stream = match ctx.pool
 					.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
 					.await
