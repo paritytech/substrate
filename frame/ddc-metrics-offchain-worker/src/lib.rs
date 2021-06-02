@@ -333,6 +333,7 @@ impl<T: Trait> Module<T> {
             Ok(v) => &v.data[..],
             Err(_err) => {
                 // Return default value in case of error
+                warn!("[OCW] Error in call get_current_period_ms of smart contract. Return default value for period");
                 return Ok(Self::get_start_of_day_ms());
             }
         };
@@ -356,14 +357,14 @@ impl<T: Trait> Module<T> {
         let contract_id_unl =
             <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::unlookup(contract_id);
 
-        let _call_data = Self::encode_finalize_metric_period(in_day_start_ms);
+        let call_data = Self::encode_finalize_metric_period(in_day_start_ms);
 
         let results = signer.send_signed_transaction(|_account| {
             pallet_contracts::Call::call(
                 contract_id_unl.clone(),
                 0u32.into(),
                 100_000_000_000,
-                _call_data.clone(),
+                call_data.clone(),
             )
         });
 
