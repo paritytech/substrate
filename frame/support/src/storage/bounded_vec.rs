@@ -75,8 +75,8 @@ impl<T, S> BoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if `index` is out of bounds.
-	pub fn remove(&mut self, index: usize) {
-		self.0.remove(index);
+	pub fn remove(&mut self, index: usize) -> T {
+		self.0.remove(index)
 	}
 
 	/// Exactly the same semantics as [`Vec::swap_remove`].
@@ -84,8 +84,8 @@ impl<T, S> BoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if `index` is out of bounds.
-	pub fn swap_remove(&mut self, index: usize) {
-		self.0.swap_remove(index);
+	pub fn swap_remove(&mut self, index: usize) -> T {
+		self.0.swap_remove(index)
 	}
 
 	/// Exactly the same semantics as [`Vec::retain`].
