@@ -25,6 +25,7 @@
 //! use.
 
 use codec::{Encode, Decode};
+use sp_std::prelude::*;
 use sp_runtime::TokenError;
 use crate::dispatch::DispatchResult;
 use crate::traits::Get;
