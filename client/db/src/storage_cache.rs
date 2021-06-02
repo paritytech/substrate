@@ -260,7 +260,8 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		keys: &BTreeMap<K, CachedInterval>,
 		child: Option<&Vec<u8>>,
 	) {
-		// Note that in theory no conflict of existing interval should happen if we correctly do `enact_value_change`.
+		// No conflict of existing interval should happen if we correctly do `enact_value_change` of
+		// previous block.
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info) {
 				intervals
@@ -286,9 +287,19 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		state: CachedInterval,
 		lru_bound: &mut Box<KeyOrderedEntry<K>>,
 	) -> usize {
+		if state == CachedInterval::Next {
+			// Avoid consecutive Next.
+			if intervals.range(..=key).next_back()
+				.map(|p| p.1.state != CachedInterval::Prev)
+				.unwrap_or(false) {
+				return 0;
+			}
+		}
+
 		let mut size = None;
 		let size = &mut size;
 		let entry = intervals.entry(key.clone()).or_insert_with(|| {
+
 			let mut entry = KeyOrderedEntry::empty();
 			entry.key = key.clone();
 			entry.child_storage_key = child.cloned();
