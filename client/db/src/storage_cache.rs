@@ -23,7 +23,6 @@
 use std::collections::{VecDeque, HashSet, BTreeSet, HashMap, BTreeMap};
 use std::sync::Arc;
 use std::hash::Hash as StdHash;
-use std::ptr::NonNull;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
@@ -68,10 +67,11 @@ struct LRUOrderedKeys<K> {
 	used_size: usize,
 	/// Limit size of contents.
 	limit: usize,
-	/// Last used entry (most recently used).
-	last: Option<NonNull<KeyOrderedEntry<K>>>,
-	/// Oldest used entry. 
-	oldest: Option<NonNull<KeyOrderedEntry<K>>>,
+	/// Dummy `KeyOrderedEntry` containing `next` pointer
+	/// as the oldest entry.
+	/// `prev` pointer is used as the lru entry, meaning
+	/// if `prev` equals to `next` the lru structure is empty.
+	lru_bound: Box<KeyOrderedEntry<K>>,
 }
 
 #[derive(Default)]
@@ -84,9 +84,9 @@ struct LocalOrderedKeys<K: Ord> {
 	
 struct KeyOrderedEntry<K> {
 	/// Entry accessed before.
-	prev: Option<NonNull<KeyOrderedEntry<K>>>,
+	prev: *mut KeyOrderedEntry<K>,
 	/// Entry access after.
-	next: Option<NonNull<KeyOrderedEntry<K>>>,
+	next: *mut KeyOrderedEntry<K>,
 	/// Used to remove from btreemap.
 	/// Specialized lru struct would not need it.
 	key: K,
@@ -99,52 +99,66 @@ struct KeyOrderedEntry<K> {
 
 unsafe impl<K: Send> Send for LRUOrderedKeys<K> {}
 unsafe impl<K: Sync> Sync for LRUOrderedKeys<K> {}
-impl<K> KeyOrderedEntry<K> {
-	fn detach(
-		&mut self,
-	) -> Option<NonNull<KeyOrderedEntry<K>>> {
-		let mut result = None;
-		if let Some(mut prev) = self.prev.take() {
-			result = unsafe { prev.as_mut() }.next.take();
-			let old_next = self.next.take();
-			old_next.map(|mut o| unsafe { o.as_mut() }.prev = Some(prev));
-			unsafe { prev.as_mut() }.next = old_next; 
-		} else if let Some(mut next) = self.next.take() {
-			// no previous
-			result = unsafe { next.as_mut() }.prev.take();
-		}
 
-		result
-	}
-	fn lru_touched(
-		&mut self,
-		last: &mut Option<NonNull<KeyOrderedEntry<K>>>,
-		oldest: &mut Option<NonNull<KeyOrderedEntry<K>>>,
-	) {
-		if let Some(mut s) = self.detach() {
-			unsafe { s.as_mut() }.prev = last.take();
-			*last = Some(s);
-		}
+impl<K: Default> KeyOrderedEntry<K> {
+	fn empty() -> Box<Self> {
+		let mut lru_bound = Box::new(KeyOrderedEntry {
+			prev: std::ptr::null_mut(),
+			next: std::ptr::null_mut(),
+			key: Default::default(),
+			child_storage_key: None,
+			state: CachedInterval::Prev,
+		});
+		let ptr: *mut KeyOrderedEntry<K> = (&mut lru_bound).as_mut();
+		lru_bound.prev = ptr;
+		lru_bound.next = ptr;
+		lru_bound
 	}
 }
 
-impl<K: Ord + Clone + 'static> LRUOrderedKeys<K> {
+impl<K> KeyOrderedEntry<K> {
+	fn detach(
+		&mut self,
+	) -> *mut KeyOrderedEntry<K> {
+		let prev = self.prev;
+		let next = self.next;
+		unsafe {
+			let s = (*prev).next;
+			(*prev).next = next;
+			(*next).prev = prev;
+			(*s).next = s;
+			(*s).prev = s;
+			s
+		}
+	}
+	fn lru_touched(
+		&mut self,
+		lru_bound: &mut Box<KeyOrderedEntry<K>>,
+	) {
+		let s = self.detach();
+		unsafe {
+			(*s).prev = (*lru_bound).prev;
+		}
+		(*lru_bound).prev = s;
+	}
+}
+
+impl<K: Default + Ord + Clone + 'static> LRUOrderedKeys<K> {
 	fn new(limit: usize) -> Self {
 		LRUOrderedKeys {
 			intervals: BTreeMap::new(),
 			child_intervals: HashMap::new(),
 			used_size: 0,
 			limit,
-			last: None,
-			oldest: None,
+			lru_bound: KeyOrderedEntry::empty(),
 		}
 	}
 
 	fn lru_touched(&mut self, entry: &mut Box<KeyOrderedEntry<K>>) {
-		entry.lru_touched(&mut self.last, &mut self.oldest)
+		entry.lru_touched(&mut self.lru_bound)
 	}
 
-	fn next_storage_key(&mut self, key: &K, child: Option<&ChildInfo>) -> Option<Option<&K>> {
+	fn next_storage_key(&mut self, key: &K, child: Option<&ChildInfo>) -> Option<Option<K>> {
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info.storage_key()) {
 				intervals
@@ -154,34 +168,50 @@ impl<K: Ord + Clone + 'static> LRUOrderedKeys<K> {
 		} else {
 			&mut self.intervals
 		};
-		let mut iter = intervals.range(key..);
+		let lru_bound = &mut self.lru_bound;
+		let mut iter = intervals.range_mut(key..);
 		let n = iter.next().map(|(k, v)| (k, v.state.clone(), v));
 		match n {
 			Some((next_key, CachedInterval::Next, v))
 			| Some((next_key, CachedInterval::Both, v)) if next_key == key => {
-				let nn = iter.next().map(|(k, v)| (k, v.state.clone(), v));
+				v.lru_touched(lru_bound);
+				let nn = iter.next().map(|(k, v)| {
+					v.lru_touched(lru_bound);
+					(k, v.state.clone())
+				});
 				match nn {
-					Some((next_key, CachedInterval::Prev, v))
-					| Some((next_key, CachedInterval::Both, v)) => Some(Some(next_key)),
-					Some((_next_key, CachedInterval::Next, v)) => None, // Should be unreachable
+					Some((next_key, CachedInterval::Prev))
+					| Some((next_key, CachedInterval::Both)) => Some(Some(next_key.clone())),
+					Some((_next_key, CachedInterval::Next)) => None, // Should be unreachable
 					None => Some(None),
 				}
 			},
-			Some((next_key, CachedInterval::Prev, v)) if next_key == key => None,
-			Some((_next_key, CachedInterval::Next, v)) => None,
+			Some((next_key, CachedInterval::Prev, _v)) if next_key == key => None,
+			Some((_next_key, CachedInterval::Next, _v)) => None,
 			Some((next_key, _, v)) => {
-				let nb = intervals.range(..key).next_back().map(|(k, v)| (k, v.state.clone(), v));
-				match nb {
-				Some((_prev_key, CachedInterval::Next, v))
-				| Some((_prev_key, CachedInterval::Both, v)) => Some(Some(next_key)),
-				_ => None, // Should be unreachable
-				}
+				v.lru_touched(lru_bound);
+				let result = Some(Some(next_key.clone()));
+				let nb = intervals.range_mut(..key).next_back().map(|(k, v)| {
+					v.lru_touched(lru_bound);
+					(k, v.state.clone())
+				});
+				debug_assert!({
+					match nb {
+						Some((_prev_key, CachedInterval::Next))
+						| Some((_prev_key, CachedInterval::Both)) => true,
+						_ => false,
+					}
+				});
+				result
 			},
 			None => {
-				let nb = intervals.range(..key).next_back().map(|(k, v)| (k, v.state.clone(), v));
+				let nb = intervals.range_mut(..key).next_back().map(|(k, v)| (k, v.state.clone(), v));
 				match nb {
 					Some((_prev_key, CachedInterval::Next, v))
-					| Some((_prev_key, CachedInterval::Both, v)) => Some(None),
+					| Some((_prev_key, CachedInterval::Both, v)) => {
+						v.lru_touched(lru_bound);
+						Some(None)
+					},
 					_ => None,
 				}
 			},
@@ -232,10 +262,13 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 			},
 			Some((next_key, CachedInterval::Prev)) if next_key == key => None,
 			Some((_next_key, CachedInterval::Next)) => None,
-			Some((next_key, _)) => match intervals.range(..key).next_back() {
-				Some((_prev_key, CachedInterval::Next))
-				| Some((_prev_key, CachedInterval::Both)) => Some(Some(next_key)),
-				_ => None, // Should be unreachable
+			Some((next_key, _)) => {
+				debug_assert!(match intervals.range(..key).next_back() {
+					Some((_prev_key, CachedInterval::Next))
+					| Some((_prev_key, CachedInterval::Both)) => true,
+					_ => false,
+				});
+				Some(Some(next_key))
 			},
 			None => match intervals.range(..key).next_back() {
 				Some((_prev_key, CachedInterval::Next))
@@ -1083,8 +1116,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if let Some(parent) = self.cache.parent_hash.as_ref() {
-			if let Some(entry) = cache.lru_next_keys.next_storage_key(&key, None).map(|a| a.clone()) {
-				let entry = entry.cloned();
+			if let Some(entry) = cache.lru_next_keys.next_storage_key(&key, None) {
 				if Self::is_allowed_interval((&key, entry.as_ref()), None, parent, &cache.modifications) {
 					trace!("Found next key in shared cache: {:?}", HexDisplay::from(&key));
 					return Ok(entry)
@@ -1110,8 +1142,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if let Some(parent) = self.cache.parent_hash.as_ref() {
-			if let Some(entry) = cache.lru_next_keys.next_storage_key(&key, Some(child_info)).map(|a| a.clone()) {
-				let entry = entry.cloned();
+			if let Some(entry) = cache.lru_next_keys.next_storage_key(&key, Some(child_info)) {
 				if Self::is_allowed_interval((&key, entry.as_ref()), None, parent, &cache.modifications) {
 					trace!("Found next key in shared cache: {:?}", HexDisplay::from(&key));
 					return Ok(entry)
