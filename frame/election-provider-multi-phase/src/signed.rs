@@ -352,7 +352,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(balances(&99), (95, 5));
-			assert_eq!(MultiPhase::signed_submissions().first().unwrap().deposit, 5);
+			assert_eq!(MultiPhase::signed_submissions().iter().next().unwrap().deposit, 5);
 		})
 	}
 
