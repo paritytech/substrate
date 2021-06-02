@@ -417,8 +417,6 @@ pub mod pallet {
 		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
 		/// over this asset, but may later change and configure the permissions using `transfer_ownership`
 		/// and `set_team`.
-		/// - `max_zombies`: The total number of accounts which may hold assets in this class yet
-		/// have no existential deposit.
 		/// - `min_balance`: The minimum balance of this new asset that any single account must
 		/// have. If an account's balance is reduced below this, then it collapses to zero.
 		///
@@ -588,8 +586,8 @@ pub mod pallet {
 		/// to zero.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
-		/// of sender; Account pre-existence of `target`.
+		/// Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of
+		/// `target`.
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub(super) fn transfer(
 			origin: OriginFor<T>,
@@ -624,8 +622,8 @@ pub mod pallet {
 		/// to zero.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
-		/// of sender; Account pre-existence of `target`.
+		/// Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of
+		/// `target`.
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub(super) fn transfer_keep_alive(
 			origin: OriginFor<T>,
@@ -661,8 +659,8 @@ pub mod pallet {
 		/// to zero.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Pre-existence of `dest`; Post-existence of `source`; Prior & post zombie-status
-		/// of `source`; Account pre-existence of `dest`.
+		/// Modes: Pre-existence of `dest`; Post-existence of `source`; Account pre-existence of
+		/// `dest`.
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub(super) fn force_transfer(
 			origin: OriginFor<T>,
@@ -779,7 +777,7 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
 		///
-		/// - `id`: The identifier of the asset to be frozen.
+		/// - `id`: The identifier of the asset to be thawed.
 		///
 		/// Emits `Thawed`.
 		///

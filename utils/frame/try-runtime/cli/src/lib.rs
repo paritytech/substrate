@@ -85,8 +85,6 @@ pub struct SharedParams {
 }
 
 /// Various commands to try out against runtime state at a specific block.
-///
-/// NOTE: For now this only assumes running the `on_runtime_upgrade` hooks
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct TryRuntimeCmd {
 	#[structopt(flatten)]
@@ -274,8 +272,22 @@ where
 				(mode, url)
 			}
 	};
+
+	// get the code to inject inject into the ext
+	let spec = config.chain_spec;
+	let genesis_storage = spec.build_storage()?;
+	let code = StorageData(
+		genesis_storage
+			.top
+			.get(well_known_keys::CODE)
+			.expect("code key must exist in genesis storage; qed")
+			.to_vec(),
+	);
+	let code_key = StorageKey(well_known_keys::CODE.to_vec());
+
 	let mut ext = Builder::<B>::new()
 		.mode(mode)
+		.inject(&[(code_key, code)])
 		.build()
 		.await?;
 	// Register externality extensions in order to provide host interface for OCW to the runtime
@@ -286,10 +298,6 @@ where
 	let keystore_ptr = Arc::new(KeyStore::new());
 	ext.register_extension(KeystoreExt(keystore_ptr));
 	ext.register_extension(TransactionPoolExt::new(pool));
-
-
-	// inject the code into this ext.
-	// builder.inject(&[(code_key, code)]).build().await?;
 
 	let header_hash: B::Hash = command.header_at.parse().unwrap();
 	let header = rpc_api::get_header::<B, _>(url,header_hash).await;
