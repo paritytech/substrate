@@ -540,16 +540,16 @@ pub mod pallet {
 
 	/// Total extrinsics count for the current block.
 	#[pallet::storage]
-	pub(super) type ExtrinsicCount<T: Config> = StorageValue<_, u32>;
+	pub type ExtrinsicCount<T: Config> = StorageValue<_, u32>;
 
 	/// The current weight for the block.
 	#[pallet::storage]
 	#[pallet::getter(fn block_weight)]
-	pub(super) type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
+	pub type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
 
 	/// Total length (in bytes) for all extrinsics put together, for the current block.
 	#[pallet::storage]
-	pub(super) type AllExtrinsicsLen<T: Config> = StorageValue<_, u32>;
+	pub type AllExtrinsicsLen<T: Config> = StorageValue<_, u32>;
 
 	/// Map of block numbers to block hashes.
 	#[pallet::storage]
@@ -560,13 +560,13 @@ pub mod pallet {
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_data)]
-	pub(super) type ExtrinsicData<T: Config> =
+	pub type ExtrinsicData<T: Config> =
 		StorageMap<_, Twox64Concat, u32, Vec<u8>, ValueQuery>;
 
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
 	#[pallet::getter(fn block_number)]
-	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// Hash of the previous block.
 	#[pallet::storage]
@@ -581,7 +581,7 @@ pub mod pallet {
 	/// Events deposited for the current block.
 	#[pallet::storage]
 	#[pallet::getter(fn events)]
-	pub(super) type Events<T: Config> =
+	pub type Events<T: Config> =
 		StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
