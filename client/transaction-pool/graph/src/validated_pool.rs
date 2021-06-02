@@ -155,7 +155,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 	/// A fast check before doing any further processing of a transaction, like validation.
 	///
-	/// If `ingore_banned` is `true`, it will not check if the transaction is banned.
+	/// If `ignore_banned` is `true`, it will not check if the transaction is banned.
 	///
 	/// It checks if the transaction is already imported or banned. If so, it returns an error.
 	pub fn check_is_known(
