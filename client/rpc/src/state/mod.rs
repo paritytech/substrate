@@ -27,6 +27,7 @@ mod tests;
 use std::sync::Arc;
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use jsonrpsee_ws_server::RpcModule;
+use futures::FutureExt;
 
 use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
@@ -216,10 +217,15 @@ impl<Block, Client> State<Block, Client>
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
 		let mut ctx_module = RpcModule::new(self);
 
-		ctx_module.register_method("state_call", |params, state| {
-			let (method, data, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.call(block, method, data))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		ctx_module.register_async_method("state_call", |params, state| {
+			let (method, data, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+
+			async move {
+				state.backend.call(block, method, data).await.map_err(|e| to_jsonrpsee_call_error(e))
+			}.boxed()
 		})?;
 
 		ctx_module.register_method("state_getKeys", |params, state| {
