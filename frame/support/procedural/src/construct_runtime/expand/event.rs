@@ -30,7 +30,7 @@ pub fn expand_outer_event(
 
 	for pallet_decl in pallet_decls {
 		if let Some(pallet_entry) = pallet_decl.find_part("Event") {
-			let path = &pallet_decl.pallet;
+			let path = &pallet_decl.path;
 			let index = pallet_decl.index;
 			let instance = pallet_decl.instance.as_ref();
 			let generics = &pallet_entry.generics;
@@ -80,7 +80,7 @@ fn expand_event_variant(
 	instance: Option<&Ident>,
 	generics: &Generics,
 ) -> TokenStream {
-	let path = &pallet.pallet;
+	let path = &pallet.path;
 	let pallet_name = &pallet.name;
 	let part_is_generic = !generics.params.is_empty();
 

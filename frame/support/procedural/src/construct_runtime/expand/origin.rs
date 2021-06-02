@@ -61,7 +61,7 @@ pub fn expand_outer_origin(
 		}
 	}
 
-	let system_path = &system_pallet.pallet;
+	let system_path = &system_pallet.path;
 	let system_index = system_pallet.index;
 
 	Ok(quote!{
@@ -257,7 +257,7 @@ fn expand_origin_caller_variant(
 ) -> TokenStream {
 	let part_is_generic = !generics.params.is_empty();
 	let variant_name = &pallet.name;
-	let path = &pallet.pallet;
+	let path = &pallet.path;
 
 	match instance {
 		Some(inst) if part_is_generic => {
@@ -282,7 +282,7 @@ fn expand_origin_pallet_conversions(
 	instance: Option<&Ident>,
 	generics: &Generics,
 ) -> TokenStream {
-	let path = &pallet.pallet;
+	let path = &pallet.path;
 	let variant_name = &pallet.name;
 
 	let part_is_generic = !generics.params.is_empty();

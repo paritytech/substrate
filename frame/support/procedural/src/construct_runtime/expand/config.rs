@@ -85,7 +85,7 @@ fn expand_config_types(
 	config: &Ident,
 	part_is_generic: bool,
 ) -> TokenStream {
-	let path = &decl.pallet;
+	let path = &decl.path;
 
 	match (decl.instance.as_ref(), part_is_generic) {
 		(Some(inst), true) => quote!{
@@ -109,7 +109,7 @@ fn expand_config_build_storage_call(
 	decl: &Pallet,
 	field_name: &Ident,
 ) -> TokenStream {
-	let path = &decl.pallet;
+	let path = &decl.path;
 	let instance = if let Some(inst) = decl.instance.as_ref() {
 		quote!(#path::#inst)
 	} else {

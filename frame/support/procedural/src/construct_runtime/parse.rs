@@ -156,7 +156,7 @@ pub struct PalletDeclaration {
 	pub name: Ident,
 	/// Optional fixed index (e.g. `MyPallet ...  = 3,`)
 	pub index: Option<u8>,
-	pub pallet: PalletPath,
+	pub path: PalletPath,
 	pub instance: Option<Ident>,
 	pub pallet_parts: Vec<PalletPart>,
 }
@@ -165,7 +165,7 @@ impl Parse for PalletDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let name = input.parse()?;
 		let _: Token![:] = input.parse()?;
-		let pallet = input.parse()?;
+		let path = input.parse()?;
 		let instance = if input.peek(Token![<]) {
 			let _: Token![<] = input.parse()?;
 			let res = Some(input.parse()?);
@@ -189,7 +189,7 @@ impl Parse for PalletDeclaration {
 
 		let parsed = Self {
 			name,
-			pallet,
+			path,
 			instance,
 			pallet_parts,
 			index,
