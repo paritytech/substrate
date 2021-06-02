@@ -48,6 +48,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver}};
+use jsonrpsee_ws_server::RpcModule;
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -388,7 +389,7 @@ mod waiting {
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
-	R: FnMut(sc_rpc::DenyUnsafe) -> Vec<jsonrpsee_ws_server::RpcModule>,
+	R: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>,
 >(
 	config: &Configuration,
 	mut gen_rpc_module: R,
@@ -410,7 +411,7 @@ fn start_rpc_servers<
 			) ).transpose()
 		}
 
-	let modules = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
+	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
 	let rpsee_addr = config.rpc_ws.map(|mut addr| {
 		let port = addr.port() + 1;
 		addr.set_port(port);
@@ -425,9 +426,19 @@ fn start_rpc_servers<
 		rt.block_on(async {
 			let mut server = WsServer::new(rpsee_addr).await.unwrap();
 
-			for module in modules {
-				server.register_module(module).unwrap();
-			}
+			server.register_module(module).unwrap();
+			let mut methods_api = RpcModule::new(());
+			let mut methods = server.method_names();
+			methods.sort();
+
+			methods_api.register_method("rpc_methods", move |_, _| {
+				Ok(serde_json::json!({
+					"version": 1,
+					"methods": methods,
+				}))
+			}).unwrap();
+
+			server.register_module(methods_api).unwrap();
 
 			server.start().await;
 		});

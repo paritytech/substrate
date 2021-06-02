@@ -26,7 +26,7 @@ mod tests;
 
 use std::sync::Arc;
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_ws_server::RpcModule;
 
 use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
@@ -213,8 +213,8 @@ impl<Block, Client> State<Block, Client>
 		Client: Send + Sync + 'static,
 {
 	/// Convert this to a RPC module.
-	pub fn into_rpc_module(self) -> Result<RpcModule, JsonRpseeError> {
-		let mut ctx_module = RpcContextModule::new(self);
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut ctx_module = RpcModule::new(self);
 
 		ctx_module.register_method("state_call", |params, state| {
 			let (method, data, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
@@ -310,7 +310,7 @@ impl<Block, Client> State<Block, Client>
 
 		// TODO: add subscriptions.
 
-		Ok(ctx_module.into_module())
+		Ok(ctx_module)
 	}
 }
 
@@ -378,8 +378,8 @@ impl<Block, Client> ChildState<Block, Client>
 		Client: Send + Sync + 'static,
 {
 	/// Convert this to a RPC module.
-	pub fn into_rpc_module(self) -> Result<RpcModule, JsonRpseeError> {
-		let mut ctx_module = RpcContextModule::new(self);
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut ctx_module = RpcModule::new(self);
 
 		ctx_module.register_method("childstate_getStorage", |params, state| {
 			let (storage_key, key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
@@ -405,7 +405,7 @@ impl<Block, Client> ChildState<Block, Client>
 				.map_err(|e| to_jsonrpsee_call_error(e))
 		})?;
 
-		Ok(ctx_module.into_module())
+		Ok(ctx_module)
 	}
 
 }

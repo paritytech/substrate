@@ -50,8 +50,9 @@ pub fn rpc_handler<M: PubSubMetadata>(
 
 	// add an endpoint to list all available methods.
 	let mut methods = io.iter().map(|x| x.0.clone()).collect::<Vec<String>>();
+	methods.sort();
+
 	io.add_method("rpc_methods", {
-		methods.sort();
 		let methods = serde_json::to_value(&methods)
 			.expect("Serialization of Vec<String> is infallible; qed");
 
