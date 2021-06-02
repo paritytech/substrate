@@ -70,6 +70,13 @@ sp_core::wasm_export_functions! {
 	fn test_empty_return() {}
 
 	fn test_dirty_plenty_memory(heap_base: u32, heap_pages: u32) {
+		// This piece of code will dirty multiple pages of memory. The number of pages is given by
+		// the `heap_pages`. It's unit is a wasm page (64KiB). The first page to be cleared
+		// is a wasm page that that follows the one that holds the `heap_base` address.
+		//
+		// This function dirties the **host** pages. I.e. we dirty 4KiB at a time and it will take
+		// 16 writes to process a single wasm page.
+
 		let mut heap_ptr = heap_base as usize;
 
 		// Find the next wasm page boundary.
