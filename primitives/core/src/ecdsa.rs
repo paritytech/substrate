@@ -539,7 +539,7 @@ impl Pair {
 	}
 
 	/// Verify a signature on a pre-hashed message. Return `true` if the signature is valid
-	pub fn verify_prehashed(&self, sig: &Signature, message: &[u8; 32], public: &Public) -> bool {
+	pub fn verify_prehashed(sig: &Signature, message: &[u8; 32], public: &Public) -> bool {
 		let message = secp256k1::Message::parse(message);
 	
 		let sig: (_, _) = match sig.try_into() {
@@ -814,10 +814,10 @@ mod test {
 		// `msg` and `sig` match
 		let msg = keccak_256(b"this should be hashed");
 		let sig = pair.sign_prehashed(&msg);
-		assert!(pair.verify_prehashed(&sig, &msg, &pair.public()));
+		assert!(Pair::verify_prehashed(&sig, &msg, &pair.public()));
 
 		// `msg` and `sig` don't match
 		let msg = keccak_256(b"this is a different message");
-		assert!(!pair.verify_prehashed(&sig, &msg, &pair.public()));
+		assert!(!Pair::verify_prehashed(&sig, &msg, &pair.public()));
 	}
 }
