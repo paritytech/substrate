@@ -226,13 +226,14 @@ impl<T: Config> Pallet<T> {
 					// remove the previous weakest element and unreserve its deposit
 					queue.remove(weakest);
 					let _remainder = T::Currency::unreserve(&weakest.who, weakest.deposit);
-					debug_assert!(_remainder.is_zero);
+					debug_assert!(_remainder.is_zero());
 
 					// This should really never ever fail, because we've just removed an item, so
 					// inserting one should be totally ok. We're not going to take it for granted
 					// though.
-					queue.try_insert(submission).ok_or(Error::<T>::SignedQueueFull)
+					queue.try_insert(submission).map_err(|_| Error::<T>::SignedQueueFull)?;
 				}
+				Ok(())
 			})
 			.map(|_| deposit)
 	}
