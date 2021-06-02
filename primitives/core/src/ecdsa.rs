@@ -537,6 +537,21 @@ impl Pair {
 		let message = secp256k1::Message::parse(message);
 		secp256k1::sign(&message, &self.secret).into()
 	}
+
+	/// Verify a signature on a pre-hashed message. Return `true` if the signature is valid
+	pub fn verify_prehashed(&self, sig: &Signature, message: &[u8; 32], public: &Public) -> bool {
+		let message = secp256k1::Message::parse(message);
+	
+		let sig: (_, _) = match sig.try_into() {
+			Ok(x) => x,
+			_ => return false,
+		};
+	
+		match secp256k1::recover(&message, &sig.0, &sig.1) {
+			Ok(actual) => public.0[..] == actual.serialize_compressed()[..],
+			_ => false,
+		}
+	}	
 }
 
 impl CryptoType for Public {
@@ -790,5 +805,19 @@ mod test {
 		let sig2: Signature = secp256k1::sign(&secp256k1::Message::parse(&msg), &pair.secret).into();
 
 		assert_eq!(sig1, sig2);		
+	}
+
+	#[test]
+	fn verify_prehashed_works() {
+		let (pair, _, _) = Pair::generate_with_phrase(Some("password"));
+		
+		// `msg` and `sig` match
+		let msg = keccak_256(b"this should be hashed");
+		let sig = pair.sign_prehashed(&msg);
+		assert!(pair.verify_prehashed(&sig, &msg, &pair.public()));
+
+		// `msg` and `sig` don't match
+		let msg = keccak_256(b"this is a different message");
+		assert!(!pair.verify_prehashed(&sig, &msg, &pair.public()));
 	}
 }
