@@ -177,7 +177,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		}
 
 		let to_rem = self.lru_bound.next;
-		unsafe { (*to_rem).detach() };
+		// unsafe { (*to_rem).detach() }; detach is called in remove_interval_entry
 		let intervals = if let Some(child) = unsafe { (*to_rem).child_storage_key.as_ref() } {
 			self.child_intervals.get_mut(child)
 				.expect("Removed only when no entry")
@@ -2416,6 +2416,51 @@ mod tests {
 		assert_eq!(None, cache.next_storage_key(&4, None));
 		assert_eq!(None, cache.next_storage_key(&9, None));
 		assert_eq!(Some(Some(21)), cache.next_storage_key(&15, None));
+
+		// clear with limit
+		cache.limit = 0;
+		cache.apply_lru_limit();
+		assert!(cache.used_size == 0);
+		assert_eq!(None, cache.next_storage_key(&15, None));
+
+		// add then remove with invalidate only
+		cache.limit = 3 * entry_size;
+		input.insert(15, None, None);
+		input.insert(6, None, Some(8));
+		cache.merge_local_cache(&mut input);
+		assert!(cache.used_size == 3 * entry_size);
+		cache.retract_value_changes(vec![&5, &100].into_iter(), None);
+		assert!(cache.used_size == 2 * entry_size);
+		cache.retract_value_changes(vec![&6].into_iter(), None);
+		assert!(cache.used_size == 0);
+
+		// enact_insert
+		cache.limit = 3 * entry_size;
+		input.insert(3, None, Some(8));
+		cache.merge_local_cache(&mut input);
+		assert!(cache.used_size == 2 * entry_size);
+		cache.enact_value_changes(vec![(&6, true)].into_iter(), None);
+		assert!(cache.used_size == 3 * entry_size);
+		assert_eq!(Some(Some(6)), cache.next_storage_key(&3, None));
+		assert_eq!(Some(Some(8)), cache.next_storage_key(&6, None));
+
+		// empty cross child contents
+		let child_0 = ChildInfo::new_default(&[0]);
+		let child_2 = ChildInfo::new_default(&[2]);
+		cache.clear();
+		cache.limit = 5 * entry_size;
+		input.insert(15, Some(&child_0), None);
+		input.insert(15, Some(&child_2), Some(16));
+		cache.merge_local_cache(&mut input);
+		assert_eq!(Some(Some(16)), cache.next_storage_key(&15, Some(&child_2)));
+		// lru will be at 0
+		assert_eq!(Some(None), cache.next_storage_key(&15, Some(&child_0)));
+		cache.merge_local_cache(&mut input);
+		cache.limit = 3 * entry_size;
+		// lru will be at 0
+		cache.apply_lru_limit();
+		assert_eq!(None, cache.next_storage_key(&15, Some(&child_2)));
+		assert_eq!(Some(None), cache.next_storage_key(&15, Some(&child_0)));
 	}
 }
 
