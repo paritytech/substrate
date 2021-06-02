@@ -243,9 +243,12 @@ impl<T: Config> Pallet<T> {
 					// inserting one should be totally ok. We're not going to take it for granted
 					// though.
 					queue.try_insert(submission).map_err(|_| Error::<T>::SignedQueueFull)?;
+
+					// the particular value here doesn't matter, as it's overwritten by the following map.
+					Ok(false)
+				} else {
+					Err(Error::<T>::SignedQueueFull)
 				}
-				// the particular value here doesn't matter, as it's overwritten by the following map.
-				Ok(false)
 			})
 			.map(|_| deposit)
 	}
@@ -436,6 +439,8 @@ mod tests {
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
+			dbg!(MultiPhase::signed_submissions().len(), SignedMaxSubmissions::get());
+
 			// weaker.
 			let solution = RawSolution { score: [4, 0, 0], ..Default::default() };
 
@@ -461,6 +466,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.into_iter()
+					.rev()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![9, 8, 7, 6, 5]
@@ -474,6 +480,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.into_iter()
+					.rev()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![20, 9, 8, 7, 6]
@@ -499,6 +506,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.into_iter()
+					.rev()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![9, 8, 7, 6, 4],
@@ -512,6 +520,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.into_iter()
+					.rev()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![9, 8, 7, 6, 5],
@@ -557,6 +566,7 @@ mod tests {
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.into_iter()
+					.rev()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
 				vec![7, 6, 5]
@@ -568,49 +578,6 @@ mod tests {
 				submit_with_witness(Origin::signed(99), solution),
 				Error::<Runtime>::SignedQueueFull,
 			);
-		})
-	}
-
-	#[test]
-	fn solutions_are_always_sorted() {
-		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
-			let scores = || {
-				MultiPhase::signed_submissions()
-					.into_iter()
-					.map(|s| s.solution.score[0])
-					.collect::<Vec<_>>()
-			};
-
-			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let solution = RawSolution { score: [5, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![5]);
-
-			let solution = RawSolution { score: [8, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![8, 5]);
-
-			let solution = RawSolution { score: [3, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![8, 5, 3]);
-
-			let solution = RawSolution { score: [6, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![8, 6, 5]);
-
-			let solution = RawSolution { score: [6, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![8, 6, 6]);
-
-			let solution = RawSolution { score: [10, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![10, 8, 6]);
-
-			let solution = RawSolution { score: [12, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![12, 10, 8]);
 		})
 	}
 
@@ -642,7 +609,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(9999), solution));
 
 			assert_eq!(
-				MultiPhase::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
+				MultiPhase::signed_submissions().iter().rev().map(|x| x.who).collect::<Vec<_>>(),
 				vec![999, 99, 9999]
 			);
 
