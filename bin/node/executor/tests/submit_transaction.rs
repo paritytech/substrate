@@ -26,7 +26,7 @@ use sp_core::{
 		testing::TestTransactionPoolExt,
 	},
 };
-use sp_keystore::{KeystoreExt, testing::KeyStore};
+use sp_keystore::{KeystoreExt, SyncCryptoStore, testing::KeyStore};
 use frame_system::{
 	offchain::{
 		Signer,

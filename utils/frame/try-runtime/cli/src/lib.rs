@@ -97,8 +97,9 @@ pub struct TryRuntimeCmd {
 /// The source of runtime state to try operations against.
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub enum State {
-	/// Use a state snapshot as the source of runtime state. NOTE: at the moment this is only
-	/// paritially supported for offchain-worker.
+	/// Use a state snapshot as the source of runtime state. NOTE: for the offchain-worker command this
+	/// is only partially supported at the moment and you must have a relevant archive node exposed on
+	//// localhost:9944 in order to query the block header.
 	Snap {
 		snapshot_path: PathBuf,
 	},
