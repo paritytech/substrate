@@ -39,7 +39,7 @@ pub struct BoundedBTreeSet<T, S>(BTreeSet<T>, PhantomData<S>);
 
 impl<T, S> Decode for BoundedBTreeSet<T, S>
 where
-	BTreeSet<T>: Decode,
+	T: Decode + Ord,
 	S: Get<u32>,
 {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {

@@ -39,7 +39,8 @@ pub struct BoundedBTreeMap<K, V, S>(BTreeMap<K, V>, PhantomData<S>);
 
 impl<K, V, S> Decode for BoundedBTreeMap<K, V, S>
 where
-	BTreeMap<K, V>: Decode,
+	K: Decode + Ord,
+	V: Decode,
 	S: Get<u32>,
 {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
