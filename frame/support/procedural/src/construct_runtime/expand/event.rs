@@ -17,7 +17,7 @@
 
 use crate::construct_runtime::Pallet;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::{Generics, Ident};
 
 pub fn expand_outer_event(
@@ -53,7 +53,7 @@ pub fn expand_outer_event(
 			};
 
 			event_variants.extend(expand_event_variant(runtime, pallet_decl, index, instance, generics));
-			event_conversions.extend(expand_event_conversion(scrate, pallet_decl, instance, &pallet_event));
+			event_conversions.extend(expand_event_conversion(scrate, pallet_decl, &pallet_event));
 		}
 	}
 
@@ -81,24 +81,22 @@ fn expand_event_variant(
 	generics: &Generics,
 ) -> TokenStream {
 	let path = &pallet.path;
-	let pallet_name = &pallet.name;
+	let variant_name = &pallet.name;
 	let part_is_generic = !generics.params.is_empty();
 
 	match instance {
 		Some(inst) => {
-			let variant = format_ident!("{}_{}", pallet_name, inst);
-
 			if part_is_generic {
-				quote!(#[codec(index = #index)] #variant(#path::Event<#runtime, #path::#inst>),)
+				quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime, #path::#inst>),)
 			} else {
-				quote!(#[codec(index = #index)] #variant(#path::Event<#path::#inst>),)
+				quote!(#[codec(index = #index)] #variant_name(#path::Event<#path::#inst>),)
 			}
 		}
 		None if part_is_generic => {
-			quote!(#[codec(index = #index)] #pallet_name(#path::Event<#runtime>),)
+			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime>),)
 		}
 		None => {
-			quote!(#[codec(index = #index)] #pallet_name(#path::Event),)
+			quote!(#[codec(index = #index)] #variant_name(#path::Event),)
 		}
 	}
 }
@@ -106,20 +104,14 @@ fn expand_event_variant(
 fn expand_event_conversion(
 	scrate: &TokenStream,
 	pallet: &Pallet,
-	instance: Option<&Ident>,
 	pallet_event: &TokenStream,
 ) -> TokenStream {
-	let pallet_name = &pallet.name;
-	let variant = if let Some(inst) = instance {
-		format_ident!("{}_{}", pallet_name, inst)
-	} else {
-		pallet_name.clone()
-	};
+	let variant_name = &pallet.name;
 
 	quote!{
 		impl From<#pallet_event> for Event {
 			fn from(x: #pallet_event) -> Self {
-				Event::#variant(x)
+				Event::#variant_name(x)
 			}
 		}
 		impl #scrate::sp_std::convert::TryInto<#pallet_event> for Event {
@@ -127,7 +119,7 @@ fn expand_event_conversion(
 
 			fn try_into(self) -> #scrate::sp_std::result::Result<#pallet_event, Self::Error> {
 				match self {
-					Self::#variant(evt) => Ok(evt),
+					Self::#variant_name(evt) => Ok(evt),
 					_ => Err(()),
 				}
 			}

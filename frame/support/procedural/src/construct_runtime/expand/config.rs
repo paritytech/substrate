@@ -34,11 +34,7 @@ pub fn expand_outer_config(
 		if let Some(pallet_entry) = decl.find_part("Config") {
 			let config = format_ident!("{}Config", decl.name);
 			let pallet_name = &decl.name.to_string().to_snake_case();
-			let field_name = if let Some(inst) = decl.instance.as_ref() {
-				format_ident!("{}_{}", pallet_name, inst.to_string().to_snake_case())
-			} else {
-				Ident::new(pallet_name, decl.name.span())
-			};
+			let field_name = &Ident::new(pallet_name, decl.name.span());
 			let part_is_generic = !pallet_entry.generics.params.is_empty();
 
 			types.extend(expand_config_types(runtime, decl, &config, part_is_generic));
