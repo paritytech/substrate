@@ -118,12 +118,13 @@ where
 
 	/// Exactly the same semantics as [`BTreeMap::insert`], but returns an `Err` (and is a noop) if the
 	/// new length of the map exceeds `S`.
-	pub fn try_insert(&mut self, key: K, value: V) -> Result<(), ()> {
+	///
+	/// In the `Err` case, returns the inserted pair so it can be further used without cloning.
+	pub fn try_insert(&mut self, key: K, value: V) -> Result<Option<V>, (K, V)> {
 		if self.len() < Self::bound() {
-			self.0.insert(key, value);
-			Ok(())
+			Ok(self.0.insert(key, value))
 		} else {
-			Err(())
+			Err((key, value))
 		}
 	}
 

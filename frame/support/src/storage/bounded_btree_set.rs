@@ -105,12 +105,13 @@ where
 
 	/// Exactly the same semantics as [`BTreeSet::insert`], but returns an `Err` (and is a noop) if the
 	/// new length of the set exceeds `S`.
-	pub fn try_insert(&mut self, item: T) -> Result<(), ()> {
+	///
+	/// In the `Err` case, returns the inserted item so it can be further used without cloning.
+	pub fn try_insert(&mut self, item: T) -> Result<bool, T> {
 		if self.len() < Self::bound() {
-			self.0.insert(item);
-			Ok(())
+			Ok(self.0.insert(item))
 		} else {
-			Err(())
+			Err(item)
 		}
 	}
 
