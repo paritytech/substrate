@@ -15,7 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The traits for dealing with a single non-fungible token class and any associated types.
+//! Traits for dealing with a single non-fungible asset class.
+//!
+//! This assumes a single level namespace identified by `Inspect::InstanceId`, and could
+//! reasonably be implemented by pallets which wants to expose a single collection of NFT-like
+//! objects.
+//!
+//! For an NFT API which has dual-level namespacing, the traits in `nonfungibles` are better to
+//! use.
 
 use codec::{Encode, Decode};
 use sp_runtime::TokenError;
@@ -90,7 +97,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for providing a non-fungible asset which can only be transferred.
+/// Trait for providing a non-fungible set of assets which can only be transferred.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer asset `instance` into `destination` account.
 	fn transfer(instance: &Self::InstanceId, destination: &AccountId) -> DispatchResult;

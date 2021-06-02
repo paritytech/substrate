@@ -15,7 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The traits for dealing with a multiple non-fungible token classes and any associated types.
+//! Traits for dealing with multiple collections of non-fungible assets.
+//!
+//! This assumes a dual-level namespace identified by `Inspect::InstanceId`, and could
+//! reasonably be implemented by pallets which want to expose multiple independent collections of
+//! NFT-like objects.
+//!
+//! For an NFT API which has single-level namespacing, the traits in `nonfungible` are better to
+//! use.
+//!
+//! Implementations of these traits may be converted to implementations of corresponding
+//! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
 use codec::{Encode, Decode};
 use sp_runtime::TokenError;
@@ -29,14 +39,14 @@ pub trait Inspect<AccountId> {
 	/// Type for identifying an asset class.
 	type ClassId;
 
-	/// Returns the owner of asset `instance`, or `None` if the asset doesn't exist or has no
-	/// owner.
+	/// Returns the owner of asset `instance` of `class`, or `None` if the asset doesn't exist (or
+	/// somehow has no owner).
 	fn owner(class: &Self::ClassId, instance: &Self::InstanceId) -> Option<AccountId>;
 
-	/// Returns the items owned by `who`.
+	/// Returns the asset instances of `class` owned by `who`.
 	fn items(class: &Self::ClassId, who: &AccountId) -> Vec<Self::InstanceId>;
 
-	/// Returns the attribute value of `instance` corresponding to `key`.
+	/// Returns the attribute value of `instance` of `class` corresponding to `key`.
 	///
 	/// By default this is `None`; no attributes are defined.
 	fn attribute(_class: &Self::ClassId, _instance: &Self::InstanceId, _key: &[u8])
@@ -45,7 +55,7 @@ pub trait Inspect<AccountId> {
 		None
 	}
 
-	/// Returns the strongly-typed attribute value of `instance` corresponding to `key`.
+	/// Returns the strongly-typed attribute value of `instance` of `class` corresponding to `key`.
 	///
 	/// By default this just attempts to use `attribute`.
 	fn typed_attribute<K: Encode, V: Decode>(
@@ -57,16 +67,16 @@ pub trait Inspect<AccountId> {
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
-	/// Returns `true` if the asset `instance` may be transferred.
+	/// Returns `true` if the asset `instance` of `class` may be transferred.
 	///
 	/// Default implementation is that all assets are transferable.
 	fn can_transfer(_class: &Self::ClassId, _instance: &Self::InstanceId) -> bool { true }
 }
 
-/// Trait for providing an interface for NFT-like assets which may be minted, burned and/or have
-/// attributes set on them.
+/// Trait for providing an interface for multiple classes of NFT-like assets which may be minted,
+/// burned and/or have attributes set on them.
 pub trait Mutate<AccountId>: Inspect<AccountId> {
-	/// Mint some asset `instance` to be owned by `who`.
+	/// Mint some asset `instance` of `class` to be owned by `who`.
 	///
 	/// By default, this is not a supported operation.
 	fn mint_into(
@@ -77,14 +87,14 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Burn some asset `instance`.
+	/// Burn some asset `instance` of `class`.
 	///
 	/// By default, this is not a supported operation.
 	fn burn_from(_class: &Self::ClassId, _instance: &Self::InstanceId) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Set attribute `value` of asset `instance`'s `key`.
+	/// Set attribute `value` of asset `instance` of `class`'s `key`.
 	///
 	/// By default, this is not a supported operation.
 	fn set_attribute(
@@ -96,7 +106,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		Err(TokenError::Unsupported.into())
 	}
 
-	/// Attempt to set the strongly-typed attribute `value` of `instance`'s `key`.
+	/// Attempt to set the strongly-typed attribute `value` of `instance` of `class`'s `key`.
 	///
 	/// By default this just attempts to use `set_attribute`.
 	fn set_typed_attribute<K: Encode, V: Encode>(
@@ -111,9 +121,9 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for providing a non-fungible asset which can only be transferred.
+/// Trait for providing a non-fungible sets of assets which can only be transferred.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
-	/// Transfer asset `instance` into `destination` account.
+	/// Transfer asset `instance` of `class` into `destination` account.
 	fn transfer(
 		class: &Self::ClassId,
 		instance: &Self::InstanceId,
