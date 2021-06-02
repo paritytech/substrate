@@ -25,12 +25,10 @@ mod chain_light;
 mod tests;
 
 use std::sync::Arc;
-use std::marker::PhantomData;
 
-use futures::{
-	future::{self, Either},
-	StreamExt
-};
+use crate::SubscriptionTaskExecutor;
+
+use futures::StreamExt;
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpsee_ws_server::{RpcModule, SubscriptionSink};
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
@@ -106,6 +104,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 /// Create new state API that works on full node.
 pub fn new_full<Block: BlockT, Client>(
 	client: Arc<Client>,
+	executor: Arc<SubscriptionTaskExecutor>,
 ) -> Chain<Block, Client>
 	where
 		Block: BlockT + 'static,
@@ -113,6 +112,7 @@ pub fn new_full<Block: BlockT, Client>(
 {
 	Chain {
 		backend: Box::new(self::chain_full::FullChain::new(client)),
+		executor,
 	}
 }
 
@@ -121,6 +121,7 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
+	executor: Arc<SubscriptionTaskExecutor>,
 ) -> Chain<Block, Client>
 	where
 		Block: BlockT + 'static,
@@ -133,12 +134,14 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 			remote_blockchain,
 			fetcher,
 		)),
+		executor,
 	}
 }
 
 /// Chain API with subscriptions support.
 pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
+	executor: Arc<SubscriptionTaskExecutor>,
 }
 
 impl<Block: BlockT, Client> Chain<Block, Client>
@@ -180,12 +183,60 @@ where
 			chain.finalized_head().map_err(rpc_err)
 		})?;
 
-		// let all_heads = rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads").unwrap();
-		// let new_heads = rpc_module.register_subscription("chain_subscribeNewHeads", "chain_unsubscribeNewHeads").unwrap();
-		// let finalized_heads = rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads").unwrap();
-		// TODO: wrap the different sinks in a new-type error prone with three params with
-		// the same type.
-		// let subs = ChainSubSinks::new(new_heads, all_heads, finalized_heads, client);
+		rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads", |_params, sink, ctx| {
+			let executor = ctx.executor.clone();
+
+			let fut = async move {
+				let hash = ctx.backend.client().info().best_hash;
+				let best_head = ctx.backend.header(Some(hash)).await.expect("hash is valid; qed");
+				// TODO(niklasad1): error to detect when the subscription is closed.
+				let _ = sink.send(&best_head);
+				let stream = ctx.backend.client().import_notification_stream();
+				stream.for_each(|item| {
+					let _ = sink.send(&item.header);
+					futures::future::ready(())
+				}).await;
+			};
+
+			executor.execute_new(Box::pin(fut));
+			Ok(())
+		})?;
+
+		rpc_module.register_subscription("chain_subscribeNewHeads", "chain_unsubscribeNewHeads", |_params, sink, ctx| {
+			let executor = ctx.executor.clone();
+
+			let fut = async move {
+				let hash = ctx.backend.client().info().best_hash;
+				let best_head = ctx.backend.header(Some(hash)).await.expect("hash is valid; qed");
+				let _ = sink.send(&best_head);
+				let stream = ctx.backend.client().import_notification_stream();
+				stream.for_each(|item| {
+					let _ = sink.send(&item.header);
+					futures::future::ready(())
+				}).await;
+			};
+
+			executor.execute_new(Box::pin(fut));
+			Ok(())
+		})?;
+
+		rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads", |_params, sink, ctx| {
+			let executor = ctx.executor.clone();
+
+			let fut = async move {
+				let hash = ctx.backend.client().info().finalized_hash;
+				let finalized_head = ctx.backend.header(Some(hash)).await.expect("hash is valid; qed");
+				let _ = sink.send(&finalized_head);
+				let stream = ctx.backend.client().finality_notification_stream();
+				stream.for_each(|item| {
+					let _ = sink.send(&item.header);
+					futures::future::ready(())
+				}).await;
+			};
+
+			executor.execute_new(Box::pin(fut));
+			Ok(())
+		})?;
 
 		Ok(rpc_module)
 	}

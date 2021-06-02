@@ -23,8 +23,10 @@ mod tests;
 
 use std::{sync::Arc, convert::TryInto};
 
-use sp_blockchain::HeaderBackend;
+use crate::SubscriptionTaskExecutor;
 
+use futures::StreamExt;
+use sp_blockchain::HeaderBackend;
 use sc_rpc_api::DenyUnsafe;
 use jsonrpsee_ws_server::RpcModule;
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as RpseeCallError};
@@ -34,7 +36,7 @@ use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::generic;
 use sp_transaction_pool::{
-	TransactionPool, InPoolTransaction, TransactionSource,
+	TransactionPool, TransactionFor, InPoolTransaction, TransactionSource,
 	TxHash, error::IntoPoolError,
 };
 use sp_session::SessionKeys;
@@ -53,6 +55,8 @@ pub struct Author<P, Client> {
 	keystore: SyncCryptoStorePtr,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
+	/// Executor to spawn subscriptions.
+	executor: Arc<SubscriptionTaskExecutor>,
 }
 
 
@@ -63,12 +67,14 @@ impl<P, Client> Author<P, Client> {
 		pool: Arc<P>,
 		keystore: SyncCryptoStorePtr,
 		deny_unsafe: DenyUnsafe,
+		executor: Arc<SubscriptionTaskExecutor>,
 	) -> Self {
 		Author {
 			client,
 			pool,
 			keystore,
 			deny_unsafe,
+			executor,
 		}
 	}
 }
@@ -183,6 +189,44 @@ impl<P, Client> Author<P, Client>
 					.map(|tx| tx.hash().clone())
 					.collect()
 			)
+		})?;
+
+		ctx_module.register_subscription(
+			"author_submitAndWatchExtrinsic",
+			"author_unwatchExtrinsic",
+			|params, sink, ctx|
+		{
+			let xt: Bytes = params.one()?;
+
+			let executor = ctx.executor.clone();
+			let fut = async move {
+				let best_block_hash = ctx.client.info().best_hash;
+				let dxt = match TransactionFor::<P>::decode(&mut &xt[..]) {
+					Ok(dxt) => dxt,
+					Err(e) => {
+						let _ = sink.send(&format!("Bad extrinsic received: {:?}; subscription useless", e));
+						return;
+					}
+				};
+				let stream = match ctx.pool
+					.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
+					.await
+				{
+					Ok(stream) => stream,
+					Err(e) => {
+						let _ = sink.send(&format!("txpool subscription failed: {:?}; subscription useless", e));
+						return;
+					}
+				};
+
+				stream.for_each(|item| {
+					let _ = sink.send(&item);
+					futures::future::ready(())
+				}).await;
+			};
+
+			executor.execute_new(Box::pin(fut));
+			Ok(())
 		})?;
 
 		Ok(ctx_module)

@@ -770,18 +770,24 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 		properties: config.chain_spec.properties(),
 		chain_type: config.chain_spec.chain_type(),
 	};
-	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
+	let task_executor = Arc::new(sc_rpc::SubscriptionTaskExecutor::new(spawn_handle));
 
 	let mut rpc_api = RpcModule::new(());
 
 	// RPC APIs.
 	// TODO(niklasad1): add remaining RPC API's here
-	let chain_rpc = sc_rpc::chain::new_full(client.clone())
+	let chain_rpc = sc_rpc::chain::new_full(client.clone(), task_executor.clone())
 		.into_rpc_module()
 		.expect("Infallible; qed");
-	let author_rpc = sc_rpc::author::Author::new(client.clone(), transaction_pool, keystore, deny_unsafe)
-		.into_rpc_module()
-		.expect("Infallible; qed");
+
+	let author_rpc = sc_rpc::author::Author::new(
+		client.clone(),
+		transaction_pool,
+		keystore,
+		deny_unsafe,
+		task_executor.clone()
+	).into_rpc_module().expect("Infallible; qed");
+
 	let system_rpc = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe)
 		.into_rpc_module()
 		.expect("Infallible; qed");
