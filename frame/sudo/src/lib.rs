@@ -142,7 +142,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
-			(dispatch_info.weight.saturating_add(10_000), dispatch_info.class)
+			(dispatch_info.weight.saturating_add(10_000), dispatch_info.class, Pays::No)
 		})]
 		pub(crate) fn sudo(
 			origin: OriginFor<T>,
@@ -168,7 +168,7 @@ pub mod pallet {
 		/// - O(1).
 		/// - The weight of this call is defined by the caller.
 		/// # </weight>
-		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
+		#[pallet::weight((*_weight, call.get_dispatch_info().class, Pays::No))]
 		pub(crate) fn sudo_unchecked_weight(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
@@ -193,7 +193,7 @@ pub mod pallet {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[pallet::weight(0)]
+		#[pallet::weight((0, Pays::No))]
 		pub(crate) fn set_key(
 			origin: OriginFor<T>,
 			new: <T::Lookup as StaticLookup>::Source,
@@ -228,6 +228,7 @@ pub mod pallet {
 					// AccountData for inner call origin accountdata.
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
+				Pays::No,
 			)
 		})]
 		pub(crate) fn sudo_as(
