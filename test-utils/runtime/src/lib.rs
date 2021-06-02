@@ -629,6 +629,7 @@ cfg_if! {
 				fn validate_transaction(
 					_source: TransactionSource,
 					utx: <Block as BlockT>::Extrinsic,
+					_: <Block as BlockT>::Hash,
 				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
@@ -878,6 +879,7 @@ cfg_if! {
 				fn validate_transaction(
 					_source: TransactionSource,
 					utx: <Block as BlockT>::Extrinsic,
+					_: <Block as BlockT>::Hash,
 				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{

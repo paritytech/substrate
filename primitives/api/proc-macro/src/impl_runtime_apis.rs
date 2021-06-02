@@ -264,6 +264,15 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					.map(|v| v.has_api_with(&A::ID, pred))
 			}
 
+			fn api_version<A: #crate_::RuntimeApiInfo + ?Sized>(
+				&self,
+				at: &#crate_::BlockId<Block>,
+			) -> std::result::Result<Option<u32>, #crate_::ApiError> where Self: Sized {
+				self.call
+					.runtime_version_at(at)
+					.map(|v| v.api_version(&A::ID))
+			}
+
 			fn record_proof(&mut self) {
 				self.recorder = Some(Default::default());
 			}
