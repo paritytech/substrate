@@ -224,7 +224,7 @@ impl<T: Config> Pallet<T> {
 
 		queue
 			.try_insert(submission)
-			.or_else(|_| {
+			.or_else(|submission| {
 				let threshold = T::SolutionImprovementThreshold::get();
 				// This shouldn't ever fail, becuase it means that the queue was simultaneously full
 				// and empty. It can still happen if the queue has a max size of 0, though.
@@ -244,7 +244,8 @@ impl<T: Config> Pallet<T> {
 					// though.
 					queue.try_insert(submission).map_err(|_| Error::<T>::SignedQueueFull)?;
 				}
-				Ok(())
+				// the particular value here doesn't matter, as it's overwritten by the following map.
+				Ok(false)
 			})
 			.map(|_| deposit)
 	}
