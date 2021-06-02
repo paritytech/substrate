@@ -100,7 +100,7 @@ struct KeyOrderedEntry<K> {
 unsafe impl<K: Send> Send for LRUOrderedKeys<K> {}
 unsafe impl<K: Sync> Sync for LRUOrderedKeys<K> {}
 
-impl<K: Default> KeyOrderedEntry<K> {
+impl<K: Default + EstimateSize> KeyOrderedEntry<K> {
 	fn empty() -> Box<Self> {
 		let mut lru_bound = Box::new(KeyOrderedEntry {
 			prev: std::ptr::null_mut(),
@@ -113,6 +113,12 @@ impl<K: Default> KeyOrderedEntry<K> {
 		lru_bound.prev = ptr;
 		lru_bound.next = ptr;
 		lru_bound
+	}
+	fn estimate_size(&self) -> usize {
+		self.key.estimate_size() * 2 // apply 2 to account for btreemap internal key storage.
+			+ self.child_storage_key.as_ref().map(|k| k.len()).unwrap_or(0) + 1
+			+ 2 * 4 // assuming 64 bit arch
+			+ 1
 	}
 }
 
@@ -143,7 +149,7 @@ impl<K> KeyOrderedEntry<K> {
 	}
 }
 
-impl<K: Default + Ord + Clone + 'static> LRUOrderedKeys<K> {
+impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	fn new(limit: usize) -> Self {
 		LRUOrderedKeys {
 			intervals: BTreeMap::new(),
@@ -156,6 +162,28 @@ impl<K: Default + Ord + Clone + 'static> LRUOrderedKeys<K> {
 
 	fn lru_touched(&mut self, entry: &mut Box<KeyOrderedEntry<K>>) {
 		entry.lru_touched(&mut self.lru_bound)
+	}
+
+	fn lru_pop(
+		&mut self
+	) -> bool {
+		if self.lru_bound.prev == self.lru_bound.next {
+			return false; // empty
+		}
+
+		let to_rem = self.lru_bound.next;
+		self.lru_bound.next = unsafe { (*to_rem).next };
+		let intervals = if let Some(child) = unsafe { (*to_rem).child_storage_key.as_ref() } {
+			self.child_intervals.get_mut(child)
+				.expect("Removed only when no entry")
+		} else {
+			&mut self.intervals
+		};
+	
+		let entry = intervals.remove(unsafe { &(*to_rem).key })
+			.expect("LRU attached entry are in map.");
+		self.used_size -= entry.estimate_size();
+		true
 	}
 
 	fn next_storage_key(&mut self, key: &K, child: Option<&ChildInfo>) -> Option<Option<K>> {
@@ -217,21 +245,85 @@ impl<K: Default + Ord + Clone + 'static> LRUOrderedKeys<K> {
 			},
 		}
 	}
-	// new value added to state from change.
-	// Since we do not know if added or removed we just invalidate.
+
+	fn merge_local_cache(&mut self, local: &mut LocalOrderedKeys<K>) {
+		// start with child trie. Notice there is no fair lru management here.
+		for (child, keys) in local.child_intervals.drain() {
+			self.merge_local_cache_inner(&keys, Some(&child));
+		}
+		self.merge_local_cache_inner(&local.intervals, None);
+		local.intervals = BTreeMap::new();
+	}
+
+	fn merge_local_cache_inner(
+		&mut self,
+		keys: &BTreeMap<K, CachedInterval>,
+		child: Option<&Vec<u8>>,
+	) {
+		// Note that in theory no conflict of existing interval should happen if we correctly do `enact_value_change`.
+		let intervals = if let Some(info) = child {
+			if let Some(intervals) = self.child_intervals.get_mut(info) {
+				intervals
+			} else {
+				self.child_intervals.insert(info.clone(), Default::default());
+				return self.merge_local_cache_inner(keys, child);
+			}
+		} else {
+			&mut self.intervals
+		};
+
+		for (k, interval) in keys {
+			self.used_size += Self::add_valid_interval_no_lru(intervals, k, child, interval.clone(), &mut self.lru_bound);
+		}
+		self.apply_lru_limit();
+	}
+
+	// `no_lru` only indicate no lru limit applied.
+	fn add_valid_interval_no_lru(
+		intervals: &mut BTreeMap<K, Box<KeyOrderedEntry<K>>>,
+		key: &K,
+		child: Option<&Vec<u8>>,
+		state: CachedInterval,
+		lru_bound: &mut Box<KeyOrderedEntry<K>>,
+	) -> usize {
+		let mut size = None;
+		let size = &mut size;
+		let entry = intervals.entry(key.clone()).or_insert_with(|| {
+			let mut entry = KeyOrderedEntry::empty();
+			entry.key = key.clone();
+			entry.child_storage_key = child.cloned();
+			entry.state = state.clone();
+			entry.lru_touched(lru_bound);
+			*size = Some(entry.estimate_size());
+			entry
+		});
+		if size.is_some() {
+			entry.state.merge(state);
+			entry.lru_touched(lru_bound);
+		}
+		size.unwrap_or(0)
+	}
+
+	fn apply_lru_limit(&mut self) {
+		while self.used_size > self.limit {
+			if !self.lru_pop() {
+				return
+			}
+		}
+	}
+
 	fn enact_value_changes<'a>(&mut self, key: impl Iterator<Item = (&'a K, bool)>, child: Option<&Vec<u8>>) {
 		unimplemented!()
 	}
-	fn merge_local_cache(&mut self, local: &mut LocalOrderedKeys<K>) {
-		unimplemented!()
-	}
+
 	fn retract_value_changes<'a>(&mut self, key: impl Iterator<Item = &'a K>, child: Option<&Vec<u8>>) {
 		// Note that enact is keeping value by inserting in existing interval, but retract cannot
 		// as we do not know if previous enact did insert or was an already existing value.
 		unimplemented!()
 	}
 	fn clear(&mut self) {
-		unimplemented!()
+		let limit = self.limit;
+		*self = Self::new(limit);
 	}
 	fn used_size(&self) -> usize {
 		self.used_size
@@ -436,6 +528,22 @@ enum CachedInterval {
 	/// Next and Previous key are keys in cache.
 	/// The current key cannot be an undefined key.
 	Both,
+}
+
+impl CachedInterval {
+	// Return true if it was updated.
+	fn merge(&mut self, other: CachedInterval) -> bool {
+		match (self.clone(), other) {
+			(CachedInterval::Next, CachedInterval::Both)
+			| (CachedInterval::Next, CachedInterval::Prev)
+			| (CachedInterval::Prev, CachedInterval::Both)
+			| (CachedInterval::Prev, CachedInterval::Next) => {
+				*self = CachedInterval::Both;
+				true
+			},
+			_ => false
+		}
+	}
 }
 
 /// Internal trait similar to `heapsize` but using
