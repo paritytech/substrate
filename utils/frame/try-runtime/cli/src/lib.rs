@@ -105,7 +105,7 @@ pub enum State {
 
 	/// Use a live chain as the source of runtime state.
 	Live {
-		/// An optional state snapshot file to WRITE to.
+		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
 		#[structopt(short, long)]
 		snapshot_path: Option<PathBuf>,
 
@@ -249,12 +249,12 @@ where
 				modules
 			} => {
 				let online_config = OnlineConfig {
-				transport: url.to_owned().into(),
-				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-				modules: modules.to_owned().unwrap_or_default(),
-				at: block_at.as_ref()
-					.map(|b| b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))).transpose()?,
-				..Default::default()
+					transport: url.to_owned().into(),
+					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
+					modules: modules.to_owned().unwrap_or_default(),
+					at: block_at.as_ref()
+						.map(|b| b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))).transpose()?,
+					..Default::default()
 				};
 
 				(Mode::Online(online_config), url)
@@ -290,13 +290,13 @@ where
 		.inject(&[(code_key, code)])
 		.build()
 		.await?;
-	// Register externality extensions in order to provide host interface for OCW to the runtime
+
+	// register externality extensions in order to provide host interface for OCW to the runtime
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
 	ext.register_extension(OffchainDbExt::new(offchain.clone()));
 	ext.register_extension(OffchainWorkerExt::new(offchain));
-	let keystore_ptr = Arc::new(KeyStore::new());
-	ext.register_extension(KeystoreExt(keystore_ptr));
+	ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
 	let header_hash: B::Hash = command.header_at.parse().unwrap();
