@@ -32,7 +32,7 @@ use futures::{
 	StreamExt
 };
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
-use jsonrpsee_ws_server::{RpcModule, RpcContextModule, SubscriptionSink};
+use jsonrpsee_ws_server::{RpcModule, SubscriptionSink};
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
@@ -146,11 +146,10 @@ where
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 {
 	/// Convert a [`Chain`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
-	pub fn into_rpc_module(self) -> Result<(RpcModule, ChainSubSinks<Block, Client>), JsonRpseeError> {
-		let client = self.backend.client().clone();
-		let mut ctx_module = RpcContextModule::new(self);
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut rpc_module = RpcModule::new(self);
 
-		ctx_module.register_method("chain_getHeader", |params, chain| {
+		rpc_module.register_method("chain_getHeader", |params, chain| {
 			log::info!("chain_getBlock [{:?}]", params);
 			// TODO: make is possible to register async methods on jsonrpsee servers.
 			//https://github.com/paritytech/jsonrpsee/issues/291
@@ -160,7 +159,7 @@ where
 			futures::executor::block_on(chain.header(hash)).map_err(rpc_err)
 		})?;
 
-		ctx_module.register_method("chain_getBlock", |params, chain| {
+		rpc_module.register_method("chain_getBlock", |params, chain| {
 			log::info!("chain_getBlock [{:?}]", params);
 			// TODO: make is possible to register async methods on jsonrpsee servers.
 			//https://github.com/paritytech/jsonrpsee/issues/291
@@ -170,27 +169,25 @@ where
 			futures::executor::block_on(chain.block(hash)).map_err(rpc_err)
 		})?;
 
-		ctx_module.register_method("chain_getBlockHash", |params, chain| {
+		rpc_module.register_method("chain_getBlockHash", |params, chain| {
 			log::info!("chain_getBlockHash [{:?}]", params);
 			let hash = params.one().ok();
 			chain.block_hash(hash).map_err(rpc_err)
 		})?;
 
-		ctx_module.register_method("chain_getFinalizedHead", |_, chain| {
+		rpc_module.register_method("chain_getFinalizedHead", |_, chain| {
 			log::info!("chain_getFinalizedHead []");
 			chain.finalized_head().map_err(rpc_err)
 		})?;
 
-		let mut rpc_module = ctx_module.into_module();
-
-		let all_heads = rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads").unwrap();
-		let new_heads = rpc_module.register_subscription("chain_subscribeNewHeads", "chain_unsubscribeNewHeads").unwrap();
-		let finalized_heads = rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads").unwrap();
+		// let all_heads = rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads").unwrap();
+		// let new_heads = rpc_module.register_subscription("chain_subscribeNewHeads", "chain_unsubscribeNewHeads").unwrap();
+		// let finalized_heads = rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads").unwrap();
 		// TODO: wrap the different sinks in a new-type error prone with three params with
 		// the same type.
-		let subs = ChainSubSinks::new(new_heads, all_heads, finalized_heads, client);
+		// let subs = ChainSubSinks::new(new_heads, all_heads, finalized_heads, client);
 
-		Ok((rpc_module, subs))
+		Ok(rpc_module)
 	}
 
 	/// TODO: document this
@@ -231,60 +228,4 @@ fn client_err(err: sp_blockchain::Error) -> StateError {
 
 fn rpc_err(err: StateError) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(err))
-}
-
-/// Possible subscriptions for the chain RPC API.
-pub struct ChainSubSinks<Block, Client> {
-	new_heads: SubscriptionSink,
-	all_heads: SubscriptionSink,
-	finalized_heads: SubscriptionSink,
-	client: Arc<Client>,
-	marker: PhantomData<Block>,
-}
-
-impl<Block: BlockT, Client> ChainSubSinks<Block, Client>
-where
-	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
-{
-	/// Create new Chain subscription that needs to be spawned.
-	pub fn new(
-		new_heads: SubscriptionSink,
-		all_heads: SubscriptionSink,
-		finalized_heads: SubscriptionSink,
-		client: Arc<Client>
-	) -> Self {
-		Self { new_heads, all_heads, finalized_heads, client, marker: PhantomData }
-	}
-
-	/// Start subscribe to chain events.
-	pub async fn subscribe(mut self) {
-		// Send current head at the start.
-		let best_head = self.client.header(BlockId::Hash(self.client.info().best_hash)).expect("header is known; qed");
-		let finalized_header = self.client.header(BlockId::Hash(self.client.info().finalized_hash)).expect("header is known; qed");
-		let _ = self.all_heads.send(&best_head);
-		let _ = self.new_heads.send(&best_head);
-		let _ = self.finalized_heads.send(&finalized_header);
-
-		let mut import_stream = self.client.import_notification_stream();
-		let mut finality_stream = self.client.finality_notification_stream();
-
-		loop {
-			let import_next = import_stream.next();
-			let finality_next = finality_stream.next();
-			futures::pin_mut!(import_next, finality_next);
-
-			match future::select(import_next, finality_next).await {
-				Either::Left((Some(import), _)) => {
-					let _ = self.all_heads.send(&import.header);
-					let _ = self.new_heads.send(&import.header);
-				}
-				Either::Right((Some(finality), _)) => {
-					let _ = self.finalized_heads.send(&finality.header);
-				}
-				// Silently just terminate the task; should not happen because the
-				// chain streams should be alive as long as the node runs.
-				_ => return,
-			}
-		}
-	}
 }

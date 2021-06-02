@@ -747,7 +747,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
-) -> Vec<RpcModule>
+) -> RpcModule<()>
 	where
 		TBl: BlockT,
 		TCl: ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + HeaderBackend<TBl> +
@@ -772,9 +772,11 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	};
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
 
+	let mut rpc_api = RpcModule::new(());
+
 	// RPC APIs.
 	// TODO(niklasad1): add remaining RPC API's here
-	let (chain_rpc, chain_subs) = sc_rpc::chain::new_full(client.clone())
+	let chain_rpc = sc_rpc::chain::new_full(client.clone())
 		.into_rpc_module()
 		.expect("Infallible; qed");
 	let author_rpc = sc_rpc::author::Author::new(client.clone(), transaction_pool, keystore, deny_unsafe)
@@ -788,24 +790,20 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	let state_rpc = state.into_rpc_module().expect("Infallible; qed");
 	let child_state_rpc = child_state.into_rpc_module().expect("Infallible; qed");
 
-	let mut rpc_api = Vec::new();
-
 	let maybe_offchain_rpc = offchain_storage.map(|storage| {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe)
 			.into_rpc_module()
 			.expect("Infaillible; qed");
 
-		rpc_api.push(offchain);
+		rpc_api.merge(offchain).unwrap();
 	});
 
-	rpc_api.push(chain_rpc);
-	rpc_api.push(author_rpc);
-	rpc_api.push(system_rpc);
-	rpc_api.push(state_rpc);
-	rpc_api.push(child_state_rpc);
-
-	// Spawn subscription tasks.
-	task_executor.execute_new(Box::pin(chain_subs.subscribe()));
+	// only unique method names used; qed
+	rpc_api.merge(chain_rpc).unwrap();
+	rpc_api.merge(author_rpc).unwrap();
+	rpc_api.merge(system_rpc).unwrap();
+	rpc_api.merge(state_rpc).unwrap();
+	rpc_api.merge(child_state_rpc).unwrap();
 
 	rpc_api
 }

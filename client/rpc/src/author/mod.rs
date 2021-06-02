@@ -26,7 +26,7 @@ use std::{sync::Arc, convert::TryInto};
 use sp_blockchain::HeaderBackend;
 
 use sc_rpc_api::DenyUnsafe;
-use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_ws_server::RpcModule;
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as RpseeCallError};
 use codec::{Encode, Decode};
 use sp_core::Bytes;
@@ -80,8 +80,8 @@ impl<P, Client> Author<P, Client>
 		Client::Api: SessionKeys<P::Block>,
 {
 	/// Convert a [`Author`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
-	pub fn into_rpc_module(self) -> std::result::Result<RpcModule, JsonRpseeError> {
-		let mut ctx_module = RpcContextModule::new(self);
+	pub fn into_rpc_module(self) -> std::result::Result<RpcModule<Self>, JsonRpseeError> {
+		let mut ctx_module = RpcModule::new(self);
 
 		ctx_module.register_method("author_insertKey", |params, author| {
 			log::info!("author_insertKey [{:?}]", params);
@@ -185,7 +185,7 @@ impl<P, Client> Author<P, Client>
 			)
 		})?;
 
-		Ok(ctx_module.into_module())
+		Ok(ctx_module)
 	}
 }
 
