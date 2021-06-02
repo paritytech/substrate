@@ -55,6 +55,7 @@ where
 	AccountId: Ord,
 	Balance: Ord + HasCompact,
 	CompactSolution: Ord,
+	RawSolution<CompactSolution>: Ord,
 {
 	fn cmp(&self, other: &Self) -> Ordering {
 		self.solution
@@ -70,7 +71,10 @@ where
 impl<AccountId, Balance, CompactSolution> PartialOrd
 	for SignedSubmission<AccountId, Balance, CompactSolution>
 where
-	SignedSubmission<AccountId, Balance, CompactSolution>: Ord,
+	AccountId: Ord,
+	Balance: Ord + HasCompact,
+	CompactSolution: Ord,
+	RawSolution<CompactSolution>: Ord,
 {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
