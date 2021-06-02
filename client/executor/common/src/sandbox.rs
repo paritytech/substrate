@@ -29,7 +29,6 @@ use wasmi::{
 	ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages
 };
 use sp_wasm_interface::{Value, FunctionContext, Pointer, WordSize};
-use wasmer_compiler_singlepass::Singlepass;
 
 /// Index of a function inside the supervisor.
 ///
@@ -341,6 +340,7 @@ enum BackendInstance {
 	Wasmi(wasmi::ModuleRef),
 
 	/// Wasmer module instance
+	#[cfg(feature = "wasmer-sandbox")]
 	Wasmer(wasmer::Instance),
 }
 
@@ -403,6 +403,7 @@ impl<FR> SandboxInstance<FR> {
 							Ok(wasmi_result)
 						}
 
+						#[cfg(feature = "wasmer-sandbox")]
 						BackendInstance::Wasmer(wasmer_instance) => {
 							let function = wasmer_instance
 								.exports
@@ -464,6 +465,7 @@ impl<FR> SandboxInstance<FR> {
 				Some(wasmi_global.into())
 			}
 
+			#[cfg(feature = "wasmer-sandbox")]
 			BackendInstance::Wasmer(wasmer_instance) => {
 				let global = wasmer_instance.exports.get_global(name).ok()?;
 				let wasmtime_value = match global.get() {
@@ -610,6 +612,7 @@ pub enum SandboxBackend {
 	Wasmi,
 
 	/// Wasmer environment
+	#[cfg(feature = "wasmer-sandbox")]
 	Wasmer,
 }
 
@@ -620,6 +623,7 @@ pub enum Memory {
 	Wasmi(MemoryRef),
 
 	/// Wasmer memory refernce
+	#[cfg(feature = "wasmer-sandbox")]
 	Wasmer(wasmer::Memory),
 }
 
@@ -633,6 +637,7 @@ impl Memory {
 	}
 
 	/// View as wasmer memory
+	#[cfg(feature = "wasmer-sandbox")]
 	pub fn as_wasmer(&self) -> Option<wasmer::Memory> {
 		match self {
 			Memory::Wasmer(memory) => Some(memory.clone()),
@@ -642,6 +647,7 @@ impl Memory {
 }
 
 /// Wasmer specific context
+#[cfg(feature = "wasmer-sandbox")]
 struct WasmerBackend {
 	store: wasmer::Store,
 }
@@ -652,6 +658,7 @@ enum BackendContext {
 	Wasmi,
 
 	/// Wasmer specific context
+	#[cfg(feature = "wasmer-sandbox")]
 	Wasmer(WasmerBackend),
 }
 
@@ -660,8 +667,9 @@ impl BackendContext {
 		match backend {
 			SandboxBackend::Wasmi => BackendContext::Wasmi,
 
+			#[cfg(feature = "wasmer-sandbox")]
 			SandboxBackend::Wasmer => {
-				let compiler = Singlepass::default();
+				let compiler = wasmer_compiler_singlepass::Singlepass::default();
 
 				BackendContext::Wasmer(
 					WasmerBackend {
@@ -703,6 +711,7 @@ impl<FR> Store<FR> {
 				)?)
 			}
 
+			#[cfg(feature = "wasmer-sandbox")]
 			BackendContext::Wasmer(context) => {
 				let ty = wasmer::MemoryType::new(initial, maximum, false);
 				Memory::Wasmer(
@@ -868,6 +877,7 @@ impl<FR> Store<FR> {
 				sandbox_instance
 			}
 
+			#[cfg(feature = "wasmer-sandbox")]
 			BackendContext::Wasmer(context) => {
 				let module = wasmer::Module::new(&context.store, wasm).map_err(|_| {
 					InstantiationError::ModuleDecoding

@@ -173,6 +173,7 @@ impl Sandbox for FunctionExecutor {
 				}
 			}
 
+			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
 				let len = buf_len as usize;
 
@@ -232,6 +233,7 @@ impl Sandbox for FunctionExecutor {
 				}
 			}
 
+			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
 				let len = val_len as usize;
 

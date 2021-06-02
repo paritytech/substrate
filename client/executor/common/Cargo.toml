@@ -23,11 +23,11 @@ sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }
 sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
 sp-maybe-compressed-blob = { version = "3.0.0", path = "../../../primitives/maybe-compressed-blob" }
 sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
-
-wasmer = "1.0"
-wasmer-compiler-singlepass = "1.0"
-
 thiserror = "1.0.21"
+
+wasmer = { version = "1.0", optional = true }
+wasmer-compiler-singlepass = { version = "1.0", optional = true }
 
 [features]
 default = []
+wasmer-sandbox = [ "wasmer", "wasmer-compiler-singlepass" ]

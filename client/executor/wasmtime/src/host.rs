@@ -31,7 +31,7 @@ use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use wasmtime::{Func, Val};
-use sandbox::{SandboxCapabiliesHolder};
+use sandbox::SandboxCapabiliesHolder;
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -66,9 +66,15 @@ struct Inner {
 impl HostState {
 	/// Constructs a new `HostState`.
 	pub fn new(allocator: FreeingBumpHeapAllocator, instance: Rc<InstanceWrapper>) -> Self {
+		#[cfg(feature = "wasmer-sandbox")]
+		let backend = sandbox::SandboxBackend::Wasmer;
+
+		#[cfg(not(feature = "wasmer-sandbox"))]
+		let backend = sandbox::SandboxBackend::Wasmi;
+
 		HostState {
 			inner: Rc::new(Inner {
-				sandbox_store: RefCell::new(sandbox::Store::new(sandbox::SandboxBackend::Wasmer)),
+				sandbox_store: RefCell::new(sandbox::Store::new(backend)),
 				allocator: RefCell::new(allocator),
 				instance,
 			})
@@ -196,6 +202,7 @@ impl Sandbox for HostState {
 				})
 			},
 
+			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
 				let len = buf_len as usize;
 
@@ -270,6 +277,7 @@ impl Sandbox for HostState {
 				})
 			}
 
+			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
 				let len = val_len as usize;
 				let supervisor_mem_size = self.inner.instance.memory_size() as usize;
