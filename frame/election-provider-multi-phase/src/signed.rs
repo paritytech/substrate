@@ -85,6 +85,10 @@ pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+pub type SignedSubmissionsOf<T> = BoundedBTreeSet<
+	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, CompactOf<T>>,
+	<T as Config>::SignedMaxSubmissions,
+>;
 
 impl<T: Config> Pallet<T> {
 	/// Finish the signed phase. Process the signed submissions from best to worse until a valid one
@@ -197,10 +201,7 @@ impl<T: Config> Pallet<T> {
 	/// long as the new solution sufficiently improves on the weakest solution.
 	pub fn insert_submission(
 		who: &T::AccountId,
-		queue: &mut BoundedBTreeSet<
-			SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>,
-			T::SignedMaxSubmissions,
-		>,
+		queue: &mut SignedSubmissionsOf<T>,
 		solution: RawSolution<CompactOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> Result<BalanceOf<T>, crate::Error<T>> {

@@ -249,13 +249,14 @@ pub mod helpers;
 
 const LOG_TARGET: &'static str = "runtime::election-provider";
 
-pub mod unsigned;
 pub mod signed;
+pub mod unsigned;
 pub mod weights;
 
+pub use signed::{
+	SignedSubmission, BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmissionsOf,
+};
 pub use weights::WeightInfo;
-
-pub use signed::{SignedSubmission, BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
 
 /// The compact solution type used by this crate.
 pub type CompactOf<T> = <T as Config>::CompactSolution;
@@ -518,7 +519,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, storage::bounded_btree_set::BoundedBTreeSet};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
@@ -1051,20 +1052,7 @@ pub mod pallet {
 	/// Sorted set of unchecked, signed solutions.
 	#[pallet::storage]
 	#[pallet::getter(fn signed_submissions)]
-	pub type SignedSubmissions<T: Config>
-	where
-		BoundedBTreeSet<
-			SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>,
-			T::SignedMaxSubmissions,
-		>: codec::Codec + Ord,
-	= StorageValue<
-		_,
-		BoundedBTreeSet<
-			SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>,
-			T::SignedMaxSubmissions,
-		>,
-		ValueQuery,
-	>;
+	pub type SignedSubmissions<T: Config> = StorageValue<_, SignedSubmissionsOf<T>, ValueQuery>;
 
 	/// The minimum score that each 'untrusted' solution must attain in order to be considered
 	/// feasible.
