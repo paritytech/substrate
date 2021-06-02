@@ -33,7 +33,7 @@ use frame_support::{
 	},
 	traits::{
 		Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, LockIdentifier,
-		U128CurrencyToVote, MaxEncodedLen,
+		U128CurrencyToVote, MaxEncodedLen, Filter,
 	},
 };
 use frame_system::{
@@ -821,11 +821,26 @@ parameter_types! {
 	pub Schedule: pallet_contracts::Schedule<Runtime> = Default::default();
 }
 
+/// The safest default is to allow no calls at all.
+///
+/// Runtimes should whitelist dispatchables that  areallowed to be called from contracts
+/// and make sure they are stable. Dispatchables exposed to contracts are not allowed to
+/// change because that would break already deployed contracts. The `Call` structure itself
+/// is not allowed to change the indices of existing pallets, too.
+pub struct ContractsCallFilter;
+impl Filter<Call> for ContractsCallFilter {
+	fn filter(_: &Call) -> bool {
+		false
+	}
+}
+
 impl pallet_contracts::Config for Runtime {
 	type Time = Timestamp;
 	type Randomness = RandomnessCollectiveFlip;
 	type Currency = Balances;
 	type Event = Event;
+	type Call = Call;
+	type CallFilter = ContractsCallFilter;
 	type RentPayment = ();
 	type SignedClaimHandicap = SignedClaimHandicap;
 	type TombstoneDeposit = TombstoneDeposit;

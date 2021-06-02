@@ -4893,6 +4893,7 @@ dependencies = [
  "pallet-contracts-proc-macro",
  "pallet-randomness-collective-flip",
  "pallet-timestamp",
+ "pallet-utility",
  "parity-scale-codec",
  "paste 1.0.4",
  "pretty_assertions 0.7.2",

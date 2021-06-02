@@ -48,6 +48,7 @@ wat = "1"
 pallet-balances = { version = "3.0.0", path = "../balances" }
 pallet-timestamp = { version = "3.0.0", path = "../timestamp" }
 pallet-randomness-collective-flip = { version = "3.0.0", path = "../randomness-collective-flip" }
+pallet-utility = { version = "3.0.0", path = "../utility" }
 
 [features]
 default = ["std"]
