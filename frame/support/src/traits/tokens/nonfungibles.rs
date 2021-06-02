@@ -32,20 +32,23 @@ use codec::{Encode, Decode};
 use sp_runtime::TokenError;
 use crate::dispatch::DispatchResult;
 
-/// Trait for providing an interface to a read-only NFT-like set of asset instances.
+/// Trait for providing an interface to many read-only NFT-like sets of asset instances.
 pub trait Inspect<AccountId> {
 	/// Type for identifying an asset instance.
 	type InstanceId;
 
-	/// Type for identifying an asset class.
+	/// Type for identifying an asset class (an identifier for an independent collection of asset
+	/// instances).
 	type ClassId;
 
 	/// Returns the owner of asset `instance` of `class`, or `None` if the asset doesn't exist (or
 	/// somehow has no owner).
 	fn owner(class: &Self::ClassId, instance: &Self::InstanceId) -> Option<AccountId>;
 
-	/// Returns the asset instances of `class` owned by `who`.
-	fn items(class: &Self::ClassId, who: &AccountId) -> Vec<Self::InstanceId>;
+	/// Returns the owner of the asset `class`, if there is one. For many NFTs this may not make
+	/// any sense, so users of this API should not be surprised to find an asset class results in
+	/// `None` here.
+	fn class_owner(_class: &Self::ClassId) -> Option<AccountId> { None }
 
 	/// Returns the attribute value of `instance` of `class` corresponding to `key`.
 	///
@@ -68,10 +71,44 @@ pub trait Inspect<AccountId> {
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 
+	/// Returns the attribute value of `class` corresponding to `key`.
+	///
+	/// By default this is `None`; no attributes are defined.
+	fn class_attribute(_class: &Self::ClassId, _key: &[u8]) -> Option<Vec<u8>> { None }
+
+	/// Returns the strongly-typed attribute value of `class` corresponding to `key`.
+	///
+	/// By default this just attempts to use `class_attribute`.
+	fn typed_class_attribute<K: Encode, V: Decode>(
+		class: &Self::ClassId,
+		key: &K,
+	) -> Option<V> {
+		key.using_encoded(|d| Self::class_attribute(class, d))
+			.and_then(|v| V::decode(&mut &v[..]).ok())
+	}
+
 	/// Returns `true` if the asset `instance` of `class` may be transferred.
 	///
 	/// Default implementation is that all assets are transferable.
 	fn can_transfer(_class: &Self::ClassId, _instance: &Self::InstanceId) -> bool { true }
+}
+
+/// Interface for enumerating assets in existence or owned by a given account over many collections
+/// of NFTs.
+///
+/// WARNING: These may be a heavy operations. Do not use when execution time is limited.
+pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
+	/// Returns the asset classes in existence.
+	fn classes() -> Vec<Self::ClassId>;
+
+	/// Returns the instances of an asset `class` in existence.
+	fn instances(class: &Self::ClassId) -> Vec<Self::InstanceId>;
+
+	/// Returns the asset instances of all classes owned by `who`.
+	fn owned(who: &AccountId) -> Vec<(Self::ClassId, Self::InstanceId)>;
+
+	/// Returns the asset instances of `class` owned by `who`.
+	fn owned_in_class(class: &Self::ClassId, who: &AccountId) -> Vec<Self::InstanceId>;
 }
 
 /// Trait for providing an interface for multiple classes of NFT-like assets which may be minted,
@@ -118,6 +155,30 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	) -> DispatchResult {
 		key.using_encoded(|k| value.using_encoded(|v|
 			Self::set_attribute(class, instance, k, v)
+		))
+	}
+
+	/// Set attribute `value` of asset `class`'s `key`.
+	///
+	/// By default, this is not a supported operation.
+	fn set_class_attribute(
+		_class: &Self::ClassId,
+		_key: &[u8],
+		_value: &[u8],
+	) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Attempt to set the strongly-typed attribute `value` of `class`'s `key`.
+	///
+	/// By default this just attempts to use `set_attribute`.
+	fn set_typed_class_attribute<K: Encode, V: Encode>(
+		class: &Self::ClassId,
+		key: &K,
+		value: &V,
+	) -> DispatchResult {
+		key.using_encoded(|k| value.using_encoded(|v|
+			Self::set_class_attribute(class, k, v)
 		))
 	}
 }

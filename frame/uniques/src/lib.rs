@@ -36,6 +36,8 @@ pub mod mock;
 mod tests;
 
 mod types;
+mod functions;
+mod impl_nonfungibles;
 pub use types::*;
 
 use sp_std::prelude::*;
@@ -448,32 +450,10 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			ensure!(!Asset::<T, I>::contains_key(class, instance), Error::<T, I>::AlreadyExists);
-
-			Class::<T, I>::try_mutate(&class, |maybe_class_details| -> DispatchResult {
-				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			Self::do_mint(class, instance, owner, |class_details| {
 				ensure!(class_details.issuer == origin, Error::<T, I>::NoPermission);
-
-				let instances = class_details.instances.checked_add(1)
-					.ok_or(ArithmeticError::Overflow)?;
-				class_details.instances = instances;
-
-				let deposit = match class_details.free_holding {
-					true => Zero::zero(),
-					false => T::InstanceDeposit::get(),
-				};
-				T::Currency::reserve(&class_details.owner, deposit)?;
-				class_details.total_deposit += deposit;
-
-				let owner = owner.clone();
-				Account::<T, I>::insert((&owner, &class, &instance), ());
-				let details = InstanceDetails { owner, approved: None, is_frozen: false, deposit};
-				Asset::<T, I>::insert(&class, &instance, details);
 				Ok(())
-			})?;
-
-			Self::deposit_event(Event::Issued(class, instance, owner));
-			Ok(())
+			})
 		}
 
 		/// Destroy a single asset instance.
@@ -499,27 +479,12 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let check_owner = check_owner.map(T::Lookup::lookup).transpose()?;
 
-			let owner = Class::<T, I>::try_mutate(&class, |maybe_class_details| -> Result<T::AccountId, DispatchError> {
-				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				let details = Asset::<T, I>::get(&class, &instance)
-					.ok_or(Error::<T, I>::Unknown)?;
+			Self::do_burn(class, instance, |class_details, details| {
 				let is_permitted = class_details.admin == origin || details.owner == origin;
 				ensure!(is_permitted, Error::<T, I>::NoPermission);
 				ensure!(check_owner.map_or(true, |o| o == details.owner), Error::<T, I>::WrongOwner);
-
-				// Return the deposit.
-				T::Currency::unreserve(&class_details.owner, details.deposit);
-				class_details.total_deposit.saturating_reduce(details.deposit);
-				class_details.instances.saturating_dec();
-				Ok(details.owner)
-			})?;
-
-
-			Asset::<T, I>::remove(&class, &instance);
-			Account::<T, I>::remove((&owner, &class, &instance));
-
-			Self::deposit_event(Event::Burned(class, instance, owner));
-			Ok(())
+				Ok(())
+			})
 		}
 
 		/// Move an asset from the sender account to another.
@@ -547,24 +512,13 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
-
-			let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(!details.is_frozen, Error::<T, I>::Frozen);
-			if details.owner != origin && class_details.admin != origin {
-				let approved = details.approved.take().map_or(false, |i| i == origin);
-				ensure!(approved, Error::<T, I>::NoPermission);
-			}
-
-			Account::<T, I>::remove((&details.owner, &class, &instance));
-			Account::<T, I>::insert((&dest, &class, &instance), ());
-			details.owner = dest;
-			Asset::<T, I>::insert(&class, &instance, &details);
-
-			Self::deposit_event(Event::Transferred(class, instance, origin, details.owner));
-
-			Ok(())
+			Self::do_transfer(class, instance, dest, |class_details, details| {
+				if details.owner != origin && class_details.admin != origin {
+					let approved = details.approved.take().map_or(false, |i| i == origin);
+					ensure!(approved, Error::<T, I>::NoPermission);
+				}
+				Ok(())
+			})
 		}
 
 		/// Reevaluate the deposits on some assets.

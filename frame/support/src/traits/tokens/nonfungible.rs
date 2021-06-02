@@ -40,9 +40,6 @@ pub trait Inspect<AccountId> {
 	/// owner.
 	fn owner(instance: &Self::InstanceId) -> Option<AccountId>;
 
-	/// Returns the items owned by `who`.
-	fn items(who: &AccountId) -> Vec<Self::InstanceId>;
-
 	/// Returns the attribute value of `instance` corresponding to `key`.
 	///
 	/// By default this is `None`; no attributes are defined.
@@ -60,6 +57,18 @@ pub trait Inspect<AccountId> {
 	///
 	/// Default implementation is that all assets are transferable.
 	fn can_transfer(_instance: &Self::InstanceId) -> bool { true }
+}
+
+/// Interface for enumerating assets in existence or owned by a given account over a collection
+/// of NFTs.
+///
+/// WARNING: These may be a heavy operations. Do not use when execution time is limited.
+pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
+	/// Returns the instances of an asset `class` in existence.
+	fn instances() -> Vec<Self::InstanceId>;
+
+	/// Returns the asset instances of all classes owned by `who`.
+	fn owned(who: &AccountId) -> Vec<Self::InstanceId>;
 }
 
 /// Trait for providing an interface for NFT-like assets which may be minted, burned and/or have
@@ -123,9 +132,6 @@ impl<
 	fn owner(instance: &Self::InstanceId) -> Option<AccountId> {
 		<F as nonfungibles::Inspect<AccountId>>::owner(&A::get(), instance)
 	}
-	fn items(who: &AccountId) -> Vec<Self::InstanceId> {
-		<F as nonfungibles::Inspect<AccountId>>::items(&A::get(), who)
-	}
 	fn attribute(instance: &Self::InstanceId, key: &[u8]) -> Option<Vec<u8>> {
 		<F as nonfungibles::Inspect<AccountId>>::attribute(&A::get(), instance, key)
 	}
@@ -134,6 +140,19 @@ impl<
 	}
 	fn can_transfer(instance: &Self::InstanceId) -> bool {
 		<F as nonfungibles::Inspect<AccountId>>::can_transfer(&A::get(), instance)
+	}
+}
+
+impl<
+	F: nonfungibles::InspectEnumerable<AccountId>,
+	A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
+	AccountId,
+> InspectEnumerable<AccountId> for ItemOf<F, A, AccountId> {
+	fn instances() -> Vec<Self::InstanceId> {
+		<F as nonfungibles::InspectEnumerable<AccountId>>::instances(&A::get())
+	}
+	fn owned(who: &AccountId) -> Vec<Self::InstanceId> {
+		<F as nonfungibles::InspectEnumerable<AccountId>>::owned_in_class(&A::get(), who)
 	}
 }
 
