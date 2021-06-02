@@ -143,7 +143,10 @@ impl<K> KeyOrderedEntry<K> {
 	) {
 		let s = self.detach();
 		unsafe {
+			let ptr: *mut KeyOrderedEntry<K> = lru_bound.as_mut();
+			(*s).next = ptr;
 			(*s).prev = (*lru_bound).prev;
+			(*(*s).prev).next = s;
 		}
 		(*lru_bound).prev = s;
 	}
@@ -174,7 +177,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		}
 
 		let to_rem = self.lru_bound.next;
-		self.lru_bound.next = unsafe { (*to_rem).next };
+		unsafe { (*to_rem).detach() };
 		let intervals = if let Some(child) = unsafe { (*to_rem).child_storage_key.as_ref() } {
 			self.child_intervals.get_mut(child)
 				.expect("Removed only when no entry")
@@ -2379,7 +2382,7 @@ mod tests {
 		let entry_size = 18;
 
 		let mut input = LocalOrderedKeys::<u32>::default();
-		input.insert(5, None, Some(6));
+		input.insert(4, None, Some(6));
 
 		let mut cache = LRUOrderedKeys::<u32>::new(3 * entry_size);
 		cache.merge_local_cache(&mut input);
@@ -2388,7 +2391,7 @@ mod tests {
 		assert!(cache.used_size == 2 * entry_size);
 		assert_eq!(None, cache.next_storage_key(&0, None));
 		assert_eq!(None, cache.next_storage_key(&6, None));
-		assert_eq!(Some(Some(6)), cache.next_storage_key(&5, None));
+		assert_eq!(Some(Some(6)), cache.next_storage_key(&4, None));
 
 		input.insert(6, None, Some(10));
 		cache.merge_local_cache(&mut input);
@@ -2398,7 +2401,21 @@ mod tests {
 		// remove 6 to merge interval
 		cache.enact_value_changes(vec![(&6, false)].into_iter(), None);
 		assert!(cache.used_size == 2 * entry_size);
-		assert_eq!(Some(Some(10)), cache.next_storage_key(&5, None));
+		assert_eq!(Some(Some(10)), cache.next_storage_key(&4, None));
+
+		// add starting into interval (with end to valid value).
+		input.insert(5, None, Some(10));
+		cache.merge_local_cache(&mut input);
+		assert!(cache.used_size == 2 * entry_size);
+		assert_eq!(Some(Some(10)), cache.next_storage_key(&4, None));
+
+		// add out of interval to get first interval lru removed
+		input.insert(15, None, Some(21));
+		cache.merge_local_cache(&mut input);
+		assert!(cache.used_size == 2 * entry_size);
+		assert_eq!(None, cache.next_storage_key(&4, None));
+		assert_eq!(None, cache.next_storage_key(&9, None));
+		assert_eq!(Some(Some(21)), cache.next_storage_key(&15, None));
 	}
 }
 
