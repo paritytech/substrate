@@ -32,7 +32,7 @@ use sp_runtime::{
 	RuntimeDebug,
 	traits::{Saturating, Zero},
 };
-use sp_std::{cmp::Ordering, vec::Vec};
+use sp_std::{cmp::Ordering, collections::btree_set::BTreeSet};
 
 /// A raw, unchecked signed submission.
 ///
@@ -89,8 +89,13 @@ pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+pub type SignedSubmissionOf<T> = SignedSubmission<
+	<T as frame_system::Config>::AccountId,
+	BalanceOf<T>,
+	CompactOf<T>,
+>;
 pub type SignedSubmissionsOf<T> = BoundedBTreeSet<
-	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, CompactOf<T>>,
+	SignedSubmissionOf<T>,
 	<T as Config>::SignedMaxSubmissions,
 >;
 
@@ -103,16 +108,17 @@ impl<T: Config> Pallet<T> {
 	/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
 	/// [`QueuedSolution`].
 	pub fn finalize_signed_phase() -> (bool, Weight) {
-		let mut all_submissions: Vec<SignedSubmission<_, _, _>> = <SignedSubmissions<T>>::take();
+		let mut all_submissions: BTreeSet<_> = <SignedSubmissions<T>>::take().into_inner();
 		let mut found_solution = false;
 		let mut weight = T::DbWeight::get().reads(1);
 
-		// Reverse the ordering of submissions: previously it was ordered such that high-scoring
-		// solutions have low indices. Now, the code flows more cleanly if high-scoring solutions
-		// have high indices.
-		all_submissions.reverse();
-
-		while let Some(best) = all_submissions.pop() {
+		// `BTreeSet::pop_last` is what we really want, but unfortunately, it's still nightly-only.
+		let take_highest = |set: &mut BTreeSet<SignedSubmissionOf<T>>| {
+			let highest = set.iter().rev().next()?.clone();
+			set.remove(&highest);
+			Some(highest)
+		};
+		while let Some(best) = take_highest(&mut all_submissions) {
 			let SignedSubmission { solution, who, deposit, reward } = best;
 			let active_voters = solution.compact.voter_count() as u32;
 			let feasibility_weight = {
@@ -211,6 +217,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<BalanceOf<T>, crate::Error<T>> {
 		use crate::Error;
 
+		let score = solution.score;
 		let reward = T::SignedRewardBase::get();
 		let deposit = Self::deposit_for(&solution, size);
 		let submission = SignedSubmission { who: who.clone(), deposit, reward, solution };
@@ -222,9 +229,13 @@ impl<T: Config> Pallet<T> {
 				// This shouldn't ever fail, becuase it means that the queue was simultaneously full
 				// and empty. It can still happen if the queue has a max size of 0, though.
 				let weakest = queue.iter().next().ok_or(Error::<T>::SignedQueueFull)?;
-				if is_score_better(solution.score, weakest.solution.score, threshold) {
+				if is_score_better(score, weakest.solution.score, threshold) {
 					// remove the previous weakest element and unreserve its deposit
-					queue.remove(weakest);
+
+					// unfortunately, because weakest is currently tied to an immutable borrow of
+					// queue, we now have to clone it in order to remove it.
+					let weakest = weakest.clone();
+					queue.remove(&weakest);
 					let _remainder = T::Currency::unreserve(&weakest.who, weakest.deposit);
 					debug_assert!(_remainder.is_zero());
 
