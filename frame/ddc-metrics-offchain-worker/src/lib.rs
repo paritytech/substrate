@@ -35,11 +35,12 @@ extern crate alloc;
 
 use alloc::string::String;
 
-pub const BLOCK_INTERVAL: u32 = 200; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
+pub const BLOCK_INTERVAL: u32 = 100; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
 // Smart contract method selectors
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
+pub const GET_ALL_DDC_NODES_SELECTOR: [u8; 4] = hex!("e6c98b60");
 pub const FINALIZE_METRIC_PERIOD: [u8; 4] = hex!("b269d557");
 
 // Specifying serde path as `alt_serde`
@@ -51,31 +52,12 @@ struct NodeInfo {
     #[serde(deserialize_with = "de_string_to_bytes")]
     id: Vec<u8>,
     httpAddr: String,
-    totalPartitions: u32,
-    reservedPartitions: u32,
-    availablePartitions: u32,
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    status: Vec<u8>,
-    deleted: bool,
 }
 
-#[derive(Deserialize, Default, Debug)]
-#[serde(crate = "alt_serde")]
-#[allow(non_snake_case)]
-struct PartitionInfo {
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    id: Vec<u8>,
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    appPubKey: Vec<u8>,
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    nodeId: Vec<u8>,
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    status: Vec<u8>,
-    isMaster: bool,
-    ringToken: u32,
-    backup: bool,
-    deleted: bool,
-    replicaIndex: u32,
+#[derive(Encode, Decode)]
+pub struct DDCNode {
+	p2p_id: Vec<u8>,
+	url: Vec<u8>,
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -204,11 +186,6 @@ impl<T: Trait> Module<T> {
             Some(contract_address) => contract_address,
         };
 
-        let ddc_url = match Self::get_ddc_url() {
-            None => return Ok(()),
-            Some(ddc_url) => ddc_url,
-        };
-
         let should_proceed = Self::check_if_should_proceed(block_number);
         if should_proceed == false {
             return Ok(());
@@ -222,7 +199,7 @@ impl<T: Trait> Module<T> {
 
         let day_end_ms = day_start_ms + MS_PER_DAY;
 
-        let aggregated_metrics = Self::fetch_all_metrics(ddc_url, day_start_ms).map_err(|err| {
+        let aggregated_metrics = Self::fetch_all_metrics(contract_address.clone(), day_start_ms).map_err(|err| {
             error!("[OCW] HTTP error occurred: {:?}", err);
             "could not fetch metrics"
         })?;
@@ -266,14 +243,6 @@ impl<T: Trait> Module<T> {
             }
             Some(Some(contract_address)) => Some(contract_address),
         }
-    }
-
-    pub fn get_ddc_url() -> Option<Vec<u8>> {
-        let ddc_url = local_storage_get(PERSISTENT, b"ddc-metrics-offchain-worker::ddc_url");
-        if ddc_url.is_none() {
-            warn!("DDC URL is not configured. Please configure it using offchain_localStorageSet with key=ddc-metrics-offchain-worker::ddc_url");
-        }
-        ddc_url
     }
 
     fn check_if_should_proceed(block_number: T::BlockNumber) -> bool {
@@ -331,9 +300,9 @@ impl<T: Trait> Module<T> {
 
         let mut data = match &exec_result {
             Ok(v) => &v.data[..],
-            Err(_err) => {
+            Err(exec_error) => {
                 // Return default value in case of error
-                warn!("[OCW] Error in call get_current_period_ms of smart contract. Return default value for period");
+                warn!("[OCW] Error in call get_current_period_ms of smart contract. Return default value for period. Details: {:?}", exec_error.error);
                 return Ok(Self::get_start_of_day_ms());
             }
         };
@@ -432,14 +401,14 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    fn fetch_all_metrics(ddc_url: Vec<u8>, day_start_ms: u64) -> ResultStr<Vec<MetricInfo>> {
+    fn fetch_all_metrics(contract_id: <T::CT as frame_system::Trait>::AccountId, day_start_ms: u64) -> ResultStr<Vec<MetricInfo>> {
         let a_moment_ago_ms = sp_io::offchain::timestamp()
             .sub(Duration::from_millis(END_TIME_DELAY_MS))
             .unix_millis();
 
         let mut aggregated_metrics = MetricsAggregator::default();
 
-        let nodes = Self::fetch_nodes(ddc_url)?;
+        let nodes = Self::fetch_nodes(contract_id)?;
 
         for node in &nodes {
             let metrics_of_node =
@@ -453,10 +422,37 @@ impl<T: Trait> Module<T> {
         Ok(aggregated_metrics.finish())
     }
 
-    fn fetch_nodes(ddc_url: Vec<u8>) -> ResultStr<Vec<NodeInfo>> {
-        let nodes_url = format!("{}{}", from_utf8(&ddc_url).unwrap(), HTTP_NODES);
+    fn fetch_nodes(contract_id: <T::CT as frame_system::Trait>::AccountId) -> ResultStr<Vec<NodeInfo>> {
+		let call_data = Self::encode_get_all_ddc_nodes();
+		let (exec_result, _gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
+			Default::default(),
+			contract_id,
+			0u32.into(),
+			100_000_000_000,
+			call_data,
+		);
 
-        Self::http_get_json(&nodes_url)
+		let mut data = match &exec_result {
+			Ok(v) => &v.data[..],
+			Err(exec_error) => {
+				warn!("[OCW] Error in call get_all_ddc_nodes of smart contract. Error: {:?}", exec_error.error);
+				return Ok(Vec::new());
+			}
+		};
+
+		let ddc_nodes = Vec::<DDCNode>::decode(&mut data)
+			.map_err(|_| "[OCW] error decoding get_all_ddc_nodes result")?;
+
+		let mut result = Vec::new();
+
+		for ddc_node in ddc_nodes.iter() {
+			result.push(NodeInfo {
+				id: ddc_node.p2p_id.clone(),
+				httpAddr: String::from_utf8(ddc_node.url.clone()).unwrap()
+			});
+		}
+
+		Ok(result)
     }
 
     fn fetch_node_metrics(
@@ -524,6 +520,11 @@ impl<T: Trait> Module<T> {
     /// Must match the contract function here: https://github.com/Cerebellum-Network/cere-enterprise-smart-contracts/blob/dev/cere02/lib.rs
     fn encode_get_current_period_ms() -> Vec<u8> {
         CURRENT_PERIOD_MS.to_vec()
+    }
+
+    /// Prepare encode_get_current_period_ms call params.
+    fn encode_get_all_ddc_nodes() -> Vec<u8> {
+        GET_ALL_DDC_NODES_SELECTOR.to_vec()
     }
 
     /// Prepare finalize_metric_period call params.
