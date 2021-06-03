@@ -63,6 +63,47 @@ benchmarks! {
 	verify {
 		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
+
+	nested_batch_all_varying_keys {
+		let d in 0 .. 256;
+		let l in 1 .. 1000;
+
+		let key_vals: Vec<_> = (0..l).map(|n| (n.encode(), n.encode())).collect();
+		let storage_call = frame_system::Call::set_storage(key_vals).into();
+		let mut call = crate::Call::batch_all(vec![storage_call]);
+		for i in 0 .. d {
+			call = crate::Call::batch_all(vec![call.into()]);
+		}
+	}: batch_all(RawOrigin::Root, vec![call.into()])
+	verify {
+		assert_last_event::<T>(Event::BatchCompleted.into())
+	}
+
+	nested_batch_all {
+		let d in 0 .. 256;
+
+		let l = 1000;
+		let key_vals: Vec<_> = (0..l).map(|n| (n.encode(), n.encode())).collect();
+		let storage_call = frame_system::Call::set_storage(key_vals).into();
+		let mut call = crate::Call::batch_all(vec![storage_call]);
+		for i in 0 .. d {
+			call = crate::Call::batch_all(vec![call.into()]);
+		}
+	}: batch_all(RawOrigin::Root, vec![call.into()])
+	verify {
+		assert_last_event::<T>(Event::BatchCompleted.into())
+	}
+
+	batch_all_varying_keys {
+		let l in 1 .. 1000;
+
+		let key_vals: Vec<_> = (0..l).map(|n| (n.encode(), n.encode())).collect();
+		let storage_call = frame_system::Call::set_storage(key_vals).into();
+		let call = crate::Call::batch_all(vec![storage_call]);
+	}: batch_all(RawOrigin::Root, vec![call.into()])
+	verify {
+		assert_last_event::<T>(Event::BatchCompleted.into())
+	}
 }
 
 impl_benchmark_test_suite!(

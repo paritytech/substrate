@@ -90,7 +90,7 @@ pub mod pallet {
 
 		/// The overarching call type.
 		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-			+ GetDispatchInfo + From<frame_system::Call<Self>>
+			+ GetDispatchInfo + From<frame_system::Call<Self>> + From<Call<Self>>
 			+ UnfilteredDispatchable<Origin=Self::Origin>;
 
 		/// Weight information for extrinsics in this pallet.
