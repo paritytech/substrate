@@ -28,7 +28,7 @@ use wasmi::{
 	Externals, ImportResolver, MemoryInstance, MemoryRef, Module,
 	ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages
 };
-use sp_wasm_interface::{Value, FunctionContext, Pointer, WordSize};
+use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
 /// Index of a function inside the supervisor.
 ///
@@ -86,6 +86,7 @@ struct Imports {
 	memories_map: HashMap<(Vec<u8>, Vec<u8>), Memory>,
 }
 
+#[cfg(feature = "wasmer-sandbox")]
 impl Imports {
 	fn func_by_name(&self, module_name: &str, func_name: &str) -> Option<GuestFuncIndex> {
 		self.func_map.get(&(module_name.as_bytes().to_owned(), func_name.as_bytes().to_owned())).cloned()
@@ -467,6 +468,8 @@ impl<FR> SandboxInstance<FR> {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			BackendInstance::Wasmer(wasmer_instance) => {
+				use sp_wasm_interface::Value;
+
 				let global = wasmer_instance.exports.get_global(name).ok()?;
 				let wasmtime_value = match global.get() {
 					wasmer::Val::I32(val) => Value::I32(val),
@@ -632,6 +635,8 @@ impl Memory {
 	pub fn as_wasmi(&self) -> Option<MemoryRef> {
 		match self {
 			Memory::Wasmi(memory) => Some(memory.clone()),
+
+			#[allow(unreachable_patterns)]
 			_ => None,
 		}
 	}
@@ -641,6 +646,8 @@ impl Memory {
 	pub fn as_wasmer(&self) -> Option<wasmer::Memory> {
 		match self {
 			Memory::Wasmer(memory) => Some(memory.clone()),
+
+			#[allow(unreachable_patterns)]
 			_ => None,
 		}
 	}
@@ -923,6 +930,8 @@ impl<FR> Store<FR> {
 
 							let function = wasmer::Function::new(&context.store, func_ty, move |params| {
 								SCH::with_sandbox_capabilities(|supervisor_externals| {
+									use sp_wasm_interface::Value;
+
 									// Serialize arguments into a byte vector.
 									let invoke_args_data = params
 										.iter()

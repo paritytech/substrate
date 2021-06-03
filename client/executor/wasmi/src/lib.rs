@@ -18,10 +18,10 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-use std::{cell::RefCell, ops::Range, rc::Rc, slice, str, sync::Arc};
+use std::{cell::RefCell, ops::Range, rc::Rc, str, sync::Arc};
 use wasmi::{
 	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
-	RuntimeValue::{I32, I64, self}, TableRef, memory_units::{self, Pages}
+	RuntimeValue::{I32, I64, self}, TableRef, memory_units::Pages,
 };
 use codec::{Encode, Decode};
 use sp_core::sandbox as sandbox_primitives;
@@ -182,7 +182,7 @@ impl Sandbox for FunctionExecutor {
 					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 				};
 
-				let memory_size: memory_units::Bytes = self.inner.memory.current_size().into();
+				let memory_size: wasmi::memory_units::Bytes = self.inner.memory.current_size().into();
 				let dst_range = match checked_range(buf_ptr.into(), len, memory_size.0) {
 					Some(range) => range,
 					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
@@ -191,7 +191,7 @@ impl Sandbox for FunctionExecutor {
 				// This is safe because we construct slice from the same parts as
 				// the memory region itself. Current implementation is single threaded,
 				// so we should not face any synchronization or aliasing issues.
-				let src_buffer = unsafe { slice::from_raw_parts(
+				let src_buffer = unsafe { core::slice::from_raw_parts(
 					sandboxed_memory.data_ptr(),
 					sandboxed_memory.data_size() as usize)
 				};
@@ -237,7 +237,7 @@ impl Sandbox for FunctionExecutor {
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
 				let len = val_len as usize;
 
-				let memory_size: memory_units::Bytes = self.inner.memory.current_size().into();
+				let memory_size: wasmi::memory_units::Bytes = self.inner.memory.current_size().into();
 				let src_range = match checked_range(val_ptr.into(), len, memory_size.0) {
 					Some(range) => range,
 					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
@@ -251,7 +251,7 @@ impl Sandbox for FunctionExecutor {
 				// This is safe because we construct slice from the same parts as
 				// the memory region itself. Current implementation is single threaded,
 				// so we should not face any synchronization or aliasing issues.
-				let dest_buffer = unsafe { slice::from_raw_parts_mut(
+				let dest_buffer = unsafe { core::slice::from_raw_parts_mut(
 					sandboxed_memory.data_ptr(),
 					sandboxed_memory.data_size() as usize)
 				};

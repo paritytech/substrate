@@ -21,7 +21,6 @@
 
 use crate::instance_wrapper::InstanceWrapper;
 use crate::util;
-use core::slice;
 use std::{cell::RefCell, rc::Rc};
 use log::trace;
 use codec::{Encode, Decode};
@@ -220,7 +219,7 @@ impl Sandbox for HostState {
 				// This is safe because we construct slice from the same parts as
 				// the memory region itself. Current implementation is single threaded,
 				// so we should not face any synchronization or aliasing issues.
-				let source = unsafe { slice::from_raw_parts(
+				let source = unsafe { core::slice::from_raw_parts(
 					sandboxed_memory.data_ptr(),
 					sandboxed_memory.data_size() as usize)
 				};
@@ -295,7 +294,7 @@ impl Sandbox for HostState {
 				// This is safe because we construct slice from the same parts as
 				// the memory region itself. Current implementation is single threaded,
 				// so we should not face any synchronization or aliasing issues.
-				let dest = unsafe { slice::from_raw_parts_mut(
+				let dest = unsafe { core::slice::from_raw_parts_mut(
 					sandboxed_memory.data_ptr(),
 					sandboxed_memory.data_size() as usize)
 				};

@@ -23,3 +23,6 @@ sp-runtime-interface = { version = "3.0.0", path = "../../../primitives/runtime-
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }
 scoped-tls = "1.0"
+
+[features]
+wasmer-sandbox = []
