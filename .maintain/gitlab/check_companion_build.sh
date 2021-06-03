@@ -97,4 +97,4 @@ fi
 diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 
 # Test pr or master branch with this Substrate commit.
-time eval "$BUILDSTRING"
+eval "$BUILDSTRING"

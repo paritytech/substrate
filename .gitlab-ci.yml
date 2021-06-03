@@ -453,6 +453,19 @@ check-cumulus-companion-build:
     - cd cumulus && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
 
+check-beefy-companion-build:
+  stage:                           build
+  <<:                              *docker-env
+  <<:                              *test-refs-no-trigger
+  needs:
+    - job:                         test-linux-stable-int
+      artifacts:                   false
+  script:
+    - ./.maintain/gitlab/check_companion_build.sh paritytech grandpa-bridge-gadget 'cargo check'
+  after_script:
+    - cd grandpa-bridge-gadget && git rev-parse --abbrev-ref HEAD
+  allow_failure:                   true
+
 test-browser-node:
   stage:                           build
   <<:                              *docker-env
