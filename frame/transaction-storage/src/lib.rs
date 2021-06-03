@@ -66,7 +66,7 @@ pub struct TransactionInfo {
 	/// Size of indexed data in bytes.
 	size: u32,
 	/// Total number of chunks added in the block with this transaction. This
-	/// is used find transactino info by block chunk index using binary search.
+	/// is used find transaction info by block chunk index using binary search.
 	block_chunks: u32,
 }
 
