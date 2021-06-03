@@ -285,7 +285,7 @@ pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
 
 /// Wrapper type that implements the configurations needed for the on-chain backup.
-struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
+pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
 impl<T: Config> onchain::Config for OnChainConfig<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
@@ -1277,27 +1277,17 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
-		if Self::round() > 1 {
-			match Self::do_elect() {
-				Ok((supports, weight)) => {
-					// all went okay, put sign to be Off, clean snapshot, etc.
-					Self::rotate_round();
-					Ok((supports, weight))
-				}
-				Err(why) => {
-					log!(error, "Entering emergency mode.");
-					<CurrentPhase<T>>::put(Phase::Emergency);
-					Err(why)
-				}
+		match Self::do_elect() {
+			Ok((supports, weight)) => {
+				// all went okay, put sign to be Off, clean snapshot, etc.
+				Self::rotate_round();
+				Ok((supports, weight))
 			}
-		} else {
-			// first round, always run on-chain.
-			// TODO: move all of this into a new trait like `GenesisElectionProvide`, or a new
-			// function in the same trait.
-			let result = Self::onchain_fallback();
-			log!(info, "Finalized initial election round with onchain compute.");
-			Self::rotate_round();
-			result
+			Err(why) => {
+				log!(error, "Entering emergency mode.");
+				<CurrentPhase<T>>::put(Phase::Emergency);
+				Err(why)
+			}
 		}
 	}
 }

@@ -91,7 +91,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	ValidatorCount::put(1);
 
 	// Start a new Era
-	let new_validators = Staking::<T>::try_trigger_new_era(SessionIndex::one()).unwrap();
+	let new_validators = Staking::<T>::try_trigger_new_era(SessionIndex::one(), true).unwrap();
 
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
@@ -484,7 +484,7 @@ benchmarks! {
 		)?;
 		let session_index = SessionIndex::one();
 	}: {
-		let validators = Staking::<T>::try_trigger_new_era(session_index)
+		let validators = Staking::<T>::try_trigger_new_era(session_index, true)
 			.ok_or("`new_era` failed")?;
 		assert!(validators.len() == v as usize);
 	}
@@ -501,7 +501,7 @@ benchmarks! {
 			None,
 		)?;
 		// Start a new Era
-		let new_validators = Staking::<T>::try_trigger_new_era(SessionIndex::one()).unwrap();
+		let new_validators = Staking::<T>::try_trigger_new_era(SessionIndex::one(), true).unwrap();
 		assert!(new_validators.len() == v as usize);
 
 		let current_era = CurrentEra::get().unwrap();
