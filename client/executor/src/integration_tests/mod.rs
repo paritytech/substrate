@@ -831,7 +831,6 @@ mod linux {
 		panic!("smaps doesn't contain rss!");
 	}
 
-	// We test this only under unix because
 	test_wasm_execution!(compiled_only memory_consumption);
 	fn memory_consumption(wasm_method: WasmExecutionMethod) {
 		let runtime = mk_test_runtime(wasm_method, 1024);
