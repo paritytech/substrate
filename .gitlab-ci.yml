@@ -265,7 +265,7 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
-    - 'node-bench-regression-guard --reference artifacts/benches/master-* 
+    - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
 cargo-check-subkey:
@@ -435,9 +435,22 @@ check-polkadot-companion-build:
     - job:                         test-linux-stable-int
       artifacts:                   false
   script:
-    - ./.maintain/gitlab/check_polkadot_companion_build.sh
+    - ./.maintain/gitlab/check_companion_build.sh paritytech polkadot
   after_script:
     - cd polkadot && git rev-parse --abbrev-ref HEAD
+  allow_failure:                   true
+
+check-cumulus-companion-build:
+  stage:                           build
+  <<:                              *docker-env
+  <<:                              *test-refs-no-trigger
+  needs:
+    - job:                         test-linux-stable-int
+      artifacts:                   false
+  script:
+    - ./.maintain/gitlab/check_companion_build.sh paritytech cumulus
+  after_script:
+    - cd cumulus && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
 
 test-browser-node:
@@ -699,7 +712,7 @@ trigger-simnet:
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
-  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here, 
+  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here,
   # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   variables:
     TRGR_PROJECT:                  ${CI_PROJECT_NAME}
