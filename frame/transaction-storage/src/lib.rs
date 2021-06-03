@@ -35,7 +35,7 @@ use frame_support::{
 use sp_std::prelude::*;
 use sp_std::{result};
 use codec::{Encode, Decode};
-use sp_runtime::traits::{Saturating, BlakeTwo256, Hash, Zero};
+use sp_runtime::traits::{Saturating, BlakeTwo256, Hash, Zero, One};
 use sp_transaction_storage_proof::{
 	TransactionStorageProof, InherentError,
 	random_chunk, encode_index,
@@ -50,11 +50,12 @@ pub use pallet::*;
 pub use weights::WeightInfo;
 
 /// Maximum bytes that can be stored in one transaction.
-// Increasing it further also requires raising the allocator limit.
-pub const MAX_DATA_SIZE: u32 = 8 * 1024 * 1024;
+// Setting higher limit also requires raising the allocator limit.
+pub const DEFAULT_MAX_TRANSACTION_SIZE: u32 = 8 * 1024 * 1024;
+pub const DEFAULT_MAX_BLOCK_TRANSACTIONS: u32 = 512;
 
 /// State data for a stored transaction.
-#[derive(Encode, Decode, sp_runtime::RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, sp_runtime::RuntimeDebug, PartialEq, Eq)]
 pub struct TransactionInfo {
 	/// Chunk trie root.
 	chunk_root: <BlakeTwo256 as Hash>::Output,
@@ -62,6 +63,13 @@ pub struct TransactionInfo {
 	content_hash: <BlakeTwo256 as Hash>::Output,
 	/// Size of indexed data in bytes.
 	size: u32,
+	/// Total number of chunks added in the block with this transaction. This
+	/// is used find transactino info by block chunk index using binary search.
+	block_chunks: u32,
+}
+
+fn num_chunks(bytes: u32) -> u32 {
+	((bytes as u64 + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as u32
 }
 
 #[frame_support::pallet]
@@ -100,6 +108,16 @@ pub mod pallet {
 		MissingProof,
 		/// Unable to verify proof becasue state data is missing.
 		MissingStateData,
+		/// Double proof check in the block.
+		DoubleCheck,
+		/// Storage proof was not checked in the block.
+		ProofNotChecked,
+		/// Transaction is too large.
+		TransactionTooLarge,
+		/// Too many transactions in the block.
+		TooManyTransactions,
+		/// Attempted to call `store` outside of block execution.
+		BadContext,
 	}
 
 	#[pallet::pallet]
@@ -109,33 +127,43 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
+			// Drop obsolete roots. The proof for `obsolete` will be checked later
+			// in this block, so we drop `obsolete` - 1.
 			let period = <StoragePeriod<T>>::get();
-			let obsolete = n.saturating_sub(period);
-			let transaction_count = if obsolete > Zero::zero() {
-				<TransactionCount<T>>::get(obsolete)
-			} else {
-				0
-			};
-			// return weight for `on_finalize` does
-			T::WeightInfo::on_finalize(transaction_count)
+			let obsolete = n.saturating_sub(period.saturating_add(One::one()));
+			if obsolete > Zero::zero() {
+				<Transactions<T>>::remove(obsolete);
+				<ChunkCount<T>>::remove(obsolete);
+			}
+			// 2 writes in `on_initialize` and 2 writes + 2 reads in `on_finalize`
+			T::DbWeight::get().reads_writes(2, 4)
 		}
 
 		fn on_finalize(n: T::BlockNumber) {
-			<TransactionCount<T>>::insert(n, <Counter<T>>::get());
-			<Counter<T>>::kill();
-			// Drop obsolete roots
-			let period = <StoragePeriod<T>>::get();
-			let obsolete = n.saturating_sub(period);
-			if obsolete > Zero::zero() {
-				<TransactionRoots<T>>::remove_prefix(obsolete);
-				<TransactionCount<T>>::remove(obsolete);
+			assert!(
+				<ProofChecked<T>>::take()
+				|| {
+					// Proof is not required for early or empty blocks.
+					let number = <frame_system::Pallet<T>>::block_number();
+					let period = <StoragePeriod<T>>::get();
+					let target_number = number.saturating_sub(period);
+					target_number.is_zero() || <ChunkCount<T>>::get(target_number) == 0
+				},
+				"Storage proof must be checked once in the block"
+			);
+			// Insert new transactions
+			let transactions = <BlockTransactions<T>>::take();
+			let total_chunks = transactions.last().map_or(0, |t| t.block_chunks);
+			if total_chunks != 0 {
+				<ChunkCount<T>>::insert(n, total_chunks);
+				<Transactions<T>>::insert(n, transactions);
 			}
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Index and store data on chain. Minimum data size is 1 bytes, maximum is `MAX_DATA_SIZE`.
+		/// Index and store data on chain. Minimum data size is 1 bytes, maximum is `MaxTransactionSize`.
 		/// Data will be removed after `STORAGE_PERIOD` blocks, unless `renew` is called.
 		/// # <weight>
 		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.
@@ -147,24 +175,35 @@ pub mod pallet {
 			data: Vec<u8>,
 		) -> DispatchResult {
 			ensure!(data.len() > 0, Error::<T>::EmptyTransaction);
+			ensure!(data.len() <= MaxTransactionSize::<T>::get() as usize, Error::<T>::TransactionTooLarge);
 			Self::apply_fee(origin, data.len() as u32)?;
 
 			// Chunk data and compute storage root
+			let chunk_count = num_chunks(data.len() as u32);
 			let chunks = data.chunks(CHUNK_SIZE).map(|c| c.to_vec()).collect();
 			let root = sp_io::trie::blake2_256_ordered_root(chunks);
 
 			let content_hash = sp_io::hashing::blake2_256(&data);
-			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index().unwrap();
+			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index().ok_or_else(
+				|| Error::<T>::BadContext)?;
 			sp_io::transaction_index::index(extrinsic_index, data.len() as u32, content_hash);
 
-			let block_num = <frame_system::Pallet<T>>::block_number();
-			let counter = <Counter<T>>::mutate(|c| { *c += 1; *c - 1 });
-			<TransactionRoots<T>>::insert(block_num, counter, TransactionInfo {
-				chunk_root: root,
-				size: data.len() as u32,
-				content_hash: content_hash.into(),
-			});
-			Self::deposit_event(Event::Stored(counter));
+			let mut index = 0;
+			<BlockTransactions<T>>::mutate(|transactions| {
+				if transactions.len() + 1 > MaxBlockTransactions::<T>::get() as usize {
+					return Err(Error::<T>::TooManyTransactions)
+				}
+				let total_chunks = transactions.last().map_or(0, |t| t.block_chunks) + chunk_count;
+				index = transactions.len() as u32;
+				transactions.push(TransactionInfo {
+					chunk_root: root,
+					size: data.len() as u32,
+					content_hash: content_hash.into(),
+					block_chunks: total_chunks,
+				});
+				Ok(())
+			})?;
+			Self::deposit_event(Event::Stored(index));
 			Ok(())
 		}
 
@@ -181,16 +220,30 @@ pub mod pallet {
 			block: T::BlockNumber,
 			index: u32,
 		) -> DispatchResultWithPostInfo {
-			let info = <TransactionRoots<T>>::get(block, index).ok_or(Error::<T>::RenewedNotFound)?;
+			let transactions = <Transactions<T>>::get(block).ok_or(Error::<T>::RenewedNotFound)?;
+			let info = transactions.get(index as usize).ok_or(Error::<T>::RenewedNotFound)?;
 			Self::apply_fee(origin, info.size)?;
 
 			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index().unwrap();
 			sp_io::transaction_index::renew(extrinsic_index, info.content_hash.into());
 
-			let counter = <Counter<T>>::mutate(|c| { *c += 1; *c - 1 });
-			let block_num = <frame_system::Pallet<T>>::block_number();
-			<TransactionRoots<T>>::insert(block_num, counter, info);
-			Self::deposit_event(Event::Renewed(counter));
+			let mut index = 0;
+			<BlockTransactions<T>>::mutate(|transactions| {
+				if transactions.len() + 1 > MaxBlockTransactions::<T>::get() as usize {
+					return Err(Error::<T>::TooManyTransactions)
+				}
+				let chunks = num_chunks(info.size);
+				let total_chunks = transactions.last().map_or(0, |t| t.block_chunks) + chunks;
+				index = transactions.len() as u32;
+				transactions.push(TransactionInfo {
+					chunk_root: info.chunk_root,
+					size: info.size,
+					content_hash: info.content_hash,
+					block_chunks: total_chunks,
+				});
+				Ok(())
+			})?;
+			Self::deposit_event(Event::Renewed(index));
 			Ok(().into())
 		}
 
@@ -204,48 +257,31 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::check_proof_max(), DispatchClass::Mandatory))]
 		pub(super) fn check_proof(
 			origin: OriginFor<T>,
-			proof: Option<TransactionStorageProof>,
+			proof: TransactionStorageProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
+			ensure!(!ProofChecked::<T>::get(), Error::<T>::DoubleCheck);
 			let number = <frame_system::Pallet<T>>::block_number();
 			let period = <StoragePeriod<T>>::get();
 			let target_number = number.saturating_sub(period);
-			if target_number.is_zero() {
-				ensure!(proof.is_none(), Error::<T>::UnexpectedProof);
-				return Ok(().into())
-			}
-			let transaction_count = <TransactionCount<T>>::get(target_number);
-			let mut total_chunks = 0;
-			for t in 0 .. transaction_count {
-				match <TransactionRoots<T>>::get(target_number, t) {
-					Some(info) => total_chunks +=
-						((info.size as u64 + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as u32,
-					None => break,
-				}
-			}
-			if total_chunks == 0 {
-				ensure!(proof.is_none(), Error::<T>::UnexpectedProof);
-				return Ok(().into())
-			}
-			let proof = proof.ok_or_else(|| Error::<T>::MissingProof)?;
+			ensure!(!target_number.is_zero(), Error::<T>::UnexpectedProof);
+			let total_chunks = <ChunkCount<T>>::get(target_number);
+			ensure!(total_chunks != 0, Error::<T>::UnexpectedProof);
 			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 			let selected_chunk_index = random_chunk(parent_hash.as_ref(), total_chunks);
-			total_chunks = 0;
-			let mut t = 0;
-			let (info, chunk_index) = loop {
-				match <TransactionRoots<T>>::get(target_number, t) {
-					Some(info) => {
-						let chunks = ((info.size as u64 + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as u32;
-						if total_chunks + chunks >= selected_chunk_index {
-							break (info, selected_chunk_index - total_chunks)
-						}
-						total_chunks += chunks;
-					},
-					None => Err(Error::<T>::MissingStateData)?,
-				}
-				t += 1;
+			let (info, chunk_index) = match <Transactions<T>>::get(target_number) {
+				Some(infos) => {
+					let index = match infos.binary_search_by_key(&selected_chunk_index, |info| info.block_chunks) {
+						Ok(index) => index,
+						Err(index) => index,
+					};
+					let info = infos.get(index).ok_or_else(|| Error::<T>::MissingStateData)?.clone();
+					let chunks = num_chunks(info.size);
+					let prev_chunks = info.block_chunks - chunks;
+					(info, selected_chunk_index - prev_chunks)
+				},
+				None => Err(Error::<T>::MissingStateData)?,
 			};
-
 			ensure!(
 				sp_io::trie::blake2_256_verify_proof(
 					info.chunk_root,
@@ -255,6 +291,7 @@ pub mod pallet {
 				),
 				Error::<T>::InvalidProof
 			);
+			ProofChecked::<T>::put(true);
 			Self::deposit_event(Event::ProofChecked);
 			Ok(().into())
 		}
@@ -271,22 +308,20 @@ pub mod pallet {
 		ProofChecked,
 	}
 
-	/// Collection of extrinsic storage roots for the current block.
+	/// Collection of transaction metadata by block number.
 	#[pallet::storage]
 	#[pallet::getter(fn transaction_roots)]
-	pub(super) type TransactionRoots<T: Config> = StorageDoubleMap<
+	pub(super) type Transactions<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		T::BlockNumber,
-		Blake2_128Concat,
-		u32,
-		TransactionInfo,
+		Vec<TransactionInfo>,
 		OptionQuery,
 	>;
 
 	/// Count indexed chunks for each block.
 	#[pallet::storage]
-	pub(super) type TransactionCount<T: Config> = StorageMap<
+	pub(super) type ChunkCount<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		T::BlockNumber,
@@ -300,17 +335,41 @@ pub mod pallet {
 	pub(super) type ByteFee<T: Config> = StorageValue<_, BalanceOf<T>>;
 
 	#[pallet::storage]
-	pub(super) type Counter<T: Config> = StorageValue<_, u32, ValueQuery>;
+	#[pallet::getter(fn entry_fee)]
+	/// Storage fee per transaction.
+	pub(super) type EntryFee<T: Config> = StorageValue<_, BalanceOf<T>>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn max_transaction_size)]
+	/// Maximum data set in a single transaction in bytes.
+	pub(super) type MaxTransactionSize<T: Config> = StorageValue<_, u32, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn max_block_transactions)]
+	/// Maximum number of indexed transactions in the block.
+	pub(super) type MaxBlockTransactions<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// Storage period for data in blocks. Should match `sp_storage_proof::DEFAULT_STORAGE_PERIOD`
 	/// for block authoring.
 	#[pallet::storage]
 	pub(super) type StoragePeriod<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
+	// Intermediates
+	#[pallet::storage]
+	pub(super) type BlockTransactions<T: Config> = StorageValue<_, Vec<TransactionInfo>, ValueQuery>;
+
+	/// Was the proof checked in this block?
+	#[pallet::storage]
+	pub(super) type ProofChecked<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub byte_fee: BalanceOf<T>,
+		pub entry_fee: BalanceOf<T>,
 		pub storage_period: T::BlockNumber,
+		pub max_block_transactions: u32,
+		pub max_transaction_size: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -318,7 +377,10 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				byte_fee: 10u32.into(),
+				entry_fee: 1000u32.into(),
 				storage_period: DEFAULT_STORAGE_PERIOD.into(),
+				max_block_transactions: DEFAULT_MAX_BLOCK_TRANSACTIONS,
+				max_transaction_size: DEFAULT_MAX_TRANSACTION_SIZE,
 			}
 		}
 	}
@@ -327,6 +389,9 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			<ByteFee<T>>::put(&self.byte_fee);
+			<EntryFee<T>>::put(&self.entry_fee);
+			<MaxTransactionSize<T>>::put(&self.max_transaction_size);
+			<MaxBlockTransactions<T>>::put(&self.max_block_transactions);
 			<StoragePeriod<T>>::put(&self.storage_period);
 		}
 	}
@@ -339,7 +404,7 @@ pub mod pallet {
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 			let proof = data.get_data::<TransactionStorageProof>(&Self::INHERENT_IDENTIFIER).unwrap_or(None);
-			Some(Call::check_proof(proof))
+			proof.map(Call::check_proof)
 		}
 
 		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
@@ -355,7 +420,8 @@ pub mod pallet {
 		fn apply_fee(origin: OriginFor<T>, size: u32) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let byte_fee = ByteFee::<T>::get().ok_or(Error::<T>::NotConfigured)?;
-			let fee = byte_fee.saturating_mul(size.into());
+			let entry_fee = EntryFee::<T>::get().ok_or(Error::<T>::NotConfigured)?;
+			let fee = byte_fee.saturating_mul(size.into()).saturating_add(entry_fee);
 			ensure!(T::Currency::can_slash(&sender, fee), Error::<T>::InsufficientFunds);
 			T::Currency::slash(&sender, fee);
 			Ok(())

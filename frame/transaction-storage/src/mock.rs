@@ -18,12 +18,14 @@
 //! Test environment for transaction-storage pallet.
 
 use crate as pallet_transaction_storage;
+use crate::TransactionStorageProof;
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, BuildStorage};
 use frame_support::{
 	parameter_types,
 	traits::{OnInitialize, OnFinalize},
 };
+
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 pub type Block = frame_system::mocking::MockBlock<Test>;
@@ -104,13 +106,19 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		pallet_transaction_storage: pallet_transaction_storage::GenesisConfig::<Test> {
 			storage_period: 10,
 			byte_fee: 2,
+			entry_fee: 200,
+			max_block_transactions: crate::DEFAULT_MAX_BLOCK_TRANSACTIONS,
+			max_transaction_size: crate::DEFAULT_MAX_TRANSACTION_SIZE,
 		},
 	}.build_storage().unwrap();
 	t.into()
 }
 
-pub fn run_to_block(n: u64) {
+pub fn run_to_block(n: u64, f: impl Fn() -> Option<TransactionStorageProof>) {
 	while System::block_number() < n {
+		if let Some(proof) = f() {
+			TransactionStorage::check_proof(Origin::none(), proof).unwrap();
+		}
 		TransactionStorage::on_finalize(System::block_number());
 		System::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);

@@ -143,7 +143,7 @@ pub mod registration {
 	type Hasher = sp_core::Blake2Hasher;
 	type TrieLayout = sp_trie::Layout::<Hasher>;
 
-	/// Register uncles inherent data provider, if not registered already.
+	/// Create a new inherent data provider instance for a given parent block hash.
 	pub fn new_data_provider<B, C>(
 		client: &C,
 		parent: &B::Hash,

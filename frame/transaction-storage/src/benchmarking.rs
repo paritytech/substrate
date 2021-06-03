@@ -29,7 +29,9 @@ use frame_support::{traits::{Currency, OnFinalize, OnInitialize}};
 
 use crate::Pallet as TransactionStorage;
 
-const MAX_EXTRINSICS: u32 = 100;
+/// Assuming 16Mb blocks
+const MAX_FULL_EXTRINSICS: u32 = 20;
+const MAX_DATA_SIZE: u32 = 8 * 1024 * 1024;
 
 const PROOF: &[u8] = &hex_literal::hex!("
 	0104000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -105,7 +107,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
 	verify {
-		assert!(TransactionRoots::<T>::get(T::BlockNumber::one(), 0u32).is_some());
+		assert!(!BlockTransactions::<T>::get().is_empty());
 		assert_last_event::<T>(Event::Stored(0).into());
 	}
 
@@ -116,16 +118,17 @@ benchmarks! {
 			RawOrigin::Signed(caller.clone()).into(),
 			vec![0u8; MAX_DATA_SIZE as usize],
 		)?;
+		run_to_block::<T>(1u32.into());
 	}: _(RawOrigin::Signed(caller.clone()), T::BlockNumber::zero(), 0)
 	verify {
-		assert_last_event::<T>(Event::Renewed(1).into());
+		assert_last_event::<T>(Event::Renewed(0).into());
 	}
 
 	check_proof_max {
 		run_to_block::<T>(1u32.into());
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		for _ in 0 .. MAX_EXTRINSICS {
+		for _ in 0 .. MAX_FULL_EXTRINSICS {
 			TransactionStorage::<T>::store(
 				RawOrigin::Signed(caller.clone()).into(),
 				vec![0u8; MAX_DATA_SIZE as usize],
@@ -135,31 +138,9 @@ benchmarks! {
 		let random_hash = [0u8];
 		let mut encoded_proof = PROOF;
 		let proof = TransactionStorageProof::decode(&mut encoded_proof).unwrap();
-	}: check_proof(RawOrigin::None, Some(proof))
+	}: check_proof(RawOrigin::None, proof)
 	verify {
 		assert_last_event::<T>(Event::ProofChecked.into());
-	}
-
-	on_finalize {
-		let l in 0 .. MAX_EXTRINSICS;
-		run_to_block::<T>(1u32.into());
-		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		for _ in 0 .. l {
-			TransactionStorage::<T>::store(
-				RawOrigin::Signed(caller.clone()).into(),
-				vec![0u8],
-			)?;
-		}
-		run_to_block::<T>(StoragePeriod::<T>::get() + T::BlockNumber::one());
-		if l != 0 {
-			assert!(TransactionRoots::<T>::get(T::BlockNumber::one(), 0).is_some());
-		}
-	}: {
-		<TransactionStorage<T>>::on_finalize(frame_system::Pallet::<T>::block_number())
-	}
-	verify {
-		assert_eq!(TransactionRoots::<T>::get(T::BlockNumber::one(), 0), None);
 	}
 }
 
