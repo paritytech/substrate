@@ -57,6 +57,8 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 
 	/// Returns the attribute value of `instance` of `class` corresponding to `key`.
 	///
+	/// When `key` is empty, we return the instance metadata value.
+	///
 	/// By default this is `None`; no attributes are defined.
 	fn class_attribute(class: &Self::ClassId, key: &[u8])
 		-> Option<Vec<u8>>
