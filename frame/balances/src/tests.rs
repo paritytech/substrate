@@ -464,7 +464,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				System::assert_last_event(
-					Event::pallet_balances(crate::Event::ReserveRepatriated(1, 2, 41, Status::Free))
+					Event::Balances(crate::Event::ReserveRepatriated(1, 2, 41, Status::Free))
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -683,18 +683,18 @@ macro_rules! decl_tests {
 					System::set_block_number(2);
 					assert_ok!(Balances::reserve(&1, 10));
 
-					System::assert_last_event(Event::pallet_balances(crate::Event::Reserved(1, 10)));
+					System::assert_last_event(Event::Balances(crate::Event::Reserved(1, 10)));
 
 					System::set_block_number(3);
 					assert!(Balances::unreserve(&1, 5).is_zero());
 
-					System::assert_last_event(Event::pallet_balances(crate::Event::Unreserved(1, 5)));
+					System::assert_last_event(Event::Balances(crate::Event::Unreserved(1, 5)));
 
 					System::set_block_number(4);
 					assert_eq!(Balances::unreserve(&1, 6), 1);
 
 					// should only unreserve 5
-					System::assert_last_event(Event::pallet_balances(crate::Event::Unreserved(1, 5)));
+					System::assert_last_event(Event::Balances(crate::Event::Unreserved(1, 5)));
 				});
 		}
 
@@ -709,9 +709,9 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::frame_system(system::Event::NewAccount(1)),
-							Event::pallet_balances(crate::Event::Endowed(1, 100)),
-							Event::pallet_balances(crate::Event::BalanceSet(1, 100, 0)),
+							Event::System(system::Event::NewAccount(1)),
+							Event::Balances(crate::Event::Endowed(1, 100)),
+							Event::Balances(crate::Event::BalanceSet(1, 100, 0)),
 						]
 					);
 
@@ -721,8 +721,8 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::frame_system(system::Event::KilledAccount(1)),
-							Event::pallet_balances(crate::Event::DustLost(1, 99)),
+							Event::System(system::Event::KilledAccount(1)),
+							Event::Balances(crate::Event::DustLost(1, 99)),
 						]
 					);
 				});
@@ -739,9 +739,9 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::frame_system(system::Event::NewAccount(1)),
-							Event::pallet_balances(crate::Event::Endowed(1, 100)),
-							Event::pallet_balances(crate::Event::BalanceSet(1, 100, 0)),
+							Event::System(system::Event::NewAccount(1)),
+							Event::Balances(crate::Event::Endowed(1, 100)),
+							Event::Balances(crate::Event::BalanceSet(1, 100, 0)),
 						]
 					);
 
@@ -751,7 +751,7 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::frame_system(system::Event::KilledAccount(1))
+							Event::System(system::Event::KilledAccount(1))
 						]
 					);
 				});
