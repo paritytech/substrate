@@ -354,6 +354,18 @@ impl Signature {
 			.ok()
 			.map(|recovered| Public(recovered.serialize_compressed()))
 	}
+
+	/// Recover the public key from this signature and a pre-hashed message.
+	#[cfg(feature = "full_crypto")]
+	pub fn recover_prehashed(&self, message: &[u8; 32]) -> Option<Public> {
+		let message = secp256k1::Message::parse(message);
+		
+		let sig: (_, _) = self.try_into().ok()?;
+
+		secp256k1::recover(&message, &sig.0, &sig.1)
+			.ok()
+			.map(|key| Public(key.serialize_compressed()))
+	}
 }
 
 #[cfg(feature = "full_crypto")]
@@ -539,6 +551,7 @@ impl Pair {
 	}
 
 	/// Verify a signature on a pre-hashed message. Return `true` if the signature is valid
+	/// and thus matches the given `public` key.
 	pub fn verify_prehashed(sig: &Signature, message: &[u8; 32], public: &Public) -> bool {
 		let message = secp256k1::Message::parse(message);
 	
@@ -819,5 +832,24 @@ mod test {
 		// `msg` and `sig` don't match
 		let msg = keccak_256(b"this is a different message");
 		assert!(!Pair::verify_prehashed(&sig, &msg, &pair.public()));
+	}
+
+	#[test]
+	fn recover_prehashed_works() {
+		let (pair, _, _) = Pair::generate_with_phrase(Some("password"));
+
+		// recovered key matches signing key
+		let msg = keccak_256(b"this should be hashed");
+		let sig = pair.sign_prehashed(&msg);
+		let key = sig.recover_prehashed(&msg).unwrap();
+		assert_eq!(pair.public(), key);
+
+		// recovered key is useable
+		assert!(Pair::verify_prehashed(&sig, &msg, &key));
+
+		// recovered key and signing key don't match
+		let msg = keccak_256(b"this is a different message");
+		let key = sig.recover_prehashed(&msg).unwrap();
+		assert_ne!(pair.public(), key);
 	}
 }
