@@ -39,6 +39,14 @@ extern "C" {
 /// the initialized value at the start of a runtime call.
 static mut MUTABLE_STATIC: u64 = 32;
 
+#[cfg(not(feature = "std"))]
+/// This is similar to `MUTABLE_STATIC`. The tests need `MUTABLE_STATIC` for testing that
+/// non-null initialization data is properly restored during instance reusing.
+///
+/// `MUTABLE_STATIC_BSS` on the other hand focuses on the zeroed data. This is important since there
+/// may be differences in handling zeroed and non-zeroed data.
+static mut MUTABLE_STATIC_BSS: [u8; 32] = [0; 32];
+
 sp_core::wasm_export_functions! {
 	fn test_calling_missing_external() {
 		unsafe { missing_external() }
@@ -276,6 +284,13 @@ sp_core::wasm_export_functions! {
 		unsafe {
 			MUTABLE_STATIC += 1;
 			MUTABLE_STATIC
+		}
+	}
+
+	fn returns_mutable_static_bss(idx: u32) -> u8 {
+		unsafe {
+			MUTABLE_STATIC_BSS[idx as usize] += 1;
+			MUTABLE_STATIC_BSS[idx as usize]
 		}
 	}
 
