@@ -23,19 +23,10 @@ use frame_support_procedural_tools::generate_crate_access_2018;
 pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
 
-	let crate_ = generate_crate_access_2018("frame-support")?;
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
-			use #crate_::storage::{with_transaction, TransactionOutcome};
-			with_transaction(|| {
-				let r = (|| { #block })();
-				if r.is_ok() {
-					TransactionOutcome::Commit(r)
-				} else {
-					TransactionOutcome::Rollback(r)
-				}
-			})
+			#block
 		}
 	};
 

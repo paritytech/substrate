@@ -178,8 +178,18 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 							#frame_support::sp_tracing::enter_span!(
 								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
 							);
-							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
-								.map(Into::into).map_err(Into::into)
+							use #frame_support::storage::{with_transaction, TransactionOutcome};
+							with_transaction(|| {
+								let r = (|| {
+									<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
+										.map(Into::into).map_err(Into::into)
+								})();
+								if r.is_ok() {
+									TransactionOutcome::Commit(r)
+								} else {
+									TransactionOutcome::Rollback(r)
+								}
+							})
 						},
 					)*
 					Self::__Ignore(_, _) => {
