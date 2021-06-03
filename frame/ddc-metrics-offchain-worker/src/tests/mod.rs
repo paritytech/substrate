@@ -1,3 +1,4 @@
+use codec::Encode;
 use frame_support::traits::{Currency, OffchainWorker};
 use frame_system::Trait as FST;
 use pallet_contracts::Gas;
@@ -216,11 +217,6 @@ fn should_submit_signed_transaction_on_chain() {
             b"ddc-metrics-offchain-worker::sc_address",
             contract_id.as_ref(),
         );
-        sp_io::offchain::local_storage_set(
-            kind,
-            b"ddc-metrics-offchain-worker::ddc_url",
-            b"https://TEST_DDC",
-        );
 
         // Trigger the worker.
         DdcMetricsOffchainWorker::offchain_worker(0);
@@ -265,7 +261,7 @@ fn deploy_contract() -> AccountId {
     // Load the contract code.
     let wasm = &include_bytes!("./test_data/ddc.wasm")[..];
     let wasm_hash = <T as FST>::Hashing::hash(wasm);
-    let contract_args = vec![];
+    let contract_args = vec![0, 0, 0, 0, 0, 0, 0, 0, 0];
 
     // Deploy the contract.
     let endowment = contracts::Config::<T>::subsistence_threshold_uncached();
@@ -286,6 +282,18 @@ fn deploy_contract() -> AccountId {
         &contract_args,
         &alice,
     );
+
+    //	let mut call_data = hex!("11a9e1b9").to_vec();
+    //	"PEER_ID".encode_to(&mut call_data);
+    //	"https://TEST_DDC".encode_to(&mut call_data);
+    //
+    //	let _result = Contracts::call(
+    //		Origin::signed(alice.clone()),
+    //		contract_id.clone(),
+    //		0u32.into(),
+    //		100_000_000_000,
+    //		call_data.clone(),
+    //	);
 
     contract_id
 }

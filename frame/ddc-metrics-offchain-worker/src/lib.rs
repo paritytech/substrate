@@ -21,14 +21,12 @@ use frame_system::offchain::{
 use hex_literal::hex;
 use pallet_contracts;
 use sp_core::crypto::KeyTypeId;
-use sp_core::offchain::StorageKind::PERSISTENT;
-use sp_io::offchain::local_storage_get;
 use sp_runtime::{
     offchain::{http, storage::StorageValueRef, Duration},
     traits::StaticLookup,
     AccountId32,
 };
-use sp_std::{str::from_utf8, vec::Vec};
+use sp_std::vec::Vec;
 
 #[macro_use]
 extern crate alloc;
@@ -56,8 +54,8 @@ struct NodeInfo {
 
 #[derive(Encode, Decode)]
 pub struct DDCNode {
-	p2p_id: Vec<u8>,
-	url: Vec<u8>,
+    p2p_id: Vec<u8>,
+    url: Vec<u8>,
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -199,10 +197,11 @@ impl<T: Trait> Module<T> {
 
         let day_end_ms = day_start_ms + MS_PER_DAY;
 
-        let aggregated_metrics = Self::fetch_all_metrics(contract_address.clone(), day_start_ms).map_err(|err| {
-            error!("[OCW] HTTP error occurred: {:?}", err);
-            "could not fetch metrics"
-        })?;
+        let aggregated_metrics = Self::fetch_all_metrics(contract_address.clone(), day_start_ms)
+            .map_err(|err| {
+                error!("[OCW] HTTP error occurred: {:?}", err);
+                "could not fetch metrics"
+            })?;
 
         Self::send_metrics_to_sc(
             contract_address.clone(),
@@ -401,7 +400,10 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    fn fetch_all_metrics(contract_id: <T::CT as frame_system::Trait>::AccountId, day_start_ms: u64) -> ResultStr<Vec<MetricInfo>> {
+    fn fetch_all_metrics(
+        contract_id: <T::CT as frame_system::Trait>::AccountId,
+        day_start_ms: u64,
+    ) -> ResultStr<Vec<MetricInfo>> {
         let a_moment_ago_ms = sp_io::offchain::timestamp()
             .sub(Duration::from_millis(END_TIME_DELAY_MS))
             .unix_millis();
@@ -422,37 +424,42 @@ impl<T: Trait> Module<T> {
         Ok(aggregated_metrics.finish())
     }
 
-    fn fetch_nodes(contract_id: <T::CT as frame_system::Trait>::AccountId) -> ResultStr<Vec<NodeInfo>> {
-		let call_data = Self::encode_get_all_ddc_nodes();
-		let (exec_result, _gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
-			Default::default(),
-			contract_id,
-			0u32.into(),
-			100_000_000_000,
-			call_data,
-		);
+    fn fetch_nodes(
+        contract_id: <T::CT as frame_system::Trait>::AccountId,
+    ) -> ResultStr<Vec<NodeInfo>> {
+        let call_data = Self::encode_get_all_ddc_nodes();
+        let (exec_result, _gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
+            Default::default(),
+            contract_id,
+            0u32.into(),
+            100_000_000_000,
+            call_data,
+        );
 
-		let mut data = match &exec_result {
-			Ok(v) => &v.data[..],
-			Err(exec_error) => {
-				warn!("[OCW] Error in call get_all_ddc_nodes of smart contract. Error: {:?}", exec_error.error);
-				return Ok(Vec::new());
-			}
-		};
+        let mut data = match &exec_result {
+            Ok(v) => &v.data[..],
+            Err(exec_error) => {
+                warn!(
+                    "[OCW] Error in call get_all_ddc_nodes of smart contract. Error: {:?}",
+                    exec_error.error
+                );
+                return Ok(Vec::new());
+            }
+        };
 
-		let ddc_nodes = Vec::<DDCNode>::decode(&mut data)
-			.map_err(|_| "[OCW] error decoding get_all_ddc_nodes result")?;
+        let ddc_nodes = Vec::<DDCNode>::decode(&mut data)
+            .map_err(|_| "[OCW] error decoding get_all_ddc_nodes result")?;
 
-		let mut result = Vec::new();
+        let mut result = Vec::new();
 
-		for ddc_node in ddc_nodes.iter() {
-			result.push(NodeInfo {
-				id: ddc_node.p2p_id.clone(),
-				httpAddr: String::from_utf8(ddc_node.url.clone()).unwrap()
-			});
-		}
+        for ddc_node in ddc_nodes.iter() {
+            result.push(NodeInfo {
+                id: ddc_node.p2p_id.clone(),
+                httpAddr: String::from_utf8(ddc_node.url.clone()).unwrap(),
+            });
+        }
 
-		Ok(result)
+        Ok(result)
     }
 
     fn fetch_node_metrics(
