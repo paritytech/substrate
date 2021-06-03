@@ -40,6 +40,8 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 
 	/// Returns the attribute value of `instance` of `class` corresponding to `key`.
 	///
+	/// When `key` is empty, we return the instance metadata value.
+	///
 	/// By default this is `None`; no attributes are defined.
 	fn attribute(class: &Self::ClassId, instance: &Self::InstanceId, key: &[u8])
 		-> Option<Vec<u8>>
@@ -102,4 +104,3 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		Self::do_transfer(class.clone(), instance.clone(), destination.clone(), |_, _| Ok(()))
 	}
 }
-
