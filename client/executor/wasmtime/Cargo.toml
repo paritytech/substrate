@@ -22,7 +22,7 @@ sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interf
 sp-runtime-interface = { version = "3.0.0", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }
-wasmtime = "0.24.0"
+wasmtime = "0.27.0"
 
 [dev-dependencies]
 assert_matches = "1.3.0"

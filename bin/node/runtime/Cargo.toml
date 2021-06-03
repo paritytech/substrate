@@ -85,6 +85,7 @@ pallet-treasury = { version = "3.0.0", default-features = false, path = "../../.
 pallet-utility = { version = "3.0.0", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
+pallet-uniques = { version = "3.0.0", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "3.0.0", default-features = false, path = "../../../frame/vesting" }
 
 max-encoded-len = { version = "3.0.0", default-features = false, path = "../../../max-encoded-len", features = [ "derive" ] }
@@ -157,6 +158,7 @@ std = [
 	"sp-version/std",
 	"pallet-society/std",
 	"pallet-recovery/std",
+	"pallet-uniques/std",
 	"pallet-vesting/std",
 	"log/std",
 	"frame-try-runtime/std",
@@ -194,6 +196,7 @@ runtime-benchmarks = [
 	"pallet-tips/runtime-benchmarks",
 	"pallet-treasury/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
+	"pallet-uniques/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-offences-benchmarking",
 	"pallet-session-benchmarking",
@@ -237,6 +240,7 @@ try-runtime = [
 	"pallet-utility/try-runtime",
 	"pallet-society/try-runtime",
 	"pallet-recovery/try-runtime",
+	"pallet-uniques/try-runtime",
 	"pallet-vesting/try-runtime",
 	"pallet-gilt/try-runtime",
 ]

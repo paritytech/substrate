@@ -22,8 +22,8 @@ use super::*;
 use codec::Encode;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types, ord_parameter_types,
-	traits::{SortedMembers, OnInitialize, Filter},
-	weights::Weight,
+	traits::{SortedMembers, OnInitialize, Filter, GenesisBuild},
+	weights::Weight, storage::StorageMap,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -63,7 +63,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Config, Event<T>},
-		Democracy: pallet_democracy::{Pallet, Call, Storage, Config, Event<T>},
+		Democracy: pallet_democracy::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -195,7 +195,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_balances::GenesisConfig::<Test>{
 		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_democracy::GenesisConfig::default().assimilate_storage(&mut t).unwrap();
+	pallet_democracy::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
