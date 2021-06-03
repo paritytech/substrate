@@ -30,6 +30,7 @@ use futures::stream::StreamExt;
 use log::debug;
 use lru::LruCache;
 use prost::Message;
+use sc_peerset::{PeersetHandle, BANNED_THRESHOLD};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, One, Zero};
 use std::cmp::min;
@@ -109,6 +110,8 @@ pub struct BlockRequestHandler<B: BlockT> {
 	///
 	/// This is used to check if a peer is spamming us with the same request.
 	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
+
+	peerset: PeersetHandle,
 }
 
 impl<B: BlockT> BlockRequestHandler<B> {
@@ -117,6 +120,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 		protocol_id: &ProtocolId,
 		client: Arc<dyn Client<B>>,
 		num_peer_hint: usize,
+		peerset: PeersetHandle,
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
 		// number of peers.
@@ -127,13 +131,26 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 		let seen_requests = LruCache::new(num_peer_hint * 2);
 
-		(Self { client, request_receiver, seen_requests }, protocol_config)
+		(Self { client, request_receiver, seen_requests, peerset }, protocol_config)
 	}
 
 	/// Run [`BlockRequestHandler`].
 	pub async fn run(mut self) {
 		while let Some(request) = self.request_receiver.next().await {
 			let IncomingRequest { peer, payload, pending_response } = request;
+
+			let reputation = self.peerset.peer_reputation(peer.clone()).await;
+			let reputation = reputation.expect("The channel can only be closed if the peerset no longer exists; qed");
+
+			if reputation < BANNED_THRESHOLD {
+				debug!(
+					target: LOG_TARGET,
+					"Cannot handle requests from a node with a low reputation {}: {}",
+					peer,
+					reputation,
+				);
+				continue;
+			}
 
 			match self.handle_request(payload, pending_response, &peer) {
 				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
