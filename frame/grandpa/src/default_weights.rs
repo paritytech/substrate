@@ -51,4 +51,19 @@ impl crate::WeightInfo for () {
 		(3 * WEIGHT_PER_MICROS)
 			.saturating_add(DbWeight::get().writes(1))
 	}
+
+	fn start_accountable_safety_protocol() -> Weight {
+		// WIP: placeholder
+		1
+	}
+
+	fn add_response() -> Weight {
+		// WIP: placeholder
+		1
+	}
+
+	fn add_prevote_response() -> Weight {
+		// WIP: placeholder
+		1
+	}
 }

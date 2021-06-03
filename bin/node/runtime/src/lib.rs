@@ -924,6 +924,9 @@ impl pallet_grandpa::Config for Runtime {
 		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
+
+	// WIP: make sure this is set to () before merging
+	type AccountableSafety = pallet_grandpa::AccountableSafetyHandler;
 }
 
 parameter_types! {
@@ -1299,6 +1302,31 @@ impl_runtime_apis! {
 			Historical::prove((fg_primitives::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
 				.map(fg_primitives::OpaqueKeyOwnershipProof::new)
+		}
+
+		fn submit_start_accountable_safety_protocol_extrinsic(
+			new_block: (
+				fg_primitives::Commit<<Block as BlockT>::Hash, NumberFor<Block>>,
+				fg_primitives::RoundNumber,
+			),
+			block_not_included: (
+				fg_primitives::Commit<<Block as BlockT>::Hash, NumberFor<Block>>,
+				fg_primitives::RoundNumber,
+			),
+		) -> Option<()> {
+			Grandpa::start_accountable_safety_protocol(new_block, block_not_included)
+		}
+
+		fn submit_accountable_safety_response_extrinsic(
+			query_response: fg_primitives::acc_safety::QueryResponse<<Block as BlockT>::Hash, NumberFor<Block>>,
+		) -> Option<()> {
+			Grandpa::add_response(query_response)
+		}
+
+		fn submit_accountable_safety_prevote_response_extrinsic(
+			prevote_query_response: fg_primitives::acc_safety::PrevoteQueryResponse<<Block as BlockT>::Hash, NumberFor<Block>>,
+		) -> Option<()> {
+			Grandpa::add_prevote_response(prevote_query_response)
 		}
 	}
 

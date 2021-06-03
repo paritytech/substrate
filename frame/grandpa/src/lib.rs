@@ -37,7 +37,8 @@ use codec::{self as codec, Decode, Encode};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use fg_primitives::{
 	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
-	GRANDPA_ENGINE_ID,
+	GRANDPA_ENGINE_ID, RoundNumber,
+	acc_safety::BlockNotIncluded,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -51,6 +52,7 @@ use sp_runtime::{
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
+mod accountable_safety;
 mod equivocation;
 mod default_weights;
 pub mod migrations;
@@ -62,6 +64,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
+pub use accountable_safety::{AccountableSafetyHandler, AccountableSafety};
 pub use equivocation::{
 	EquivocationHandler, GrandpaEquivocationOffence, GrandpaOffence, GrandpaTimeSlot,
 	HandleEquivocation,
@@ -115,6 +118,9 @@ pub mod pallet {
 
 		/// Weights for this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The accountable safety subsystem
+		type AccountableSafety: AccountableSafety<Self>;
 	}
 
 	#[pallet::hooks]
@@ -180,6 +186,9 @@ pub mod pallet {
 				},
 				_ => {},
 			}
+
+			// Update the accountable safety state machine
+			T::AccountableSafety::update();
 		}
 	}
 
@@ -244,6 +253,37 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			Ok(Self::on_stalled(delay, best_finalized_block_number).into())
+		}
+
+		/// Trigger the accountable safety protocol
+		#[pallet::weight(T::WeightInfo::start_accountable_safety_protocol())]
+		fn start_accountable_safety_protocol_unsigned(
+			origin: OriginFor<T>,
+			new_block: (sp_finality_grandpa::Commit::<T::Hash, T::BlockNumber>, RoundNumber),
+			block_not_included: (sp_finality_grandpa::Commit::<T::Hash, T::BlockNumber>, RoundNumber),
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+
+			Self::do_start_accountable_safety_protocol(
+				T::AccountableSafety::block_author(),
+				new_block,
+				block_not_included,
+			)
+		}
+
+		/// Submit response to a query in the accountable safety protocol. Can be either a set of
+		/// prevotes or a set of precommits.
+		#[pallet::weight(T::WeightInfo::add_response())]
+		fn add_response_unsigned(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+			todo!();
+		}
+
+		/// Submit response to a prevote query in the accountable safety protocol
+		#[pallet::weight(T::WeightInfo::add_prevote_response())]
+		fn add_prevote_response_unsigned(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+			todo!();
 		}
 	}
 
@@ -320,6 +360,40 @@ pub mod pallet {
 	#[pallet::getter(fn session_for_set)]
 	pub(super) type SetIdSession<T: Config> = StorageMap<_, Twox64Concat, SetId, SessionIndex>;
 
+	/// Once the accountable safety protocol is started, we keep track of the block and round number
+	/// of the block which isn't included as an ancestor for the block of the commit.
+	#[pallet::storage]
+	#[pallet::getter(fn accountable_safety_session)]
+	pub(super) type AccountableSafetySession<T: Config> = StorageValue<
+		_,
+		fg_primitives::acc_safety::BlockNotIncluded<T::Hash, T::BlockNumber>,
+	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn accountable_safety_current_round)]
+	pub(super) type AccountableSafetyCurrentRound<T: Config> = StorageValue<_, RoundNumber>;
+
+	/// For each round we track the voters asked, and then responded.
+	/// Empty Vec means that we are still waiting for a reply.
+	#[pallet::storage]
+	#[pallet::getter(fn accountable_safety_queries)]
+	pub(super) type AccountableSafetyQueries<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		AuthorityId,
+		fg_primitives::acc_safety::Query<T::Hash, T::BlockNumber>,
+	>;
+
+	/// In case we need to query the prevotes seen.
+	#[pallet::storage]
+	#[pallet::getter(fn accountable_safety_prevote_queries)]
+	pub(super) type AccountableSafetyPrevoteQueries<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		AuthorityId,
+		fg_primitives::acc_safety::PrevoteQuery<T::Hash, T::BlockNumber>,
+	>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub authorities: AuthorityList,
@@ -346,6 +420,10 @@ pub mod pallet {
 pub trait WeightInfo {
 	fn report_equivocation(validator_count: u32) -> Weight;
 	fn note_stalled() -> Weight;
+
+	fn start_accountable_safety_protocol() -> Weight;
+	fn add_response() -> Weight;
+	fn add_prevote_response() -> Weight;
 }
 
 /// A stored pending change.
@@ -590,6 +668,99 @@ impl<T: Config> Pallet<T> {
 		// failed. until then, we can't meaningfully guard against
 		// `next == last` the way that normal session changes do.
 		<Stalled<T>>::put((further_wait, median));
+	}
+
+	pub fn start_accountable_safety_protocol(
+		new_block: (fg_primitives::Commit::<T::Hash, T::BlockNumber>, RoundNumber),
+		block_not_included: (fg_primitives::Commit::<T::Hash, T::BlockNumber>, RoundNumber),
+	) -> Option<()> {
+		T::AccountableSafety::start_accountable_safety_protocol(
+			new_block,
+			block_not_included,
+		)
+		.ok()
+	}
+
+	fn do_start_accountable_safety_protocol(
+		_reporter: Option<T::AccountId>,
+		new_block: (fg_primitives::Commit::<T::Hash, T::BlockNumber>, RoundNumber),
+		block_not_included: (fg_primitives::Commit::<T::Hash, T::BlockNumber>, RoundNumber),
+	) -> DispatchResultWithPostInfo {
+		// WIP: validate input.
+		// - Check that new_block is in a later round than block_not_included
+		// - ..
+
+		let block_not_included = BlockNotIncluded {
+			block: (block_not_included.0.target_number, block_not_included.1),
+			offending_block: new_block.clone(),
+		};
+
+		// The current round of the protocol. Start at the round for the new
+		// block and walk backwards to round after the block not included.
+		let current_round = new_block.1;
+
+		// Use `new_block` to start the protocol
+		let voters = new_block
+			.0
+			.precommits
+			.iter()
+			.map(|commit| &commit.id);
+
+		AccountableSafetySession::<T>::put(block_not_included);
+		AccountableSafetyCurrentRound::<T>::put(current_round);
+		for voter in voters {
+			AccountableSafetyQueries::<T>::insert(voter, fg_primitives::acc_safety::Query::WaitingForReply);
+		}
+
+		Ok(Pays::No.into())
+	}
+
+	pub fn add_response(
+		query_response: fg_primitives::acc_safety::QueryResponse<T::Hash, T::BlockNumber>,
+	) -> Option<()> {
+		T::AccountableSafety::add_response(
+			query_response,
+		)
+		.ok()
+	}
+
+	pub fn do_add_response(
+		responder: AuthorityId, // WIP: AuthorityId or T::AccountId?
+		query_response: fg_primitives::acc_safety::QueryResponse<T::Hash, T::BlockNumber>,
+	) -> DispatchResultWithPostInfo {
+		// WIP: validate input.
+		// - Check signatures
+		// - Check that responder hasn't already responded
+
+		AccountableSafetyQueries::<T>::insert(
+			&responder,
+			fg_primitives::acc_safety::Query::Replied(query_response),
+		);
+		Ok(Pays::No.into())
+	}
+
+	pub fn add_prevote_response(
+		prevote_query_response: fg_primitives::acc_safety::PrevoteQueryResponse<T::Hash, T::BlockNumber>,
+	) -> Option<()> {
+		T::AccountableSafety::add_prevote_response(
+			prevote_query_response
+		)
+		.ok()
+	}
+
+	pub fn do_add_prevote_response(
+		responder: AuthorityId, // WIP: AuthorityId or T::AccountId?
+		query_response: fg_primitives::acc_safety::PrevoteQueryResponse<T::Hash, T::BlockNumber>,
+	) -> DispatchResultWithPostInfo {
+		// WIP: validate input.
+		// - Check signatures
+		// - Check that responder hasn't already responded
+
+		AccountableSafetyPrevoteQueries::<T>::insert(
+			&responder,
+			fg_primitives::acc_safety::PrevoteQuery::Replied(query_response),
+		);
+		Ok(Pays::No.into())
 	}
 }
 
