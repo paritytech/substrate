@@ -40,7 +40,7 @@ use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero},
+	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero, Header as HeaderT},
 };
 use sp_core::traits::SpawnNamed;
 use sp_transaction_pool::{
@@ -379,6 +379,7 @@ where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
 		+ sc_client_api::BlockBackend<Block>
+		+ sc_client_api::blockchain::HeaderBackend<Block>
 		+ sp_runtime::traits::BlockIdTo<Block>
 		+ sc_client_api::ExecutorProvider<Block>
 		+ sc_client_api::UsageProvider<Block>
@@ -419,6 +420,7 @@ where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
 		+ sc_client_api::BlockBackend<Block>
+		+ sc_client_api::blockchain::HeaderBackend<Block>
 		+ sp_runtime::traits::BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
@@ -555,19 +557,32 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
 	api: &Api,
 	pool: &sc_transaction_graph::Pool<Api>,
 ) -> Vec<ExtrinsicHash<Api>> {
-	let hashes = api.block_body(&block_id).await
+	let extrinsics = api.block_body(&block_id).await
 		.unwrap_or_else(|e| {
 			log::warn!("Prune known transactions: error request {:?}!", e);
 			None
 		})
-		.unwrap_or_default()
-		.into_iter()
+		.unwrap_or_default();
+
+	let hashes = extrinsics.iter()
 		.map(|tx| pool.hash_of(&tx))
 		.collect::<Vec<_>>();
 
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
-	if let Err(e) = pool.prune_known(&block_id, &hashes) {
+	let header = match api.block_header(&block_id) {
+		Ok(Some(h)) => h,
+		Ok(None) => {
+			log::debug!(target: "txpool", "Could not find header for {:?}.", block_id);
+			return hashes
+		},
+		Err(e) => {
+			log::debug!(target: "txpool", "Error retrieving header for {:?}: {:?}", block_id, e);
+			return hashes
+		}
+	};
+
+	if let Err(e) = pool.prune(&block_id, &BlockId::hash(*header.parent_hash()), &extrinsics).await {
 		log::error!("Cannot prune known in the pool {:?}!", e);
 	}
 
