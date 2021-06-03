@@ -94,6 +94,7 @@ impl pallet_transaction_storage::Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type Currency = Balances;
+	type FeeDestination = ();
 	type WeightInfo = ();
 }
 

@@ -29,7 +29,7 @@ mod mock;
 mod tests;
 
 use frame_support::{
-	traits::{ReservableCurrency, Currency},
+	traits::{ReservableCurrency, Currency, OnUnbalanced},
 	dispatch::{Dispatchable, GetDispatchInfo},
 };
 use sp_std::prelude::*;
@@ -44,6 +44,8 @@ use sp_transaction_storage_proof::{
 
 /// A type alias for the balance type from this pallet's point of view.
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>
+	::NegativeImbalance;
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
@@ -86,6 +88,8 @@ pub mod pallet {
 		type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + From<frame_system::Call<Self>>;
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
+		/// Handler for the unbalanced decrease when fees are burned.
+		type FeeDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -176,7 +180,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure!(data.len() > 0, Error::<T>::EmptyTransaction);
 			ensure!(data.len() <= MaxTransactionSize::<T>::get() as usize, Error::<T>::TransactionTooLarge);
-			Self::apply_fee(origin, data.len() as u32)?;
+			let sender = ensure_signed(origin)?;
+			Self::apply_fee(sender, data.len() as u32)?;
 
 			// Chunk data and compute storage root
 			let chunk_count = num_chunks(data.len() as u32);
@@ -220,9 +225,10 @@ pub mod pallet {
 			block: T::BlockNumber,
 			index: u32,
 		) -> DispatchResultWithPostInfo {
+			let sender = ensure_signed(origin)?;
 			let transactions = <Transactions<T>>::get(block).ok_or(Error::<T>::RenewedNotFound)?;
 			let info = transactions.get(index as usize).ok_or(Error::<T>::RenewedNotFound)?;
-			Self::apply_fee(origin, info.size)?;
+			Self::apply_fee(sender, info.size)?;
 
 			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index().unwrap();
 			sp_io::transaction_index::renew(extrinsic_index, info.content_hash.into());
@@ -417,13 +423,13 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		fn apply_fee(origin: OriginFor<T>, size: u32) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
+		fn apply_fee(sender: T::AccountId, size: u32) -> DispatchResult {
 			let byte_fee = ByteFee::<T>::get().ok_or(Error::<T>::NotConfigured)?;
 			let entry_fee = EntryFee::<T>::get().ok_or(Error::<T>::NotConfigured)?;
 			let fee = byte_fee.saturating_mul(size.into()).saturating_add(entry_fee);
 			ensure!(T::Currency::can_slash(&sender, fee), Error::<T>::InsufficientFunds);
-			T::Currency::slash(&sender, fee);
+			let (credit, _) = T::Currency::slash(&sender, fee);
+			T::FeeDestination::on_unbalanced(credit);
 			Ok(())
 		}
 	}
