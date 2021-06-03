@@ -445,12 +445,9 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 	fn update_meta(
 		&self,
-		hash: Block::Hash,
-		number: <Block::Header as HeaderT>::Number,
-		is_best: bool,
-		is_finalized: bool,
-		with_state: bool,
+		update: MetaUpdate<Block>,
 	) {
+		let MetaUpdate { hash, number, is_best, is_finalized, with_state } = update;
 		let mut meta = self.meta.write();
 		if number.is_zero() {
 			meta.genesis_hash = hash;
@@ -1117,13 +1114,13 @@ impl<Block: BlockT> Backend<Block> {
 			&& info.finalized_hash != Default::default()
 			&& sc_client_api::Backend::have_state_at(&backend, &info.finalized_hash, info.finalized_number)
 		{
-			backend.blockchain.update_meta(
-				info.finalized_hash,
-				info.finalized_number,
-				info.finalized_hash == info.best_hash,
-				true,
-				true,
-			);
+			backend.blockchain.update_meta(MetaUpdate {
+				hash: info.finalized_hash,
+				number: info.finalized_number,
+				is_best: info.finalized_hash == info.best_hash,
+				is_finalized: true,
+				with_state: true,
+			});
 		}
 		Ok(backend)
 	}
@@ -1618,7 +1615,7 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		for m in meta_updates {
-			self.blockchain.update_meta(m.hash, m.number, m.is_best, m.is_finalized, m.with_state);
+			self.blockchain.update_meta(m);
 		}
 
 		Ok(())
@@ -1957,7 +1954,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			&mut displaced,
 		)?;
 		self.storage.db.commit(transaction)?;
-		self.blockchain.update_meta(m.hash, m.number, m.is_best, m.is_finalized, m.with_state);
+		self.blockchain.update_meta(m);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		Ok(())
 	}
@@ -2137,7 +2134,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, best_hash);
 						self.storage.db.commit(transaction)?;
 						self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
-						self.blockchain.update_meta(best_hash, best_number, true, update_finalized, false);
+						self.blockchain.update_meta(MetaUpdate {
+							hash: best_hash,
+							number: best_number,
+							is_best: true,
+							is_finalized: update_finalized,
+							with_state: false
+						});
 					}
 					None => return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
