@@ -7,15 +7,16 @@
 #
 # $REPO companion: $ORGANISATION/$REPO#567
 #
-# $ORGANISATION and $REPO are set using $1 and $2
+# $ORGANISATION and $REPO are set using $1 and $2. You can also specify a custom
+# build command with $3
 # So invoke this script like:
-# ./check_companion_build.sh paritytech polkadot
+# ./check_companion_build.sh paritytech polkadot 'cargo test --release'
 
 set -e
 
 ORGANISATION=$1
 REPO=$2
-
+BUILDSTRING=${3:-cargo test --all --release}
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 # use github api v3 in order to access the data without authentication
@@ -81,8 +82,8 @@ then
   if [ "${pr_companion}" ]
   then
     boldprint "companion pr specified/detected: #${pr_companion}"
-    git fetch origin refs/pull/${pr_companion}/head:pr/${pr_companion}
-    git checkout pr/${pr_companion}
+    git fetch origin "refs/pull/${pr_companion}/head:pr/${pr_companion}"
+    git checkout "pr/${pr_companion}"
     git merge origin/master
   else
     boldprint "no companion branch found - building ${REPO}:master"
@@ -96,4 +97,4 @@ fi
 diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 
 # Test pr or master branch with this Substrate commit.
-time cargo test --all --release --verbose
+time eval "$BUILDSTRING"

@@ -448,7 +448,7 @@ check-cumulus-companion-build:
     - job:                         test-linux-stable-int
       artifacts:                   false
   script:
-    - ./.maintain/gitlab/check_companion_build.sh paritytech cumulus
+    - ./.maintain/gitlab/check_companion_build.sh paritytech cumulus 'cargo check'
   after_script:
     - cd cumulus && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
