@@ -427,19 +427,25 @@ impl Peerset {
 			return;
 		}
 
-		debug!(target: "peerset", "Report {}: {:+} to {}. Reason: {}, Disconnecting",
+		debug!(target: "peerset", "Report {}: {:+} to {} (below ban threshold). Reason: {}",
 			peer_id, change.value, reputation.reputation(), change.reason
 		);
 
 		drop(reputation);
 
 		for set_index in 0..self.data.num_sets() {
+			if self.reserved_nodes[set_index].0.contains(&peer_id) {
+				continue;
+			}
+
 			if let peersstate::Peer::Connected(peer) = self.data.peer(set_index, &peer_id) {
 				let peer = peer.disconnect();
 				self.message_queue.push_back(Message::Drop {
 					set_id: SetId(set_index),
 					peer_id: peer.into_peer_id(),
 				});
+
+				self.alloc_slots(SetId(set_index));
 			}
 		}
 	}
