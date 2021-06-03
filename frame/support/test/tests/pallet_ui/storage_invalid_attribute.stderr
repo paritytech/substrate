@@ -1,0 +1,5 @@
+error: expected `getter` or `storage_name`
+  --> $DIR/storage_invalid_attribute.rs:19:15
+   |
+19 |     #[pallet::generate_store(pub trait Store)]
+   |               ^^^^^^^^^^^^^^
