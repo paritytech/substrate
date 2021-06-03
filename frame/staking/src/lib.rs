@@ -2631,8 +2631,8 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
-		let current_era = dbg!(Self::current_era().unwrap_or(0));
-		let current_session = dbg!(Self::current_planned_session());
+		let current_era = Self::current_era().unwrap_or(0);
+		let current_session = Self::current_planned_session();
 		let current_era_start_session_index =
 			Self::eras_start_session_index(current_era).unwrap_or(0);
 		let era_length = current_session
