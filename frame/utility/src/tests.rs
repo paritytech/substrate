@@ -552,17 +552,10 @@ fn batch_all_does_not_nest() {
 		// And for those who want to get a little fancy, we check that the filter persists across
 		// other kinds of dispatch wrapping functions... in this case `batch_all(batch(batch_all(..)))`
 		let batch_nested = Call::Utility(UtilityCall::batch(vec![batch_all]));
-		let info = batch_nested.get_dispatch_info();
-		assert_noop!(
-			Utility::batch_all(Origin::signed(1), vec![batch_nested]),
-			DispatchErrorWithPostInfo {
-				post_info: PostDispatchInfo {
-					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(1) + info.weight),
-					pays_fee: Pays::Yes
-				},
-				error: DispatchError::BadOrigin,
-			}
-		);
+		// Batch will end with `Ok`, but does not actually execute as we can see from the event
+		// and balances.
+		assert_ok!(Utility::batch_all(Origin::signed(1), vec![batch_nested]));
+		System::assert_has_event(utility::Event::BatchInterrupted(0, DispatchError::BadOrigin).into());
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
 	});
