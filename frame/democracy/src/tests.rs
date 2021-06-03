@@ -23,7 +23,7 @@ use codec::Encode;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types, ord_parameter_types,
 	traits::{SortedMembers, OnInitialize, Filter, GenesisBuild},
-	weights::Weight, storage::StorageMap,
+	weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{
