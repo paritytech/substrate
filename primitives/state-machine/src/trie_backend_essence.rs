@@ -266,21 +266,19 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		};
 		let mut root = H::Out::default();
 		root.as_mut().copy_from_slice(&root_vec);
-		// error is ignored
 		let _ = self.keys_values_with_prefix_inner(
 			&root,
 			prefix,
 			|k, _v| { f(&k); true },
 			Some(child_info),
 			None,
-			true,
+			false,
 		);
 	}
 
 	/// Execute given closure for all keys starting with prefix.
 	pub fn for_keys_with_prefix(&self, prefix: &[u8], mut f: impl FnMut(&[u8])) {
-		// error is ignored
-		let _ = self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| { f(&k); true }, None, None, true);
+		let _ = self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| { f(&k); true }, None, None, false);
 	}
 
 	fn keys_values_with_prefix_inner(
@@ -328,8 +326,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Execute given closure for all key and values starting with prefix.
 	pub fn for_key_values_with_prefix(&self, prefix: &[u8], mut f: impl FnMut(&[u8], &[u8])) {
-		// error is ignored
-		let _ = self.keys_values_with_prefix_inner(&self.root, prefix, |k, v| {f(&k, &v); true}, None, None, true);
+		let _ = self.keys_values_with_prefix_inner(&self.root, prefix, |k, v| {f(&k, &v); true}, None, None, false);
 	}
 }
 
