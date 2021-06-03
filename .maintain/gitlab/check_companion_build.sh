@@ -37,7 +37,7 @@ this job checks if there is a string in the description of the pr like
 $REPO companion: $ORGANISATION/$REPO#567
 
 
-it will then run cargo check from this cumulus's branch with substrate code
+it will then run cargo check from this ${REPO}'s branch with substrate code
 from this pull request. otherwise, it will uses master instead
 
 
@@ -47,12 +47,12 @@ EOT
 git config --global user.name 'CI system'
 git config --global user.email '<>'
 
-# Merge master into our branch before building Cumulus to make sure we don't miss
-# any commits that are required by Cumulus.
+# Merge master into our branch before building to make sure we don't miss
+# any commits that are required.
 git fetch --depth 100 origin
 git merge origin/master
 
-# Clone the current Cumulus master branch into ./cumulus.
+# Clone the current master branch into a local directory
 # NOTE: we need to pull enough commits to be able to find a common
 # ancestor for successfully performing merges below.
 git clone --depth 20 "https://github.com/${ORGANISATION}/${REPO}.git"
@@ -67,7 +67,7 @@ then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
 
   pr_data_file="$(mktemp)"
-  # get the last reference to a pr in cumulus
+  # get the last reference to a pr in the target repo
   curl -sSL -H "${github_header}" -o "${pr_data_file}" \
     "${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME}"
 
@@ -85,15 +85,15 @@ then
     git checkout pr/${pr_companion}
     git merge origin/master
   else
-    boldprint "no companion branch found - building cumulus:master"
+    boldprint "no companion branch found - building ${REPO}:master"
   fi
   rm -f "${pr_data_file}"
 else
-  boldprint "this is not a pull request - building cumulus:master"
+  boldprint "this is not a pull request - building ${REPO}:master"
 fi
 
-# Patch all Substrate crates in Cumulus
+# Patch all Substrate crates in the repo
 diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 
-# Test Cumulus pr or master branch with this Substrate commit.
+# Test pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
