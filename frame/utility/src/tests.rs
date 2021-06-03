@@ -539,7 +539,22 @@ fn batch_all_does_not_nest() {
 		assert_eq!(Balances::free_balance(2), 10);
 		// A nested batch_all call will not pass the filter, and fail with `BadOrigin`.
 		assert_noop!(
-			Utility::batch_all(Origin::signed(1), vec![batch_all]),
+			Utility::batch_all(Origin::signed(1), vec![batch_all.clone()]),
+			DispatchErrorWithPostInfo {
+				post_info: PostDispatchInfo {
+					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(1) + info.weight),
+					pays_fee: Pays::Yes
+				},
+				error: DispatchError::BadOrigin,
+			}
+		);
+
+		// And for those who want to get a little fancy, we check that the filter persists across
+		// other kinds of dispatch wrapping functions... in this case `batch_all(batch(batch_all(..)))`
+		let batch_nested = Call::Utility(UtilityCall::batch(vec![batch_all]));
+		let info = batch_nested.get_dispatch_info();
+		assert_noop!(
+			Utility::batch_all(Origin::signed(1), vec![batch_nested]),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
 					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(1) + info.weight),
