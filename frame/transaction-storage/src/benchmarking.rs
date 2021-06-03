@@ -29,10 +29,6 @@ use frame_support::{traits::{Currency, OnFinalize, OnInitialize}};
 
 use crate::Pallet as TransactionStorage;
 
-/// Assuming 16Mb blocks
-const MAX_FULL_EXTRINSICS: u32 = 20;
-const MAX_DATA_SIZE: u32 = 8 * 1024 * 1024;
-
 const PROOF: &[u8] = &hex_literal::hex!("
 	0104000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 	0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -102,7 +98,7 @@ pub fn run_to_block<T: Config>(n: T::BlockNumber) {
 
 benchmarks! {
 	store {
-		let l in 1 .. MAX_DATA_SIZE;
+		let l in 1 .. MaxTransactionSize::<T>::get();
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
@@ -116,7 +112,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		TransactionStorage::<T>::store(
 			RawOrigin::Signed(caller.clone()).into(),
-			vec![0u8; MAX_DATA_SIZE as usize],
+			vec![0u8; MaxTransactionSize::<T>::get() as usize],
 		)?;
 		run_to_block::<T>(1u32.into());
 	}: _(RawOrigin::Signed(caller.clone()), T::BlockNumber::zero(), 0)
@@ -128,10 +124,10 @@ benchmarks! {
 		run_to_block::<T>(1u32.into());
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		for _ in 0 .. MAX_FULL_EXTRINSICS {
+		for _ in 0 .. MaxBlockTransactions::<T>::get() {
 			TransactionStorage::<T>::store(
 				RawOrigin::Signed(caller.clone()).into(),
-				vec![0u8; MAX_DATA_SIZE as usize],
+				vec![0u8; MaxTransactionSize::<T>::get() as usize],
 			)?;
 		}
 		run_to_block::<T>(StoragePeriod::<T>::get() + T::BlockNumber::one());
