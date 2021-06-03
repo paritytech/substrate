@@ -17,7 +17,7 @@
 //! Helper for handling (i.e. answering) state requests from a remote peer via the
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
-use codec::{Decode};
+use codec::{Encode, Decode};
 use crate::chain::Client;
 use crate::config::ProtocolId;
 use crate::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
@@ -168,23 +168,23 @@ impl<B: BlockT> StateRequestHandler<B> {
 
 		log::trace!(
 			target: LOG_TARGET,
-			"Handling state request from {}: Block {:?}, Starting at {:?}, with_proof={}",
+			"Handling state request from {}: Block {:?}, Starting at {:?}, no_proof={}",
 			peer,
 			sp_core::hexdisplay::HexDisplay::from(&request.block),
 			sp_core::hexdisplay::HexDisplay::from(&request.start),
-			request.with_proof,
+			request.no_proof,
 		);
 
 		let result = if reputation_changes.is_empty() {
 			let mut response = StateResponse::default();
 
-			if request.with_proof {
+			if !request.no_proof {
 				let (proof, count) = self.client.read_proof_collection(
 					&BlockId::hash(block),
 					&request.start,
 					MAX_RESPONSE_BYTES,
 				)?;
-				response.proof = proof.into_nodes();
+				response.proof = proof.encode();
 				if count == 0 {
 					response.complete = true;
 				}

@@ -74,15 +74,15 @@ message StateRequest {
 	bytes block = 1;
 	// Start from this key. Equivalent to <empty bytes> if omitted.
 	bytes start = 2; // optional
-	// Whether to include proof in the response.
-	bool with_proof = 3;
+	// if 'true' indicates that response should contain raw key-values, rather than proof.
+	bool no_proof = 3;
 }
 
 message StateResponse {
-	// A collection of keys-values. Only populated if `with_proof` is `false`
+	// A collection of keys-values. Only populated if `no_proof` is `true`
 	repeated StateEntry entries = 1;
-	// If `with_proof` is true in request, this contains proof nodes.
-	repeated bytes proof = 2;
+	// If `no_proof` is false in request, this contains proof nodes.
+	bytes proof = 2;
 	// Set to true when there are no more keys to return.
 	bool complete = 3;
 }

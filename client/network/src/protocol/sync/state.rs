@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
-use codec::Encode;
+use codec::{Encode, Decode};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sc_client_api::StorageProof;
 use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
@@ -36,7 +36,7 @@ pub struct StateSync<B: BlockT> {
 	complete: bool,
 	client: Arc<dyn Client<B>>,
 	imported_bytes: u64,
-	request_proof: bool,
+	skip_proof: bool,
 }
 
 /// Import state chunk result.
@@ -51,7 +51,7 @@ pub enum ImportResult<B: BlockT> {
 
 impl<B: BlockT> StateSync<B> {
 	///  Create a new instance.
-	pub fn new(client: Arc<dyn Client<B>>, target: B::Header, request_proof: bool) -> Self {
+	pub fn new(client: Arc<dyn Client<B>>, target: B::Header, skip_proof: bool) -> Self {
 		StateSync {
 			client,
 			target_block: target.hash(),
@@ -61,7 +61,7 @@ impl<B: BlockT> StateSync<B> {
 			state: Vec::default(),
 			complete: false,
 			imported_bytes: 0,
-			request_proof,
+			skip_proof,
 		}
 	}
 
@@ -74,23 +74,30 @@ impl<B: BlockT> StateSync<B> {
 			);
 			return ImportResult::BadResponse;
 		}
-		if self.request_proof && response.proof.is_empty() {
+		if !self.skip_proof && response.proof.is_empty() {
 			log::debug!(
 				target: "sync",
 				"Missing proof",
 			);
 			return ImportResult::BadResponse;
 		}
-		let complete = if self.request_proof {
+		let complete = if !self.skip_proof {
 			log::debug!(
 				target: "sync",
 				"Importing state from {} trie nodes",
 				response.proof.len(),
 			);
-			let proof_size = response.proof.iter().map(|v| v.len()).sum::<usize>() as u64;
+			let proof_size = response.proof.len() as u64;
+			let proof = match StorageProof::decode(&mut response.proof.as_ref()) {
+				Ok(proof) => proof,
+				Err(e) => {
+					log::debug!(target: "sync", "Error decoding proof: {:?}", e);
+					return ImportResult::BadResponse;
+				}
+			};
 			let (values, complete) = match self.client.verify_range_proof(
 				self.target_root,
-				StorageProof::new(response.proof),
+				proof,
 				&self.last_key
 			) {
 				Err(e) => {
@@ -148,7 +155,7 @@ impl<B: BlockT> StateSync<B> {
 		StateRequest {
 			block: self.target_block.encode(),
 			start: self.last_key.clone(),
-			with_proof: self.request_proof,
+			no_proof: self.skip_proof,
 		}
 	}
 

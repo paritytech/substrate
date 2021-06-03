@@ -1556,12 +1556,12 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let (proof, count) = prove_range_read_with_size(remote_backend, None, None, 0, None).unwrap();
 		// Alwasys contains at least some nodes.
-		assert_eq!(proof.into_nodes().len(), 3);
+		assert_eq!(proof.into_memory_db::<BlakeTwo256>().drain().len(), 3);
 		assert_eq!(count, 1);
 
 		let remote_backend = trie_backend::tests::test_trie();
 		let (proof, count) = prove_range_read_with_size(remote_backend, None, None, 800, Some(&[])).unwrap();
-		assert_eq!(proof.clone().into_nodes().len(), 9);
+		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 9);
 		assert_eq!(count, 85);
 		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
 			remote_root,
@@ -1587,7 +1587,7 @@ mod tests {
 
 		let remote_backend = trie_backend::tests::test_trie();
 		let (proof, count) = prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
-		assert_eq!(proof.clone().into_nodes().len(), 11);
+		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 11);
 		assert_eq!(count, 132);
 		let (results, completed) = read_range_proof_check::<BlakeTwo256>(
 			remote_root,

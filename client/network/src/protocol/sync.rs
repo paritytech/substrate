@@ -1274,7 +1274,11 @@ impl<B: BlockT> ChainSync<B> {
 					}
 					let state_sync_complete = self.state_sync.as_ref().map_or(false, |s| s.target() == hash);
 					if state_sync_complete {
-						info!(target: "sync", "State sync is complete, restarting block sync.");
+						info!(
+							target: "sync",
+							"State sync is complete ({} MiB), restarting block sync.",
+							self.state_sync.as_ref().map_or(0, |s| s.progress().1),
+						);
 						self.state_sync = None;
 						self.mode = SyncMode::Full;
 						output.extend(self.restart());
@@ -1366,7 +1370,7 @@ impl<B: BlockT> ChainSync<B> {
 							number,
 							hash,
 						);
-						self.state_sync = Some(StateSync::new(self.client.clone(), header, !skip_proofs));
+						self.state_sync = Some(StateSync::new(self.client.clone(), header, *skip_proofs));
 					}
 				}
 			}
