@@ -20,7 +20,7 @@
 
 use sp_std::prelude::*;
 use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, EncodeLike};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
@@ -40,6 +40,33 @@ use crate::{
 #[derive(Encode)]
 pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
+/// A bounded slice.
+///
+/// Similar to a `BoundedVec`, but not owned and cannot be decoded.
+#[derive(Encode)]
+pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
+
+// `BoundedSlice`s encode to something which will always decode into a `BoundedVec` or a `Vec`.
+impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
+impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, S> {}
+
+impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
+	type Error = ();
+	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
+		if t.len() < S::get() as usize {
+			Ok(BoundedSlice(t, PhantomData))
+		} else {
+			Err(())
+		}
+	}
+}
+
+impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
+	fn from(t: BoundedSlice<'a, T, S>) -> Self {
+		t.0
+	}
+}
+
 impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
@@ -53,6 +80,9 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 		Vec::<T>::skip(input)
 	}
 }
+
+// `BoundedVec`s encode to something which will always decode as a `Vec`.
+impl<T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedVec<T, S> {}
 
 impl<T, S> BoundedVec<T, S> {
 	/// Create `Self` from `t` without any checks.
