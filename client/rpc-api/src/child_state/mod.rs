@@ -23,11 +23,12 @@ use sp_core::storage::{StorageKey, PrefixedStorageKey, StorageData};
 use crate::state::error::FutureResult;
 
 pub use self::gen_client::Client as ChildStateClient;
+use crate::state::ReadProof;
 
 /// Substrate child state API
 ///
-/// Note that all `PrefixedStorageKey` are desierialized
-/// from json and not guaranted valid.
+/// Note that all `PrefixedStorageKey` are deserialized
+/// from json and not guaranteed valid.
 #[rpc]
 pub trait ChildStateApi<Hash> {
 	/// RPC Metadata
@@ -68,4 +69,13 @@ pub trait ChildStateApi<Hash> {
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<u64>>;
+
+	/// Returns proof of storage for child key entries at a specific block's state.
+	#[rpc(name = "state_getChildReadProof")]
+	fn read_child_proof(
+		&self,
+		child_storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		hash: Option<Hash>,
+	) -> FutureResult<ReadProof<Hash>>;
 }

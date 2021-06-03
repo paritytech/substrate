@@ -40,11 +40,12 @@ pub fn duration_now() -> Duration {
 }
 
 /// Returns the duration until the next slot from now.
-pub fn time_until_next(slot_duration: Duration) -> Duration {
-	let remaining_full_millis = slot_duration.as_millis()
-		- (duration_now().as_millis() % slot_duration.as_millis())
-		- 1;
-	Duration::from_millis(remaining_full_millis as u64)
+pub fn time_until_next_slot(slot_duration: Duration) -> Duration {
+	let now = duration_now().as_millis();
+
+	let next_slot = (now + slot_duration.as_millis()) / slot_duration.as_millis();
+	let remaining_millis = next_slot * slot_duration.as_millis() - now;
+	Duration::from_millis(remaining_millis as u64)
 }
 
 /// Information about a slot.
@@ -86,7 +87,7 @@ impl<B: BlockT> SlotInfo<B> {
 			duration,
 			chain_head,
 			block_size_limit,
-			ends_at: Instant::now() + time_until_next(duration),
+			ends_at: Instant::now() + time_until_next_slot(duration),
 		}
 	}
 }
@@ -132,7 +133,7 @@ where
 			self.inner_delay = match self.inner_delay.take() {
 				None => {
 					// schedule wait.
-					let wait_dur = time_until_next(self.slot_duration);
+					let wait_dur = time_until_next_slot(self.slot_duration);
 					Some(Delay::new(wait_dur))
 				}
 				Some(d) => Some(d),
@@ -143,7 +144,12 @@ where
 			}
 			// timeout has fired.
 
-			let ends_at = Instant::now() + time_until_next(self.slot_duration);
+			let ends_in = time_until_next_slot(self.slot_duration);
+
+			// reschedule delay for next slot.
+			self.inner_delay = Some(Delay::new(ends_in));
+
+			let ends_at = Instant::now() + ends_in;
 
 			let chain_head = match self.client.best_chain() {
 				Ok(x) => x,
@@ -173,10 +179,6 @@ where
 			let timestamp = inherent_data_providers.timestamp();
 			let slot = inherent_data_providers.slot();
 			let inherent_data = inherent_data_providers.create_inherent_data()?;
-
-			// reschedule delay for next slot.
-			let ends_in = time_until_next(self.slot_duration);
-			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
 			if slot > self.last_slot {

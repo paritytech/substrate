@@ -50,7 +50,7 @@ mod misc;
 pub use misc::{
 	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
 	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing, ExtrinsicCall,
-	EnsureInherentsAreFirst,
+	EnsureInherentsAreFirst, ConstU32,
 };
 
 mod stored_map;
@@ -73,10 +73,13 @@ pub use hooks::GenesisBuild;
 
 pub mod schedule;
 mod storage;
-pub use storage::{Instance, StorageInstance};
+pub use storage::{Instance, StorageInstance, StorageInfo, StorageInfoTrait};
 
 mod dispatch;
 pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 
 mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+
+// for backwards-compatibility with existing imports
+pub use max_encoded_len::MaxEncodedLen;

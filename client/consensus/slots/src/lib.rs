@@ -439,10 +439,10 @@ impl<B: BlockT, T: SimpleSlotWorker<B> + Send> SlotWorker<B, <T::Proposer as Pro
 
 /// Slot specific extension that the inherent data provider needs to implement.
 pub trait InherentDataProviderExt {
-	/// The current timestamp that will be found in the [`InherentData`].
+	/// The current timestamp that will be found in the [`InherentData`](`sp_inherents::InherentData`).
 	fn timestamp(&self) -> Timestamp;
 
-	/// The current slot that will be found in the [`InherentData`].
+	/// The current slot that will be found in the [`InherentData`](`sp_inherents::InherentData`).
 	fn slot(&self) -> Slot;
 }
 
@@ -597,7 +597,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
 	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self> where
-		C: sc_client_api::backend::AuxStore,
+		C: sc_client_api::backend::AuxStore + sc_client_api::UsageProvider<B>,
 		C: ProvideRuntimeApi<B>,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
@@ -612,19 +612,20 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 					})
 				}),
 			None => {
-				use sp_runtime::traits::Zero;
-				let genesis_slot_duration =
-					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
+				let best_hash = client.usage_info().chain.best_hash;
+				let slot_duration =
+					cb(client.runtime_api(), &BlockId::hash(best_hash))?;
 
 				info!(
-					"⏱  Loaded block-time = {:?} from genesis on first-launch",
-					genesis_slot_duration.slot_duration()
+					"⏱  Loaded block-time = {:?} from block {:?}",
+					slot_duration.slot_duration(),
+					best_hash,
 				);
 
-				genesis_slot_duration
+				slot_duration
 					.using_encoded(|s| client.insert_aux(&[(T::SLOT_KEY, &s[..])], &[]))?;
 
-				Ok(SlotDuration(genesis_slot_duration))
+				Ok(SlotDuration(slot_duration))
 			}
 		}?;
 

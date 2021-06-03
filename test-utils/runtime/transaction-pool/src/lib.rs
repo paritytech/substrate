@@ -23,7 +23,7 @@ use codec::Encode;
 use parking_lot::RwLock;
 use sp_runtime::{
 	generic::{self, BlockId},
-	traits::{BlakeTwo256, Hash as HashT, Block as _, Header as _},
+	traits::{BlakeTwo256, Hash as HashT, Block as BlockT, Header as _},
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
 		TransactionSource,
@@ -345,6 +345,24 @@ impl sc_transaction_graph::ChainApi for TestApi {
 				.get(hash)
 				.map(|b| b.extrinsics().to_vec()),
 		}))
+	}
+
+	fn block_header(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
+		Ok(match at {
+			BlockId::Number(num) => self.chain
+				.read()
+				.block_by_number
+				.get(num)
+				.map(|b| b[0].0.header().clone()),
+			BlockId::Hash(hash) => self.chain
+				.read()
+				.block_by_hash
+				.get(hash)
+				.map(|b| b.header().clone()),
+		})
 	}
 }
 
