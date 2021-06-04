@@ -1982,6 +1982,13 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		self.backend.blockchain().has_indexed_transaction(hash)
 	}
+
+	fn block_indexed_body(
+		&self,
+		id: &BlockId<Block>
+	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
+		self.backend.blockchain().block_indexed_body(*id)
+	}
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
@@ -2048,5 +2055,28 @@ impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B,
 		id: &BlockId<B>,
 	) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
 		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
+	}
+}
+
+impl<BE, E, B, RA> sp_transaction_storage_proof::IndexedBody<B> for Client<BE, E, B, RA>
+where
+	BE: backend::Backend<B>,
+	E: CallExecutor<B>,
+	B: BlockT,
+{
+	fn block_indexed_body(
+		&self,
+		number: NumberFor<B>,
+	) ->Result<Option<Vec<Vec<u8>>>, sp_transaction_storage_proof::Error> {
+		self.backend.blockchain().block_indexed_body(BlockId::number(number))
+			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))
+	}
+
+	fn number(
+		&self,
+		hash: B::Hash,
+	) -> Result<Option<NumberFor<B>>, sp_transaction_storage_proof::Error> {
+		self.backend.blockchain().number(hash)
+			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))
 	}
 }

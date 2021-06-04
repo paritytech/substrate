@@ -23,7 +23,8 @@ pub mod tokens;
 pub use tokens::fungible;
 pub use tokens::fungibles;
 pub use tokens::currency::{
-	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, VestingSchedule,
+	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, NamedReservableCurrency,
+	VestingSchedule,
 };
 pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
 pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};
@@ -81,33 +82,5 @@ pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
 
-mod max_encoded_len;
-// This looks like an overlapping import/export, but it isn't:
-// macros and traits live in distinct namespaces.
+// for backwards-compatibility with existing imports
 pub use max_encoded_len::MaxEncodedLen;
-/// Derive [`MaxEncodedLen`][max_encoded_len::MaxEncodedLen].
-///
-/// # Examples
-///
-/// ```
-/// # use codec::Encode;
-/// # use frame_support::traits::MaxEncodedLen;
-/// #[derive(Encode, MaxEncodedLen)]
-/// struct TupleStruct(u8, u32);
-///
-/// assert_eq!(TupleStruct::max_encoded_len(), u8::max_encoded_len() + u32::max_encoded_len());
-/// ```
-///
-/// ```
-/// # use codec::Encode;
-/// # use frame_support::traits::MaxEncodedLen;
-/// #[derive(Encode, MaxEncodedLen)]
-/// enum GenericEnum<T> {
-/// 	A,
-/// 	B(T),
-/// }
-///
-/// assert_eq!(GenericEnum::<u8>::max_encoded_len(), u8::max_encoded_len() + u8::max_encoded_len());
-/// assert_eq!(GenericEnum::<u128>::max_encoded_len(), u8::max_encoded_len() + u128::max_encoded_len());
-/// ```
-pub use frame_support_procedural::MaxEncodedLen;
