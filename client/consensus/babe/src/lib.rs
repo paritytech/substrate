@@ -363,7 +363,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, SC, E, I, SO, CIDP, BS, CAW, L> {
+pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS, CAW> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
 
@@ -384,6 +384,9 @@ pub struct BabeParams<B: BlockT, C, SC, E, I, SO, CIDP, BS, CAW, L> {
 	/// A sync oracle
 	pub sync_oracle: SO,
 
+	/// Hook into the sync module to control the justification sync process.
+	pub justification_sync_link: L,
+
 	/// Something that can create the inherent data providers.
 	pub create_inherent_data_providers: CIDP,
 
@@ -398,9 +401,6 @@ pub struct BabeParams<B: BlockT, C, SC, E, I, SO, CIDP, BS, CAW, L> {
 
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
-
-	/// Hook into the sync module to control the justification sync process.
-	pub justification_sync_link: L,
 
 	/// The proportion of the slot dedicated to proposing.
 	///
@@ -421,15 +421,15 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(BabeParams {
 	env,
 	block_import,
 	sync_oracle,
+	justification_sync_link,
 	create_inherent_data_providers,
 	force_authoring,
 	backoff_authoring_blocks,
 	babe_link,
 	can_author_with,
-	justification_sync_link,
 	block_proposal_slot_portion,
 	telemetry,
-}: BabeParams<B, C, SC, E, I, SO, CIDP, BS, CAW, L>) -> Result<
+}: BabeParams<B, C, SC, E, I, SO, L, CIDP, BS, CAW>) -> Result<
 	BabeWorker<B>,
 	sp_consensus::Error,
 > where
@@ -452,11 +452,11 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(BabeParams {
 		+ Sync
 		+ 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
+	L: sp_consensus::JustificationSyncLink<B> + 'static,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
-	L: sp_consensus::JustificationSyncLink<B> + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
@@ -469,6 +469,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(BabeParams {
 		block_import,
 		env,
 		sync_oracle: sync_oracle.clone(),
+		justification_sync_link,
 		force_authoring,
 		backoff_authoring_blocks,
 		keystore,
@@ -485,7 +486,6 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(BabeParams {
 		select_chain,
 		worker,
 		sync_oracle,
-		justification_sync_link,
 		create_inherent_data_providers,
 		can_author_with,
 	);
@@ -614,11 +614,12 @@ type SlotNotificationSinks<B> = Arc<
 	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>
 >;
 
-struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
+struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,
 	sync_oracle: SO,
+	justification_sync_link: L,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
@@ -629,8 +630,8 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	telemetry: Option<TelemetryHandle>,
 }
 
-impl<B, C, E, I, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
-	for BabeSlotWorker<B, C, E, I, SO, BS>
+impl<B, C, E, I, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
+	for BabeSlotWorker<B, C, E, I, SO, L, BS>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> +
@@ -642,12 +643,14 @@ where
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
+	L: sp_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>>,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 	type Claim = (PreDigest, AuthorityId);
 	type SyncOracle = SO;
+	type JustificationSyncLink = L;
 	type CreateProposer = Pin<Box<
 		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
 	>>;
@@ -810,6 +813,10 @@ where
 
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
 		&mut self.sync_oracle
+	}
+
+	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink {
+		&mut self.justification_sync_link
 	}
 
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
