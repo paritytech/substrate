@@ -833,8 +833,9 @@ impl<B: BlockT> ChainSync<B> {
 								.drain(self.best_queued_number + One::one())
 								.into_iter()
 								.map(|block_data| {
-									let justifications =
-										legacy_justification_mapping(block_data.block.justification);
+									let justifications = block_data.block.justifications.or(
+										legacy_justification_mapping(block_data.block.justification)
+									);
 									IncomingBlock {
 										hash: block_data.block.hash,
 										header: block_data.block.header,
@@ -854,11 +855,14 @@ impl<B: BlockT> ChainSync<B> {
 							}
 							validate_blocks::<B>(&blocks, who, Some(request))?;
 							blocks.into_iter().map(|b| {
+								let justifications = b.justifications.or(
+									legacy_justification_mapping(b.justification)
+								);
 								IncomingBlock {
 									hash: b.hash,
 									header: b.header,
 									body: b.body,
-									justifications: legacy_justification_mapping(b.justification),
+									justifications,
 									origin: Some(who.clone()),
 									allow_missing_state: true,
 									import_existing: false,
@@ -963,11 +967,14 @@ impl<B: BlockT> ChainSync<B> {
 					// When request.is_none() this is a block announcement. Just accept blocks.
 					validate_blocks::<B>(&blocks, who, None)?;
 					blocks.into_iter().map(|b| {
+						let justifications = b.justifications.or(
+							legacy_justification_mapping(b.justification)
+						);
 						IncomingBlock {
 							hash: b.hash,
 							header: b.header,
 							body: b.body,
-							justifications: legacy_justification_mapping(b.justification),
+							justifications,
 							origin: Some(who.clone()),
 							allow_missing_state: true,
 							import_existing: false,
@@ -1043,7 +1050,7 @@ impl<B: BlockT> ChainSync<B> {
 					return Err(BadPeer(who, rep::BAD_JUSTIFICATION));
 				}
 
-				block.justification
+				block.justifications.or(legacy_justification_mapping(block.justification))
 			} else {
 				// we might have asked the peer for a justification on a block that we assumed it
 				// had but didn't (regardless of whether it had a justification for it or not).
@@ -1058,7 +1065,7 @@ impl<B: BlockT> ChainSync<B> {
 
 			if let Some((peer, hash, number, j)) = self
 				.extra_justifications
-				.on_response(who, legacy_justification_mapping(justification))
+				.on_response(who, justification)
 			{
 				return Ok(OnBlockJustification::Import { peer, hash, number, justifications: j })
 			}
@@ -1536,21 +1543,23 @@ impl<B: BlockT> ChainSync<B> {
 			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
-		trace!(
-			target: "sync",
-			"Added sync target for block announced from {}: {} {:?}",
-			who,
-			hash,
-			announce.summary(),
-		);
-		self.fork_targets
-			.entry(hash.clone())
-			.or_insert_with(|| ForkTarget {
-				number,
-				parent_hash: Some(*announce.header.parent_hash()),
-				peers: Default::default(),
-			})
-			.peers.insert(who.clone());
+		if self.status().state == SyncState::Idle {
+			trace!(
+				target: "sync",
+				"Added sync target for block announced from {}: {} {:?}",
+				who,
+				hash,
+				announce.summary(),
+			);
+			self.fork_targets
+				.entry(hash.clone())
+				.or_insert_with(|| ForkTarget {
+					number,
+					parent_hash: Some(*announce.header.parent_hash()),
+					peers: Default::default(),
+				})
+				.peers.insert(who.clone());
+		}
 
 		PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 	}
@@ -1563,6 +1572,10 @@ impl<B: BlockT> ChainSync<B> {
 		self.peers.remove(who);
 		self.extra_justifications.peer_disconnected(who);
 		self.pending_requests.set_all();
+		self.fork_targets.retain(|_, target| {
+			target.peers.remove(who);
+			!target.peers.is_empty()
+		});
 		let blocks: Vec<_> = self.blocks
 			.drain(self.best_queued_number + One::one())
 			.into_iter()
@@ -1655,7 +1668,7 @@ impl<B: BlockT> ChainSync<B> {
 // This is purely during a backwards compatible transitionary period and should be removed
 // once we can assume all nodes can send and receive multiple Justifications
 // The ID tag is hardcoded here to avoid depending on the GRANDPA crate.
-// TODO: https://github.com/paritytech/substrate/issues/8172
+// See: https://github.com/paritytech/substrate/issues/8172
 fn legacy_justification_mapping(justification: Option<EncodedJustification>) -> Option<Justifications> {
 	justification.map(|just| (*b"FRNK", just).into())
 }
@@ -2163,6 +2176,7 @@ mod test {
 					receipt: None,
 					message_queue: None,
 					justification: None,
+					justifications: None,
 				}
 			).collect(),
 		}
@@ -2563,5 +2577,38 @@ mod test {
 			1,
 			&peer_id1,
 		);
+	}
+
+	#[test]
+	fn removes_target_fork_on_disconnect() {
+		sp_tracing::try_init_simple();
+		let mut client = Arc::new(TestClientBuilder::new().build());
+		let blocks = (0..3)
+			.map(|_| build_block(&mut client, None, false))
+			.collect::<Vec<_>>();
+
+		let info = client.info();
+
+		let mut sync = ChainSync::new(
+			Roles::AUTHORITY,
+			client.clone(),
+			&info,
+			Box::new(DefaultBlockAnnounceValidator),
+			1,
+		);
+
+		let peer_id1 = PeerId::random();
+		let common_block = blocks[1].clone();
+		// Connect the node we will sync from
+		sync.new_peer(peer_id1.clone(), common_block.hash(), *common_block.header().number()).unwrap();
+
+		// Create a "new" header and announce it
+		let mut header = blocks[0].header().clone();
+		header.number = 4;
+		send_block_announce(header, &peer_id1, &mut sync);
+		assert!(sync.fork_targets.len() == 1);
+
+		sync.peer_disconnected(&peer_id1);
+		assert!(sync.fork_targets.len() == 0);
 	}
 }
