@@ -49,11 +49,22 @@ pub struct OnRuntimeUpgradeCmd {
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct OffchainWorkerCmd {
+	/// Hash of the block whose header to use to execute the offchain worker.
 	#[structopt(short, long, multiple = false, parse(try_from_str = parse::hash))]
 	pub header_at: String,
 
 	#[structopt(subcommand)]
 	pub state: State,
+
+	/// Wether or not to overwrite the code from state with the code from
+	/// the specified chain spec.
+	#[structopt(long)]
+	pub overwrite_code: bool,
+
+	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
+	/// sc_service::Configuration.default_heap_pages.
+	#[structopt(long, short)]
+	pub heap_pages: Option<u64>,
 }
 
 #[derive(Debug, Clone, structopt::StructOpt)]
@@ -152,11 +163,10 @@ where
 
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
-
 	let mut changes = Default::default();
-	// don't really care about these -- use the default values.
-	let max_runtime_instances = config.max_runtime_instances;
+	// don't really care about these so we just use the default
 	let heap_pages = config.default_heap_pages;
+	let max_runtime_instances = config.max_runtime_instances;
 	let executor = NativeExecutor::<ExecDispatch>::new(
 		wasm_method.into(),
 		heap_pages,
@@ -232,10 +242,13 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
-
+	let heap_pages = if command.heap_pages.is_some() {
+		command.heap_pages
+	} else {
+		config.default_heap_pages
+	};
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let heap_pages = config.default_heap_pages;
 	let executor = NativeExecutor::<ExecDispatch>::new(
 		wasm_method.into(),
 		heap_pages,
@@ -273,24 +286,23 @@ where
 				(mode, url)
 			}
 	};
-
-	// get the code to inject inject into the ext
-	let spec = config.chain_spec;
-	let genesis_storage = spec.build_storage()?;
-	let code = StorageData(
-		genesis_storage
-			.top
-			.get(well_known_keys::CODE)
-			.expect("code key must exist in genesis storage; qed")
-			.to_vec(),
-	);
-	let code_key = StorageKey(well_known_keys::CODE.to_vec());
-
-	let mut ext = Builder::<B>::new()
-		.mode(mode)
-		.inject(&[(code_key, code)])
-		.build()
-		.await?;
+	let builder = Builder::<B>::new().mode(mode);
+	let mut ext = if command.overwrite_code {
+		// get the code to inject inject into the ext
+		let spec = config.chain_spec; // TODO DRY this code block
+		let genesis_storage = spec.build_storage()?;
+		let code = StorageData(
+			genesis_storage
+				.top
+				.get(well_known_keys::CODE)
+				.expect("code key must exist in genesis storage; qed")
+				.to_vec(),
+		);
+		let code_key = StorageKey(well_known_keys::CODE.to_vec());
+		builder.inject(&[(code_key, code)]).build().await?
+	} else {
+		builder.build().await?
+	};
 
 	// register externality extensions in order to provide host interface for OCW to the runtime
 	let (offchain, _offchain_state) = TestOffchainExt::new();
