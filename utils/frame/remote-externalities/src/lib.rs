@@ -30,7 +30,6 @@ pub use sp_io::TestExternalities;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{StorageKey, StorageData},
-	// offchain::{OffchainWorkerExt, OffchainDbExt, testing::TestOffchainExt},
 };
 use codec::{Encode, Decode};
 use sp_runtime::traits::Block as BlockT;
