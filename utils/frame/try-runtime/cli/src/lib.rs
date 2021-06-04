@@ -23,6 +23,7 @@ use sc_service::Configuration;
 use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
 use sc_executor::NativeExecutor;
 use sc_service::NativeExecutionDispatch;
+use sc_chain_spec::ChainSpec;
 use sp_state_machine::StateMachine;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::{
@@ -75,7 +76,7 @@ pub struct SharedParams {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = "Native",
+		default_value = "Wasm",
 	)]
 	pub execution: ExecutionStrategy,
 
@@ -149,18 +150,6 @@ where
 	<NumberFor<B> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
-	let spec = config.chain_spec;
-	let genesis_storage = spec.build_storage()?;
-
-	let code = StorageData(
-		genesis_storage
-			.top
-			.get(well_known_keys::CODE)
-			.expect("code key must exist in genesis storage; qed")
-			.to_vec(),
-	);
-	let code_key = StorageKey(well_known_keys::CODE.to_vec());
-
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
 	let heap_pages = if shared.heap_pages.is_some() {
@@ -198,8 +187,9 @@ where
 				..Default::default()
 			})),
 		};
-
+		
 		// inject the code into this ext.
+		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder.inject(&[(code_key, code)]).build().await?
 	};
 
@@ -294,16 +284,7 @@ where
 	let builder = Builder::<B>::new().mode(mode);
 	let mut ext = if command.overwrite_code {
 		// get the code to inject inject into the ext
-		let spec = config.chain_spec; // TODO DRY this code block
-		let genesis_storage = spec.build_storage()?;
-		let code = StorageData(
-			genesis_storage
-				.top
-				.get(well_known_keys::CODE)
-				.expect("code key must exist in genesis storage; qed")
-				.to_vec(),
-		);
-		let code_key = StorageKey(well_known_keys::CODE.to_vec());
+		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder.inject(&[(code_key, code)]).build().await?
 	} else {
 		builder.build().await?
@@ -373,6 +354,22 @@ impl CliConfiguration for TryRuntimeCmd {
 			None => "dev".into(),
 		})
 	}
+}
+
+/// Extract `:code` from given chain spec and return as `StorageData` along with the corresponding
+/// `StorageKey`.
+fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
+	let genesis_storage = spec.build_storage()?;
+		let code = StorageData(
+			genesis_storage
+				.top
+				.get(well_known_keys::CODE)
+				.expect("code key must exist in genesis storage; qed")
+				.to_vec(),
+		);
+	let code_key = StorageKey(well_known_keys::CODE.to_vec());
+
+	Ok((code_key, code))
 }
 
 // Utils for parsing user input

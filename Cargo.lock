@@ -10661,6 +10661,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "remote-externalities",
+ "sc-chain-spec",
  "sc-cli",
  "sc-client-api",
  "sc-executor",
