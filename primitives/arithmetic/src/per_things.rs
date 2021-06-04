@@ -639,20 +639,20 @@ macro_rules! implement_per_thing {
 		impl Pow<usize> for $name {
 			type Output = Self;
 
-			fn pow(self, exp: usize) -> Self::Output {
+			fn pow(mut self, mut exp: usize) -> Self::Output {
 				if exp == 0 || self.is_one() {
 					return Self::one()
 				}
-				let mut result = self;
-				let mut exp = exp - 1;
-				while exp > 0 && !result.is_zero() {
-					if exp % 2 == 0 {
-						result = result.square();
-						exp /= 2;
-					} else {
+
+				let mut result = Self::one();
+				while exp > 0 {
+					if exp % 2 != 0 {
 						result = result * self;
 						exp -= 1;
 					}
+
+					self = self.square();
+					exp /= 2;
 				}
 				result
 			}
