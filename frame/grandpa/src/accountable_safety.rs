@@ -24,9 +24,6 @@ use sp_runtime::DispatchResult;
 use super::{Call, Config, Pallet};
 
 pub trait AccountableSafety<T: Config> {
-	/// Update the accountable safety state machine(s), if there are any active.
-	fn update();
-
 	/// Initiate the accountable safety protocol. This will be called when mutually inconsistent
 	/// finalized blocks are detected.
 	fn start_accountable_safety_protocol(
@@ -55,8 +52,6 @@ pub trait AccountableSafety<T: Config> {
 }
 
 impl<T: Config> AccountableSafety<T> for () {
-	fn update() {}
-
 	fn start_accountable_safety_protocol(
 		_new_block: (
 			sp_finality_grandpa::Commit<T::Hash, T::BlockNumber>,
@@ -96,13 +91,6 @@ where
 	// submission.
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
 {
-	fn update() {
-		// WIP: update the state
-		// if all_replies_received || blocks_passed > THRESHOLD {
-		// 		move_to_next_round()
-		// }
-	}
-
 	fn start_accountable_safety_protocol(
 		new_block: (
 			sp_finality_grandpa::Commit<T::Hash, T::BlockNumber>,

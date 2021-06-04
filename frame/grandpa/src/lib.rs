@@ -186,9 +186,6 @@ pub mod pallet {
 				},
 				_ => {},
 			}
-
-			// Update the accountable safety state machine
-			T::AccountableSafety::update();
 		}
 	}
 
