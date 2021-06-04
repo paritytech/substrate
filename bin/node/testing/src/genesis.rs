@@ -120,5 +120,6 @@ pub fn config_endowed(
 		},
 		vesting: Default::default(),
 		gilt: Default::default(),
+		transaction_storage: Default::default(),
 	}
 }

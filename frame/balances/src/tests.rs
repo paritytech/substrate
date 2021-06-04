@@ -964,5 +964,123 @@ macro_rules! decl_tests {
 					assert_eq!(Balances::total_balance(&2), 100);
 				});
 		}
+
+		#[test]
+		fn named_reserve_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = Balances::deposit_creating(&1, 111);
+
+				let id_1 = [1u8; 8];
+				let id_2 = [2u8; 8];
+				let id_3 = [3u8; 8];
+
+				// reserve
+
+				assert_noop!(Balances::reserve_named(&id_1, &1, 112), Error::<Test, _>::InsufficientBalance);
+
+				assert_ok!(Balances::reserve_named(&id_1, &1, 12));
+
+				assert_eq!(Balances::reserved_balance(1), 12);
+				assert_eq!(Balances::reserved_balance_named(&id_1, &1), 12);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 0);
+
+				assert_ok!(Balances::reserve_named(&id_1, &1, 2));
+
+				assert_eq!(Balances::reserved_balance(1), 14);
+				assert_eq!(Balances::reserved_balance_named(&id_1, &1), 14);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 0);
+
+				assert_ok!(Balances::reserve_named(&id_2, &1, 23));
+
+				assert_eq!(Balances::reserved_balance(1), 37);
+				assert_eq!(Balances::reserved_balance_named(&id_1, &1), 14);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 23);
+
+				assert_ok!(Balances::reserve(&1, 34));
+
+				assert_eq!(Balances::reserved_balance(1), 71);
+				assert_eq!(Balances::reserved_balance_named(&id_1, &1), 14);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 23);
+
+				assert_eq!(Balances::total_balance(&1), 111);
+				assert_eq!(Balances::free_balance(1), 40);
+
+				assert_noop!(Balances::reserve_named(&id_3, &1, 2), Error::<Test, _>::TooManyReserves);
+
+				// unreserve
+
+				assert_eq!(Balances::unreserve_named(&id_1, &1, 10), 0);
+
+				assert_eq!(Balances::reserved_balance(1), 61);
+				assert_eq!(Balances::reserved_balance_named(&id_1, &1), 4);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 23);
+
+				assert_eq!(Balances::unreserve_named(&id_1, &1, 5), 1);
+
+				assert_eq!(Balances::reserved_balance(1), 57);
+				assert_eq!(Balances::reserved_balance_named(&id_1, &1), 0);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 23);
+
+				assert_eq!(Balances::unreserve_named(&id_2, &1, 3), 0);
+
+				assert_eq!(Balances::reserved_balance(1), 54);
+				assert_eq!(Balances::reserved_balance_named(&id_1, &1), 0);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 20);
+
+				assert_eq!(Balances::total_balance(&1), 111);
+				assert_eq!(Balances::free_balance(1), 57);
+
+				// slash_reserved_named
+
+				assert_ok!(Balances::reserve_named(&id_1, &1, 10));
+
+				assert_eq!(Balances::slash_reserved_named(&id_1, &1, 25).1, 15);
+
+				assert_eq!(Balances::reserved_balance(1), 54);
+				assert_eq!(Balances::reserved_balance_named(&id_1, &1), 0);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 20);
+				assert_eq!(Balances::total_balance(&1), 101);
+
+				assert_eq!(Balances::slash_reserved_named(&id_2, &1, 5).1, 0);
+
+				assert_eq!(Balances::reserved_balance(1), 49);
+				assert_eq!(Balances::reserved_balance_named(&id_1, &1), 0);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 15);
+				assert_eq!(Balances::total_balance(&1), 96);
+
+				// repatriate_reserved_named
+
+				let _ = Balances::deposit_creating(&2, 100);
+
+				assert_eq!(Balances::repatriate_reserved_named(&id_2, &1, &2, 10, Status::Reserved).unwrap(), 0);
+
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 5);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &2), 10);
+				assert_eq!(Balances::reserved_balance(&2), 10);
+
+				assert_eq!(Balances::repatriate_reserved_named(&id_2, &2, &1, 11, Status::Reserved).unwrap(), 1);
+
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 15);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &2), 0);
+				assert_eq!(Balances::reserved_balance(&2), 0);
+
+				assert_eq!(Balances::repatriate_reserved_named(&id_2, &1, &2, 10, Status::Free).unwrap(), 0);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 5);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &2), 0);
+				assert_eq!(Balances::free_balance(&2), 110);
+
+				// repatriate_reserved_named to self
+
+				assert_eq!(Balances::repatriate_reserved_named(&id_2, &1, &1, 10, Status::Reserved).unwrap(), 5);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 5);
+
+				assert_eq!(Balances::free_balance(&1), 47);
+
+				assert_eq!(Balances::repatriate_reserved_named(&id_2, &1, &1, 15, Status::Free).unwrap(), 10);
+				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 0);
+
+				assert_eq!(Balances::free_balance(&1), 52);
+			});
+		}
 	}
 }

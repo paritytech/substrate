@@ -335,6 +335,7 @@ pub fn testnet_genesis(
 		},
 		vesting: Default::default(),
 		gilt: Default::default(),
+		transaction_storage: Default::default(),
 	}
 }
 
