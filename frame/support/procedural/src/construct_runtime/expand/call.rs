@@ -24,6 +24,7 @@ pub fn expand_outer_dispatch(
 	runtime: &Ident,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
+	use_v2: bool,
 ) -> TokenStream {
 	let mut variant_defs = TokenStream::new();
 	let mut variant_patterns = Vec::new();
@@ -44,10 +45,16 @@ pub fn expand_outer_dispatch(
 		pallet_paths.push(&pallet_declaration.pallet);
 	}
 
+	let query_call_part_macros = if use_v2 {
+		quote! {
+			#( #pallet_paths::__is_call_part_defined!(#pallet_names); )*
+		}
+	} else {
+		TokenStream::new()
+	};
+
 	quote! {
-		#(
-			#pallet_paths::__is_call_part_defined!(#pallet_names);
-		)*
+		#query_call_part_macros
 
 		#[derive(
 			Clone, PartialEq, Eq,

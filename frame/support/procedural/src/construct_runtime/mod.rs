@@ -109,14 +109,14 @@ fn complete_pallets(decl: impl Iterator<Item = PalletDeclaration>) -> syn::Resul
 		.collect()
 }
 
-pub fn construct_runtime(input: TokenStream) -> TokenStream {
+pub fn construct_runtime(input: TokenStream, use_v2: bool) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
-	construct_runtime_parsed(definition)
+	construct_runtime_parsed(definition, use_v2)
 		.unwrap_or_else(|e| e.to_compile_error())
 		.into()
 }
 
-fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
+fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Result<TokenStream2> {
 	let RuntimeDefinition {
 		name,
 		where_section: WhereSection {
@@ -145,7 +145,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
 	let pallet_to_index = decl_pallet_runtime_setup(&pallets, &scrate);
 
-	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate);
+	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate, use_v2);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
 	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
 	let inherent = decl_outer_inherent(
