@@ -78,7 +78,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 	/// Run [`LightClientRequestHandler`].
 	pub async fn run(mut self) {
 		while let Some(request) = self.request_receiver.next().await {
-			let IncomingRequest { peer, payload, pending_response } = request;
+			let IncomingRequest { peer, reputation: _, payload, pending_response } = request;
 
 			match self.handle_request(peer, payload) {
 				Ok(response_data) => {

@@ -110,8 +110,6 @@ pub struct BlockRequestHandler<B: BlockT> {
 	///
 	/// This is used to check if a peer is spamming us with the same request.
 	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
-
-	peerset: PeersetHandle,
 }
 
 impl<B: BlockT> BlockRequestHandler<B> {
@@ -120,7 +118,6 @@ impl<B: BlockT> BlockRequestHandler<B> {
 		protocol_id: &ProtocolId,
 		client: Arc<dyn Client<B>>,
 		num_peer_hint: usize,
-		peerset: PeersetHandle,
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
 		// number of peers.
@@ -131,16 +128,13 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 		let seen_requests = LruCache::new(num_peer_hint * 2);
 
-		(Self { client, request_receiver, seen_requests, peerset }, protocol_config)
+		(Self { client, request_receiver, seen_requests }, protocol_config)
 	}
 
 	/// Run [`BlockRequestHandler`].
 	pub async fn run(mut self) {
 		while let Some(request) = self.request_receiver.next().await {
-			let IncomingRequest { peer, payload, pending_response } = request;
-
-			let reputation = self.peerset.peer_reputation(peer.clone()).await;
-			let reputation = reputation.expect("The channel can only be closed if the peerset no longer exists; qed");
+			let IncomingRequest { peer, reputation, payload, pending_response } = request;
 
 			if reputation < BANNED_THRESHOLD {
 				debug!(

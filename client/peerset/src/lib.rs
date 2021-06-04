@@ -164,7 +164,7 @@ impl PeersetHandle {
 	}
 
 	/// Returns the reputation value of the peer.
-	pub async fn peer_reputation(&self, peer_id: PeerId) -> Result<i32, ()> {
+	pub async fn peer_reputation(self, peer_id: PeerId) -> Result<i32, ()> {
 		let (tx, rx) = oneshot::channel();
 
 		let _ = self.tx.unbounded_send(Action::PeerReputation(peer_id, tx));
