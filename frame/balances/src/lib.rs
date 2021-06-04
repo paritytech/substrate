@@ -362,6 +362,26 @@ pub mod pallet {
 			<Self as Currency<_>>::transfer(&transactor, &dest, value, KeepAlive)?;
 			Ok(().into())
 		}
+
+		/// Transfer the entire transferable balance from the caller account.
+		///
+		/// # <weight>
+		/// - O(1). Just like transfer, but reading the user's transferable balance first.
+		/// #</weight>
+		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
+		pub fn transfer_all(
+			origin: OriginFor<T>,
+			dest: <T::Lookup as StaticLookup>::Source,
+			keep_alive: bool,
+		) -> DispatchResultWithPostInfo {
+			use fungible::Inspect;
+			let transactor = ensure_signed(origin)?;
+			let reducible_balance = Self::reducible_balance(&transactor, keep_alive);
+			let dest = T::Lookup::lookup(dest)?;
+			let keep_alive = if keep_alive { KeepAlive } else { AllowDeath };
+			<Self as Currency<_>>::transfer(&transactor, &dest, reducible_balance, keep_alive.into())?;
+			Ok(().into())
+		}
 	}
 
 	#[pallet::event]
