@@ -284,7 +284,7 @@ struct RequestProcessingOutcome {
 impl RequestResponsesBehaviour {
 	/// Creates a new behaviour. Must be passed a list of supported protocols. Returns an error if
 	/// the same protocol is passed twice.
-	pub fn new(list: impl Iterator<Item = ProtocolConfig>, peerset: Option<PeersetHandle>) -> Result<Self, RegisterError> {
+	pub fn new(list: impl Iterator<Item = ProtocolConfig>, peerset: PeersetHandle) -> Result<Self, RegisterError> {
 		let mut protocols = HashMap::new();
 		for protocol in list {
 			let mut cfg = RequestResponseConfig::default();
@@ -315,7 +315,7 @@ impl RequestResponsesBehaviour {
 			pending_responses: Default::default(),
 			pending_responses_arrival_time: Default::default(),
 			send_feedback: Default::default(),
-			peerset: peerset.unwrap(), // FIXME
+			peerset,
 			message_request: None,
 		})
 	}
