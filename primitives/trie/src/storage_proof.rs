@@ -106,11 +106,7 @@ impl CompactProof {
 			proof,
 			root,
 		);
-		if let Ok(proof) = compact_proof {
-			Some(proof.encoded_size())
-		} else {
-			None
-		}
+		compact_proof.ok().map(|p| p.encoded_size())
 	}
 }
 
@@ -143,5 +139,12 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 			db.insert(crate::EMPTY_PREFIX, &item);
 		}
 		db
+	}
+}
+
+#[cfg(test)]
+mod test {
+	#[test]
+	fn test_compact_proof() {
 	}
 }
