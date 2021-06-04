@@ -249,9 +249,9 @@ impl BlockImport<Block> for PeersClient {
 	) -> Result<ImportResult, Self::Error> {
 		match self {
 			PeersClient::Full(client, _) =>
-				client.import_block(block.convert_transaction(), cache).await,
+				client.import_block(block.clear_storage_changes_and_mutate(), cache).await,
 			PeersClient::Light(client, _) =>
-				client.import_block(block.convert_transaction(), cache).await,
+				client.import_block(block.clear_storage_changes_and_mutate(), cache).await,
 		}
 	}
 }
@@ -598,7 +598,7 @@ impl<I> BlockImport<Block> for BlockImportAdapter<I> where
 		block: BlockImportParams<Block, ()>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.import_block(block.convert_transaction(), cache).await
+		self.inner.import_block(block.clear_storage_changes_and_mutate(), cache).await
 	}
 }
 

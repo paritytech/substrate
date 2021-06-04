@@ -1277,7 +1277,7 @@ impl<B: BlockT> ChainSync<B> {
 						info!(
 							target: "sync",
 							"State sync is complete ({} MiB), restarting block sync.",
-							self.state_sync.as_ref().map_or(0, |s| s.progress().1),
+							self.state_sync.as_ref().map_or(0, |s| s.progress().1 / (1024 * 1024)),
 						);
 						self.state_sync = None;
 						self.mode = SyncMode::Full;

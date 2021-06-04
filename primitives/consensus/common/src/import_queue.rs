@@ -269,7 +269,7 @@ pub(crate) async fn import_single_block_metered<B: BlockT, V: Verifier<B>, Trans
 		cache.extend(keys.into_iter());
 	}
 	import_block.import_existing = block.import_existing;
-	let mut import_block = import_block.convert_transaction();
+	let mut import_block = import_block.clear_storage_changes_and_mutate();
 	if let Some(state) = block.state {
 		import_block.state_action = StateAction::ApplyChanges(crate::StorageChanges::Import(state));
 	} else if block.skip_execution {

@@ -245,7 +245,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	///
 	/// Actually this just sets Changes `storage_changes` to `None` and makes rustc think that `Self` now
 	/// uses a different transaction type.
-	pub fn convert_transaction<Transaction2>(self) -> BlockImportParams<Block, Transaction2> {
+	pub fn clear_storage_changes_and_mutate<Transaction2>(self) -> BlockImportParams<Block, Transaction2> {
 		// Preserve imported state.
 		let state_action = match self.state_action {
 			StateAction::ApplyChanges(StorageChanges::Import(state)) =>
