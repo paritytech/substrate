@@ -111,7 +111,8 @@ pub struct TryRuntimeCmd {
 pub enum State {
 	/// Use a state snapshot as the source of runtime state. NOTE: for the offchain-worker command this
 	/// is only partially supported at the moment and you must have a relevant archive node exposed on
-	//// localhost:9944 in order to query the block header.
+	/// localhost:9944 in order to query the block header.
+	// TODO https://github.com/paritytech/substrate/issues/9027
 	Snap {
 		snapshot_path: PathBuf,
 	},
@@ -272,6 +273,7 @@ where
 				// TODO This is a temporary hack; the url is used just to get the header. We should try
 				// and get the header out of state, OR use an arbitrary header if thats ok, OR allow
 				// the user to feed in a header via file.
+				// https://github.com/paritytech/substrate/issues/9027
 				// This assumes you have a node running on local host default
 				let url = "ws://127.0.0.1:9944".to_string();
 				let mode = Mode::Offline(OfflineConfig {
