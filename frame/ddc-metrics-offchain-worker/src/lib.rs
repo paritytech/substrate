@@ -70,32 +70,11 @@ struct MetricInfo {
     requests: u128,
 }
 
-impl MetricInfo {
-    fn new() -> Self {
-        Self {
-            appPubKey: Default::default(),
-            partitionId: Default::default(),
-            bytes: Default::default(),
-            requests: Default::default(),
-        }
-    }
-}
-
 #[derive(Default, Debug)]
 struct DDNMetricInfo {
 	ddn_id: Vec<u8>,
 	bytes: u128,
 	requests: u128,
-}
-
-impl DDNMetricInfo {
-	fn new() -> Self {
-		Self {
-			ddn_id: Default::default(),
-			bytes: Default::default(),
-			requests: Default::default(),
-		}
-	}
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -453,7 +432,7 @@ impl<T: Trait> Module<T> {
                 );
 
                 let call_data = Self::encode_report_metrics_ddn(
-                    one_metric.ddn_id.clone(),
+                    &one_metric.ddn_id,
                     day_start_ms,
                     one_metric.bytes,
                     one_metric.requests,
@@ -644,7 +623,7 @@ impl<T: Trait> Module<T> {
     }
 
 	fn encode_report_metrics_ddn(
-        ddn_id: Vec<u8>,
+        ddn_id: &[u8],
         day_start_ms: u64,
         stored_bytes: u128,
         requests: u128,
@@ -680,10 +659,12 @@ impl MetricsAggregator {
 
         if existing_pubkey_index.is_none() {
             // New app.
-            let mut new_metric_obj = MetricInfo::new();
-            new_metric_obj.appPubKey = metrics.appPubKey.clone();
-            new_metric_obj.requests = metrics.requests;
-            new_metric_obj.bytes = metrics.bytes;
+            let new_metric_obj = MetricInfo {
+                appPubKey: metrics.appPubKey.clone(),
+                partitionId: vec![], // Ignored in aggregates.
+                bytes: metrics.bytes,
+                requests: metrics.requests,
+            };
             self.0.push(new_metric_obj);
         } else {
             // Add to metrics of an existing app.
@@ -717,11 +698,11 @@ impl DDnMetricsAggregator {
 				bytes_sum += metric_item.bytes;
 			}
 
-
-			let mut new_metric_obj = DDNMetricInfo::new();
-			new_metric_obj.ddn_id = ddn_id.clone();
-			new_metric_obj.requests = requests_sum;
-			new_metric_obj.bytes = bytes_sum;
+			let new_metric_obj = DDNMetricInfo {
+                ddn_id,
+                bytes: bytes_sum,
+                requests: requests_sum,
+            };
 			self.0.push(new_metric_obj);
 		}
 	}
