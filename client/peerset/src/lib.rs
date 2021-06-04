@@ -919,4 +919,45 @@ mod tests {
 
 		futures::executor::block_on(fut);
 	}
+
+	#[test]
+	fn test_relloc_after_banned() {
+		let (mut peerset, handle) = Peerset::from_config(PeersetConfig {
+			sets: vec![SetConfig {
+				in_peers: 25,
+				out_peers: 25,
+				bootnodes: vec![],
+				reserved_nodes: Default::default(),
+				reserved_only: false,
+			}],
+		});
+
+		// We ban a node by setting its reputation under the threshold.
+		let peer_id = PeerId::random();
+		handle.report_peer(peer_id.clone(), ReputationChange::new(BANNED_THRESHOLD - 1, ""));
+
+		let fut = futures::future::poll_fn(move |cx| {
+			// We need one polling for the message to be processed.
+			assert_eq!(Stream::poll_next(Pin::new(&mut peerset), cx), Poll::Pending);
+
+			// Check that an incoming connection from that node gets refused.
+			// This is already tested in other tests, but it is done again here because it doesn't
+			// hurt.
+			peerset.incoming(SetId::from(0), peer_id.clone(), IncomingIndex(1));
+			if let Poll::Ready(msg) = Stream::poll_next(Pin::new(&mut peerset), cx) {
+				assert_eq!(msg.unwrap(), Message::Reject(IncomingIndex(1)));
+			} else {
+				panic!()
+			}
+
+			// Wait for the peerset to change its mind and actually connect to it.
+			while let Poll::Ready(msg) = Stream::poll_next(Pin::new(&mut peerset), cx) {
+				assert_eq!(msg.unwrap(), Message::Connect { set_id: SetId::from(0), peer_id });
+			}
+
+			Poll::Ready(())
+		});
+
+		futures::executor::block_on(fut);
+	}
 }
