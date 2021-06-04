@@ -263,7 +263,7 @@ fn deploy_contract() -> AccountId {
     let _ = Balances::deposit_creating(&alice, 10_000_000_000);
 
     // Load the contract code.
-    let wasm = &include_bytes!("./test_data/ddc.wasm")[..];
+    let wasm = &include_bytes!("./test_data/cere02.wasm")[..];
     let wasm_hash = <T as FST>::Hashing::hash(wasm);
     let contract_args = vec![];
 
