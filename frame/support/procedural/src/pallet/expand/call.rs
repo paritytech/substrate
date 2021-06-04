@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use super::Counter;
 use syn::spanned::Spanned;
 
-thread_local!{
+thread_local! {
 	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
 }
 

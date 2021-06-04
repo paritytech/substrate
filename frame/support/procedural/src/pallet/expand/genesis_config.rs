@@ -16,13 +16,45 @@
 // limitations under the License.
 
 use crate::pallet::{Def, parse::helper::get_doc_literals};
+use std::cell::RefCell;
+use super::Counter;
+use syn::{Ident, spanned::Spanned};
+
+thread_local! {
+	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
+}
 
 /// * add various derive trait on GenesisConfig struct.
 pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
-	let genesis_config = if let Some(genesis_config) = &def.genesis_config {
-		genesis_config
+	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
+
+	let (genesis_config, macro_ident) = if let Some(genesis_config) = &def.genesis_config {
+		let ident = Ident::new(
+			&format!("__is_genesis_config_defined_{}", count),
+			genesis_config.genesis_config.span(),
+		);
+		(genesis_config, ident)
 	} else {
-		return Default::default()
+		let macro_ident = Ident::new(
+			&format!("__is_genesis_config_defined_{}", count),
+			def.item.span(),
+		);
+
+		return quote::quote! {
+			#[macro_export]
+			macro_rules! #macro_ident {
+				($pallet_name:ident) => {
+					compile_error!(concat!(
+						"`",
+						stringify!($pallet_name),
+						"` does not have #[pallet::genesis_config] defined, perhaps you should \
+						remove `Config` from construct_runtime?",
+					));
+				}
+			}
+
+			pub use #macro_ident as __is_genesis_config_defined;
+		};
 	};
 	let frame_support = &def.frame_support;
 
@@ -57,5 +89,12 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 		_ => unreachable!("Checked by genesis_config parser"),
 	}
 
-	Default::default()
+	quote::quote! {
+		#[macro_export]
+		macro_rules! #macro_ident {
+			($pallet_name:ident) => {};
+		}
+
+		pub use #macro_ident as __is_genesis_config_defined;
+	}
 }

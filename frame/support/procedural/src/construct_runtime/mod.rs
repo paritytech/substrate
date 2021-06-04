@@ -147,7 +147,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Resu
 
 	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate, use_v2);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
-	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
+	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate, use_v2);
 	let inherent = decl_outer_inherent(
 		&name,
 		&block,

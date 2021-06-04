@@ -24,10 +24,13 @@ pub fn expand_outer_config(
 	runtime: &Ident,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
+	use_v2: bool,
 ) -> TokenStream {
 	let mut types = TokenStream::new();
 	let mut fields = TokenStream::new();
 	let mut build_storage_calls = TokenStream::new();
+	let mut pallet_paths = Vec::new();
+	let mut pallet_names = Vec::new();
 
 	for decl in pallet_decls {
 		if let Some(pallet_entry) = decl.find_part("Config") {
@@ -43,10 +46,22 @@ pub fn expand_outer_config(
 			types.extend(expand_config_types(runtime, decl, &config, part_is_generic));
 			fields.extend(quote!(pub #field_name: #config,));
 			build_storage_calls.extend(expand_config_build_storage_call(scrate, runtime, decl, &field_name));
+			pallet_paths.push(&decl.pallet);
+			pallet_names.push(&decl.name);
 		}
 	}
 
-	quote!{
+	let query_genesis_config_part_macros = if use_v2 {
+		quote! {
+			#( #pallet_paths::__is_genesis_config_defined!(#pallet_names); )*
+		}
+	} else {
+		TokenStream::new()
+	};
+
+	quote! {
+		#query_genesis_config_part_macros
+
 		#types
 
 		#[cfg(any(feature = "std", test))]
