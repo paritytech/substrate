@@ -887,8 +887,8 @@ mod execution {
 		proof: StorageProof,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
-		count: u32,
-		value_size: u32,
+		count_limit: u32,
+		value_size_limit: u32,
 		start_at: Option<&[u8]>,
 	) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Box<dyn Error>>
 	where
@@ -900,8 +900,8 @@ mod execution {
 			&proving_backend,
 			child_info,
 			prefix,
-			count,
-			value_size,
+			count_limit,
+			value_size_limit,
 			start_at,
 		)
 	}
@@ -937,8 +937,8 @@ mod execution {
 		proving_backend: &TrieBackend<MemoryDB<H>, H>,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
-		count: u32,
-		value_size: u32,
+		count_limit: u32,
+		value_size_limit: u32,
 		start_at: Option<&[u8]>,
 	) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Box<dyn Error>>
 	where
@@ -948,7 +948,7 @@ mod execution {
 		let mut total_value_size = 0usize;
 		let mut result = Vec::new();
 		proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |key, value| {
-			if result.len() as u32 == count || total_value_size > value_size as usize {
+			if result.len() as u32 == count_limit || total_value_size > value_size_limit as usize {
 				return false;
 			}
 			result.push((key.to_vec(), value.to_vec()));

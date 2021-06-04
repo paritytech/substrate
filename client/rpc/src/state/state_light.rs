@@ -656,8 +656,8 @@ fn storage_range<Block: BlockT, F: Fetcher<Block>>(
 	block: Block::Hash,
 	child_trie_key: Option<PrefixedStorageKey>,
 	prefix: Option<Vec<u8>>,
-	count: u32,
-	value_size: u32,
+	count_limit: u32,
+	value_size_limit: u32,
 	start_key: Option<Vec<u8>>,
 ) -> impl std::future::Future<Output = Result<Vec<(StorageKey, StorageData)>, Error>> {
 	resolve_header(remote_blockchain, &*fetcher, block)
@@ -667,8 +667,8 @@ fn storage_range<Block: BlockT, F: Fetcher<Block>>(
 				header,
 				child_trie_key,
 				prefix,
-				count,
-				value_size,
+				count_limit,
+				value_size_limit,
 				start_key,
 				retry_count: Default::default(),
 			}).then(|result| ready(result

@@ -770,8 +770,8 @@ impl<B: Block> Request<B> {
 						.unwrap_or_else(Default::default),
 					prefix: request.prefix.clone()
 						.unwrap_or_else(Default::default),
-					count: request.count.clone(),
-					value_size: request.value_size.clone(),
+					count_limit: request.count_limit.clone(),
+					value_size_limit: request.value_size_limit.clone(),
 					start_key: request.start_key.clone()
 						.unwrap_or_else(Default::default),
 				};

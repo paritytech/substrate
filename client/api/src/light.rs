@@ -102,10 +102,10 @@ pub struct RemoteReadRangeRequest<Header: HeaderT> {
 	/// Limit range of query to a given prefix.
 	pub prefix: Option<Vec<u8>>,
 	/// Maximum number of key value to query.
-	pub count: u32,
+	pub count_limit: u32,
 	/// Maximum total size of value to query.
 	/// Acts as a threshold.
-	pub value_size: u32,
+	pub value_size_limit: u32,
 	/// Start key for query. Allows resuming from previous
 	/// range query.
 	pub start_key: Option<Vec<u8>>,

@@ -304,8 +304,8 @@ impl<B: Block> LightClientRequestHandler<B> {
 		peer: &PeerId,
 		request: &schema::v1::light::RemoteReadRangeRequest,
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
-		if request.count > MAX_LIGHT_RANGE_COUNT 
-			|| request.value_size > VALUE_SIZE_LIGHT_RANGE_TRESHOLD {
+		if request.count_limit > MAX_LIGHT_RANGE_COUNT 
+			|| request.value_size_limit > VALUE_SIZE_LIGHT_RANGE_TRESHOLD {
 			log::debug!("Invalid remote range read request sent by {}.", peer);
 			return Err(HandleRequestError::BadRequest("Range read request too big."))
 		}
@@ -315,8 +315,8 @@ impl<B: Block> LightClientRequestHandler<B> {
 			peer,
 			HexDisplay::from(&request.child_trie_key),
 			HexDisplay::from(&request.prefix),
-			&request.count,
-			&request.value_size,
+			&request.count_limit,
+			&request.value_size_limit,
 			HexDisplay::from(&request.start_key),
 			request.block,
 		);
@@ -324,11 +324,11 @@ impl<B: Block> LightClientRequestHandler<B> {
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
 		let prefix = (request.prefix.len() == 0).then(|| request.prefix.as_slice());
-		let mut count = request.count.clone();
-		if count == 0 {
-			count = MAX_LIGHT_RANGE_COUNT;
+		let mut count_limit = request.count_limit.clone();
+		if count_limit == 0 {
+			count_limit = MAX_LIGHT_RANGE_COUNT;
 		}
-		let mut value_treshold = request.value_size.clone();
+		let mut value_treshold = request.value_size_limit.clone();
 		if value_treshold == 0 {
 			value_treshold = VALUE_SIZE_LIGHT_RANGE_TRESHOLD;
 		}
@@ -346,7 +346,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 			&BlockId::Hash(block),
 			child_info.as_ref(),
 			prefix,
-			count,
+			count_limit,
 			value_treshold,
 			start_key,
 		)) {
@@ -357,8 +357,8 @@ impl<B: Block> LightClientRequestHandler<B> {
 					peer,
 					HexDisplay::from(&request.child_trie_key),
 					HexDisplay::from(&request.prefix),
-					&request.count,
-					&request.value_size,
+					&request.count_limit,
+					&request.value_size_limit,
 					HexDisplay::from(&request.start_key),
 					request.block,
 					error,

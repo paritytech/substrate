@@ -77,12 +77,12 @@ message RemoteReadRangeRequest {
 
 	/// Maximum number of key value to query.
 	/// 0 to use the hardcoded max limit.
-	uint32 count = 5;
+	uint32 count_limit = 5;
 
 	/// Maximum total size of value in proof.
 	/// Act only as a treshold.
 	/// 0 to use the hardcoded max limit.
-	uint32 value_size = 6;
+	uint32 value_size_limit = 6;
 
 	/// Start key for query. Allows resuming from previous
 	/// range query.
@@ -143,4 +143,3 @@ message RemoteChangesResponse {
 	// Missing changes tries roots proof.
 	bytes roots_proof = 5;
 }
-

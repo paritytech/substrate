@@ -277,8 +277,8 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 			remote_proof,
 			child_info.as_ref(),
 			request.prefix.as_ref().map(Vec::as_slice),
-			request.count,
-			request.value_size,
+			request.count_limit,
+			request.value_size_limit,
 			request.start_key.as_ref().map(Vec::as_slice),
 		).map_err(|e| ClientError::from(e))
 	}
