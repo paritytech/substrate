@@ -1402,28 +1402,29 @@ mod tests {
 		}
 	}
 
+	fn test_compact(remote_proof: StorageProof, remote_root: &sp_core::H256) -> StorageProof {
+		type Layout = sp_trie::Layout<BlakeTwo256>;
+		let compact_remote_proof = sp_trie::encode_compact::<Layout>(
+			remote_proof,
+			remote_root.clone(),
+		).unwrap();
+		let mut db = sp_trie::MemoryDB::<BlakeTwo256>::new(&[]);
+		sp_trie::decode_compact::<Layout, _, _>(
+			&mut db,
+			compact_remote_proof.iter_compact_encoded_nodes(),
+			Some(remote_root),
+		).unwrap();
+		StorageProof::new(db.drain().into_iter().filter_map(|kv|
+			if (kv.1).1 > 0 {
+				Some((kv.1).0)
+			} else {
+				None
+			}
+		).collect())
+	}
+
 	#[test]
 	fn prove_read_and_proof_check_works() {
-		fn test_compact(remote_proof: StorageProof, remote_root: &sp_core::H256) -> StorageProof {
-			type Layout = sp_trie::Layout<BlakeTwo256>;
-			let compact_remote_proof = sp_trie::encode_compact::<Layout>(
-				remote_proof,
-				remote_root.clone(),
-			).unwrap();
-			let mut db = sp_trie::MemoryDB::<BlakeTwo256>::new(&[]);
-			sp_trie::decode_compact::<Layout, _, _>(
-				&mut db,
-				compact_remote_proof.iter_compact_encoded_nodes(),
-				Some(remote_root),
-			).unwrap();
-			StorageProof::new(db.drain().into_iter().filter_map(|kv|
-				if (kv.1).1 > 0 {
-					Some((kv.1).0)
-				} else {
-					None
-				}
-			).collect())
-		}
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
@@ -1479,6 +1480,50 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn compact_multiple_child_trie() {
+		// this root will be queried
+		let child_info1 = ChildInfo::new_default(b"sub1");
+		// this root will not be include in proof
+		let child_info2 = ChildInfo::new_default(b"sub2");
+		// this root will be include in proof
+		let child_info3 = ChildInfo::new_default(b"sub");
+		let mut remote_backend = trie_backend::tests::test_trie();
+		let (remote_root, transaction) = remote_backend.full_storage_root(
+			std::iter::empty(),
+			vec![
+				(&child_info1, vec![
+					(&b"key1"[..], Some(&b"val2"[..])),
+					(&b"key2"[..], Some(&b"val3"[..])),
+				].into_iter()),
+				(&child_info2, vec![
+					(&b"key3"[..], Some(&b"val4"[..])),
+					(&b"key4"[..], Some(&b"val5"[..])),
+				].into_iter()),
+				(&child_info3, vec![
+					(&b"key5"[..], Some(&b"val6"[..])),
+					(&b"key6"[..], Some(&b"val7"[..])),
+				].into_iter()),
+			].into_iter(),
+		);
+		remote_backend.backend_storage_mut().consolidate(transaction);
+		remote_backend.essence.set_root(remote_root.clone());
+		let remote_proof = prove_child_read(
+			remote_backend,
+			&child_info1,
+			&[b"key1"],
+		).unwrap();
+		let remote_proof = test_compact(remote_proof, &remote_root);
+		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
+			remote_root,
+			remote_proof.clone(),
+			&child_info1,
+			&[b"key1"],
+		).unwrap();
+		assert_eq!(local_result1.len(), 1);
+		assert_eq!(local_result1.get(&b"key1"[..]), Some(&Some(b"val2".to_vec())));
+	}
+	
 	#[test]
 	fn child_storage_uuid() {
 
