@@ -304,7 +304,7 @@ where
 		builder.build().await?
 	};
 
-	// register externality extensions in order to provide host interface for OCW to the runtime
+	// register externality extensions in order to provide host interface for OCW to the runtime.
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
 	ext.register_extension(OffchainDbExt::new(offchain.clone()));
@@ -313,7 +313,7 @@ where
 	ext.register_extension(TransactionPoolExt::new(pool));
 
 	let header_hash: B::Hash = command.header_at.parse().unwrap();
-	let header = rpc_api::get_header::<B, _>(url,header_hash).await;
+	let header = rpc_api::get_header::<B, _>(url, header_hash).await;
 
 	let _ = StateMachine::<_, _, NumberFor<B>, _>::new(
 		&ext.backend,
@@ -398,4 +398,3 @@ mod parse {
 		}
 	}
 }
-
