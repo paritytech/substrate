@@ -39,7 +39,7 @@ use futures::prelude::*;
 use log::{debug, error, trace};
 use serde_json::json;
 use std::{collections::HashMap, pin::Pin, task::{Context, Poll}, time::Duration};
-use wasm_timer::Instant;
+use wasm_timer::{Delay, Instant};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 pub use libp2p::PeerId;
@@ -252,6 +252,9 @@ pub struct Peerset {
 	created: Instant,
 	/// Last time when we updated the reputations of connected nodes.
 	latest_time_update: Instant,
+	/// Next time to do a periodic call to `alloc_slots` with all sets. This is done once per
+	/// second, to match the period of the reputation updates.
+	next_periodic_alloc_slots: Delay,
 }
 
 impl Peerset {
@@ -279,6 +282,7 @@ impl Peerset {
 				message_queue: VecDeque::new(),
 				created: now,
 				latest_time_update: now,
+				next_periodic_alloc_slots: Delay::new(Duration::new(0, 0)),
 			}
 		};
 
@@ -697,6 +701,14 @@ impl Stream for Peerset {
 		loop {
 			if let Some(message) = self.message_queue.pop_front() {
 				return Poll::Ready(Some(message));
+			}
+
+			if let Poll::Ready(_) = Future::poll(Pin::new(&mut self.next_periodic_alloc_slots), cx) {
+				self.next_periodic_alloc_slots = Delay::new(Duration::new(1, 0));
+
+				for set_index in 0..self.data.num_sets() {
+					self.alloc_slots(SetId(set_index));
+				}
 			}
 
 			let action = match Stream::poll_next(Pin::new(&mut self.rx), cx) {
