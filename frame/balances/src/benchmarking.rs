@@ -176,6 +176,22 @@ benchmarks_instance_pallet! {
 		assert_eq!(Balances::<T, I>::free_balance(&caller), Zero::zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);
 	}
+
+	// Benchmark `transfer_all` with the worst possible condition:
+	// * The recipient account is created
+	// * The sender is killed
+	transfer_all {
+		let caller = whitelisted_caller();
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
+
+		// Give the sender account max funds, thus a transfer will not kill account.
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, T::Balance::max_value());
+	}: _(RawOrigin::Signed(caller.clone()), recipient_lookup, false)
+	verify {
+		assert!(Balances::<T, I>::free_balance(&caller).is_zero());
+		assert_eq!(Balances::<T, I>::free_balance(&recipient), T::Balance::max_value());
+	}
 }
 
 impl_benchmark_test_suite!(

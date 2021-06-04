@@ -368,7 +368,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - O(1). Just like transfer, but reading the user's transferable balance first.
 		/// #</weight>
-		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
+		#[pallet::weight(T::WeightInfo::transfer_all())]
 		pub fn transfer_all(
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
