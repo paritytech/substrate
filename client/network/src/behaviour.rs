@@ -211,7 +211,7 @@ impl<B: BlockT> Behaviour<B> {
 			discovery: disco_config.finish(),
 			bitswap: bitswap.into(),
 			request_responses:
-				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter())?,
+				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter(), None)?, // FIXME
 			light_client_request_sender,
 			events: VecDeque::new(),
 			block_request_protocol_name,

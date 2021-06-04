@@ -58,7 +58,7 @@ use wasm_timer::Instant;
 use crate::ReputationChange;
 
 pub use libp2p::request_response::{InboundFailure, OutboundFailure, RequestId};
-use sc_peerset::PeersetHandle;
+use sc_peerset::{PeersetHandle, BANNED_THRESHOLD};
 
 /// Configuration for a single request-response protocol.
 #[derive(Debug, Clone)]
@@ -111,9 +111,6 @@ pub struct ProtocolConfig {
 pub struct IncomingRequest {
 	/// Who sent the request.
 	pub peer: PeerId,
-
-	/// Peers' reputation.
-	pub reputation: i32,
 
 	/// Request sent by the remote. Will always be smaller than
 	/// [`ProtocolConfig::max_request_size`].
@@ -270,6 +267,8 @@ struct MessageRequest {
     request_id: RequestId,
     request: Vec<u8>,
     channel: ResponseChannel<Result<Vec<u8>, ()>>,
+	protocol: String,
+    resp_builder: Option<futures::channel::mpsc::Sender<IncomingRequest>>,
     get_peer_reputation: Pin<Box<dyn Future<Output=Result<i32, ()>> + Send>>,
 }
 
@@ -285,7 +284,7 @@ struct RequestProcessingOutcome {
 impl RequestResponsesBehaviour {
 	/// Creates a new behaviour. Must be passed a list of supported protocols. Returns an error if
 	/// the same protocol is passed twice.
-	pub fn new(list: impl Iterator<Item = ProtocolConfig>) -> Result<Self, RegisterError> {
+	pub fn new(list: impl Iterator<Item = ProtocolConfig>, peerset: Option<PeersetHandle>) -> Result<Self, RegisterError> {
 		let mut protocols = HashMap::new();
 		for protocol in list {
 			let mut cfg = RequestResponseConfig::default();
@@ -316,6 +315,8 @@ impl RequestResponsesBehaviour {
 			pending_responses: Default::default(),
 			pending_responses_arrival_time: Default::default(),
 			send_feedback: Default::default(),
+			peerset: peerset.unwrap(), // FIXME
+			message_request: None,
 		})
 	}
 
@@ -497,13 +498,15 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		>,
 	> {
 		'poll_all: loop {
-			if let Some(message_request) = self.message_request {
+			if let Some(message_request) = self.message_request.take() {
 				let MessageRequest {
 					peer,
 					request_id,
 					request,
 					channel,
-					get_peer_reputation,
+					protocol,
+					resp_builder,
+					mut get_peer_reputation,
 				} = message_request;
 
 				let reputation = Future::poll(Pin::new(&mut get_peer_reputation), cx);
@@ -514,24 +517,35 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							request_id,
 							request,
 							channel,
+							protocol,
+							resp_builder,
 							get_peer_reputation,
 						});
 						return Poll::Pending;
 					},
 					Poll::Ready(reputation) => {
 						let reputation = reputation.expect("The channel can only be closed if the peerset no longer exists; qed");
-						
+
+						if reputation < BANNED_THRESHOLD {
+							log::debug!(
+								target: "sub-libp2p",
+								"Cannot handle requests from a node with a low reputation {}: {}",
+								peer,
+								reputation,
+							);
+							continue 'poll_all;
+						}
+
 						let (tx, rx) = oneshot::channel();
 
 						// Submit the request to the "response builder" passed by the user at
 						// initialization.
-						if let Some(resp_builder) = resp_builder {
+						if let Some(mut resp_builder) = resp_builder {
 							// If the response builder is too busy, silently drop `tx`. This
 							// will be reported by the corresponding `RequestResponse` through
 							// an `InboundFailure::Omission` event.
 							let _ = resp_builder.try_send(IncomingRequest {
 								peer: peer.clone(),
-								reputation: reputation,
 								payload: request,
 								pending_response: tx,
 							});
@@ -539,7 +553,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							debug_assert!(false, "Received message on outbound-only protocol.");
 						}
 
-						let protocol = protocol.clone();
+						let protocol = Cow::from(protocol);
 						self.pending_responses.push(Box::pin(async move {
 							// The `tx` created above can be dropped if we are not capable of
 							// processing this request, which is reflected as a
@@ -667,6 +681,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								request_id,
 								request,
 								channel,
+								protocol: protocol.to_string(),
+								resp_builder: resp_builder.clone(),
 								get_peer_reputation,
 							});
 

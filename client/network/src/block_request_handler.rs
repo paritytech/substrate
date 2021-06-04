@@ -30,7 +30,6 @@ use futures::stream::StreamExt;
 use log::debug;
 use lru::LruCache;
 use prost::Message;
-use sc_peerset::{PeersetHandle, BANNED_THRESHOLD};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, One, Zero};
 use std::cmp::min;
@@ -134,17 +133,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 	/// Run [`BlockRequestHandler`].
 	pub async fn run(mut self) {
 		while let Some(request) = self.request_receiver.next().await {
-			let IncomingRequest { peer, reputation, payload, pending_response } = request;
-
-			if reputation < BANNED_THRESHOLD {
-				debug!(
-					target: LOG_TARGET,
-					"Cannot handle requests from a node with a low reputation {}: {}",
-					peer,
-					reputation,
-				);
-				continue;
-			}
+			let IncomingRequest { peer, payload, pending_response } = request;
 
 			match self.handle_request(payload, pending_response, &peer) {
 				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),

@@ -145,7 +145,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 		where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 	{
 		while let Some(request) = self.request_receiver.next().await {
-			let IncomingRequest { peer, reputation: _, payload, pending_response } = request;
+			let IncomingRequest { peer, payload, pending_response } = request;
 
 			match self.handle_request(payload, pending_response) {
 				Ok(()) => debug!(target: LOG_TARGET, "Handled grandpa warp sync request from {}.", peer),
