@@ -76,7 +76,7 @@ pub use self::hash::{
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StorageNMap, StoragePrefixedMap,
 	IterableStorageMap, IterableStorageDoubleMap, IterableStorageNMap, migration,
-	bounded_vec::BoundedVec, weak_bounded_vec::WeakBoundedVec,
+	bounded_vec::{BoundedVec, BoundedSlice}, weak_bounded_vec::WeakBoundedVec,
 };
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
