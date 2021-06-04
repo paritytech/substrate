@@ -32,7 +32,6 @@ use frame_system::{EventRecord, Phase};
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::testing::Digest;
-use sp_std::collections::btree_map::BTreeMap;
 
 #[test]
 fn authorities_change_logged() {
@@ -942,93 +941,4 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		assert!(post_info.actual_weight.is_none());
 		assert_eq!(post_info.pays_fee, Pays::Yes);
 	})
-}
-
-#[test]
-fn accountable_safety_start() {
-	let authorities = test_authorities();
-
-	let alice_keyring = Ed25519Keyring::Alice;
-	let payload = vec![];
-	let signature = alice_keyring.sign(&payload);
-
-	let new_precommits: Vec<_> = authorities.iter()
-		.map(|(id, _)| {
-			let precommit = grandpa::Precommit {
-				target_number: 8,
-				target_hash: H256::random(),
-			};
-			grandpa::SignedPrecommit {
-				precommit,
-				signature: signature.clone().into(),
-				id: id.clone(),
-			}
-		})
-		.collect();
-	let old_precommits: Vec<_> = authorities.iter()
-		.map(|(id, _)| {
-			let precommit = grandpa::Precommit {
-				target_number: 2,
-				target_hash: H256::random(),
-			};
-			grandpa::SignedPrecommit {
-				precommit,
-				signature: signature.clone().into(),
-				id: id.clone(),
-			}
-		})
-		.collect();
-
-	new_test_ext_raw_authorities(authorities).execute_with(|| {
-		start_era(1);
-
-		// assert_eq!(Grandpa::accountable_safety_state(), None);
-
-
-		let new_block = (
-			fg_primitives::Commit {
-				target_number: 8,
-				target_hash: H256::random(),
-				precommits: new_precommits,
-			},
-			4,
-		);
-		let block_not_included = (
-			fg_primitives::Commit {
-				target_number: 2,
-				target_hash: H256::random(),
-				precommits: old_precommits,
-			},
-			2,
-		);
-
-		Grandpa::start_accountable_safety_protocol(
-			new_block.clone(),
-			block_not_included.clone(),
-		);
-
-		//let mut querying_rounds = BTreeMap::new();
-		//let voters = new_block.0
-		//	.precommits
-		//	.iter()
-		//	.map(|prec| prec.id.clone())
-		//	.collect();
-		//querying_rounds.insert(4, QueryState::<_, _> {
-		//	voters,
-		//	responses: Default::default(),
-		//	equivocations: Default::default(),
-		//});
-
-		//assert_eq!(
-		//	Grandpa::accountable_safety_state(),
-		//	Some(StoredAccountableSafetyState {
-		//		block_not_included,
-		//		querying_rounds,
-		//		prevote_queries: Default::default(),
-		//	}),
-		//);
-
-		Grandpa::on_finalize(3);
-
-	});
 }

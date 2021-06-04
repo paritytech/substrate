@@ -223,8 +223,6 @@ impl pallet_grandpa::Config for Runtime {
 	type HandleEquivocation = ();
 
 	type WeightInfo = ();
-
-	type AccountableSafety = ();
 }
 
 parameter_types! {
@@ -431,37 +429,6 @@ impl_runtime_apis! {
 			// NOTE: this is the only implementation possible since we've
 			// defined our key owner proof type as a bottom type (i.e. a type
 			// with no values).
-			None
-		}
-
-		fn submit_start_accountable_safety_protocol_extrinsic(
-			_new_block: (
-				fg_primitives::Commit<<Block as BlockT>::Hash, NumberFor<Block>>,
-				fg_primitives::RoundNumber
-			),
-			_block_not_included: (
-				fg_primitives::Commit<<Block as BlockT>::Hash, NumberFor<Block>>,
-				fg_primitives::RoundNumber
-			),
-		) -> Option<()> {
-			None
-		}
-
-		fn submit_accountable_safety_response_extrinsic(
-			_query_response: fg_primitives::acc_safety::QueryResponse<
-				<Block as BlockT>::Hash,
-				NumberFor<Block>,
-			>,
-		) -> Option<()> {
-			None
-		}
-
-		fn submit_accountable_safety_prevote_response_extrinsic(
-			_prevote_query_response: fg_primitives::acc_safety::PrevoteQueryResponse<
-				<Block as BlockT>::Hash,
-				NumberFor<Block>,
-			>,
-		) -> Option<()> {
 			None
 		}
 	}

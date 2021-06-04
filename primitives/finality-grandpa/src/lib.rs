@@ -314,26 +314,17 @@ where
 	}
 }
 
-// Set of types used for the accountable safety subsystem.
-pub mod acc_safety {
+pub mod accountable_safety {
 	use super::{
-		Encode, Decode, RoundNumber, AuthorityId, AuthoritySignature,
+		Encode, Decode, AuthorityId, AuthoritySignature,
 	};
 	use sp_std::vec::Vec;
 	use sp_runtime::RuntimeDebug;
 
-
-	#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
-	pub struct BlockNotIncluded<H, B> {
-		/// Earlier block not included.
-		pub block: (B, RoundNumber),
-		/// Latter block, for which the first block isn't an ancestor.
-		pub offending_block: (super::Commit<H, B>, RoundNumber),
-	}
-
 	#[derive(Clone, RuntimeDebug, Encode, Decode, Eq, PartialEq)]
 	pub enum Query<H, N> {
 		WaitingForReply,
+		WaitingForPrevoteReply,
 		Replied(QueryResponse<H, N>),
 	}
 
@@ -355,17 +346,6 @@ pub mod acc_safety {
 			}
 		}
 	}
-
-	#[derive(Clone, RuntimeDebug, Encode, Decode, Eq, PartialEq)]
-	pub enum PrevoteQuery<H, N> {
-		WaitingForReply,
-		Replied(PrevoteQueryResponse<H, N>),
-	}
-
-	#[derive(Clone, RuntimeDebug, Encode, Decode, Eq, PartialEq)]
-	pub struct PrevoteQueryResponse<H, N>(
-		pub Vec<grandpa::SignedPrevote<H, N, AuthoritySignature, AuthorityId>>,
-	);
 }
 
 /// Encode round message localized to a given round and set id.
@@ -591,22 +571,5 @@ sp_api::decl_runtime_apis! {
 			set_id: SetId,
 			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
-
-		/// Initiate the accountable safety protocol. This will be called when mutually inconsistent
-		/// finalized blocks are detected.
-		fn submit_start_accountable_safety_protocol_extrinsic(
-			new_block: (grandpa::Commit<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>, RoundNumber),
-			block_not_included: (grandpa::Commit<Block::Hash, NumberFor<Block>, AuthoritySignature, AuthorityId>, RoundNumber),
-		) -> Option<()>;
-
-		/// Submit a response to a query where the reply can be either prevotes or precommits
-		fn submit_accountable_safety_response_extrinsic(
-			query_response: acc_safety::QueryResponse<Block::Hash, NumberFor<Block>>,
-		) -> Option<()>;
-
-		/// Submit a response to a query which specifically calls for prevotes.
-		fn submit_accountable_safety_prevote_response_extrinsic(
-			prevote_query_response: acc_safety::PrevoteQueryResponse<Block::Hash, NumberFor<Block>>,
-		) -> Option<()>;
 	}
 }

@@ -218,37 +218,6 @@ sp_api::mock_impl_runtime_apis! {
 		) -> Option<OpaqueKeyOwnershipProof> {
 			None
 		}
-
-		fn submit_start_accountable_safety_protocol_extrinsic(
-			new_block: (
-				sp_finality_grandpa::Commit<<Block as BlockT>::Hash, NumberFor<Block>>,
-				sp_finality_grandpa::RoundNumber,
-			),
-			block_not_included: (
-				sp_finality_grandpa::Commit<<Block as BlockT>::Hash, NumberFor<Block>>,
-				sp_finality_grandpa::RoundNumber,
-			),
-		) -> Option<()> {
-			None
-		}
-
-		fn submit_accountable_safety_response_extrinsic(
-			_query_response: sp_finality_grandpa::acc_safety::QueryResponse<
-				<Block as BlockT>::Hash,
-				NumberFor<Block>
-			>,
-		) -> Option<()> {
-			None
-		}
-
-		fn submit_accountable_safety_prevote_response_extrinsic(
-			_prevote_query_response: sp_finality_grandpa::acc_safety::PrevoteQueryResponse<
-				<Block as BlockT>::Hash,
-				NumberFor<Block>
-			>,
-		) -> Option<()> {
-			None
-		}
 	}
 }
 

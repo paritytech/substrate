@@ -854,31 +854,6 @@ cfg_if! {
 				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}
-
-				fn submit_start_accountable_safety_protocol_extrinsic(
-					_new_block: (sp_finality_grandpa::Commit<<Block as BlockT>::Hash, NumberFor<Block>>, sp_finality_grandpa::RoundNumber),
-					_block_not_included: (sp_finality_grandpa::Commit<<Block as BlockT>::Hash, NumberFor<Block>>, sp_finality_grandpa::RoundNumber),
-				) -> Option<()> {
-					None
-				}
-
-				fn submit_accountable_safety_response_extrinsic(
-					_query_response: sp_finality_grandpa::acc_safety::QueryResponse<
-						<Block as BlockT>::Hash,
-						NumberFor<Block>
-					>,
-				) -> Option<()> {
-					None
-				}
-
-				fn submit_accountable_safety_prevote_response_extrinsic(
-					_query_response: sp_finality_grandpa::acc_safety::PrevoteQueryResponse<
-						<Block as BlockT>::Hash,
-						NumberFor<Block>,
-					>,
-				) -> Option<()> {
-					None
-				}
 			}
 
 			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {

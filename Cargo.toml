@@ -86,6 +86,7 @@ members = [
 	"frame/executive",
 	"frame/gilt",
 	"frame/grandpa",
+	"frame/grandpa-accountable-safety",
 	"frame/identity",
 	"frame/im-online",
 	"frame/indices",
