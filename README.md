@@ -36,8 +36,9 @@ Follow the [instructions](https://github.com/Cerebellum-Network/validator-instru
 3. Run the following command to copy SC artifacts to test_data folder.
 
 ```
- docker run -v $PWD:/smart-contracts --rm -ti $ECR_REGISTRY/crb-smart-contracts:$SMART_CONTRACT_VERSION bash -c "cp -r ./cere02/target/ink/ddc.wasm ./frame/ddc-metrics-offchain-worker/src/tests/test_data/"
- docker run -v $PWD:/smart-contracts --rm -ti $ECR_REGISTRY/crb-smart-contracts:$SMART_CONTRACT_VERSION bash -c "cp -r ./cere02/target/ink/metadata.json ./frame/ddc-metrics-offchain-worker/src/tests/test_data/"
+id=$(docker create $ECR_REGISTRY/crb-smart-contracts:$SMART_CONTRACT_VERSION)
+docker cp $id::/smart-contracts/artifacts/ ./artifacts/
+docker rm -v $id
 ```
 
 ## Versioning strategy
