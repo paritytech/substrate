@@ -187,7 +187,7 @@ where
 				..Default::default()
 			})),
 		};
-		
+
 		// inject the code into this ext.
 		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder.inject(&[(code_key, code)]).build().await?
@@ -360,13 +360,7 @@ impl CliConfiguration for TryRuntimeCmd {
 /// `StorageKey`.
 fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
 	let genesis_storage = spec.build_storage()?;
-		let code = StorageData(
-			genesis_storage
-				.top
-				.get(well_known_keys::CODE)
-				.expect("code key must exist in genesis storage; qed")
-				.to_vec(),
-		);
+genesis_storage
 	let code_key = StorageKey(well_known_keys::CODE.to_vec());
 
 	Ok((code_key, code))
