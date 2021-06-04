@@ -50,7 +50,7 @@ pub type Weight = u64;
 ///
 /// As 1 gas is equal to 1 weight we base this on the conducted benchmarks which
 /// determined runtime weights:
-/// https://github.com/paritytech/substrate/pull/5446
+/// <https://github.com/paritytech/substrate/pull/5446>
 const GAS_PER_SECOND: Weight = 1_000_000_000_000;
 
 /// The maximum amount of weight that the call and instantiate rpcs are allowed to consume.
