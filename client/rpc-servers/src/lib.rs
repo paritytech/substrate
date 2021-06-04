@@ -27,8 +27,10 @@ use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
 use log::error;
 use pubsub::PubSubMetadata;
 
+const MEGABYTE: usize = 1024 * 1024;
+
 /// Maximal payload accepted by RPC servers.
-pub const DEFAULT_MAX_PAYLOAD: usize = 15 * 1024 * 1024;
+pub const DEFAULT_MAX_PAYLOAD: usize = 15 * MEGABYTE;
 
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
@@ -81,7 +83,7 @@ mod inner {
 		addr: &std::net::SocketAddr,
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
-		max_payload: Option<usize>,
+		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<http::Server> {
 		http::ServerBuilder::new(io)
 			.threads(4)
@@ -93,7 +95,7 @@ mod inner {
 				http::RestApi::Unsecure
 			})
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
-			.max_request_body_size(max_payload.unwrap_or(DEFAULT_MAX_PAYLOAD))
+			.max_request_body_size(maybe_max_payload_mb.map(|mb| mb * MEGABYTE).unwrap_or(DEFAULT_MAX_PAYLOAD))
 			.start_http(addr)
 	}
 
@@ -117,15 +119,17 @@ mod inner {
 	/// Start WS server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ws<M: pubsub::PubSubMetadata + From<jsonrpc_core::futures::sync::mpsc::Sender<String>>> (
+	pub fn start_ws<
+		M: pubsub::PubSubMetadata + From<jsonrpc_core::futures::sync::mpsc::Sender<String>>,
+	>(
 		addr: &std::net::SocketAddr,
 		max_connections: Option<usize>,
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
-		maybe_max_payload: Option<usize>,
+		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<ws::Server> {
 		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
-			.max_payload(maybe_max_payload.unwrap_or(DEFAULT_MAX_PAYLOAD))
+			.max_payload(maybe_max_payload_mb.map(|mb| mb * MEGABYTE).unwrap_or(DEFAULT_MAX_PAYLOAD))
 			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 			.allowed_origins(map_cors(cors))
 			.allowed_hosts(hosts_filtering(cors.is_some()))
