@@ -36,6 +36,7 @@ use alloc::string::String;
 pub const BLOCK_INTERVAL: u32 = 100; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
 // Smart contract method selectors
+pub const REPORT_METRICS_DDN_SELECTOR: [u8; 4] = hex!("de028ad8");
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
 pub const GET_ALL_DDC_NODES_SELECTOR: [u8; 4] = hex!("e6c98b60");
@@ -78,6 +79,23 @@ impl MetricInfo {
             requests: Default::default(),
         }
     }
+}
+
+#[derive(Default, Debug)]
+struct DDNMetricInfo {
+	ddn_id: Vec<u8>,
+	bytes: u128,
+	requests: u128,
+}
+
+impl DDNMetricInfo {
+	fn new() -> Self {
+		Self {
+			ddn_id: Default::default(),
+			bytes: Default::default(),
+			requests: Default::default(),
+		}
+	}
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -197,7 +215,7 @@ impl<T: Trait> Module<T> {
 
         let day_end_ms = day_start_ms + MS_PER_DAY;
 
-        let aggregated_metrics = Self::fetch_all_metrics(contract_address.clone(), day_start_ms)
+        let (aggregated_metrics, ddn_aggregated_metrics) = Self::fetch_all_metrics(contract_address.clone(), day_start_ms)
             .map_err(|err| {
                 error!("[OCW] HTTP error occurred: {:?}", err);
                 "could not fetch metrics"
@@ -213,6 +231,17 @@ impl<T: Trait> Module<T> {
             error!("[OCW] Contract error occurred: {:?}", err);
             "could not submit report_metrics TX"
         })?;
+
+		Self::send_metrics_ddn_to_sc(
+			contract_address.clone(),
+			&signer,
+			day_start_ms,
+			ddn_aggregated_metrics,
+		)
+		.map_err(|err| {
+			error!("[OCW] Contract error occurred: {:?}", err);
+			"could not submit report_metrics_ddn TX"
+		})?;
 
         let block_timestamp = sp_io::offchain::timestamp().unix_millis();
 
@@ -400,15 +429,68 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
+	fn send_metrics_ddn_to_sc(
+        contract_id: <T::CT as frame_system::Trait>::AccountId,
+        signer: &Signer<T::CST, T::AuthorityId>,
+        day_start_ms: u64,
+        metrics: Vec<DDNMetricInfo>,
+    ) -> ResultStr<()> {
+        info!("[OCW] Using Contract Address: {:?}", contract_id);
+
+        for one_metric in metrics.iter() {
+            if one_metric.bytes == 0 && one_metric.requests == 0 {
+                continue;
+            }
+
+            let results = signer.send_signed_transaction(|account| {
+                info!(
+                    "[OCW] Sending transactions from {:?}: report_metrics_ddn({:?}, {:?}, {:?}, {:?})",
+                    account.id,
+					one_metric.ddn_id,
+                    day_start_ms,
+                    one_metric.bytes,
+                    one_metric.requests
+                );
+
+                let call_data = Self::encode_report_metrics_ddn(
+                    one_metric.ddn_id.clone(),
+                    day_start_ms,
+                    one_metric.bytes,
+                    one_metric.requests,
+                );
+
+                let contract_id_unl =
+                    <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::unlookup(
+                        contract_id.clone(),
+                    );
+
+                pallet_contracts::Call::call(
+                    contract_id_unl,
+                    0u32.into(),
+                    100_000_000_000,
+                    call_data,
+                )
+            });
+
+            match &results {
+                None | Some((_, Err(()))) => return Err("Error while submitting TX to SC"),
+                Some((_, Ok(()))) => {}
+            }
+        }
+
+        Ok(())
+    }
+
     fn fetch_all_metrics(
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         day_start_ms: u64,
-    ) -> ResultStr<Vec<MetricInfo>> {
+    ) -> ResultStr<(Vec<MetricInfo>, Vec<DDNMetricInfo>)> {
         let a_moment_ago_ms = sp_io::offchain::timestamp()
             .sub(Duration::from_millis(END_TIME_DELAY_MS))
             .unix_millis();
 
         let mut aggregated_metrics = MetricsAggregator::default();
+        let mut ddn_aggregated_metrics = DDnMetricsAggregator::default();
 
         let nodes = Self::fetch_nodes(contract_id)?;
 
@@ -416,12 +498,14 @@ impl<T: Trait> Module<T> {
             let metrics_of_node =
                 Self::fetch_node_metrics(&node.httpAddr, day_start_ms, a_moment_ago_ms)?;
 
+			ddn_aggregated_metrics.add(node.id.clone(), &metrics_of_node);
+
             for metrics in &metrics_of_node {
                 aggregated_metrics.add(metrics);
             }
         }
 
-        Ok(aggregated_metrics.finish())
+        Ok((aggregated_metrics.finish(), ddn_aggregated_metrics.finish()))
     }
 
     fn fetch_nodes(
@@ -559,6 +643,20 @@ impl<T: Trait> Module<T> {
         call_data
     }
 
+	fn encode_report_metrics_ddn(
+        ddn_id: Vec<u8>,
+        day_start_ms: u64,
+        stored_bytes: u128,
+        requests: u128,
+    ) -> Vec<u8> {
+        let mut call_data = REPORT_METRICS_DDN_SELECTOR.to_vec();
+		ddn_id.encode_to(&mut call_data);
+        day_start_ms.encode_to(&mut call_data);
+        stored_bytes.encode_to(&mut call_data);
+        requests.encode_to(&mut call_data);
+        call_data
+    }
+
     fn account_id_from_hex(id_hex: &str) -> ResultStr<AccountId32> {
         let id_hex = id_hex.trim_start_matches("0x");
         if id_hex.len() != 64 {
@@ -597,6 +695,38 @@ impl MetricsAggregator {
     fn finish(self) -> Vec<MetricInfo> {
         self.0
     }
+}
+
+#[derive(Default)]
+struct DDnMetricsAggregator(Vec<DDNMetricInfo>);
+
+impl DDnMetricsAggregator {
+	fn add(&mut self, ddn_id: Vec<u8>, metrics: &Vec<MetricInfo>) {
+		let existing_pubkey_index = self
+			.0
+			.iter()
+			.position(|one_result_obj| ddn_id == one_result_obj.ddn_id);
+
+		// Only if key does not exists - add new item, otherwise - skip
+		if existing_pubkey_index.is_none() {
+			let mut requests_sum = 0;
+			let mut bytes_sum = 0;
+
+			for metric_item in metrics.iter() {
+				requests_sum += metric_item.requests;
+				bytes_sum += metric_item.bytes;
+			}
+
+
+			let mut new_metric_obj = DDNMetricInfo::new();
+			new_metric_obj.ddn_id = ddn_id.clone();
+			new_metric_obj.requests = requests_sum;
+			new_metric_obj.bytes = bytes_sum;
+			self.0.push(new_metric_obj);
+		}
+	}
+
+	fn finish(self) -> Vec<DDNMetricInfo> { self.0 }
 }
 
 // TODO: remove, or write meaningful events.
