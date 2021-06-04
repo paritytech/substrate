@@ -42,7 +42,7 @@ pub struct RunCmd {
 	/// The node will be started with the authority role and actively
 	/// participate in any consensus task that it can (e.g. depending on
 	/// availability of local keys).
-	#[structopt(long = "validator")]
+	#[structopt(long)]
 	pub validator: bool,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA
