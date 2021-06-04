@@ -48,7 +48,7 @@ pub use memory_db::prefixed_key;
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 /// Trie codec reexport, mainly child trie support
 /// for trie compact proof.
-pub use trie_codec::{decode_compact, encode_compact};
+pub use trie_codec::{decode_compact, encode_compact, Error as CompactProofError};
 
 #[derive(Default)]
 /// substrate trie layout
