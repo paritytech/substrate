@@ -1107,11 +1107,13 @@ macro_rules! implement_per_thing {
 					$name::from_parts($max / 2).square(),
 				);
 
-				// x^3
-				assert_eq!(
-					$name::from_parts($max / 2).saturating_pow(3),
-					$name::from_parts($max / 8),
-				);
+				// x^2 .. x^16
+				for n in 2..=16 {
+					assert_eq!(
+						$name::from_parts($max / 2).saturating_pow(n),
+						$name::from_parts(($max as u128 / 2u128.pow(n as u32)) as $type),
+					);
+				}
 
 				// 0^n == 0
 				assert_eq!(
