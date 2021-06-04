@@ -1011,9 +1011,10 @@ mod tests {
 	use libp2p::core::transport::{Transport, MemoryTransport};
 	use libp2p::noise;
 	use libp2p::swarm::{Swarm, SwarmEvent};
+	use sc_peerset::{SetConfig, Peerset, PeersetConfig};
 	use std::{iter, time::Duration};
 
-	fn build_swarm(list: impl Iterator<Item = ProtocolConfig>) -> (Swarm<RequestResponsesBehaviour>, Multiaddr) {
+	fn build_swarm(list: impl Iterator<Item = ProtocolConfig>) -> (Swarm<RequestResponsesBehaviour>, Multiaddr, Peerset) {
 		let keypair = Keypair::generate_ed25519();
 
 		let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
@@ -1026,13 +1027,25 @@ mod tests {
 			.multiplex(libp2p::yamux::YamuxConfig::default())
 			.boxed();
 
-		let behaviour = RequestResponsesBehaviour::new(list).unwrap();
+		let config = PeersetConfig {
+			sets: vec![SetConfig {
+				in_peers: u32::max_value(),
+				out_peers: u32::max_value(),
+				bootnodes: vec![],
+				reserved_nodes: Default::default(),
+				reserved_only: false,
+			}],
+		};
+
+		let (peerset, handle) = Peerset::from_config(config);
+
+		let behaviour = RequestResponsesBehaviour::new(list, handle).unwrap();
 
 		let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 		let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
 		swarm.listen_on(listen_addr.clone()).unwrap();
-		(swarm, listen_addr)
+		(swarm, listen_addr, peerset)
 	}
 
 	#[test]
@@ -1079,7 +1092,7 @@ mod tests {
 
 		// Running `swarm[0]` in the background.
 		pool.spawner().spawn_obj({
-			let (mut swarm, _) = swarms.remove(0);
+			let (mut swarm, _, peerset) = swarms.remove(0);
 			async move {
 				loop {
 					match swarm.next_event().await {
@@ -1093,7 +1106,7 @@ mod tests {
 		}).unwrap();
 
 		// Remove and run the remaining swarm.
-		let (mut swarm, _) = swarms.remove(0);
+		let (mut swarm, _, peerset) = swarms.remove(0);
 		pool.run_until(async move {
 			let mut response_receiver = None;
 
@@ -1168,7 +1181,7 @@ mod tests {
 		// Running `swarm[0]` in the background until a `InboundRequest` event happens,
 		// which is a hint about the test having ended.
 		pool.spawner().spawn_obj({
-			let (mut swarm, _) = swarms.remove(0);
+			let (mut swarm, _, peerset) = swarms.remove(0);
 			async move {
 				loop {
 					match swarm.next_event().await {
@@ -1183,7 +1196,7 @@ mod tests {
 		}).unwrap();
 
 		// Remove and run the remaining swarm.
-		let (mut swarm, _) = swarms.remove(0);
+		let (mut swarm, _, peerset) = swarms.remove(0);
 		pool.run_until(async move {
 			let mut response_receiver = None;
 
@@ -1255,7 +1268,7 @@ mod tests {
 			build_swarm(protocol_configs.into_iter()).0
 		};
 
-		let (mut swarm_2, mut swarm_2_handler_1, mut swarm_2_handler_2, listen_add_2) = {
+		let (mut swarm_2, mut swarm_2_handler_1, mut swarm_2_handler_2, listen_add_2, peerset) = {
 			let (tx_1, rx_1) = mpsc::channel(64);
 			let (tx_2, rx_2) = mpsc::channel(64);
 
@@ -1276,9 +1289,9 @@ mod tests {
 				},
 			];
 
-			let (swarm, listen_addr) = build_swarm(protocol_configs.into_iter());
+			let (swarm, listen_addr, peerset) = build_swarm(protocol_configs.into_iter());
 
-			(swarm, rx_1, rx_2, listen_addr)
+			(swarm, rx_1, rx_2, listen_addr, peerset)
 		};
 
 		// Ask swarm 1 to dial swarm 2. There isn't any discovery mechanism in place in this test,
