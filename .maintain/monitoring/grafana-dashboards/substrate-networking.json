@@ -32,12 +32,6 @@
       "id": "prometheus",
       "name": "Prometheus",
       "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "text",
-      "name": "Text",
-      "version": ""
     }
   ],
   "annotations": {
@@ -74,36 +68,9 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1613393276921,
+  "iteration": 1621244671073,
   "links": [],
   "panels": [
-    {
-      "datasource": null,
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {}
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 1,
-        "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "id": 308,
-      "options": {
-        "content": "",
-        "mode": "markdown"
-      },
-      "pluginVersion": "7.3.6",
-      "repeat": "nodename",
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "$nodename",
-      "type": "text"
-    },
     {
       "collapsed": false,
       "datasource": null,
@@ -111,7 +78,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 1
+        "y": 0
       },
       "id": 27,
       "panels": [],
@@ -120,7 +87,7 @@
     },
     {
       "aliasColors": {},
-      "bars": true,
+      "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
@@ -135,13 +102,13 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 2
+        "y": 1
       },
       "hiddenSeries": false,
       "id": 19,
-      "interval": "1m",
+      "interval": "",
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -154,7 +121,7 @@
         "total": false,
         "values": false
       },
-      "lines": false,
+      "lines": true,
       "linewidth": 1,
       "maxPerRow": 12,
       "nullPointMode": "null as zero",
@@ -170,18 +137,22 @@
       "repeatDirection": "h",
       "seriesOverrides": [
         {
+          "$$hashKey": "object:70",
           "alias": "established (in)",
           "color": "#37872D"
         },
         {
+          "$$hashKey": "object:71",
           "alias": "established (out)",
           "color": "#C4162A"
         },
         {
+          "$$hashKey": "object:72",
           "alias": "pending (out)",
           "color": "#FF7383"
         },
         {
+          "$$hashKey": "object:73",
           "alias": "closed-recently",
           "color": "#FADE2A",
           "steppedLine": true
@@ -242,6 +213,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:100",
           "format": "short",
           "label": "Connections",
           "logBase": 1,
@@ -250,6 +222,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:101",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -280,13 +253,13 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 8
+        "y": 7
       },
       "hiddenSeries": false,
       "id": 189,
-      "interval": "1m",
+      "interval": "",
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -347,6 +320,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:184",
           "format": "percentunit",
           "label": "",
           "logBase": 1,
@@ -355,6 +329,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:185",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -385,13 +360,13 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 14
+        "y": 13
       },
       "hiddenSeries": false,
       "id": 39,
-      "interval": "1m",
+      "interval": "",
       "legend": {
         "avg": false,
         "current": false,
@@ -415,6 +390,7 @@
       "repeat": "nodename",
       "seriesOverrides": [
         {
+          "$$hashKey": "object:263",
           "alias": "/.*/",
           "color": "#FF780A"
         }
@@ -424,14 +400,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(${metric_namespace}_sub_libp2p_incoming_connections_handshake_errors_total{instance=~\"${nodename}\"}[$__interval])",
+          "expr": "increase(${metric_namespace}_sub_libp2p_incoming_connections_handshake_errors_total{instance=~\"${nodename}\"}[$__rate_interval])",
           "hide": false,
           "interval": "",
           "legendFormat": "{{reason}}",
           "refId": "A"
         },
         {
-          "expr": "rate(${metric_namespace}_sub_libp2p_listeners_errors_total{instance=~\"${nodename}\"}[$__interval])",
+          "expr": "increase(${metric_namespace}_sub_libp2p_listeners_errors_total{instance=~\"${nodename}\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "pre-handshake",
           "refId": "B"
@@ -457,6 +433,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:270",
           "format": "short",
           "label": "Errors",
           "logBase": 1,
@@ -465,6 +442,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:271",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -484,7 +462,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
-      "description": "Each bucket represent a certain number of nodes using a certain bandwidth range.",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "custom": {}
@@ -495,9 +473,9 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 20
+        "y": 19
       },
       "hiddenSeries": false,
       "id": 4,
@@ -528,7 +506,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(${metric_namespace}_sub_libp2p_network_bytes_total{instance=~\"${nodename}\"}[5m])",
+          "expr": "rate(${metric_namespace}_sub_libp2p_network_bytes_total{instance=~\"${nodename}\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "{{direction}}",
           "refId": "B"
@@ -538,7 +516,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Network bandwidth - # bytes per second",
+      "title": "Network bandwidth",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -554,7 +532,8 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "$$hashKey": "object:352",
+          "format": "binBps",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -562,6 +541,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:353",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -592,13 +572,13 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 7,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 26
+        "y": 25
       },
       "hiddenSeries": false,
       "id": 81,
-      "interval": "1m",
+      "interval": "",
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -631,7 +611,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(${metric_namespace}_sub_libp2p_pending_connections_errors_total{instance=~\"${nodename}\"}[$__interval])",
+          "expr": "increase(${metric_namespace}_sub_libp2p_pending_connections_errors_total{instance=~\"${nodename}\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "{{reason}}",
           "refId": "A"
@@ -657,6 +637,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:431",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -665,6 +646,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:432",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -680,7 +662,7 @@
     },
     {
       "aliasColors": {},
-      "bars": true,
+      "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
@@ -695,13 +677,13 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 7,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 33
+        "y": 32
       },
       "hiddenSeries": false,
       "id": 46,
-      "interval": "1m",
+      "interval": "",
       "legend": {
         "avg": false,
         "current": false,
@@ -711,10 +693,10 @@
         "total": false,
         "values": false
       },
-      "lines": false,
+      "lines": true,
       "linewidth": 1,
       "maxPerRow": 12,
-      "nullPointMode": "null as zero",
+      "nullPointMode": "connected",
       "options": {
         "alertThreshold": true
       },
@@ -731,7 +713,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}[$__interval])",
+          "expr": "rate(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "{{reason}} ({{direction}})",
           "refId": "A"
@@ -741,7 +723,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Disconnects",
+      "title": "Disconnects/sec",
       "tooltip": {
         "shared": true,
         "sort": 2,
@@ -757,8 +739,9 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:514",
           "decimals": null,
-          "format": "short",
+          "format": "cps",
           "label": "Disconnects",
           "logBase": 1,
           "max": null,
@@ -766,6 +749,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:515",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -786,7 +770,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 39
       },
       "id": 167,
       "panels": [],
@@ -811,9 +795,9 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 5,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 41
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 101,
@@ -842,7 +826,7 @@
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": true,
+      "steppedLine": false,
       "targets": [
         {
           "expr": "${metric_namespace}_sub_libp2p_peerset_num_requested{instance=~\"${nodename}\"}",
@@ -851,7 +835,7 @@
           "refId": "A"
         },
         {
-          "expr": "polkadot_sub_libp2p_peers_count{instance=~\"${nodename}.*\"}",
+          "expr": "${metric_namespace}_sub_libp2p_peers_count{instance=~\"${nodename}.*\"}",
           "interval": "",
           "legendFormat": "peers-count",
           "refId": "B"
@@ -877,6 +861,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:679",
           "format": "none",
           "label": null,
           "logBase": 1,
@@ -885,6 +870,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:680",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -905,12 +891,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 46
+        "y": 45
       },
       "id": 29,
       "panels": [],
-      "repeat": "request_protocol",
-      "title": "Requests (${request_protocol})",
+      "repeat": "request_protocol_out",
+      "title": "Outbound requests (${request_protocol_out})",
       "type": "row"
     },
     {
@@ -930,9 +916,9 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 47
+        "y": 46
       },
       "hiddenSeries": false,
       "id": 148,
@@ -963,7 +949,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(${metric_namespace}_sub_libp2p_requests_out_success_total_sum{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m]) + on(instance) sum(irate(${metric_namespace}_sub_libp2p_requests_out_failure_total{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance)",
+          "expr": "rate(${metric_namespace}_sub_libp2p_requests_out_success_total_count{instance=~\"${nodename}\", protocol=\"${request_protocol_out}\"}[$__rate_interval]) + on(instance) sum(rate(${metric_namespace}_sub_libp2p_requests_out_failure_total{instance=~\"${nodename}\", protocol=\"${request_protocol_out}\"}[$__rate_interval])) by (instance)\n\nor\n\nrate(${metric_namespace}_sub_libp2p_requests_out_success_total_count{instance=~\"${nodename}\", protocol=\"${request_protocol_out}\"}[$__rate_interval])",
           "hide": false,
           "interval": "",
           "legendFormat": "{{instance}}",
@@ -1030,9 +1016,9 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 51
+        "y": 50
       },
       "hiddenSeries": false,
       "id": 448,
@@ -1063,7 +1049,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(irate(${metric_namespace}_sub_libp2p_requests_out_failure_total{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[$__rate_interval])) by (instance, reason)",
+          "expr": "sum(rate(${metric_namespace}_sub_libp2p_requests_out_failure_total{instance=~\"${nodename}\", protocol=\"${request_protocol_out}\", reason != \"obsolete\"}[$__rate_interval])) by (instance, reason)",
           "hide": false,
           "interval": "",
           "intervalFactor": 1,
@@ -1075,7 +1061,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Outbound requests failures",
+      "title": "Outbound requests failures (other than \"obsolete\")",
       "tooltip": {
         "shared": true,
         "sort": 2,
@@ -1131,9 +1117,9 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 55
+        "y": 54
       },
       "hiddenSeries": false,
       "id": 256,
@@ -1164,7 +1150,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(${metric_namespace}_sub_libp2p_requests_out_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le)) > 0",
+          "expr": "histogram_quantile(0.5, sum(rate(${metric_namespace}_sub_libp2p_requests_out_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol_out}\"}[$__rate_interval])) by (instance, le)) > 0",
           "instant": false,
           "interval": "",
           "legendFormat": "{{instance}}",
@@ -1191,6 +1177,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:1069",
           "format": "s",
           "label": null,
           "logBase": 1,
@@ -1199,6 +1186,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:1070",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -1229,9 +1217,9 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 59
+        "y": 58
       },
       "hiddenSeries": false,
       "id": 257,
@@ -1262,7 +1250,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_requests_out_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le)) > 0",
+          "expr": "histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_requests_out_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol_out}\"}[$__rate_interval])) by (instance, le)) > 0",
           "instant": false,
           "interval": "",
           "legendFormat": "{{instance}}",
@@ -1289,6 +1277,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:988",
           "format": "s",
           "label": null,
           "logBase": 1,
@@ -1297,6 +1286,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:989",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -1309,6 +1299,21 @@
         "align": false,
         "alignLevel": null
       }
+    },
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 62
+      },
+      "id": 504,
+      "panels": [],
+      "repeat": "request_protocol_in",
+      "title": "Inbound requests (${request_protocol_in})",
+      "type": "row"
     },
     {
       "aliasColors": {},
@@ -1327,7 +1332,7 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 63
       },
@@ -1360,7 +1365,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(${metric_namespace}_sub_libp2p_requests_in_success_total_count{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])",
+          "expr": "rate(${metric_namespace}_sub_libp2p_requests_in_success_total_count{instance=~\"${nodename}\", protocol=\"${request_protocol_in}\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "A"
@@ -1386,6 +1391,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:907",
           "format": "reqps",
           "label": null,
           "logBase": 1,
@@ -1394,6 +1400,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:908",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -1424,7 +1431,7 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 67
       },
@@ -1457,7 +1464,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(irate(${metric_namespace}_sub_libp2p_requests_in_failure_total{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[$__rate_interval])) by (instance, reason)",
+          "expr": "sum(rate(${metric_namespace}_sub_libp2p_requests_in_failure_total{instance=~\"${nodename}\", protocol=\"${request_protocol_in}\"}[$__rate_interval])) by (instance, reason)",
           "hide": false,
           "interval": "",
           "intervalFactor": 1,
@@ -1525,7 +1532,7 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 71
       },
@@ -1558,7 +1565,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(${metric_namespace}_sub_libp2p_requests_in_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le))",
+          "expr": "histogram_quantile(0.5, sum(rate(${metric_namespace}_sub_libp2p_requests_in_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol_in}\"}[$__rate_interval])) by (instance, le))",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "A"
@@ -1584,6 +1591,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:666",
           "format": "s",
           "label": null,
           "logBase": 1,
@@ -1592,6 +1600,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:667",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -1622,7 +1631,7 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 75
       },
@@ -1655,7 +1664,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_requests_in_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol}\"}[5m])) by (instance, le))",
+          "expr": "histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_requests_in_success_total_bucket{instance=~\"${nodename}\", protocol=\"${request_protocol_in}\"}[$__rate_interval])) by (instance, le))",
           "interval": "",
           "legendFormat": "{{instance}}",
           "refId": "A"
@@ -1681,6 +1690,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:747",
           "format": "s",
           "label": null,
           "logBase": 1,
@@ -1689,6 +1699,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:748",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -1734,7 +1745,7 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 80
       },
@@ -1796,6 +1807,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:896",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -1804,230 +1816,7 @@
           "show": true
         },
         {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$data_source",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "links": []
-        },
-        "overrides": []
-      },
-      "fill": 0,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 0,
-        "y": 86
-      },
-      "hiddenSeries": false,
-      "id": 31,
-      "interval": "1m",
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "rightSide": true,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "maxPerRow": 12,
-      "nullPointMode": "connected",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pluginVersion": "7.3.6",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "repeat": "nodename",
-      "repeatDirection": "h",
-      "seriesOverrides": [
-        {
-          "alias": "/(in)/",
-          "color": "#73BF69"
-        },
-        {
-          "alias": "/(out)/",
-          "color": "#F2495C"
-        }
-      ],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "avg by (direction) (irate(${metric_namespace}_sub_libp2p_notifications_sizes_count{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[$__rate_interval]))",
-          "interval": "",
-          "legendFormat": "{{direction}}",
-          "refId": "A"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Average network notifications per second",
-      "tooltip": {
-        "shared": true,
-        "sort": 2,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "cps",
-          "label": "Notifs/sec",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$data_source",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "links": []
-        },
-        "overrides": []
-      },
-      "fill": 0,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 0,
-        "y": 92
-      },
-      "hiddenSeries": false,
-      "id": 37,
-      "interval": "1m",
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "hideEmpty": false,
-        "hideZero": false,
-        "max": false,
-        "min": false,
-        "rightSide": true,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "maxPerRow": 12,
-      "nullPointMode": "connected",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pluginVersion": "7.3.6",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "repeat": "nodename",
-      "repeatDirection": "h",
-      "seriesOverrides": [
-        {
-          "alias": "/(in)/",
-          "color": "#73BF69"
-        },
-        {
-          "alias": "/(out)/",
-          "color": "#F2495C"
-        }
-      ],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "avg(irate(${metric_namespace}_sub_libp2p_notifications_sizes_sum{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[$__rate_interval])) by (direction)",
-          "instant": false,
-          "interval": "",
-          "legendFormat": "{{direction}}",
-          "refId": "A"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Average bandwidth used by notifications",
-      "tooltip": {
-        "shared": true,
-        "sort": 2,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "Bps",
-          "label": "Bandwidth",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
+          "$$hashKey": "object:897",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -2058,9 +1847,344 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 24,
+        "x": 0,
+        "y": 86
+      },
+      "hiddenSeries": false,
+      "id": 486,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": true,
+        "rightSide": false,
+        "show": false,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null as zero",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeat": "nodename",
+      "repeatDirection": "h",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "rate(${metric_namespace}_sub_libp2p_notifications_streams_closed_total{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[$__rate_interval])",
+          "interval": "",
+          "intervalFactor": 4,
+          "legendFormat": "{{instance}}",
+          "refId": "B"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Substreams closed/sec",
+      "tooltip": {
+        "shared": false,
+        "sort": 1,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:484",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:485",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 92
+      },
+      "hiddenSeries": false,
+      "id": 31,
+      "interval": "",
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "maxPerRow": 12,
+      "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeat": "nodename",
+      "repeatDirection": "h",
+      "seriesOverrides": [
+        {
+          "$$hashKey": "object:399",
+          "alias": "/(in)/",
+          "color": "#73BF69"
+        },
+        {
+          "$$hashKey": "object:400",
+          "alias": "/(out)/",
+          "color": "#F2495C"
+        }
+      ],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "avg by (direction) (rate(${metric_namespace}_sub_libp2p_notifications_sizes_count{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[$__rate_interval]))",
+          "interval": "",
+          "legendFormat": "{{direction}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Number of network notifications",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:413",
+          "format": "short",
+          "label": "Notifs/sec",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:414",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
         "x": 0,
         "y": 98
+      },
+      "hiddenSeries": false,
+      "id": 37,
+      "interval": "",
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "hideZero": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "maxPerRow": 12,
+      "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeat": "nodename",
+      "repeatDirection": "h",
+      "seriesOverrides": [
+        {
+          "$$hashKey": "object:492",
+          "alias": "/(in)/",
+          "color": "#73BF69"
+        },
+        {
+          "$$hashKey": "object:493",
+          "alias": "/(out)/",
+          "color": "#F2495C"
+        }
+      ],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "avg(rate(${metric_namespace}_sub_libp2p_notifications_sizes_sum{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[$__rate_interval])) by (direction)",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "{{direction}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Average bandwidth used by notifications",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:506",
+          "format": "Bps",
+          "label": "Bandwidth",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:507",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 104
       },
       "hiddenSeries": false,
       "id": 16,
@@ -2088,12 +2212,12 @@
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": true,
+      "steppedLine": false,
       "targets": [
         {
-          "expr": "max(${metric_namespace}_sub_libp2p_out_events_notifications_sizes{instance=~\"${nodename}\", protocol=\"${notif_protocol}\", action=\"sent\"} - ignoring(action) ${metric_namespace}_sub_libp2p_out_events_notifications_sizes{instance=~\"${nodename}\", protocol=\"${notif_protocol}\", action=\"received\"}) by (instance) > 0",
+          "expr": "${metric_namespace}_sub_libp2p_out_events_notifications_sizes{instance=~\"${nodename}\", protocol=\"${notif_protocol}\", action=\"sent\"} - ignoring(action) ${metric_namespace}_sub_libp2p_out_events_notifications_sizes{instance=~\"${nodename}\", protocol=\"${notif_protocol}\", action=\"received\"}",
           "interval": "",
-          "legendFormat": "{{instance}}",
+          "legendFormat": "{{name}}",
           "refId": "A"
         }
       ],
@@ -2117,6 +2241,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:232",
           "format": "bytes",
           "label": null,
           "logBase": 1,
@@ -2125,6 +2250,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:233",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -2155,9 +2281,9 @@
       "fillGradient": 1,
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 104
+        "y": 110
       },
       "hiddenSeries": false,
       "id": 21,
@@ -2188,7 +2314,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(${metric_namespace}_sub_libp2p_notifications_sizes_sum{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[5m])) by (direction, protocol) / sum(rate(${metric_namespace}_sub_libp2p_notifications_sizes_count{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[5m])) by (direction, protocol)",
+          "expr": "sum(rate(${metric_namespace}_sub_libp2p_notifications_sizes_sum{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[$__rate_interval])) by (direction, protocol) / sum(rate(${metric_namespace}_sub_libp2p_notifications_sizes_count{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[$__rate_interval])) by (direction, protocol)",
           "format": "time_series",
           "interval": "",
           "legendFormat": "{{direction}}",
@@ -2199,7 +2325,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Average size of sent and received notifications in the past 5 minutes",
+      "title": "Average size of sent and received notifications",
       "tooltip": {
         "shared": true,
         "sort": 2,
@@ -2215,6 +2341,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:322",
           "format": "bytes",
           "label": "Max. notification size",
           "logBase": 10,
@@ -2223,6 +2350,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:323",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -2253,9 +2381,9 @@
       "fillGradient": 1,
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 110
+        "y": 116
       },
       "hiddenSeries": false,
       "id": 134,
@@ -2286,7 +2414,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(1.0, sum(rate(${metric_namespace}_sub_libp2p_notifications_sizes_bucket{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[5m])) by (direction, le))",
+          "expr": "histogram_quantile(0.99, sum(irate(${metric_namespace}_sub_libp2p_notifications_sizes_bucket{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[$__rate_interval])) by (direction, le))",
           "format": "time_series",
           "interval": "",
           "legendFormat": "{{direction}}",
@@ -2297,7 +2425,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Maximum size of sent and received notifications in the past 5 minutes",
+      "title": "99th percentile of size of sent and received notifications",
       "tooltip": {
         "shared": true,
         "sort": 2,
@@ -2313,6 +2441,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:244",
           "format": "bytes",
           "label": "Max. notification size",
           "logBase": 10,
@@ -2321,121 +2450,7 @@
           "show": true
         },
         {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$data_source",
-      "description": "99.9% of the time, the output queue size for this protocol is below the given value",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "links": []
-        },
-        "overrides": []
-      },
-      "fill": 0,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 0,
-        "y": 116
-      },
-      "hiddenSeries": false,
-      "id": 14,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": true,
-        "hideEmpty": false,
-        "hideZero": true,
-        "max": true,
-        "min": false,
-        "rightSide": true,
-        "show": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pluginVersion": "7.3.6",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "repeat": "nodename",
-      "seriesOverrides": [
-        {
-          "alias": "max",
-          "fill": 1,
-          "linewidth": 0
-        }
-      ],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_notifications_queues_size_bucket{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[2m])) by (le, instance))",
-          "hide": false,
-          "interval": "",
-          "legendFormat": "{{protocol}}",
-          "refId": "A"
-        },
-        {
-          "expr": "max(histogram_quantile(0.99, sum(rate(${metric_namespace}_sub_libp2p_notifications_queues_size_bucket{instance=~\"${nodename}\", protocol=\"${notif_protocol}\"}[2m])) by (le, instance)))",
-          "interval": "",
-          "legendFormat": "max",
-          "refId": "B"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "99th percentile of queues sizes",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": "300",
-          "min": "0",
-          "show": true
-        },
-        {
+          "$$hashKey": "object:245",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -2480,7 +2495,7 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 123
       },
@@ -2515,16 +2530,19 @@
       "repeatDirection": "h",
       "seriesOverrides": [
         {
+          "$$hashKey": "object:366",
           "alias": "/discard/",
           "color": "#FA6400",
           "zindex": -2
         },
         {
+          "$$hashKey": "object:367",
           "alias": "/keep/",
           "color": "#73BF69",
           "zindex": 2
         },
         {
+          "$$hashKey": "object:368",
           "alias": "/process_and_discard/",
           "color": "#5794F2"
         }
@@ -2560,6 +2578,7 @@
       },
       "yaxes": [
         {
+          "$$hashKey": "object:409",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -2568,6 +2587,7 @@
           "show": true
         },
         {
+          "$$hashKey": "object:410",
           "format": "short",
           "label": null,
           "logBase": 1,
@@ -2627,7 +2647,7 @@
       "type": "dashlist"
     }
   ],
-  "refresh": "1m",
+  "refresh": false,
   "schemaVersion": 26,
   "style": "dark",
   "tags": [],
@@ -2660,7 +2680,7 @@
         "allValue": null,
         "current": {},
         "datasource": "$data_source",
-        "definition": "${metric_namespace}_sub_libp2p_notifications_sizes_count{instance=~\"${nodename}\"}",
+        "definition": "${metric_namespace}_sub_libp2p_notifications_streams_opened_total{instance=~\"${nodename}\"}",
         "error": null,
         "hide": 2,
         "includeAll": true,
@@ -2668,7 +2688,7 @@
         "multi": false,
         "name": "notif_protocol",
         "options": [],
-        "query": "${metric_namespace}_sub_libp2p_notifications_sizes_count{instance=~\"${nodename}\"}",
+        "query": "${metric_namespace}_sub_libp2p_notifications_streams_opened_total{instance=~\"${nodename}\"}",
         "refresh": 1,
         "regex": "/protocol=\"(.*?)\"/",
         "skipUrlSync": false,
@@ -2689,7 +2709,7 @@
         "includeAll": true,
         "label": null,
         "multi": false,
-        "name": "request_protocol",
+        "name": "request_protocol_in",
         "options": [],
         "query": "${metric_namespace}_sub_libp2p_requests_in_success_total_count{instance=~\"${nodename}\"}",
         "refresh": 1,
@@ -2742,6 +2762,29 @@
         "query": "${VAR_METRIC_NAMESPACE}",
         "skipUrlSync": false,
         "type": "constant"
+      },
+      {
+        "allValue": null,
+        "current": {},
+        "datasource": "$data_source",
+        "definition": "${metric_namespace}_sub_libp2p_requests_out_success_total_count{instance=~\"${nodename}\"}",
+        "error": null,
+        "hide": 2,
+        "includeAll": true,
+        "label": null,
+        "multi": false,
+        "name": "request_protocol_out",
+        "options": [],
+        "query": "${metric_namespace}_sub_libp2p_requests_out_success_total_count{instance=~\"${nodename}\"}",
+        "refresh": 1,
+        "regex": "/protocol=\"(.*?)\"/",
+        "skipUrlSync": false,
+        "sort": 5,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
       }
     ]
   },
@@ -2766,5 +2809,5 @@
   "timezone": "utc",
   "title": "Substrate Networking",
   "uid": "vKVuiD9Zk",
-  "version": 154
+  "version": 176
 }

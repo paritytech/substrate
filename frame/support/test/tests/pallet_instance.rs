@@ -209,7 +209,6 @@ pub mod pallet {
 #[frame_support::pallet]
 pub mod pallet2 {
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
@@ -219,12 +218,6 @@ pub mod pallet2 {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
-
-	#[pallet::call]
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
 
 	#[pallet::event]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -418,7 +411,7 @@ fn pallet_expand_deposit_event() {
 #[test]
 fn storage_expand() {
 	use frame_support::pallet_prelude::*;
-	use frame_support::StoragePrefixedMap;
+	use frame_support::storage::StoragePrefixedMap;
 
 	fn twox_64_concat(d: &[u8]) -> Vec<u8> {
 		let mut v = twox_64(d).to_vec();
