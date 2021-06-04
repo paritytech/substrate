@@ -123,6 +123,8 @@ parameter_types! {
 	pub const MaxLocks: u32 = 10;
 }
 impl pallet_balances::Config for Test {
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type MaxLocks = MaxLocks;
 	type Balance = u64;
 	type Event = Event;
