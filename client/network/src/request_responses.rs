@@ -1093,6 +1093,7 @@ mod tests {
 		// Running `swarm[0]` in the background.
 		pool.spawner().spawn_obj({
 			let (mut swarm, _, peerset) = swarms.remove(0);
+			let _ = peerset; // FIXME
 			async move {
 				loop {
 					match swarm.next_event().await {
@@ -1107,6 +1108,7 @@ mod tests {
 
 		// Remove and run the remaining swarm.
 		let (mut swarm, _, peerset) = swarms.remove(0);
+		let _ = peerset; // FIXME
 		pool.run_until(async move {
 			let mut response_receiver = None;
 
@@ -1182,6 +1184,7 @@ mod tests {
 		// which is a hint about the test having ended.
 		pool.spawner().spawn_obj({
 			let (mut swarm, _, peerset) = swarms.remove(0);
+			let _ = peerset; // FIXME
 			async move {
 				loop {
 					match swarm.next_event().await {
@@ -1197,6 +1200,7 @@ mod tests {
 
 		// Remove and run the remaining swarm.
 		let (mut swarm, _, peerset) = swarms.remove(0);
+		let _ = peerset; // FIXME
 		pool.run_until(async move {
 			let mut response_receiver = None;
 
@@ -1293,6 +1297,7 @@ mod tests {
 
 			(swarm, rx_1, rx_2, listen_addr, peerset)
 		};
+		let _ = peerset; // FIXME
 
 		// Ask swarm 1 to dial swarm 2. There isn't any discovery mechanism in place in this test,
 		// so they wouldn't connect to each other.
