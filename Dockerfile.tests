@@ -1,14 +1,19 @@
+# ===== FIRST STAGE ======
 FROM phusion/baseimage:0.11 as builder
 LABEL maintainer="team@cere.network"
 LABEL description="This is the build stage to create the binary."
 WORKDIR /cerenetwork
 COPY . /cerenetwork
 
-# Copy smart-contract artifacts (cere01.wasm and metadata.json)
+# ===== SECOND STAGE ======
 ARG SMART_CONTRACT_VERSION=1.1.0
 ARG ECR_REGISTRY
-COPY --from=$ECR_REGISTRY/crb-smart-contracts:$SMART_CONTRACT_VERSION /smart-contracts/cere02/target/ink/cere02.wasm /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data/
-COPY --from=$ECR_REGISTRY/crb-smart-contracts:$SMART_CONTRACT_VERSION /smart-contracts/cere02/target/ink/metadata.json /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data/
+FROM $ECR_REGISTRY/crb-smart-contracts:$SMART_CONTRACT_VERSION as smart-contracts
+
+FROM builder
+# Copy smart-contract artifacts (cere01.wasm and metadata.json)
+COPY --from=smart-contracts /smart-contracts/cere01/target/ink/ddc.wasm /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data/
+COPY --from=smart-contracts /smart-contracts/cere01/target/ink/metadata.json /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data/
 
 RUN apt-get update && \
 	apt-get upgrade -y && \
