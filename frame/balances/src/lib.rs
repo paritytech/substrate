@@ -580,12 +580,12 @@ pub struct BalanceLock<Balance> {
 	pub reasons: Reasons,
 }
 
-/// Store named reserved balance
+/// Store named reserved balance.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub struct ReserveData<ReserveIdentifier, Balance> {
-	/// The identifier for the named reserve
+	/// The identifier for the named reserve.
 	pub id: ReserveIdentifier,
-	/// The amount of the named reserve
+	/// The amount of the named reserve.
 	pub amount: Balance,
 }
 
