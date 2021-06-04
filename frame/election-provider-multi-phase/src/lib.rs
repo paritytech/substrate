@@ -946,8 +946,9 @@ impl<T: Config> Pallet<T> {
 	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 	/// acquired with success.
 	fn do_synchronized_offchain_worker(now: T::BlockNumber) {
-		log!(trace, "lock for offchain worker acquired.");
-		match Self::current_phase() {
+		let phase = Self::current_phase();
+		log!(trace, "lock for offchain worker acquired, phase = {:?}, now = {:?}.", phase, now);
+		match phase {
 			Phase::Unsigned((true, opened)) if opened == now => {
 				// mine a new solution, cache it, and attempt to submit it
 				let initial_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {

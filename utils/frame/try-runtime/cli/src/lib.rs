@@ -251,7 +251,7 @@ where
 	let max_runtime_instances = config.max_runtime_instances;
 	let executor = NativeExecutor::<ExecDispatch>::new(
 		wasm_method.into(),
-		heap_pages,
+		dbg!(heap_pages),
 		max_runtime_instances,
 	);
 

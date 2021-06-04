@@ -318,7 +318,7 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `heap_base` - the offset from the beginning of the linear memory where the heap starts.
 	pub fn new(heap_base: u32) -> Self {
-		let aligned_heap_base = (heap_base + ALIGNMENT - 1) / ALIGNMENT * ALIGNMENT;
+		let aligned_heap_base = (dbg!(heap_base) + ALIGNMENT - 1) / ALIGNMENT * ALIGNMENT;
 
 		FreeingBumpHeapAllocator {
 			bumper: aligned_heap_base,
@@ -432,7 +432,7 @@ impl FreeingBumpHeapAllocator {
 	/// Returns an `Error::AllocatorOutOfSpace` if the operation
 	/// would exhaust the heap.
 	fn bump(bumper: &mut u32, size: u32, heap_end: u32) -> Result<u32, Error> {
-		if *bumper + size > heap_end {
+		if dbg!(*bumper + size) > dbg!(heap_end) {
 			return Err(Error::AllocatorOutOfSpace);
 		}
 
