@@ -30,35 +30,35 @@ use crate::{
 	},
 };
 
-use codec::{Decode, Encode};
+use codec::Decode;
 use hash_db::Hasher;
 use sp_core::{
-    offchain::testing::TestPersistentOffchainDB,
-    storage::{
-        well_known_keys::{is_child_storage_key, CHANGES_TRIE_CONFIG, CODE},
-        Storage,
-    },
-    testing::TaskExecutor,
-    traits::TaskExecutorExt,
+	offchain::testing::TestPersistentOffchainDB,
+	storage::{
+		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, is_child_storage_key},
+		Storage,
+	},
+	traits::TaskExecutorExt,
+	testing::TaskExecutor,
 };
-use sp_externalities::{Extension, ExtensionStore, Extensions};
+use sp_externalities::{Extensions, Extension, ExtensionStore};
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
 where
-    H::Out: codec::Codec + Ord,
+	H::Out: codec::Codec + Ord,
 {
-    /// The overlay changed storage.
-    overlay: OverlayedChanges,
-    offchain_db: TestPersistentOffchainDB,
-    storage_transaction_cache:
-        StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H, N>,
-    /// Storage backend.
-    pub backend: InMemoryBackend<H>,
-    changes_trie_config: Option<ChangesTrieConfiguration>,
-    changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
-    /// Extensions.
-    pub extensions: Extensions,
+	/// The overlay changed storage.
+	overlay: OverlayedChanges,
+	offchain_db: TestPersistentOffchainDB,
+	storage_transaction_cache:
+		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H, N>,
+	/// Storage backend.
+	pub backend: InMemoryBackend<H>,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
+	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
+	/// Extensions.
+	pub extensions: Extensions,
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>

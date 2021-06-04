@@ -86,7 +86,7 @@ pub struct SharedParams {
 		value_name = "METHOD",
 		possible_values = &WasmExecutionMethod::variants(),
 		case_insensitive = true,
-		default_value = "compiled"
+		default_value = "Compiled"
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
@@ -269,7 +269,7 @@ where
 				(Mode::Online(online_config), url)
 			},
 			State::Snap { snapshot_path } => {
-				// This is a temporary hack; the url is used just to get the header. We should try
+				// TODO This is a temporary hack; the url is used just to get the header. We should try
 				// and get the header out of state, OR use an arbitrary header if thats ok, OR allow
 				// the user to feed in a header via file.
 				// This assumes you have a node running on local host default
@@ -360,7 +360,13 @@ impl CliConfiguration for TryRuntimeCmd {
 /// `StorageKey`.
 fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
 	let genesis_storage = spec.build_storage()?;
-genesis_storage
+	let code = StorageData(
+		genesis_storage
+			.top
+			.get(well_known_keys::CODE)
+			.expect("code key must exist in genesis storage; qed")
+			.to_vec(),
+	);
 	let code_key = StorageKey(well_known_keys::CODE.to_vec());
 
 	Ok((code_key, code))
