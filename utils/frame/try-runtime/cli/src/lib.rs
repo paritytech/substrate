@@ -60,11 +60,6 @@ pub struct OffchainWorkerCmd {
 	/// the specified chain spec.
 	#[structopt(long)]
 	pub overwrite_code: bool,
-
-	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
-	/// sc_service::Configuration.default_heap_pages.
-	#[structopt(long, short)]
-	pub heap_pages: Option<u64>,
 }
 
 #[derive(Debug, Clone, structopt::StructOpt)]
@@ -93,6 +88,11 @@ pub struct SharedParams {
 		default_value = "compiled"
 	)]
 	pub wasm_method: WasmExecutionMethod,
+
+	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
+	/// sc_service::Configuration.default_heap_pages.
+	#[structopt(long)]
+	pub heap_pages: Option<u64>,
 }
 
 /// Various commands to try out against runtime state at a specific block.
@@ -163,9 +163,13 @@ where
 
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
+	let heap_pages = if shared.heap_pages.is_some() {
+		shared.heap_pages
+	} else {
+		config.default_heap_pages
+	};
+
 	let mut changes = Default::default();
-	// don't really care about these so we just use the default
-	let heap_pages = config.default_heap_pages;
 	let max_runtime_instances = config.max_runtime_instances;
 	let executor = NativeExecutor::<ExecDispatch>::new(
 		wasm_method.into(),
@@ -242,11 +246,12 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
-	let heap_pages = if command.heap_pages.is_some() {
-		command.heap_pages
+	let heap_pages = if shared.heap_pages.is_some() {
+		shared.heap_pages
 	} else {
 		config.default_heap_pages
 	};
+
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
 	let executor = NativeExecutor::<ExecDispatch>::new(
