@@ -269,7 +269,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
 		let approx_payload_size = BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN;
-		let response = if approx_payload_size > DEFAULT_MAX_PAYLOAD { // TODO
+		let response = if approx_payload_size > DEFAULT_MAX_PAYLOAD {
 				TraceBlockResponse::TraceError(TraceError {
 					error:
 						"Payload likely exceeds max payload size of RPC server.".to_string()
