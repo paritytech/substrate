@@ -27,8 +27,8 @@ use crate::state::ReadProof;
 
 /// Substrate child state API
 ///
-/// Note that all `PrefixedStorageKey` are desierialized
-/// from json and not guaranted valid.
+/// Note that all `PrefixedStorageKey` are deserialized
+/// from json and not guaranteed valid.
 #[rpc]
 pub trait ChildStateApi<Hash> {
 	/// RPC Metadata
