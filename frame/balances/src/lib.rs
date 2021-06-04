@@ -372,9 +372,16 @@ pub mod pallet {
 
 		/// Transfer the entire transferable balance from the caller account.
 		///
-		/// # <weight>
+		/// The dispatch origin of this call must be Signed.
+		///
+		/// - `dest`: The recipient of the transfer.
+		/// - `keep_alive`: A boolean to determine if the `transfer_all` operation should send all
+		///   of the funds the account has, causing the sender account to be killed (false), or
+		///   transfer everything except at least the existential deposit, which will guarantee to
+		///   keep the sender account alive (true).
+		///   # <weight>
 		/// - O(1). Just like transfer, but reading the user's transferable balance first.
-		/// #</weight>
+		///   #</weight>
 		#[pallet::weight(T::WeightInfo::transfer_all())]
 		pub fn transfer_all(
 			origin: OriginFor<T>,
@@ -1716,7 +1723,7 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 	/// Is a no-op if value to be reserved is zero.
 	fn reserve_named(id: &Self::ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> DispatchResult {
 		if value.is_zero() { return Ok(()) }
-		
+
 		Reserves::<T, I>::try_mutate(who, |reserves| -> DispatchResult {
 			match reserves.binary_search_by_key(id, |data| data.id) {
 				Ok(index) => {

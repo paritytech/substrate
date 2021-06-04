@@ -40,7 +40,7 @@ benchmarks_instance_pallet! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let caller = whitelisted_caller();
 
-		// Give some multiple of the existential deposit + creation fee + transfer fee
+		// Give some multiple of the existential deposit
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, balance);
 
@@ -130,7 +130,7 @@ benchmarks_instance_pallet! {
 		let source: T::AccountId = account("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
 
-		// Give some multiple of the existential deposit + creation fee + transfer fee
+		// Give some multiple of the existential deposit
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&source, balance);
 
@@ -154,7 +154,7 @@ benchmarks_instance_pallet! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let caller = whitelisted_caller();
 
-		// Give some multiple of the existential deposit + creation fee + transfer fee
+		// Give some multiple of the existential deposit
 		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
 		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, balance);
 
@@ -185,12 +185,14 @@ benchmarks_instance_pallet! {
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 
-		// Give the sender account max funds, thus a transfer will not kill account.
-		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, T::Balance::max_value());
+		// Give some multiple of the existential deposit
+		let existential_deposit = T::ExistentialDeposit::get();
+		let balance = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
+		let _ = <Balances<T, I> as Currency<_>>::make_free_balance_be(&caller, balance);
 	}: _(RawOrigin::Signed(caller.clone()), recipient_lookup, false)
 	verify {
 		assert!(Balances::<T, I>::free_balance(&caller).is_zero());
-		assert_eq!(Balances::<T, I>::free_balance(&recipient), T::Balance::max_value());
+		assert_eq!(Balances::<T, I>::free_balance(&recipient), balance);
 	}
 }
 
