@@ -189,7 +189,8 @@ impl<'a> Client<'a> {
 	/// Note that unlike [`send`], given `deadline` is used instead of the default Client's `timeout`.
 	/// `Err` is returned in case of underlying HTTP error or deserialization error.
 	pub fn send_with_deadline(&self, deadline: Timestamp, request: &'a Request) -> RpcResult {
-		// Construct http POST body
+		// Construct http POST body.
+		// Note that we explicitly avoid deriving `Serialize` from `serde`, cause it significantly increases the runtime size.
 		let request_body = json!({
 			"jsonrpc": request.jsonrpc,
 			"id": request.id,
