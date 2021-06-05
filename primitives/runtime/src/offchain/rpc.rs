@@ -178,8 +178,7 @@ impl<'a> Client<'a> {
 
 	/// Send the request with this Client's `timeout` and return a RPC result.
 	///
-	/// Err is returned in case there is a Http
-	/// or deserializing error.
+	/// `Err` is returned in case of underlying HTTP error or deserialization error.
 	pub fn send(&self, request: &'a Request) -> RpcResult {
 		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(self.timeout));
 		self.send_with_deadline(deadline, request)
