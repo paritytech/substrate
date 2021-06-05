@@ -308,6 +308,7 @@ pub fn new_full_base(
 			env: proposer,
 			block_import,
 			sync_oracle: network.clone(),
+			justification_sync_link: network.clone(),
 			create_inherent_data_providers: move |parent, ()| {
 				let client_clone = client_clone.clone();
 				async move {
