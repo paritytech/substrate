@@ -189,7 +189,6 @@ where
 			})),
 		};
 
-		// inject the code into this ext.
 		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder.inject(&[(code_key, code)]).build().await?
 	};
@@ -285,7 +284,6 @@ where
 	};
 	let builder = Builder::<B>::new().mode(mode);
 	let mut ext = if command.overwrite_code {
-		// get the code to inject inject into the ext
 		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder.inject(&[(code_key, code)]).build().await?
 	} else {
