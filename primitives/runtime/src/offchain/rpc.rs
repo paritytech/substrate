@@ -353,7 +353,7 @@ mod test {
 
 		let expected_result = Ok(expected_response);
 
-    let client = Client::new();
+		let client = Client::new();
 		let request = Request::new();
 
 		assess_response(&body, &client, &request, &RESPONSE, &expected_result);
