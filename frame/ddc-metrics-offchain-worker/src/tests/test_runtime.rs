@@ -11,7 +11,8 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-    testing::{Header, TestXt},
+    generic,
+    testing::TestXt,
     traits::{
         BlakeTwo256, Convert, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify,
     },
@@ -21,6 +22,9 @@ use std::cell::RefCell;
 
 pub type Signature = MultiSignature;
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type Balance = u128;
+pub type BlockNumber = u32;
+pub type Moment = u64;
 
 // -- Implement a contracts runtime for testing --
 
@@ -74,7 +78,7 @@ impl_outer_dispatch! {
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]
 pub struct Test;
 parameter_types! {
-    pub const BlockHashCount: u64 = 250;
+    pub const BlockHashCount: BlockNumber = 250;
     pub const MaximumBlockWeight: Weight = 1024;
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
@@ -83,14 +87,14 @@ impl frame_system::Trait for Test {
     type BaseCallFilter = ();
     type Origin = Origin;
     type Index = u64;
-    type BlockNumber = u64;
+    type BlockNumber = BlockNumber;
     type Hash = H256;
     type Call = MetaCall;
     type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     // u64; // sp_core::sr25519::Public;
     type Lookup = IdentityLookup<Self::AccountId>;
-    type Header = Header;
+    type Header = generic::Header<BlockNumber, BlakeTwo256>;
     type Event = MetaEvent;
     type BlockHashCount = BlockHashCount;
     type MaximumBlockWeight = MaximumBlockWeight;
@@ -102,7 +106,7 @@ impl frame_system::Trait for Test {
     type MaximumBlockLength = MaximumBlockLength;
     type Version = ();
     type PalletInfo = ();
-    type AccountData = pallet_balances::AccountData<u64>;
+    type AccountData = pallet_balances::AccountData<Balance>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
     type SystemWeightInfo = ();
@@ -110,7 +114,7 @@ impl frame_system::Trait for Test {
 
 impl pallet_balances::Trait for Test {
     type MaxLocks = ();
-    type Balance = u64;
+    type Balance = Balance;
     type Event = MetaEvent;
     type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
@@ -119,13 +123,13 @@ impl pallet_balances::Trait for Test {
 }
 
 thread_local! {
-    static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+    static EXISTENTIAL_DEPOSIT: RefCell<Balance> = RefCell::new(1);
 }
 
 pub struct ExistentialDeposit;
 
-impl Get<u64> for ExistentialDeposit {
-    fn get() -> u64 {
+impl Get<Balance> for ExistentialDeposit {
+    fn get() -> Balance {
         EXISTENTIAL_DEPOSIT.with(|v| *v.borrow())
     }
 }
@@ -134,18 +138,18 @@ parameter_types! {
     pub const MinimumPeriod: u64 = 1;
 }
 impl pallet_timestamp::Trait for Test {
-    type Moment = u64;
+    type Moment = Moment;
     type OnTimestampSet = ();
     type MinimumPeriod = MinimumPeriod;
     type WeightInfo = ();
 }
 parameter_types! {
-    pub const SignedClaimHandicap: u64 = 2;
-    pub const TombstoneDeposit: u64 = 16;
+    pub const SignedClaimHandicap: BlockNumber = 2;
+    pub const TombstoneDeposit: Balance = 16;
     pub const StorageSizeOffset: u32 = 8;
-    pub const RentByteFee: u64 = 4;
-    pub const RentDepositOffset: u64 = 10_000;
-    pub const SurchargeReward: u64 = 150;
+    pub const RentByteFee: Balance = 4;
+    pub const RentDepositOffset: Balance = 10_000;
+    pub const SurchargeReward: Balance = 150;
     pub const MaxDepth: u32 = 100;
     pub const MaxValueSize: u32 = 16_384;
 }
@@ -170,7 +174,7 @@ impl contracts::Trait for Test {
     type SurchargeReward = SurchargeReward;
     type MaxDepth = MaxDepth;
     type MaxValueSize = MaxValueSize;
-    type WeightPrice = Self;
+    type WeightPrice = Self; //pallet_transaction_payment::Module<Self>;
 }
 
 parameter_types! {
@@ -179,7 +183,7 @@ parameter_types! {
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
     fn convert(w: Weight) -> BalanceOf<Self> {
-        w
+        w.into()
     }
 }
 
