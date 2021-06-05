@@ -145,7 +145,7 @@ impl<'a> Request<'a> {
 		self
 	}
 
-	/// Change the Jsonrpc for the Request
+	/// Change the JSON-RPC version of the Request
 	pub fn jsonrpc(mut self, jsonrpc: &'a str) -> Self {
 		self.jsonrpc = jsonrpc;
 		self
