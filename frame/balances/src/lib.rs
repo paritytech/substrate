@@ -372,6 +372,12 @@ pub mod pallet {
 
 		/// Transfer the entire transferable balance from the caller account.
 		///
+		/// NOTE: This function is only attempt to transfer _transferable_ balances. This means that
+		/// any locked, reserved, or existential deposits (when `keep_alive` is `true`), will not be
+		/// transferred by this function. To ensure that this function results in a killed account,
+		/// you might need to prepare the account by removing any reference counters, storage
+		/// deposits, etc...
+		///
 		/// The dispatch origin of this call must be Signed.
 		///
 		/// - `dest`: The recipient of the transfer.
