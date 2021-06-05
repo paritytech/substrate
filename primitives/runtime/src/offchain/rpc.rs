@@ -101,7 +101,7 @@ pub struct Request<'a> {
 /// A rpc client
 #[derive(Clone, RuntimeDebug)]
 pub struct Client<'a> {
-  /// rpc request timeout
+	/// RPC request timeout in milliseconds.
 	pub timeout: u64,
 	/// rpc request url
 	pub url: &'a str,
