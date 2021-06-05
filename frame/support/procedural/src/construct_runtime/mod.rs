@@ -148,11 +148,11 @@ fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Resu
 	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate, use_v2);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
 	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate, use_v2);
-	let inherent = decl_outer_inherent(
+	let inherent = expand::expand_outer_inherent(
 		&name,
 		&block,
 		&unchecked_extrinsic,
-		pallets.iter(),
+		&pallets,
 		&scrate,
 	);
 	let validate_unsigned = decl_validate_unsigned(&name, pallets.iter(), &scrate);
@@ -212,33 +212,6 @@ fn decl_validate_unsigned<'a>(
 		#scrate::impl_outer_validate_unsigned!(
 			impl ValidateUnsigned for #runtime {
 				#( #pallets_tokens )*
-			}
-		);
-	)
-}
-
-fn decl_outer_inherent<'a>(
-	runtime: &'a Ident,
-	block: &'a syn::TypePath,
-	unchecked_extrinsic: &'a syn::TypePath,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations.filter_map(|pallet_declaration| {
-		let maybe_config_part = pallet_declaration.find_part("Inherent");
-		maybe_config_part.map(|_| {
-			let name = &pallet_declaration.name;
-			quote!(#name,)
-		})
-	});
-	quote!(
-		#scrate::impl_outer_inherent!(
-			impl Inherents where
-				Block = #block,
-				UncheckedExtrinsic = #unchecked_extrinsic,
-				Runtime = #runtime,
-			{
-				#(#pallets_tokens)*
 			}
 		);
 	)
