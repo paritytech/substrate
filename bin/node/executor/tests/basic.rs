@@ -697,6 +697,8 @@ fn native_big_block_import_succeeds() {
 fn native_big_block_import_fails_on_fallback() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 
+	set_heap_pages(&mut t.ext(), 8);
+
 	assert!(
 		executor_call::<NeverNativeValue, fn() -> _>(
 			&mut t,
