@@ -176,7 +176,7 @@ impl<'a> Client<'a> {
 		self
 	}
 
-  /// Send the request and return a RPC result.
+	/// Send the request with this Client's `timeout` and return a RPC result.
 	///
 	/// Err is returned in case there is a Http
 	/// or deserializing error.
