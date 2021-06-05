@@ -103,7 +103,7 @@ pub struct Request<'a> {
 pub struct Client<'a> {
 	/// RPC request timeout in milliseconds.
 	pub timeout: u64,
-	/// rpc request url
+	/// HTTP URL to send the RPC request to.
 	pub url: &'a str,
 }
 
