@@ -639,18 +639,18 @@ macro_rules! implement_per_thing {
 		impl Pow<usize> for $name {
 			type Output = Self;
 
-			fn pow(mut self, mut exp: usize) -> Self::Output {
+			fn pow(mut self, exp: usize) -> Self::Output {
 				if exp == 0 || self.is_one() {
 					return Self::one()
 				}
 
-				let mut result = Self::one();
-				while exp > 0 {
+				let mut result = self;
+				let mut exp = exp - 1;
+				while exp > 0 && !result.is_zero() {
 					if exp % 2 != 0 {
 						result = result * self;
 						exp -= 1;
 					}
-
 					self = self.square();
 					exp /= 2;
 				}
@@ -1108,7 +1108,7 @@ macro_rules! implement_per_thing {
 				);
 
 				// x^2 .. x^16
-				for n in 2..=16 {
+				for n in 1..=16 {
 					assert_eq!(
 						$name::from_parts($max / 2).saturating_pow(n),
 						$name::from_parts(($max as u128 / 2u128.pow(n as u32)) as $type),
