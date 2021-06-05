@@ -421,7 +421,7 @@ mod test {
 		let expected_response = Error::Deserializing;
 		let expected_result = Err(expected_response);
 
-    let client = Client::new();
+		let client = Client::new();
 		let request = Request::new();
 
 		for response in RESPONSES.iter() {
