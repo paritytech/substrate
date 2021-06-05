@@ -29,12 +29,13 @@ pub fn expand_outer_config(
 	let mut types = TokenStream::new();
 	let mut fields = TokenStream::new();
 	let mut build_storage_calls = TokenStream::new();
-	let mut pallet_paths = Vec::new();
-	let mut pallet_names = Vec::new();
+	let mut query_genesis_config_part_macros = Vec::new();
 
 	for decl in pallet_decls {
 		if let Some(pallet_entry) = decl.find_part("Config") {
-			let config = format_ident!("{}Config", decl.name);
+			let path = &decl.pallet;
+			let pallet_name = &decl.name;
+			let config = format_ident!("{}Config", pallet_name);
 			let mod_name = decl.pallet.mod_name();
 			let field_name = if let Some(inst) = decl.instance.as_ref() {
 				format_ident!("{}_{}", mod_name, inst)
@@ -46,21 +47,17 @@ pub fn expand_outer_config(
 			types.extend(expand_config_types(runtime, decl, &config, part_is_generic));
 			fields.extend(quote!(pub #field_name: #config,));
 			build_storage_calls.extend(expand_config_build_storage_call(scrate, runtime, decl, &field_name));
-			pallet_paths.push(&decl.pallet);
-			pallet_names.push(&decl.name);
+
+			if use_v2 {
+				query_genesis_config_part_macros.push(
+					quote!( #path::__is_genesis_config_defined!(#pallet_name); ),
+				);
+			}
 		}
 	}
 
-	let query_genesis_config_part_macros = if use_v2 {
-		quote! {
-			#( #pallet_paths::__is_genesis_config_defined!(#pallet_names); )*
-		}
-	} else {
-		TokenStream::new()
-	};
-
 	quote! {
-		#query_genesis_config_part_macros
+		#( #query_genesis_config_part_macros )*
 
 		#types
 

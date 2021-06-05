@@ -139,7 +139,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Resu
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
 
-	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
+	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate, use_v2)?;
 
 	let outer_origin = expand::expand_outer_origin(&name, &pallets, pallets_token, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter());

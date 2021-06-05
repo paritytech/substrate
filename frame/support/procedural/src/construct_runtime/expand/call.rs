@@ -28,8 +28,8 @@ pub fn expand_outer_dispatch(
 ) -> TokenStream {
 	let mut variant_defs = TokenStream::new();
 	let mut variant_patterns = Vec::new();
+	let mut query_call_part_macros = Vec::new();
 	let mut pallet_names = Vec::new();
-	let mut pallet_paths = Vec::new();
 
 	let pallets_with_call = pallet_decls
 		.iter()
@@ -37,24 +37,22 @@ pub fn expand_outer_dispatch(
 
 	for pallet_declaration in pallets_with_call {
 		let name = &pallet_declaration.name;
+		let path = &pallet_declaration.pallet;
 		let index = pallet_declaration.index;
 
 		variant_defs.extend(quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),));
 		variant_patterns.push(quote!(Call::#name(call)));
 		pallet_names.push(name);
-		pallet_paths.push(&pallet_declaration.pallet);
+
+		if use_v2 {
+			query_call_part_macros.push(
+				quote!( #path::__is_call_part_defined!(#name); ),
+			);
+		}
 	}
 
-	let query_call_part_macros = if use_v2 {
-		quote! {
-			#( #pallet_paths::__is_call_part_defined!(#pallet_names); )*
-		}
-	} else {
-		TokenStream::new()
-	};
-
 	quote! {
-		#query_call_part_macros
+		#( #query_call_part_macros )*
 
 		#[derive(
 			Clone, PartialEq, Eq,

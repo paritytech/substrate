@@ -24,14 +24,17 @@ pub fn expand_outer_event(
 	runtime: &Ident,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
+	use_v2: bool,
 ) -> syn::Result<TokenStream> {
 	let mut event_variants = TokenStream::new();
 	let mut event_conversions = TokenStream::new();
 	let mut events_metadata = TokenStream::new();
+	let mut query_event_part_macros = Vec::new();
 
 	for pallet_decl in pallet_decls {
 		if let Some(pallet_entry) = pallet_decl.find_part("Event") {
 			let path = &pallet_decl.pallet;
+			let pallet_name = &pallet_decl.name;
 			let index = pallet_decl.index;
 			let instance = pallet_decl.instance.as_ref();
 			let generics = &pallet_entry.generics;
@@ -40,9 +43,9 @@ pub fn expand_outer_event(
 				let msg = format!(
 					"Instantiable pallet with no generic `Event` cannot \
 					 be constructed: pallet `{}` must have generic `Event`",
-					pallet_decl.name,
+					pallet_name,
 				);
-				return Err(syn::Error::new(pallet_decl.name.span(), msg));
+				return Err(syn::Error::new(pallet_name.span(), msg));
 			}
 
 			let part_is_generic = !generics.params.is_empty();
@@ -56,10 +59,16 @@ pub fn expand_outer_event(
 			event_variants.extend(expand_event_variant(runtime, path, index, instance, generics));
 			event_conversions.extend(expand_event_conversion(scrate, path, instance, &pallet_event));
 			events_metadata.extend(expand_event_metadata(scrate, path, &pallet_event));
+
+			if use_v2 {
+				query_event_part_macros.push(quote!( #path::__is_event_part_defined!(#pallet_name); ));
+			}
 		}
 	}
 
-	Ok(quote!{
+	Ok(quote! {
+		#( #query_event_part_macros )*
+
 		#[derive(
 			Clone, PartialEq, Eq,
 			#scrate::codec::Encode,
