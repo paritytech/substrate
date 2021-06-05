@@ -821,7 +821,9 @@ mod tests {
 	}
 
 	fn new_test_ext(balance_factor: Balance) -> sp_io::TestExternalities {
+		use sp_core::storage::well_known_keys::HEAP_PAGES;
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		t.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
 		}.assimilate_storage(&mut t).unwrap();
