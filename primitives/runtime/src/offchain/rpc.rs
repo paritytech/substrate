@@ -164,7 +164,7 @@ impl<'a> Client<'a> {
 		Client::default()
 	}
 
-  /// Change the URL for the Client
+	/// Change the URL for the Client
 	pub fn url(mut self, url: &'a str) -> Self {
 		self.url = url;
 		self
