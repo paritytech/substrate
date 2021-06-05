@@ -26,18 +26,27 @@ pub fn expand_outer_inherent(
 	unchecked_extrinsic: &TypePath,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
+	use_v2: bool,
 ) -> TokenStream {
 	let mut pallet_names = Vec::new();
+	let mut query_inherent_part_macros = Vec::new();
 
 	for pallet_decl in pallet_decls {
 		if pallet_decl.find_part("Inherent").is_some() {
 			let name = &pallet_decl.name;
+			let path = &pallet_decl.pallet;
 
 			pallet_names.push(name);
+
+			if use_v2 {
+				query_inherent_part_macros.push(quote!( #path::__is_inherent_part_defined!(#name); ));
+			}
 		}
 	}
 
 	quote! {
+		#( #query_inherent_part_macros )*
+
 		trait InherentDataExt {
 			fn create_extrinsics(&self) ->
 				#scrate::inherent::Vec<<#block as #scrate::inherent::BlockT>::Extrinsic>;

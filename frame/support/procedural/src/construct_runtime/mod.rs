@@ -154,6 +154,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Resu
 		&unchecked_extrinsic,
 		&pallets,
 		&scrate,
+		use_v2,
 	);
 	let validate_unsigned = decl_validate_unsigned(&name, pallets.iter(), &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
