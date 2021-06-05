@@ -170,7 +170,7 @@ impl<'a> Client<'a> {
 		self
 	}
 
-  /// Change the Timeout for the Client
+	/// Change the Timeout for the Client
 	pub fn timeout(mut self, timeout: u64) -> Self {
 		self.timeout = timeout;
 		self
