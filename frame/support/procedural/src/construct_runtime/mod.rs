@@ -156,7 +156,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Resu
 		&scrate,
 		use_v2,
 	);
-	let validate_unsigned = decl_validate_unsigned(&name, pallets.iter(), &scrate);
+	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 
 	let res = quote!(
@@ -199,23 +199,6 @@ fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Resu
 	);
 
 	Ok(res)
-}
-
-fn decl_validate_unsigned<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations
-		.filter(|pallet_declaration| pallet_declaration.exists_part("ValidateUnsigned"))
-		.map(|pallet_declaration| &pallet_declaration.name);
-	quote!(
-		#scrate::impl_outer_validate_unsigned!(
-			impl ValidateUnsigned for #runtime {
-				#( #pallets_tokens )*
-			}
-		);
-	)
 }
 
 fn decl_all_pallets<'a>(

@@ -21,6 +21,7 @@ mod event;
 mod inherent;
 mod metadata;
 mod origin;
+mod unsigned;
 
 pub use call::expand_outer_dispatch;
 pub use config::expand_outer_config;
@@ -28,3 +29,4 @@ pub use event::expand_outer_event;
 pub use inherent::expand_outer_inherent;
 pub use metadata::expand_runtime_metadata;
 pub use origin::expand_outer_origin;
+pub use unsigned::expand_outer_validate_unsigned;

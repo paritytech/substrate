@@ -32,13 +32,13 @@ pub fn expand_outer_inherent(
 	let mut query_inherent_part_macros = Vec::new();
 
 	for pallet_decl in pallet_decls {
-		if pallet_decl.find_part("Inherent").is_some() {
+		if pallet_decl.exists_part("Inherent") {
 			let name = &pallet_decl.name;
-			let path = &pallet_decl.pallet;
 
 			pallet_names.push(name);
 
 			if use_v2 {
+				let path = &pallet_decl.pallet;
 				query_inherent_part_macros.push(quote!( #path::__is_inherent_part_defined!(#name); ));
 			}
 		}
