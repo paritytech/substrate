@@ -184,10 +184,10 @@ impl<'a> Client<'a> {
 		self.send_with_deadline(deadline, request)
 	}
 
-	/// Send the request and return a RPC result.
-	/// Deadline is used instead of Timeout
-	/// Err is returned in case there is a Http
-	/// or deserializing error.
+	/// Send the request with a completion deadline and return a RPC result.
+	///
+	/// Note that unlike [`send`], given `deadline` is used instead of the default Client's `timeout`.
+	/// `Err` is returned in case of underlying HTTP error or deserialization error.
 	pub fn send_with_deadline(&self, deadline: Timestamp, request: &'a Request) -> RpcResult {
 		// Construct http POST body
 		let request_body = json!({
