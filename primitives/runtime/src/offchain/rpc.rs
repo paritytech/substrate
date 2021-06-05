@@ -296,7 +296,7 @@ mod test {
 	/// Helper function to assess expected response
 	fn assess_response(
 		body: &Value,
-    client: &Client,
+		client: &Client,
 		request: &Request,
 		response: &[u8],
 		expected_result: &RpcResult
