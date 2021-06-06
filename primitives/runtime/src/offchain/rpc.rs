@@ -69,7 +69,7 @@ pub struct RpcError {
 	/// error message
 	pub message: Vec<u8>,
 	/// error data
-	pub data: Option<Value>,
+	pub data: Value,
 }
 
 /// A rpc call response
@@ -78,7 +78,7 @@ pub struct Response {
 	/// rpc response jsonrpc
 	pub jsonrpc: Vec<u8>,
 	/// rpc response result
-	pub result: Option<Value>,
+	pub result: Value,
 	/// rpc response error struct
 	pub error: Option<RpcError>,
 	/// rpc response id
@@ -244,46 +244,45 @@ impl<'a> Client<'a> {
 //// Note we avoid deriving this implementation from `serde`, cause according to our tests
 /// it generates larger WASM code blob than manual implementation.
 fn deserialize_response(response_body_bytes: &Vec<u8>) -> RpcResult {
-	let response_deserialized: Value = serde_json::from_slice(response_body_bytes)
+	let mut response_deserialized: Value = serde_json::from_slice(response_body_bytes)
 		.map_err(|_| Error::Deserializing)?;
 
-	fn deserialize(response_deserialized: &Value) -> Option<Response> {
+	fn deserialize(response_deserialized: &mut Value) -> Option<Response> {
 		response_deserialized.as_object()?;
 
-		let jsonrpc_value = response_deserialized.get("jsonrpc")?;
+		let jsonrpc_value = response_deserialized["jsonrpc"].take();
 		let jsonrpc = jsonrpc_value.as_str()?;
 
-		let id_value = response_deserialized.get("id")?;
+		let id_value = response_deserialized["id"].take();
 		let id = id_value.as_u64()?;
 
-		let result_value = response_deserialized.get("result");
-		let error_value = response_deserialized.get("error");
+		let result_value = response_deserialized["result"].take();
+		let mut error_value = response_deserialized["error"].take();
 
-		if error_value == None && result_value == None {
+		if error_value == Value::Null && result_value == Value::Null {
 			return None;
 		}
 
-		let error: Option<RpcError> = match error_value {
-			Some(value) => {
-				let code_value = value.get("code")?;
-				let code = code_value.as_i64()?;
-				let message_value = value.get("message")?;
-				let message = message_value.as_str()?;
-				let data_value = value.get("data");
+		let error: Option<RpcError> = if error_value != Value::Null {
+			let code_value = error_value["code"].take();
+			let code = code_value.as_i64()?;
+			let message_value = error_value["message"].take();
+			let message = message_value.as_str()?;
+			let data_value = error_value["data"].take();
 
-				let rpc_error = RpcError {
-					code: code as i32,
-					message: message.as_bytes().to_vec(),
-					data: data_value.cloned()
-				};
-				Some(rpc_error)
-			},
-			None => None
+			let rpc_error = RpcError {
+				code: code as i32,
+				message: message.as_bytes().to_vec(),
+				data: data_value
+			};
+			Some(rpc_error)
+		} else {
+			None
 		};
 
 		let rpc_response = Response {
 			jsonrpc: jsonrpc.as_bytes().to_vec(),
-			result: result_value.cloned(),
+			result: result_value,
 			error,
 			id: id as u32,
 		};
@@ -291,7 +290,7 @@ fn deserialize_response(response_body_bytes: &Vec<u8>) -> RpcResult {
 		Some(rpc_response)
 	}
 
-	let rpc_result = deserialize(&response_deserialized).ok_or(Error::Deserializing)?;
+	let rpc_result = deserialize(&mut response_deserialized).ok_or(Error::Deserializing)?;
 
 	Ok(rpc_result)
 }
@@ -357,7 +356,7 @@ mod test {
 
 		let expected_response = Response {
 			jsonrpc: b"2.0".to_vec(),
-			result: Some(json!(str::from_utf8(EXPECTED_RESULT).unwrap())),
+			result: json!(str::from_utf8(EXPECTED_RESULT).unwrap()),
 			error: None,
 			id: 1,
 		};
@@ -388,12 +387,12 @@ mod test {
 		let expected_rpc_error = RpcError {
 			code: EXPECTED_ERROR_CODE,
 			message: EXPECTED_ERROR_MESSAGE.to_vec(),
-			data: None
+			data: Value::Null
 		};
 
 		let expected_response = Response {
 			jsonrpc: b"2.0".to_vec(),
-			result: None,
+			result: Value::Null,
 			error: Some(expected_rpc_error),
 			id: 1,
 		};
