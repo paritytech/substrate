@@ -231,40 +231,42 @@ impl<'a> Client<'a> {
 
 		// Deserialize response body
 		let response_body_bytes = response.body().collect::<Vec<u8>>();
-		let rpc_result = Self::deserialize_response(&response_body_bytes)?;
+		let rpc_result = deserialize_response(&response_body_bytes)?;
 
 		Ok(rpc_result)
 	}
+}
 
-	/// Deserialize a RPC response.
-	////
-	//// Note we avoid deriving this implementation from `serde`, cause according to our tests
-	/// it generates larger WASM code blob than manual implementation.
-	fn deserialize_response(response_body_bytes: Vec<u8>) -> RpcResult {
-		let response_deserialized: Value = serde_json::from_slice(response_body_bytes)
-			.map_err(|_| Error::Deserializing)?;
+/// Deserialize a RPC response.
+////
+//// Note we avoid deriving this implementation from `serde`, cause according to our tests
+/// it generates larger WASM code blob than manual implementation.
+fn deserialize_response(response_body_bytes: &Vec<u8>) -> RpcResult {
+	let response_deserialized: Value = serde_json::from_slice(response_body_bytes)
+		.map_err(|_| Error::Deserializing)?;
 
-		response_deserialized.as_object().ok_or(Error::Deserializing)?;
+	fn deserialize(response_deserialized: &Value) -> Option<Response> {
+		response_deserialized.as_object()?;
 
-		let jsonrpc_value = response_deserialized.get("jsonrpc").ok_or(Error::Deserializing)?;
-		let jsonrpc = jsonrpc_value.as_str().ok_or(Error::Deserializing)?;
+		let jsonrpc_value = response_deserialized.get("jsonrpc")?;
+		let jsonrpc = jsonrpc_value.as_str()?;
 
-		let id_value = response_deserialized.get("id").ok_or(Error::Deserializing)?;
-		let id = id_value.as_u64().ok_or(Error::Deserializing)?;
+		let id_value = response_deserialized.get("id")?;
+		let id = id_value.as_u64()?;
 
 		let result_value = response_deserialized.get("result");
 		let error_value = response_deserialized.get("error");
 
 		if error_value == None && result_value == None {
-			return Err(Error::Deserializing);
+			return None;
 		}
 
 		let error: Option<RpcError> = match error_value {
 			Some(value) => {
-				let code_value = value.get("code").ok_or(Error::Deserializing)?;
-				let code = code_value.as_i64().ok_or(Error::Deserializing)?;
-				let message_value = value.get("message").ok_or(Error::Deserializing)?;
-				let message = message_value.as_str().ok_or(Error::Deserializing)?;
+				let code_value = value.get("code")?;
+				let code = code_value.as_i64()?;
+				let message_value = value.get("message")?;
+				let message = message_value.as_str()?;
 				let data_value = value.get("data");
 
 				let rpc_error = RpcError {
@@ -284,8 +286,12 @@ impl<'a> Client<'a> {
 			id: id as u32,
 		};
 
-		Ok(rpc_response)
+		Some(rpc_response)
 	}
+
+	let rpc_result = deserialize(&response_deserialized).ok_or(Error::Deserializing)?;
+
+	Ok(rpc_result)
 }
 
 #[cfg(test)]
