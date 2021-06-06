@@ -156,7 +156,8 @@ fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Resu
 		&scrate,
 		use_v2,
 	);
-	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
+	let validate_unsigned =
+		expand::expand_outer_validate_unsigned(&name, &pallets, &scrate, use_v2);
 	let integrity_test = decl_integrity_test(&scrate);
 
 	let res = quote!(

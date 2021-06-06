@@ -29,6 +29,7 @@ mod instances;
 mod genesis_build;
 mod genesis_config;
 mod type_value;
+mod validate_unsigned;
 
 use crate::pallet::{Def, parse::helper::get_doc_literals};
 use quote::ToTokens;
@@ -75,6 +76,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let genesis_build = genesis_build::expand_genesis_build(&mut def);
 	let genesis_config = genesis_config::expand_genesis_config(&mut def);
 	let type_values = type_value::expand_type_values(&mut def);
+	let validate_unsigned = validate_unsigned::expand_validate_unsigned(&mut def);
 
 	if get_doc_literals(&def.item.attrs).is_empty() {
 		def.item.attrs.push(syn::parse_quote!(
@@ -102,6 +104,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		#genesis_build
 		#genesis_config
 		#type_values
+		#validate_unsigned
 	);
 
 	def.item.content.as_mut().expect("This is checked by parsing").1
