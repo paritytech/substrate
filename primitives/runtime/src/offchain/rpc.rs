@@ -198,7 +198,7 @@ impl<'a> Client<'a> {
 			"params": request.params
 		});
 		let mut body: Vec<&[u8]> = Vec::new();
-		let request_body_slice: &[u8] = &(serde_json::to_vec(&request_body).unwrap())[..];
+		let request_body_slice: &[u8] = &(serde_json::to_vec(&request_body).expect("Constructed request body has infallible serialization, just an object with strings; qed"))[..];
 		body.push(request_body_slice);
 
 		// Send http POST request
