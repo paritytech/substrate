@@ -206,24 +206,18 @@ impl<'a> Client<'a> {
 		// Send http POST request
 		let post_request = http::Request::post(self.url, body);
 
-		let pending = match post_request
+		let pending = post_request
 			.add_header("Content-Type", "application/json;charset=utf-8")
 			.deadline(deadline)
-			.send().map_err(|_| http::Error::IoError) {
-				Ok(result) => result,
-				Err(e) => return Err(Error::Http(e)),
-		};
+			.send()
+			.map_err(|_| http::Error::IoError)
+			.map_err(|e| Error::Http(e))?;
 
 		// Hanlde http response
-		let response = match pending.try_wait(deadline)
-			.map_err(|_| http::Error::DeadlineReached) {
-				Ok(result) =>
-					match result {
-						Ok(result_bis) => result_bis,
-						Err(e) => return Err(Error::Http(e)),
-					},
-				Err(e) => return Err(Error::Http(e)),
-		};
+		let response = pending.try_wait(deadline)
+			.map_err(|_| http::Error::DeadlineReached)
+			.map_err(|e| Error::Http(e))?
+			.map_err(|e| Error::Http(e))?;
 
 		// Return http error if response status is not 200
 		if response.code != 200 {
