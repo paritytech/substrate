@@ -141,10 +141,3 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 		db
 	}
 }
-
-#[cfg(test)]
-mod test {
-	#[test]
-	fn test_compact_proof() {
-	}
-}
