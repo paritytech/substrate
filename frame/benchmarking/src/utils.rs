@@ -63,7 +63,6 @@ pub struct BenchmarkResults {
 	pub writes: u32,
 	pub repeat_writes: u32,
 	pub proof_size: u32,
-	pub compact_proof_size: u32,
 }
 
 /// Configuration used to setup and run runtime benchmarks.
@@ -166,7 +165,7 @@ pub trait Benchmarking {
 	}
 
 	/// Get current estimated proof size.
-	fn proof_size(&self) -> Option<(u32, u32)> {
+	fn proof_size(&self) -> Option<u32> {
 		self.proof_size()
 	}
 }

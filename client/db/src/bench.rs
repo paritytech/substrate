@@ -520,12 +520,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
 	}
 
-	fn proof_size(&self) -> Option<(u32, u32)> {
+	fn proof_size(&self) -> Option<u32> {
 		self.proof_recorder.as_ref().map(|recorder| {
 			let proof_size = recorder.estimate_encoded_size() as u32;
 			let proof = recorder.to_storage_proof();
 			let proof_recorder_root = self.proof_recorder_root.get();
-			let compact_size = if proof_recorder_root == Default::default() || proof_size == 1 {
+			if proof_recorder_root == Default::default() || proof_size == 1 {
 				// empty trie
 				proof_size
 			} else {
@@ -543,9 +543,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 						proof_size,
 					);
 				}
-			};
-
-			(proof_size, compact_size)
+			}
 		})
 	}
 }

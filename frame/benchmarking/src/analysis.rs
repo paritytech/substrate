@@ -39,7 +39,6 @@ pub enum BenchmarkSelector {
 	Reads,
 	Writes,
 	ProofSize,
-	CompactProofSize,
 }
 
 #[derive(Debug)]
@@ -89,7 +88,6 @@ impl Analysis {
 				BenchmarkSelector::Reads => result.reads.into(),
 				BenchmarkSelector::Writes => result.writes.into(),
 				BenchmarkSelector::ProofSize => result.proof_size.into(),
-				BenchmarkSelector::CompactProofSize => result.compact_proof_size.into(),
 			}
 		).collect();
 
@@ -131,7 +129,6 @@ impl Analysis {
 						BenchmarkSelector::Reads => result.reads.into(),
 						BenchmarkSelector::Writes => result.writes.into(),
 						BenchmarkSelector::ProofSize => result.proof_size.into(),
-						BenchmarkSelector::CompactProofSize => result.compact_proof_size.into(),
 					};
 					(result.components[i].1, data)
 				})
@@ -197,7 +194,6 @@ impl Analysis {
 					BenchmarkSelector::Reads => result.reads.into(),
 					BenchmarkSelector::Writes => result.writes.into(),
 					BenchmarkSelector::ProofSize => result.proof_size.into(),
-					BenchmarkSelector::CompactProofSize => result.compact_proof_size.into(),
 				})
 		}
 
@@ -379,7 +375,6 @@ mod tests {
 			writes,
 			repeat_writes: 0,
 			proof_size: 0,
-			compact_proof_size: 0,
 		}
 	}
 

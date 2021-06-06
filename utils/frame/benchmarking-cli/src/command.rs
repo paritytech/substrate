@@ -133,7 +133,7 @@ impl BenchmarkCmd {
 							let parameters = &result.components;
 							parameters.iter().for_each(|param| print!("{:?},", param.1));
 							// Print extrinsic time and storage root time
-							print!("{:?},{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
+							print!("{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
 								result.extrinsic_time,
 								result.storage_root_time,
 								result.reads,
@@ -141,7 +141,6 @@ impl BenchmarkCmd {
 								result.writes,
 								result.repeat_writes,
 								result.proof_size,
-								result.compact_proof_size,
 							);
 						});
 

@@ -787,11 +787,8 @@ macro_rules! impl_benchmark {
 
 							// Calculate the diff caused by the benchmark.
 							let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
-							let (diff_pov, compact_diff_pov) = match (start_pov, end_pov) {
-								(Some((start, compact_start)), Some((end, compact_end))) => (
-									end.saturating_sub(start),
-									compact_end.saturating_sub(compact_start),
-								),
+							let diff_pov = match (start_pov, end_pov) {
+								(Some(start), Some(end)) => end.saturating_sub(start),
 								_ => Default::default(),
 							};
 
@@ -836,7 +833,6 @@ macro_rules! impl_benchmark {
 								writes: read_write_count.2,
 								repeat_writes: read_write_count.3,
 								proof_size: diff_pov,
-								compact_proof_size: compact_diff_pov,
 							});
 						}
 
