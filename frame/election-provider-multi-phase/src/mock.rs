@@ -237,6 +237,8 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
 
@@ -345,6 +347,7 @@ impl crate::Config for Runtime {
 	type BenchmarkingConfig = ();
 	type OnChainAccuracy = Perbill;
 	type Fallback = Fallback;
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type CompactSolution = TestCompact;
 }
 

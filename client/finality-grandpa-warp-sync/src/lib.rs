@@ -173,4 +173,6 @@ pub enum HandleRequestError {
 	InvalidProof(String),
 	#[display(fmt = "Failed to send response.")]
 	SendResponse,
+	#[display(fmt = "Missing required data to be able to answer request.")]
+	MissingData,
 }

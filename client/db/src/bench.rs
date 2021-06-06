@@ -507,7 +507,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		*self.whitelist.borrow_mut() = new;
 	}
 
-	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
+	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {
 		self.state.borrow_mut().as_mut().map(|s| s.register_overlay_stats(stats));
 	}
 

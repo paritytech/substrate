@@ -85,11 +85,11 @@
 		{
 			"prefix": 8,
 			"network": "karura",
-			"displayName": "Acala Karura Canary",
+			"displayName": "Karura",
 			"symbols": ["KAR"],
-			"decimals": [18],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": "https://acala.network/"
+			"website": "https://karura.network/"
 		},
 		{
 			"prefix": 9,
@@ -105,7 +105,7 @@
 			"network": "acala",
 			"displayName": "Acala",
 			"symbols": ["ACA"],
-			"decimals": [18],
+			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://acala.network/"
 		},
@@ -475,7 +475,8 @@
 			"decimals": [0,9,9,9,9,9,9,9],
 			"standardAccount": "*25519",
 			"website": "https://equilibrium.io"
-    }, {
+		},
+		{
 			"prefix": 69,
 			"network": "sora",
 			"displayName": "SORA Network",
@@ -483,15 +484,26 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://sora.org"
-		}, {
+		},
+		{
 			"prefix": 77,
-			"network": "hedgeware",
-			"displayName": "Hedgeware",
-			"symbols": ["HEDG"],
-			"decimals": [18],
+			"network": "manta",
+			"displayName": "Manta network",
+			"symbols": ["MA"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": "https://edgewa.re"
-    }, {
+			"website": "https://manta.network"
+		},
+		{
+			"prefix": 78,
+			"network": "calamari",
+			"displayName": "Calamari: Manta Canary Network",
+			"symbols": ["KMA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://manta.network"
+		},
+		{
 			"prefix": 252,
 			"network": "social-network",
 			"displayName": "Social Network",
@@ -499,6 +511,24 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://social.network"
+		},
+    {
+			"prefix": 777,
+			"network": "hedgeware",
+			"displayName": "Hedgeware",
+			"symbols": ["HEDG"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://edgewa.re"
+		},
+		{
+			"prefix": 10041,
+			"network": "basilisk",
+			"displayName": "Basilisk",
+			"symbols": ["BSX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://bsx.fi"
 		}
 	]
 }
