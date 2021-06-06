@@ -124,6 +124,11 @@ pub enum BehaviourOut<B: BlockT> {
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.
 		protocol: Cow<'static, str>,
+		/// If the negotiation didn't use the main name of the protocol (the one in
+		/// `notifications_protocol`), then this field contains which name has actually been
+		/// used.
+		/// See also [`crate::Event::NotificationStreamOpened`].
+		negotiated_fallback: Option<Cow<'static, str>>,
 		/// Object that permits sending notifications to the peer.
 		notifications_sink: NotificationsSink,
 		/// Role of the remote.
@@ -324,10 +329,13 @@ Behaviour<B> {
 					&target, &self.block_request_protocol_name, buf, pending_response, IfDisconnected::ImmediateError,
 				);
 			},
-			CustomMessageOutcome::NotificationStreamOpened { remote, protocol, roles, notifications_sink } => {
+			CustomMessageOutcome::NotificationStreamOpened {
+				remote, protocol, negotiated_fallback, roles, notifications_sink
+			} => {
 				self.events.push_back(BehaviourOut::NotificationStreamOpened {
 					remote,
 					protocol,
+					negotiated_fallback,
 					role: reported_roles_to_observed_role(roles),
 					notifications_sink: notifications_sink.clone(),
 				});

@@ -30,6 +30,7 @@ parity-util-mem = { version = "0.9.0", default-features = false, features = ["pr
 hash256-std-hasher = { version = "0.15.2", default-features = false }
 either = { version = "1.5", default-features = false }
 serde_json = { version = '1.0.64', default-features = false, features = ['alloc'] }
+max-encoded-len = { version = "3.0.0", default-features = false, path = "../../max-encoded-len", features = [ "derive" ] }
 
 [dev-dependencies]
 hex = "0.4"
@@ -56,4 +57,5 @@ std = [
 	"parity-util-mem/std",
 	"hash256-std-hasher/std",
 	"either/use_std",
+	"max-encoded-len/std",
 ]

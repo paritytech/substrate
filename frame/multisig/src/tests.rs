@@ -78,6 +78,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -122,14 +124,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
-}
-
-fn last_event() -> Event {
-	system::Pallet::<Test>::events().pop().map(|e| e.event).expect("Event expected")
-}
-
-fn expect_event<E: Into<Event>>(e: E) {
-	assert_eq!(last_event(), e.into());
 }
 
 fn now() -> Timepoint<u64> {
@@ -433,7 +427,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 		assert_ok!(Multisig::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), data.clone(), false, call_weight));
 
 		let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
-		expect_event(RawEvent::MultisigExecuted(3, now(), multi, hash, Err(err)));
+		System::assert_last_event(pallet_multisig::Event::MultisigExecuted(3, now(), multi, hash, Err(err)).into());
 	});
 }
 

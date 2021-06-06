@@ -90,6 +90,7 @@ impl pallet_transaction_payment::Config for Test {
 }
 parameter_types! {
 	pub const MaxLocks: u32 = 50;
+	pub const MaxReserves: u32 = 2;
 }
 impl Config for Test {
 	type Balance = u64;
@@ -103,6 +104,8 @@ impl Config for Test {
 		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
 

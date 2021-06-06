@@ -23,7 +23,8 @@ pub mod tokens;
 pub use tokens::fungible;
 pub use tokens::fungibles;
 pub use tokens::currency::{
-	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, VestingSchedule,
+	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, NamedReservableCurrency,
+	VestingSchedule,
 };
 pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
 pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};
@@ -50,7 +51,7 @@ mod misc;
 pub use misc::{
 	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
 	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing, ExtrinsicCall,
-	EnsureInherentsAreFirst,
+	EnsureInherentsAreFirst, ConstU32,
 };
 
 mod stored_map;
@@ -73,7 +74,7 @@ pub use hooks::GenesisBuild;
 
 pub mod schedule;
 mod storage;
-pub use storage::{Instance, StorageInstance};
+pub use storage::{Instance, StorageInstance, StorageInfo, StorageInfoTrait};
 
 mod dispatch;
 pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
@@ -81,5 +82,5 @@ pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
 
-mod max_encoded_len;
+// for backwards-compatibility with existing imports
 pub use max_encoded_len::MaxEncodedLen;

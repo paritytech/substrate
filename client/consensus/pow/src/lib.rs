@@ -19,14 +19,22 @@
 //! Proof of work consensus for Substrate.
 //!
 //! To use this engine, you can need to have a struct that implements
-//! `PowAlgorithm`. After that, pass an instance of the struct, along
-//! with other necessary client references to `import_queue` to setup
-//! the queue. Use the `start_mine` function for basic CPU mining.
+//! [`PowAlgorithm`]. After that, pass an instance of the struct, along
+//! with other necessary client references to [`import_queue`] to setup
+//! the queue.
+//!
+//! This library also comes with an async mining worker, which can be
+//! started via the [`start_mining_worker`] function. It returns a worker
+//! handle together with a future. The future must be pulled. Through
+//! the worker handle, you can pull the metadata needed to start the
+//! mining process via [`MiningWorker::metadata`], and then do the actual
+//! mining on a standalone thread. Finally, when a seal is found, call
+//! [`MiningWorker::submit`] to build the block.
 //!
 //! The auxiliary storage for PoW engine only stores the total difficulty.
 //! For other storage requirements for particular PoW algorithm (such as
 //! the actual difficulty for each particular blocks), you can take a client
-//! reference in your `PowAlgorithm` implementation, and use a separate prefix
+//! reference in your [`PowAlgorithm`] implementation, and use a separate prefix
 //! for the auxiliary storage. It is also possible to just use the runtime
 //! as the storage, but it is not recommended as it won't work well with light
 //! clients.
@@ -519,20 +527,21 @@ pub fn import_queue<B, Transaction, Algorithm>(
 ///
 /// `pre_runtime` is a parameter that allows a custom additional pre-runtime digest to be inserted
 /// for blocks being built. This can encode authorship information, or just be a graffiti.
-pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, CIDP>(
+pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP, CAW>(
 	block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
 	client: Arc<C>,
 	select_chain: S,
 	algorithm: Algorithm,
 	mut env: E,
 	mut sync_oracle: SO,
+	justification_sync_link: L,
 	pre_runtime: Option<Vec<u8>>,
 	create_inherent_data_providers: CIDP,
 	timeout: Duration,
 	build_time: Duration,
 	can_author_with: CAW,
 ) -> (
-	Arc<Mutex<MiningWorker<Block, Algorithm, C, <E::Proposer as Proposer<Block>>::Proof>>>,
+	Arc<Mutex<MiningWorker<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>>>,
 	impl Future<Output = ()>,
 ) where
 	Block: BlockT,
@@ -544,14 +553,16 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, CIDP>(
 	E::Error: std::fmt::Debug,
 	E::Proposer: Proposer<Block, Transaction = sp_api::TransactionFor<C, Block>>,
 	SO: SyncOracle + Clone + Send + Sync + 'static,
-	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
+	L: sp_consensus::JustificationSyncLink<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()>,
+	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
 {
 	let mut timer = UntilImportedOrTimeout::new(client.import_notification_stream(), timeout);
-	let worker = Arc::new(Mutex::new(MiningWorker::<Block, Algorithm, C, _> {
+	let worker = Arc::new(Mutex::new(MiningWorker {
 		build: None,
 		algorithm: algorithm.clone(),
 		block_import,
+		justification_sync_link,
 	}));
 	let worker_ret = worker.clone();
 
