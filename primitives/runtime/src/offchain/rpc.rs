@@ -190,7 +190,8 @@ impl<'a> Client<'a> {
 	/// `Err` is returned in case of underlying HTTP error or deserialization error.
 	pub fn send_with_deadline(&self, deadline: Timestamp, request: &'a Request) -> RpcResult {
 		// Construct http POST body.
-		// Note that we explicitly avoid deriving `Serialize` from `serde`, cause it significantly increases the runtime size.
+		// Note that we explicitly avoid deriving `Serialize` from `serde`
+		// , cause it significantly increases the runtime size.
 		let request_body = json!({
 			"jsonrpc": request.jsonrpc,
 			"id": request.id,
@@ -198,7 +199,8 @@ impl<'a> Client<'a> {
 			"params": request.params
 		});
 		let mut body: Vec<&[u8]> = Vec::new();
-		let request_body_slice: &[u8] = &(serde_json::to_vec(&request_body).expect("Constructed request body has infallible serialization, just an object with strings; qed"))[..];
+		let request_body_slice: &[u8] = &(serde_json::to_vec(&request_body)
+			.expect("Constructed request body has infallible serialization, just an object with strings; qed"))[..];
 		body.push(request_body_slice);
 
 		// Send http POST request
