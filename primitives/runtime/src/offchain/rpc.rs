@@ -236,8 +236,11 @@ impl<'a> Client<'a> {
 		Ok(rpc_result)
 	}
 
-	/// Deserialize a RPC response
-	pub fn deserialize_response(response_body_bytes: &Vec<u8>) -> RpcResult {
+	/// Deserialize a RPC response.
+	////
+	//// Note we avoid deriving this implementation from `serde`, cause according to our tests
+	/// it generates larger WASM code blob than manual implementation.
+	fn deserialize_response(response_body_bytes: Vec<u8>) -> RpcResult {
 		let response_deserialized: Value = serde_json::from_slice(response_body_bytes)
 			.map_err(|_| Error::Deserializing)?;
 
