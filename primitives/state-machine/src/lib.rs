@@ -1523,7 +1523,7 @@ mod tests {
 		assert_eq!(local_result1.len(), 1);
 		assert_eq!(local_result1.get(&b"key1"[..]), Some(&Some(b"val2".to_vec())));
 	}
-	
+
 	#[test]
 	fn child_storage_uuid() {
 
