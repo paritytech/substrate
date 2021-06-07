@@ -194,7 +194,7 @@ impl<P, Client> Author<P, Client>
 		ctx_module.register_subscription(
 			"author_submitAndWatchExtrinsic",
 			"author_unwatchExtrinsic",
-			|params, sink, ctx|
+			|params, mut sink, ctx|
 		{
 			let xt: Bytes = params.one()?;
 			let best_block_hash = ctx.client.info().best_hash;

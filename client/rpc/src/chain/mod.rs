@@ -183,7 +183,7 @@ where
 			chain.finalized_head().map_err(rpc_err)
 		})?;
 
-		rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads", |_params, sink, ctx| {
+		rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads", |_params, mut sink, ctx| {
 			let executor = ctx.executor.clone();
 
 			let fut = async move {
@@ -202,7 +202,7 @@ where
 			Ok(())
 		})?;
 
-		rpc_module.register_subscription("chain_subscribeNewHeads", "chain_unsubscribeNewHeads", |_params, sink, ctx| {
+		rpc_module.register_subscription("chain_subscribeNewHeads", "chain_unsubscribeNewHeads", |_params, mut sink, ctx| {
 			let executor = ctx.executor.clone();
 
 			let fut = async move {
@@ -220,7 +220,7 @@ where
 			Ok(())
 		})?;
 
-		rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads", |_params, sink, ctx| {
+		rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads", |_params, mut sink, ctx| {
 			let executor = ctx.executor.clone();
 
 			let fut = async move {

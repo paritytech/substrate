@@ -369,12 +369,12 @@ fn start_rpc_servers<
 	}).unwrap_or_else(|| "127.0.0.1:9945".parse().unwrap());
 
 	std::thread::spawn(move || {
-		use jsonrpsee_ws_server::WsServer;
+		use jsonrpsee_ws_server::WsServerBuilder;
 
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		rt.block_on(async {
-			let mut server = WsServer::new(rpsee_addr).await.unwrap();
+			let mut server = WsServerBuilder::default().build(rpsee_addr).await.unwrap();
 
 			server.register_module(module).unwrap();
 			let mut methods_api = RpcModule::new(());
