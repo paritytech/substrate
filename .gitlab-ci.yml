@@ -456,7 +456,7 @@ check-beefy-companion-build:
   <<: *check-companion-build
   variables:
     COMPANION_ORG: paritytech
-    COMPANION_REPO: beefy
+    COMPANION_REPO: grandpa-bridge-gadget
     COMPANION_BUILD: "cargo check"
   allow_failure: true
 
