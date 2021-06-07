@@ -59,7 +59,7 @@ pub struct OffchainWorkerCmd {
 	#[structopt(subcommand)]
 	pub state: State,
 
-	/// Wether or not to overwrite the code from state with the code from
+	/// Whether or not to overwrite the code from state with the code from
 	/// the specified chain spec.
 	#[structopt(long)]
 	pub overwrite_code: bool,
