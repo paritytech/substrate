@@ -848,11 +848,18 @@ mod linux {
 		instance.call_export("test_dirty_plenty_memory", &(heap_base as u32, 1024u32).encode()).unwrap();
 		let rss_post = obtain_rss();
 
-		// In case the memory is sucessfully decommited we expect a slight raise of resident memory
-		// usage. However, in practice this test is running in parallel to other tests and the
-		// memory usage may be a bit skewed. This makes this test flaky. This problem should be
-		// excaberated with the number of CPU cores. Empirically, this works just fine on the build
-		// host (numcpus=128).
-		assert!(rss_post - rss_pre < 32768 /* kB */);
+		// In case the memory is sucessfully decommited we expect only a slight increase of resident memory
+		// usage.
+		//
+		// However, in practice the memory usage can either go up and sometimes down (hence
+		// `saturating_sub` below). This is because this test is run along with other concurrently
+		// and the other tests may allocate or deallocate memory. This in theory makes this test
+		// flaky. This problem should be excaberated with the number of CPU cores
+		//
+		// However, empirically, this works just fine on the "build host" (numcpus=128) and is able
+		// reliably to tell if the decommiting really works or not.
+		//
+		// That said, if the test fails randomly we should consider turning it off.
+		assert!(rss_post.saturating_sub(rss_pre) < 32768 /* kB */);
 	}
 }
