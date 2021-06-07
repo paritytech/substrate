@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use futures::StreamExt;
+use futures::{StreamExt, FutureExt};
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpsee_ws_server::RpcModule;
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
@@ -152,34 +152,22 @@ where
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
 		let mut rpc_module = RpcModule::new(self);
 
-		rpc_module.register_method("chain_getHeader", |params, chain| {
-			log::info!("chain_getBlock [{:?}]", params);
-			// TODO: make is possible to register async methods on jsonrpsee servers.
-			//https://github.com/paritytech/jsonrpsee/issues/291
-			//
-			// NOTE(niklasad1): will block the connection task on the server.
+		rpc_module.register_async_method("chain_getHeader", |params, chain| {
 			let hash = params.one().ok();
-			futures::executor::block_on(chain.header(hash)).map_err(rpc_err)
+			async move { chain.header(hash).await.map_err(rpc_err) }.boxed()
 		})?;
 
-		rpc_module.register_method("chain_getBlock", |params, chain| {
-			log::info!("chain_getBlock [{:?}]", params);
-			// TODO: make is possible to register async methods on jsonrpsee servers.
-			//https://github.com/paritytech/jsonrpsee/issues/291
-			//
-			// NOTE(niklasad1): will block the connection task on the server.
+		rpc_module.register_async_method("chain_getBlock", |params, chain| {
 			let hash = params.one().ok();
-			futures::executor::block_on(chain.block(hash)).map_err(rpc_err)
+			async move { chain.block(hash).await.map_err(rpc_err) }.boxed()
 		})?;
 
 		rpc_module.register_method("chain_getBlockHash", |params, chain| {
-			log::info!("chain_getBlockHash [{:?}]", params);
 			let hash = params.one().ok();
 			chain.block_hash(hash).map_err(rpc_err)
 		})?;
 
 		rpc_module.register_method("chain_getFinalizedHead", |_, chain| {
-			log::info!("chain_getFinalizedHead []");
 			chain.finalized_head().map_err(rpc_err)
 		})?;
 
