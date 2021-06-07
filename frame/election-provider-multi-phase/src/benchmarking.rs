@@ -274,7 +274,7 @@ frame_benchmarking::benchmarks! {
 		<Round<T>>::put(1);
 
 		<SignedSubmissions<T>>::mutate(|outer_queue| {
-			let mut queue = std::mem::take(outer_queue);
+			let mut queue = sp_std::mem::take(outer_queue);
 			queue = queue.try_mutate(|queue| {
 				for i in 0..c {
 					let solution = RawSolution {
