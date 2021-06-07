@@ -428,12 +428,9 @@ check-polkadot-companion-status:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
 .check-companion-build:             &check-companion-build
-  stage:                           build
+  stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
-  needs:
-    - job:                         test-linux-stable-int
-      artifacts:                   false
   script:
     - ./.maintain/gitlab/check_companion_build.sh "$COMPANION_ORG" "$COMPANION_REPO" "$COMPANION_BUILD"
   after_script:
