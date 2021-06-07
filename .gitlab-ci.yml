@@ -427,7 +427,7 @@ check-polkadot-companion-status:
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
-check-polkadot-companion-build:
+.check-companion-build:             &check-companion-build
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
@@ -435,23 +435,25 @@ check-polkadot-companion-build:
     - job:                         test-linux-stable-int
       artifacts:                   false
   script:
-    - ./.maintain/gitlab/check_companion_build.sh paritytech polkadot
+    - ./.maintain/gitlab/check_companion_build.sh "$COMPANION_ORG" "$COMPANION_REPO" "$COMPANION_BUILD"
   after_script:
-    - cd polkadot && git rev-parse --abbrev-ref HEAD
+    - cd "$COMPANION_REPO" && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
 
+check-polkadot-companion-build:
+  <<: *check-companion-build
+  variables:
+    COMPANION_ORG: paritytech
+    COMPANION_REPO: polkadot
+  allow_failure: true
+
 check-cumulus-companion-build:
-  stage:                           build
-  <<:                              *docker-env
-  <<:                              *test-refs-no-trigger
-  needs:
-    - job:                         test-linux-stable-int
-      artifacts:                   false
-  script:
-    - ./.maintain/gitlab/check_companion_build.sh paritytech cumulus 'cargo check'
-  after_script:
-    - cd cumulus && git rev-parse --abbrev-ref HEAD
-  allow_failure:                   true
+  <<: *check-companion-build
+  variables:
+    COMPANION_ORG: paritytech
+    COMPANION_REPO: cumulus
+    COMPANION_BUILD: "cargo check"
+  allow_failure: true
 
 check-beefy-companion-build:
   stage:                           build
