@@ -23,7 +23,7 @@ mod tests;
 
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
-use jsonrpsee_ws_server::{RpcContextModule, RpcModule};
+use jsonrpsee_ws_server::RpcModule;
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use sc_rpc_api::DenyUnsafe;
 use self::error::Error;
@@ -51,9 +51,9 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 		}
 	}
 
-	/// Register all RPC methods and return an [`RpcModule`].
-	pub fn into_rpc_module(self) -> Result<RpcModule, JsonRpseeError> {
-		let mut ctx = RpcContextModule::new(self);
+	/// TODO: docs.
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut ctx = RpcModule::new(self);
 
 		ctx.register_method("offchain_localStorageSet", |params, offchain| {
 			offchain.deny_unsafe.check_if_safe()?;
@@ -83,7 +83,7 @@ impl<T: OffchainStorage + 'static> Offchain<T> {
 			Ok(bytes)
 		})?;
 
-		Ok(ctx.into_module())
+		Ok(ctx)
 	}
 }
 

@@ -23,10 +23,12 @@ mod tests;
 
 use std::{sync::Arc, convert::TryInto};
 
-use sp_blockchain::HeaderBackend;
+use crate::SubscriptionTaskExecutor;
 
+use futures::{StreamExt, FutureExt};
+use sp_blockchain::HeaderBackend;
 use sc_rpc_api::DenyUnsafe;
-use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_ws_server::RpcModule;
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as RpseeCallError};
 use codec::{Encode, Decode};
 use sp_core::Bytes;
@@ -34,7 +36,7 @@ use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::generic;
 use sp_transaction_pool::{
-	TransactionPool, InPoolTransaction, TransactionSource,
+	TransactionPool, TransactionFor, InPoolTransaction, TransactionSource,
 	TxHash, error::IntoPoolError,
 };
 use sp_session::SessionKeys;
@@ -53,6 +55,8 @@ pub struct Author<P, Client> {
 	keystore: SyncCryptoStorePtr,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
+	/// Executor to spawn subscriptions.
+	executor: Arc<SubscriptionTaskExecutor>,
 }
 
 
@@ -63,12 +67,14 @@ impl<P, Client> Author<P, Client> {
 		pool: Arc<P>,
 		keystore: SyncCryptoStorePtr,
 		deny_unsafe: DenyUnsafe,
+		executor: Arc<SubscriptionTaskExecutor>,
 	) -> Self {
 		Author {
 			client,
 			pool,
 			keystore,
 			deny_unsafe,
+			executor,
 		}
 	}
 }
@@ -80,11 +86,10 @@ impl<P, Client> Author<P, Client>
 		Client::Api: SessionKeys<P::Block>,
 {
 	/// Convert a [`Author`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
-	pub fn into_rpc_module(self) -> std::result::Result<RpcModule, JsonRpseeError> {
-		let mut ctx_module = RpcContextModule::new(self);
+	pub fn into_rpc_module(self) -> std::result::Result<RpcModule<Self>, JsonRpseeError> {
+		let mut ctx_module = RpcModule::new(self);
 
 		ctx_module.register_method("author_insertKey", |params, author| {
-			log::info!("author_insertKey [{:?}]", params);
 			author.deny_unsafe.check_if_safe()?;
 			let (key_type, suri, public): (String, String, Bytes) = params.parse()?;
 			let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
@@ -97,8 +102,7 @@ impl<P, Client> Author<P, Client>
 			Ok(())
 		})?;
 
-		ctx_module.register_method::<Bytes, _>("author_rotateKeys", |params, author| {
-			log::info!("author_rotateKeys [{:?}]", params);
+		ctx_module.register_method::<Bytes, _>("author_rotateKeys", |_params, author| {
 			author.deny_unsafe.check_if_safe()?;
 
 			let best_block_hash = author.client.info().best_hash;
@@ -111,7 +115,6 @@ impl<P, Client> Author<P, Client>
 		})?;
 
 		ctx_module.register_method("author_hasSessionKeys", |params, author| {
-			log::info!("author_hasSessionKeys [{:?}]", params);
 			author.deny_unsafe.check_if_safe()?;
 
 			let session_keys: Bytes = params.one()?;
@@ -126,7 +129,6 @@ impl<P, Client> Author<P, Client>
 		})?;
 
 		ctx_module.register_method("author_hasKey", |params, author| {
-			log::info!("author_hasKey [{:?}]", params);
 			author.deny_unsafe.check_if_safe()?;
 
 			// TODO: this compiles, but I don't know how it could actually work...?
@@ -136,33 +138,30 @@ impl<P, Client> Author<P, Client>
 			Ok(SyncCryptoStore::has_keys(&*author.keystore, &[(public_key, key_type)]))
 		})?;
 
-		ctx_module.register_method::<TxHash<P>, _>("author_submitExtrinsic", |params, author| {
-			log::info!("author_submitExtrinsic [{:?}]", params);
-			// TODO: make is possible to register async methods on jsonrpsee servers.
-			//https://github.com/paritytech/jsonrpsee/issues/291
-			//
-			// NOTE(niklasad1): will block the connection task on the server.
-			let ext: Bytes = params.one()?;
-			let xt = match Decode::decode(&mut &ext[..]) {
-				Ok(xt) => xt,
-				Err(err) => return Err(RpseeCallError::Failed(err.into())),
+		ctx_module.register_async_method::<TxHash<P>, _>("author_submitExtrinsic", |params, author| {
+			let ext: Bytes = match params.one() {
+				Ok(ext) => ext,
+				Err(e) => return Box::pin(futures::future::err(e)),
 			};
-			let best_block_hash = author.client.info().best_hash;
-			let fut = author.pool.submit_one(&generic::BlockId::hash(best_block_hash), TX_SOURCE, xt);
-
-			futures::executor::block_on(fut)
-				.map_err(|e| e.into_pool_error()
-					.map(|e| RpseeCallError::Failed(Box::new(e)))
-					.unwrap_or_else(|e| RpseeCallError::Failed(Box::new(e))))
+			async move {
+				let xt = match Decode::decode(&mut &ext[..]) {
+					Ok(xt) => xt,
+					Err(err) => return Err(RpseeCallError::Failed(err.into())),
+				};
+				let best_block_hash = author.client.info().best_hash;
+				author.pool.submit_one(&generic::BlockId::hash(best_block_hash), TX_SOURCE, xt)
+					.await
+					.map_err(|e| e.into_pool_error()
+						.map(|e| RpseeCallError::Failed(Box::new(e)))
+						.unwrap_or_else(|e| RpseeCallError::Failed(Box::new(e))))
+			}.boxed()
 		})?;
 
 		ctx_module.register_method::<Vec<Bytes>, _>("author_pendingExtrinsics", |_, author| {
-			log::info!("author_pendingExtrinsics");
 			Ok(author.pool.ready().map(|tx| tx.data().encode().into()).collect())
 		})?;
 
 		ctx_module.register_method::<Vec<TxHash<P>>, _>("author_removeExtrinsic", |params, author| {
-			log::info!("author_removeExtrinsic [{:?}]", params);
 			author.deny_unsafe.check_if_safe()?;
 
 			let bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>> = params.parse()?;
@@ -185,7 +184,39 @@ impl<P, Client> Author<P, Client>
 			)
 		})?;
 
-		Ok(ctx_module.into_module())
+		ctx_module.register_subscription(
+			"author_submitAndWatchExtrinsic",
+			"author_unwatchExtrinsic",
+			|params, mut sink, ctx|
+		{
+			let xt: Bytes = params.one()?;
+			let best_block_hash = ctx.client.info().best_hash;
+			let dxt = TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| JsonRpseeError::Custom(e.to_string()))?;
+
+			let executor = ctx.executor.clone();
+			let fut = async move {
+				let stream = match ctx.pool
+					.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
+					.await
+				{
+					Ok(stream) => stream,
+					Err(e) => {
+						let _ = sink.send(&format!("txpool subscription failed: {:?}; subscription useless", e));
+						return;
+					}
+				};
+
+				stream.for_each(|item| {
+					let _ = sink.send(&item);
+					futures::future::ready(())
+				}).await;
+			};
+
+			executor.execute_new(Box::pin(fut));
+			Ok(())
+		})?;
+
+		Ok(ctx_module)
 	}
 }
 

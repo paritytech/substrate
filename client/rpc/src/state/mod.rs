@@ -26,9 +26,13 @@ mod tests;
 
 use std::sync::Arc;
 use std::marker::PhantomData;
+
+use crate::SubscriptionTaskExecutor;
+
 use futures::{future, StreamExt};
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use jsonrpsee_ws_server::{RpcModule, RpcContextModule, SubscriptionSink};
+use jsonrpsee_ws_server::{RpcModule, SubscriptionSink};
+use futures::FutureExt;
 
 use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
@@ -154,6 +158,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 /// Create new state API that works on full node.
 pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
+	executor: Arc<SubscriptionTaskExecutor>,
 	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
@@ -169,7 +174,10 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		self::state_full::FullState::new(client.clone())
 	);
 	let backend = Box::new(self::state_full::FullState::new(client.clone()));
-	(State { backend, client, deny_unsafe }, ChildState { backend: child_backend })
+	(
+		State { backend, client, executor, deny_unsafe },
+		ChildState { backend: child_backend }
+	)
 }
 
 /// Create new state API that works on light node.
@@ -177,6 +185,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
+	executor: Arc<SubscriptionTaskExecutor>,
 	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
@@ -199,12 +208,16 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 			remote_blockchain,
 			fetcher,
 	));
-	(State { backend, client, deny_unsafe }, ChildState { backend: child_backend })
+	(
+		State { backend, client, executor, deny_unsafe },
+		ChildState { backend: child_backend }
+	)
 }
 
 /// State API with subscriptions support.
 pub struct State<Block, Client> {
 	backend: Box<dyn StateBackend<Block, Client>>,
+	executor: Arc<SubscriptionTaskExecutor>,
 	// TODO: this is pretty dumb. the `FullState` struct has a `client` in it, but I don't know how to get a
 	// reference to it. I could impl `ChainBackend` which has a `client()` method, but that's pretty lame. I could
 	// also add a `client()` method to the `StateBackend` trait but that's also terrible.
@@ -219,188 +232,210 @@ impl<Block, Client> State<Block, Client>
 		Client: BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block>
 			 + Send + Sync + 'static,
 {
-	/// Register all RPC methods and return an [`RpcModule`].
-	pub fn into_rpc_module(self) -> Result<(RpcModule, SubscriptionSinks<Block, Client>), JsonRpseeError> {
-		// TODO: this is pretty dumb. the `FullState` struct has a `client` in it, but I don't know how to get a
-		// reference to it. I could impl `ChainBackend` which has a `client()` method, but that's pretty lame. I could
-		// also add a `client()` method to the `StateBackend` trait but that's also terrible.
-		let client = self.client.clone();
-		let mut ctx_module = RpcContextModule::new(self);
+	/// Convert this to a RPC module.
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut module = RpcModule::new(self);
 
-		ctx_module.register_method("state_call", |params, state| {
-			let (method, data, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.call(block, method, data))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_call", |params, state| {
+			let (method, data, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+
+			async move {
+				state.backend.call(block, method, data).await.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_getKeys", |params, state| {
-			let (key_prefix, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage_keys(block, key_prefix))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_getKeys", |params, state| {
+			let (key_prefix, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage_keys(block, key_prefix).await.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_getPairs", |params, state| {
-			state.deny_unsafe.check_if_safe()?;
-			let (key_prefix, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage_pairs(block, key_prefix))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_getPairs", |params, state| {
+			let (key_prefix, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.deny_unsafe.check_if_safe()?;
+				state.backend.storage_pairs(block, key_prefix).await.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_getKeysPaged", |params, state| {
-			let (prefix, count, start_key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			if count > STORAGE_KEYS_PAGED_MAX_COUNT {
-				return Err(JsonRpseeCallError::Failed(Box::new(Error::InvalidCount {
-						value: count,
-						max: STORAGE_KEYS_PAGED_MAX_COUNT,
-					})
-				));
-			}
-			futures::executor::block_on(state.backend.storage_keys_paged(block, prefix, count,start_key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_getKeysPaged", |params, state| {
+			let (prefix, count, start_key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				if count > STORAGE_KEYS_PAGED_MAX_COUNT {
+					return Err(JsonRpseeCallError::Failed(Box::new(Error::InvalidCount {
+							value: count,
+							max: STORAGE_KEYS_PAGED_MAX_COUNT,
+						})
+					));
+				}
+				state.backend.storage_keys_paged(block, prefix, count,start_key)
+					.await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_getStorage", |params, state| {
-			let (key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage(block, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_getStorage", |params, state| {
+			let (key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_getStorageHash", |params, state| {
-			let (key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage(block, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_getStorageHash", |params, state| {
+			let (key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_getStorageSize", |params, state| {
-			let (key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage_size(block, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_getStorageSize", |params, state| {
+			let (key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage_size(block, key).await.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_getMetadata", |params, state| {
+		module.register_async_method("state_getMetadata", |params, state| {
 			let maybe_block = params.one().ok();
-			futures::executor::block_on(state.backend.metadata(maybe_block))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+			async move {
+				state.backend.metadata(maybe_block).await.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_getRuntimeVersion", |params, state| {
-			state.deny_unsafe.check_if_safe()?;
+		module.register_async_method("state_getRuntimeVersion", |params, state| {
 			let at = params.one().ok();
-			futures::executor::block_on(state.backend.runtime_version(at))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+			async move {
+				state.deny_unsafe.check_if_safe()?;
+				state.backend.runtime_version(at).await.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_queryStorage", |params, state| {
-			state.deny_unsafe.check_if_safe()?;
-			let (keys, from, to) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.query_storage(from, to, keys))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_queryStorage", |params, state| {
+			let (keys, from, to) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.deny_unsafe.check_if_safe()?;
+				state.backend.query_storage(from, to, keys).await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_queryStorageAt", |params, state| {
-			state.deny_unsafe.check_if_safe()?;
-			let (keys, at) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.query_storage_at(keys, at))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_queryStorageAt", |params, state| {
+			let (keys, at) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.deny_unsafe.check_if_safe()?;
+				state.backend.query_storage_at(keys, at).await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_getReadProof", |params, state| {
-			state.deny_unsafe.check_if_safe()?;
-			let (keys, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.read_proof(block, keys))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_getReadProof", |params, state| {
+			let (keys, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.deny_unsafe.check_if_safe()?;
+				state.backend.read_proof(block, keys).await.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("state_traceBlock", |params, state| {
-			state.deny_unsafe.check_if_safe()?;
-			let (block, targets, storage_keys) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.trace_block(block, targets, storage_keys))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		module.register_async_method("state_traceBlock", |params, state| {
+			let (block, targets, storage_keys) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.deny_unsafe.check_if_safe()?;
+				state.backend.trace_block(block, targets, storage_keys).await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
+		module.register_subscription(
+			"state_runtimeVersion",
+			"state_unsubscribeRuntimeVersion",
+			|_params, mut sink, ctx| {
+				let executor = ctx.executor.clone();
+				let client = ctx.client.clone();
 
-		// TODO: add subscriptions.
-		// TODO: this is a bit awkward, should we have `register_subscription` on `RpcContextModule` too? Or even make `RpcModule` always take a context (it seems to be the common case, at least here in substrate)
-		let mut module = ctx_module.into_module();
+				let mut previous_version = client.runtime_version_at(&BlockId::hash(client.info().best_hash))
+					.expect("best hash is valid; qed");
+				let _ = sink.send(&previous_version);
+				let rt_version_stream = client.storage_changes_notification_stream( Some(&[StorageKey(well_known_keys::CODE.to_vec())]), None, ).map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))
+					.expect("TODO: error handling");
+				let fut = async move {
+					let mut stream = rt_version_stream
+						.filter_map(move |_| {
+							let info = client.info();
+							let version = client
+								.runtime_version_at(&BlockId::hash(info.best_hash));
+								match version {
+									Ok(v) => if previous_version != v {
+											previous_version = v.clone();
+											future::ready(Some(v))
+										} else {
+											future::ready(None)
+										},
+									Err(e) => {
+										log::error!("Could not fetch current runtime version. Error={:?}", e);
+										// TODO: Does this terminate the stream? What is the best way to let users know?
+										future::ready(None)
+									}
+								}
+						});
+						stream.for_each(|version| {
+							let _ = sink.send(&version);
+							// Why is this not `future::ready(sink.send(&version))`?
+							futures::future::ready(())
+						}).await;
+				};
+				executor.execute_new(Box::pin(fut));
+				Ok(())
+		})?;
 
-		// state_runtimeVersion/state_unsubscribeRuntimeVersion
-		// state_storage/state_unsubscribeStorage
-		let runtime_version_sink = module.register_subscription("state_runtimeVersion", "state_unsubscribeRuntimeVersion")?;
-		// TODO: this one is tricky, need to look up storage values, but how?
-		let _storage_subs = module.register_subscription("state_storage", "state_unsubscribeStorage")?;
-		let sinks = SubscriptionSinks::new(client, runtime_version_sink);
+		// TODO:
+		module.register_subscription(
+			"state_storage",
+			"state_unsubscribeStorage",
+			|_params, _sink, ctx| {
+				let executor = ctx.executor.clone();
+				let fut = async move {
+					()
+				};
 
+				executor.execute_new(Box::pin(fut));
+				Ok(())
+		})?;
 
-		Ok((module, sinks))
-	}
-}
-
-pub struct SubscriptionSinks<Block, Client> {
-	client: Arc<Client>,
-	runtime_version_sink: SubscriptionSink,
-	marker: PhantomData<Block>,
-}
-
-impl<Block, Client> SubscriptionSinks<Block, Client>
-	where
-		Block: BlockT + 'static,
-		Client: BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block> + Send + Sync + 'static,
-{
-	fn new(client: Arc<Client>, runtime_version_sink: SubscriptionSink, ) -> Self {
-		Self { client, runtime_version_sink, marker: PhantomData }
-	}
-
-	/// Set up subscriptions to storage events.
-	// Note: Spawned in `gen_rpc_module` in builder.rs
-	pub async fn subscribe(mut self) -> Result<(), Error> {
-		let version = self.client.runtime_version_at(&BlockId::hash(self.client.info().best_hash))
-			.map_err(|api_err| Error::Client(Box::new(api_err)))?;
-		let mut previous_version = version.clone();
-		self.runtime_version_sink.send(&version).map_err(|state_err| Error::Client(state_err.into()))?;
-
-		let rt_version_stream = self.client.storage_changes_notification_stream(
-			Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
-			None,
-		).map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
-
-		let client = self.client.clone();
-    	let mut stream = rt_version_stream
-			// I don't plan to change this logic, but to me it seems kind of crazy to implement watching for runtime
-			// version changes this way. Storage change notifications seems fairly expensive and here we just ignore all
-			// of them. They are `(<Block as Block>::Hash, StorageChangeSet)` and afaict they can be aribtrarily big
-			// (and allocate). In reality I think we only need a notification on each new block, i.e. use
-			// `import_notification_stream()` instead. I guess it would be ok-ish to use the storage changes stream if
-			// the user mostly subscribe to all storage changes and if there was a way to read all items off the stream
-			// and send some items to one sink and other items to another?
-			.filter_map(move |_| {
-				let info = client.info();
-				let version = client
-        			.runtime_version_at(&BlockId::hash(info.best_hash))
-        			.map_err(|api_err| Error::Client(Box::new(api_err)));
-				match version {
-					Ok(v) => if previous_version != v {
-							previous_version = v.clone();
-							future::ready(Some(v))
-						} else {
-							future::ready(None)
-						},
-					Err(e) => {
-						log::error!("Could not fetch current runtime version. Error={:?}", e);
-						// TODO: this terminates the stream yes? What is the best way to let users know?
-						future::ready(None)
-					}
-
-				}
-			});
-
-		loop {
-			if let Some(version) = stream.next().await {
-				if let Err(e) = self.runtime_version_sink.send(&version) {
-					log::error!("RuntimeVersion subscription failed with: {:?}", e);
-				}
-			}
-		}
-
+		Ok(module)
 	}
 }
 
@@ -468,34 +503,58 @@ impl<Block, Client> ChildState<Block, Client>
 		Client: Send + Sync + 'static,
 {
 	/// Convert this to a RPC module.
-	pub fn into_rpc_module(self) -> Result<RpcModule, JsonRpseeError> {
-		let mut ctx_module = RpcContextModule::new(self);
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut ctx_module = RpcModule::new(self);
 
-		ctx_module.register_method("childstate_getStorage", |params, state| {
-			let (storage_key, key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage(block, storage_key, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		ctx_module.register_async_method("childstate_getStorage", |params, state| {
+			let (storage_key, key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage(block, storage_key, key)
+					.await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("childstate_getKeys", |params, state| {
-			let (storage_key, key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage_keys(block, storage_key, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		ctx_module.register_async_method("childstate_getKeys", |params, state| {
+			let (storage_key, key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage_keys(block, storage_key, key)
+					.await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("childstate_getStorageHash", |params, state| {
-			let (storage_key, key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage_hash(block, storage_key, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		ctx_module.register_async_method("childstate_getStorageHash", |params, state| {
+			let (storage_key, key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage_hash(block, storage_key, key)
+					.await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("childstate_getStorageSize", |params, state| {
-			let (storage_key, key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage_size(block, storage_key, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		ctx_module.register_async_method("childstate_getStorageSize", |params, state| {
+			let (storage_key, key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage_size(block, storage_key, key)
+					.await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		Ok(ctx_module.into_module())
+		Ok(ctx_module)
 	}
 
 }
