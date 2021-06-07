@@ -24,6 +24,23 @@ Follow the [instructions](https://github.com/Cerebellum-Network/validator-instru
  docker build .
 ```
 
+## Run tests
+
+1. [Install `Docker`](https://docs.docker.com/get-docker/).
+2. Run the following command run tests.
+
+```
+ docker build --build-arg ECR_REGISTRY=$ECR_REGISTRY -f Dockerfile.tests -t pos-network-node:test .
+```
+
+3. Run the following command to copy SC artifacts to test_data folder.
+
+```
+id=$(docker create $ECR_REGISTRY/crb-smart-contracts:$SMART_CONTRACT_VERSION)
+docker cp $id::/smart-contracts/artifacts/ ./artifacts/
+docker rm -v $id
+```
+
 ## Versioning strategy
 
 The package must follow **Semantic Versioning** (SemVer).
