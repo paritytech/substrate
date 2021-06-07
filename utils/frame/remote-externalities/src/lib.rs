@@ -37,6 +37,8 @@ use jsonrpsee_ws_client::{
 	WsClientBuilder, WsClient, v2::params::JsonRpcParams,
 };
 
+pub mod rpc_api;
+
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
@@ -449,36 +451,7 @@ impl<B: BlockT> Builder<B> {
 	}
 }
 
-/// WS RPC API for one off RPC calls to a substrate node.
-/// TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
-pub mod rpc_api {
-	use super::*;
-	/// Get the header of the block identified by `at`
-	pub async fn get_header<B: BlockT, S: AsRef<str>>(from: S, at: B::Hash) -> B::Header
-	where
-		B::Header: serde::de::DeserializeOwned,
-	{
-		use jsonrpsee_ws_client::traits::Client;
-		let params = vec![serde_json::to_value(at).unwrap()];
-		let client = WsClientBuilder::default()
-			.max_request_body_size(u32::MAX)
-			.build(from.as_ref())
-			.await
-			.unwrap();
-		client.request::<B::Header>("chain_getHeader", JsonRpcParams::Array(params)).await.unwrap()
-	}
 
-	/// Get the finalized head
-	pub async fn get_finalized_head<B: BlockT, S: AsRef<str>>(from: S) -> B::Hash {
-		use jsonrpsee_ws_client::traits::Client;
-		let client = WsClientBuilder::default()
-			.max_request_body_size(u32::MAX)
-			.build(from.as_ref())
-			.await
-			.unwrap();
-		client.request::<B::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams).await.unwrap()
-	}
-}
 
 #[cfg(test)]
 mod test_prelude {

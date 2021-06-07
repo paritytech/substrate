@@ -45,6 +45,7 @@ use sp_externalities::{Extensions, Extension, ExtensionStore};
 
 /// Legacy default value in `TestExternalities::new_with_code` for `:heap_pages`.
 /// `:heap_pages` must now be explicitly set to this value.
+#[allow(dead_code)]
 pub const HEAP_PAGES_TEST_LEGACY: u64 = 8;
 
 /// Simple HashMap-based Externalities impl.
