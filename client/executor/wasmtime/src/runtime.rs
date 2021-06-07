@@ -213,9 +213,10 @@ directory = \"{cache_dir}\"
 	Ok(())
 }
 
-fn common_config() -> wasmtime::Config {
+fn common_config(semantics: &Semantics) -> wasmtime::Config {
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
+	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
 	config
 }
 
@@ -252,7 +253,20 @@ pub struct Semantics {
 	///
 	/// [stack_height]: https://github.com/paritytech/wasm-utils/blob/d9432baf/src/stack_height/mod.rs#L1-L50
 	pub stack_depth_metering: bool,
-	// Other things like nan canonicalization can be added here.
+
+	/// Controls whether wasmtime should compile floating point in a way that doesn't allow for
+	/// non-determinism.
+	///
+	/// By default, the wasm spec allows some local non-determinism wrt. certain floating point
+	/// operations. Specifically, those operations that are not defined to operate on bits (e.g. fneg)
+	/// can produce NaN values. The exact bit pattern for those is not specified and may depend
+	/// on the particular machine that executes wasmtime generated JITed machine code. That is
+	/// a source of non-deterministic values.
+	///
+	/// The classical runtime environment for Substrate allowed it and punted this on the runtime
+	/// developers. For PVFs, we want to ensure that execution is deterministic though. Therefore,
+	/// for PVF execution this flag is meant to be turned on.
+	pub canonicalize_nans: bool,
 }
 
 pub struct Config {
@@ -336,7 +350,7 @@ unsafe fn do_create_runtime(
 	host_functions: Vec<&'static dyn Function>,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
 	// Create the engine, store and finally the module from the given code.
-	let mut wasmtime_config = common_config();
+	let mut wasmtime_config = common_config(&config.semantics);
 	if let Some(ref cache_path) = config.cache_path {
 		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut wasmtime_config) {
 			log::warn!(
@@ -411,7 +425,7 @@ pub fn prepare_runtime_artifact(
 ) -> std::result::Result<Vec<u8>, WasmError> {
 	instrument(&mut blob, semantics);
 
-	let engine = Engine::new(&common_config())
+	let engine = Engine::new(&common_config(semantics))
 		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;
 
 	engine

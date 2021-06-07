@@ -329,6 +329,7 @@ pub fn create_wasm_runtime_with_code(
 					semantics: sc_executor_wasmtime::Semantics {
 						fast_instance_reuse: true,
 						stack_depth_metering: false,
+						canonicalize_nans: false,
 					},
 				},
 				host_functions,
