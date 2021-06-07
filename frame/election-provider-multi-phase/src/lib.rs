@@ -179,7 +179,7 @@
 //! a mediocre or malicious signed submission (assuming in the absence of honest signed bots).
 //! If there are signed submissions, they can be checked against an absolute measure (e.g. PJR),
 //! then we can only open the unsigned phase in extreme conditions (i.e. "no good signed solution
-//! received") to spare some work in the validators.
+//! received") to spare some work for the active validators.
 //!
 //! **Allow smaller solutions and build up**: For now we only allow solutions that are exactly
 //! [`DesiredTargets`], no more, no less. Over time, we can change this to a [min, max] where any
