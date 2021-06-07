@@ -22,7 +22,7 @@
 //!
 //! - [`WeighData`]: the weight amount.
 //! - [`ClassifyDispatch`]: class of the dispatch.
-//! - [`PaysFee`]: weather this weight should be translated to fee and deducted upon dispatch.
+//! - [`PaysFee`]: whether this weight should be translated to fee and deducted upon dispatch.
 //!
 //! Substrate then bundles the output information of the three traits into [`DispatchInfo`] struct
 //! and provides it by implementing the [`GetDispatchInfo`] for all `Call` both inner and outer call
