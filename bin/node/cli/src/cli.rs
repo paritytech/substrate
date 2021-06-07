@@ -47,8 +47,7 @@ pub enum Subcommand {
 	#[structopt(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 
-	/// Try some experimental command on the runtime. See `try-runtime --help` for more.
-	/// NOTE: `try-runtime` feature must be enabled.
+	/// Try some experimental command on the runtime. Note: `try-runtime` feature must be enabled.
 	#[cfg(feature = "try-runtime")]
 	TryRuntime(try_runtime_cli::TryRuntimeCmd),
 

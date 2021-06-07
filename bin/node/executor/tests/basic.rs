@@ -697,7 +697,7 @@ fn native_big_block_import_succeeds() {
 fn native_big_block_import_fails_on_fallback() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 
-	set_heap_pages(&mut t.ext(), 8);
+	set_heap_pages(&mut t.ext(), sp_state_machine::HEAP_PAGES_TEST_LEGACY);
 
 	assert!(
 		executor_call::<NeverNativeValue, fn() -> _>(
