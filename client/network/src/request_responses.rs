@@ -1048,6 +1048,10 @@ mod tests {
 		(swarm, listen_addr, peerset)
 	}
 
+	async fn loop_peerset(peerset: Peerset) {
+		let _: Vec<_> = peerset.collect().await;
+	}
+
 	#[test]
 	fn basic_request_response_works() {
 		let protocol_name = "/test/req-resp/1";
@@ -1090,10 +1094,11 @@ mod tests {
 			Swarm::dial_addr(&mut swarms[0].0, dial_addr).unwrap();
 		}
 
+		let (mut swarm, _, peerset) = swarms.remove(0);
+		// Process every peerset event in the background.
+		pool.spawner().spawn_obj(loop_peerset(peerset).boxed().into()).unwrap();
 		// Running `swarm[0]` in the background.
 		pool.spawner().spawn_obj({
-			let (mut swarm, _, peerset) = swarms.remove(0);
-			let _ = peerset; // FIXME
 			async move {
 				loop {
 					match swarm.next_event().await {
@@ -1108,7 +1113,8 @@ mod tests {
 
 		// Remove and run the remaining swarm.
 		let (mut swarm, _, peerset) = swarms.remove(0);
-		let _ = peerset; // FIXME
+		// Process every peerset event in the background.
+		pool.spawner().spawn_obj(loop_peerset(peerset).boxed().into()).unwrap();
 		pool.run_until(async move {
 			let mut response_receiver = None;
 
@@ -1182,9 +1188,10 @@ mod tests {
 
 		// Running `swarm[0]` in the background until a `InboundRequest` event happens,
 		// which is a hint about the test having ended.
+		let (mut swarm, _, peerset) = swarms.remove(0);
+		// Process every peerset event in the background.
+		pool.spawner().spawn_obj(loop_peerset(peerset).boxed().into()).unwrap();
 		pool.spawner().spawn_obj({
-			let (mut swarm, _, peerset) = swarms.remove(0);
-			let _ = peerset; // FIXME
 			async move {
 				loop {
 					match swarm.next_event().await {
@@ -1200,7 +1207,8 @@ mod tests {
 
 		// Remove and run the remaining swarm.
 		let (mut swarm, _, peerset) = swarms.remove(0);
-		let _ = peerset; // FIXME
+		// Process every peerset event in the background.
+		pool.spawner().spawn_obj(loop_peerset(peerset).boxed().into()).unwrap();
 		pool.run_until(async move {
 			let mut response_receiver = None;
 
@@ -1297,7 +1305,8 @@ mod tests {
 
 			(swarm, rx_1, rx_2, listen_addr, peerset)
 		};
-		let _ = peerset; // FIXME
+		// Process every peerset event in the background.
+		pool.spawner().spawn_obj(loop_peerset(peerset).boxed().into()).unwrap();
 
 		// Ask swarm 1 to dial swarm 2. There isn't any discovery mechanism in place in this test,
 		// so they wouldn't connect to each other.
