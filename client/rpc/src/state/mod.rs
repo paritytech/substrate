@@ -224,7 +224,7 @@ impl<Block, Client> State<Block, Client>
 			};
 
 			async move {
-				state.backend.call(block, method, data).await.map_err(|e| to_jsonrpsee_call_error(e))
+				state.backend.call(block, method, data).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -234,7 +234,7 @@ impl<Block, Client> State<Block, Client>
 				Err(e) => return Box::pin(futures::future::err(e)),
 			};
 			async move {
-				state.backend.storage_keys(block, key_prefix).await.map_err(|e| to_jsonrpsee_call_error(e))
+				state.backend.storage_keys(block, key_prefix).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -245,7 +245,7 @@ impl<Block, Client> State<Block, Client>
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.storage_pairs(block, key_prefix).await.map_err(|e| to_jsonrpsee_call_error(e))
+				state.backend.storage_pairs(block, key_prefix).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -264,7 +264,7 @@ impl<Block, Client> State<Block, Client>
 				}
 				state.backend.storage_keys_paged(block, prefix, count,start_key)
 					.await
-					.map_err(|e| to_jsonrpsee_call_error(e))
+					.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -274,7 +274,7 @@ impl<Block, Client> State<Block, Client>
 				Err(e) => return Box::pin(futures::future::err(e)),
 			};
 			async move {
-				state.backend.storage(block, key).await.map_err(|e| to_jsonrpsee_call_error(e))
+				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -284,7 +284,7 @@ impl<Block, Client> State<Block, Client>
 				Err(e) => return Box::pin(futures::future::err(e)),
 			};
 			async move {
-				state.backend.storage(block, key).await.map_err(|e| to_jsonrpsee_call_error(e))
+				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -294,14 +294,14 @@ impl<Block, Client> State<Block, Client>
 				Err(e) => return Box::pin(futures::future::err(e)),
 			};
 			async move {
-				state.backend.storage_size(block, key).await.map_err(|e| to_jsonrpsee_call_error(e))
+				state.backend.storage_size(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
 		ctx_module.register_async_method("state_getMetadata", |params, state| {
 			let maybe_block = params.one().ok();
 			async move {
-				state.backend.metadata(maybe_block).await.map_err(|e| to_jsonrpsee_call_error(e))
+				state.backend.metadata(maybe_block).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -309,7 +309,7 @@ impl<Block, Client> State<Block, Client>
 			let at = params.one().ok();
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.runtime_version(at).await.map_err(|e| to_jsonrpsee_call_error(e))
+				state.backend.runtime_version(at).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -321,7 +321,7 @@ impl<Block, Client> State<Block, Client>
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.query_storage(from, to, keys).await
-					.map_err(|e| to_jsonrpsee_call_error(e))
+					.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -333,7 +333,7 @@ impl<Block, Client> State<Block, Client>
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.query_storage_at(keys, at).await
-					.map_err(|e| to_jsonrpsee_call_error(e))
+					.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -344,7 +344,7 @@ impl<Block, Client> State<Block, Client>
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.read_proof(block, keys).await.map_err(|e| to_jsonrpsee_call_error(e))
+				state.backend.read_proof(block, keys).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -356,7 +356,7 @@ impl<Block, Client> State<Block, Client>
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.trace_block(block, targets, storage_keys).await
-					.map_err(|e| to_jsonrpsee_call_error(e))
+					.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
@@ -434,28 +434,52 @@ impl<Block, Client> ChildState<Block, Client>
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
 		let mut ctx_module = RpcModule::new(self);
 
-		ctx_module.register_method("childstate_getStorage", |params, state| {
-			let (storage_key, key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage(block, storage_key, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		ctx_module.register_async_method("childstate_getStorage", |params, state| {
+			let (storage_key, key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage(block, storage_key, key)
+					.await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("childstate_getKeys", |params, state| {
-			let (storage_key, key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage_keys(block, storage_key, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		ctx_module.register_async_method("childstate_getKeys", |params, state| {
+			let (storage_key, key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage_keys(block, storage_key, key)
+					.await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("childstate_getStorageHash", |params, state| {
-			let (storage_key, key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage_hash(block, storage_key, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		ctx_module.register_async_method("childstate_getStorageHash", |params, state| {
+			let (storage_key, key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage_hash(block, storage_key, key)
+					.await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
-		ctx_module.register_method("childstate_getStorageSize", |params, state| {
-			let (storage_key, key, block) = params.parse().map_err(|_| JsonRpseeCallError::InvalidParams)?;
-			futures::executor::block_on(state.backend.storage_size(block, storage_key, key))
-				.map_err(|e| to_jsonrpsee_call_error(e))
+		ctx_module.register_async_method("childstate_getStorageSize", |params, state| {
+			let (storage_key, key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(futures::future::err(e)),
+			};
+			async move {
+				state.backend.storage_size(block, storage_key, key)
+					.await
+					.map_err(to_jsonrpsee_call_error)
+			}.boxed()
 		})?;
 
 		Ok(ctx_module)
