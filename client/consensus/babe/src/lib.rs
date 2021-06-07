@@ -363,7 +363,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS, IDP> {
+pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS, CAW> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
 
@@ -384,8 +384,11 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS, IDP> {
 	/// A sync oracle
 	pub sync_oracle: SO,
 
+	/// Hook into the sync module to control the justification sync process.
+	pub justification_sync_link: L,
+
 	/// Something that can create the inherent data providers.
-	pub create_inherent_data_providers: IDP,
+	pub create_inherent_data_providers: CIDP,
 
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
@@ -411,13 +414,14 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS, IDP> {
 }
 
 /// Start the babe worker.
-pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error, IDP>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(BabeParams {
 	keystore,
 	client,
 	select_chain,
 	env,
 	block_import,
 	sync_oracle,
+	justification_sync_link,
 	create_inherent_data_providers,
 	force_authoring,
 	backoff_authoring_blocks,
@@ -425,26 +429,35 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error, IDP>(BabeParams {
 	can_author_with,
 	block_proposal_slot_portion,
 	telemetry,
-}: BabeParams<B, C, E, I, SO, SC, CAW, BS, IDP>) -> Result<
+}: BabeParams<B, C, SC, E, I, SO, L, CIDP, BS, CAW>) -> Result<
 	BabeWorker<B>,
 	sp_consensus::Error,
 > where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
-		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>
-		+ Send + Sync + 'static,
+	C: ProvideRuntimeApi<B>
+		+ ProvideCache<B>
+		+ ProvideUncles<B>
+		+ BlockchainEvents<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = ClientError>
+		+ Send
+		+ Sync
+		+ 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send
-		+ Sync + 'static,
-	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
+	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>>
+		+ Send
+		+ Sync
+		+ 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-	CAW: CanAuthorWith<B> + Send + Sync + 'static,
+	L: sp_consensus::JustificationSyncLink<B> + 'static,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
-	IDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
-	IDP::InherentDataProviders: InherentDataProviderExt + Send,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
 
@@ -456,6 +469,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error, IDP>(BabeParams {
 		block_import,
 		env,
 		sync_oracle: sync_oracle.clone(),
+		justification_sync_link,
 		force_authoring,
 		backoff_authoring_blocks,
 		keystore,
@@ -600,11 +614,12 @@ type SlotNotificationSinks<B> = Arc<
 	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>
 >;
 
-struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
+struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,
 	sync_oracle: SO,
+	justification_sync_link: L,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
@@ -615,8 +630,8 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	telemetry: Option<TelemetryHandle>,
 }
 
-impl<B, C, E, I, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
-	for BabeSlotWorker<B, C, E, I, SO, BS>
+impl<B, C, E, I, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
+	for BabeSlotWorker<B, C, E, I, SO, L, BS>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> +
@@ -628,12 +643,14 @@ where
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
+	L: sp_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>>,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 	type Claim = (PreDigest, AuthorityId);
 	type SyncOracle = SO;
+	type JustificationSyncLink = L;
 	type CreateProposer = Pin<Box<
 		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
 	>>;
@@ -796,6 +813,10 @@ where
 
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
 		&mut self.sync_oracle
+	}
+
+	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink {
+		&mut self.justification_sync_link
 	}
 
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
