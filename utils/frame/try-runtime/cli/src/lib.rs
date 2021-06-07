@@ -140,17 +140,17 @@ pub enum State {
 	},
 }
 
-async fn on_runtime_upgrade<B, ExecDispatch>(
+async fn on_runtime_upgrade<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: OnRuntimeUpgradeCmd,
 	config: Configuration
 ) -> sc_cli::Result<()>
 where
-	B: BlockT,
-	B::Hash: FromStr,
-	<B::Hash as FromStr>::Err: Debug,
-	NumberFor<B>: FromStr,
-	<NumberFor<B> as FromStr>::Err: Debug,
+	Block: BlockT,
+	Block::Hash: FromStr,
+	<Block::Hash as FromStr>::Err: Debug,
+	NumberFor<Block>: FromStr,
+	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
 	let wasm_method = shared.wasm_method;
@@ -172,7 +172,7 @@ where
 	let ext = {
 		let builder = match command.state {
 			State::Snap { snapshot_path } => {
-				Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
+				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				}))
 			},
@@ -181,7 +181,7 @@ where
 				snapshot_path,
 				block_at,
 				modules
-			} => Builder::<B>::new().mode(Mode::Online(OnlineConfig {
+			} => Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
 				transport: url.to_owned().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
@@ -195,7 +195,7 @@ where
 		builder.inject(&[(code_key, code)]).build().await?
 	};
 
-	let encoded_result = StateMachine::<_, _, NumberFor<B>, _>::new(
+	let encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
 		&ext.backend,
 		None,
 		&mut changes,
@@ -222,18 +222,18 @@ where
 	Ok(())
 }
 
-async fn offchain_worker<B, ExecDispatch>(
+async fn offchain_worker<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: OffchainWorkerCmd,
 	config: Configuration,
 )-> sc_cli::Result<()>
 where
-	B: BlockT,
-	B::Hash: FromStr,
-	B::Header: serde::de::DeserializeOwned,
-	<B::Hash as FromStr>::Err: Debug,
-	NumberFor<B>: FromStr,
-	<NumberFor<B> as FromStr>::Err: Debug,
+	Block: BlockT,
+	Block::Hash: FromStr,
+	Block::Header: serde::de::DeserializeOwned,
+	<Block::Hash as FromStr>::Err: Debug,
+	NumberFor<Block>: FromStr,
+	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
 	let wasm_method = shared.wasm_method;
@@ -284,7 +284,7 @@ where
 				(mode, url)
 			}
 	};
-	let builder = Builder::<B>::new().mode(mode);
+	let builder = Builder::<Block>::new().mode(mode);
 	let mut ext = if command.overwrite_code {
 		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder.inject(&[(code_key, code)]).build().await?
@@ -300,10 +300,10 @@ where
 	ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
-	let header_hash: B::Hash = command.header_at.parse().unwrap();
-	let header = rpc_api::get_header::<B, _>(url, header_hash).await;
+	let header_hash: Block::Hash = command.header_at.parse().unwrap();
+	let header = rpc_api::get_header::<Block, _>(url, header_hash).await;
 
-	let _ = StateMachine::<_, _, NumberFor<B>, _>::new(
+	let _ = StateMachine::<_, _, NumberFor<Block>, _>::new(
 		&ext.backend,
 		None,
 		&mut changes,
@@ -324,22 +324,22 @@ where
 }
 
 impl TryRuntimeCmd {
-	pub async fn run<B, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
+	pub async fn run<Block, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
-		B: BlockT,
-		B::Header: serde::de::DeserializeOwned,
-		B::Hash: FromStr,
-		<B::Hash as FromStr>::Err: Debug,
-		NumberFor<B>: FromStr,
-		<NumberFor<B> as FromStr>::Err: Debug,
+		Block: BlockT,
+		Block::Header: serde::de::DeserializeOwned,
+		Block::Hash: FromStr,
+		<Block::Hash as FromStr>::Err: Debug,
+		NumberFor<Block>: FromStr,
+		<NumberFor<Block> as FromStr>::Err: Debug,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		match &self.command {
 			Command::OnRuntimeUpgrade(ref cmd) => {
-				on_runtime_upgrade::<B, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
+				on_runtime_upgrade::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
 			}
 			Command::OffchainWorker(cmd) => {
-				offchain_worker::<B, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
+				offchain_worker::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
 			}
 		}
 	}
@@ -358,8 +358,8 @@ impl CliConfiguration for TryRuntimeCmd {
 	}
 }
 
-/// Extract `:code` from given chain spec and return as `StorageData` along with the corresponding
-/// `StorageKey`.
+/// Extract `:code` from the given chain spec and return as `StorageData` along with the 
+/// corresponding `StorageKey`.
 fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
 	let genesis_storage = spec.build_storage()?;
 	let code = StorageData(

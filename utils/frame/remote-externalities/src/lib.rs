@@ -451,8 +451,6 @@ impl<B: BlockT> Builder<B> {
 	}
 }
 
-
-
 #[cfg(test)]
 mod test_prelude {
 	pub(crate) use super::*;
