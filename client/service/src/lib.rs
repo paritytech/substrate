@@ -47,7 +47,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver}};
-use jsonrpsee_ws_server::RpcModule;
+use jsonrpsee::RpcModule;
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -369,7 +369,7 @@ fn start_rpc_servers<
 	}).unwrap_or_else(|| "127.0.0.1:9945".parse().unwrap());
 
 	std::thread::spawn(move || {
-		use jsonrpsee_ws_server::WsServerBuilder;
+		use jsonrpsee::ws_server::WsServerBuilder;
 
 		let rt = tokio::runtime::Runtime::new().unwrap();
 

@@ -24,7 +24,7 @@ wasmtime = [
 test-helpers = []
 
 [dependencies]
-jsonrpsee-ws-server = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "time"] }
 
 thiserror = "1.0.21"

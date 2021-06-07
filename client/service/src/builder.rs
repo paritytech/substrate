@@ -74,7 +74,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
-use jsonrpsee_ws_server::RpcModule;
+use jsonrpsee::RpcModule;
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
