@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
-use sp_trie::{MemoryDB, prefixed_key, CompactProof};
+use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay
@@ -529,10 +529,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				// empty trie
 				proof_size
 			} else {
-				if let Some(size) = CompactProof::encoded_compact_size::<HashFor<B>>(
-					proof,
-					proof_recorder_root,
-				) {
+				if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root) {
 					size as u32
 				} else {
 					panic!(

@@ -201,7 +201,7 @@ pub fn decode_compact<'a, L, DB, I>(
 /// Then parse all child trie root and compress main trie content first
 /// then all child trie contents.
 /// Child trie are ordered by the order of their roots in the top trie.
-pub fn encode_compact<'a, L>(
+pub fn encode_compact<L>(
 	proof: StorageProof,
 	root: TrieHash<L>,
 ) -> Result<CompactProof, Error<L>>

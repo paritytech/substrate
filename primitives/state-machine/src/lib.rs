@@ -1403,24 +1403,10 @@ mod tests {
 	}
 
 	fn test_compact(remote_proof: StorageProof, remote_root: &sp_core::H256) -> StorageProof {
-		type Layout = sp_trie::Layout<BlakeTwo256>;
-		let compact_remote_proof = sp_trie::encode_compact::<Layout>(
-			remote_proof,
+		let compact_remote_proof = remote_proof.into_compact_proof::<BlakeTwo256>(
 			remote_root.clone(),
 		).unwrap();
-		let mut db = sp_trie::MemoryDB::<BlakeTwo256>::new(&[]);
-		sp_trie::decode_compact::<Layout, _, _>(
-			&mut db,
-			compact_remote_proof.iter_compact_encoded_nodes(),
-			Some(remote_root),
-		).unwrap();
-		StorageProof::new(db.drain().into_iter().filter_map(|kv|
-			if (kv.1).1 > 0 {
-				Some((kv.1).0)
-			} else {
-				None
-			}
-		).collect())
+		compact_remote_proof.to_storage_proof::<BlakeTwo256>(Some(remote_root)).unwrap().0
 	}
 
 	#[test]

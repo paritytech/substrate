@@ -85,6 +85,26 @@ impl StorageProof {
 
 		Self { trie_nodes }
 	}
+
+	/// Encode as a compact proof with default
+	/// trie layout.
+	pub fn into_compact_proof<H: Hasher>(
+		self,
+		root: H::Out,
+	) -> Result<CompactProof, crate::CompactProofError<crate::Layout<H>>> {
+		crate::encode_compact::<crate::Layout<H>>(self, root)
+	}
+	
+	/// Returns the estimated encoded size of the compact proof.
+	///
+	/// Runing this operation is a slow operation (build the whole compact proof) and should only be
+	/// in non sensitive path.
+	/// Return `None` on error.
+	pub fn encoded_compact_size<H: Hasher>(self, root: H::Out) -> Option<usize> {
+		let compact_proof = self.into_compact_proof::<H>(root);
+		compact_proof.ok().map(|p| p.encoded_size())
+	}
+
 }
 
 impl CompactProof {
@@ -93,20 +113,27 @@ impl CompactProof {
 		self.encoded_nodes.iter().map(Vec::as_slice)
 	}
 
-	/// Returns the estimated encoded size of the compact proof.
+	/// Decode to a full storage_proof.
 	///
-	/// Runing this operation is a slow operation (build the whole compact proof) and should only be
-	/// in non sensitive path.
-	/// Return `None` on error.
-	pub fn encoded_compact_size<H: Hasher>(
-		proof: StorageProof,
-		root: H::Out,
-	) -> Option<usize> {
-		let compact_proof = crate::encode_compact::<crate::Layout<H>>(
-			proof,
-			root,
-		);
-		compact_proof.ok().map(|p| p.encoded_size())
+	/// Method use a temporary `HashDB`, and `sp_trie::decode_compact`
+	/// is often better.
+	pub fn to_storage_proof<H: Hasher>(
+		&self,
+		expected_root: Option<&H::Out>,
+	) -> Result<(StorageProof, H::Out), crate::CompactProofError<crate::Layout<H>>> {
+		let mut db = crate::MemoryDB::<H>::new(&[]);
+		let root = crate::decode_compact::<crate::Layout<H>, _, _>(
+			&mut db,
+			self.iter_compact_encoded_nodes(),
+			expected_root,
+		)?;
+		Ok((StorageProof::new(db.drain().into_iter().filter_map(|kv|
+			if (kv.1).1 > 0 {
+				Some((kv.1).0)
+			} else {
+				None
+			}
+		).collect()), root))
 	}
 }
 
