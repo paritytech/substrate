@@ -2518,8 +2518,10 @@ impl<T: Config> Module<T> {
 					.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 			});
 
-			let vote_weight = weight_of(&nominator);
-			all_voters.push((nominator, vote_weight, targets))
+			if !targets.is_empty() {
+				let vote_weight = weight_of(&nominator);
+				all_voters.push((nominator, vote_weight, targets))
+			}
 		}
 
 		all_voters
