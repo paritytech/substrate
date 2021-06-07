@@ -572,9 +572,7 @@ build-rust-doc:
     # pass artifacts to the trigger-simnet job 
     - echo "IMAGE_NAME is ${IMAGE_NAME}"
     - echo "IMAGE_NAME=${IMAGE_NAME}" > ./artifacts/$PRODUCT/build.env
-    - ls -la
     - VERSION="$(cat ./artifacts/$PRODUCT/VERSION)"
-    - echo "VERSION is ${VERSION}"
     - IMAGE_TAG="${VERSION}"
     - echo "IMAGE_TAG is ${IMAGE_TAG}"
     - echo "IMAGE_TAG=${IMAGE_TAG}" >> ./artifacts/$PRODUCT/build.env
@@ -705,8 +703,8 @@ trigger-simnet:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/   # PRs # FIXME: revert me
   needs:
     - job:                         publish-docker-substrate
   # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here, 
