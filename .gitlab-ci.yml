@@ -716,4 +716,4 @@ trigger-simnet:
     DWNSTRM_ID:                    332
   script:
     # API trigger for a simnet job
-    - .maintain/gitlab/trigger_pipeline.sh
+    - .maintain/gitlab/trigger_pipeline.sh --simnet-version=${SIMNET_REF}
