@@ -36,6 +36,8 @@ use sp_core::{
 use sp_keystore::{KeystoreExt, testing::KeyStore};
 use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig, rpc_api};
 
+mod parse;
+
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub enum Command {
 	OnRuntimeUpgrade(OnRuntimeUpgradeCmd),
@@ -370,33 +372,4 @@ fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, Storage
 	let code_key = StorageKey(well_known_keys::CODE.to_vec());
 
 	Ok((code_key, code))
-}
-
-// Utils for parsing user input
-mod parse {
-	pub fn hash(block_number: &str) -> Result<String, String> {
-		let block_number = if block_number.starts_with("0x") {
-			&block_number[2..]
-		} else {
-			block_number
-		};
-
-		if let Some(pos) = block_number.chars().position(|c| !c.is_ascii_hexdigit()) {
-			Err(format!(
-				"Expected block hash, found illegal hex character at position: {}",
-				2 + pos,
-			))
-		} else {
-			Ok(block_number.into())
-		}
-	}
-
-	pub fn url(s: &str) -> Result<String, &'static str> {
-		if s.starts_with("ws://") || s.starts_with("wss://") {
-			// could use Url crate as well, but lets keep it simple for now.
-			Ok(s.to_string())
-		} else {
-			Err("not a valid WS(S) url: must start with 'ws://' or 'wss://'")
-		}
-	}
 }
