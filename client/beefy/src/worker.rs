@@ -184,7 +184,7 @@ where
 			.clone()
 			.ok_or_else(|| error::Crypto::CannotSign((*id).clone(), "Missing KeyStore".into()))?;
 
-		let sig = SyncCryptoStore::sign_with(&*key_store, KEY_TYPE, &id.to_public_crypto_pair(), &commitment)
+		let sig = SyncCryptoStore::sign_with(&*key_store, KEY_TYPE, &id.to_public_crypto_pair(), commitment)
 			.map_err(|e| error::Crypto::CannotSign((*id).clone(), e.to_string()))?
 			.ok_or_else(|| error::Crypto::CannotSign((*id).clone(), "No key in KeyStore found".into()))?;
 
