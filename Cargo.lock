@@ -2348,6 +2348,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "h2"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "825343c4eef0b63f541f8903f395dc5beb362a979b5799a84062527ef1e37726"
+dependencies = [
+ "bytes 1.0.1",
+ "fnv",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+ "http 0.2.3",
+ "indexmap",
+ "slab",
+ "tokio 1.6.0",
+ "tokio-util 0.6.3",
+ "tracing",
+]
+
+[[package]]
 name = "half"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2626,12 +2645,14 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
+ "h2 0.3.3",
  "http 0.2.3",
  "http-body 0.4.2",
  "httparse",
  "httpdate",
  "itoa",
  "pin-project 1.0.5",
+ "socket2 0.4.0",
  "tokio 1.6.0",
  "tower-service",
  "tracing",
@@ -2985,6 +3006,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee"
+version = "0.2.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
+dependencies = [
+ "jsonrpsee-http-server",
+ "jsonrpsee-utils",
+ "jsonrpsee-ws-server",
+]
+
+[[package]]
+name = "jsonrpsee-http-server"
+version = "0.2.0"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "globset",
+ "hyper 0.14.5",
+ "jsonrpsee-types",
+ "jsonrpsee-utils",
+ "lazy_static",
+ "log",
+ "serde",
+ "serde_json",
+ "socket2 0.4.0",
+ "thiserror",
+ "tokio 1.6.0",
+ "unicase",
+]
+
+[[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.2.0"
 source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
@@ -3020,6 +3072,7 @@ source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bb
 dependencies = [
  "futures-channel",
  "futures-util",
+ "hyper 0.14.5",
  "jsonrpsee-types",
  "log",
  "parking_lot 0.11.1",
@@ -8052,7 +8105,7 @@ dependencies = [
  "hash-db",
  "jsonrpc-core",
  "jsonrpc-pubsub",
- "jsonrpsee-ws-server",
+ "jsonrpsee",
  "lazy_static",
  "log",
  "parity-scale-codec",
@@ -10255,7 +10308,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd3076b5c8cc18138b8f8814895c11eb4de37114a5d127bafdc5e55798ceef37"
 dependencies = [
  "autocfg",
+ "bytes 1.0.1",
  "libc",
+ "memchr",
  "mio 0.7.9",
  "num_cpus",
  "pin-project-lite 0.2.6",
