@@ -217,7 +217,7 @@ impl LightClient {
 		let mut valid = 0;
 		for (signature, public) in signatures.into_iter().zip(validator_set.1.iter()) {
 			match signature {
-				Some(signature) if signature.is_valid_for(&public) => {
+				Some(signature) if signature.is_valid_for(public) => {
 					valid += 1;
 				}
 				_ => {}
