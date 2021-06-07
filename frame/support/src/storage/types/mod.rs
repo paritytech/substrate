@@ -25,6 +25,7 @@ mod double_map;
 mod key;
 mod map;
 mod nmap;
+mod sorted_map;
 mod value;
 
 pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};

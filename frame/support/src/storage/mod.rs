@@ -38,7 +38,6 @@ pub mod bounded_btree_set;
 pub mod bounded_vec;
 pub mod weak_bounded_vec;
 pub mod child;
-#[doc(hidden)]
 pub mod generator;
 pub mod migration;
 pub mod types;
