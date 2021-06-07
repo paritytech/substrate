@@ -594,19 +594,21 @@ mod tests {
 			assert_eq!(balances(&99), (100, 0));
 			assert_eq!(balances(&999), (100, 0));
 			assert_eq!(balances(&9999), (100, 0));
-			let mut solution = raw_solution();
+			let solution = raw_solution();
 
 			// submit a correct one.
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
 			// make the solution invalidly better and submit. This ought to be slashed.
-			solution.score[0] += 1;
-			assert_ok!(submit_with_witness(Origin::signed(999), solution.clone()));
+			let mut solution_999 = solution.clone();
+			solution_999.score[0] += 1;
+			assert_ok!(submit_with_witness(Origin::signed(999), solution_999));
 
 			// make the solution invalidly worse and submit. This ought to be suppressed and
 			// returned.
-			solution.score[0] -= 1;
-			assert_ok!(submit_with_witness(Origin::signed(9999), solution));
+			let mut solution_9999 = solution.clone();
+			solution_9999.score[0] -= 1;
+			assert_ok!(submit_with_witness(Origin::signed(9999), solution_9999));
 
 			assert_eq!(
 				MultiPhase::signed_submissions().iter().rev().map(|x| x.who).collect::<Vec<_>>(),
