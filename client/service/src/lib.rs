@@ -37,11 +37,10 @@ mod task_manager;
 use std::{io, pin::Pin};
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::time::Duration;
 use std::task::Poll;
 
 use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
-use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
+use sc_network::PeerId;
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
@@ -125,42 +124,6 @@ impl RpcHandlers {
 	}
 }
 
-/// Sinks to propagate network status updates.
-/// For each element, every time the `Interval` fires we push an element on the sender.
-#[derive(Clone)]
-pub struct NetworkStatusSinks<Block: BlockT> {
-	status: Arc<status_sinks::StatusSinks<NetworkStatus<Block>>>,
-	state: Arc<status_sinks::StatusSinks<NetworkState>>,
-}
-
-impl<Block: BlockT> NetworkStatusSinks<Block> {
-	fn new() -> Self {
-		Self {
-			status: Arc::new(status_sinks::StatusSinks::new()),
-			state: Arc::new(status_sinks::StatusSinks::new()),
-		}
-	}
-
-	/// Returns a receiver that periodically yields a [`NetworkStatus`].
-	pub fn status_stream(&self, interval: Duration)
-		-> TracingUnboundedReceiver<NetworkStatus<Block>>
-	{
-		let (sink, stream) = tracing_unbounded("mpsc_network_status");
-		self.status.push(interval, sink);
-		stream
-	}
-
-	/// Returns a receiver that periodically yields a [`NetworkState`].
-	pub fn state_stream(&self, interval: Duration)
-		-> TracingUnboundedReceiver<NetworkState>
-	{
-		let (sink, stream) = tracing_unbounded("mpsc_network_state");
-		self.state.push(interval, sink);
-		stream
-	}
-
-}
-
 /// An incomplete set of chain components, but enough to run the chain ops subcommands.
 pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
 	/// A shared client instance.
@@ -192,7 +155,6 @@ async fn build_network_future<
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
-	status_sinks: NetworkStatusSinks<B>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
@@ -336,18 +298,6 @@ async fn build_network_future<
 			// used in the future to perform actions in response of things that happened on
 			// the network.
 			_ = (&mut network).fuse() => {}
-
-			// At a regular interval, we send high-level status as well as
-			// detailed state information of the network on what are called
-			// "status sinks".
-
-			status_sink = status_sinks.status.next().fuse() => {
-				status_sink.send(network.status());
-			}
-
-			state_sink = status_sinks.state.next().fuse() => {
-				state_sink.send(network.network_state());
-			}
 		}
 	}
 }
