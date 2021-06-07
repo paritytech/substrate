@@ -296,7 +296,13 @@ mod tests {
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), true.into(), api(), None, RevalidationType::Full, spawner.clone(),
+			Options::default(),
+			true.into(),
+			api(),
+			None,
+			RevalidationType::Full,
+			spawner.clone(),
+			0,
 		));
 		let env = ProposerFactory::new(
 			spawner.clone(),
@@ -373,6 +379,7 @@ mod tests {
 			None,
 			RevalidationType::Full,
 			spawner.clone(),
+			0,
 		));
 		let env = ProposerFactory::new(
 			spawner.clone(),
@@ -453,6 +460,7 @@ mod tests {
 			None,
 			RevalidationType::Full,
 			spawner.clone(),
+			0,
 		));
 		let env = ProposerFactory::new(
 			spawner.clone(),
