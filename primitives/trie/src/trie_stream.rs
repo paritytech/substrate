@@ -61,8 +61,7 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK, 2),
 		NodeKind::BranchNoValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK, 2),
 		NodeKind::BranchWithValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK, 2),
-		NodeKind::AltHashLeaf => size_and_prefix_iterator(size, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 4),
-		NodeKind::AltHashBranchNoValue => size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITHOUT_MASK, 4),
+		NodeKind::AltHashLeaf => size_and_prefix_iterator(size, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3),
 		NodeKind::AltHashBranchWithValue => size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4),
 	};
 	iter_start
@@ -113,12 +112,7 @@ impl trie_root::TrieStream for TrieStream {
 				};
 				self.buffer.extend(fuse_nibbles_node(partial, kind));
 			} else {
-				let kind = if self.inner_value_hashing {
-					NodeKind::AltHashBranchNoValue
-				} else {
-					NodeKind::BranchNoValue
-				};
-				self.buffer.extend(fuse_nibbles_node(partial, kind));
+				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchNoValue));
 			}
 			let bm = branch_node_bit_mask(has_children);
 			self.buffer.extend([bm.0,bm.1].iter());

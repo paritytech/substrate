@@ -938,9 +938,8 @@ mod trie_constants {
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
 	pub const BRANCH_WITH_MASK: u8 = 0b_11 << 6;
 	pub const EMPTY_TRIE: u8 = FIRST_PREFIX | (0b_00 << 4);
-	pub const ALT_HASHING_LEAF_PREFIX_MASK: u8 = FIRST_PREFIX | (0b_01 << 4);
-	pub const ALT_HASHING_BRANCH_WITHOUT_MASK: u8 = FIRST_PREFIX | (0b_10 << 4);
-	pub const ALT_HASHING_BRANCH_WITH_MASK: u8 = FIRST_PREFIX | (0b_11 << 4);
+	pub const ALT_HASHING_LEAF_PREFIX_MASK: u8 = FIRST_PREFIX | (0b_1 << 5);
+	pub const ALT_HASHING_BRANCH_WITH_MASK: u8 = FIRST_PREFIX | (0b_01 << 4);
 }
 
 #[cfg(test)]

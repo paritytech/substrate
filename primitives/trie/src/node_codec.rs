@@ -101,10 +101,16 @@ impl<H: Hasher> NodeCodec<H> {
 		meta.as_mut()
 			.map(|m| m.set_state_meta(alt_hashing));
 
+		let branch_has_value = if let NodeHeader::Branch(has_value, _) = &header {
+			*has_value
+		} else {
+			false
+		};
+
 		match header {
 			NodeHeader::Null => Ok(NodePlan::Empty),
-			NodeHeader::AltHashBranch(has_value, nibble_count)
-			| NodeHeader::Branch(has_value, nibble_count) => {
+			NodeHeader::AltHashBranch(nibble_count)
+			| NodeHeader::Branch(_, nibble_count) => {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
 				if padding && nibble_ops::pad_left(data[input.offset]) != 0 {
@@ -116,7 +122,7 @@ impl<H: Hasher> NodeCodec<H> {
 				let partial_padding = nibble_ops::number_padding(nibble_count);
 				let bitmap_range = input.take(BITMAP_LENGTH)?;
 				let bitmap = Bitmap::decode(&data[bitmap_range])?;
-				let value = if has_value {
+				let value = if branch_has_value {
 					if alt_hashing && contains_hash {
 						ValuePlan::HashedValue(input.take(H::LENGTH)?, 0)
 					} else {
@@ -257,17 +263,14 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 		meta: &mut M,
 	) -> Vec<u8> {
 		let mut output = match (&maybe_value, meta.do_value_hash()) {
-			(&Value::NoValue, false) => {
-				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchWithValue)
-			},
-			(_, false) => {
+			(&Value::NoValue, _) => {
 				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue)
 			},
-			(&Value::NoValue, true) => {
-				partial_from_iterator_encode(partial, number_nibble, NodeKind::AltHashBranchWithValue)
+			(_, false) => {
+				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchWithValue)
 			},
 			(_, true) => {
-				partial_from_iterator_encode(partial, number_nibble, NodeKind::AltHashBranchNoValue)
+				partial_from_iterator_encode(partial, number_nibble, NodeKind::AltHashBranchWithValue)
 			},
 		};
 
@@ -325,8 +328,7 @@ fn partial_from_iterator_encode<I: Iterator<Item = u8>>(
 		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
 		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count).encode_to(&mut output),
-		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(true, nibble_count).encode_to(&mut output),
-		NodeKind::AltHashBranchNoValue => NodeHeader::AltHashBranch(false, nibble_count).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count).encode_to(&mut output),
 	};
 	output.extend(partial);
 	output
@@ -346,8 +348,7 @@ fn partial_encode(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
 		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count).encode_to(&mut output),
-		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(true, nibble_count).encode_to(&mut output),
-		NodeKind::AltHashBranchNoValue => NodeHeader::AltHashBranch(false, nibble_count).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count).encode_to(&mut output),
 	};
 	if number_nibble_encoded > 0 {
 		output.push(nibble_ops::pad_right((partial.0).1));
