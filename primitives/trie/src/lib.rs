@@ -980,14 +980,13 @@ mod tests {
 		let mut memdb = MemoryDBMeta::<_, T::MetaHasher>::default();
 		let mut root = Default::default();
 		{
-			let mut t = TrieDBMut::<T>::new_with_layout(&mut memdb, &mut root, layout);
+			let mut t = TrieDBMut::<T>::new_with_layout(&mut memdb, &mut root, layout.clone());
 			for (x, y) in input.clone() {
 				t.insert(x, y).unwrap();
 			}
 		}
 		{
-			// Not using layout: it should be initialized from state root meta.
-			let t = TrieDB::<T>::new(&mut memdb, &root).unwrap();
+			let t = TrieDB::<T>::new_with_layout(&mut memdb, &root, layout).unwrap();
 			assert_eq!(
 				input.iter().map(|(i, j)| (i.to_vec(), j.to_vec())).collect::<Vec<_>>(),
 				t.iter().unwrap()
@@ -1000,6 +999,7 @@ mod tests {
 	fn check_input(input: &Vec<(&[u8], &[u8])>) {
 // TODO remove this iter
 		let layout = Layout::with_inner_hashing();
+		check_iteration::<Layout>(input, layout.clone());
 		check_equivalent::<Layout>(input, layout.clone());
 
 

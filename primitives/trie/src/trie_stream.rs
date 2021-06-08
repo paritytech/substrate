@@ -151,8 +151,7 @@ impl trie_root::TrieStream for TrieStream {
 						switch_to_value_hash: false,
 						do_value_hash: true,
 					};
-					let hash = <StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta);
-					self.buffer.extend_from_slice(hash.as_ref());
+					<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta).as_ref().encode_to(&mut self.buffer);
 				} else {
 					H::hash(&data).as_ref().encode_to(&mut self.buffer);
 				}

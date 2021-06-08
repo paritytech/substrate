@@ -104,7 +104,8 @@ impl<H: Hasher> NodeCodec<H> {
 		let branch_has_value = if let NodeHeader::Branch(has_value, _) = &header {
 			*has_value
 		} else {
-			false
+			// alt_hash_branch
+			true
 		};
 
 		match header {

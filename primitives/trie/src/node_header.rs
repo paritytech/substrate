@@ -105,7 +105,7 @@ impl Decode for NodeHeader {
 pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8, prefix_mask: usize) -> impl Iterator<Item = u8> {
 	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
 
-	let max_value = 255u8 >> (8 - prefix_mask);
+	let max_value = 255u8 >> prefix_mask;
 	let l1 = sp_std::cmp::min(max_value as usize - 1, size);
 	let (first_byte, mut rem) = if size == l1 {
 		(once(prefix + l1 as u8), 0)
