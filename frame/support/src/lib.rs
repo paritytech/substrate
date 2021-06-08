@@ -48,6 +48,8 @@ pub use sp_io::{storage::root as storage_root, self};
 pub use sp_runtime::RuntimeDebug;
 #[doc(hidden)]
 pub use log;
+#[doc(hidden)]
+pub use frame_metadata as metadata;
 
 #[macro_use]
 mod origin;
@@ -57,8 +59,6 @@ pub mod storage;
 mod hash;
 #[macro_use]
 pub mod event;
-#[macro_use]
-pub mod metadata;
 #[macro_use]
 pub mod genesis_config;
 #[macro_use]
