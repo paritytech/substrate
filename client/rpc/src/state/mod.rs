@@ -428,7 +428,7 @@ impl<Block, Client> State<Block, Client>
 		})?;
 
 		module.register_subscription(
-			"state_storage",
+			"state_subscribeStorage",
 			"state_unsubscribeStorage",
 			|params, mut sink, ctx| {
 				let executor = ctx.executor.clone();
