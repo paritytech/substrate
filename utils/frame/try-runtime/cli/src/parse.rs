@@ -17,20 +17,20 @@
 
 //! Utils for parsing user input
 
-pub(crate) fn hash(block_number: &str) -> Result<String, String> {
-	let block_number = if block_number.starts_with("0x") {
-		&block_number[2..]
+pub(crate) fn hash(block_hash: &str) -> Result<String, String> {
+	let (block_hash, offset) = if block_hash.starts_with("0x") {
+		(&block_hash[2..], 2)
 	} else {
-		block_number
+		(block_hash, 0)
 	};
 
-	if let Some(pos) = block_number.chars().position(|c| !c.is_ascii_hexdigit()) {
+	if let Some(pos) = block_hash.chars().position(|c| !c.is_ascii_hexdigit()) {
 		Err(format!(
 			"Expected block hash, found illegal hex character at position: {}",
-			2 + pos,
+			offset + pos,
 		))
 	} else {
-		Ok(block_number.into())
+		Ok(block_hash.into())
 	}
 }
 
