@@ -114,7 +114,6 @@ default:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_MESSAGE  =~ /.*build-for-simnet.*/
 
 .nightly-pipeline:                 &nightly-pipeline
   rules:
@@ -570,12 +569,9 @@ build-rust-doc:
   after_script:
     - buildah logout "$IMAGE_NAME"
     # pass artifacts to the trigger-simnet job 
-    - echo "IMAGE_NAME is ${IMAGE_NAME}"
-    - echo "IMAGE_NAME=${IMAGE_NAME}" > ./artifacts/$PRODUCT/build.env
-    - VERSION="$(cat ./artifacts/$PRODUCT/VERSION)"
-    - IMAGE_TAG="${VERSION}"
-    - echo "IMAGE_TAG is ${IMAGE_TAG}"
-    - echo "IMAGE_TAG=${IMAGE_TAG}" >> ./artifacts/$PRODUCT/build.env
+    - echo "IMAGE_NAME=${IMAGE_NAME}" | tee    ./artifacts/$PRODUCT/build.env
+    - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
+    - echo "IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
     - cat ./artifacts/$PRODUCT/build.env
 
 publish-docker-substrate:
