@@ -31,7 +31,6 @@ pallet-balances = { version = "3.0.0", path = "../balances" }
 pallet-transaction-payment = { version = "3.0.0", path = "../transaction-payment" }
 sp-version = { version = "3.0.0", path = "../../primitives/version" }
 sp-inherents = { version = "3.0.0", path = "../../primitives/inherents" }
-sp-state-machine = { version = "0.9.0", default-features = false, path = "../../primitives/state-machine" }
 
 [features]
 default = ["std"]
