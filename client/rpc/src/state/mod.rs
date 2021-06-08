@@ -239,7 +239,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_call", |params, state| {
 			let (method, data, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 
 			async move {
@@ -250,7 +250,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_getKeys", |params, state| {
 			let (key_prefix, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_keys(block, key_prefix).await.map_err(to_jsonrpsee_call_error)
@@ -260,7 +260,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_getPairs", |params, state| {
 			let (key_prefix, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -271,7 +271,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_getKeysPaged", |params, state| {
 			let (prefix, count, start_key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				if count > STORAGE_KEYS_PAGED_MAX_COUNT {
@@ -290,7 +290,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_getStorage", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
@@ -300,7 +300,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_getStorageHash", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
@@ -310,7 +310,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_getStorageSize", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_size(block, key).await.map_err(to_jsonrpsee_call_error)
@@ -335,7 +335,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_queryStorage", |params, state| {
 			let (keys, from, to) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -347,7 +347,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_queryStorageAt", |params, state| {
 			let (keys, at) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -359,7 +359,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_getReadProof", |params, state| {
 			let (keys, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -370,7 +370,7 @@ impl<Block, Client> State<Block, Client>
 		module.register_async_method("state_traceBlock", |params, state| {
 			let (block, targets, storage_keys) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -389,8 +389,10 @@ impl<Block, Client> State<Block, Client>
 				let mut previous_version = client.runtime_version_at(&BlockId::hash(client.info().best_hash))
 					.expect("best hash is valid; qed");
 				let _ = sink.send(&previous_version);
-				let rt_version_stream = client.storage_changes_notification_stream( Some(&[StorageKey(well_known_keys::CODE.to_vec())]), None, ).map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))
-					.expect("TODO: error handling");
+				let rt_version_stream = client.storage_changes_notification_stream(Some(&[StorageKey(well_known_keys::CODE.to_vec())]), None, )
+					.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))
+					.map_err(to_jsonrpsee_call_error)?;
+
 				let fut = async move {
 					let mut stream = rt_version_stream
 						.filter_map(move |_| {
@@ -513,7 +515,7 @@ impl<Block, Client> ChildState<Block, Client>
 		ctx_module.register_async_method("childstate_getStorage", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage(block, storage_key, key)
@@ -525,7 +527,7 @@ impl<Block, Client> ChildState<Block, Client>
 		ctx_module.register_async_method("childstate_getKeys", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_keys(block, storage_key, key)
@@ -537,7 +539,7 @@ impl<Block, Client> ChildState<Block, Client>
 		ctx_module.register_async_method("childstate_getStorageHash", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_hash(block, storage_key, key)
@@ -549,7 +551,7 @@ impl<Block, Client> ChildState<Block, Client>
 		ctx_module.register_async_method("childstate_getStorageSize", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_size(block, storage_key, key)
