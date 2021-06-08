@@ -569,7 +569,7 @@ build-rust-doc:
   after_script:
     - buildah logout "$IMAGE_NAME"
     # pass artifacts to the trigger-simnet job 
-    - echo "IMAGE_NAME=${IMAGE_NAME}" | tee    ./artifacts/$PRODUCT/build.env
+    - echo "IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
     - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
     - echo "IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
     - cat ./artifacts/$PRODUCT/build.env
