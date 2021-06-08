@@ -100,7 +100,7 @@ pub type SubmissionIndicesOf<T> =
 /// Mask type which pretends to be a set of `SignedSubmissionOf<T>`, while in fact delegating to the
 /// actual implementations in `SignedSubmissionIndices<T>`, `SignedSubmissionsMap<T>`, and
 /// `SignedSubmissionNextIndex<T>`.
-#[derive(DebugNoBound)]
+#[cfg_attr(feature = "std", derive(DebugNoBound))]
 pub struct SignedSubmissions<T: Config>(SubmissionIndicesOf<T>);
 
 impl<T: Config> SignedSubmissions<T> {
