@@ -18,13 +18,8 @@
 use crate::pallet::Def;
 use proc_macro2::TokenStream;
 use quote::quote;
-use std::cell::RefCell;
-use super::Counter;
+use crate::COUNTER;
 use syn::{Ident, spanned::Spanned};
-
-thread_local! {
-	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
-}
 
 pub fn expand_validate_unsigned(def: &mut Def) -> TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
@@ -45,12 +40,14 @@ pub fn expand_validate_unsigned(def: &mut Def) -> TokenStream {
 
 	quote! {
 		#[macro_export]
+		#[doc(hidden)]
 		macro_rules! #macro_ident {
 			($pallet_name:ident) => {
 				#maybe_compile_error
 			}
 		}
 
+		#[doc(hidden)]
 		pub use #macro_ident as __is_validate_unsigned_part_defined;
 	}
 }

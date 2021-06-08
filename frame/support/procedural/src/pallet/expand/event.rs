@@ -16,13 +16,8 @@
 // limitations under the License.
 
 use crate::pallet::{Def, parse::helper::get_doc_literals};
-use std::cell::RefCell;
-use super::Counter;
+use crate::COUNTER;
 use syn::{spanned::Spanned, Ident};
-
-thread_local! {
-	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
-}
 
 /// * Add __Ignore variant on Event
 /// * Impl various trait on Event including metadata
@@ -41,6 +36,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 
 		return quote::quote! {
 			#[macro_export]
+			#[doc(hidden)]
 			macro_rules! #macro_ident {
 				($pallet_name:ident) => {
 					compile_error!(concat!(
@@ -52,6 +48,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 				}
 			}
 
+			#[doc(hidden)]
 			pub use #macro_ident as __is_event_part_defined;
 		};
 	};
@@ -160,10 +157,12 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 
 	quote::quote_spanned!(event.attr_span =>
 		#[macro_export]
+		#[doc(hidden)]
 		macro_rules! #macro_ident {
 			($pallet_name:ident) => {};
 		}
 
+		#[doc(hidden)]
 		pub use #macro_ident as __is_event_part_defined;
 
 		#deposit_event

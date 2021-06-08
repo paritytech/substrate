@@ -16,13 +16,8 @@
 // limitations under the License.
 
 use crate::pallet::{Def, parse::helper::get_doc_literals};
-use std::cell::RefCell;
-use super::Counter;
+use crate::COUNTER;
 use syn::{Ident, spanned::Spanned};
-
-thread_local! {
-	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
-}
 
 /// * add various derive trait on GenesisConfig struct.
 pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
@@ -42,6 +37,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 
 		return quote::quote! {
 			#[macro_export]
+			#[doc(hidden)]
 			macro_rules! #macro_ident {
 				($pallet_name:ident) => {
 					compile_error!(concat!(
@@ -53,6 +49,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 				}
 			}
 
+			#[doc(hidden)]
 			pub use #macro_ident as __is_genesis_config_defined;
 		};
 	};
@@ -91,10 +88,12 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 
 	quote::quote! {
 		#[macro_export]
+		#[doc(hidden)]
 		macro_rules! #macro_ident {
 			($pallet_name:ident) => {};
 		}
 
+		#[doc(hidden)]
 		pub use #macro_ident as __is_genesis_config_defined;
 	}
 }

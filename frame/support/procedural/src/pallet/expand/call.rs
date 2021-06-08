@@ -17,13 +17,8 @@
 
 use crate::pallet::Def;
 use frame_support_procedural_tools::clean_type_string;
-use std::cell::RefCell;
-use super::Counter;
+use crate::COUNTER;
 use syn::spanned::Spanned;
-
-thread_local! {
-	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
-}
 
 /// * Generate enum call and implement various trait on it.
 /// * Implement Callable and call_function on `Pallet`
@@ -112,12 +107,14 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 	quote::quote_spanned!(span =>
 		#[macro_export]
+		#[doc(hidden)]
 		macro_rules! #macro_ident {
 			($pallet_name:ident) => {
 				#maybe_compile_error
 			};
 		}
 
+		#[doc(hidden)]
 		pub use #macro_ident as __is_call_part_defined;
 
 		#( #[doc = #docs] )*
