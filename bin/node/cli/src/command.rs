@@ -168,6 +168,6 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::TryRuntime) => {
 			Err("TryRuntime wasn't enabled when building the node. \
 				You can enable it with `--features try-runtime`.".into())
-		}
+		},
 	}
 }
