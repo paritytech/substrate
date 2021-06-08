@@ -412,14 +412,11 @@ impl<Block, Client> State<Block, Client>
 									}
 								}
 						});
-						stream.for_each(|version| {
-							match sink.send(&version) {
-								Ok(_) =>  future::ready(()),
-								Err(e) => {
-									log::error!("Could not send data to the state_runtimeVersion subscriber: {:?}", e);
-									future::ready(())
-								},
+						stream.for_each(|data| {
+							if let Err(e) = sink.send(&data) {
+								log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
 							}
+							future::ready(())
 						}).await;
 				}.boxed();
 				executor.execute_new(fut);
@@ -435,7 +432,9 @@ impl<Block, Client> State<Block, Client>
 				let stream = ctx.client.storage_changes_notification_stream(
 					keys.as_ref().map(|keys| &**keys),
 					None
-				).unwrap();
+					)
+					.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))
+					.map_err(to_jsonrpsee_call_error)?;
 				let fut = async move {
 					let stream = stream.map(|(block, changes)| {
 						StorageChangeSet {
