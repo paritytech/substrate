@@ -380,7 +380,7 @@ impl<Block, Client> State<Block, Client>
 		})?;
 
 		module.register_subscription(
-			"state_runtimeVersion",
+			"state_subscribeRuntimeVersion",
 			"state_unsubscribeRuntimeVersion",
 			|_params, mut sink, ctx| {
 				let executor = ctx.executor.clone();
@@ -408,7 +408,6 @@ impl<Block, Client> State<Block, Client>
 										},
 									Err(e) => {
 										log::error!("Could not fetch current runtime version. Error={:?}", e);
-										// TODO: Does this terminate the stream? What is the best way to let users know?
 										future::ready(None)
 									}
 								}
@@ -428,7 +427,7 @@ impl<Block, Client> State<Block, Client>
 		})?;
 
 		module.register_subscription(
-			"state_storage",
+			"state_subscribeStorage",
 			"state_unsubscribeStorage",
 			|params, mut sink, ctx| {
 				let executor = ctx.executor.clone();

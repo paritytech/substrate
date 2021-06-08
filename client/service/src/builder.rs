@@ -805,9 +805,8 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 		.expect("Infallible; qed");
 	let (state, child_state) = sc_rpc::state::new_full(client.clone(), task_executor.clone(), deny_unsafe);
 
-	// TODO: fix proofs here. If it's actually infallible don't return `Result`. If not, handle errors.
-	let state_rpc = state.into_rpc_module().expect("Infallible; qed");
-	let child_state_rpc = child_state.into_rpc_module().expect("Infallible; qed");
+	let state_rpc = state.into_rpc_module().expect("Method names are unique; qed");
+	let child_state_rpc = child_state.into_rpc_module().expect("Method names are unique; qed");
 
 	let maybe_offchain_rpc = offchain_storage.map(|storage| {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe)
@@ -824,7 +823,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	rpc_api.merge(state_rpc).unwrap();
 	rpc_api.merge(child_state_rpc).unwrap();
 
-		rpc_api
+	rpc_api
 }
 
 /// Parameters to pass into `build_network`.
