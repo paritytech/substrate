@@ -31,6 +31,12 @@ pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
+/// Storage proof in compact form.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+pub struct CompactProof {
+	pub encoded_nodes: Vec<Vec<u8>>,
+}
+
 impl StorageProof {
 	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
 	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
@@ -78,6 +84,56 @@ impl StorageProof {
 			.collect();
 
 		Self { trie_nodes }
+	}
+
+	/// Encode as a compact proof with default
+	/// trie layout.
+	pub fn into_compact_proof<H: Hasher>(
+		self,
+		root: H::Out,
+	) -> Result<CompactProof, crate::CompactProofError<crate::Layout<H>>> {
+		crate::encode_compact::<crate::Layout<H>>(self, root)
+	}
+	
+	/// Returns the estimated encoded size of the compact proof.
+	///
+	/// Runing this operation is a slow operation (build the whole compact proof) and should only be
+	/// in non sensitive path.
+	/// Return `None` on error.
+	pub fn encoded_compact_size<H: Hasher>(self, root: H::Out) -> Option<usize> {
+		let compact_proof = self.into_compact_proof::<H>(root);
+		compact_proof.ok().map(|p| p.encoded_size())
+	}
+
+}
+
+impl CompactProof {
+	/// Return an iterator on the compact encoded nodes.
+	pub fn iter_compact_encoded_nodes(&self) -> impl Iterator<Item = &[u8]> {
+		self.encoded_nodes.iter().map(Vec::as_slice)
+	}
+
+	/// Decode to a full storage_proof.
+	///
+	/// Method use a temporary `HashDB`, and `sp_trie::decode_compact`
+	/// is often better.
+	pub fn to_storage_proof<H: Hasher>(
+		&self,
+		expected_root: Option<&H::Out>,
+	) -> Result<(StorageProof, H::Out), crate::CompactProofError<crate::Layout<H>>> {
+		let mut db = crate::MemoryDB::<H>::new(&[]);
+		let root = crate::decode_compact::<crate::Layout<H>, _, _>(
+			&mut db,
+			self.iter_compact_encoded_nodes(),
+			expected_root,
+		)?;
+		Ok((StorageProof::new(db.drain().into_iter().filter_map(|kv|
+			if (kv.1).1 > 0 {
+				Some((kv.1).0)
+			} else {
+				None
+			}
+		).collect()), root))
 	}
 }
 
