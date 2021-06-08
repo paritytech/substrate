@@ -254,7 +254,8 @@ pub mod unsigned;
 pub mod weights;
 
 pub use signed::{
-	SignedSubmission, BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmissionsOf,
+	BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmission, SignedSubmissionOf,
+	SignedSubmissions, SubmissionIndicesOf,
 };
 pub use weights::WeightInfo;
 
@@ -884,18 +885,16 @@ pub mod pallet {
 
 			// ensure solution claims is better.
 			let mut signed_submissions = Self::signed_submissions();
-			let ejected_a_solution = signed_submissions.len()
-				== T::SignedMaxSubmissions::get().saturated_into::<usize>();
 
-			let deposit_amount =
-				Self::insert_submission(&who, &mut signed_submissions, solution, size)?;
+			let (maybe_deposit, ejected_a_solution) =
+				Self::insert_submission(&who, &mut signed_submissions, solution, size);
 
-			// collect deposit. Thereafter, the function cannot fail.
-			T::Currency::reserve(&who, deposit_amount)
-				.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+			if let Some(deposit_amount) = maybe_deposit {
+				// collect deposit. Thereafter, the function cannot fail.
+				T::Currency::reserve(&who, deposit_amount)
+					.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+			}
 
-			// store the new signed submission.
-			<SignedSubmissions<T>>::put(signed_submissions);
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
 			Ok(())
 		}
@@ -1049,10 +1048,34 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
-	/// Sorted set of unchecked, signed solutions.
+	/// The next index to be assigned to an incoming signed submission.
+	///
+	/// We can't just use `SignedSubmissionIndices.len()`, because that's a bounded set; past its
+	/// capacity, it will simply saturate. We can't just iterate over `SignedSubmissionsMap`,
+	/// because iteration is slow. Instead, we store the value here.
 	#[pallet::storage]
-	#[pallet::getter(fn signed_submissions)]
-	pub type SignedSubmissions<T: Config> = StorageValue<_, SignedSubmissionsOf<T>, ValueQuery>;
+	pub(crate) type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
+
+	/// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
+	/// `SignedSubmissions`.
+	///
+	/// We never need to process more than a single signed submission at a time. Signed submissions
+	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access
+	/// them one at a time instead of reading and decoding all of them at once.
+	#[pallet::storage]
+	pub(crate) type SignedSubmissionIndices<T: Config> =
+		StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
+
+	/// Unchecked, signed solutions.
+	///
+	/// Together with `SubmissionIndices`, this stores a bounded set of `SignedSubmissions` while
+	/// allowing us to keep only a single one in memory at a time.
+	///
+	/// Twox note: the key of the map is an auto-incrementing index which users cannot inspect or
+	/// affect; we shouldn't need a cryptographically secure hasher.
+	#[pallet::storage]
+	pub(crate) type SignedSubmissionsMap<T: Config> =
+		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, ValueQuery>;
 
 	/// The minimum score that each 'untrusted' solution must attain in order to be considered
 	/// feasible.
