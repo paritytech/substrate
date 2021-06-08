@@ -412,12 +412,16 @@ impl<Block, Client> State<Block, Client>
 								}
 						});
 						stream.for_each(|version| {
-							let _ = sink.send(&version);
-							// Why is this not `future::ready(sink.send(&version))`?
-							futures::future::ready(())
+							match sink.send(&version) {
+								Ok(_) =>  future::ready(()),
+								Err(e) => {
+									log::error!("Could not send data to the state_runtimeVersion subscriber: {:?}", e);
+									future::ready(())
+								},
+							}
 						}).await;
-				};
-				executor.execute_new(Box::pin(fut));
+				}.boxed();
+				executor.execute_new(fut);
 				Ok(())
 		})?;
 
