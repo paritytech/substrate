@@ -427,7 +427,6 @@ impl<Block, Client> State<Block, Client>
 				Ok(())
 		})?;
 
-		// TODO:
 		module.register_subscription(
 			"state_storage",
 			"state_unsubscribeStorage",
@@ -442,8 +441,12 @@ impl<Block, Client> State<Block, Client>
 					let stream = stream.map(|(block, changes)| {
 						StorageChangeSet {
 							block,
-							changes: changes.iter().filter_map(|(o_sk, k, v)| {
-								// TODO: figure out why we check for None here
+							changes: changes
+								.iter()
+								.filter_map(|(o_sk, k, v)| {
+								// Note: the first `Option<&StorageKey>` seems to be the parent key, so it's set only
+								// for storage events stemming from child storage, `None` otherwise. This RPC only
+								// returns non-child storage.
 								if o_sk.is_none() {
 									Some((k.clone(), v.cloned()))
 								} else {
