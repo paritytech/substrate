@@ -455,13 +455,10 @@ impl<Block, Client> State<Block, Client>
 						}
 					});
 					stream.for_each(|data| {
-						match sink.send(&data) {
-							Ok(_) =>  future::ready(()),
-							Err(e) => {
-								log::error!("Could not send data to the state_storage subscriber: {:?}", e);
-								future::ready(())
-							},
+						if let Err(e) = sink.send(&data) {
+							log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
 						}
+						future::ready(())
 					}).await;
 				}.boxed();
 
