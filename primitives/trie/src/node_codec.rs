@@ -90,23 +90,18 @@ pub struct NodeCodec<H>(PhantomData<H>);
 impl<H: Hasher> NodeCodec<H> {
 	fn decode_plan_inner_hashed<M: Meta>(
 		data: &[u8],
-		meta: Option<&mut M>,
+		meta: Option<&mut M>, // TODO when remove no meta, remove option
 	) -> Result<NodePlan, Error> {
-		let contains_hash = meta.as_ref()
-			.map(|m| m.contains_hash_of_value()).unwrap_or_default();
-		if data.len() < 1 {
-			return Err(Error::BadFormat);
-		}
-		let offset = if let Some(meta) = meta {
-			meta.read_state_meta(data).map_err(|_| Error::BadFormat)?
-		} else {
-			0
-		};
 		let mut input = ByteSliceInput::new(data);
 		let _ = input.take(offset)?;
 
+		let contains_hash = meta.as_ref()
+			.map(|m| m.contains_hash_of_value()).unwrap_or_default();
+		let header = NodeHeader::decode(&mut input)?;
+		let alt_hashing = header.alt_hashing();
 		match NodeHeader::decode(&mut input)? {
 			NodeHeader::Null => Ok(NodePlan::Empty),
+			NodeHeader::AltHashBranch(has_value, nibble_count)
 			NodeHeader::Branch(has_value, nibble_count) => {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
@@ -120,10 +115,10 @@ impl<H: Hasher> NodeCodec<H> {
 				let bitmap_range = input.take(BITMAP_LENGTH)?;
 				let bitmap = Bitmap::decode(&data[bitmap_range])?;
 				let value = if has_value {
-					let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-					if contains_hash {
+					if alt_hashing && contains_hash {
 						ValuePlan::HashedValue(input.take(H::LENGTH)?, count)
 					} else {
+						let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
 						ValuePlan::Value(input.take(count)?)
 					}
 				} else {
@@ -149,8 +144,9 @@ impl<H: Hasher> NodeCodec<H> {
 					value,
 					children,
 				})
-			}
-			NodeHeader::Leaf(nibble_count) => {
+			},
+			NodeHeader::AltHashLeaf(nibble_count)
+			| NodeHeader::Leaf(nibble_count) => {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
 				if padding && nibble_ops::pad_left(data[input.offset]) != 0 {
@@ -160,10 +156,10 @@ impl<H: Hasher> NodeCodec<H> {
 					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
 				)?;
 				let partial_padding = nibble_ops::number_padding(nibble_count);
-				let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-				let value = if contains_hash {
-					ValuePlan::HashedValue(input.take(H::LENGTH)?, count)
+				if alt_hashing && contains_hash {
+					ValuePlan::HashedValue(input.take(H::LENGTH)?, 0)
 				} else {
+					let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
 					ValuePlan::Value(input.take(count)?)
 				};
 
@@ -201,9 +197,7 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 	}
 
 	fn empty_node(meta: &mut M) -> Vec<u8> {
-		let mut output = meta.write_state_meta();
-		output.extend_from_slice(&[trie_constants::EMPTY_TRIE]);
-		output
+		empty_node_no_meta().to_vec()
 	}
 
 	fn empty_node_no_meta() -> &'static [u8] {
@@ -211,8 +205,11 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 	}
 
 	fn leaf_node(partial: Partial, value: Value, meta: &mut M) -> Vec<u8> {
-		let mut output = meta.write_state_meta();
-		output.append(&mut partial_encode(partial, NodeKind::Leaf));
+		let mut output = if meta.do_value_hash() {
+			partial_encode(partial, NodeKind::AltHashLeaf)
+		} else {
+			partial_encode(partial, NodeKind::Leaf)
+		};
 		match value {
 			Value::Value(value) => {
 				Compact(value.len() as u32).encode_to(&mut output);
@@ -221,9 +218,8 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 				let end = output.len();
 				meta.encoded_value_callback(ValuePlan::Value(start..end));
 			},
-			Value::HashedValue(hash, size) => {
+			Value::HashedValue(hash, _size) => {
 				debug_assert!(hash.len() == H::LENGTH);
-				Compact(size as u32).encode_to(&mut output);
 				let start = output.len();
 				output.extend_from_slice(hash);
 				let end = output.len();
@@ -258,20 +254,21 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 		maybe_value: Value,
 		meta: &mut M,
 	) -> Vec<u8> {
-		let mut output = meta.write_state_meta();
-		output.append(&mut if let Value::NoValue = &maybe_value {
-			partial_from_iterator_encode(
-				partial,
-				number_nibble,
-				NodeKind::BranchNoValue,
-			)
-		} else {
-			partial_from_iterator_encode(
-				partial,
-				number_nibble,
-				NodeKind::BranchWithValue,
-			)
-		});
+		let mut output = match (&maybe_value, meta.do_value_hash()) {
+			(&Value::NoValue, false) => {
+				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchWithValue)
+			},
+			(_, false) => {
+				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue)
+			},
+			(&Value::NoValue, true) => {
+				partial_from_iterator_encode(partial, number_nibble, NodeKind::AltHashBranchWithValue)
+			},
+			(_, true) => {
+				partial_from_iterator_encode(partial, number_nibble, NodeKind::AltHashBranchNoValue)
+			},
+		};
+
 		let bitmap_index = output.len();
 		let mut bitmap: [u8; BITMAP_LENGTH] = [0; BITMAP_LENGTH];
 		(0..BITMAP_LENGTH).for_each(|_|output.push(0));
@@ -283,9 +280,8 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 				let end = output.len();
 				meta.encoded_value_callback(ValuePlan::Value(start..end));
 			},
-			Value::HashedValue(hash, size) => {
+			Value::HashedValue(hash, _size) => {
 				debug_assert!(hash.len() == H::LENGTH);
-				Compact(size as u32).encode_to(&mut output);
 				let start = output.len();
 				output.extend_from_slice(hash);
 				let end = output.len();
@@ -326,6 +322,9 @@ fn partial_from_iterator_encode<I: Iterator<Item = u8>>(
 		NodeKind::Leaf => NodeHeader::Leaf(nibble_count).encode_to(&mut output),
 		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
+		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(true, nibble_count).encode_to(&mut output),
+		NodeKind::AltHashBranchNoValue => NodeHeader::AltHashBranch(false, nibble_count).encode_to(&mut output),
 	};
 	output.extend(partial);
 	output
@@ -344,6 +343,9 @@ fn partial_encode(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 		NodeKind::Leaf => NodeHeader::Leaf(nibble_count).encode_to(&mut output),
 		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
+		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(true, nibble_count).encode_to(&mut output),
+		NodeKind::AltHashBranchNoValue => NodeHeader::AltHashBranch(false, nibble_count).encode_to(&mut output),
 	};
 	if number_nibble_encoded > 0 {
 		output.push(nibble_ops::pad_right((partial.0).1));

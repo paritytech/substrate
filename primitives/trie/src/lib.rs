@@ -52,85 +52,104 @@ pub use hash_db::NoMeta;
 /// Meta use by trie state.
 #[derive(Default, Clone, Debug)]
 pub struct TrieMeta {
-	// range of encoded value or hashed value.
+	/// Range of encoded value or hashed value.
 	pub range: Option<core::ops::Range<usize>>,
-	// When `do_value_hash` is true, try to
-	// store this behavior in top node
-	// encoded (need to be part of state).
+	/// Defined in the trie layout, when used with
+	/// `TrieDbMut` it switch nodes to alternative hashing
+	/// method by setting `do_value_hash` to true.
+	/// TODO may be useless (indicate that previous hash is
+	/// not using `do_value_hash`).
+	pub switch_to_value_hash: bool,
+	/// When `do_value_hash` is true, try to
+	/// store this behavior in top node
+	/// encoded (need to be part of state).
+	/// TODO remove
 	pub recorded_do_value_hash: bool,
-	// Does current encoded contains a hash instead of
-	// a value (information stored in meta for proofs).
+	/// Does current encoded contains a hash instead of
+	/// a value (information stored in meta for proofs).
 	pub contain_hash: bool,
-	// Flag indicating if value hash can run.
-	// When defined for a node it gets active
-	// for all children node
+	/// Flag indicating if alternative value hash can run.
+	/// This is read and written as a state meta of the node.
+	/// TODO replace by TrieDbMut node variant
+	/// TODO replace by Option<usize> being size treshold.
 	pub do_value_hash: bool,
-	// Record if a value was accessed, this is
-	// set as accessed by defalult, but can be
-	// change on access explicitely: `HashDB::get_with_meta`.
-	// and reset on access explicitely: `HashDB::access_from`.
+	/// Record if a value was accessed, this is
+	/// set as accessed by defalult, but can be
+	/// change on access explicitely: `HashDB::get_with_meta`.
+	/// and reset on access explicitely: `HashDB::access_from`.
+	/// TODO!! remove from meta: only use in proof recorder context.
 	pub unused_value: bool,
-	// Indicate that a node is using old hash scheme.
-	// Write with `do_value_hash` inactive will set this to
-	// true.
-	// In this case hash is not doing internal hashing,
-	// but next write with `do_value_hash` will remove switch scheme.
+	/// Indicate that a node is using old hash scheme.
+	/// TODO remove
 	pub old_hash: bool,
 }
 
 impl Meta for TrieMeta {
-	/// Layout do not have content.
+	/// When true apply inner hashing of value.
 	type GlobalMeta = bool;
 
+	// TODO remove upstraem
 	/// When true apply inner hashing of value.
 	type StateMeta = bool;
 
-	fn set_state_meta(&mut self, state_meta: Self::StateMeta) {
-		self.recorded_do_value_hash = state_meta;
-		self.do_value_hash = state_meta;
+	// TODO remove upstream
+	fn set_state_meta(&mut self, _state_meta: Self::StateMeta) {
+		/*if !self.do_value_hash && state_meta {
+			self.switch_to_value_hash = true;
+			self.do_value_hash = true;
+		}*/
 	}
 
+	// TODO remove upstream
 	fn extract_global_meta(&self) -> Self::GlobalMeta {
 		self.recorded_do_value_hash
 	}
 
 	fn set_global_meta(&mut self, global_meta: Self::GlobalMeta) {
-		if global_meta {
-			self.recorded_do_value_hash = true;
+		if !self.do_value_hash && state_meta {
+			self.switch_to_value_hash = true;
 			self.do_value_hash = true;
 		}
 	}
 
+	// TODO remove upstream?
 	fn has_state_meta(&self) -> bool {
-		self.recorded_do_value_hash
+		false
+		//self.do_value_hash
 	}
 
+	// TODO consider removal upstream of this method (node type in codec)
 	fn read_state_meta(&mut self, data: &[u8]) -> Result<usize, &'static str> {
-		let offset = if data[0] == trie_constants::ENCODED_META_ALLOW_HASH {
+		unreachable!()
+		// TODO read directly from codec.
+/*		let offset = if data[0] == trie_constants::ENCODED_META_ALLOW_HASH {
 			self.recorded_do_value_hash = true;
 			self.do_value_hash = true;
 			1
 		} else {
 			0
 		};
-		Ok(offset)
+		Ok(offset)*/
 	}
 
+	// TODO consider removal upstream of this method (node type in codec)
+	// `do_value_hash` method is enough function to write with codec.
 	fn write_state_meta(&self) -> Vec<u8> {
-		if self.recorded_do_value_hash {
-			// Note that this only works with sp_trie codec that
-			// cannot encode node starting by this byte.
+		unreachable!()
+/*		if self.do_value_hash {
+			// Note that this only works with sp_trie codec.
+			// Acts as a boolean result.
 			[trie_constants::ENCODED_META_ALLOW_HASH].to_vec()
 		} else {
 			Vec::new()
-		}
+		}*/
 	}
 
 	fn meta_for_new(
 		global: Self::GlobalMeta,
 	) -> Self {
 		let mut result = Self::default();
-		result.do_value_hash = global;
+		result.set_global_meta(global);
 		result
 	}
 
@@ -140,12 +159,14 @@ impl Meta for TrieMeta {
 		Self::meta_for_new(global)
 	}
 
+	// TODO meta for empty is unused: can consider removal upstream.
 	fn meta_for_empty(
 		global: Self::GlobalMeta,
 	) -> Self {
 		Self::meta_for_new(global)
 	}
 
+	// TODO if removing all meta, the Option<ValueRange> will replace it.
 	fn encoded_value_callback(
 		&mut self,
 		value_plan: ValuePlan,
@@ -158,9 +179,9 @@ impl Meta for TrieMeta {
 
 		self.range = Some(range);
 		self.contain_hash = contain_hash;
-		if self.do_value_hash {
-			// Switch value hashing.
-			self.old_hash = false;
+		if self.switch_to_value_hash {
+			// Switched value hashing.
+			self.switch_to_value_hash = false
 		}
 	}
 
@@ -184,7 +205,7 @@ impl Meta for TrieMeta {
 	}
 
 	fn do_value_hash(&self) -> bool {
-		self.unused_value
+		self.do_value_hash
 	}
 }
 
@@ -224,6 +245,7 @@ impl<H, M> Default for Layout<H, M> {
 impl<H, M> Layout<H, M> {
 	/// Layout with inner hashing active.
 	/// Will flag trie for hashing.
+	/// TODO rename inner -> alt
 	pub fn with_inner_hashing() -> Self {
 		Layout(true, sp_std::marker::PhantomData)
 	}
@@ -248,13 +270,19 @@ impl<H, M> TrieLayout for Layout<H, M>
 	fn layout_meta(&self) -> GlobalMeta<Self> {
 		self.0
 	}
-	fn initialize_from_root_meta(&mut self, root_meta: &Self::Meta) {
-		if root_meta.extract_global_meta() {
+
+	// TODO remove upstream
+	fn initialize_from_root_meta(&mut self, _root_meta: &Self::Meta) {
+		unreachable!()
+		/*if root_meta.extract_global_meta() {
 			self.0 = true;
-		}
+		}*/
 	}
-	fn set_root_meta(root_meta: &mut Self::Meta, global_meta: GlobalMeta<Self>) {
-		root_meta.set_global_meta(global_meta);
+
+	// TODO remove upstream
+	fn set_root_meta(_root_meta: &mut Self::Meta, _global_meta: GlobalMeta<Self>) {
+		unreachable!()
+//		root_meta.set_global_meta(global_meta);
 	}
 }
 
@@ -271,7 +299,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 
 	fn hash(value: &[u8], meta: &Self::Meta) -> H::Out {
 		match &meta {
-			TrieMeta { range: Some(range), contain_hash: false, do_value_hash, old_hash: false, .. } => {
+			TrieMeta { range: Some(range), contain_hash: false, do_value_hash, switch_to_value_hash: false, .. } => {
 				if *do_value_hash && range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
 					let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
 					H::hash(value.as_slice())
@@ -289,24 +317,10 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		}
 	}
 
+	// TODO if removing meta upstream, still need to get DEAD_HEADER_META_HASHED_VALUE
+	// from proof.
 	fn stored_value(value: &[u8], mut meta: Self::Meta) -> DBValue {
 		let mut stored = Vec::with_capacity(value.len() + 1);
-		if meta.old_hash {
-			// write as old hash.
-			stored.push(trie_constants::OLD_HASHING);
-			stored.extend_from_slice(value);
-			return stored;
-		}
-		if !meta.do_value_hash {
-			if let Some(range) = meta.range.as_ref() {
-				if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
-					// write as old hash.
-					stored.push(trie_constants::OLD_HASHING);
-					stored.extend_from_slice(value);
-					return stored;
-				}
-			}
-		}
 		if meta.contain_hash {
 			// already contain hash, just flag it.
 			stored.push(trie_constants::DEAD_HEADER_META_HASHED_VALUE);
@@ -336,16 +350,13 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		<Self as MetaHasher<H, DBValue>>::stored_value(value.as_slice(), meta)
 	}
 
+	// TODO remove upstream?
 	fn extract_value(mut stored: &[u8], global_meta: Self::GlobalMeta) -> (&[u8], Self::Meta) {
 		let input = &mut stored;
 		let mut contain_hash = false;
 		let mut old_hash = false;
 		if input.get(0) == Some(&trie_constants::DEAD_HEADER_META_HASHED_VALUE) {
 			contain_hash = true;
-			*input = &input[1..];
-		}
-		if input.get(0) == Some(&trie_constants::OLD_HASHING) {
-			old_hash = true;
 			*input = &input[1..];
 		}
 		let mut meta = TrieMeta {
@@ -356,14 +367,11 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 			recorded_do_value_hash: false,
 			old_hash,
 		};
-		// get recorded_do_value_hash
-		let _offset = meta.read_state_meta(stored)
-			.expect("State meta reading failure.");
-		//let stored = &stored[offset..];
-		meta.do_value_hash = meta.recorded_do_value_hash || global_meta;
+		meta.set_global_meta(global_meta);
 		(stored, meta)
 	}
 
+	// TODO remove upstream
 	fn extract_value_owned(mut stored: DBValue, global: Self::GlobalMeta) -> (DBValue, Self::Meta) {
 		let len = stored.len();
 		let (v, meta) = <Self as MetaHasher<H, DBValue>>::extract_value(stored.as_slice(), global);
@@ -374,6 +382,8 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 
 /// Reimplement `NoMeta` `MetaHasher` with
 /// additional constraint.
+/// TODO remove the MetaHasher is ignored
+/// when no node have do_value_hash or layout defines it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NoMetaHasher;
 
@@ -900,7 +910,10 @@ pub fn estimate_entry_size(entry: &(DBValue, TrieMeta), hash_len: usize) -> usiz
 	full_encoded
 }
 
-/// If needed, call to decode plan in order to record meta.
+/// If needed, call to decode plan in order to update meta earlier.
+/// TODO if removing fully meta, this will still be needed but with
+/// a less generic name: read variant of node from db value and indicate
+/// if can hash value.
 pub fn resolve_encoded_meta<H: Hasher>(entry: &mut (DBValue, TrieMeta)) {
 	use trie_db::NodeCodec;
 	if entry.1.do_value_hash {
@@ -912,45 +925,25 @@ pub fn resolve_encoded_meta<H: Hasher>(entry: &mut (DBValue, TrieMeta)) {
 mod trie_constants {
 	/// Treshold for using hash of value instead of value
 	/// in encoded trie node when flagged.
+	/// TODO design would be to make it the global meta, but then
+	/// when serializing proof we would need to attach it (no way to
+	/// hash the nodes otherwhise), which would
+	/// break proof format.
+	/// TODO attaching to storage proof in a compatible way could be
+	/// achieve by using a escaped header in first or last element of proof
+	/// and write it after.
 	pub const INNER_HASH_TRESHOLD: usize = 33;
 	const FIRST_PREFIX: u8 = 0b_00 << 6;
-	pub const EMPTY_TRIE: u8 = FIRST_PREFIX | 0b_00;
-	pub const ENCODED_META_ALLOW_HASH: u8 = FIRST_PREFIX | 0b_01;
 	/// In proof this header is used when only hashed value is stored.
-	pub const DEAD_HEADER_META_HASHED_VALUE: u8 = FIRST_PREFIX | 0b_00_10;
-	/// If inner hashing should apply, but state is not flagged, then set
-	/// this meta to avoid checking both variant of hashes.
-	pub const OLD_HASHING: u8 = FIRST_PREFIX | 0b_00_11;
+	pub const DEAD_HEADER_META_HASHED_VALUE: u8 = EMPTY_TRIE | 0b_00_01;
 	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
 	pub const BRANCH_WITH_MASK: u8 = 0b_11 << 6;
-}
-
-/// Utility to tag a state without meta with old_hash internal
-/// hashing.
-pub fn tag_old_hashes<H: Hasher>(existing: &[u8]) -> Option<Vec<u8>> {
-	use trie_db::NodeCodec;
-	let mut meta = TrieMeta::default();
-	// allows restarting a migration.
-	if existing.len() > 0 && existing[0] == trie_constants::OLD_HASHING {
-		return None; // allow restarting a migration.
-	}
-	let _ = <trie_types::Layout::<H> as TrieLayout>::Codec::decode_plan(existing, &mut meta)
-		.expect("Invalid db state entry found: {:?}, entry.0.as_slice()");
-	match meta.range {
-		Some(range) => {
-			if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
-				let mut res = Vec::with_capacity(existing.len() + 1);
-				res.push(trie_constants::OLD_HASHING);
-				res.extend_from_slice(existing);
-				Some(res)
-			} else {
-				None
-			}
-		},
-		None => None,
-	}
+	pub const EMPTY_TRIE: u8 = FIRST_PREFIX | (0b_00 << 4);
+	pub const ALT_HASHING_LEAF_PREFIX_MASK: u8 = FIRST_PREFIX | (0b_01 << 4);
+	pub const ALT_HASHING_BRANCH_WITHOUT_MASK: u8 = FIRST_PREFIX | (0b_10 << 4);
+	pub const ALT_HASHING_BRANCH_WITH_MASK: u8 = FIRST_PREFIX | (0b_11 << 4);
 }
 
 #[cfg(test)]

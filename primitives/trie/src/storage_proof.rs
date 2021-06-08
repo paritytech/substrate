@@ -113,6 +113,7 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 		let mut is_hashed_value = false;
 		let mut accum = Vec::new();
 		for item in proof.trie_nodes.iter() {
+			// TODO remove this look up
 			// Note using `default()` as global meta helps looking fro root node.
 			let layout_meta = Default::default();
 			let (encoded_node, mut meta) = <

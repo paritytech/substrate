@@ -28,6 +28,8 @@ pub(crate) enum NodeHeader {
 	Null,
 	Branch(bool, usize),
 	Leaf(usize),
+	AltHashBranch(bool, usize),
+	AltHashLeaf(usize),
 }
 
 /// NodeHeader without content
@@ -35,6 +37,9 @@ pub(crate) enum NodeKind {
 	Leaf,
 	BranchNoValue,
 	BranchWithValue,
+	AltHashLeaf,
+	AltHashBranchNoValue,
+	AltHashBranchWithValue,
 }
 
 impl Encode for NodeHeader {
@@ -47,10 +52,28 @@ impl Encode for NodeHeader {
 				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, output),
 			NodeHeader::Leaf(nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::LEAF_PREFIX_MASK, output),
+			NodeHeader::AltHashBranch(true, nibble_count)	=>
+				encode_size_and_prefix_alt(*nibble_count, trie_constants::ALT_HASIHNG_BRANCH_WITH_MASK, output),
+			NodeHeader::AltHashBranch(false, nibble_count) =>
+				encode_size_and_prefix_alt(*nibble_count, trie_constants::ALT_HASHING_BRANCH_WITHOUT_MASK, output),
+			NodeHeader::AltHashLeaf(nibble_count) =>
+				encode_size_and_prefix_alt(*nibble_count, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, output),
 		}
 	}
 }
 
+impl NodeHeader {
+	/// Is this header using alternate hashing scheme.
+	pub(crate) alt_hashing() -> bool {
+		match self {
+			NodeHeader::Null
+			| NodeHeader::Leaf(..)
+			| NodeHeader::Branch(..)	=> false,
+			NodeHeader::AltHashBranch(..)
+			| NodeHeader::AltHashLeaf(..) => true,
+		}
+	}
+}
 impl codec::EncodeLike for NodeHeader {}
 
 impl Decode for NodeHeader {
@@ -60,11 +83,16 @@ impl Decode for NodeHeader {
 			return Ok(NodeHeader::Null);
 		}
 		match i & (0b11 << 6) {
-			trie_constants::LEAF_PREFIX_MASK => Ok(NodeHeader::Leaf(decode_size(i, input)?)),
-			trie_constants::BRANCH_WITHOUT_MASK => Ok(NodeHeader::Branch(false, decode_size(i, input)?)),
-			trie_constants::BRANCH_WITH_MASK => Ok(NodeHeader::Branch(true, decode_size(i, input)?)),
-			// do not allow any special encoding
-			_ => Err("Unallowed encoding".into()),
+			trie_constants::LEAF_PREFIX_MASK => Ok(NodeHeader::Leaf(decode_size(i, input, 2)?)),
+			trie_constants::BRANCH_WITH_MASK => Ok(NodeHeader::Branch(true, decode_size(i, input, 2)?)),
+			trie_constants::BRANCH_WITHOUT_MASK => Ok(NodeHeader::Branch(false, decode_size(i, input, 2)?)),
+			trie_constants::EMPTY_TRIE => match i & (0b1111 << 4) {
+				trie_constants::ALT_HASHING_LEAF_PREFIX_MASK => Ok(NodeHeader::AltHashLeaf(decode_size(i, input, 4)?)),
+				trie_constants::ALT_HASHING_BRANCH_WITH_MASK => Ok(NodeHeader::AltHashBranch(true, decode_size(i, input, 4)?)),
+				trie_constants::ALT_HASHING_BRANCH_WITHOUT_MASK => Ok(NodeHeader::AltHashBranch(false, decode_size(i, input, 4)?)),
+				// do not allow any special encoding
+				_ => Err("Unallowed encoding".into()),
+			},
 		}
 	}
 }
@@ -72,14 +100,15 @@ impl Decode for NodeHeader {
 /// Returns an iterator over encoded bytes for node header and size.
 /// Size encoding allows unlimited, length inefficient, representation, but
 /// is bounded to 16 bit maximum value to avoid possible DOS.
-pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator<Item = u8> {
+pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8, prefix_mask: usize) -> impl Iterator<Item = u8> {
 	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
 
-	let l1 = sp_std::cmp::min(62, size);
+	let max_value = 255 >> prefix_mask;
+	let l1 = sp_std::cmp::min(max_value - 1, size);
 	let (first_byte, mut rem) = if size == l1 {
 		(once(prefix + l1 as u8), 0)
 	} else {
-		(once(prefix + 63), size - l1)
+		(once(prefix + max_value), size - l1)
 	};
 	let next_bytes = move || {
 		if rem > 0 {
@@ -98,17 +127,25 @@ pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator
 	first_byte.chain(sp_std::iter::from_fn(next_bytes))
 }
 
-/// Encodes size and prefix to a stream output.
+/// Encodes size and prefix to a stream output (prefix on 2 first bit only).
 fn encode_size_and_prefix<W: Output + ?Sized>(size: usize, prefix: u8, out: &mut W) {
-	for b in size_and_prefix_iterator(size, prefix) {
+	for b in size_and_prefix_iterator(size, prefix, 2) {
+		out.push_byte(b)
+	}
+}
+
+/// Encodes size and prefix to a stream output with prefix (prefix on 4 first bit only). 
+fn encode_size_and_prefix_alt<W: Output + ?Sized>(size: usize, prefix: u8, out: &mut W) {
+	for b in size_and_prefix_iterator(size, prefix, 4) {
 		out.push_byte(b)
 	}
 }
 
 /// Decode size only from stream input and header byte.
-fn decode_size(first: u8, input: &mut impl Input) -> Result<usize, codec::Error> {
-	let mut result = (first & 255u8 >> 2) as usize;
-	if result < 63 {
+fn decode_size(first: u8, input: &mut impl Input, prefix_mask: usize) -> Result<usize, codec::Error> {
+	let max_value = 255u8 >> prefix_mask;
+	let mut result = (first & max_value) as usize;
+	if result < max_value {
 		return Ok(result);
 	}
 	result -= 1;
