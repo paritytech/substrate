@@ -110,28 +110,15 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 		// only allow global definition.
 		// Using compact proof will work directly here (read trie structure and
 		// work directly.
-		let mut is_hashed_value = false;
-		let mut accum = Vec::new();
 		for item in proof.trie_nodes.iter() {
-			// TODO remove this look up
 			// Note using `default()` as global meta helps looking fro root node.
 			let layout_meta = Default::default();
 			let (encoded_node, mut meta) = <
 				<Layout::<H> as TrieLayout>::MetaHasher as MetaHasher<H, _>
 			>::extract_value(item.as_slice(), layout_meta);
-			// read state meta.
+			// read state meta (required for value layout and AltHash node.
 			let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(encoded_node, &mut meta);
-			if meta.recorded_do_value_hash {
-				debug_assert!(!is_hashed_value);
-				is_hashed_value = true;
-			}
-			accum.push((encoded_node, meta));
-		}
-		for mut item in accum.into_iter() {
-			if is_hashed_value {
-				item.1.do_value_hash = true;
-			}
-			db.insert_with_meta(crate::EMPTY_PREFIX, item.0, item.1);
+			db.insert_with_meta(crate::EMPTY_PREFIX, encoded_node, meta);
 		}
 		db
 	}

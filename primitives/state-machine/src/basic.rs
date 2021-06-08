@@ -74,7 +74,7 @@ impl BasicExternalities {
 			inner: Storage {
 				top: std::mem::take(&mut storage.top),
 				children_default: std::mem::take(&mut storage.children_default),
-				flag_hashed_value: storage.flag_hashed_value,
+				alt_hashing: storage.alt_hashing,
 			},
 			extensions: Default::default(),
 		};
@@ -129,7 +129,7 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 			inner: Storage {
 				top: hashmap,
 				children_default: Default::default(),
-				flag_hashed_value: true,
+				alt_hashing: true,
 			},
 			extensions: Default::default(),
 		}
@@ -283,7 +283,7 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let layout = if self.inner.flag_hashed_value {
+		let layout = if self.inner.alt_hashing {
 			Layout::<Blake2Hasher>::with_inner_hashing()
 		} else {
 			Layout::<Blake2Hasher>::default()
@@ -298,7 +298,7 @@ impl Externalities for BasicExternalities {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
 			crate::in_memory_backend::new_in_mem::<Blake2Hasher>()
-				.child_storage_root(&child.child_info, delta).0
+				.child_storage_root(&child.child_info, delta, self.inner.alt_hashing).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()
@@ -341,7 +341,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn flag_hash_value(&mut self) {
-		self.inner.flag_hashed_value = true;
+		self.inner.alt_hashing = true;
 	}
 }
 

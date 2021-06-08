@@ -26,13 +26,12 @@ use sp_runtime::traits::Block as BlockT;
 use crate::{columns, utils::DatabaseType};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use codec::{Decode, Encode};
-use log::info;
 
 /// Version file name.
 const VERSION_FILE_NAME: &'static str = "db_version";
 
 /// Current db version.
-const CURRENT_VERSION: u32 = 4;
+const CURRENT_VERSION: u32 = 3;
 
 /// Number of columns in v1.
 const V1_NUM_COLUMNS: u32 = 11;
@@ -50,7 +49,6 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_bl
 				migrate_2_to_3::<Block>(db_path, db_type)?
 			},
 			2 => migrate_2_to_3::<Block>(db_path, db_type)?,
-			3 => migrate_3_to_4::<Block>(db_path, db_type)?,
 			CURRENT_VERSION => (),
 			_ => Err(sp_blockchain::Error::Backend(format!("Future database version: {}", db_version)))?,
 		}
@@ -99,63 +97,6 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 
 	Ok(())
 }
-
-/// Migration from version3 to version4:
-/// - Trie state meta for state that could be hashed internaly.
-fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
-
-	info!("Starting trie node migration.");
-	let	start_time = std::time::Instant::now();
-	let db_path = db_path.to_str()
-		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
-	let db_cfg = DatabaseConfig::with_columns(V2_NUM_COLUMNS);
-	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
-
-	let mut nb_node_prefixed = 0;
-	let mut nb_node_seen = 0;
-	let batch_size = 250_000;
-	loop {
-		let mut full_batch = false;
-		let mut size = 0;
-		let mut last = Vec::new();
-		let mut transaction = db.transaction();
-		// Get all the keys we need to update.
-		// Note that every batch will restart full iter,
-		// if this prove to slow for archive node, this could be
-		// switch to a `iter_from` function but would require
-		// to upstream change to our rocksdb crate.
-		for entry in db.iter(columns::STATE) {
-			if &entry.1[..] > last.as_slice() {
-				nb_node_seen += 1;
-				if let Some(new_val) = sp_trie::tag_old_hashes::<sp_runtime::traits::HashFor<Block>>(&entry.1) {
-					transaction.put_vec(columns::STATE, &entry.0, new_val);
-					nb_node_prefixed += 1;
-					size += 1;
-					if size == batch_size {
-						full_batch = true;
-						last = entry.0.to_vec();
-						break;
-					}
-				}
-			}
-		}
-		info!(
-			"Committing batch, currently processed: {} of {} read nodes at {:?}, {:?}",
-			nb_node_prefixed,
-			nb_node_seen,
-			last,
-			start_time.elapsed().as_millis(),
-		);
-		db.write(transaction).map_err(db_err)?;
-		if !full_batch {
-			break;
-		}
-	}
-	info!("Trie node migration finished in {:?} ms.", start_time.elapsed().as_millis());
-	info!("{:?} nodes prefixed for {:?} node.", nb_node_prefixed, nb_node_seen);
-	Ok(())
-}
-
 
 /// Reads current database version from the file at given path.
 /// If the file does not exist returns 0.

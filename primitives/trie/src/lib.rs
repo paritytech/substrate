@@ -88,25 +88,22 @@ impl Meta for TrieMeta {
 	/// When true apply inner hashing of value.
 	type GlobalMeta = bool;
 
-	// TODO remove upstraem
 	/// When true apply inner hashing of value.
 	type StateMeta = bool;
 
-	// TODO remove upstream
-	fn set_state_meta(&mut self, _state_meta: Self::StateMeta) {
-		/*if !self.do_value_hash && state_meta {
-			self.switch_to_value_hash = true;
+	fn set_state_meta(&mut self, state_meta: Self::StateMeta) {
+		if !self.do_value_hash && state_meta {
 			self.do_value_hash = true;
-		}*/
+		}
 	}
 
 	// TODO remove upstream
 	fn extract_global_meta(&self) -> Self::GlobalMeta {
-		self.recorded_do_value_hash
+		self.switch_to_value_hash || self.do_value_hash
 	}
 
 	fn set_global_meta(&mut self, global_meta: Self::GlobalMeta) {
-		if !self.do_value_hash && state_meta {
+		if !self.do_value_hash && global_meta {
 			self.switch_to_value_hash = true;
 			self.do_value_hash = true;
 		}
@@ -114,12 +111,11 @@ impl Meta for TrieMeta {
 
 	// TODO remove upstream?
 	fn has_state_meta(&self) -> bool {
-		false
-		//self.do_value_hash
+		self.do_value_hash && !self.switch_to_value_hash
 	}
 
 	// TODO consider removal upstream of this method (node type in codec)
-	fn read_state_meta(&mut self, data: &[u8]) -> Result<usize, &'static str> {
+	fn read_state_meta(&mut self, _data: &[u8]) -> Result<usize, &'static str> {
 		unreachable!()
 		// TODO read directly from codec.
 /*		let offset = if data[0] == trie_constants::ENCODED_META_ALLOW_HASH {
@@ -204,6 +200,7 @@ impl Meta for TrieMeta {
 		self.contain_hash
 	}
 
+	// TODO could be rename to get_state_meta
 	fn do_value_hash(&self) -> bool {
 		self.do_value_hash
 	}
@@ -255,12 +252,12 @@ impl<H, M> TrieLayout for Layout<H, M>
 	where
 		H: Hasher,
 		M: MetaHasher<H, DBValue, GlobalMeta = bool>,
-		M::Meta: Meta<GlobalMeta = bool>,
+		M::Meta: Meta<GlobalMeta = bool, StateMeta = bool>,
 {
 	const USE_EXTENSION: bool = false;
 	const ALLOW_EMPTY: bool = true;
 	const USE_META: bool = true;
-	const READ_ROOT_STATE_META: bool = true;
+	const READ_ROOT_STATE_META: bool = false; // TODO rem
 
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
@@ -299,8 +296,8 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 
 	fn hash(value: &[u8], meta: &Self::Meta) -> H::Out {
 		match &meta {
-			TrieMeta { range: Some(range), contain_hash: false, do_value_hash, switch_to_value_hash: false, .. } => {
-				if *do_value_hash && range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
+			TrieMeta { range: Some(range), contain_hash: false, do_value_hash: true, switch_to_value_hash: false, .. } => {
+				if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
 					let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
 					H::hash(value.as_slice())
 				} else {
@@ -354,7 +351,6 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 	fn extract_value(mut stored: &[u8], global_meta: Self::GlobalMeta) -> (&[u8], Self::Meta) {
 		let input = &mut stored;
 		let mut contain_hash = false;
-		let mut old_hash = false;
 		if input.get(0) == Some(&trie_constants::DEAD_HEADER_META_HASHED_VALUE) {
 			contain_hash = true;
 			*input = &input[1..];
@@ -365,7 +361,8 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 			contain_hash,
 			do_value_hash: false,
 			recorded_do_value_hash: false,
-			old_hash,
+			switch_to_value_hash: false,
+			old_hash: false,
 		};
 		meta.set_global_meta(global_meta);
 		(stored, meta)
@@ -419,7 +416,7 @@ impl<H, M> TrieConfiguration for Layout<H, M>
 	where
 		H: Hasher,
 		M: MetaHasher<H, DBValue, GlobalMeta = bool>,
-		M::Meta: Meta<GlobalMeta = bool>,
+		M::Meta: Meta<GlobalMeta = bool, StateMeta = bool>,
 {
 	fn trie_root<I, A, B>(&self, input: I) -> <Self::Hash as Hasher>::Out where
 		I: IntoIterator<Item = (A, B)>,
@@ -515,7 +512,8 @@ pub mod trie_types {
 pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	db: &mut DB,
 	mut root: TrieHash<L>,
-	delta: I
+	delta: I,
+	layout: L,
 ) -> Result<TrieHash<L>, Box<TrieError<L>>> where
 	I: IntoIterator<Item = (A, B)>,
 	A: Borrow<[u8]>,
@@ -524,14 +522,11 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 {
 	{
-		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
+		let mut trie = TrieDBMut::<L>::from_existing_with_layout(db, &mut root, layout)?;
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
 
-		if delta.len() == 0 {
-			trie.force_layout_meta()?;
-		}
 		for (key, change) in delta {
 			match change.borrow() {
 				Some(val) => trie.insert(key.borrow(), val.borrow())?,
@@ -622,6 +617,7 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 	db: &mut DB,
 	root_data: RD,
 	delta: I,
+	layout: L,
 ) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
 	where
 		I: IntoIterator<Item = (A, B)>,
@@ -640,6 +636,7 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 		&mut db,
 		root,
 		delta,
+		layout,
 	)
 }
 
@@ -971,9 +968,6 @@ mod tests {
 				let mut memdb = MemoryDBMeta::<_, T::MetaHasher>::default();
 				let mut root = Default::default();
 				let mut t = TrieDBMut::<T>::new_with_layout(&mut memdb, &mut root, layout);
-				if input.len() == 0 {
-					t.force_layout_meta().unwrap();
-				}
 				for (x, y) in input.iter().rev() {
 					t.insert(x, y).unwrap();
 				}
@@ -1005,7 +999,7 @@ mod tests {
 	}
 
 	fn check_input(input: &Vec<(&[u8], &[u8])>) {
-
+// TODO remove this iter
 		let layout = Layout::with_inner_hashing();
 		check_equivalent::<Layout>(input, layout.clone());
 
@@ -1122,25 +1116,12 @@ mod tests {
 		db: &'db mut dyn HashDB<T::Hash, DBValue, T::Meta, GlobalMeta<T>>,
 		root: &'db mut TrieHash<T>,
 		v: &[(Vec<u8>, Vec<u8>)],
-		flag_hash: bool,
+		layout: T,
 	) -> TrieDBMut<'db, T>
 		where
 			T: TrieConfiguration<Meta = TrieMeta>,
 	{
-		let mut t = if flag_hash {
-			let mut root_meta = Default::default();
-			T::set_root_meta(&mut root_meta, flag_hash);
-
-			let mut layout = T::default();
-			layout.initialize_from_root_meta(&root_meta);
-
-			let mut t = TrieDBMut::<T>::new_with_layout(db, root, layout);
-			t.force_layout_meta()
-				.expect("Could not force layout.");
-			t
-		} else {
-			TrieDBMut::<T>::new(db, root)
-		};
+		let mut t = TrieDBMut::<T>::new_with_layout(db, root, layout);
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -1186,7 +1167,8 @@ mod tests {
 			let real = layout.trie_root(x.clone());
 			let mut memdb = MemoryDB::default();
 			let mut root = Default::default();
-			let mut memtrie = populate_trie::<Layout>(&mut memdb, &mut root, &x, flag);
+
+			let mut memtrie = populate_trie::<Layout>(&mut memdb, &mut root, &x, layout.clone());
 
 			memtrie.commit();
 			if *memtrie.root() != real {
@@ -1274,6 +1256,12 @@ mod tests {
 		iterator_works_inner(false);
 	}
 	fn iterator_works_inner(flag: bool) {
+		let layout = if flag {
+			Layout::with_inner_hashing()
+		} else {
+			Layout::default()
+		};
+
 		let pairs = vec![
 			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),
 			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
@@ -1281,9 +1269,9 @@ mod tests {
 
 		let mut mdb = MemoryDB::default();
 		let mut root = Default::default();
-		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs, flag);
+		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs, layout.clone());
 
-		let trie = TrieDB::<Layout>::new(&mdb, &root).unwrap();
+		let trie = TrieDB::<Layout>::new_with_layout(&mdb, &root, layout).unwrap();
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();
@@ -1315,11 +1303,13 @@ mod tests {
 			&mut proof_db.clone(),
 			storage_root,
 			valid_delta,
+			Default::default(),
 		).unwrap();
 		let second_storage_root = delta_trie_root::<Layout, _, _, _, _, _>(
 			&mut proof_db.clone(),
 			storage_root,
 			invalid_delta,
+			Default::default(),
 		).unwrap();
 
 		assert_eq!(first_storage_root, second_storage_root);

@@ -1496,12 +1496,13 @@ mod tests {
 	#[test]
 	fn inner_state_hashing_switch_proofs() {
 
+		let mut layout = Layout::default();
 		let (mut mdb, mut root) = trie_backend::tests::test_db(false);
 		{
 			let mut trie = TrieDBMut::from_existing_with_layout(
 				&mut mdb,
 				&mut root,
-				Layout::default(),
+				layout.cloen(),
 			).unwrap();
 			trie.insert(b"foo", vec![1u8; 1_000].as_slice()) // big inner hash
 				.expect("insert failed");
@@ -1537,31 +1538,14 @@ mod tests {
 		let root1 = root.clone();
 
 
-		// trigger switch
-		{
-			let mut trie = TrieDBMut::from_existing_with_layout(
-				&mut mdb,
-				&mut root,
-				Layout::with_inner_hashing(),
-			).unwrap();
-			trie.force_layout_meta()
-				.expect("failed forced layout change");
-		}
-		let root2 = root.clone();
-		assert!(root1 != root2);
-		let remote_proof = check_proof(mdb.clone(), root.clone());
-		// nodes are still with old hashing.
-		assert!(remote_proof.encode().len() > 1_100);
-		assert!(remote_proof.encoded_size() > 1_100);
-		assert_eq!(remote_proof.encode().len(),
-			remote_proof.encoded_size());
-
+		// do switch
+		layout = Layout::with_inner_hashing();
 		// update with same value do not change
 		{
 			let mut trie = TrieDBMut::from_existing_with_layout(
 				&mut mdb,
 				&mut root,
-				Layout::default(),
+				layout.clone(),
 			).unwrap();
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
 				.expect("insert failed");
@@ -1576,7 +1560,7 @@ mod tests {
 			let mut trie = TrieDBMut::from_existing_with_layout(
 				&mut mdb,
 				&mut root,
-				Layout::default(),
+				layout.clone(),
 			).unwrap();
 			trie.insert(b"foo222", vec![4u8].as_slice()) // inner hash
 				.expect("insert failed");

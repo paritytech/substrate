@@ -46,9 +46,7 @@ pub fn generate_trie(
 
 			let mut trie_db = if flag_hashed_value {
 				let layout = sp_trie::Layout::with_inner_hashing();
-				let mut t = TrieDBMut::<crate::simple_trie::Hasher>::new_with_layout(&mut trie, &mut root, layout);
-				t.force_layout_meta().expect("force layout meta failed");
-				t
+				TrieDBMut::<crate::simple_trie::Hasher>::new_with_layout(&mut trie, &mut root, layout)
 			} else {
 				TrieDBMut::new(&mut trie, &mut root)
 			};
@@ -58,7 +56,7 @@ pub fn generate_trie(
 
 			trie_db.commit();
 		}
-		( trie.db, overlay )
+		(trie.db, overlay)
 	};
 
 	let mut transaction = db.transaction();

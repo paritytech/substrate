@@ -353,17 +353,18 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	fn storage_root<'b>(
 		&self,
 		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
-		flag_inner_hash_value: bool,
+		alt_hashing: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		self.0.storage_root(delta, flag_inner_hash_value)
+		self.0.storage_root(delta, alt_hashing)
 	}
 
 	fn child_storage_root<'b>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+		alt_hashing: bool,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
-		self.0.child_storage_root(child_info, delta)
+		self.0.child_storage_root(child_info, delta, alt_hashing)
 	}
 
 	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) { }

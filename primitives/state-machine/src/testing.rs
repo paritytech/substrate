@@ -239,7 +239,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N>
 	fn default() -> Self {
 		// default to inner hashed.
 		let mut storage = Storage::default();
-		storage.flag_hashed_value = true;
+		storage.alt_hashing = true;
 		Self::new(storage)
 	}
 }

@@ -547,7 +547,7 @@ where
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				Some(self.backend.child_storage_root(info, delta))
+				Some(self.backend.child_storage_root(info, delta, self.overlay.flag_hash_value()))
 			} else {
 				None
 			};

@@ -645,17 +645,18 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		flag_hash_value: bool,
+		alt_hashing: bool,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.state.storage_root(delta, flag_hash_value)
+		self.state.storage_root(delta, alt_hashing)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		alt_hashing: bool,
 	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
-		self.state.child_storage_root(child_info, delta)
+		self.state.child_storage_root(child_info, delta, alt_hashing)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -832,17 +833,18 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		flag_hash_value: bool,
+		alt_hashing: bool,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.caching_state().storage_root(delta, flag_hash_value)
+		self.caching_state().storage_root(delta, alt_hashing)
 	}
 
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		alt_hashing: bool,
 	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
-		self.caching_state().child_storage_root(child_info, delta)
+		self.caching_state().child_storage_root(child_info, delta, alt_hashing)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

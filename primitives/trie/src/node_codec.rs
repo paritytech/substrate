@@ -88,21 +88,23 @@ impl<'a> Input for ByteSliceInput<'a> {
 pub struct NodeCodec<H>(PhantomData<H>);
 
 impl<H: Hasher> NodeCodec<H> {
-	fn decode_plan_inner_hashed<M: Meta>(
+	fn decode_plan_inner_hashed<M: Meta<StateMeta = bool>>(
 		data: &[u8],
-		meta: Option<&mut M>, // TODO when remove no meta, remove option
+		mut meta: Option<&mut M>, // TODO when remove no meta, remove option
 	) -> Result<NodePlan, Error> {
 		let mut input = ByteSliceInput::new(data);
-		let _ = input.take(offset)?;
 
 		let contains_hash = meta.as_ref()
 			.map(|m| m.contains_hash_of_value()).unwrap_or_default();
 		let header = NodeHeader::decode(&mut input)?;
 		let alt_hashing = header.alt_hashing();
-		match NodeHeader::decode(&mut input)? {
+		meta.as_mut()
+			.map(|m| m.set_state_meta(alt_hashing));
+
+		match header {
 			NodeHeader::Null => Ok(NodePlan::Empty),
 			NodeHeader::AltHashBranch(has_value, nibble_count)
-			NodeHeader::Branch(has_value, nibble_count) => {
+			| NodeHeader::Branch(has_value, nibble_count) => {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
 				if padding && nibble_ops::pad_left(data[input.offset]) != 0 {
@@ -116,7 +118,7 @@ impl<H: Hasher> NodeCodec<H> {
 				let bitmap = Bitmap::decode(&data[bitmap_range])?;
 				let value = if has_value {
 					if alt_hashing && contains_hash {
-						ValuePlan::HashedValue(input.take(H::LENGTH)?, count)
+						ValuePlan::HashedValue(input.take(H::LENGTH)?, 0)
 					} else {
 						let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
 						ValuePlan::Value(input.take(count)?)
@@ -156,7 +158,7 @@ impl<H: Hasher> NodeCodec<H> {
 					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
 				)?;
 				let partial_padding = nibble_ops::number_padding(nibble_count);
-				if alt_hashing && contains_hash {
+				let value = if alt_hashing && contains_hash {
 					ValuePlan::HashedValue(input.take(H::LENGTH)?, 0)
 				} else {
 					let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
@@ -172,7 +174,7 @@ impl<H: Hasher> NodeCodec<H> {
 	}
 }
 
-impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
+impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 	type Error = Error;
 	type HashOut = H::Out;
 
@@ -196,8 +198,8 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 		data == <Self as NodeCodecT<M>>::empty_node_no_meta()
 	}
 
-	fn empty_node(meta: &mut M) -> Vec<u8> {
-		empty_node_no_meta().to_vec()
+	fn empty_node(_meta: &mut M) -> Vec<u8> {
+		sp_std::vec![trie_constants::EMPTY_TRIE]
 	}
 
 	fn empty_node_no_meta() -> &'static [u8] {
@@ -223,7 +225,7 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 				let start = output.len();
 				output.extend_from_slice(hash);
 				let end = output.len();
-				meta.encoded_value_callback(ValuePlan::HashedValue(start..end, size));
+				meta.encoded_value_callback(ValuePlan::HashedValue(start..end, 0));
 			},
 			Value::NoValue => unimplemented!("No support for incomplete nodes"),
 		}
@@ -285,7 +287,7 @@ impl<H: Hasher, M: Meta> NodeCodecT<M> for NodeCodec<H> {
 				let start = output.len();
 				output.extend_from_slice(hash);
 				let end = output.len();
-				meta.encoded_value_callback(ValuePlan::HashedValue(start..end, size));
+				meta.encoded_value_callback(ValuePlan::HashedValue(start..end, 0));
 			},
 			Value::NoValue => (),
 		}

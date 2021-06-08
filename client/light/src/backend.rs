@@ -490,11 +490,11 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		flag_hash_value: bool,
+		alt_hashing: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.storage_root(delta, flag_hash_value),
+				state.storage_root(delta, alt_hashing),
 			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}
@@ -503,10 +503,11 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		alt_hashing: bool,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(child_info, delta);
+				let (root, is_equal, _) = state.child_storage_root(child_info, delta, alt_hashing);
 				(root, is_equal, Default::default())
 			},
 			GenesisOrUnavailableState::Unavailable =>

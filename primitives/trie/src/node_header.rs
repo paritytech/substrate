@@ -53,7 +53,7 @@ impl Encode for NodeHeader {
 			NodeHeader::Leaf(nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::LEAF_PREFIX_MASK, output),
 			NodeHeader::AltHashBranch(true, nibble_count)	=>
-				encode_size_and_prefix_alt(*nibble_count, trie_constants::ALT_HASIHNG_BRANCH_WITH_MASK, output),
+				encode_size_and_prefix_alt(*nibble_count, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, output),
 			NodeHeader::AltHashBranch(false, nibble_count) =>
 				encode_size_and_prefix_alt(*nibble_count, trie_constants::ALT_HASHING_BRANCH_WITHOUT_MASK, output),
 			NodeHeader::AltHashLeaf(nibble_count) =>
@@ -64,7 +64,7 @@ impl Encode for NodeHeader {
 
 impl NodeHeader {
 	/// Is this header using alternate hashing scheme.
-	pub(crate) alt_hashing() -> bool {
+	pub(crate) fn alt_hashing(&self) -> bool {
 		match self {
 			NodeHeader::Null
 			| NodeHeader::Leaf(..)
@@ -74,6 +74,7 @@ impl NodeHeader {
 		}
 	}
 }
+
 impl codec::EncodeLike for NodeHeader {}
 
 impl Decode for NodeHeader {
@@ -93,6 +94,7 @@ impl Decode for NodeHeader {
 				// do not allow any special encoding
 				_ => Err("Unallowed encoding".into()),
 			},
+			_ => unreachable!(),
 		}
 	}
 }
@@ -103,12 +105,12 @@ impl Decode for NodeHeader {
 pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8, prefix_mask: usize) -> impl Iterator<Item = u8> {
 	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
 
-	let max_value = 255 >> prefix_mask;
-	let l1 = sp_std::cmp::min(max_value - 1, size);
+	let max_value = 255u8 >> prefix_mask;
+	let l1 = sp_std::cmp::min(max_value as usize - 1, size);
 	let (first_byte, mut rem) = if size == l1 {
 		(once(prefix + l1 as u8), 0)
 	} else {
-		(once(prefix + max_value), size - l1)
+		(once(prefix + max_value as u8), size - l1)
 	};
 	let next_bytes = move || {
 		if rem > 0 {
@@ -145,7 +147,7 @@ fn encode_size_and_prefix_alt<W: Output + ?Sized>(size: usize, prefix: u8, out: 
 fn decode_size(first: u8, input: &mut impl Input, prefix_mask: usize) -> Result<usize, codec::Error> {
 	let max_value = 255u8 >> prefix_mask;
 	let mut result = (first & max_value) as usize;
-	if result < max_value {
+	if result < max_value as usize {
 		return Ok(result);
 	}
 	result -= 1;

@@ -25,7 +25,6 @@ use sp_std::ops::Range;
 use crate::{trie_constants, TrieMeta, StateHasher};
 use crate::node_header::{NodeKind, size_and_prefix_iterator};
 use crate::node_codec::Bitmap;
-use trie_db::Meta;
 
 const BRANCH_NODE_NO_VALUE: u8 = 254;
 const BRANCH_NODE_WITH_VALUE: u8 = 255;
@@ -59,9 +58,12 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibbles.len());
 
 	let iter_start = match kind {
-		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK),
-		NodeKind::BranchNoValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK),
-		NodeKind::BranchWithValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK),
+		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK, 2),
+		NodeKind::BranchNoValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK, 2),
+		NodeKind::BranchWithValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK, 2),
+		NodeKind::AltHashLeaf => size_and_prefix_iterator(size, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 4),
+		NodeKind::AltHashBranchNoValue => size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITHOUT_MASK, 4),
+		NodeKind::AltHashBranchWithValue => size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4),
 	};
 	iter_start
 		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })
@@ -85,7 +87,12 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn append_leaf(&mut self, key: &[u8], value: &[u8]) {
-		self.buffer.extend(fuse_nibbles_node(key, NodeKind::Leaf));
+		let kind = if self.inner_value_hashing {
+			NodeKind::AltHashLeaf
+		} else {
+			NodeKind::Leaf
+		};
+		self.buffer.extend(fuse_nibbles_node(key, kind));
 		Compact(value.len() as u32).encode_to(&mut self.buffer);
 		self.current_value_range = Some(self.buffer.len()..self.buffer.len() + value.len());
 		self.buffer.extend_from_slice(value);
@@ -99,9 +106,19 @@ impl trie_root::TrieStream for TrieStream {
 	) {
 		if let Some(partial) = maybe_partial {
 			if maybe_value.is_some() {
-				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchWithValue));
+				let kind = if self.inner_value_hashing {
+					NodeKind::AltHashBranchWithValue
+				} else {
+					NodeKind::BranchWithValue
+				};
+				self.buffer.extend(fuse_nibbles_node(partial, kind));
 			} else {
-				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchNoValue));
+				let kind = if self.inner_value_hashing {
+					NodeKind::AltHashBranchNoValue
+				} else {
+					NodeKind::BranchNoValue
+				};
+				self.buffer.extend(fuse_nibbles_node(partial, kind));
 			}
 			let bm = branch_node_bit_mask(has_children);
 			self.buffer.extend([bm.0,bm.1].iter());
@@ -134,11 +151,14 @@ impl trie_root::TrieStream for TrieStream {
 						range: range,
 						unused_value: false,
 						contain_hash: false,
-						do_value_hash: true,
 						old_hash: false,
 						recorded_do_value_hash: false,
+						// No existing state, no need to use switch_to_value_hash
+						switch_to_value_hash: false,
+						do_value_hash: true,
 					};
-					<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta).as_ref().encode_to(&mut self.buffer);
+					let hash = <StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta);
+					self.buffer.extend_from_slice(hash.as_ref());
 				} else {
 					H::hash(&data).as_ref().encode_to(&mut self.buffer);
 				}
@@ -154,27 +174,19 @@ impl trie_root::TrieStream for TrieStream {
 			range: range,
 			unused_value: false,
 			contain_hash: false,
-			do_value_hash: inner_value_hashing,
 			old_hash: false,
 			recorded_do_value_hash: inner_value_hashing,
-		};
-			
-		// Add the recorded_do_value_hash to encoded
-		let mut encoded = meta.write_state_meta();
-		let encoded = if encoded.len() > 0 {
-			encoded.extend(data);
-			encoded
-		} else {
-			data
+			switch_to_value_hash: false,
+			do_value_hash: inner_value_hashing,
 		};
 
 		if inner_value_hashing
 			&& meta.range.as_ref().map(|r| r.end - r.start >= trie_constants::INNER_HASH_TRESHOLD)
 				.unwrap_or_default() {
 		
-			<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&encoded, &meta)
+			<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta)
 		} else {
-			H::hash(&encoded)
+			H::hash(&data)
 		}
 	}
 

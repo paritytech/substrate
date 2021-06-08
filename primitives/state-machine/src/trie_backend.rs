@@ -171,7 +171,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		flag_inner_hash_value: bool,
+		use_inner_hash_value: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
@@ -182,16 +182,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 			let res = || {
-				if flag_inner_hash_value {
-					let layout = sp_trie::Layout::with_inner_hashing();
-					let mut t = sp_trie::trie_types::TrieDBMut::<H>::from_existing_with_layout(
-						&mut eph,
-						&mut root,
-						layout,
-					)?;
-					t.force_layout_meta()?;
-				}
-				delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta)
+				let layout = if use_inner_hash_value {
+					sp_trie::Layout::with_inner_hashing()
+				} else {
+					sp_trie::Layout::default()
+				};
+				delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta, layout)
 			};
 		
 			match res() {
@@ -207,9 +203,15 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		use_inner_hash_value: bool,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
+		};
+		let layout = if use_inner_hash_value {
+			sp_trie::Layout::with_inner_hashing()
+		} else {
+			sp_trie::Layout::default()
 		};
 
 		let mut write_overlay = S::Overlay::default();
@@ -234,6 +236,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut eph,
 				root,
 				delta,
+				layout,
 			) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
@@ -291,14 +294,7 @@ pub mod tests {
 			root.encode_to(&mut sub_root);
 			let mut trie = if hashed_value {
 				let layout = Layout::with_inner_hashing();
-				let mut t = TrieDBMut::new_with_layout(
-					&mut mdb,
-					&mut root,
-					layout,
-				);
-				t.force_layout_meta()
-					.expect("failed forced layout change");
-				t
+				TrieDBMut::new_with_layout(&mut mdb, &mut root, layout)
 			} else {
 				TrieDBMut::new(&mut mdb, &mut root)
 			};
