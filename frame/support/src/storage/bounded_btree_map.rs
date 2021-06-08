@@ -116,12 +116,12 @@ where
 		self.0.get_mut(key)
 	}
 
-	/// Exactly the same semantics as [`BTreeMap::insert`], but returns an `Err` (and is a noop) if the
-	/// new length of the map exceeds `S`.
+	/// Exactly the same semantics as [`BTreeMap::insert`], but returns an `Err` (and is a noop) if
+	/// the new length of the map exceeds `S`.
 	///
 	/// In the `Err` case, returns the inserted pair so it can be further used without cloning.
 	pub fn try_insert(&mut self, key: K, value: V) -> Result<Option<V>, (K, V)> {
-		if self.len() < Self::bound() {
+		if self.len() < Self::bound() || self.0.contains_key(&key) {
 			Ok(self.0.insert(key, value))
 		} else {
 			Err((key, value))
@@ -408,5 +408,51 @@ pub mod test {
 			BoundedBTreeMap::<u32, u32, Four>::decode(&mut &v.encode()[..]),
 			Err("BoundedBTreeMap exceeds its limit".into()),
 		);
+	}
+
+	#[test]
+	fn unequal_eq_impl_insert_works() {
+		// given a struct with a strange notion of equality
+		#[derive(Debug)]
+		struct Unequal(u32, bool);
+
+		impl PartialEq for Unequal {
+			fn eq(&self, other: &Self) -> bool {
+				self.0 == other.0
+			}
+		}
+		impl Eq for Unequal {}
+
+		impl Ord for Unequal {
+			fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+				self.0.cmp(&other.0)
+			}
+		}
+
+		impl PartialOrd for Unequal {
+			fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+				Some(self.cmp(other))
+			}
+		}
+
+		let mut map = BoundedBTreeMap::<Unequal, u32, Four>::new();
+
+		// when the set is full
+
+		for i in 0..4 {
+			map.try_insert(Unequal(i, false), i).unwrap();
+		}
+
+		// can't insert a new distinct member
+		map.try_insert(Unequal(5, false), 5).unwrap_err();
+
+		// but _can_ insert a distinct member which compares equal, though per the documentation,
+		// neither the set length nor the actual member are changed, but the value is
+		map.try_insert(Unequal(0, true), 6).unwrap();
+		assert_eq!(map.len(), 4);
+		let (zero_key, zero_value) = map.get_key_value(&Unequal(0, true)).unwrap();
+		assert_eq!(zero_key.0, 0);
+		assert_eq!(zero_key.1, false);
+		assert_eq!(*zero_value, 6);
 	}
 }
