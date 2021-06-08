@@ -332,31 +332,25 @@ fn deploy_contract() -> AccountId {
 
 	pub const ADD_DDC_NODE_SELECTOR: [u8; 4] = hex!("11a9e1b9");
 
-	let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
-	"12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".encode_to(&mut call_data);
-	"https://node-0.ddc.stage.cere.network".encode_to(&mut call_data);
+	let call_data_items = vec![
+		["12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "https://node-0.ddc.stage.cere.network"],
+		["12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "https://node-3.ddc.stage.cere.network"],
+	];
 
-	let results_1 = Contracts::call(
-		Origin::signed(alice.clone()),
-		contract_id.clone(),
-		0,
-		100_000_000_000,
-		call_data,
-	);
-	results_1.unwrap();
+	for call_data_item in call_data_items {
+		let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
+		call_data_item[0].encode_to(&mut call_data);
+		call_data_item[1].encode_to(&mut call_data);
 
-	let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
-	"12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".encode_to(&mut call_data);
-	"https://node-3.ddc.stage.cere.network".encode_to(&mut call_data);
-
-	let results_2 = Contracts::call(
-		Origin::signed(alice.clone()),
-		contract_id.clone(),
-		0,
-		100_000_000_000,
-		call_data,
-	);
-	results_2.unwrap();
+		let results = Contracts::call(
+			Origin::signed(alice.clone()),
+			contract_id.clone(),
+			0,
+			100_000_000_000,
+			call_data,
+		);
+		results.unwrap();
+	}
 
     contract_id
 }
