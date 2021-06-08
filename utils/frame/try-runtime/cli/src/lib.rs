@@ -304,7 +304,7 @@ where
 	ext.register_extension(TransactionPoolExt::new(pool));
 
 	let header_hash: Block::Hash = command.header_at.parse().unwrap();
-	let header = rpc_api::get_header::<Block, _>(url, header_hash).await;
+	let header = rpc_api::get_header::<Block, _>(url, header_hash).await?;
 
 	let _ = StateMachine::<_, _, NumberFor<Block>, _>::new(
 		&ext.backend,
