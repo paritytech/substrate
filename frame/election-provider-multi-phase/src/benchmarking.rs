@@ -273,20 +273,16 @@ frame_benchmarking::benchmarks! {
 		MultiPhase::<T>::on_initialize_open_signed().expect("should be ok to start signed phase");
 		<Round<T>>::put(1);
 
-		<SignedSubmissions<T>>::mutate(|outer_queue| {
-			let mut queue = sp_std::mem::take(outer_queue);
-			queue = queue.try_mutate(|queue| {
-				for i in 0..c {
-					let solution = RawSolution {
-						score: [(10_000_000 + i).into(), 0, 0],
-						..Default::default()
-					};
-					let signed_submission = SignedSubmission { solution, ..Default::default() };
-					queue.insert(signed_submission);
-				}
-			}).unwrap();
-			*outer_queue = queue;
-		});
+		let mut signed_submissions = SignedSubmissions::<T>::get();
+		for i in 0..c {
+			let solution = RawSolution {
+				score: [(10_000_000 + i).into(), 0, 0],
+				..Default::default()
+			};
+			let signed_submission = SignedSubmission { solution, ..Default::default() };
+			signed_submissions.insert(signed_submission);
+		}
+		signed_submissions.put();
 
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());

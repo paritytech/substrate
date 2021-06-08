@@ -26,6 +26,7 @@ use codec::{Encode, Decode, HasCompact};
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+	DebugNoBound,
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution, ElectionScore};
@@ -99,9 +100,25 @@ pub type SubmissionIndicesOf<T> =
 /// Mask type which pretends to be a set of `SignedSubmissionOf<T>`, while in fact delegating to the
 /// actual implementations in `SignedSubmissionIndices<T>`, `SignedSubmissionsMap<T>`, and
 /// `SignedSubmissionNextIndex<T>`.
+#[derive(DebugNoBound)]
 pub struct SignedSubmissions<T: Config>(SubmissionIndicesOf<T>);
 
 impl<T: Config> SignedSubmissions<T> {
+	/// Get the signed submissions from storage.
+	pub fn get() -> Self {
+		SignedSubmissions(SignedSubmissionIndices::<T>::get())
+	}
+
+	/// Put the signed submissions back into storage.
+	pub fn put(self) {
+		SignedSubmissionIndices::<T>::put(self.0)
+	}
+
+	/// Iterate through the set of signed submissions in order of increasing score.
+	pub fn iter(&self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
+		self.0.iter().map(|(_score, idx)| SignedSubmissionsMap::<T>::get(idx))
+	}
+
 	/// Empty the set of signed submissions, returning an iterator of signed submissions
 	pub fn drain(&mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
 		self.0.clear();
@@ -183,14 +200,6 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 }
 
-// ensure that we update the storage once we're done with this wrapper struct.
-impl<T: Config> Drop for SignedSubmissions<T> {
-	fn drop(&mut self) {
-		let indices = sp_std::mem::take(&mut self.0);
-		SignedSubmissionIndices::<T>::put(indices);
-	}
-}
-
 impl<T: Config> Deref for SignedSubmissions<T> {
 	type Target = SubmissionIndicesOf<T>;
 
@@ -202,7 +211,7 @@ impl<T: Config> Deref for SignedSubmissions<T> {
 impl<T: Config> Pallet<T> {
 	/// `Self` accessor for `SignedSubmission<T>`.
 	pub fn signed_submissions() -> SignedSubmissions<T> {
-		SignedSubmissions(SignedSubmissionIndices::<T>::get())
+		SignedSubmissions::<T>::get()
 	}
 
 	/// Finish the signed phase. Process the signed submissions from best to worse until a valid one
@@ -263,6 +272,8 @@ impl<T: Config> Pallet<T> {
 			weight = weight.saturating_add(T::DbWeight::get().writes(1));
 			debug_assert!(_remaining.is_zero());
 		}
+
+		all_submissions.put();
 
 		(found_solution, weight)
 	}
@@ -542,11 +553,10 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
-					.rev()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![9, 8, 7, 6, 5]
+				vec![5, 6, 7, 8, 9]
 			);
 
 			// better.
@@ -556,11 +566,10 @@ mod tests {
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
-					.rev()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![20, 9, 8, 7, 6]
+				vec![6, 7, 8, 9, 20]
 			);
 		})
 	}
@@ -582,11 +591,10 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
-					.rev()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![9, 8, 7, 6, 4],
+				vec![4, 6, 7, 8, 9],
 			);
 
 			// better.
@@ -596,11 +604,10 @@ mod tests {
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
-					.rev()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![9, 8, 7, 6, 5],
+				vec![5, 6, 7, 8, 9],
 			);
 		})
 	}
@@ -642,11 +649,10 @@ mod tests {
 			}
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
-					.rev()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![7, 6, 5]
+				vec![5, 6, 7]
 			);
 
 			// 5 is not accepted. This will only cause processing with no benefit.
@@ -688,8 +694,8 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(9999), solution_9999));
 
 			assert_eq!(
-				MultiPhase::signed_submissions().iter().rev().map(|x| x.who).collect::<Vec<_>>(),
-				vec![999, 99, 9999]
+				MultiPhase::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
+				vec![9999, 99, 999]
 			);
 
 			// _some_ good solution was stored.

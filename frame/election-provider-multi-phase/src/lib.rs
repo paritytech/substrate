@@ -888,6 +888,12 @@ pub mod pallet {
 
 			let (maybe_deposit, ejected_a_solution) =
 				Self::insert_submission(&who, &mut signed_submissions, solution, size);
+			// it's an error if we neither inserted nor removed any submissions
+			ensure!(
+				(None, false) != (maybe_deposit, ejected_a_solution),
+				Error::<T>::SignedQueueFull,
+			);
+			signed_submissions.put();
 
 			if let Some(deposit_amount) = maybe_deposit {
 				// collect deposit. Thereafter, the function cannot fail.
