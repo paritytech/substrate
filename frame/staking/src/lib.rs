@@ -1820,6 +1820,7 @@ decl_module! {
 			// last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
+			Self::deposit_event(RawEvent::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
 			Ok(Some(
 				35 * WEIGHT_PER_MICROS
