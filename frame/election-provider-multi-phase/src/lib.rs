@@ -175,7 +175,7 @@
 //! portion of the bond).
 //!
 //! **Conditionally open unsigned phase**: Currently, the unsigned phase is always opened. This is
-//! useful because a honest validator will run substrate OCW code, which should be good enough to trump
+//! useful because an honest validator will run substrate OCW code, which should be good enough to trump
 //! a mediocre or malicious signed submission (assuming in the absence of honest signed bots).
 //! If there are signed submissions, they can be checked against an absolute measure (e.g. PJR),
 //! then we can only open the unsigned phase in extreme conditions (i.e. "no good signed solution
