@@ -4838,6 +4838,7 @@ name = "pallet-contracts"
 version = "3.0.0"
 dependencies = [
  "assert_matches",
+ "bitflags",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
