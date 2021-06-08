@@ -194,12 +194,6 @@ fn should_submit_signed_transaction_on_chain() {
             });
         };
 
-        // List nodes from a boot node.
-        expect_request(
-            "https://TEST_DDC/api/rest/nodes",
-            include_bytes!("./test_data/ddc_nodes.json"),
-        );
-
         // List partitions from a boot node.
         expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?isMaster=true&active=true&from=1608336000&to=1608337114",
 					   include_bytes!("test_data/ddc_metrics_node-0.json"));
@@ -233,7 +227,7 @@ fn should_submit_signed_transaction_on_chain() {
         // Get the transaction from the worker.
         let transactions = pool_state.read().transactions.clone();
         eprintln!("Transactions: {:?}\n", transactions);
-        assert_eq!(transactions.len(), 2);
+        assert_eq!(transactions.len(), 4); // sc_get_current_period_ms + fetch_nodes + (2 x send_metrics_to_sc)
 
         // Check metrics of an app based on ddc_metrics_node-0.json and ddc_metrics_node-3.json.
         let app_id = AccountId32::from(hex!(
@@ -335,6 +329,34 @@ fn deploy_contract() -> AccountId {
         &contract_args,
         &alice,
     );
+
+	pub const ADD_DDC_NODE_SELECTOR: [u8; 4] = hex!("11a9e1b9");
+
+	let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
+	"12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".encode_to(&mut call_data);
+	"https://node-0.ddc.stage.cere.network".encode_to(&mut call_data);
+
+	let results_1 = Contracts::call(
+		Origin::signed(alice.clone()),
+		contract_id.clone(),
+		0,
+		100_000_000_000,
+		call_data,
+	);
+	results_1.unwrap();
+
+	let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
+	"12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".encode_to(&mut call_data);
+	"https://node-3.ddc.stage.cere.network".encode_to(&mut call_data);
+
+	let results_2 = Contracts::call(
+		Origin::signed(alice.clone()),
+		contract_id.clone(),
+		0,
+		100_000_000_000,
+		call_data,
+	);
+	results_2.unwrap();
 
     contract_id
 }
