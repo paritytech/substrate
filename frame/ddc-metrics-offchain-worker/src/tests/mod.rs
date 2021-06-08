@@ -227,7 +227,7 @@ fn should_submit_signed_transaction_on_chain() {
         // Get the transaction from the worker.
         let transactions = pool_state.read().transactions.clone();
         eprintln!("Transactions: {:?}\n", transactions);
-        assert_eq!(transactions.len(), 4); // sc_get_current_period_ms + fetch_nodes + (2 x send_metrics_to_sc)
+        assert_eq!(transactions.len(), 4); // (2 x send_metrics_to_sc) + (2 x send_metrics_ddn_to_sc)
 
         // Check metrics of an app based on ddc_metrics_node-0.json and ddc_metrics_node-3.json.
         let app_id = AccountId32::from(hex!(
@@ -249,6 +249,20 @@ fn should_submit_signed_transaction_on_chain() {
         assert!(
             transactions[1].ends_with(&expected_call),
             "Expected a specific call to the report_metrics function"
+        );
+
+        let expected_call =
+            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".as_bytes(), INIT_DAY_MS, 101, 202);
+        assert!(
+            transactions[2].ends_with(&expected_call),
+            "Expected a specific call to the report_metrics_ddn function"
+        );
+
+		let expected_call =
+            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".as_bytes(), INIT_DAY_MS, 10, 20);
+        assert!(
+            transactions[3].ends_with(&expected_call),
+            "Expected a specific call to the report_metrics_ddn function"
         );
     });
 }
