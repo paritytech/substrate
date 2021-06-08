@@ -150,7 +150,7 @@ pub fn run() -> Result<()> {
 			})
 		},
 		#[cfg(feature = "try-runtime")]
-		Some(Subcommand::TryRuntime(cmd)) => {
+		Some(Subcommand::TryRuntime(cmd)) =>  {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				// we don't need any of the components of new_partial, just a runtime, or a task
@@ -163,6 +163,11 @@ pub fn run() -> Result<()> {
 
 				Ok((cmd.run::<Block, Executor>(config), task_manager))
 			})
+		},
+		#[cfg(not(feature = "try-runtime"))]
+		Some(Subcommand::TryRuntime) => {
+			Err("TryRuntime wasn't enabled when building the node. \
+				You can enable it with `--features try-runtime`.".into())
 		}
 	}
 }
