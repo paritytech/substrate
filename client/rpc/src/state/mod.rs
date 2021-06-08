@@ -431,13 +431,39 @@ impl<Block, Client> State<Block, Client>
 		module.register_subscription(
 			"state_storage",
 			"state_unsubscribeStorage",
-			|_params, _sink, ctx| {
+			|params, mut sink, ctx| {
 				let executor = ctx.executor.clone();
+				let keys = params.one::<Option<Vec<StorageKey>>>()?;
+				let stream = ctx.client.storage_changes_notification_stream(
+					keys.as_ref().map(|keys| &**keys),
+					None
+				).unwrap();
 				let fut = async move {
-					()
-				};
+					let stream = stream.map(|(block, changes)| {
+						StorageChangeSet {
+							block,
+							changes: changes.iter().filter_map(|(o_sk, k, v)| {
+								// TODO: figure out why we check for None here
+								if o_sk.is_none() {
+									Some((k.clone(), v.cloned()))
+								} else {
+									None
+								}
+							}).collect(),
+						}
+					});
+					stream.for_each(|data| {
+						match sink.send(&data) {
+							Ok(_) =>  future::ready(()),
+							Err(e) => {
+								log::error!("Could not send data to the state_storage subscriber: {:?}", e);
+								future::ready(())
+							},
+						}
+					}).await;
+				}.boxed();
 
-				executor.execute_new(Box::pin(fut));
+				executor.execute_new(fut);
 				Ok(())
 		})?;
 
