@@ -27,7 +27,6 @@ pub fn expand_outer_event(
 ) -> syn::Result<TokenStream> {
 	let mut event_variants = TokenStream::new();
 	let mut event_conversions = TokenStream::new();
-	let mut events_metadata = TokenStream::new();
 
 	for pallet_decl in pallet_decls {
 		if let Some(pallet_entry) = pallet_decl.find_part("Event") {
@@ -55,7 +54,6 @@ pub fn expand_outer_event(
 
 			event_variants.extend(expand_event_variant(runtime, path, index, instance, generics));
 			event_conversions.extend(expand_event_conversion(scrate, path, instance, &pallet_event));
-			events_metadata.extend(expand_event_metadata(scrate, path, &pallet_event));
 		}
 	}
 
@@ -133,14 +131,4 @@ fn expand_event_conversion(
 			}
 		}
 	}
-}
-
-fn expand_event_metadata(
-	scrate: &TokenStream,
-	path: &PalletPath,
-	pallet_event: &TokenStream,
-) -> TokenStream {
-	let mod_name = path.mod_name();
-
-	quote!{(stringify!(#mod_name), #scrate::event::FnEncode(#pallet_event::metadata)),}
 }
