@@ -442,11 +442,13 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				assert!(
-					frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
-					"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
-					account,
-				);
+				if frame_system::Pallet::<T>::inc_consumers(&account).is_err() {
+					// This will leak a provider reference, however it only happens once (at
+					// genesis) so it's really not a big deal and we assume that the user wants to
+					// do this since it's the only way a non-endowed account can contain a session
+					// key.
+					frame_system::Pallet::<T>::inc_providers(&account);
+				}
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -750,11 +752,11 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
-		frame_system::Pallet::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
+		ensure!(frame_system::Pallet::<T>::can_inc_consumer(&account), Error::<T>::NoAccount);
 		let old_keys = Self::inner_set_keys(&who, keys)?;
-		if old_keys.is_some() {
-			let _ = frame_system::Pallet::<T>::dec_consumers(&account);
-			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
+		if old_keys.is_none() {
+			let assertion = frame_system::Pallet::<T>::inc_consumers(&account).is_ok();
+			debug_assert!(assertion, "can_inc_consumer() returned true; no change since; qed");
 		}
 
 		Ok(())
@@ -777,6 +779,10 @@ impl<T: Config> Module<T> {
 				Self::key_owner(*id, key).map_or(true, |owner| &owner == who),
 				Error::<T>::DuplicatedKey,
 			);
+		}
+
+		for id in T::Keys::key_ids() {
+			let key = keys.get_raw(*id);
 
 			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {
 				if key == old {
@@ -819,7 +825,8 @@ impl<T: Config> Module<T> {
 		<NextKeys<T>>::insert(v, keys);
 	}
 
-	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
+	/// Query the owner of a session key by returning the owner's validator ID.
+	pub fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
 		<KeyOwner<T>>::get((id, key_data))
 	}
 

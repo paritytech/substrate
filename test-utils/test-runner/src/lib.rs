@@ -228,10 +228,10 @@
 
 use manual_seal::consensus::ConsensusDataProvider;
 use sc_executor::NativeExecutionDispatch;
-use sc_service::{Configuration, TFullBackend, TFullClient, TaskManager};
+use sc_service::{Configuration, TFullBackend, TFullClient, TaskManager, TaskExecutor};
 use sp_api::{ConstructRuntimeApi, TransactionFor};
 use sp_consensus::{BlockImport, SelectChain};
-use sp_inherents::InherentDataProviders;
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::{Block as BlockT, SignedExtension};
 use std::sync::Arc;
@@ -242,6 +242,7 @@ mod host_functions;
 
 pub use host_functions::*;
 pub use node::*;
+pub use utils::*;
 
 /// Wrapper trait for concrete type required by this testing framework.
 pub trait ChainInfo: Sized {
@@ -276,8 +277,14 @@ pub trait ChainInfo: Sized {
 	/// The signed extras required by the runtime
 	type SignedExtras: SignedExtension;
 
+	/// The inherent data providers.
+	type InherentDataProviders: InherentDataProvider + 'static;
+
 	/// Signed extras, this function is caled in an externalities provided environment.
 	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras;
+
+	/// config factory
+	fn config(task_executor: TaskExecutor) -> Configuration;
 
 	/// Attempt to create client parts, including block import,
 	/// select chain strategy and consensus data provider.
@@ -289,7 +296,13 @@ pub trait ChainInfo: Sized {
 			Arc<TFullBackend<Self::Block>>,
 			SyncCryptoStorePtr,
 			TaskManager,
-			InherentDataProviders,
+			Box<
+				dyn CreateInherentDataProviders<
+					Self::Block,
+					(),
+					InherentDataProviders = Self::InherentDataProviders
+				>
+			>,
 			Option<
 				Box<
 					dyn ConsensusDataProvider<

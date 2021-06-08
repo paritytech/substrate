@@ -136,6 +136,7 @@ impl TransactionsHandlerPrototype {
 	pub fn set_config(&self) -> config::NonDefaultSetConfig {
 		config::NonDefaultSetConfig {
 			notifications_protocol: self.protocol_name.clone(),
+			fallback_names: Vec::new(),
 			max_notification_size: MAX_TRANSACTIONS_SIZE,
 			set_config: config::SetConfig {
 				in_peers: 0,
@@ -318,7 +319,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 				}
 			},
 
-			Event::NotificationStreamOpened { remote, protocol, role } if protocol == self.protocol_name => {
+			Event::NotificationStreamOpened { remote, protocol, role, .. } if protocol == self.protocol_name => {
 				let _was_in = self.peers.insert(remote, Peer {
 					known_transactions: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_TRANSACTIONS)
 						.expect("Constant is nonzero")),
@@ -360,7 +361,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 	) {
 		// sending transaction to light node is considered a bad behavior
 		if matches!(self.local_role, config::Role::Light) {
-			trace!(target: "sync", "Peer {} is trying to send transactions to the light node", who);
+			debug!(target: "sync", "Peer {} is trying to send transactions to the light node", who);
 			self.service.disconnect_peer(who, self.protocol_name.clone());
 			self.service.report_peer(who, rep::UNEXPECTED_TRANSACTIONS);
 			return;

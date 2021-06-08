@@ -46,7 +46,9 @@ pub use std_reexport::*;
 #[cfg(feature = "std")]
 pub use execution::*;
 #[cfg(feature = "std")]
-pub use log::{debug, warn, trace, error as log_error};
+pub use log::{debug, warn, error as log_error};
+#[cfg(feature = "std")]
+pub use tracing::trace;
 
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.
@@ -176,7 +178,7 @@ mod execution {
 	use codec::{Decode, Encode, Codec};
 	use sp_core::{
 		storage::ChildInfo, NativeOrEncoded, NeverNativeValue, hexdisplay::HexDisplay,
-		traits::{CodeExecutor, CallInWasmExt, RuntimeCode, SpawnNamed},
+		traits::{CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
 	};
 	use sp_externalities::Extensions;
 
@@ -337,7 +339,7 @@ mod execution {
 			runtime_code: &'a RuntimeCode,
 			spawn_handle: impl SpawnNamed + Send + 'static,
 		) -> Self {
-			extensions.register(CallInWasmExt::new(exec.clone()));
+			extensions.register(ReadRuntimeVersionExt::new(exec.clone()));
 			extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
 
 			Self {
@@ -941,15 +943,11 @@ mod tests {
 		}
 	}
 
-	impl sp_core::traits::CallInWasm for DummyCodeExecutor {
-		fn call_in_wasm(
+	impl sp_core::traits::ReadRuntimeVersion for DummyCodeExecutor {
+		fn read_runtime_version(
 			&self,
 			_: &[u8],
-			_: Option<Vec<u8>>,
-			_: &str,
-			_: &[u8],
 			_: &mut dyn Externalities,
-			_: sp_core::traits::MissingHostFunctions,
 		) -> std::result::Result<Vec<u8>, String> {
 			unimplemented!("Not required in tests.")
 		}
@@ -1404,14 +1402,22 @@ mod tests {
 		}
 	}
 
+	fn test_compact(remote_proof: StorageProof, remote_root: &sp_core::H256) -> StorageProof {
+		let compact_remote_proof = remote_proof.into_compact_proof::<BlakeTwo256>(
+			remote_root.clone(),
+		).unwrap();
+		compact_remote_proof.to_storage_proof::<BlakeTwo256>(Some(remote_root)).unwrap().0
+	}
+
 	#[test]
 	fn prove_read_and_proof_check_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
+		let remote_proof = test_compact(remote_proof, &remote_root);
  		// check proof locally
 		let local_result1 = read_proof_check::<BlakeTwo256, _>(
 			remote_root,
@@ -1431,12 +1437,13 @@ mod tests {
 		assert_eq!(local_result2, false);
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
 			child_info,
 			&[b"value3"],
 		).unwrap();
+		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone(),
@@ -1457,6 +1464,50 @@ mod tests {
 			local_result2.into_iter().collect::<Vec<_>>(),
 			vec![(b"value2".to_vec(), None)],
 		);
+	}
+
+	#[test]
+	fn compact_multiple_child_trie() {
+		// this root will be queried
+		let child_info1 = ChildInfo::new_default(b"sub1");
+		// this root will not be include in proof
+		let child_info2 = ChildInfo::new_default(b"sub2");
+		// this root will be include in proof
+		let child_info3 = ChildInfo::new_default(b"sub");
+		let mut remote_backend = trie_backend::tests::test_trie();
+		let (remote_root, transaction) = remote_backend.full_storage_root(
+			std::iter::empty(),
+			vec![
+				(&child_info1, vec![
+					(&b"key1"[..], Some(&b"val2"[..])),
+					(&b"key2"[..], Some(&b"val3"[..])),
+				].into_iter()),
+				(&child_info2, vec![
+					(&b"key3"[..], Some(&b"val4"[..])),
+					(&b"key4"[..], Some(&b"val5"[..])),
+				].into_iter()),
+				(&child_info3, vec![
+					(&b"key5"[..], Some(&b"val6"[..])),
+					(&b"key6"[..], Some(&b"val7"[..])),
+				].into_iter()),
+			].into_iter(),
+		);
+		remote_backend.backend_storage_mut().consolidate(transaction);
+		remote_backend.essence.set_root(remote_root.clone());
+		let remote_proof = prove_child_read(
+			remote_backend,
+			&child_info1,
+			&[b"key1"],
+		).unwrap();
+		let remote_proof = test_compact(remote_proof, &remote_root);
+		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
+			remote_root,
+			remote_proof.clone(),
+			&child_info1,
+			&[b"key1"],
+		).unwrap();
+		assert_eq!(local_result1.len(), 1);
+		assert_eq!(local_result1.get(&b"key1"[..]), Some(&Some(b"val2".to_vec())));
 	}
 
 	#[test]

@@ -17,15 +17,67 @@
 
 //! Traits for dealing with the idea of membership.
 
-use sp_std::prelude::*;
+use sp_std::{prelude::*, marker::PhantomData};
 
 /// A trait for querying whether a type can be said to "contain" a value.
-pub trait Contains<T: Ord> {
+pub trait Contains<T> {
 	/// Return `true` if this "contains" the given value `t`.
-	fn contains(t: &T) -> bool { Self::sorted_members().binary_search(t).is_ok() }
+	fn contains(t: &T) -> bool;
+}
 
+/// A `Contains` implementation which always returns `true`.
+pub struct All<T>(PhantomData<T>);
+impl<T> Contains<T> for All<T> {
+	fn contains(_: &T) -> bool { true }
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<T> Contains<T> for Tuple {
+	fn contains(t: &T) -> bool {
+		for_tuples!( #(
+			if Tuple::contains(t) { return true }
+		)* );
+		false
+	}
+}
+
+/// Create a type which implements the `Contains` trait for a particular type with syntax similar
+/// to `matches!`.
+#[macro_export]
+macro_rules! match_type {
+	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat $( | $ptail:pat )* } ; ) => {
+		pub struct $n;
+		impl $crate::traits::Contains<$t> for $n {
+			fn contains(l: &$t) -> bool {
+				matches!(l, $phead $( | $ptail )* )
+			}
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	match_type! {
+		pub type OneOrTenToTwenty: impl Contains<u8> = { 1 | 10..=20 };
+	}
+
+	#[test]
+	fn match_type_works() {
+		for i in 0..=255 {
+			assert_eq!(OneOrTenToTwenty::contains(&i), i == 1 || i >= 10 && i <= 20);
+		}
+	}
+}
+
+/// A trait for a set which can enumerate its members in order.
+pub trait SortedMembers<T: Ord> {
 	/// Get a vector of all members in the set, ordered.
 	fn sorted_members() -> Vec<T>;
+
+	/// Return `true` if this "contains" the given value `t`.
+	fn contains(t: &T) -> bool { Self::sorted_members().binary_search(t).is_ok() }
 
 	/// Get the number of items in the set.
 	fn count() -> usize { Self::sorted_members().len() }
@@ -36,6 +88,21 @@ pub trait Contains<T: Ord> {
 	/// **Should be used for benchmarking only!!!**
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(_t: &T) { unimplemented!() }
+}
+
+/// Adapter struct for turning an `OrderedMembership` impl into a `Contains` impl.
+pub struct AsContains<OM>(PhantomData<(OM,)>);
+impl<T: Ord + Eq, OM: SortedMembers<T>> Contains<T> for AsContains<OM> {
+	fn contains(t: &T) -> bool { OM::contains(t) }
+}
+
+/// Trivial utility for implementing `Contains`/`OrderedMembership` with a `Vec`.
+pub struct IsInVec<T>(PhantomData<T>);
+impl<X: Eq, T: super::Get<Vec<X>>> Contains<X> for IsInVec<T> {
+	fn contains(t: &X) -> bool { T::get().contains(t) }
+}
+impl<X: Ord + PartialOrd, T: super::Get<Vec<X>>> SortedMembers<X> for IsInVec<T> {
+	fn sorted_members() -> Vec<X> { let mut r = T::get(); r.sort(); r }
 }
 
 /// A trait for querying bound for the length of an implementation of `Contains`

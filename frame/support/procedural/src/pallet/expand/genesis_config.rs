@@ -29,6 +29,8 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 	let genesis_config_item = &mut def.item.content.as_mut()
 		.expect("Checked by def parser").1[genesis_config.index];
 
+	let serde_crate = format!("{}::serde", frame_support);
+
 	match genesis_config_item {
 		syn::Item::Enum(syn::ItemEnum { attrs, ..}) |
 		syn::Item::Struct(syn::ItemStruct { attrs, .. }) |
@@ -50,6 +52,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 			attrs.push(syn::parse_quote!( #[serde(deny_unknown_fields)] ));
 			attrs.push(syn::parse_quote!( #[serde(bound(serialize = ""))] ));
 			attrs.push(syn::parse_quote!( #[serde(bound(deserialize = ""))] ));
+			attrs.push(syn::parse_quote!( #[serde(crate = #serde_crate)] ));
 		},
 		_ => unreachable!("Checked by genesis_config parser"),
 	}

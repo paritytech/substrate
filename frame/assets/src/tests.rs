@@ -23,10 +23,6 @@ use sp_runtime::TokenError;
 use frame_support::{assert_ok, assert_noop, traits::Currency};
 use pallet_balances::Error as BalancesError;
 
-fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-}
-
 #[test]
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
@@ -401,10 +397,7 @@ fn transferring_less_than_one_unit_is_fine() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 0));
-		assert_eq!(
-			last_event(),
-			mock::Event::pallet_assets(crate::Event::Transferred(0, 1, 2, 0)),
-		);
+		System::assert_last_event(mock::Event::pallet_assets(crate::Event::Transferred(0, 1, 2, 0)));
 	});
 }
 
@@ -492,9 +485,6 @@ fn set_metadata_should_work() {
 	});
 }
 
-// TODO: tests for force_set_metadata, force_clear_metadata, force_asset_status
-// https://github.com/paritytech/substrate/issues/8470
-
 #[test]
 fn freezer_should_work() {
 	new_test_ext().execute_with(|| {
@@ -554,5 +544,84 @@ fn imbalances_should_work() {
 		assert!(Assets::resolve(&1, imb1).is_ok());
 		assert_eq!(Assets::balance(0, 1), 30);
 		assert_eq!(Assets::total_supply(0), 30);
+	});
+}
+
+#[test]
+fn force_metadata_should_work() {
+	new_test_ext().execute_with(|| {
+		//force set metadata works
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::force_set_metadata(Origin::root(), 0, vec![0u8; 10], vec![0u8; 10], 8, false));
+		assert!(Metadata::<Test>::contains_key(0));
+
+		//overwrites existing metadata
+		let asset_original_metadata = Metadata::<Test>::get(0);
+		assert_ok!(Assets::force_set_metadata(Origin::root(), 0, vec![1u8; 10], vec![1u8; 10], 8, false));
+		assert_ne!(Metadata::<Test>::get(0), asset_original_metadata);
+
+		//attempt to set metadata for non-existent asset class
+		assert_noop!(
+			Assets::force_set_metadata(Origin::root(), 1, vec![0u8; 10], vec![0u8; 10], 8, false),
+			Error::<Test>::Unknown
+		);
+
+		//string length limit check
+		let limit = StringLimit::get() as usize;
+		assert_noop!(
+			Assets::force_set_metadata(Origin::root(), 0, vec![0u8; limit + 1], vec![0u8; 10], 8, false),
+			Error::<Test>::BadMetadata
+		);
+		assert_noop!(
+			Assets::force_set_metadata(Origin::root(), 0, vec![0u8; 10], vec![0u8; limit + 1], 8, false),
+			Error::<Test>::BadMetadata
+		);
+
+		//force clear metadata works
+		assert!(Metadata::<Test>::contains_key(0));
+		assert_ok!(Assets::force_clear_metadata(Origin::root(), 0));
+		assert!(!Metadata::<Test>::contains_key(0));
+
+		//Error handles clearing non-existent asset class
+		assert_noop!(Assets::force_clear_metadata(Origin::root(), 1), Error::<Test>::Unknown);
+	});
+}
+
+#[test]
+fn force_asset_status_should_work(){
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 10);
+		Balances::make_free_balance_be(&2, 10);
+		assert_ok!(Assets::create(Origin::signed(1), 0, 1, 30));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 50));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 150));
+
+		//force asset status to change min_balance > balance
+		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 100, true, false));
+		assert_eq!(Assets::balance(0, 1), 50);
+
+		//account can recieve assets for balance < min_balance
+		assert_ok!(Assets::transfer(Origin::signed(2), 0, 1, 1));
+		assert_eq!(Assets::balance(0, 1), 51);
+
+		//account on outbound transfer will cleanup for balance < min_balance
+		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 1));
+		assert_eq!(Assets::balance(0,1), 0);
+
+		//won't create new account with balance below min_balance
+		assert_noop!(Assets::transfer(Origin::signed(2), 0, 3, 50), TokenError::BelowMinimum);
+
+		//force asset status will not execute for non-existent class
+		assert_noop!(
+			Assets::force_asset_status(Origin::root(), 1, 1, 1, 1, 1, 90, true, false),
+			Error::<Test>::Unknown
+		);
+
+		//account drains to completion when funds dip below min_balance
+		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 110, true, false));
+		assert_ok!(Assets::transfer(Origin::signed(2), 0, 1, 110));
+		assert_eq!(Assets::balance(0, 1), 200);
+		assert_eq!(Assets::balance(0, 2), 0);
+		assert_eq!(Assets::total_supply(0), 200);
 	});
 }

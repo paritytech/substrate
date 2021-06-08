@@ -78,6 +78,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types! {
@@ -86,6 +87,8 @@ parameter_types! {
 
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -95,13 +98,13 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub const LotteryModuleId: ModuleId = ModuleId(*b"py/lotto");
-	pub const MaxCalls: usize = 2;
+	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
+	pub const MaxCalls: u32 = 2;
 	pub const MaxGenerateRandom: u32 = 10;
 }
 
 impl Config for Test {
-	type ModuleId = LotteryModuleId;
+	type PalletId = LotteryPalletId;
 	type Call = Call;
 	type Currency = Balances;
 	type Randomness = TestRandomness<Self>;

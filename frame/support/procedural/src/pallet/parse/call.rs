@@ -45,6 +45,7 @@ pub struct CallDef {
 	pub docs: Vec<syn::Lit>,
 }
 
+#[derive(Clone)]
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
 pub struct CallVariantDef {
 	/// Function name.

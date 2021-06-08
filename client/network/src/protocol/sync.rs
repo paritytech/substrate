@@ -505,9 +505,10 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Number of active sync requests.
+	/// Number of active forks requests. This includes
+	/// requests that are pending or could be issued right away.
 	pub fn num_sync_requests(&self) -> usize {
-		self.fork_targets.len()
+		self.fork_targets.values().filter(|f| f.number <= self.best_queued_number).count()
 	}
 
 	/// Number of downloaded blocks.
@@ -631,6 +632,11 @@ impl<B: BlockT> ChainSync<B> {
 		})
 	}
 
+	/// Clear all pending justification requests.
+	pub fn clear_justification_requests(&mut self) {
+		self.extra_justifications.reset();
+	}
+
 	/// Request syncing for the given block from given set of peers.
 	// The implementation is similar to on_block_announce with unknown parent hash.
 	pub fn set_sync_fork_request(
@@ -737,10 +743,19 @@ impl<B: BlockT> ChainSync<B> {
 			// If our best queued is more than `MAX_BLOCKS_TO_LOOK_BACKWARDS` blocks away from the
 			// common number, the peer best number is higher than our best queued and the common
 			// number is smaller than the last finalized block number, we should do an ancestor
-			// search to find a better common block.
+			// search to find a better common block. If the queue is full we wait till all blocks are
+			// imported though.
 			if best_queued.saturating_sub(peer.common_number) > MAX_BLOCKS_TO_LOOK_BACKWARDS.into()
 				&& best_queued < peer.best_number && peer.common_number < last_finalized
+				&& queue.len() <= MAJOR_SYNC_BLOCKS.into()
 			{
+				trace!(
+					target: "sync",
+					"Peer {:?} common block {} too far behind of our best {}. Starting ancestry search.",
+					id,
+					peer.common_number,
+					best_queued,
+				);
 				let current = std::cmp::min(peer.best_number, best_queued);
 				peer.state = PeerSyncState::AncestorSearch {
 					current,
@@ -803,7 +818,7 @@ impl<B: BlockT> ChainSync<B> {
 		response: BlockResponse<B>
 	) -> Result<OnBlockData<B>, BadPeer> {
 		self.downloaded_blocks += response.blocks.len();
-		let mut new_blocks: Vec<IncomingBlock<B>> =
+		let new_blocks: Vec<IncomingBlock<B>> =
 			if let Some(peer) = self.peers.get_mut(who) {
 				let mut blocks = response.blocks;
 				if request.as_ref().map_or(false, |r| r.direction == message::Direction::Descending) {
@@ -823,8 +838,9 @@ impl<B: BlockT> ChainSync<B> {
 								.drain(self.best_queued_number + One::one())
 								.into_iter()
 								.map(|block_data| {
-									let justifications =
-										legacy_justification_mapping(block_data.block.justification);
+									let justifications = block_data.block.justifications.or(
+										legacy_justification_mapping(block_data.block.justification)
+									);
 									IncomingBlock {
 										hash: block_data.block.hash,
 										header: block_data.block.header,
@@ -844,11 +860,14 @@ impl<B: BlockT> ChainSync<B> {
 							}
 							validate_blocks::<B>(&blocks, who, Some(request))?;
 							blocks.into_iter().map(|b| {
+								let justifications = b.justifications.or(
+									legacy_justification_mapping(b.justification)
+								);
 								IncomingBlock {
 									hash: b.hash,
 									header: b.header,
 									body: b.body,
-									justifications: legacy_justification_mapping(b.justification),
+									justifications,
 									origin: Some(who.clone()),
 									allow_missing_state: true,
 									import_existing: false,
@@ -953,11 +972,14 @@ impl<B: BlockT> ChainSync<B> {
 					// When request.is_none() this is a block announcement. Just accept blocks.
 					validate_blocks::<B>(&blocks, who, None)?;
 					blocks.into_iter().map(|b| {
+						let justifications = b.justifications.or(
+							legacy_justification_mapping(b.justification)
+						);
 						IncomingBlock {
 							hash: b.hash,
 							header: b.header,
 							body: b.body,
-							justifications: legacy_justification_mapping(b.justification),
+							justifications,
 							origin: Some(who.clone()),
 							allow_missing_state: true,
 							import_existing: false,
@@ -969,6 +991,13 @@ impl<B: BlockT> ChainSync<B> {
 				return Err(BadPeer(who.clone(), rep::NOT_REQUESTED));
 			};
 
+		Ok(self.validate_and_queue_blocks(new_blocks))
+	}
+
+	fn validate_and_queue_blocks(
+		&mut self,
+		mut new_blocks: Vec<IncomingBlock<B>>,
+	) -> OnBlockData<B> {
 		let orig_len = new_blocks.len();
 		new_blocks.retain(|b| !self.queue_blocks.contains(&b.hash));
 		if new_blocks.len() != orig_len {
@@ -991,10 +1020,8 @@ impl<B: BlockT> ChainSync<B> {
 			);
 			self.on_block_queued(h, n)
 		}
-
 		self.queue_blocks.extend(new_blocks.iter().map(|b| b.hash));
-
-		Ok(OnBlockData::Import(origin, new_blocks))
+		OnBlockData::Import(origin, new_blocks)
 	}
 
 	/// Handle a response from the remote to a justification request that we made.
@@ -1028,7 +1055,7 @@ impl<B: BlockT> ChainSync<B> {
 					return Err(BadPeer(who, rep::BAD_JUSTIFICATION));
 				}
 
-				block.justification
+				block.justifications.or(legacy_justification_mapping(block.justification))
 			} else {
 				// we might have asked the peer for a justification on a block that we assumed it
 				// had but didn't (regardless of whether it had a justification for it or not).
@@ -1043,7 +1070,7 @@ impl<B: BlockT> ChainSync<B> {
 
 			if let Some((peer, hash, number, j)) = self
 				.extra_justifications
-				.on_response(who, legacy_justification_mapping(justification))
+				.on_response(who, justification)
 			{
 				return Ok(OnBlockJustification::Import { peer, hash, number, justifications: j })
 			}
@@ -1095,7 +1122,7 @@ impl<B: BlockT> ChainSync<B> {
 							number,
 							hash
 						);
-						self.extra_justifications.reset()
+						self.clear_justification_requests();
 					}
 
 					if aux.needs_justification {
@@ -1352,7 +1379,7 @@ impl<B: BlockT> ChainSync<B> {
 					PreValidateBlockAnnounce::Failure { who, disconnect }
 				}
 				Err(e) => {
-					error!(
+					debug!(
 						target: "sync",
 						"💔 Block announcement validation of block {:?} errored: {}",
 						hash,
@@ -1421,22 +1448,35 @@ impl<B: BlockT> ChainSync<B> {
 		&mut self,
 		pre_validation_result: PreValidateBlockAnnounce<B::Header>,
 	) -> PollBlockAnnounceValidation<B::Header> {
-		trace!(
-			target: "sync",
-			"Finished block announce validation: {:?}",
-			pre_validation_result,
-		);
-
 		let (announce, is_best, who) = match pre_validation_result {
 			PreValidateBlockAnnounce::Failure { who, disconnect } => {
+				debug!(
+					target: "sync",
+					"Failed announce validation: {:?}, disconnect: {}",
+					who,
+					disconnect,
+				);
 				return PollBlockAnnounceValidation::Failure { who, disconnect }
 			},
 			PreValidateBlockAnnounce::Process { announce, is_new_best, who } => {
 				(announce, is_new_best, who)
 			},
-			PreValidateBlockAnnounce::Error { .. } | PreValidateBlockAnnounce::Skip =>
-				return PollBlockAnnounceValidation::Skip,
+			PreValidateBlockAnnounce::Error { .. } | PreValidateBlockAnnounce::Skip => {
+				debug!(
+					target: "sync",
+					"Ignored announce validation",
+				);
+				return PollBlockAnnounceValidation::Skip
+			},
 		};
+
+		trace!(
+			target: "sync",
+			"Finished block announce validation: from {:?}: {:?}. local_best={}",
+			who,
+			announce.summary(),
+			is_best,
+		);
 
 		let number = *announce.header.number();
 		let hash = announce.header.hash();
@@ -1508,13 +1548,13 @@ impl<B: BlockT> ChainSync<B> {
 			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
-		if number <= self.best_queued_number {
+		if self.status().state == SyncState::Idle {
 			trace!(
 				target: "sync",
 				"Added sync target for block announced from {}: {} {:?}",
 				who,
 				hash,
-				announce.header,
+				announce.summary(),
 			);
 			self.fork_targets
 				.entry(hash.clone())
@@ -1526,16 +1566,42 @@ impl<B: BlockT> ChainSync<B> {
 				.peers.insert(who.clone());
 		}
 
-		trace!(target: "sync", "Announce validation result is nothing");
 		PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 	}
 
 	/// Call when a peer has disconnected.
-	pub fn peer_disconnected(&mut self, who: &PeerId) {
+	/// Canceled obsolete block request may result in some blocks being ready for
+	/// import, so this functions checks for such blocks and returns them.
+	pub fn peer_disconnected(&mut self, who: &PeerId) -> Option<OnBlockData<B>> {
 		self.blocks.clear_peer_download(who);
 		self.peers.remove(who);
 		self.extra_justifications.peer_disconnected(who);
 		self.pending_requests.set_all();
+		self.fork_targets.retain(|_, target| {
+			target.peers.remove(who);
+			!target.peers.is_empty()
+		});
+		let blocks: Vec<_> = self.blocks
+			.drain(self.best_queued_number + One::one())
+			.into_iter()
+			.map(|block_data| {
+				let justifications =
+					legacy_justification_mapping(block_data.block.justification);
+				IncomingBlock {
+					hash: block_data.block.hash,
+					header: block_data.block.header,
+					body: block_data.block.body,
+					justifications,
+					origin: block_data.origin,
+					allow_missing_state: true,
+					import_existing: false,
+				}
+			}).collect();
+		if !blocks.is_empty() {
+			Some(self.validate_and_queue_blocks(blocks))
+		} else {
+			None
+		}
 	}
 
 	/// Restart the sync process. This will reset all pending block requests and return an iterator
@@ -1607,7 +1673,7 @@ impl<B: BlockT> ChainSync<B> {
 // This is purely during a backwards compatible transitionary period and should be removed
 // once we can assume all nodes can send and receive multiple Justifications
 // The ID tag is hardcoded here to avoid depending on the GRANDPA crate.
-// TODO: https://github.com/paritytech/substrate/issues/8172
+// See: https://github.com/paritytech/substrate/issues/8172
 fn legacy_justification_mapping(justification: Option<EncodedJustification>) -> Option<Justifications> {
 	justification.map(|just| (*b"FRNK", just).into())
 }
@@ -2115,6 +2181,7 @@ mod test {
 					receipt: None,
 					message_queue: None,
 					justification: None,
+					justifications: None,
 				}
 			).collect(),
 		}
@@ -2338,6 +2405,9 @@ mod test {
 					.for_each(|b| block_on(client.import_as_final(BlockOrigin::Own, b)).unwrap());
 		}
 
+		// "Wait" for the queue to clear
+		sync.queue_blocks.clear();
+
 		// Let peer2 announce that it finished syncing
 		send_block_announce(best_block.header().clone(), &peer_id2, &mut sync);
 
@@ -2512,5 +2582,38 @@ mod test {
 			1,
 			&peer_id1,
 		);
+	}
+
+	#[test]
+	fn removes_target_fork_on_disconnect() {
+		sp_tracing::try_init_simple();
+		let mut client = Arc::new(TestClientBuilder::new().build());
+		let blocks = (0..3)
+			.map(|_| build_block(&mut client, None, false))
+			.collect::<Vec<_>>();
+
+		let info = client.info();
+
+		let mut sync = ChainSync::new(
+			Roles::AUTHORITY,
+			client.clone(),
+			&info,
+			Box::new(DefaultBlockAnnounceValidator),
+			1,
+		);
+
+		let peer_id1 = PeerId::random();
+		let common_block = blocks[1].clone();
+		// Connect the node we will sync from
+		sync.new_peer(peer_id1.clone(), common_block.hash(), *common_block.header().number()).unwrap();
+
+		// Create a "new" header and announce it
+		let mut header = blocks[0].header().clone();
+		header.number = 4;
+		send_block_announce(header, &peer_id1, &mut sync);
+		assert!(sync.fork_targets.len() == 1);
+
+		sync.peer_disconnected(&peer_id1);
+		assert!(sync.fork_targets.len() == 0);
 	}
 }

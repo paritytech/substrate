@@ -68,6 +68,30 @@ impl ImportResult {
 
 		ImportResult::Imported(aux)
 	}
+
+	/// Handles any necessary request for justifications (or clearing of pending requests) based on
+	/// the outcome of this block import.
+	pub fn handle_justification<B>(
+		&self,
+		hash: &B::Hash,
+		number: NumberFor<B>,
+		justification_sync_link: &mut dyn JustificationSyncLink<B>,
+	) where
+		B: BlockT,
+	{
+		match self {
+			ImportResult::Imported(aux) => {
+				if aux.clear_justification_requests {
+					justification_sync_link.clear_justification_requests();
+				}
+
+				if aux.needs_justification {
+					justification_sync_link.request_justification(hash, number);
+				}
+			}
+			_ => {}
+		}
+	}
 }
 
 /// Block data origin.
@@ -237,13 +261,10 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
 		let (k, v) = self.intermediates.remove_entry(key).ok_or(Error::NoIntermediate)?;
 
-		match v.downcast::<T>() {
-			Ok(v) => Ok(v),
-			Err(v) => {
+		v.downcast::<T>().or_else(|v| {
 				self.intermediates.insert(k, v);
 				Err(Error::InvalidIntermediate)
-			},
-		}
+		})
 	}
 
 	/// Get a reference to a given intermediate.
@@ -356,4 +377,33 @@ pub trait JustificationImport<B: BlockT> {
 		number: NumberFor<B>,
 		justification: Justification,
 	) -> Result<(), Self::Error>;
+}
+
+/// Control the synchronization process of block justifications.
+///
+/// When importing blocks different consensus engines might require that
+/// additional finality data is provided (i.e. a justification for the block).
+/// This trait abstracts the required methods to issue those requests
+pub trait JustificationSyncLink<B: BlockT>: Send + Sync {
+	/// Request a justification for the given block.
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>);
+
+	/// Clear all pending justification requests.
+	fn clear_justification_requests(&self);
+}
+
+impl<B: BlockT> JustificationSyncLink<B> for () {
+	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
+
+	fn clear_justification_requests(&self) {}
+}
+
+impl<B: BlockT, L: JustificationSyncLink<B>> JustificationSyncLink<B> for Arc<L> {
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		L::request_justification(&*self, hash, number);
+	}
+
+	fn clear_justification_requests(&self) {
+		L::clear_justification_requests(&*self);
+	}
 }

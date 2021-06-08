@@ -22,10 +22,10 @@ use super::ConsensusDataProvider;
 use crate::Error;
 use codec::Encode;
 use std::{borrow::Cow, sync::{Arc, atomic}, time::SystemTime};
-use sc_client_api::AuxStore;
+use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus_babe::{
-	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate,
-	register_babe_inherent_data_provider, INTERMEDIATE_KEY, find_pre_digest,
+	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY,
+	find_pre_digest,
 };
 use sc_consensus_epochs::{SharedEpochChanges, descendent_query, ViableEpochDescriptor, EpochHeader};
 use sp_keystore::SyncCryptoStorePtr;
@@ -38,12 +38,12 @@ use sp_consensus_babe::{
 	BabeApi, inherents::BabeInherentData, ConsensusLog, BABE_ENGINE_ID, AuthorityId,
 	digests::{PreDigest, SecondaryPlainPreDigest, NextEpochDescriptor}, BabeAuthorityWeight,
 };
-use sp_inherents::{InherentDataProviders, InherentData, ProvideInherentData, InherentIdentifier};
+use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
 	traits::{DigestItemFor, DigestFor, Block as BlockT, Zero, Header},
 	generic::{Digest, BlockId},
 };
-use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER, TimestampInherentData};
+use sp_timestamp::{InherentType, INHERENT_IDENTIFIER, TimestampInherentData};
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
@@ -67,13 +67,16 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 impl<B, C> BabeConsensusDataProvider<B, C>
 	where
 		B: BlockT,
-		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + HeaderMetadata<B, Error = sp_blockchain::Error>,
+		C: AuxStore
+			+ HeaderBackend<B>
+			+ ProvideRuntimeApi<B>
+			+ HeaderMetadata<B, Error = sp_blockchain::Error>
+			+ UsageProvider<B>,
 		C::Api: BabeApi<B>,
 {
 	pub fn new(
 		client: Arc<C>,
 		keystore: SyncCryptoStorePtr,
-		provider: &InherentDataProviders,
 		epoch_changes: SharedEpochChanges<B, Epoch>,
 		authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	) -> Result<Self, Error> {
@@ -82,10 +85,6 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 		}
 
 		let config = Config::get_or_compute(&*client)?;
-		let timestamp_provider = SlotTimestampProvider::new(client.clone())?;
-
-		provider.register_provider(timestamp_provider)?;
-		register_babe_inherent_data_provider(provider, config.slot_duration())?;
 
 		Ok(Self {
 			config,
@@ -125,13 +124,18 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 	where
 		B: BlockT,
-		C: AuxStore + HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + ProvideRuntimeApi<B>,
+		C: AuxStore
+			+ HeaderBackend<B>
+			+ HeaderMetadata<B, Error = sp_blockchain::Error>
+			+ UsageProvider<B>
+			+ ProvideRuntimeApi<B>,
 		C::Api: BabeApi<B>,
 {
 	type Transaction = TransactionFor<C, B>;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<DigestFor<B>, Error> {
-		let slot = inherents.babe_inherent_data()?;
+		let slot = inherents.babe_inherent_data()?
+			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
 		let epoch = self.epoch(parent, slot)?;
 
 		// this is a dev node environment, we should always be able to claim a slot.
@@ -194,7 +198,8 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 		params: &mut BlockImportParams<B, Self::Transaction>,
 		inherents: &InherentData
 	) -> Result<(), Error> {
-		let slot = inherents.babe_inherent_data()?;
+		let slot = inherents.babe_inherent_data()?
+			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
 		let epoch_changes = self.epoch_changes.shared_data();
 		let mut epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
@@ -216,7 +221,9 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 
 		if !has_authority {
 			log::info!(target: "manual-seal", "authority not found");
-			let slot = *inherents.timestamp_inherent_data()? / self.config.slot_duration;
+			let timestamp = inherents.timestamp_inherent_data()?
+				.ok_or_else(|| Error::StringError("No timestamp inherent data".into()))?;
+			let slot = *timestamp / self.config.slot_duration;
 			// manually hard code epoch descriptor
 			epoch_descriptor = match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _header) => {
@@ -243,17 +250,17 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 
 /// Provide duration since unix epoch in millisecond for timestamp inherent.
 /// Mocks the timestamp inherent to always produce the timestamp for the next babe slot.
-struct SlotTimestampProvider {
+pub struct SlotTimestampProvider {
 	time: atomic::AtomicU64,
 	slot_duration: u64
 }
 
 impl SlotTimestampProvider {
-	/// create a new mocked time stamp provider.
-	fn new<B, C>(client: Arc<C>) -> Result<Self, Error>
+	/// Create a new mocked time stamp provider.
+	pub fn new<B, C>(client: Arc<C>) -> Result<Self, Error>
 		where
 			B: BlockT,
-			C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B>,
+			C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
 			C::Api: BabeApi<B>,
 	{
 		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;
@@ -261,7 +268,7 @@ impl SlotTimestampProvider {
 
 		// looks like this isn't the first block, rehydrate the fake time.
 		// otherwise we'd be producing blocks for older slots.
-		let duration = if info.best_number != Zero::zero() {
+		let time = if info.best_number != Zero::zero() {
 			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
 			let slot = find_pre_digest::<B>(&header).unwrap().slot();
 			// add the slot duration so there's no collision of slots
@@ -275,17 +282,19 @@ impl SlotTimestampProvider {
 		};
 
 		Ok(Self {
-			time: atomic::AtomicU64::new(duration),
+			time: atomic::AtomicU64::new(time),
 			slot_duration,
 		})
 	}
+
+	/// Get the current slot number
+	pub fn slot(&self) -> u64 {
+		self.time.load(atomic::Ordering::SeqCst) / self.slot_duration
+	}
 }
 
-impl ProvideInherentData for SlotTimestampProvider {
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
+#[async_trait::async_trait]
+impl InherentDataProvider for SlotTimestampProvider {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
 		// we update the time here.
 		let duration: InherentType = self.time.fetch_add(
@@ -296,7 +305,11 @@ impl ProvideInherentData for SlotTimestampProvider {
 		Ok(())
 	}
 
-	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| format!("{:?}", e))
+	async fn try_handle_error(
+		&self,
+		_: &InherentIdentifier,
+		_: &[u8],
+	) -> Option<Result<(), sp_inherents::Error>> {
+		None
 	}
 }

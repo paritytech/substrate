@@ -373,10 +373,7 @@ impl Telemetry {
 	/// The `connection_message` argument is a JSON object that is sent every time the connection
 	/// (re-)establishes.
 	pub fn start_telemetry(&mut self, connection_message: ConnectionMessage) -> Result<()> {
-		let endpoints = match self.endpoints.take() {
-			Some(x) => x,
-			None => return Err(Error::TelemetryAlreadyInitialized),
-		};
+		let endpoints = self.endpoints.take().ok_or_else(|| Error::TelemetryAlreadyInitialized)?;
 
 		self.register_sender
 			.unbounded_send(Register::Telemetry {
@@ -387,7 +384,7 @@ impl Telemetry {
 			.map_err(|_| Error::TelemetryWorkerDropped)
 	}
 
-	/// Make a new clonable handle to this [`Telemetry`]. This is used for reporting telemetries.
+	/// Make a new cloneable handle to this [`Telemetry`]. This is used for reporting telemetries.
 	pub fn handle(&self) -> TelemetryHandle {
 		TelemetryHandle {
 			message_sender: Arc::new(Mutex::new(self.message_sender.clone())),
