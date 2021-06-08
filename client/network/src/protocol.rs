@@ -966,6 +966,11 @@ impl<B: BlockT> Protocol<B> {
 		self.sync.request_justification(&hash, number)
 	}
 
+	/// Clear all pending justification requests.
+	pub fn clear_justification_requests(&mut self) {
+		self.sync.clear_justification_requests();
+	}
+
 	/// Request syncing for the given block from given set of peers.
 	/// Uses `protocol` to queue a new block download request and tries to dispatch all pending
 	/// requests.
@@ -1515,6 +1520,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							"Received sync for peer earlier refused by sync layer: {}",
 							peer_id
 						);
+						CustomMessageOutcome::None
+					}
+					_ if self.bad_handshake_substreams.contains(&(peer_id.clone(), set_id)) => {
 						CustomMessageOutcome::None
 					}
 					_ => {

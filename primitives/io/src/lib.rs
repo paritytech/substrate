@@ -429,6 +429,24 @@ pub trait Trie {
 	fn keccak_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
 		Layout::<sp_core::KeccakHasher>::ordered_trie_root(input)
 	}
+
+	/// Verify trie proof
+	fn blake2_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
+		sp_trie::verify_trie_proof::<Layout<sp_core::Blake2Hasher>, _, _, _>(
+			&root,
+			proof,
+			&[(key, Some(value))],
+		).is_ok()
+	}
+
+	/// Verify trie proof
+	fn keccak_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
+		sp_trie::verify_trie_proof::<Layout<sp_core::KeccakHasher>, _, _, _>(
+			&root,
+			proof,
+			&[(key, Some(value))],
+		).is_ok()
+	}
 }
 
 /// Interface that provides miscellaneous functions for communicating between the runtime and the node.
@@ -821,6 +839,20 @@ pub trait Hashing {
 	/// Conduct two XX hashes to give a 64-bit result.
 	fn twox_64(data: &[u8]) -> [u8; 8] {
 		sp_core::hashing::twox_64(data)
+	}
+}
+
+/// Interface that provides transaction indexing API.
+#[runtime_interface]
+pub trait TransactionIndex {
+	/// Add transaction index. Returns indexed content hash.
+	fn index(&mut self, extrinsic: u32, size: u32, context_hash: [u8; 32]) {
+		self.storage_index_transaction(extrinsic, &context_hash, size);
+	}
+
+	/// Conduct a 512-bit Keccak hash.
+	fn renew(&mut self, extrinsic: u32, context_hash: [u8; 32]) {
+		self.storage_renew_transaction_index(extrinsic, &context_hash);
 	}
 }
 
@@ -1434,6 +1466,7 @@ pub type SubstrateHostFunctions = (
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
 	runtime_tasks::HostFunctions,
+	transaction_index::HostFunctions,
 );
 
 #[cfg(test)]
