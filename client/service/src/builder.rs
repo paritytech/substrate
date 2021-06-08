@@ -824,14 +824,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	rpc_api.merge(state_rpc).unwrap();
 	rpc_api.merge(child_state_rpc).unwrap();
 
-	// // TODO: task executor doesn't allow error; either allow errors or use channels.
-	// std::thread::spawn(move || {
-	// 	if let Err(e) = futures::executor::block_on(state_subs.subscribe()) {
-	// 		log::error!("state_subscription failed: {:?}", e)
-	// 	}
-	// });
-
-	rpc_api
+		rpc_api
 }
 
 /// Parameters to pass into `build_network`.
