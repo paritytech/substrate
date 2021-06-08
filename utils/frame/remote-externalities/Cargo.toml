@@ -13,8 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee-ws-client = { version = "=0.2.0-alpha.6", default-features = false }
-jsonrpsee-proc-macros = "=0.2.0-alpha.6"
+jsonrpsee-ws-client = { version = "0.2.0", default-features = false, features = ["tokio02"] }
+jsonrpsee-proc-macros = "0.2.0"
 
 hex = "0.4.0"
 env_logger = "0.8.2"
@@ -28,7 +28,7 @@ sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-tokio = { version = "1.6.0", features = ["macros", "rt"] }
+tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
 pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "4.0.0" }
 frame-support = { path = "../../../frame/support", version = "3.0.0" }
 
