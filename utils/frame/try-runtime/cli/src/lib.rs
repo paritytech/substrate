@@ -38,9 +38,12 @@ use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineC
 
 mod parse;
 
+/// Primary command options for `try-runtime`
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub enum Command {
+	/// Execute "TryRuntime_on_runtime_upgrade" against the given runtime state.
 	OnRuntimeUpgrade(OnRuntimeUpgradeCmd),
+	/// Execute "OffchainWorkerApi_offchain_worker" against the given runtime state.
 	OffchainWorker(OffchainWorkerCmd),
 }
 
