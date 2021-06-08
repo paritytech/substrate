@@ -85,12 +85,11 @@ fn expand_event_variant(
 	let part_is_generic = !generics.params.is_empty();
 
 	match instance {
+		Some(inst) if part_is_generic => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime, #path::#inst>),)
+		}
 		Some(inst) => {
-			if part_is_generic {
-				quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime, #path::#inst>),)
-			} else {
-				quote!(#[codec(index = #index)] #variant_name(#path::Event<#path::#inst>),)
-			}
+			quote!(#[codec(index = #index)] #variant_name(#path::Event<#path::#inst>),)
 		}
 		None if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime>),)
