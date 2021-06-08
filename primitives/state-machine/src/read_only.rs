@@ -203,8 +203,8 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
 
-	fn flag_hash_value(&mut self) {
-		unimplemented!("flag_hash_value is not supported by ReadOnlyExternalities");
+	fn alt_hashing(&mut self) {
+		unimplemented!("alt_hashing is not supported by ReadOnlyExternalities");
 	}
 }
 

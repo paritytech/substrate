@@ -171,7 +171,7 @@ where
 			))
 		}
 
-		self.backend.update(transaction, self.overlay.flag_hash_value())
+		self.backend.update(transaction, self.overlay.alt_hashing())
 	}
 
 	/// Commit all pending changes to the underlying backend.

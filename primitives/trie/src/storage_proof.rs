@@ -111,7 +111,8 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 		// Using compact proof will work directly here (read trie structure and
 		// work directly.
 		for item in proof.trie_nodes.iter() {
-			// Note using `default()` as global meta helps looking fro root node.
+			// Note using `default()` to build proof is fine, do_value being in header
+			// and no switch needed.
 			let layout_meta = Default::default();
 			let (encoded_node, mut meta) = <
 				<Layout::<H> as TrieLayout>::MetaHasher as MetaHasher<H, _>

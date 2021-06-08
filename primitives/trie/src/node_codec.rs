@@ -127,8 +127,9 @@ impl<H: Hasher> NodeCodec<H> {
 					if alt_hashing && contains_hash {
 						ValuePlan::HashedValue(input.take(H::LENGTH)?, 0)
 					} else {
+						let with_len = input.offset;
 						let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-						ValuePlan::Value(input.take(count)?)
+						ValuePlan::Value(input.take(count)?, with_len)
 					}
 				} else {
 					ValuePlan::NoValue
@@ -168,8 +169,9 @@ impl<H: Hasher> NodeCodec<H> {
 				let value = if alt_hashing && contains_hash {
 					ValuePlan::HashedValue(input.take(H::LENGTH)?, 0)
 				} else {
+					let with_len = input.offset;
 					let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
-					ValuePlan::Value(input.take(count)?)
+					ValuePlan::Value(input.take(count)?, with_len)
 				};
 
 				Ok(NodePlan::Leaf {
@@ -221,11 +223,12 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 		};
 		match value {
 			Value::Value(value) => {
+				let with_len = output.len();
 				Compact(value.len() as u32).encode_to(&mut output);
 				let start = output.len();
 				output.extend_from_slice(value);
 				let end = output.len();
-				meta.encoded_value_callback(ValuePlan::Value(start..end));
+				meta.encoded_value_callback(ValuePlan::Value(start..end, with_len));
 			},
 			Value::HashedValue(hash, _size) => {
 				debug_assert!(hash.len() == H::LENGTH);
@@ -280,11 +283,12 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 		(0..BITMAP_LENGTH).for_each(|_|output.push(0));
 		match maybe_value {
 			Value::Value(value) => {
+				let with_len = output.len();
 				Compact(value.len() as u32).encode_to(&mut output);
 				let start = output.len();
 				output.extend_from_slice(value);
 				let end = output.len();
-				meta.encoded_value_callback(ValuePlan::Value(start..end));
+				meta.encoded_value_callback(ValuePlan::Value(start..end, with_len));
 			},
 			Value::HashedValue(hash, _size) => {
 				debug_assert!(hash.len() == H::LENGTH);

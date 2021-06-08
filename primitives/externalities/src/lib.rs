@@ -293,7 +293,8 @@ pub trait Externalities: ExtensionStore {
 	}
 
 	/// Set flag in inner state to activate hashing of values.
-	fn flag_hash_value(&mut self);
+	/// TODO remove
+	fn alt_hashing(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.

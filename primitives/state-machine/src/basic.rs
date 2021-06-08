@@ -340,7 +340,7 @@ impl Externalities for BasicExternalities {
 		unimplemented!("set_whitelist is not supported in Basic")
 	}
 
-	fn flag_hash_value(&mut self) {
+	fn alt_hashing(&mut self) {
 		self.inner.alt_hashing = true;
 	}
 }
@@ -408,7 +408,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			flag_hashed_value: false,
+			alt_hashing: false,
 		});
 
 		assert_eq!(ext.child_storage(child_info, b"doe"), Some(b"reindeer".to_vec()));
@@ -439,7 +439,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			flag_hashed_value: false,
+			alt_hashing: false,
 		});
 
 		let res = ext.kill_child_storage(child_info, None);

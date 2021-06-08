@@ -64,7 +64,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_switch_state() {
 		print("switch_state");
-		storage::flag_hash_value();
+		storage::alt_hashing();
 		print("switched!");
 	}
 

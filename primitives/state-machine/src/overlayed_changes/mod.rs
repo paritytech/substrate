@@ -108,7 +108,7 @@ pub struct OverlayedChanges {
 	/// True if extrinsics stats must be collected.
 	collect_extrinsics: bool,
 	/// True if we flag inner state to store hash of values.
-	flag_hash_value: bool,
+	alt_hashing: bool,
 	/// Collect statistic on this execution.
 	stats: StateMachineStats,
 }
@@ -263,13 +263,13 @@ impl OverlayedChanges {
 	}
 
 	/// Ask to switch state to use inner hash.
-	pub fn set_flag_hash_value(&mut self) {
-		self.flag_hash_value = true;
+	pub fn set_alt_hashing(&mut self) {
+		self.alt_hashing = true;
 	}
 
-	/// Is `flag_hash_value` flag set.
-	pub fn flag_hash_value(&self) -> bool {
-		self.flag_hash_value
+	/// Is `alt_hashing` flag set.
+	pub fn alt_hashing(&self) -> bool {
+		self.alt_hashing
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
@@ -643,7 +643,7 @@ impl OverlayedChanges {
 				|(k, v)| (&k[..], v.value().map(|v| &v[..]))
 			)));
 
-		let (root, transaction) = backend.full_storage_root(delta, child_delta, self.flag_hash_value);
+		let (root, transaction) = backend.full_storage_root(delta, child_delta, self.alt_hashing);
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);

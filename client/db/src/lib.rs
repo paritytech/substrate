@@ -782,7 +782,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		let flag = storage.flag_hashed_value;
+		let flag = storage.alt_hashing;
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| {
 				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
@@ -2291,7 +2291,7 @@ pub(crate) mod tests {
 		set_state_data_inner(true);
 		set_state_data_inner(false);
 	}
-	fn set_state_data_inner(flagged: bool) {
+	fn set_state_data_inner(alt_hashing: bool) {
 		let db = Backend::<Block>::new_test(2, 0);
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
@@ -2312,14 +2312,14 @@ pub(crate) mod tests {
 			header.state_root = op.old_state.storage_root(storage
 				.iter()
 				.map(|(x, y)| (&x[..], Some(&y[..]))),
-				flagged,
+				alt_hashing,
 			).0.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-				flag_hashed_value: flagged,
+				alt_hashing: alt_hashing,
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -2358,7 +2358,7 @@ pub(crate) mod tests {
 			let (root, overlay) = op.old_state.storage_root(
 				storage.iter()
 					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))),
-				flagged,
+				alt_hashing,
 			);
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
@@ -2385,7 +2385,7 @@ pub(crate) mod tests {
 	fn delete_only_when_negative_rc() {
 		sp_tracing::try_init_simple();
 		let key;
-		let flagged = false;
+		let alt_hashing = false;
 		let backend = Backend::<Block>::new_test(1, 0);
 
 		let hash = {
@@ -2399,13 +2399,13 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			header.state_root = op.old_state.storage_root(std::iter::empty(), flagged).0.into();
+			header.state_root = op.old_state.storage_root(std::iter::empty(), alt_hashing).0.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
 				top: Default::default(),
 				children_default: Default::default(),
-				flag_hashed_value: flagged,
+				alt_hashing: alt_hashing,
 			}).unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
@@ -2441,7 +2441,7 @@ pub(crate) mod tests {
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y))),
-				flagged,
+				alt_hashing,
 			).0.into();
 			let hash = header.hash();
 
@@ -2479,7 +2479,7 @@ pub(crate) mod tests {
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y))),
-				flagged,
+				alt_hashing,
 			).0.into();
 			let hash = header.hash();
 
@@ -2517,7 +2517,7 @@ pub(crate) mod tests {
 				.iter()
 				.cloned()
 				.map(|(x, y)| (x, Some(y))),
-				flagged,
+				alt_hashing,
 			).0.into();
 
 			op.set_block_data(
@@ -2833,7 +2833,7 @@ pub(crate) mod tests {
 	#[test]
 	fn storage_hash_is_cached_correctly() {
 		let backend = Backend::<Block>::new_test(10, 10);
-		let flagged = false;
+		let alt_hashing = false;
 
 		let hash0 = {
 			let mut op = backend.begin_operation().unwrap();
@@ -2851,14 +2851,14 @@ pub(crate) mod tests {
 			header.state_root = op.old_state.storage_root(storage
 				.iter()
 				.map(|(x, y)| (&x[..], Some(&y[..]))),
-				flagged,
+				alt_hashing,
 			).0.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-				flag_hashed_value: flagged,
+				alt_hashing: alt_hashing,
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -2893,7 +2893,7 @@ pub(crate) mod tests {
 			let (root, overlay) = op.old_state.storage_root(
 				storage.iter()
 					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))),
-				flagged,
+				alt_hashing,
 			);
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();

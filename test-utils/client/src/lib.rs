@@ -211,7 +211,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
 			if self.state_hashed_value {
-				storage.flag_hashed_value = true;
+				storage.alt_hashing = true;
 			}
 
 			// Add some child storage keys.

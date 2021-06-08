@@ -379,17 +379,17 @@ pub mod tests {
 		// a drop a insert of same hash: rc is 0
 		assert_eq!(test_trie(false).storage_root(iter::empty(), false).1.drain()
 			.into_iter().filter(|v| (v.1).1 != 0).count(), 0);
-		// a drop a insert
+		// Unchanged
 		assert_eq!(test_trie(false).storage_root(iter::empty(), true).1.drain()
-			.into_iter().filter(|v| (v.1).1 != 0).count(), 2);
+			.into_iter().filter(|v| (v.1).1 != 0).count(), 0);
 		// a drop a insert of same hash: rc is 0
 		assert_eq!(test_trie(true).storage_root(iter::empty(), true).1.drain()
 			.into_iter().filter(|v| (v.1).1 != 0).count(), 0);
 	}
 
 	#[test]
-	fn storage_root_flagged_is_not_empty() {
-		assert!(!test_trie(false).storage_root(iter::empty(), true).1.drain().is_empty());
+	fn storage_root_flagged_is_empty() {
+		assert!(test_trie(false).storage_root(iter::empty(), true).1.drain().is_empty());
 	}
 
 	#[test]

@@ -190,8 +190,8 @@ impl Externalities for AsyncExternalities {
 		unimplemented!("set_whitelist is not supported in AsyncExternalities")
 	}
 
-	fn flag_hash_value(&mut self) {
-		unimplemented!("flag_hash_value is not supported in AsyncExternalities")
+	fn alt_hashing(&mut self) {
+		unimplemented!("alt_hashing is not supported in AsyncExternalities")
 	}
 }
 

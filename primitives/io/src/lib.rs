@@ -214,10 +214,9 @@ pub trait Storage {
 			.expect("No open transaction that can be committed.");
 	}
 
-	/// Set flag to switch storage state
-	/// to internally hash its values.
-	fn flag_hash_value(&mut self) {
-		self.flag_hash_value();
+	/// Swith state to alternate hashing.
+	fn alt_hashing(&mut self) {
+		self.alt_hashing();
 	}
 }
 
@@ -1465,7 +1464,7 @@ mod tests {
 		t = BasicExternalities::new(Storage {
 			top: map![b"foo".to_vec() => b"bar".to_vec()],
 			children_default: map![],
-			flag_hashed_value: false,
+			alt_hashing: false,
 		});
 
 		t.execute_with(|| {
@@ -1477,7 +1476,7 @@ mod tests {
 		t = BasicExternalities::new(Storage {
 			top: map![b"foo00".to_vec() => value.clone()],
 			children_default: map![],
-			flag_hashed_value: true,
+			alt_hashing: true,
 		});
 
 		t.execute_with(|| {
@@ -1492,7 +1491,7 @@ mod tests {
 		let mut t = BasicExternalities::new(Storage {
 			top: map![b":test".to_vec() => value.clone()],
 			children_default: map![],
-			flag_hashed_value: false,
+			alt_hashing: false,
 		});
 
 		t.execute_with(|| {
@@ -1515,7 +1514,7 @@ mod tests {
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
 			children_default: map![],
-			flag_hashed_value: false,
+			alt_hashing: false,
 		});
 
 		t.execute_with(|| {

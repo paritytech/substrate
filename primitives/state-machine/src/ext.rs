@@ -547,7 +547,7 @@ where
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				Some(self.backend.child_storage_root(info, delta, self.overlay.flag_hash_value()))
+				Some(self.backend.child_storage_root(info, delta, self.overlay.alt_hashing()))
 			} else {
 				None
 			};
@@ -738,9 +738,9 @@ where
 		self.backend.proof_size()
 	}
 
-	fn flag_hash_value(&mut self) {
+	fn alt_hashing(&mut self) {
 		self.mark_dirty();
-		self.overlay.set_flag_hash_value()
+		self.overlay.set_alt_hashing()
 	}
 }
 
@@ -952,7 +952,7 @@ mod tests {
 				vec![40] => vec![40]
 			],
 			children_default: map![],
-			flag_hashed_value: false,
+			alt_hashing: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -998,7 +998,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			flag_hashed_value: false,
+			alt_hashing: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1043,7 +1043,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			flag_hashed_value: false,
+			alt_hashing: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1083,7 +1083,7 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			flag_hashed_value: false,
+			alt_hashing: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);

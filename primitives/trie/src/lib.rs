@@ -168,7 +168,7 @@ impl Meta for TrieMeta {
 		value_plan: ValuePlan,
 	) {
 		let (contain_hash, range) = match value_plan {
-			ValuePlan::Value(range) => (false, range),
+			ValuePlan::Value(range, with_len) => (false, with_len..range.end),
 			ValuePlan::HashedValue(range, _size) => (true, range),
 			ValuePlan::NoValue => return,
 		};
@@ -186,7 +186,7 @@ impl Meta for TrieMeta {
 		node_plan: &NodePlan,
 	) {
 		let (contain_hash, range) = match node_plan.value_plan() {
-			Some(ValuePlan::Value(range)) => (false, range.clone()),
+			Some(ValuePlan::Value(range, with_len)) => (false, *with_len..range.end),
 			Some(ValuePlan::HashedValue(range, _size)) => (true, range.clone()),
 			Some(ValuePlan::NoValue) => return,
 			None => return,
@@ -324,7 +324,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 			stored.extend_from_slice(value);
 			return stored;
 		}
-		if meta.unused_value {
+		if meta.unused_value && meta.do_value_hash && !meta.switch_to_value_hash {
 			if let Some(range) = meta.range.as_ref() {
 				if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
 					// Waring this assume that encoded value does not start by this, so it is tightly coupled
@@ -893,7 +893,7 @@ fn inner_hashed_value<H: Hasher>(x: &[u8], range: Option<(usize, usize)>) -> Vec
 pub fn estimate_entry_size(entry: &(DBValue, TrieMeta), hash_len: usize) -> usize {
 	use codec::Encode;
 	let mut full_encoded = entry.0.encoded_size();
-	if entry.1.unused_value {
+	if entry.1.unused_value && entry.1.do_value_hash {
 		if let Some(range) = entry.1.range.as_ref() {
 			let value_size = range.end - range.start;
 			if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
@@ -913,9 +913,7 @@ pub fn estimate_entry_size(entry: &(DBValue, TrieMeta), hash_len: usize) -> usiz
 /// if can hash value.
 pub fn resolve_encoded_meta<H: Hasher>(entry: &mut (DBValue, TrieMeta)) {
 	use trie_db::NodeCodec;
-	if entry.1.do_value_hash {
-		let _ = <trie_types::Layout::<H> as TrieLayout>::Codec::decode_plan(entry.0.as_slice(), &mut entry.1);
-	}
+	let _ = <trie_types::Layout::<H> as TrieLayout>::Codec::decode_plan(entry.0.as_slice(), &mut entry.1);
 }
 
 /// Constants used into trie simplification codec.

@@ -1502,7 +1502,7 @@ mod tests {
 			let mut trie = TrieDBMut::from_existing_with_layout(
 				&mut mdb,
 				&mut root,
-				layout.cloen(),
+				layout.clone(),
 			).unwrap();
 			trie.insert(b"foo", vec![1u8; 1_000].as_slice()) // big inner hash
 				.expect("insert failed");
@@ -1527,11 +1527,12 @@ mod tests {
 				local_result1.into_iter().collect::<Vec<_>>(),
 				vec![(b"foo222".to_vec(), Some(vec![5u8; 100]))],
 			);
+			println!("a{:?}", remote_proof.encode().len());
+			println!("b{:?}", remote_proof.encoded_size());
 			remote_proof
 		};
 
 		let remote_proof = check_proof(mdb.clone(), root.clone());
-
 		// check full values in proof
 		assert!(remote_proof.encode().len() > 1_100);
 		assert!(remote_proof.encoded_size() > 1_100);
@@ -1551,7 +1552,7 @@ mod tests {
 				.expect("insert failed");
 		}
 		let root3 = root.clone();
-		assert!(root2 == root3);
+		assert!(root1 == root3);
 		// different value then same is enough to update
 		// from triedbmut persipective (do not
 		// work with state machine as only changes do makes
@@ -1568,7 +1569,7 @@ mod tests {
 				.expect("insert failed");
 		}
 		let root3 = root.clone();
-		assert!(root2 != root3);
+		assert!(root1 != root3);
 		let remote_proof = check_proof(mdb.clone(), root.clone());
 		// nodes foo is replaced by its hashed value form.
 		assert!(remote_proof.encode().len() < 1000);
