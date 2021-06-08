@@ -52,7 +52,7 @@ struct GuestFuncIndex(usize);
 /// This struct holds a mapping from guest index space to supervisor.
 struct GuestToSupervisorFunctionMapping {
 	/// Position of elements in this vector are interpreted
-	/// as indices of guest functions and are mappeed to
+	/// as indices of guest functions and are mapped to
 	/// corresponding supervisor function indices.
 	funcs: Vec<SupervisorFuncIndex>,
 }
@@ -207,7 +207,7 @@ pub struct GuestExternals<'a, FE: SandboxCapabilities + 'a> {
 	/// Instance of sandboxed module to be dispatched
 	sandbox_instance: &'a SandboxInstance<FE::SupervisorFuncRef>,
 
-	/// Opaque pointer to outer context, see the `instantiate` function
+	/// External state passed to guest environment, see the `instantiate` function
 	state: u32,
 }
 
@@ -387,7 +387,7 @@ impl<FR> SandboxInstance<FR> {
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error>
 	where
 		FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
-		SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>,
+		SCH: SandboxCapabilitiesHolder<SupervisorFuncRef = FR, SC = FE>,
 		DTH: DispatchThunkHolder<DispatchThunk = FR>,
 	{
 		SCH::with_sandbox_capabilities( |supervisor_externals| {
@@ -584,7 +584,7 @@ impl<FR> UnregisteredInstance<FR> {
 }
 
 /// Helper type to provide sandbox capabilities to the inner context
-pub trait SandboxCapabiliesHolder {
+pub trait SandboxCapabilitiesHolder {
 	/// Supervisor function reference
 	type SupervisorFuncRef;
 
@@ -636,8 +636,8 @@ impl Memory {
 		match self {
 			Memory::Wasmi(memory) => Some(memory.clone()),
 
-			#[allow(unreachable_patterns)]
-			_ => None,
+			#[cfg(feature = "wasmer-sandbox")]
+			Memory::Wasmer(_) => None,
 		}
 	}
 
@@ -646,9 +646,7 @@ impl Memory {
 	pub fn as_wasmer(&self) -> Option<wasmer::Memory> {
 		match self {
 			Memory::Wasmer(memory) => Some(memory.clone()),
-
-			#[allow(unreachable_patterns)]
-			_ => None,
+			Memory::Wasmi(_) => None,
 		}
 	}
 }
@@ -844,7 +842,7 @@ impl<FR> Store<FR> {
 	where
 		FR: Clone + 'static,
 		FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
-		SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>,
+		SCH: SandboxCapabilitiesHolder<SupervisorFuncRef = FR, SC = FE>,
 		DTH: DispatchThunkHolder<DispatchThunk = FR>,
 	{
 		let backend_context = &self.backend_context;

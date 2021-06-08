@@ -361,8 +361,6 @@ impl Sandbox for FunctionExecutor {
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
-		println!("Instantiating sandbox from wasmi");
-
 		let store = &mut *self.inner.sandbox_store.borrow_mut();
 		let result = EXECUTOR.set(self, || DISPATCH_THUNK.set(&dispatch_thunk, || {
 				store.instantiate::<_, CapsHolder, ThunkHolder>(
@@ -404,7 +402,7 @@ struct CapsHolder;
 
 scoped_tls::scoped_thread_local!(static EXECUTOR: FunctionExecutor);
 
-impl sandbox::SandboxCapabiliesHolder for CapsHolder {
+impl sandbox::SandboxCapabilitiesHolder for CapsHolder {
 	type SupervisorFuncRef = wasmi::FuncRef;
 	type SC = FunctionExecutor;
 
@@ -855,7 +853,7 @@ pub struct WasmiInstance {
 	missing_functions: Arc<Vec<String>>,
 }
 
-// This is safe because `WasmiInstance` does not leak any references to `self.inner.memory` and `self.instance`
+// This is safe because `WasmiInstance` does not leak any references to `self.memory` and `self.instance`
 unsafe impl Send for WasmiInstance {}
 
 impl WasmInstance for WasmiInstance {

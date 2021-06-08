@@ -30,7 +30,7 @@ use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use wasmtime::{Func, Val};
-use sandbox::SandboxCapabiliesHolder;
+use sandbox::SandboxCapabilitiesHolder;
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -413,8 +413,6 @@ impl Sandbox for HostState {
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
-		println!("Instantiating sandbox from host");
-
 		let store = &mut *self.inner.sandbox_store.borrow_mut();
 		let result = DISPATCH_THUNK.set(&dispatch_thunk, || {
 			store.instantiate::<_, CapsHolder, ThunkHolder>(
@@ -449,7 +447,7 @@ impl Sandbox for HostState {
 
 struct CapsHolder;
 
-impl SandboxCapabiliesHolder for CapsHolder {
+impl SandboxCapabilitiesHolder for CapsHolder {
 	type SupervisorFuncRef = SupervisorFuncRef;
 	type SC = HostState;
 
