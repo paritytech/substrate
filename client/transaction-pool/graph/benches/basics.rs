@@ -23,7 +23,7 @@ use sc_transaction_graph::*;
 use codec::Encode;
 use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 use sp_runtime::{
-	generic::BlockId, traits::Block as BlockT,
+	generic::BlockId,
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionTag as Tag,
 		TransactionSource,
@@ -113,13 +113,6 @@ impl ChainApi for TestApi {
 
 	fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
 		ready(Ok(None))
-	}
-
-	fn block_header(
-		&self,
-		_: &BlockId<Self::Block>,
-	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		Ok(None)
 	}
 }
 

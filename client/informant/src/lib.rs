@@ -20,22 +20,17 @@
 
 use ansi_term::Colour;
 use futures::prelude::*;
-use futures_timer::Delay;
 use log::{info, trace, warn};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
-use sc_network::NetworkService;
+use sc_network::NetworkStatus;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
 use sp_transaction_pool::TransactionPool;
+use sp_utils::{status_sinks, mpsc::tracing_unbounded};
 use std::{fmt::Display, sync::Arc, time::Duration, collections::VecDeque};
 
 mod display;
-
-/// Creates a stream that returns a new value every `duration`.
-fn interval(duration: Duration) -> impl Stream<Item = ()> + Unpin {
-	futures::stream::unfold((), move |_| Delay::new(duration).map(|_| Some(((), ())))).map(drop)
-}
 
 /// The format to print telemetry output in.
 #[derive(Clone, Debug)]
@@ -69,12 +64,12 @@ impl<T: TransactionPool> TransactionPoolAndMaybeMallogSizeOf for T {}
 impl<T: TransactionPool + MallocSizeOf> TransactionPoolAndMaybeMallogSizeOf for T {}
 
 /// Builds the informant and returns a `Future` that drives the informant.
-pub async fn build<B: BlockT, C>(
+pub fn build<B: BlockT, C>(
 	client: Arc<C>,
-	network: Arc<NetworkService<B, <B as BlockT>::Hash>>,
+	network_status_sinks: Arc<status_sinks::StatusSinks<NetworkStatus<B>>>,
 	pool: Arc<impl TransactionPoolAndMaybeMallogSizeOf>,
 	format: OutputFormat,
-)
+) -> impl futures::Future<Output = ()>
 where
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
@@ -82,12 +77,10 @@ where
 	let mut display = display::InformantDisplay::new(format.clone());
 
 	let client_1 = client.clone();
+	let (network_status_sink, network_status_stream) = tracing_unbounded("mpsc_network_status");
+	network_status_sinks.push(Duration::from_millis(5000), network_status_sink);
 
-	let display_notifications = interval(Duration::from_millis(5000))
-		.filter_map(|_| async {
-			let status = network.status().await;
-			status.ok()
-		})
+	let display_notifications = network_status_stream
 		.for_each(move |net_status| {
 			let info = client_1.usage_info();
 			if let Some(ref usage) = info.usage {
@@ -108,10 +101,10 @@ where
 			future::ready(())
 		});
 
-	futures::select! {
-		() = display_notifications.fuse() => (),
-		() = display_block_import(client).fuse() => (),
-	};
+	future::join(
+		display_notifications,
+		display_block_import(client),
+	).map(|_| ())
 }
 
 fn display_block_import<B: BlockT, C>(client: Arc<C>) -> impl Future<Output = ()>

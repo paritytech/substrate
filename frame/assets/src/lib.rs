@@ -138,15 +138,14 @@ mod functions;
 mod types;
 pub use types::*;
 
-use sp_std::{prelude::*, borrow::Borrow, convert::TryInto};
+use sp_std::{prelude::*, borrow::Borrow};
 use sp_runtime::{
-	TokenError, ArithmeticError,
-	traits::{
+	RuntimeDebug, TokenError, ArithmeticError, traits::{
 		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded,
 		StoredMapError,
 	}
 };
-use codec::HasCompact;
+use codec::{Encode, Decode, HasCompact};
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
 use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
 use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
@@ -166,7 +165,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -176,10 +174,10 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The units in which we record balances.
-		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + MaxEncodedLen;
+		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member + Parameter + Default + Copy + HasCompact + MaxEncodedLen;
+		type AssetId: Member + Parameter + Default + Copy + HasCompact;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -209,7 +207,7 @@ pub mod pallet {
 		type Freezer: FrozenBalance<Self::AssetId, Self::AccountId, Self::Balance>;
 
 		/// Additional data to be stored with an account's asset balance.
-		type Extra: Member + Parameter + Default + MaxEncodedLen;
+		type Extra: Member + Parameter + Default;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -234,8 +232,6 @@ pub mod pallet {
 		T::AccountId,
 		AssetBalance<T::Balance, T::Extra>,
 		ValueQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::storage]
@@ -251,8 +247,6 @@ pub mod pallet {
 		),
 		Approval<T::Balance, DepositBalanceOf<T, I>>,
 		OptionQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::storage]
@@ -261,10 +255,8 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AssetId,
-		AssetMetadata<DepositBalanceOf<T, I>, BoundedVec<u8, T::StringLimit>>,
+		AssetMetadata<DepositBalanceOf<T, I>>,
 		ValueQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::event]
@@ -417,6 +409,8 @@ pub mod pallet {
 		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
 		/// over this asset, but may later change and configure the permissions using `transfer_ownership`
 		/// and `set_team`.
+		/// - `max_zombies`: The total number of accounts which may hold assets in this class yet
+		/// have no existential deposit.
 		/// - `min_balance`: The minimum balance of this new asset that any single account must
 		/// have. If an account's balance is reduced below this, then it collapses to zero.
 		///
@@ -523,7 +517,7 @@ pub mod pallet {
 		/// - `beneficiary`: The account to be credited with the minted assets.
 		/// - `amount`: The amount of the asset to be minted.
 		///
-		/// Emits `Issued` event when successful.
+		/// Emits `Destroyed` event when successful.
 		///
 		/// Weight: `O(1)`
 		/// Modes: Pre-existing balance of `beneficiary`; Account pre-existence of `beneficiary`.
@@ -537,6 +531,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 			Self::do_mint(id, &beneficiary, amount, Some(origin))?;
+			Self::deposit_event(Event::Issued(id, beneficiary, amount));
 			Ok(())
 		}
 
@@ -566,7 +561,8 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 
 			let f = DebitFlags { keep_alive: false, best_effort: true };
-			let _ = Self::do_burn(id, &who, amount, Some(origin), f)?;
+			let burned = Self::do_burn(id, &who, amount, Some(origin), f)?;
+			Self::deposit_event(Event::Burned(id, who, burned));
 			Ok(())
 		}
 
@@ -586,8 +582,8 @@ pub mod pallet {
 		/// to zero.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of
-		/// `target`.
+		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
+		/// of sender; Account pre-existence of `target`.
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub(super) fn transfer(
 			origin: OriginFor<T>,
@@ -622,8 +618,8 @@ pub mod pallet {
 		/// to zero.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of
-		/// `target`.
+		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
+		/// of sender; Account pre-existence of `target`.
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub(super) fn transfer_keep_alive(
 			origin: OriginFor<T>,
@@ -659,8 +655,8 @@ pub mod pallet {
 		/// to zero.
 		///
 		/// Weight: `O(1)`
-		/// Modes: Pre-existence of `dest`; Post-existence of `source`; Account pre-existence of
-		/// `dest`.
+		/// Modes: Pre-existence of `dest`; Post-existence of `source`; Prior & post zombie-status
+		/// of `source`; Account pre-existence of `dest`.
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub(super) fn force_transfer(
 			origin: OriginFor<T>,
@@ -777,7 +773,7 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
 		///
-		/// - `id`: The identifier of the asset to be thawed.
+		/// - `id`: The identifier of the asset to be frozen.
 		///
 		/// Emits `Thawed`.
 		///
@@ -903,14 +899,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let bounded_name: BoundedVec<u8, T::StringLimit> = name
-				.clone()
-				.try_into()
-				.map_err(|_| Error::<T, I>::BadMetadata)?;
-			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol
-				.clone()
-				.try_into()
-				.map_err(|_| Error::<T, I>::BadMetadata)?;
+			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
+			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(&origin == &d.owner, Error::<T, I>::NoPermission);
@@ -934,8 +924,8 @@ pub mod pallet {
 
 				*metadata = Some(AssetMetadata {
 					deposit: new_deposit,
-					name: bounded_name,
-					symbol: bounded_symbol,
+					name: name.clone(),
+					symbol: symbol.clone(),
 					decimals,
 					is_frozen: false,
 				});
@@ -999,23 +989,16 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			let bounded_name: BoundedVec<u8, T::StringLimit> = name
-				.clone()
-				.try_into()
-				.map_err(|_| Error::<T, I>::BadMetadata)?;
-
-			let bounded_symbol: BoundedVec<u8, T::StringLimit> = symbol
-				.clone()
-				.try_into()
-				.map_err(|_| Error::<T, I>::BadMetadata)?;
+			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
+			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T, I>::BadMetadata);
 
 			ensure!(Asset::<T, I>::contains_key(id), Error::<T, I>::Unknown);
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 				let deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				*metadata = Some(AssetMetadata {
 					deposit,
-					name: bounded_name,
-					symbol: bounded_symbol,
+					name: name.clone(),
+					symbol: symbol.clone(),
 					decimals,
 					is_frozen,
 				});

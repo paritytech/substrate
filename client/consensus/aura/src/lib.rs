@@ -109,7 +109,7 @@ fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&A
 }
 
 /// Parameters of [`start_aura`].
-pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
+pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW, IDP> {
 	/// The duration of a slot.
 	pub slot_duration: SlotDuration,
 	/// The client to interact with the chain.
@@ -122,10 +122,8 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
 	pub proposer_factory: PF,
 	/// The sync oracle that can give us the current sync status.
 	pub sync_oracle: SO,
-	/// Hook into the sync module to control the justification sync process.
-	pub justification_sync_link: L,
 	/// Something that can create the inherent data providers.
-	pub create_inherent_data_providers: CIDP,
+	pub create_inherent_data_providers: IDP,
 	/// Should we force the authoring of blocks?
 	pub force_authoring: bool,
 	/// The backoff strategy when we miss slots.
@@ -145,7 +143,7 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
+pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error, IDP>(
 	StartAuraParams {
 		slot_duration,
 		client,
@@ -153,7 +151,6 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
 		block_import,
 		proposer_factory,
 		sync_oracle,
-		justification_sync_link,
 		create_inherent_data_providers,
 		force_authoring,
 		backoff_authoring_blocks,
@@ -161,33 +158,31 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
 		can_author_with,
 		block_proposal_slot_portion,
 		telemetry,
-	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW>,
+	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW, IDP>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
-	P: Pair + Send + Sync,
-	P::Public: AppPublic + Hash + Member + Encode + Decode,
-	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	SO: SyncOracle + Send + Sync + Clone,
-	L: sp_consensus::JustificationSyncLink<B>,
-	CIDP: CreateInherentDataProviders<B, ()> + Send,
-	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
-	CAW: CanAuthorWith<B> + Send,
+	P: Pair + Send + Sync,
+	P::Public: AppPublic + Hash + Member + Encode + Decode,
+	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	SO: SyncOracle + Send + Sync + Clone,
+	CAW: CanAuthorWith<B> + Send,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	IDP: CreateInherentDataProviders<B, ()> + Send,
+	IDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
-	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
+	let worker = build_aura_worker::<P, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
 		client: client.clone(),
 		block_import,
 		proposer_factory,
 		keystore,
 		sync_oracle: sync_oracle.clone(),
-		justification_sync_link,
 		force_authoring,
 		backoff_authoring_blocks,
 		telemetry,
@@ -205,7 +200,7 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
 }
 
 /// Parameters of [`build_aura_worker`].
-pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS> {
+pub struct BuildAuraWorkerParams<C, I, PF, SO, BS> {
 	/// The client to interact with the chain.
 	pub client: Arc<C>,
 	/// The block import.
@@ -214,8 +209,6 @@ pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS> {
 	pub proposer_factory: PF,
 	/// The sync oracle that can give us the current sync status.
 	pub sync_oracle: SO,
-	/// Hook into the sync module to control the justification sync process.
-	pub justification_sync_link: L,
 	/// Should we force the authoring of blocks?
 	pub force_authoring: bool,
 	/// The backoff strategy when we miss slots.
@@ -235,19 +228,18 @@ pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS> {
 /// Build the aura worker.
 ///
 /// The caller is responsible for running this worker, otherwise it will do nothing.
-pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
+pub fn build_aura_worker<P, B, C, PF, I, SO, BS, Error>(
 	BuildAuraWorkerParams {
 		client,
 		block_import,
 		proposer_factory,
 		sync_oracle,
-		justification_sync_link,
 		backoff_authoring_blocks,
 		keystore,
 		block_proposal_slot_portion,
 		telemetry,
 		force_authoring,
-	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS>,
+	}: BuildAuraWorkerParams<C, I, PF, SO, BS>,
 ) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
@@ -260,7 +252,6 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	L: sp_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	AuraWorker {
@@ -269,7 +260,6 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 		env: proposer_factory,
 		keystore,
 		sync_oracle,
-		justification_sync_link,
 		force_authoring,
 		backoff_authoring_blocks,
 		telemetry,
@@ -278,13 +268,12 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 	}
 }
 
-struct AuraWorker<C, E, I, P, SO, L, BS> {
+struct AuraWorker<C, E, I, P, SO, BS> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
-	justification_sync_link: L,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
 	block_proposal_slot_portion: SlotProportion,
@@ -292,8 +281,8 @@ struct AuraWorker<C, E, I, P, SO, L, BS> {
 	_key_type: PhantomData<P>,
 }
 
-impl<B, C, E, I, P, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
-	for AuraWorker<C, E, I, P, SO, L, BS>
+impl<B, C, E, I, P, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
+	for AuraWorker<C, E, I, P, SO, BS>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + HeaderBackend<B> + Sync,
@@ -305,13 +294,11 @@ where
 	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
-	L: sp_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	type BlockImport = I;
 	type SyncOracle = SO;
-	type JustificationSyncLink = L;
 	type CreateProposer = Pin<Box<
 		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
 	>>;
@@ -436,10 +423,6 @@ where
 
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
 		&mut self.sync_oracle
-	}
-
-	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink {
-		&mut self.justification_sync_link
 	}
 
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
@@ -742,14 +725,13 @@ mod tests {
 
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
+			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
 				slot_duration,
 				block_import: client.clone(),
 				select_chain,
 				client,
 				proposer_factory: environ,
 				sync_oracle: DummyOracle,
-				justification_sync_link: (),
 				create_inherent_data_providers: |_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_duration(
@@ -822,7 +804,6 @@ mod tests {
 			env: environ,
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
-			justification_sync_link: (),
 			force_authoring: false,
 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 			telemetry: None,
@@ -872,7 +853,6 @@ mod tests {
 			env: environ,
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
-			justification_sync_link: (),
 			force_authoring: false,
 			backoff_authoring_blocks: Option::<()>::None,
 			telemetry: None,
@@ -891,7 +871,7 @@ mod tests {
 				duration: Duration::from_millis(1000),
 				chain_head: head,
 				block_size_limit: None,
-			}
+			},
 		)).unwrap();
 
 		// The returned block should be imported and we should be able to get its header by now.

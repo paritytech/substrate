@@ -27,9 +27,7 @@ use sc_consensus_babe::BabeBlockImport;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_keyring::sr25519::Keyring::Alice;
 use sp_consensus_babe::AuthorityId;
-use sc_consensus_manual_seal::{
-	ConsensusDataProvider, consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
-};
+use sc_consensus_manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
 use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
 use node_cli::chain_spec::development_config;
 
@@ -61,7 +59,10 @@ impl ChainInfo for NodeTemplateChainInfo {
 		Self::SelectChain,
 	>;
 	type SignedExtras = node_runtime::SignedExtra;
-	type InherentDataProviders = (SlotTimestampProvider, sp_consensus_babe::inherents::InherentDataProvider);
+	type InherentDataProviders = (
+		sp_timestamp::InherentDataProvider,
+		sp_consensus_babe::inherents::InherentDataProvider,
+	);
 
 	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras {
 		(
@@ -138,16 +139,20 @@ impl ChainInfo for NodeTemplateChainInfo {
 			.expect("failed to create ConsensusDataProvider");
 
 		Ok((
-			client.clone(),
+			client,
 			backend,
 			keystore.sync_keystore(),
 			task_manager,
 			Box::new(move |_, _| {
-				let client = client.clone();
+				let slot_duration = slot_duration.clone();
 				async move {
-					let timestamp = SlotTimestampProvider::new(client.clone()).map_err(|err| format!("{:?}", err))?;
-					let babe = sp_consensus_babe::inherents::InherentDataProvider::new(timestamp.slot().into());
-					Ok((timestamp, babe))
+					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+					let slot = sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						slot_duration.slot_duration(),
+					);
+
+					Ok((timestamp, slot))
 				}
 			}),
 			Some(Box::new(consensus_data_provider)),

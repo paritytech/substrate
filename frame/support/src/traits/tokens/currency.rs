@@ -22,17 +22,17 @@ use sp_runtime::traits::MaybeSerializeDeserialize;
 use crate::dispatch::{DispatchResult, DispatchError};
 use super::misc::{Balance, WithdrawReasons, ExistenceRequirement};
 use super::imbalance::{Imbalance, SignedImbalance};
-use frame_support::traits::MaxEncodedLen;
+
 
 mod reservable;
-pub use reservable::{ReservableCurrency, NamedReservableCurrency};
+pub use reservable::ReservableCurrency;
 mod lockable;
 pub use lockable::{LockableCurrency, VestingSchedule, LockIdentifier};
 
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: Balance + MaybeSerializeDeserialize + Debug + MaxEncodedLen;
+	type Balance: Balance + MaybeSerializeDeserialize + Debug;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.

@@ -382,17 +382,21 @@ macro_rules! impl_outer_origin {
 						x.into()
 					}
 				}
-				impl From<$name> for $crate::sp_std::result::Result<
+				impl Into<
+					$crate::sp_std::result::Result<
 						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
 						$name,
-					>
-				{
+					>>
+				for $name {
 					/// NOTE: converting to pallet origin loses the origin filter information.
-					fn from(val: $name) -> Self {
-						if let $caller_name::[< $module $( _ $generic_instance )? >](l) = val.caller {
+					fn into(self) -> $crate::sp_std::result::Result<
+						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
+						Self,
+					> {
+						if let $caller_name::[< $module $( _ $generic_instance )? >](l) = self.caller {
 							Ok(l)
 						} else {
-							Err(val)
+							Err(self)
 						}
 					}
 				}

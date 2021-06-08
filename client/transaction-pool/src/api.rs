@@ -81,7 +81,7 @@ impl<Client, Block> FullChainApi<Client, Block> {
 impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -150,13 +150,6 @@ where
 			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
 		})
 	}
-
-	fn block_header(
-		&self,
-		at: &BlockId<Self::Block>,
-	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		self.client.header(*at).map_err(Into::into)
-	}
 }
 
 /// Helper function to validate a transaction using a full chain API.
@@ -169,7 +162,7 @@ fn validate_transaction_blocking<Client, Block>(
 ) -> error::Result<TransactionValidity>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -200,7 +193,7 @@ where
 impl<Client, Block> FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -339,12 +332,5 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for
 
 			Ok(Some(transactions))
 		}.boxed()
-	}
-
-	fn block_header(
-		&self,
-		at: &BlockId<Self::Block>,
-	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
-		self.client.header(*at).map_err(Into::into)
 	}
 }

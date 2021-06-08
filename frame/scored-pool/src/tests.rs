@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for the pallet.
+//! Tests for the module.
 
 use super::*;
 use mock::*;
@@ -23,7 +23,7 @@ use mock::*;
 use frame_support::{assert_ok, assert_noop, traits::OnInitialize};
 use sp_runtime::traits::BadOrigin;
 
-type ScoredPool = Pallet<Test>;
+type ScoredPool = Module<Test>;
 type System = frame_system::Pallet<Test>;
 type Balances = pallet_balances::Pallet<Test>;
 

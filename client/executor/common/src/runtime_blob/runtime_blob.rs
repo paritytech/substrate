@@ -16,18 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use pwasm_utils::{
-	parity_wasm::elements::{
-		DataSegment, Module, deserialize_buffer, serialize, Internal,
-	},
-	export_mutable_globals,
-};
+use parity_wasm::elements::{DataSegment, Module as RawModule, deserialize_buffer, serialize};
+
 use crate::error::WasmError;
 
 /// A bunch of information collected from a WebAssembly module.
 #[derive(Clone)]
 pub struct RuntimeBlob {
-	raw_module: Module,
+	raw_module: RawModule,
 }
 
 impl RuntimeBlob {
@@ -46,7 +42,7 @@ impl RuntimeBlob {
 	///
 	/// Returns `Err` if the wasm code cannot be deserialized.
 	pub fn new(wasm_code: &[u8]) -> Result<Self, WasmError> {
-		let raw_module: Module = deserialize_buffer(wasm_code)
+		let raw_module: RawModule = deserialize_buffer(wasm_code)
 			.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:?}", e)))?;
 		Ok(Self { raw_module })
 	}
@@ -78,7 +74,7 @@ impl RuntimeBlob {
 
 	/// Perform an instrumentation that makes sure that the mutable globals are exported.
 	pub fn expose_mutable_globals(&mut self) {
-		export_mutable_globals(&mut self.raw_module, "exported_internal_global");
+		pwasm_utils::export_mutable_globals(&mut self.raw_module, "exported_internal_global");
 	}
 
 	/// Returns an iterator of all globals which were exported by [`expose_mutable_globals`].
@@ -91,7 +87,7 @@ impl RuntimeBlob {
 			.map(|es| es.entries())
 			.unwrap_or(&[]);
 		exports.iter().filter_map(|export| match export.internal() {
-			Internal::Global(_)
+			parity_wasm::elements::Internal::Global(_)
 				if export.field().starts_with("exported_internal_global") =>
 			{
 				Some(export.field())
@@ -116,7 +112,7 @@ impl RuntimeBlob {
 	}
 
 	/// Destructure this structure into the underlying parity-wasm Module.
-	pub fn into_inner(self) -> Module {
+	pub fn into_inner(self) -> RawModule {
 		self.raw_module
 	}
 }

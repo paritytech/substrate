@@ -18,7 +18,7 @@
 //! The for various partial storage decoders
 
 use super::*;
-use frame_support::storage::{migration, unhashed};
+use frame_support::storage::{migration, StorageMap, unhashed};
 
 #[test]
 fn test_decode_compact_u32_at() {

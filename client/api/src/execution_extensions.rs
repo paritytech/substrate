@@ -33,8 +33,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits,
 };
-use sp_state_machine::{ExecutionManager, DefaultHandler};
-pub use sp_state_machine::ExecutionStrategy;
+use sp_state_machine::{ExecutionStrategy, ExecutionManager, DefaultHandler};
 use sp_externalities::Extensions;
 use parking_lot::RwLock;
 

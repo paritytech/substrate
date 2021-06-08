@@ -632,11 +632,6 @@ impl<B: BlockT> ChainSync<B> {
 		})
 	}
 
-	/// Clear all pending justification requests.
-	pub fn clear_justification_requests(&mut self) {
-		self.extra_justifications.reset();
-	}
-
 	/// Request syncing for the given block from given set of peers.
 	// The implementation is similar to on_block_announce with unknown parent hash.
 	pub fn set_sync_fork_request(
@@ -1122,7 +1117,7 @@ impl<B: BlockT> ChainSync<B> {
 							number,
 							hash
 						);
-						self.clear_justification_requests();
+						self.extra_justifications.reset()
 					}
 
 					if aux.needs_justification {

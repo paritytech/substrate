@@ -54,7 +54,7 @@ default:
     paths:
       - artifacts/
 
-.kubernetes-env:                   &kubernetes-env
+.kubernetes-build:                 &kubernetes-build
   tags:
     - kubernetes-parity-build
   interruptible:                   true
@@ -62,8 +62,6 @@ default:
 .rust-info-script:                 &rust-info-script
   - rustup show
   - cargo --version
-  - rustup +nightly show
-  - cargo +nightly --version
   - sccache -s
 
 .docker-env:                       &docker-env
@@ -142,7 +140,7 @@ default:
 
 skip-if-draft:
   image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   stage:                           .pre
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
@@ -157,7 +155,7 @@ skip-if-draft:
 check-runtime:
   stage:                           check
   image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   variables:
@@ -171,7 +169,7 @@ check-runtime:
 check-signed-tag:
   stage:                           check
   image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
@@ -181,7 +179,7 @@ check-signed-tag:
 check-line-width:
   stage:                           check
   image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
@@ -191,7 +189,7 @@ check-line-width:
 test-dependency-rules:
   stage:                           check
   image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
@@ -200,7 +198,7 @@ test-dependency-rules:
 test-prometheus-alerting-rules:
   stage:                           check
   image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -421,7 +419,7 @@ cargo-check-macos:
 check-polkadot-companion-status:
   stage:                           build
   image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
@@ -538,7 +536,7 @@ build-rust-doc:
 
 .build-push-docker-image:          &build-push-docker-image
   <<:                              *build-refs
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
     <<:                            *default-vars
@@ -600,7 +598,7 @@ publish-docker-subkey:
 publish-s3-release:
   stage:                           publish
   <<:                              *build-refs
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   needs:
     - job:                         build-linux-substrate
       artifacts:                   true
@@ -629,7 +627,7 @@ publish-s3-doc:
     - job:                         build-linux-substrate
       artifacts:                   false
   <<:                              *build-refs
-  <<:                              *kubernetes-env
+  <<:                              *kubernetes-build
   variables:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io"
@@ -691,7 +689,6 @@ deploy-prometheus-alerting-rules:
 trigger-simnet:
   stage:                           deploy
   image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -708,4 +705,4 @@ trigger-simnet:
     DWNSTRM_ID:                    332
   script:
     # API trigger for a simnet job
-    - .maintain/gitlab/trigger_pipeline.sh
+    - ./scripts/gitlab/trigger_pipeline.sh

@@ -138,7 +138,7 @@ impl<T: ChainInfo> Node<T> {
 			client.clone(),
 		);
 
-		let (network, system_rpc_tx, network_starter) = {
+		let (network, network_status_sinks, system_rpc_tx, network_starter) = {
 			let params = BuildNetworkParams {
 				config: &config,
 				client: client.clone(),
@@ -182,6 +182,7 @@ impl<T: ChainInfo> Node<T> {
 				rpc_extensions_builder: Box::new(move |_, _| jsonrpc_core::IoHandler::default()),
 				remote_blockchain: None,
 				network,
+				network_status_sinks,
 				system_rpc_tx,
 				telemetry: None
 			};

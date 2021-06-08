@@ -46,7 +46,7 @@ mod rep {
 	use super::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
-	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
+	pub const SAME_REQUEST: Rep = Rep::new(i32::min_value(), "Same block request multiple times");
 }
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
@@ -65,7 +65,11 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 // Visibility `pub(crate)` to allow `crate::light_client_requests::sender` to generate block request
 // protocol name and send block requests.
 pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
-	format!("/{}/sync/2", protocol_id.as_ref())
+	let mut s = String::new();
+	s.push_str("/");
+	s.push_str(protocol_id.as_ref());
+	s.push_str("/sync/2");
+	s
 }
 
 /// The key of [`BlockRequestHandler::seen_requests`].
@@ -188,7 +192,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			support_multiple_justifications,
 		};
 
-		let mut reputation_change = None;
+		let mut reputation_changes = Vec::new();
 
 		match self.seen_requests.get_mut(&key) {
 			Some(SeenRequestsValue::First) => {},
@@ -196,7 +200,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				*requests = requests.saturating_add(1);
 
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
-					reputation_change = Some(rep::SAME_REQUEST);
+					reputation_changes.push(rep::SAME_REQUEST);
 				}
 			},
 			None => {
@@ -215,7 +219,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			attributes,
 		);
 
-		let result = if reputation_change.is_none() {
+		let result = if reputation_changes.is_empty() {
 			let block_response = self.get_block_response(
 				attributes,
 				from_block_id,
@@ -224,7 +228,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				support_multiple_justifications,
 			)?;
 
-			// If any of the blocks contains any data, we can consider it as successful request.
+			// If any of the blocks contains nay data, we can consider it as successful request.
 			if block_response
 				.blocks
 				.iter()
@@ -249,7 +253,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 		pending_response.send(OutgoingResponse {
 			result,
-			reputation_changes: reputation_change.into_iter().collect(),
+			reputation_changes,
 			sent_feedback: None,
 		}).map_err(|_| HandleRequestError::SendResponse)
 	}

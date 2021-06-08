@@ -88,7 +88,7 @@ use frame_support::{
 	Parameter, storage,
 	traits::{
 		SortedMembers, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
-		StoredMap, EnsureOrigin, OriginTrait, Filter, MaxEncodedLen,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
@@ -194,20 +194,19 @@ pub mod pallet {
 		type BlockNumber:
 			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay +
 			AtLeast32BitUnsigned + Default + Bounded + Copy + sp_std::hash::Hash +
-			sp_std::str::FromStr + MaybeMallocSizeOf + MaxEncodedLen;
+			sp_std::str::FromStr + MaybeMallocSizeOf;
 
 		/// The output of the `Hashing` function.
 		type Hash:
 			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
-			+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]>
-			+ MaybeMallocSizeOf + MaxEncodedLen;
+			+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 		type Hashing: Hash<Output=Self::Hash>;
 
 		/// The user account identifier type for the runtime.
 		type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
-			+ Default + MaxEncodedLen;
+			+ Default;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
 		///
@@ -266,7 +265,7 @@ pub mod pallet {
 		/// that the runtime should know about the prefix in order to make use of it as
 		/// an identifier of the chain.
 		#[pallet::constant]
-		type SS58Prefix: Get<u16>;
+		type SS58Prefix: Get<u8>;
 
 		/// What to do if the user wants the code set to something. Just use `()` unless you are in
 		/// cumulus.

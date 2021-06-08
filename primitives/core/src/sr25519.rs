@@ -60,10 +60,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(
-	PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner,
-	max_encoded_len::MaxEncodedLen,
-)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner)]
 pub struct Public(pub [u8; 32]);
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.

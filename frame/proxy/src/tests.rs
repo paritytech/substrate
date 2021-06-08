@@ -80,8 +80,6 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -102,10 +100,7 @@ parameter_types! {
 	pub const AnnouncementDepositBase: u64 = 1;
 	pub const AnnouncementDepositFactor: u64 = 1;
 }
-#[derive(
-	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug,
-	max_encoded_len::MaxEncodedLen,
-)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug)]
 pub enum ProxyType {
 	Any,
 	JustTransfer,
@@ -185,17 +180,15 @@ fn announcement_works() {
 		assert_eq!(Balances::reserved_balance(3), 0);
 
 		assert_ok!(Proxy::announce(Origin::signed(3), 1, [1; 32].into()));
-		let announcements = Announcements::<Test>::get(3);
-		assert_eq!(announcements.0, vec![Announcement {
+		assert_eq!(Announcements::<Test>::get(3), (vec![Announcement {
 			real: 1,
 			call_hash: [1; 32].into(),
 			height: 1,
-		}]);
-		assert_eq!(Balances::reserved_balance(3), announcements.1);
+		}], 2));
+		assert_eq!(Balances::reserved_balance(3), 2);
 
 		assert_ok!(Proxy::announce(Origin::signed(3), 2, [2; 32].into()));
-		let announcements = Announcements::<Test>::get(3);
-		assert_eq!(announcements.0, vec![
+		assert_eq!(Announcements::<Test>::get(3), (vec![
 			Announcement {
 				real: 1,
 				call_hash: [1; 32].into(),
@@ -206,8 +199,8 @@ fn announcement_works() {
 				call_hash: [2; 32].into(),
 				height: 1,
 			},
-		]);
-		assert_eq!(Balances::reserved_balance(3), announcements.1);
+		], 3));
+		assert_eq!(Balances::reserved_balance(3), 3);
 
 		assert_noop!(Proxy::announce(Origin::signed(3), 2, [3; 32].into()), Error::<Test>::TooMany);
 	});
@@ -223,13 +216,12 @@ fn remove_announcement_works() {
 		let e = Error::<Test>::NotFound;
 		assert_noop!(Proxy::remove_announcement(Origin::signed(3), 1, [0; 32].into()), e);
 		assert_ok!(Proxy::remove_announcement(Origin::signed(3), 1, [1; 32].into()));
-		let announcements = Announcements::<Test>::get(3);
-		assert_eq!(announcements.0, vec![Announcement {
+		assert_eq!(Announcements::<Test>::get(3), (vec![Announcement {
 			real: 2,
 			call_hash: [2; 32].into(),
 			height: 1,
-		}]);
-		assert_eq!(Balances::reserved_balance(3), announcements.1);
+		}], 2));
+		assert_eq!(Balances::reserved_balance(3), 2);
 	});
 }
 
@@ -245,13 +237,12 @@ fn reject_announcement_works() {
 		let e = Error::<Test>::NotFound;
 		assert_noop!(Proxy::reject_announcement(Origin::signed(4), 3, [1; 32].into()), e);
 		assert_ok!(Proxy::reject_announcement(Origin::signed(1), 3, [1; 32].into()));
-		let announcements = Announcements::<Test>::get(3);
-		assert_eq!(announcements.0, vec![Announcement {
+		assert_eq!(Announcements::<Test>::get(3), (vec![Announcement {
 			real: 2,
 			call_hash: [2; 32].into(),
 			height: 1,
-		}]);
-		assert_eq!(Balances::reserved_balance(3), announcements.1);
+		}], 2));
+		assert_eq!(Balances::reserved_balance(3), 2);
 	});
 }
 
@@ -293,13 +284,12 @@ fn proxy_announced_removes_announcement_and_returns_deposit() {
 
 		system::Pallet::<Test>::set_block_number(2);
 		assert_ok!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()));
-		let announcements = Announcements::<Test>::get(3);
-		assert_eq!(announcements.0, vec![Announcement {
+		assert_eq!(Announcements::<Test>::get(3), (vec![Announcement {
 			real: 2,
 			call_hash,
 			height: 1,
-		}]);
-		assert_eq!(Balances::reserved_balance(3), announcements.1);
+		}], 2));
+		assert_eq!(Balances::reserved_balance(3), 2);
 	});
 }
 

@@ -54,10 +54,7 @@ type Seed = [u8; 32];
 
 /// A public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(
-	PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner,
-	max_encoded_len::MaxEncodedLen,
-)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.

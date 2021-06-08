@@ -18,12 +18,11 @@
 //! Various basic types for use in the assets pallet.
 
 use super::*;
-use frame_support::pallet_prelude::*;
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct AssetDetails<
 	Balance,
 	AccountId,
@@ -67,7 +66,7 @@ impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, Deposi
 }
 
 /// Data concerning an approval.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, MaxEncodedLen)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
 pub struct Approval<Balance, DepositBalance> {
 	/// The amount of funds approved for the balance transfer from the owner to some delegated
 	/// target.
@@ -76,7 +75,7 @@ pub struct Approval<Balance, DepositBalance> {
 	pub(super) deposit: DepositBalance,
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, MaxEncodedLen)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
 pub struct AssetBalance<Balance, Extra> {
 	/// The balance.
 	pub(super) balance: Balance,
@@ -88,16 +87,16 @@ pub struct AssetBalance<Balance, Extra> {
 	pub(super) extra: Extra,
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, Default, RuntimeDebug, MaxEncodedLen)]
-pub struct AssetMetadata<DepositBalance, BoundedString> {
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
+pub struct AssetMetadata<DepositBalance> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.
 	pub(super) deposit: DepositBalance,
 	/// The user friendly name of this asset. Limited in length by `StringLimit`.
-	pub(super) name: BoundedString,
+	pub(super) name: Vec<u8>,
 	/// The ticker symbol for this asset. Limited in length by `StringLimit`.
-	pub(super) symbol: BoundedString,
+	pub(super) symbol: Vec<u8>,
 	/// The number of decimals this asset uses to represent one unit.
 	pub(super) decimals: u8,
 	/// Whether the asset metadata may be changed by a non Force origin.
@@ -105,7 +104,7 @@ pub struct AssetMetadata<DepositBalance, BoundedString> {
 }
 
 /// Witness data for the destroy transactions.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct DestroyWitness {
 	/// The number of accounts holding the asset.
 	#[codec(compact)]

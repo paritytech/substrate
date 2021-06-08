@@ -1,4 +1,4 @@
-use max_encoded_len::MaxEncodedLen;
+use frame_support::traits::MaxEncodedLen;
 
 #[derive(MaxEncodedLen)]
 struct NotEncode;

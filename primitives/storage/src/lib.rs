@@ -107,12 +107,10 @@ impl PrefixedStorageKey {
 
 /// Storage data associated to a [`StorageKey`].
 #[derive(PartialEq, Eq, RuntimeDebug)]
-#[cfg_attr(
-	feature = "std",
-	derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode, Default)
-)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode))]
 pub struct StorageData(
-	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
+	pub Vec<u8>,
 );
 
 /// Map of data to use in a storage, it is a collection of

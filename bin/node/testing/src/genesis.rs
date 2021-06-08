@@ -120,6 +120,5 @@ pub fn config_endowed(
 		},
 		pallet_vesting: Default::default(),
 		pallet_gilt: Default::default(),
-		pallet_transaction_storage: Default::default(),
 	}
 }
