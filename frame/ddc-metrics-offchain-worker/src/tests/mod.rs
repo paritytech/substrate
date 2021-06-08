@@ -9,10 +9,12 @@ use sp_core::{
 };
 use sp_runtime::{traits::Hash, AccountId32, RuntimeAppPublic};
 use test_runtime::{
-    AccountId, Balances, Contracts, DdcMetricsOffchainWorker, Origin, System, Test, Timestamp,
+    AccountId, Balance, Balances, Contracts, DdcMetricsOffchainWorker, Origin, System, Test,
+    Timestamp,
 };
 
 use crate::{CURRENT_PERIOD_MS, FINALIZE_METRIC_PERIOD, REPORT_METRICS_SELECTOR};
+use codec::Encode;
 use hex_literal::hex;
 use sp_core::bytes::from_hex;
 
@@ -257,23 +259,70 @@ fn should_submit_signed_transaction_on_chain() {
     });
 }
 
+#[test]
+fn should_run_contract() {
+    let mut t = build_ext();
+
+    t.execute_with(|| {
+        let alice = AccountId::from([1; 32]);
+        let contract_id = deploy_contract();
+        let call_data = DdcMetricsOffchainWorker::encode_get_current_period_ms();
+
+        pallet_contracts::Module::<T>::call(
+            Origin::signed(alice.clone()),
+            contract_id.clone(),
+            0,
+            100_000_000_000,
+            call_data.clone(),
+        )
+        .unwrap();
+
+        let (exec_result, _gas_consumed) = pallet_contracts::Module::<T>::bare_call(
+            alice.clone(),
+            contract_id,
+            0,
+            100_000_000_000,
+            call_data,
+        );
+        match exec_result {
+            Ok(res) => {
+                //println!("XXX Contract returned {:?}", res.data);
+                assert_eq!(res.data.len(), 8); // size of u64
+            }
+            Err(_) => panic!("error in contract call"),
+        };
+    });
+}
+
+pub const CTOR_SELECTOR: [u8; 4] = hex!("9bae9d5e");
+
+fn encode_constructor() -> Vec<u8> {
+    let mut call_data = CTOR_SELECTOR.to_vec();
+    let x = 0 as u128;
+    for _ in 0..9 {
+        x.encode_to(&mut call_data);
+    }
+    call_data
+}
+
 fn deploy_contract() -> AccountId {
     // Admin account who deploys the contract.
-    let alice = AccountId::default();
-    let _ = Balances::deposit_creating(&alice, 10_000_000_000);
+    let alice = AccountId::from([1; 32]);
+    let _ = Balances::deposit_creating(&alice, 1_000_000_000_000);
 
     // Load the contract code.
     let wasm = &include_bytes!("./test_data/ddc.wasm")[..];
     let wasm_hash = <T as FST>::Hashing::hash(wasm);
-    let contract_args = vec![];
+    let contract_args = encode_constructor();
 
     // Deploy the contract.
-    let endowment = contracts::Config::<T>::subsistence_threshold_uncached();
-    const GAS_LIMIT: Gas = 10_000_000_000;
+    //let endowment = contracts::Config::<T>::subsistence_threshold_uncached();
+    const GAS_LIMIT: Gas = 100_000_000_000;
+    const ENDOWMENT: Balance = 100_000_000_000;
     Contracts::put_code(Origin::signed(alice.clone()), wasm.to_vec()).unwrap();
     Contracts::instantiate(
         Origin::signed(alice.clone()),
-        endowment,
+        ENDOWMENT,
         GAS_LIMIT,
         wasm_hash.into(),
         contract_args.clone(),
