@@ -14,11 +14,27 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 		*counter.borrow_mut() += 1;
 		*counter.borrow()
 	});
-	let genesis_config_macro_ident = syn::Ident::new(&format!("__is_genesis_config_defined_{}", count), proc_macro2::Span::call_site());
-	let event_macro_ident = syn::Ident::new(&format!("__is_event_part_defined_{}", count), proc_macro2::Span::call_site());
-	let inherent_macro_ident = syn::Ident::new(&format!("__is_inherent_part_defined_{}", count), proc_macro2::Span::call_site());
-	let validate_unsigned_macro_ident = syn::Ident::new(&format!("__is_validate_unsigned_part_defined_{}", count), proc_macro2::Span::call_site());
-	let call_macro_ident = syn::Ident::new(&format!("__is_call_part_defined_{}", count), proc_macro2::Span::call_site());
+
+	let genesis_config_macro_ident = syn::Ident::new(
+		&format!("__is_genesis_config_defined_{}", count),
+		proc_macro2::Span::call_site(),
+	);
+	let event_macro_ident = syn::Ident::new(
+		&format!("__is_event_part_defined_{}", count),
+		proc_macro2::Span::call_site(),
+	);
+	let inherent_macro_ident = syn::Ident::new(
+		&format!("__is_inherent_part_defined_{}", count),
+		proc_macro2::Span::call_site(),
+	);
+	let validate_unsigned_macro_ident = syn::Ident::new(
+		&format!("__is_validate_unsigned_part_defined_{}", count),
+		proc_macro2::Span::call_site(),
+	);
+	let call_macro_ident = syn::Ident::new(
+		&format!("__is_call_part_defined_{}", count),
+		proc_macro2::Span::call_site(),
+	);
 
 	quote::quote!(
 		#[macro_export]
