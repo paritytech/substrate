@@ -163,11 +163,11 @@
 //! This is a phase in which no further solutions are processed, and the current best solution might
 //! be challenged by anyone (signed or unsigned). The main plan here is to enforce the solution to
 //! be PJR. Checking PJR on-chain is quite expensive, yet proving that a solution is **not** PJR is
-//! rather cheap. If a queued solution is successfully challenged:
+//! rather cheap. If a queued solution is successfully proven bad:
 //!
 //! 1. We must surely slash whoever submitted that solution (might be a challenge for unsigned
 //!    solutions).
-//! 2. It is probably fine to fallback to the on-chain election, as we expect this to happen rarely.
+//! 2. We will fallback to the emergency strategy (likely extending the current era).
 //!
 //! **Bailing out**. The functionality of bailing out of a queued solution is nice. A miner can
 //! submit a solution as soon as they _think_ it is high probability feasible, and do the checks
