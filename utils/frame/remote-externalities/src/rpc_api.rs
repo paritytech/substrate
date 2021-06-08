@@ -20,35 +20,34 @@
 
 use super::*;
 
-const WS_CLIENT_BUILDER_ERR: &str = "`jsonrpsee::WsClientBuilder` failed to build.";
-
 /// Get the header of the block identified by `at`
-pub async fn get_header<B: BlockT, S: AsRef<str>>(from: S, at: B::Hash) -> Result<B::Header, &'static str>
+pub async fn get_header<B: BlockT, S: AsRef<str>>(from: S, at: B::Hash) -> Result<B::Header, String>
 where
 	B::Header: serde::de::DeserializeOwned,
 {
 	use jsonrpsee_ws_client::traits::Client;
-	let at = serde_json::to_value(at).map_err(|_| "Block hash could not be converted to JSON.")?;
+	let at = serde_json::to_value(at)
+		.map_err(|e| format!("Block hash could not be converted to JSON due to {:?}", e))?;
 	let params = vec![at];
 	let client = WsClientBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.build(from.as_ref())
 		.await
-		.map_err(|_| WS_CLIENT_BUILDER_ERR)?;
+		.map_err(|e| format!("`WsClientBuilder` failed to build do to {:?}", e))?;
 	client.request::<B::Header>("chain_getHeader", JsonRpcParams::Array(params))
 		.await
-		.map_err(|_| "chain_getHeader request failed.")
+		.map_err(|e| format!("chain_getHeader request failed due to {:?}", e))
 }
 
 /// Get the finalized head
-pub async fn get_finalized_head<B: BlockT, S: AsRef<str>>(from: S) -> Result<B::Hash, &'static str> {
+pub async fn get_finalized_head<B: BlockT, S: AsRef<str>>(from: S) -> Result<B::Hash, String> {
 	use jsonrpsee_ws_client::traits::Client;
 	let client = WsClientBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.build(from.as_ref())
 		.await
-		.map_err(|_| WS_CLIENT_BUILDER_ERR)?;
+		.map_err(|e| format!("`WsClientBuilder` failed to build do to {:?}", e))?;
 	client.request::<B::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams)
 		.await
-		.map_err(|_| "chain_getFinalizedHead request failed.")
+		.map_err(|e| format!("chain_getFinalizedHead request failed due to {:?}", e))
 }

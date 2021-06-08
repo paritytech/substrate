@@ -303,7 +303,9 @@ where
 	ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
-	let header_hash: Block::Hash = command.header_at.parse().unwrap();
+	let header_hash: Block::Hash = command.header_at
+		.parse()
+		.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
 	let header = rpc_api::get_header::<Block, _>(url, header_hash).await?;
 
 	let _ = StateMachine::<_, _, NumberFor<Block>, _>::new(
