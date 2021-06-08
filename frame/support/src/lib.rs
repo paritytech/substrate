@@ -501,8 +501,11 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	decl_storage, construct_runtime, construct_runtime_v2, transactional, RuntimeDebugNoBound
+	decl_storage, construct_runtime, construct_runtime_v2, transactional, RuntimeDebugNoBound,
 };
+
+#[doc(hidden)]
+pub use frame_support_procedural::__generate_dummy_part_checker;
 
 /// Derive [`Clone`] but do not bound any generic.
 ///
