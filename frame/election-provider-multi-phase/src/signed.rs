@@ -267,6 +267,7 @@ impl<T: Config> Pallet<T> {
 
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
+		let discarded = all_submissions.len();
 		for SignedSubmission { who, deposit, .. } in all_submissions.drain() {
 			let _remaining = T::Currency::unreserve(&who, deposit);
 			weight = weight.saturating_add(T::DbWeight::get().writes(1));
@@ -275,6 +276,7 @@ impl<T: Config> Pallet<T> {
 
 		all_submissions.put();
 
+		log!(debug, "closed signed phase, found solution? {}, discarded {}", found_solution, discarded);
 		(found_solution, weight)
 	}
 
