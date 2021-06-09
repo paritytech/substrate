@@ -25,15 +25,20 @@ mod state_light;
 mod tests;
 
 use std::sync::Arc;
+use std::marker::PhantomData;
+
+use crate::SubscriptionTaskExecutor;
+
+use futures::{future, StreamExt};
 use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use jsonrpsee_ws_server::RpcModule;
+use jsonrpsee_ws_server::{RpcModule, SubscriptionSink};
 use futures::FutureExt;
 
 use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
-use sp_core::{Bytes, storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
+use sp_core::{Bytes, storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey, well_known_keys}};
 use sp_version::RuntimeVersion;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
@@ -153,6 +158,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 /// Create new state API that works on full node.
 pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
+	executor: Arc<SubscriptionTaskExecutor>,
 	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
@@ -167,8 +173,11 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	let child_backend = Box::new(
 		self::state_full::FullState::new(client.clone())
 	);
-	let backend = Box::new(self::state_full::FullState::new(client));
-	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
+	let backend = Arc::new(self::state_full::FullState::new(client.clone()));
+	(
+		State { backend, client, executor, deny_unsafe },
+		ChildState { backend: child_backend }
+	)
 }
 
 /// Create new state API that works on light node.
@@ -176,6 +185,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
+	executor: Arc<SubscriptionTaskExecutor>,
 	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
@@ -193,17 +203,25 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 			fetcher.clone(),
 	));
 
-	let backend = Box::new(self::state_light::LightState::new(
-			client,
+	let backend = Arc::new(self::state_light::LightState::new(
+			client.clone(),
 			remote_blockchain,
 			fetcher,
 	));
-	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
+	(
+		State { backend, client, executor, deny_unsafe },
+		ChildState { backend: child_backend }
+	)
 }
 
 /// State API with subscriptions support.
 pub struct State<Block, Client> {
-	backend: Box<dyn StateBackend<Block, Client>>,
+	backend: Arc<dyn StateBackend<Block, Client>>,
+	executor: Arc<SubscriptionTaskExecutor>,
+	// TODO: this is pretty dumb. the `FullState` struct has a `client` in it, but I don't know how to get a
+	// reference to it. I could impl `ChainBackend` which has a `client()` method, but that's pretty lame. I could
+	// also add a `client()` method to the `StateBackend` trait but that's also terrible.
+	client: Arc<Client>,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
@@ -211,16 +229,17 @@ pub struct State<Block, Client> {
 impl<Block, Client> State<Block, Client>
 	where
 		Block: BlockT + 'static,
-		Client: Send + Sync + 'static,
+		Client: BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block>
+			 + Send + Sync + 'static,
 {
 	/// Convert this to a RPC module.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut ctx_module = RpcModule::new(self);
+		let mut module = RpcModule::new(self);
 
-		ctx_module.register_async_method("state_call", |params, state| {
+		module.register_async_method("state_call", |params, state| {
 			let (method, data, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 
 			async move {
@@ -228,20 +247,20 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_getKeys", |params, state| {
+		module.register_async_method("state_getKeys", |params, state| {
 			let (key_prefix, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_keys(block, key_prefix).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_getPairs", |params, state| {
+		module.register_async_method("state_getPairs", |params, state| {
 			let (key_prefix, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -249,10 +268,10 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_getKeysPaged", |params, state| {
+		module.register_async_method("state_getKeysPaged", |params, state| {
 			let (prefix, count, start_key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				if count > STORAGE_KEYS_PAGED_MAX_COUNT {
@@ -268,44 +287,44 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_getStorage", |params, state| {
+		module.register_async_method("state_getStorage", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_getStorageHash", |params, state| {
+		module.register_async_method("state_getStorageHash", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_getStorageSize", |params, state| {
+		module.register_async_method("state_getStorageSize", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_size(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_getMetadata", |params, state| {
+		module.register_async_method("state_getMetadata", |params, state| {
 			let maybe_block = params.one().ok();
 			async move {
 				state.backend.metadata(maybe_block).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_getRuntimeVersion", |params, state| {
+		module.register_async_method("state_getRuntimeVersion", |params, state| {
 			let at = params.one().ok();
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -313,10 +332,10 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_queryStorage", |params, state| {
+		module.register_async_method("state_queryStorage", |params, state| {
 			let (keys, from, to) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -325,10 +344,10 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_queryStorageAt", |params, state| {
+		module.register_async_method("state_queryStorageAt", |params, state| {
 			let (keys, at) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -337,10 +356,10 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_getReadProof", |params, state| {
+		module.register_async_method("state_getReadProof", |params, state| {
 			let (keys, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -348,10 +367,10 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("state_traceBlock", |params, state| {
+		module.register_async_method("state_traceBlock", |params, state| {
 			let (block, targets, storage_keys) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
@@ -360,10 +379,122 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
+		module.register_subscription(
+			"state_subscribeRuntimeVersion",
+			"state_unsubscribeRuntimeVersion",
+			|_params, mut sink, ctx| {
+				let executor = ctx.executor.clone();
+				let client = ctx.client.clone();
 
-		// TODO: add subscriptions.
+				let mut previous_version = client.runtime_version_at(&BlockId::hash(client.info().best_hash))
+					.expect("best hash is valid; qed");
+				let _ = sink.send(&previous_version);
+				let rt_version_stream = client.storage_changes_notification_stream(Some(&[StorageKey(well_known_keys::CODE.to_vec())]), None, )
+					.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))
+					.map_err(to_jsonrpsee_call_error)?;
 
-		Ok(ctx_module)
+				let fut = async move {
+                    rt_version_stream
+                        .filter_map(|_| {
+                            let info = client.info();
+                            let version = client
+                                .runtime_version_at(&BlockId::hash(info.best_hash));
+                                match version {
+                                    Ok(v) => if previous_version != v {
+                                            previous_version = v.clone();
+                                            future::ready(Some(v))
+                                        } else {
+                                            future::ready(None)
+                                        },
+                                    Err(e) => {
+                                        log::error!("Could not fetch current runtime version. Error={:?}", e);
+                                        future::ready(None)
+                                    }
+                                }
+                        })
+                        .take_while(|version| {
+							future::ready(
+								sink.send(&version).map_or_else(|e| {
+									log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
+									false
+								}, |_| true)
+							)
+
+                        })
+                        .for_each(|_| future::ready(()))
+                        .await;
+                }.boxed();
+				executor.execute_new(fut);
+				Ok(())
+		})?;
+
+		module.register_subscription(
+			"state_subscribeStorage",
+			"state_unsubscribeStorage",
+			|params, mut sink, ctx| {
+				let executor = ctx.executor.clone();
+				let backend = ctx.backend.clone();
+				let keys = params.one::<Option<Vec<StorageKey>>>()?;
+
+				let initial = {
+					let block = ctx.client.info().best_hash;
+					let changes: Vec<(StorageKey, Option<StorageData>)> = keys.as_ref().map(|keys| {
+						keys
+							.iter()
+							.map(|storage_key| {
+								futures::executor::block_on(
+									StateBackend::storage(&*backend, Some(block.clone()).into(), storage_key.clone())
+										.map(|val| (storage_key.clone(), val.unwrap_or(None)))
+								)
+							})
+							.collect()
+					}).unwrap_or_default();
+					vec![StorageChangeSet { block, changes }]
+				};
+				sink.send(&initial)?;
+
+				let stream = ctx.client.storage_changes_notification_stream(
+					keys.as_ref().map(|keys| &**keys),
+					None
+					)
+					.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))
+					.map_err(to_jsonrpsee_call_error)?;
+
+				let fut = async move {
+					stream.map(|(block, changes)| {
+						StorageChangeSet {
+							block,
+							changes: changes
+								.iter()
+								.filter_map(|(o_sk, k, v)| {
+									// Note: the first `Option<&StorageKey>` seems to be the parent key, so it's set only
+									// for storage events stemming from child storage, `None` otherwise. This RPC only
+									// returns non-child storage.
+									if o_sk.is_none() {
+										Some((k.clone(), v.cloned()))
+									} else {
+										None
+									}
+								}).collect(),
+						}
+					})
+        			.take_while(|changes| {
+						future::ready(
+							sink.send(&changes).map_or_else(|e| {
+								log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
+								false
+							}, |_| true)
+						)
+					})
+        			.for_each(|_| future::ready(()))
+					.await;
+				}.boxed();
+
+				executor.execute_new(fut);
+				Ok(())
+		})?;
+
+		Ok(module)
 	}
 }
 
@@ -437,7 +568,7 @@ impl<Block, Client> ChildState<Block, Client>
 		ctx_module.register_async_method("childstate_getStorage", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage(block, storage_key, key)
@@ -449,7 +580,7 @@ impl<Block, Client> ChildState<Block, Client>
 		ctx_module.register_async_method("childstate_getKeys", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_keys(block, storage_key, key)
@@ -461,7 +592,7 @@ impl<Block, Client> ChildState<Block, Client>
 		ctx_module.register_async_method("childstate_getStorageHash", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_hash(block, storage_key, key)
@@ -473,7 +604,7 @@ impl<Block, Client> ChildState<Block, Client>
 		ctx_module.register_async_method("childstate_getStorageSize", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(futures::future::err(e)),
+				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
 				state.backend.storage_size(block, storage_key, key)

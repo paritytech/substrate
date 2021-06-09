@@ -803,10 +803,10 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	let system_rpc = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe)
 		.into_rpc_module()
 		.expect("Infallible; qed");
-	let (state, child_state) = sc_rpc::state::new_full(client.clone(), deny_unsafe);
+	let (state, child_state) = sc_rpc::state::new_full(client.clone(), task_executor.clone(), deny_unsafe);
 
-	let state_rpc = state.into_rpc_module().expect("Infallible; qed");
-	let child_state_rpc = child_state.into_rpc_module().expect("Infallible; qed");
+	let state_rpc = state.into_rpc_module().expect("Method names are unique; qed");
+	let child_state_rpc = child_state.into_rpc_module().expect("Method names are unique; qed");
 
 	let maybe_offchain_rpc = offchain_storage.map(|storage| {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe)
