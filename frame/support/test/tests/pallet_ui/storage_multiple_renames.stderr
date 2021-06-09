@@ -1,5 +1,5 @@
-error: Invalid pallet::storage, multiple argument pallet::storage_name found
-  --> $DIR/storage_multiple_renames.rs:20:30
+error: Invalid pallet::storage, multiple argument pallet::storage_prefix found
+  --> $DIR/storage_multiple_renames.rs:20:29
    |
-20 |     #[pallet::storage_name = "Baz"]
-   |                              ^^^^^
+20 |     #[pallet::storage_prefix = "Baz"]
+   |                                ^^^^^

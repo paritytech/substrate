@@ -7,16 +7,13 @@ mod pallet {
 	pub trait Config: frame_system::Config {}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(core::marker::PhantomData<T>);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	pub struct Pallet<T>(_);
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
 
 	#[pallet::storage]
-    #[pallet::generate_store(pub trait Store)]
+	#[pallet::generate_store(pub trait Store)]
 	type Foo<T> = StorageValue<u8, u8>;
 }
 

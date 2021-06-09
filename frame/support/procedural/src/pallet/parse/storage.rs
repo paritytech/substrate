@@ -25,14 +25,14 @@ mod keyword {
 	syn::custom_keyword!(Error);
 	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(getter);
-	syn::custom_keyword!(storage_name);
+	syn::custom_keyword!(storage_prefix);
 	syn::custom_keyword!(OptionQuery);
 	syn::custom_keyword!(ValueQuery);
 }
 
 /// Parse for one of the following:
 /// * `#[pallet::getter(fn dummy)]`
-/// * `#[pallet::storage_name = "CustomName"]`
+/// * `#[pallet::storage_prefix = "CustomName"]`
 pub enum PalletStorageAttr {
 	Getter(syn::Ident),
 	StorageName(syn::Lit),
@@ -63,8 +63,8 @@ impl syn::parse::Parse for PalletStorageAttr {
 			syn::parenthesized!(generate_content in content);
 			generate_content.parse::<syn::Token![fn]>()?;
 			Ok(Self::Getter(generate_content.parse::<syn::Ident>()?))
-		} else if lookahead.peek(keyword::storage_name) {
-			content.parse::<keyword::storage_name>()?;
+		} else if lookahead.peek(keyword::storage_prefix) {
+			content.parse::<keyword::storage_prefix>()?;
 			content.parse::<syn::Token![=]>()?;
 
 			Ok(Self::StorageName(content.parse::<syn::Lit>()?))
@@ -587,7 +587,7 @@ impl StorageDef {
 			return Err(syn::Error::new(getters[1].span(), msg));
 		}
 		if names.len() > 1 {
-			let msg = "Invalid pallet::storage, multiple argument pallet::storage_name found";
+			let msg = "Invalid pallet::storage, multiple argument pallet::storage_prefix found";
 			return Err(syn::Error::new(names[1].span(), msg));
 		}
 		let getter = getters.pop().map(|attr| {

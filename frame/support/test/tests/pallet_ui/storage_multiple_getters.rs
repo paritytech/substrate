@@ -16,8 +16,8 @@ mod pallet {
 	impl<T: Config> Pallet<T> {}
 
 	#[pallet::storage]
-    #[pallet::getter(fn get_foo)]
-    #[pallet::getter(fn foo_error)]
+	#[pallet::getter(fn get_foo)]
+	#[pallet::getter(fn foo_error)]
 	type Foo<T> = StorageValue<_, u8>;
 }
 

@@ -16,8 +16,8 @@ mod pallet {
 	impl<T: Config> Pallet<T> {}
 
 	#[pallet::storage]
-    #[pallet::storage_name = "Bar"]
-    #[pallet::storage_name = "Baz"]
+	#[pallet::storage_prefix = "Bar"]
+	#[pallet::storage_prefix = "Baz"]
 	type Foo<T> = StorageValue<_, u8>;
 }
 

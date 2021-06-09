@@ -199,7 +199,7 @@ pub mod pallet {
 	pub type Value<T> = StorageValue<Value = u32>;
 
 	#[pallet::storage]
-	#[pallet::storage_name = "Value2"]
+	#[pallet::storage_prefix = "Value2"]
 	pub type RenamedValue<T> = StorageValue<Value = u64>;
 
 	#[pallet::type_value]
