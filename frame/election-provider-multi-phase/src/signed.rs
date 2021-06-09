@@ -123,6 +123,18 @@ impl<T: Config> SignedSubmissions<T> {
 		}
 	}
 
+	/// Put the signed submissions back into storage.
+	pub fn put(self) {
+		SignedSubmissionIndices::<T>::put(self.indices);
+		SignedSubmissionNextIndex::<T>::put(self.next_idx);
+		for key in self.deletion_overlay {
+			SignedSubmissionsMap::<T>::remove(key);
+		}
+		for (key, value) in self.insertion_overlay {
+			SignedSubmissionsMap::<T>::insert(key, value);
+		}
+	}
+
 	/// Get the submission at a particular index.
 	fn map_get(&self, idx: u32) -> Option<SignedSubmissionOf<T>> {
 		self.insertion_overlay
@@ -154,7 +166,7 @@ impl<T: Config> SignedSubmissions<T> {
 	/// arbitrary order
 	pub fn drain(&mut self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
 		self.indices.clear();
-		self.next_idx = 0;
+		SignedSubmissionNextIndex::<T>::kill();
 		let insertion_overlay = sp_std::mem::take(&mut self.insertion_overlay);
 		SignedSubmissionsMap::<T>::drain()
 			.filter(move |(k, _v)| !self.deletion_overlay.contains(k))
@@ -243,20 +255,6 @@ impl<T: Config> Deref for SignedSubmissions<T> {
 	}
 }
 
-impl<T: Config> Drop for SignedSubmissions<T> {
-    fn drop(&mut self) {
-		SignedSubmissionIndices::<T>::put(sp_std::mem::take(&mut self.indices));
-		SignedSubmissionNextIndex::<T>::put(self.next_idx);
-
-		for key in self.deletion_overlay.iter().copied() {
-			SignedSubmissionsMap::<T>::remove(key);
-		}
-		for (key, value) in sp_std::mem::take(&mut self.insertion_overlay) {
-			SignedSubmissionsMap::<T>::insert(key, value);
-		}
-    }
-}
-
 impl<T: Config> Pallet<T> {
 	/// `Self` accessor for `SignedSubmission<T>`.
 	pub fn signed_submissions() -> SignedSubmissions<T> {
@@ -322,6 +320,8 @@ impl<T: Config> Pallet<T> {
 			weight = weight.saturating_add(T::DbWeight::get().writes(1));
 			debug_assert!(_remaining.is_zero());
 		}
+
+		all_submissions.put();
 
 		log!(debug, "closed signed phase, found solution? {}, discarded {}", found_solution, discarded);
 		(found_solution, weight)

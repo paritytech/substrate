@@ -282,7 +282,7 @@ frame_benchmarking::benchmarks! {
 			let signed_submission = SignedSubmission { solution, ..Default::default() };
 			signed_submissions.insert(signed_submission);
 		}
-		drop(signed_submissions);
+		signed_submissions.put();
 
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
