@@ -421,7 +421,7 @@ impl<Block, Client> State<Block, Client>
 							)
 
                         })
-                        .into_future()
+                        .for_each(|_| future::ready(()))
                         .await;
                 }.boxed();
 				executor.execute_new(fut);
@@ -486,7 +486,7 @@ impl<Block, Client> State<Block, Client>
 							})
 						)
 					})
-        			.into_future()
+        			.for_each(|_| future::ready(()))
 					.await;
 				}.boxed();
 
