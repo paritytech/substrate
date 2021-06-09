@@ -120,7 +120,7 @@
 //!
 //! If, for any of the below reasons:
 //!
-//! 1. No signed or unsigned solution submitted & Fallback is `None`
+//! 1. No signed or unsigned solution submitted & Fallback is `None` or failed
 //! 2. Internal error
 //!
 //! A call to `T::ElectionProvider::elect` is made, and `Ok(_)` cannot be returned, then the pallet
