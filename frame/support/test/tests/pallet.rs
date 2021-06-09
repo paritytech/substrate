@@ -1009,6 +1009,11 @@ fn test_storage_info() {
 				max_size: Some(4),
 			},
 			StorageInfo {
+				prefix: prefix(b"Example", b"Value2"),
+				max_values: Some(1),
+				max_size: Some(8),
+			},
+			StorageInfo {
 				prefix: prefix(b"Example", b"Map"),
 				max_values: None,
 				max_size: Some(3 + 16),
