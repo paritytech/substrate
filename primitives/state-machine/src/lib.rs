@@ -144,7 +144,7 @@ mod changes_trie {
 #[cfg(feature = "std")]
 mod std_reexport {
 	pub use sp_trie::{trie_types::{Layout, TrieDBMut}, StorageProof, TrieMut, DBValue, MemoryDB};
-	pub use crate::testing::{TestExternalities, HEAP_PAGES_TEST_LEGACY};
+	pub use crate::testing::TestExternalities;
 	pub use crate::basic::BasicExternalities;
 	pub use crate::read_only::{ReadOnlyExternalities, InspectState};
 	pub use crate::changes_trie::{
