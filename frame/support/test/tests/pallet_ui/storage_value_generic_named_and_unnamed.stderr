@@ -1,0 +1,5 @@
+error: Invalid pallet::storage, invalid generic declaration for storage. Expect only type generics or binding generics, e.g. `<Name1 = Gen1, Name2 = Gen2, ..>` or `<Gen1, Gen2, ..>`.
+  --> $DIR/storage_value_generic_named_and_unnamed.rs:19:16
+   |
+19 |     type Foo<T> = StorageValue<u32, QueryKind = OptionQuery>;
+   |                   ^^^^^^^^^^^^

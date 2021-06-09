@@ -888,7 +888,44 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		});
 	}
 
-	/// You may call this when new transactons are imported by the transaction pool.
+	/// High-level network status information.
+	///
+	/// Returns an error if the `NetworkWorker` is no longer running.
+	pub async fn status(&self) -> Result<NetworkStatus<B>, ()> {
+		let (tx, rx) = oneshot::channel();
+
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::NetworkStatus {
+			pending_response: tx,
+		});
+
+		match rx.await {
+			Ok(v) => v.map_err(|_| ()),
+			// The channel can only be closed if the network worker no longer exists.
+			Err(_) => Err(()),
+		}
+	}
+
+	/// Get network state.
+	///
+	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literally
+	/// everywhere about this. Please don't use this function to retrieve actual information.
+	///
+	/// Returns an error if the `NetworkWorker` is no longer running.
+	pub async fn network_state(&self) -> Result<NetworkState, ()> {
+		let (tx, rx) = oneshot::channel();
+
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::NetworkState {
+			pending_response: tx,
+		});
+
+		match rx.await {
+			Ok(v) => v.map_err(|_| ()),
+			// The channel can only be closed if the network worker no longer exists.
+			Err(_) => Err(()),
+		}
+	}
+
+	/// You may call this when new transactions are imported by the transaction pool.
 	///
 	/// All transactions will be fetched from the `TransactionPool` that was passed at
 	/// initialization as part of the configuration and propagated to peers.
@@ -1307,6 +1344,12 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
 	},
+	NetworkStatus {
+		pending_response: oneshot::Sender<Result<NetworkStatus<B>, RequestFailure>>,
+	},
+	NetworkState {
+		pending_response: oneshot::Sender<Result<NetworkState, RequestFailure>>,
+	},
 	DisconnectPeer(PeerId, Cow<'static, str>),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
 }
@@ -1434,6 +1477,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				ServiceToWorkerMsg::Request { target, protocol, request, pending_response, connect } => {
 					this.network_service.behaviour_mut().send_request(&target, &protocol, request, pending_response, connect);
 				},
+				ServiceToWorkerMsg::NetworkStatus { pending_response } => {
+					let _ = pending_response.send(Ok(this.status()));
+				},
+				ServiceToWorkerMsg::NetworkState { pending_response } => {
+					let _ = pending_response.send(Ok(this.network_state()));
+				},
 				ServiceToWorkerMsg::DisconnectPeer(who, protocol_name) =>
 					this.network_service.behaviour_mut().user_protocol_mut().disconnect_peer(&who, &protocol_name),
 				ServiceToWorkerMsg::NewBestBlockImported(hash, number) =>
@@ -1541,7 +1590,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
-					remote, protocol, notifications_sink, role
+					remote, protocol, negotiated_fallback, notifications_sink, role
 				})) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.notifications_streams_opened_total
@@ -1549,11 +1598,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
-						peers_notifications_sinks.insert((remote.clone(), protocol.clone()), notifications_sink);
+						let _previous_value = peers_notifications_sinks
+							.insert((remote.clone(), protocol.clone()), notifications_sink);
+						debug_assert!(_previous_value.is_none());
 					}
 					this.event_streams.send(Event::NotificationStreamOpened {
 						remote,
 						protocol,
+						negotiated_fallback,
 						role,
 					});
 				},
@@ -1568,6 +1620,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							target: "sub-libp2p",
 							"NotificationStreamReplaced for non-existing substream"
 						);
+						debug_assert!(false);
 					}
 
 					// TODO: Notifications might have been lost as a result of the previous
@@ -1602,7 +1655,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					});
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
-						peers_notifications_sinks.remove(&(remote.clone(), protocol));
+						let _previous_value = peers_notifications_sinks
+							.remove(&(remote.clone(), protocol));
+						debug_assert!(_previous_value.is_some());
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationsReceived { remote, messages })) => {

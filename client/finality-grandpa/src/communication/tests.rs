@@ -20,7 +20,7 @@
 
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use futures::prelude::*;
-use sc_network::{Event as NetworkEvent, ObservedRole, PeerId};
+use sc_network::{config::Role, Event as NetworkEvent, ObservedRole, PeerId};
 use sc_network_test::{Block, Hash};
 use sc_network_gossip::Validator;
 use std::sync::Arc;
@@ -137,7 +137,7 @@ fn config() -> crate::Config {
 		justification_period: 256,
 		keystore: None,
 		name: None,
-		is_authority: true,
+		local_role: Role::Authority,
 		observer_enabled: true,
 		telemetry: None,
 	}
@@ -295,6 +295,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 
@@ -308,6 +309,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: receiver_id.clone(),
 						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 
@@ -442,6 +444,7 @@ fn bad_commit_leads_to_report() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						protocol: GRANDPA_PROTOCOL_NAME.into(),
+						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {

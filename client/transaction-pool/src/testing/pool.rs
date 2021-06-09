@@ -361,7 +361,7 @@ fn should_revalidate_across_many_blocks() {
 
 
 #[test]
-fn should_push_watchers_during_maintaince() {
+fn should_push_watchers_during_maintenance() {
 	fn alice_uxt(nonce: u64) -> Extrinsic {
 		uxt(Alice, 209 + nonce)
 	}

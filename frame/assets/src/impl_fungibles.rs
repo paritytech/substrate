@@ -127,26 +127,26 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		});
 	}
 	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-						-> Result<Self::Balance, DispatchError>
+		-> Result<Self::Balance, DispatchError>
 	{
 		let f = DebitFlags { keep_alive: false, best_effort: false };
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
 	}
 	fn decrease_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-								-> Self::Balance
+		-> Self::Balance
 	{
 		let f = DebitFlags { keep_alive: false, best_effort: true };
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
 			.unwrap_or(Zero::zero())
 	}
 	fn increase_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-						-> Result<Self::Balance, DispatchError>
+		-> Result<Self::Balance, DispatchError>
 	{
 		Self::increase_balance(asset, who, amount, |_| Ok(()))?;
 		Ok(amount)
 	}
 	fn increase_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-								-> Self::Balance
+		-> Self::Balance
 	{
 		match Self::increase_balance(asset, who, amount, |_| Ok(())) {
 			Ok(()) => amount,

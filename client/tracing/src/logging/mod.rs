@@ -122,6 +122,9 @@ where
 		.add_directive(parse_default_directive("ws=off").expect("provided directive is valid"))
 		.add_directive(parse_default_directive("yamux=off").expect("provided directive is valid"))
 		.add_directive(
+			parse_default_directive("regalloc=off").expect("provided directive is valid"),
+		)
+		.add_directive(
 			parse_default_directive("cranelift_codegen=off").expect("provided directive is valid"),
 		)
 		// Set warn logging by default for some modules.
@@ -176,6 +179,9 @@ where
 		dup_to_stdout: !atty::is(atty::Stream::Stderr) && atty::is(atty::Stream::Stdout),
 	};
 	let builder = FmtSubscriber::builder().with_env_filter(env_filter);
+
+	#[cfg(not(target_os = "unknown"))]
+	let builder = builder.with_span_events(format::FmtSpan::NONE);
 
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.with_writer(std::io::stderr as _);
