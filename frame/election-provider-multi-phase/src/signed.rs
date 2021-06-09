@@ -34,7 +34,11 @@ use sp_runtime::{
 	RuntimeDebug,
 	traits::{Saturating, Zero},
 };
-use sp_std::{cmp::Ordering, ops::Deref};
+use sp_std::{
+	cmp::Ordering,
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	ops::Deref,
+};
 
 /// A raw, unchecked signed submission.
 ///
@@ -101,29 +105,73 @@ pub type SubmissionIndicesOf<T> =
 /// actual implementations in `SignedSubmissionIndices<T>`, `SignedSubmissionsMap<T>`, and
 /// `SignedSubmissionNextIndex<T>`.
 #[cfg_attr(feature = "std", derive(DebugNoBound))]
-pub struct SignedSubmissions<T: Config>(SubmissionIndicesOf<T>);
+pub struct SignedSubmissions<T: Config> {
+	indices: SubmissionIndicesOf<T>,
+	next_idx: u32,
+	insertion_overlay: BTreeMap<u32, SignedSubmissionOf<T>>,
+	deletion_overlay: BTreeSet<u32>,
+}
 
 impl<T: Config> SignedSubmissions<T> {
 	/// Get the signed submissions from storage.
 	pub fn get() -> Self {
-		SignedSubmissions(SignedSubmissionIndices::<T>::get())
+		SignedSubmissions {
+			indices: SignedSubmissionIndices::<T>::get(),
+			next_idx: SignedSubmissionNextIndex::<T>::get(),
+			insertion_overlay: BTreeMap::new(),
+			deletion_overlay: BTreeSet::new(),
+		}
 	}
 
 	/// Put the signed submissions back into storage.
 	pub fn put(self) {
-		SignedSubmissionIndices::<T>::put(self.0)
+		SignedSubmissionIndices::<T>::put(self.indices);
+		SignedSubmissionNextIndex::<T>::put(self.next_idx);
+		for key in self.deletion_overlay {
+			SignedSubmissionsMap::<T>::remove(key);
+		}
+		for (key, value) in self.insertion_overlay {
+			SignedSubmissionsMap::<T>::insert(key, value);
+		}
+	}
+
+	/// Get the submission at a particular index.
+	fn map_get(&self, idx: u32) -> Option<SignedSubmissionOf<T>> {
+		self.insertion_overlay
+			.get(&idx)
+			.cloned()
+			.or_else(|| SignedSubmissionsMap::<T>::try_get(idx).ok())
+	}
+
+	/// Take the submission at a particular index.
+	fn map_take(&mut self, idx: u32) -> Option<SignedSubmissionOf<T>> {
+		self.insertion_overlay.remove(&idx).or_else(|| {
+			if self.deletion_overlay.contains(&idx) {
+				None
+			} else {
+				self.deletion_overlay.insert(idx);
+				SignedSubmissionsMap::<T>::try_get(idx).ok()
+			}
+		})
 	}
 
 	/// Iterate through the set of signed submissions in order of increasing score.
 	pub fn iter(&self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
-		self.0.iter().map(|(_score, idx)| SignedSubmissionsMap::<T>::get(idx))
+		self.indices.iter().map(move |(_score, idx)| {
+			self.map_get(*idx).expect("SignedSubmissions must remain internally consistent")
+		})
 	}
 
-	/// Empty the set of signed submissions, returning an iterator of signed submissions
-	pub fn drain(&mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
-		self.0.clear();
+	/// Empty the set of signed submissions, returning an iterator of signed submissions in
+	/// arbitrary order
+	pub fn drain(&mut self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
+		self.indices.clear();
 		SignedSubmissionNextIndex::<T>::kill();
-		SignedSubmissionsMap::<T>::drain().map(|(_k, v)| v)
+		let insertion_overlay = sp_std::mem::take(&mut self.insertion_overlay);
+		SignedSubmissionsMap::<T>::drain()
+			.filter(move |(k, _v)| !self.deletion_overlay.contains(k))
+			.map(|(_k, v)| v)
+			.chain(insertion_overlay.into_iter().map(|(_k, v)| v))
 	}
 
 	/// Decode the length of the signed submissions without actually reading the entire struct into
@@ -143,13 +191,12 @@ impl<T: Config> SignedSubmissions<T> {
 		&mut self,
 		submission: SignedSubmissionOf<T>,
 	) -> (bool, Option<SignedSubmissionOf<T>>) {
-		let insert_idx = SignedSubmissionNextIndex::<T>::get();
-		let weakest = match self.0.try_insert(submission.solution.score, insert_idx) {
+		let weakest = match self.indices.try_insert(submission.solution.score, self.next_idx) {
 			Ok(Some(prev_idx)) => {
 				// a submission of equal score was already present in the set;
 				// no point editing the actual backing map as we know that the newer solution can't
 				// be better than the old. However, we do need to put the old value back.
-				self.0
+				self.indices
 					.try_insert(submission.solution.score, prev_idx)
 					.expect("didn't change the map size; qed");
 				return (false, None);
@@ -163,7 +210,7 @@ impl<T: Config> SignedSubmissions<T> {
 				// note that we short-circuit return here in case the iteration produces `None`.
 				// If there wasn't a weakest entry to remove, then there must be a capacity of 0,
 				// which means that we can't meaningfully proceed.
-				let (weakest_score, weakest_idx) = match self.0.iter().next() {
+				let (weakest_score, weakest_idx) = match self.indices.iter().next() {
 					None => return (false, None),
 					Some((score, idx)) => (*score, *idx),
 				};
@@ -174,29 +221,29 @@ impl<T: Config> SignedSubmissions<T> {
 					return (false, None);
 				}
 
-				self.0.remove(&weakest_score);
-				self.0
+				self.indices.remove(&weakest_score);
+				self.indices
 					.try_insert(score, insert_idx)
 					.expect("just removed an item, we must be under capacity; qed");
 
 				// ensure that SignedSubmissionsMap never grows past capacity by taking out the
 				// weakest member here.
-				Some(SignedSubmissionsMap::<T>::take(weakest_idx))
+				self.map_take(weakest_idx)
 			}
 		};
 
 		// we've taken out the weakest, so update the storage map and the next index
-		SignedSubmissionsMap::<T>::insert(insert_idx, submission);
-		SignedSubmissionNextIndex::<T>::put(insert_idx + 1);
+		self.insertion_overlay.insert(self.next_idx, submission);
+		self.next_idx += 1;
 		(true, weakest)
 	}
 
 	/// Remove the signed submission with the highest score from the set.
 	pub fn pop_last(&mut self) -> Option<SignedSubmissionOf<T>> {
-		let (highest_score, idx) = self.0.iter().rev().next()?;
+		let (highest_score, idx) = self.indices.iter().rev().next()?;
 		let (highest_score, idx) = (*highest_score, *idx);
-		self.0.remove(&highest_score);
-		Some(SignedSubmissionsMap::<T>::take(idx))
+		self.indices.remove(&highest_score);
+		self.map_take(idx)
 	}
 }
 
@@ -204,7 +251,7 @@ impl<T: Config> Deref for SignedSubmissions<T> {
 	type Target = SubmissionIndicesOf<T>;
 
 	fn deref(&self) -> &Self::Target {
-		&self.0
+		&self.indices
 	}
 }
 
@@ -740,6 +787,24 @@ mod tests {
 				submit_with_witness(Origin::signed(99), solution),
 				Error::<Runtime>::SignedTooMuchWeight,
 			);
+		})
+	}
+
+	#[test]
+	fn insufficient_deposit_doesnt_store_submission() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			let solution = raw_solution();
+
+			assert_eq!(balances(&123), (0, 0));
+			assert_noop!(
+				submit_with_witness(Origin::signed(123), solution),
+				Error::<Runtime>::SignedCannotPayDeposit,
+			);
+
+			assert_eq!(balances(&123), (0, 0));
 		})
 	}
 }
