@@ -276,6 +276,7 @@ pub mod testing_utils;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
 
+pub mod nominator_list;
 pub mod slashing;
 pub mod inflation;
 pub mod weights;
