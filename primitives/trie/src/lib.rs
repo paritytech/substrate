@@ -57,14 +57,9 @@ pub struct TrieMeta {
 	/// Defined in the trie layout, when used with
 	/// `TrieDbMut` it switch nodes to alternative hashing
 	/// method by setting `do_value_hash` to true.
-	/// TODO may be useless (indicate that previous hash is
-	/// not using `do_value_hash`).
+	/// TODO consider defining it without do_value
+	/// and set do_value on encoding only.
 	pub switch_to_value_hash: bool,
-	/// When `do_value_hash` is true, try to
-	/// store this behavior in top node
-	/// encoded (need to be part of state).
-	/// TODO remove
-	pub recorded_do_value_hash: bool,
 	/// Does current encoded contains a hash instead of
 	/// a value (information stored in meta for proofs).
 	pub contain_hash: bool,
@@ -79,9 +74,6 @@ pub struct TrieMeta {
 	/// and reset on access explicitely: `HashDB::access_from`.
 	/// TODO!! remove from meta: only use in proof recorder context.
 	pub unused_value: bool,
-	/// Indicate that a node is using old hash scheme.
-	/// TODO remove
-	pub old_hash: bool,
 }
 
 impl Meta for TrieMeta {
@@ -201,8 +193,11 @@ impl Meta for TrieMeta {
 	}
 
 	// TODO could be rename to get_state_meta
+	// the type of node depend on it.
 	fn do_value_hash(&self) -> bool {
-		self.do_value_hash
+		self.do_value_hash/* && self.range.as_ref().map(|range|
+			range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD
+		).unwrap_or(false)*/
 	}
 }
 
@@ -360,9 +355,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 			unused_value: contain_hash,
 			contain_hash,
 			do_value_hash: false,
-			recorded_do_value_hash: false,
 			switch_to_value_hash: false,
-			old_hash: false,
 		};
 		meta.set_global_meta(global_meta);
 		(stored, meta)

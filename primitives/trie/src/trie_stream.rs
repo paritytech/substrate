@@ -145,8 +145,6 @@ impl trie_root::TrieStream for TrieStream {
 						range: range,
 						unused_value: false,
 						contain_hash: false,
-						old_hash: false,
-						recorded_do_value_hash: false,
 						// No existing state, no need to use switch_to_value_hash
 						switch_to_value_hash: false,
 						do_value_hash: true,
@@ -167,8 +165,6 @@ impl trie_root::TrieStream for TrieStream {
 			range: range,
 			unused_value: false,
 			contain_hash: false,
-			old_hash: false,
-			recorded_do_value_hash: inner_value_hashing,
 			switch_to_value_hash: false,
 			do_value_hash: inner_value_hashing,
 		};

@@ -170,6 +170,10 @@ pub mod well_known_keys {
 	/// Current extrinsic index (u32) is stored under this key.
 	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
 
+	/// Configuration for trie internal hashing of value is stored
+	/// under this key.
+	pub const TRIE_HASHING_CONFIG: &'static [u8] = b":trie_hashing_conf";
+
 	/// Changes trie configuration is stored under this key.
 	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 
@@ -196,7 +200,6 @@ pub mod well_known_keys {
 			CHILD_STORAGE_KEY_PREFIX.starts_with(key)
 		}
 	}
-
 }
 
 /// Information related to a child state.
