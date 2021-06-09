@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use super::helper;
+use core::convert::TryFrom;
 use syn::spanned::Spanned;
 use quote::ToTokens;
 
@@ -25,7 +26,6 @@ mod keyword {
 	syn::custom_keyword!(From);
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(I);
-	syn::custom_keyword!(Get);
 	syn::custom_keyword!(config);
 	syn::custom_keyword!(IsType);
 	syn::custom_keyword!(Event);
@@ -62,19 +62,48 @@ pub struct ConstMetadataDef {
 	pub doc: Vec<syn::Lit>,
 }
 
-impl syn::parse::Parse for ConstMetadataDef  {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		let doc = helper::get_doc_literals(&syn::Attribute::parse_outer(input)?);
-		input.parse::<syn::Token![type]>()?;
-		let ident = input.parse::<syn::Ident>()?;
-		input.parse::<syn::Token![:]>()?;
-		input.parse::<keyword::Get>()?;
-		input.parse::<syn::Token![<]>()?;
-		let mut type_ = input.parse::<syn::Type>()?;
-		type_ = syn::parse2::<syn::Type>(replace_self_by_t(type_.to_token_stream()))
+impl TryFrom<syn::TraitItemType> for ConstMetadataDef {
+	type Error = syn::Error;
+
+	fn try_from(value: syn::TraitItemType) -> Result<Self, Self::Error> {
+		let doc = helper::get_doc_literals(&value.attrs);
+		let ident = value.ident.clone();
+		let bound = value.bounds
+			.iter()
+			.find_map(|b|
+				if let syn::TypeParamBound::Trait(tb) = b {
+					tb.path.segments
+						.last()
+						.and_then(|s| if s.ident == "Get" { Some(s) } else { None } )
+				} else {
+					None
+				}
+			)
+			.ok_or_else(|| syn::Error::new(
+				value.bounds.span(),
+				"`Get<T>` trait bound not found")
+			)?;
+		let type_arg = if let syn::PathArguments::AngleBracketed (ref ab) = bound.arguments {
+			if ab.args.len() == 1 {
+				if let syn::GenericArgument::Type(ref ty) = ab.args[0] {
+					Ok(ty)
+				} else {
+					Err(syn::Error::new(
+						ab.args[0].span(),
+						"Expected a type argument")
+					)
+				}
+			} else {
+				Err(syn::Error::new(
+					ab.span(),
+					"Expected a single type argument")
+				)
+			}
+		} else {
+			Err(syn::Error::new(bound.arguments.span(), "Expected trait angle bracketed args"))
+		}?;
+		let type_ = syn::parse2::<syn::Type>(replace_self_by_t(type_arg.to_token_stream()))
 			.expect("Internal error: replacing `Self` by `T` should result in valid type");
-		input.parse::<syn::Token![>]>()?;
-		input.parse::<syn::Token![;]>()?;
 
 		Ok(Self { ident, type_, doc })
 	}
@@ -323,7 +352,7 @@ impl ConfigDef {
 			if type_attrs_const.len() == 1 {
 				match trait_item {
 					syn::TraitItem::Type(type_) => {
-						let constant = syn::parse2::<ConstMetadataDef>(type_.to_token_stream())
+						let constant = ConstMetadataDef::try_from(type_.clone())
 							.map_err(|e| {
 								let error_msg = "Invalid usage of `#[pallet::constant]`, syntax \
 									must be `type $SomeIdent: Get<$SomeType>;`";
