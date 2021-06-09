@@ -62,42 +62,44 @@ pub struct ConstMetadataDef {
 	pub doc: Vec<syn::Lit>,
 }
 
-{
-type Error = syn::Error;
+impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
+	type Error = syn::Error;
 
-fn try_from(trait_ty: &syn::TraitItemType) -> Result<Self, Self::Error> {
-	let doc = helper::get_doc_literals(&trait_ty.attrs);
-	let ident = trait_ty.ident.clone();
-	let bound = trait_ty.bounds
-		.iter()
-		.find_map(|b|
-			if let syn::TypeParamBound::Trait(tb) = b {
-				tb.path.segments
-					.last()
-					.and_then(|s| if s.ident == "Get" { Some(s) } else { None } )
+	fn try_from(trait_ty: &syn::TraitItemType) -> Result<Self, Self::Error> {
+		let err = |span, msg|
+			syn::Error::new(span, format!("Invalid usage of `#[pallet::constant]`: {}", msg));
+		let doc = helper::get_doc_literals(&trait_ty.attrs);
+		let ident = trait_ty.ident.clone();
+		let bound = trait_ty.bounds
+			.iter()
+			.find_map(|b|
+				if let syn::TypeParamBound::Trait(tb) = b {
+					tb.path.segments
+						.last()
+						.and_then(|s| if s.ident == "Get" { Some(s) } else { None } )
+				} else {
+					None
+				}
+			)
+			.ok_or_else(|| err(trait_ty.span(), "`Get<T>` trait bound not found"))?;
+		let type_arg = if let syn::PathArguments::AngleBracketed (ref ab) = bound.arguments {
+			if ab.args.len() == 1 {
+				if let syn::GenericArgument::Type(ref ty) = ab.args[0] {
+					Ok(ty)
+				} else {
+					Err(err(ab.args[0].span(), "Expected a type argument"))
+				}
 			} else {
-				None
-			}
-		)
-		.ok_or_else(|| Error::new(trait_ty.span(), "`Get<T>` trait bound not found"))?;
-	let type_arg = if let syn::PathArguments::AngleBracketed (ref ab) = bound.arguments {
-		if ab.args.len() == 1 {
-			if let syn::GenericArgument::Type(ref ty) = ab.args[0] {
-				Ok(ty)
-			} else {
-				Err(Error::new(ab.args[0].span(), "Expected a type argument"))
+				Err(err(bound.span(), "Expected a single type argument"))
 			}
 		} else {
-			Err(Error::new(bound.span(), "Expected a single type argument"))
-		}
-	} else {
-		Err(Error::new(bound.span(), "Expected trait generic args"))
-	}?;
-	let type_ = syn::parse2::<syn::Type>(replace_self_by_t(type_arg.to_token_stream()))
-		.expect("Internal error: replacing `Self` by `T` should result in valid type");
+			Err(err(bound.span(), "Expected trait generic args"))
+		}?;
+		let type_ = syn::parse2::<syn::Type>(replace_self_by_t(type_arg.to_token_stream()))
+			.expect("Internal error: replacing `Self` by `T` should result in valid type");
 
-	Ok(Self { ident, type_, doc })
-}
+		Ok(Self { ident, type_, doc })
+	}
 }
 
 /// Parse for `#[pallet::disable_frame_system_supertrait_check]`
@@ -342,16 +344,8 @@ impl ConfigDef {
 
 			if type_attrs_const.len() == 1 {
 				match trait_item {
-					syn::TraitItem::Type(type_) => {
-						let constant = ConstMetadataDef::try_from(type_.clone())
-							.map_err(|e| {
-								let error_msg = "Invalid usage of `#[pallet::constant]`, syntax \
-									must be `type $SomeIdent: Get<$SomeType>;`";
-								let mut err = syn::Error::new(type_.span(), error_msg);
-								err.combine(e);
-								err
-							})?;
-
+					syn::TraitItem::Type(ref type_) => {
+						let constant = ConstMetadataDef::try_from(type_)?;
 						consts_metadata.push(constant);
 					},
 					_ => {
