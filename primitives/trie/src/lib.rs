@@ -53,6 +53,7 @@ pub use hash_db::NoMeta;
 #[derive(Default, Clone, Debug)]
 pub struct TrieMeta {
 	/// Range of encoded value or hashed value.
+	/// When encoded value, it includes the length of the value.
 	pub range: Option<core::ops::Range<usize>>,
 	/// Defined in the trie layout, when used with
 	/// `TrieDbMut` it switch nodes to alternative hashing
@@ -194,10 +195,9 @@ impl Meta for TrieMeta {
 
 	// TODO could be rename to get_state_meta
 	// the type of node depend on it.
+	// Note that it is after encoding state meta here!!
 	fn do_value_hash(&self) -> bool {
-		self.do_value_hash/* && self.range.as_ref().map(|range|
-			range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD
-		).unwrap_or(false)*/
+		self.do_value_hash
 	}
 }
 

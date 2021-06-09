@@ -216,7 +216,7 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 	}
 
 	fn leaf_node(partial: Partial, value: Value, meta: &mut M) -> Vec<u8> {
-		let mut output = if meta.do_value_hash() {
+		let mut output = if meta.do_value_hash() && value_do_hash(&value) {
 			partial_encode(partial, NodeKind::AltHashLeaf)
 		} else {
 			partial_encode(partial, NodeKind::Leaf)
@@ -263,10 +263,10 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 		partial: impl Iterator<Item = u8>,
 		number_nibble: usize,
 		children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
-		maybe_value: Value,
+		value: Value,
 		meta: &mut M,
 	) -> Vec<u8> {
-		let mut output = match (&maybe_value, meta.do_value_hash()) {
+		let mut output = match (&value, meta.do_value_hash() && value_do_hash(&value)) {
 			(&Value::NoValue, _) => {
 				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue)
 			},
@@ -281,7 +281,7 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 		let bitmap_index = output.len();
 		let mut bitmap: [u8; BITMAP_LENGTH] = [0; BITMAP_LENGTH];
 		(0..BITMAP_LENGTH).for_each(|_|output.push(0));
-		match maybe_value {
+		match value {
 			Value::Value(value) => {
 				let with_len = output.len();
 				Compact(value.len() as u32).encode_to(&mut output);
@@ -317,6 +317,14 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 }
 
 // utils
+
+fn value_do_hash(val: &Value) -> bool {
+	if let Value::Value(val) = val {
+		val.encoded_size() >= trie_constants::INNER_HASH_TRESHOLD 
+	} else {
+		false
+	}
+}
 
 /// Encode and allocate node type header (type and size), and partial value.
 /// It uses an iterator over encoded partial bytes as input.
