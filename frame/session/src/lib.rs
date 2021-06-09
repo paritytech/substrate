@@ -250,7 +250,7 @@ pub trait SessionManager<ValidatorId> {
 	/// Because the session pallet can queue validator set the ending session can be lower than the
 	/// last new session index.
 	fn end_session(end_index: SessionIndex);
-	/// Start an already planned the session.
+	/// Start an already planned session.
 	///
 	/// The session start to be used for validation.
 	fn start_session(start_index: SessionIndex);

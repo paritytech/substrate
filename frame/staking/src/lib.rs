@@ -543,7 +543,7 @@ impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
 			if !slash_from_target.is_zero() {
 				*target -= slash_from_target;
 
-				// don't leave a dust balance in the staking system.
+				// Don't leave a dust balance in the staking system.
 				if *target <= minimum_balance {
 					slash_from_target += *target;
 					*value += sp_std::mem::replace(target, Zero::zero());
@@ -561,10 +561,10 @@ impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
 				slash_out_of(total, &mut chunk.value, &mut value);
 				chunk.value
 			})
-			.take_while(|value| value.is_zero()) // take all fully-consumed chunks out.
+			.take_while(|value| value.is_zero()) // Take all fully-consumed chunks out.
 			.count();
 
-		// kill all drained chunks.
+		// Kill all drained chunks.
 		let _ = self.unlocking.drain(..i);
 
 		pre_total.saturating_sub(*total)
@@ -734,7 +734,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	type ElectionProvider: frame_election_provider_support::ElectionProvider<
 		Self::AccountId,
 		Self::BlockNumber,
-		// we only accept an election provider that has staking as data provider.
+		// We only accept an election provider that has staking as data provider.
 		DataProvider = Module<Self>,
 	>;
 
@@ -1055,12 +1055,12 @@ pub mod migrations {
 
 		/// check to execute prior to migration.
 		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
-			// these may or may not exist.
+			// These may or may not exist.
 			log!(info, "SnapshotValidators.exits()? {:?}", SnapshotValidators::exists());
 			log!(info, "SnapshotNominators.exits()? {:?}", SnapshotNominators::exists());
 			log!(info, "QueuedElected.exits()? {:?}", QueuedElected::exists());
 			log!(info, "QueuedScore.exits()? {:?}", QueuedScore::exists());
-			// these must exist.
+			// These must exist.
 			assert!(IsCurrentSessionFinal::exists(), "IsCurrentSessionFinal storage item not found!");
 			assert!(EraElectionStatus::exists(), "EraElectionStatus storage item not found!");
 			Ok(())
@@ -1200,7 +1200,7 @@ decl_module! {
 		}
 
 		fn on_initialize(_now: T::BlockNumber) -> Weight {
-			// just return the weight of the on_finalize.
+			// Just return the weight of the on_finalize.
 			T::DbWeight::get().reads(1)
 		}
 
@@ -1268,7 +1268,7 @@ decl_module! {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 
-			// reject a bond which is considered to be _dust_.
+			// Reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
 				Err(Error::<T>::InsufficientValue)?
 			}
@@ -1330,7 +1330,7 @@ decl_module! {
 				let extra = extra.min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
-				// last check: the new active amount of ledger must be more than ED.
+				// Last check: the new active amount of ledger must be more than ED.
 				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
 				Self::deposit_event(RawEvent::Bonded(stash, extra));
@@ -1443,7 +1443,7 @@ decl_module! {
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
 				Self::kill_stash(&stash, num_slashing_spans)?;
-				// remove the lock.
+				// Remove the lock.
 				T::Currency::remove_lock(STAKING_ID, &stash);
 				// This is worst case scenario, so we use the full weight and return None
 				None
@@ -1532,7 +1532,7 @@ decl_module! {
 
 			let nominations = Nominations {
 				targets,
-				// initial nominations are considered submitted at era 0. See `Nominations` doc
+				// Initial nominations are considered submitted at era 0. See `Nominations` doc
 				submitted_in: Self::current_era().unwrap_or(0),
 				suppressed: false,
 			};
@@ -1732,10 +1732,10 @@ decl_module! {
 		fn force_unstake(origin, stash: T::AccountId, num_slashing_spans: u32) {
 			ensure_root(origin)?;
 
-			// remove all staking-related information.
+			// Remove all staking-related information.
 			Self::kill_stash(&stash, num_slashing_spans)?;
 
-			// remove the lock.
+			// Remove the lock.
 			T::Currency::remove_lock(STAKING_ID, &stash);
 		}
 
@@ -1846,7 +1846,7 @@ decl_module! {
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let ledger = ledger.rebond(value);
-			// last check: the new active amount of ledger must be more than ED.
+			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
 			Self::update_ledger(&controller, &ledger);
@@ -2166,7 +2166,7 @@ impl<T: Config> Module<T> {
 				// Only go to `try_trigger_new_era` if deadline reached.
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 				_ => {
-					// either `Forcing::ForceNone`,
+					// Either `Forcing::ForceNone`,
 					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
 					return None
 				},
@@ -2241,12 +2241,12 @@ impl<T: Config> Module<T> {
 			if active_era > bonding_duration {
 				let first_kept = active_era - bonding_duration;
 
-				// prune out everything that's from before the first-kept index.
+				// Prune out everything that's from before the first-kept index.
 				let n_to_prune = bonded.iter()
 					.take_while(|&&(era_idx, _)| era_idx < first_kept)
 					.count();
 
-				// kill slashing metadata.
+				// Kill slashing metadata.
 				for (pruned_era, _) in bonded.drain(..n_to_prune) {
 					slashing::clear_era_metadata::<T>(pruned_era);
 				}
@@ -2391,7 +2391,7 @@ impl<T: Config> Module<T> {
 		// Insert current era staking information
 		<ErasTotalStake<T>>::insert(&new_planned_era, total_stake);
 
-		// collect the pref of all winners
+		// Collect the pref of all winners
 		for stash in &elected_stashes {
 			let pref = Self::validators(stash);
 			<ErasValidatorPrefs<T>>::insert(&new_planned_era, stash, pref);
@@ -2422,7 +2422,7 @@ impl<T: Config> Module<T> {
 		supports
 			.into_iter()
 			.map(|(validator, support)| {
-				// build `struct exposure` from `support`
+				// Build `struct exposure` from `support`
 				let mut others = Vec::with_capacity(support.voters.len());
 				let mut own: BalanceOf<T> = Zero::zero();
 				let mut total: BalanceOf<T> = Zero::zero();
@@ -2557,12 +2557,12 @@ impl<T: Config> Module<T> {
 		let mut all_voters = Vec::new();
 
 		for (validator, _) in <Validators<T>>::iter() {
-			// append self vote
+			// Append self vote
 			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
 		}
 
-		// collect all slashing spans into a BTreeMap for further queries.
+		// Collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
 		for (nominator, nominations) in <Nominators<T>>::iter() {
@@ -2652,7 +2652,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 			Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => Zero::zero(),
 			Forcing::NotForcing => T::SessionsPerEra::get()
 				.saturating_sub(era_length)
-				// one session is computed in this_session_end.
+				// One session is computed in this_session_end.
 				.saturating_sub(1)
 				.into(),
 		};
@@ -2858,7 +2858,7 @@ where
 			let active_era = Self::active_era();
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
-				// this offence need not be re-submitted.
+				// This offence need not be re-submitted.
 				return consumed_weight
 			}
 			active_era.expect("value checked not to be `None`; qed").index
@@ -2872,7 +2872,7 @@ where
 
 		let window_start = active_era.saturating_sub(T::BondingDuration::get());
 
-		// fast path for active-era report - most likely.
+		// Fast path for active-era report - most likely.
 		// `slash_session` cannot be in a future active era. It must be in `active_era` or before.
 		let slash_era = if slash_session >= active_era_start_session_index {
 			active_era
@@ -2880,10 +2880,10 @@ where
 			let eras = BondedEras::get();
 			add_db_reads_writes(1, 0);
 
-			// reverse because it's more likely to find reports from recent eras.
+			// Reverse because it's more likely to find reports from recent eras.
 			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
 				Some(&(ref slash_era, _)) => *slash_era,
-				// before bonding period. defensive - should be filtered out.
+				// Before bonding period. defensive - should be filtered out.
 				None => return consumed_weight,
 			}
 		};
@@ -2929,7 +2929,7 @@ where
 				}
 				unapplied.reporters = details.reporters.clone();
 				if slash_defer_duration == 0 {
-					// apply right away.
+					// Apply right away.
 					slashing::apply_slash::<T>(unapplied);
 					{
 						let slash_cost = (6, 5);
@@ -2940,7 +2940,7 @@ where
 						);
 					}
 				} else {
-					// defer to end of some `slash_defer_duration` from now.
+					// Defer to end of some `slash_defer_duration` from now.
 					<Self as Store>::UnappliedSlashes::mutate(
 						active_era,
 						move |for_later| for_later.push(unapplied),
@@ -2969,7 +2969,7 @@ where
 	O: Offence<Offender>,
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
-		// disallow any slashing from before the current bonding period.
+		// Disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
 		let bonded_eras = BondedEras::get();
 

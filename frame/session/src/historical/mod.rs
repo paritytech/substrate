@@ -154,7 +154,7 @@ impl<T: Config, I: SessionManager<T::ValidatorId, T::FullIdentification>> NoteHi
 		} else {
 			<I as SessionManager<_, _>>::new_session(new_index)
 		};
-		let new_validators = new_validators_and_id
+		let new_validators_opt = new_validators_and_id
 			.as_ref()
 			.map(|new_validators| new_validators.iter().map(|(v, _id)| v.clone()).collect());
 
@@ -174,7 +174,7 @@ impl<T: Config, I: SessionManager<T::ValidatorId, T::FullIdentification>> NoteHi
 			}
 		}
 
-		new_validators
+		new_validators_opt
 	}
 }
 
