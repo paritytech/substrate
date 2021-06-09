@@ -316,7 +316,7 @@ where
 
 pub mod accountable_safety {
 	use super::{
-		Encode, Decode, AuthorityId, AuthoritySignature,
+		Encode, Decode, AuthorityId, AuthoritySignature, RoundNumber, SetId,
 	};
 	use sp_std::vec::Vec;
 	use sp_runtime::RuntimeDebug;
@@ -345,6 +345,13 @@ pub mod accountable_safety {
 				},
 			}
 		}
+	}
+
+	#[derive(Clone, Encode, Decode, RuntimeDebug)]
+	pub enum Equivocation<H, N> {
+		Prevote(Vec<grandpa::SignedPrevote<H, N, AuthoritySignature, AuthorityId>>),
+		Precommit(Vec<grandpa::SignedPrecommit<H, N, AuthoritySignature, AuthorityId>>),
+		InvalidResponse(AuthorityId),
 	}
 }
 
