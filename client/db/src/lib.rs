@@ -270,10 +270,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn usage_info(&self) -> StateUsageInfo {
 		self.state.usage_info()
 	}
-
-	fn state_hashed_value(&self) -> bool {
-		self.state.state_hashed_value()
-	}
 }
 
 /// Database settings.
@@ -782,7 +778,6 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		let flag = storage.alt_hashing;
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| {
 				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
@@ -794,7 +789,6 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 				(&k[..], Some(&v[..]))
 			}),
 			child_delta,
-			flag,
 		);
 
 		self.db_updates = transaction;
@@ -2304,10 +2298,19 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let storage = vec![
+			let mut storage = vec![
 				(vec![1, 3, 5], vec![2, 4, 6]),
 				(vec![1, 2, 3], vec![9, 9, 9]),
 			];
+
+			if alt_hashing {
+				storage.push((
+					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
+					sp_core::storage::trie_threshold_encode(
+						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
+					),
+				));
+			}
 
 			header.state_root = op.old_state.storage_root(storage
 				.iter()
@@ -2319,7 +2322,6 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-				alt_hashing: alt_hashing,
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -2405,7 +2407,6 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: Default::default(),
 				children_default: Default::default(),
-				alt_hashing: alt_hashing,
 			}).unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
@@ -2858,7 +2859,6 @@ pub(crate) mod tests {
 			op.reset_storage(Storage {
 				top: storage.into_iter().collect(),
 				children_default: Default::default(),
-				alt_hashing: alt_hashing,
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),

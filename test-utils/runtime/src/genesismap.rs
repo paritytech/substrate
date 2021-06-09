@@ -74,10 +74,8 @@ impl GenesisConfig {
 		// Add the extra storage entries.
 		map.extend(self.extra_storage.top.clone().into_iter());
 
-		let alt_hashing = self.extra_storage.alt_hashing;
-
 		// Assimilate the system genesis config.
-		let mut storage = Storage { top: map, children_default: self.extra_storage.children_default.clone(), alt_hashing};
+		let mut storage = Storage { top: map, children_default: self.extra_storage.children_default.clone()};
 		let mut config = system::GenesisConfig::default();
 		config.authorities = self.authorities.clone();
 		config.assimilate_storage(&mut storage).expect("Adding `system::GensisConfig` to the genesis");

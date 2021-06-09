@@ -346,7 +346,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
-		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta, input.alt_hashing);
+		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -538,13 +538,6 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		match self {
 			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),
 			GenesisOrUnavailableState::Unavailable => None,
-		}
-	}
-
-	fn state_hashed_value(&self) -> bool {
-		match self {
-			GenesisOrUnavailableState::Genesis(state) => state.state_hashed_value(),
-			GenesisOrUnavailableState::Unavailable => false,
 		}
 	}
 }

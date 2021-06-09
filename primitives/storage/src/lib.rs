@@ -140,8 +140,6 @@ pub struct Storage {
 	/// trie kind, so this is exclusively for the `ChildType::ParentKeyId`
 	/// tries.
 	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
-	/// `true` when state should hash values internally.
-	pub alt_hashing: bool,
 }
 
 /// Storage change set
@@ -198,6 +196,44 @@ pub mod well_known_keys {
 			key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 		} else {
 			CHILD_STORAGE_KEY_PREFIX.starts_with(key)
+		}
+	}
+}
+
+/// Configuration value for a given threshold.
+pub fn trie_threshold_encode(threshold: u32) -> Vec<u8> {
+	codec::Compact(threshold).encode()
+}
+
+/// Configuration threshold from encoded, invalid encoded
+/// is same as no threshold.
+pub fn trie_threshold_decode(mut encoded: &[u8]) -> Option<u32> {
+	codec::Compact::<u32>::decode(&mut encoded).ok()
+		.map(|compact| compact.0)
+}
+
+/// Default value to use as a threshold for testing.
+pub const TEST_DEFAULT_ALT_HASH_THRESHOLD: u32 = 34;
+
+#[cfg(feature = "std")]
+impl Storage {
+	/// Utility function to get trie inner value hash threshold from
+	/// backend state or pending changes.
+	pub fn get_trie_alt_hashing_threshold(&self) -> Option<u32> {
+		self.top.get(well_known_keys::TRIE_HASHING_CONFIG)
+			.and_then(|encoded| trie_threshold_decode(&mut encoded.as_slice()))
+	}
+
+	/// Utility function to modify trie inner value hash threshold.
+	pub fn modify_trie_alt_hashing_threshold(&mut self, threshold: Option<u32>) {
+		match threshold {
+			Some(threshold) => {
+				let encoded = trie_threshold_encode(threshold);
+				self.top.insert(well_known_keys::TRIE_HASHING_CONFIG.to_vec(), encoded);
+			},
+			None => {
+				self.top.remove(well_known_keys::TRIE_HASHING_CONFIG);
+			},
 		}
 	}
 }

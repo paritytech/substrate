@@ -33,7 +33,7 @@ use sp_core::{
 };
 use log::warn;
 use codec::Encode;
-use sp_externalities::{Extensions, Extension};
+use sp_externalities::{Extensions, Extension, ExternalitiesHelpers};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -74,7 +74,6 @@ impl BasicExternalities {
 			inner: Storage {
 				top: std::mem::take(&mut storage.top),
 				children_default: std::mem::take(&mut storage.children_default),
-				alt_hashing: storage.alt_hashing,
 			},
 			extensions: Default::default(),
 		};
@@ -129,7 +128,6 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 			inner: Storage {
 				top: hashmap,
 				children_default: Default::default(),
-				alt_hashing: true,
 			},
 			extensions: Default::default(),
 		}
@@ -283,7 +281,8 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let layout = if self.inner.alt_hashing {
+		let alt_hashing = self.get_trie_alt_hashing_threshold().is_some();
+		let layout = if alt_hashing {
 			Layout::<Blake2Hasher>::with_inner_hashing()
 		} else {
 			Layout::<Blake2Hasher>::default()
@@ -297,8 +296,9 @@ impl Externalities for BasicExternalities {
 	) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
+			let alt_hashing = self.get_trie_alt_hashing_threshold().is_some();
 			crate::in_memory_backend::new_in_mem::<Blake2Hasher>()
-				.child_storage_root(&child.child_info, delta, self.inner.alt_hashing).0
+				.child_storage_root(&child.child_info, delta, alt_hashing).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()
@@ -338,10 +338,6 @@ impl Externalities for BasicExternalities {
 
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in Basic")
-	}
-
-	fn alt_hashing(&mut self) {
-		self.inner.alt_hashing = true;
 	}
 }
 
@@ -408,7 +404,6 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			alt_hashing: false,
 		});
 
 		assert_eq!(ext.child_storage(child_info, b"doe"), Some(b"reindeer".to_vec()));
@@ -439,7 +434,6 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			alt_hashing: false,
 		});
 
 		let res = ext.kill_child_storage(child_info, None);

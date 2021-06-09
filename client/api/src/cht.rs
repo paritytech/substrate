@@ -117,7 +117,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
-	let mut storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)], false);
+	let mut storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)]);
 	let trie_storage = storage.as_trie_backend()
 		.expect("InMemoryState::as_trie_backend always returns Some; qed");
 	prove_read_on_trie_backend(

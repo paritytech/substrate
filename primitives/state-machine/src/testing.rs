@@ -139,7 +139,7 @@ where
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
-		self.backend.insert(vec![(None, vec![(k, Some(v))])], false);
+		self.backend.insert(vec![(None, vec![(k, Some(v))])]);
 	}
 
 	/// Registers the given extension for this instance.
@@ -171,7 +171,7 @@ where
 			))
 		}
 
-		self.backend.update(transaction, self.overlay.alt_hashing())
+		self.backend.update(transaction)
 	}
 
 	/// Commit all pending changes to the underlying backend.
@@ -239,7 +239,9 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N>
 	fn default() -> Self {
 		// default to inner hashed.
 		let mut storage = Storage::default();
-		storage.alt_hashing = true;
+		storage.modify_trie_alt_hashing_threshold(
+			Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD),
+		);
 		Self::new(storage)
 	}
 }
@@ -308,7 +310,8 @@ mod tests {
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext = TestExternalities::<BlakeTwo256, u64>::default();
+		let storage = Storage::default(); // avoid adding the trie threshold.
+		let mut ext = TestExternalities::<BlakeTwo256, u64>::from(storage);
 		let mut ext = ext.ext();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());

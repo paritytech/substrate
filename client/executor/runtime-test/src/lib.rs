@@ -64,7 +64,10 @@ sp_core::wasm_export_functions! {
 
 	fn test_switch_state() {
 		print("switch_state");
-		storage::alt_hashing();
+		storage::set(
+			sp_storage::well_known_keys::TRIE_HASHING_CONFIG,
+			sp_storage::trie_threshold_encode(sp_storage::TEST_DEFAULT_ALT_HASH_THRESHOLD).as_slice(),
+		);
 		print("switched!");
 	}
 

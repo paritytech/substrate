@@ -211,7 +211,9 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
 			if self.state_hashed_value {
-				storage.alt_hashing = true;
+				storage.modify_trie_alt_hashing_threshold(
+					Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD),
+				);
 			}
 
 			// Add some child storage keys.

@@ -204,15 +204,18 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}
 
-	let expected = TestExternalities::new(sp_core::storage::Storage {
+	let mut storage = sp_core::storage::Storage {
 		top: map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
 		],
 		children_default: map![],
-		alt_hashing: false,
-	});
+	};
+	storage.modify_trie_alt_hashing_threshold(Some(
+		sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD
+	));
+	let expected = TestExternalities::new(storage);
 	assert_eq!(ext, expected);
 }
 
@@ -238,15 +241,19 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}
 
-	let expected = TestExternalities::new(sp_core::storage::Storage {
+	let mut storage = sp_core::storage::Storage {
 		top: map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
 		],
 		children_default: map![],
-		alt_hashing: false,
-	});
+	};
+	storage.modify_trie_alt_hashing_threshold(Some(
+		sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD
+	));
+
+	let expected = TestExternalities::new(storage);
 	assert_eq!(expected, ext);
 }
 

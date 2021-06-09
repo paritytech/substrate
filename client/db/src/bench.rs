@@ -151,7 +151,6 @@ impl<B: BlockT> BenchmarkingState<B> {
 		state.add_whitelist_to_tracker();
 
 		state.reopen()?;
-		let flagged = genesis.alt_hashing;
 		let child_delta = genesis.children_default.iter().map(|(_storage_key, child_content)| (
 			&child_content.child_info,
 			child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
@@ -159,7 +158,6 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 			genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
-			flagged,
 		);
 		state.genesis = transaction.clone().drain();
 		state.genesis_root = root.clone();
@@ -531,10 +529,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 	fn proof_size(&self) -> Option<u32> {
 		self.proof_recorder.as_ref().map(|recorder| recorder.estimate_encoded_size() as u32)
-	}
-
-	fn state_hashed_value(&self) -> bool {
-		self.state.borrow().as_ref().map_or(Default::default(), |s| s.state_hashed_value())
 	}
 }
 

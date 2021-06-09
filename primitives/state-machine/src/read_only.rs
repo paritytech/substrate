@@ -202,10 +202,6 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
-
-	fn alt_hashing(&mut self) {
-		unimplemented!("alt_hashing is not supported by ReadOnlyExternalities");
-	}
 }
 
 impl<'a, H: Hasher, B: 'a + Backend<H>> sp_externalities::ExtensionStore for ReadOnlyExternalities<'a, H, B> {

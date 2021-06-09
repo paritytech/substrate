@@ -28,7 +28,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
-	Externalities, Extensions, Extension, ExtensionStore,
+	Externalities, Extensions, Extension, ExtensionStore, ExternalitiesHelpers,
 };
 use codec::{Decode, Encode, EncodeAppend};
 
@@ -547,7 +547,8 @@ where
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				Some(self.backend.child_storage_root(info, delta, self.overlay.alt_hashing()))
+				let alt_hashing = self.get_trie_alt_hashing_threshold().is_some();
+				Some(self.backend.child_storage_root(info, delta, alt_hashing))
 			} else {
 				None
 			};
@@ -736,11 +737,6 @@ where
 
 	fn proof_size(&self) -> Option<u32> {
 		self.backend.proof_size()
-	}
-
-	fn alt_hashing(&mut self) {
-		self.mark_dirty();
-		self.overlay.set_alt_hashing()
 	}
 }
 
@@ -951,8 +947,7 @@ mod tests {
 				vec![20] => vec![20],
 				vec![40] => vec![40]
 			],
-			children_default: map![],
-			alt_hashing: false,
+			children_default: map![]
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -998,7 +993,6 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			alt_hashing: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1043,7 +1037,6 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			alt_hashing: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
@@ -1083,7 +1076,6 @@ mod tests {
 					child_info: child_info.to_owned(),
 				}
 			],
-			alt_hashing: false,
 		}.into();
 
 		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);

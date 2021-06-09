@@ -170,12 +170,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		Ok(next_key)
 	}
 
-	/// Does current trie use inner hashed value.
-	pub fn state_hashed_value(&self) -> bool {
-		sp_trie::state_hashed_value::<Layout<H>, _>(self, &self.root)
-			.unwrap_or_default()
-	}
-
 	/// Get the value of storage at given key.
 	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);

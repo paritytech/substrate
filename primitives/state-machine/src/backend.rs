@@ -178,8 +178,8 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			&'a ChildInfo,
 			impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		)>,
-		alt_hashing: bool,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord + Encode {
+		let alt_hashing = self.get_trie_alt_hashing_threshold().is_some();
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
@@ -257,8 +257,12 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		unimplemented!()
 	}
 
-	/// Does trie state allow hashing of value.
-	fn state_hashed_value(&self) -> bool;
+	/// Read current trie hashing threshold.
+	/// Please do not reimplement.
+	fn get_trie_alt_hashing_threshold(&self) -> Option<u32> {
+		self.storage(sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG).ok().flatten()
+			.and_then(|encoded| sp_core::storage::trie_threshold_decode(&mut encoded.as_slice()))
+	}
 }
 
 /// Trait that allows consolidate two transactions together.

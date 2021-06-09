@@ -385,10 +385,6 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>>;
-
-	/// Returns true when state allow hashing value and therefore
-	/// removing unaccess value from proofs.
-	fn state_hashed_value(&self, id: &BlockId<Block>) -> sp_blockchain::Result<bool>;
 }
 
 /// Client backend.

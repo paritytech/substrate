@@ -688,10 +688,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		info.include_state_machine_states(&self.overlay_stats);
 		info
 	}
-
-	fn state_hashed_value(&self) -> bool {
-		self.state.state_hashed_value()
-	}
 }
 
 /// Extended [`CachingState`] that will sync the caches on drop.
@@ -876,10 +872,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.caching_state().usage_info()
-	}
-
-	fn state_hashed_value(&self) -> bool {
-		self.caching_state().state_hashed_value()
 	}
 }
 
@@ -1208,8 +1200,7 @@ mod tests {
 
 		let shared = new_shared_cache::<Block>(256*1024, (0,1));
 		let mut backend = InMemoryBackend::<BlakeTwo256>::default();
-		let flagged = false;
-		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])), flagged);
+		backend.insert(std::iter::once((None, vec![(key.clone(), Some(vec![1]))])));
 
 		let mut s = CachingState::new(
 			backend.clone(),

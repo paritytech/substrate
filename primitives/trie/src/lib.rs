@@ -459,31 +459,6 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	Ok(root)
 }
 
-/// Resolve if inner hashing of value is active.
-pub fn state_hashed_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>>(
-	db: &DB,
-	root: &TrieHash<L>,
-) -> Option<GlobalMeta<L>> {
-	struct ReadMeta<L: TrieConfiguration> {
-		hashed: Option<GlobalMeta<L>>,
-	}
-	impl<L: TrieConfiguration> trie_db::Query<L::Hash, L::Meta> for &mut ReadMeta<L> {
-		type Item = DBValue;
-		fn decode(self, value: &[u8]) -> DBValue { value.to_vec() }
-		fn record(&mut self, _hash: &<L::Hash as Hasher>::Out, _data: &[u8], _depth: u32, meta: &L::Meta) {
-			debug_assert!(self.hashed.is_none());
-			self.hashed = Some(meta.extract_global_meta());
-		}
-	}
-	let mut read_meta: ReadMeta<L> = ReadMeta {
-		hashed: None,
-	};
-	if let Ok(t) = TrieDB::<L>::new(&*db, root) {
-		let _ = t.get_with(&[], &mut read_meta);
-	}
-	read_meta.hashed
-}
-
 /// Read a value from the trie.
 pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>>(
 	db: &DB,
@@ -847,6 +822,7 @@ mod trie_constants {
 	/// achieve by using a escaped header in first or last element of proof
 	/// and write it after.
 	/// TODO 33 is not good switch to 32 + 1 + 1: 34 (avoid hashing stored hash for a 1 byte gain).
+	/// TODO replace with sp_storage test one.
 	pub const INNER_HASH_TRESHOLD: usize = 33;
 	const FIRST_PREFIX: u8 = 0b_00 << 6;
 	/// In proof this header is used when only hashed value is stored.

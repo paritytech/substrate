@@ -213,11 +213,6 @@ pub trait Storage {
 		self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
 	}
-
-	/// Swith state to alternate hashing.
-	fn alt_hashing(&mut self) {
-		self.alt_hashing();
-	}
 }
 
 /// Interface for accessing the child storage for default child trie,
@@ -1464,7 +1459,6 @@ mod tests {
 		t = BasicExternalities::new(Storage {
 			top: map![b"foo".to_vec() => b"bar".to_vec()],
 			children_default: map![],
-			alt_hashing: false,
 		});
 
 		t.execute_with(|| {
@@ -1473,11 +1467,14 @@ mod tests {
 		});
 
 		let value = vec![7u8; 35];
-		t = BasicExternalities::new(Storage {
+		let mut storage = Storage {
 			top: map![b"foo00".to_vec() => value.clone()],
 			children_default: map![],
-			alt_hashing: true,
-		});
+		};
+		storage.modify_trie_alt_hashing_threshold(Some(
+			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD
+		));
+		t = BasicExternalities::new(storage);
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
@@ -1491,7 +1488,6 @@ mod tests {
 		let mut t = BasicExternalities::new(Storage {
 			top: map![b":test".to_vec() => value.clone()],
 			children_default: map![],
-			alt_hashing: false,
 		});
 
 		t.execute_with(|| {
@@ -1514,7 +1510,6 @@ mod tests {
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
 			children_default: map![],
-			alt_hashing: false,
 		});
 
 		t.execute_with(|| {

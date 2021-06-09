@@ -1751,11 +1751,7 @@ fn imports_blocks_with_changes_tries_config_change() {
 
 #[test]
 fn storage_keys_iter_prefix_and_start_key_works() {
-	storage_keys_iter_prefix_and_start_key_works_inner(true);
-	storage_keys_iter_prefix_and_start_key_works_inner(false);
-}
-fn storage_keys_iter_prefix_and_start_key_works_inner(hashed_value: bool) {
-	let client = substrate_test_runtime_client::new(hashed_value);
+	let client = substrate_test_runtime_client::new(false);
 
 	let prefix = StorageKey(hex!("3a").to_vec());
 
@@ -1800,11 +1796,19 @@ fn storage_keys_iter_works_inner(hashed_value: bool) {
 		.take(3)
 		.map(|x| x.0)
 		.collect();
-	assert_eq!(res, [
-		hex!("3a686561707061676573").to_vec(),
-		hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
-		hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
-	]);
+	if hashed_value {
+		assert_eq!(res, [
+			hex!("3a686561707061676573").to_vec(),
+			sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
+			hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
+		]);
+	} else {
+		assert_eq!(res, [
+			hex!("3a686561707061676573").to_vec(),
+			hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
+			hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
+		]);
+	}
 
 	let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec())))
 		.unwrap()

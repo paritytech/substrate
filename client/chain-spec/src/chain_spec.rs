@@ -87,9 +87,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 					)
 					.collect();
 
-				let alt_hashing = storage.alt_hashing;
-
-				Ok(Genesis::Raw(RawGenesis { top, children_default, alt_hashing }))
+				Ok(Genesis::Raw(RawGenesis { top, children_default }))
 			},
 		}
 	}
@@ -99,7 +97,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(RawGenesis { top: map, children_default: children_map, alt_hashing }) => Ok(Storage {
+			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 				children_default: children_map.into_iter().map(|(storage_key, child_content)| {
 					let child_info = ChildInfo::new_default(storage_key.0.as_slice());
@@ -111,7 +109,6 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 						},
 					)
 				}).collect(),
-				alt_hashing,
 			}),
 		}
 	}
@@ -133,8 +130,6 @@ pub type GenesisStorage = HashMap<StorageKey, StorageData>;
 pub struct RawGenesis {
 	pub top: GenesisStorage,
 	pub children_default: HashMap<StorageKey, GenesisStorage>,
-	#[serde(default)]
-	pub alt_hashing: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -328,9 +323,8 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 							.collect(),
 					))
 					.collect();
-				let alt_hashing = storage.alt_hashing;
 
-				Genesis::Raw(RawGenesis { top, children_default, alt_hashing })
+				Genesis::Raw(RawGenesis { top, children_default })
 			},
 			(_, genesis) => genesis,
 		};

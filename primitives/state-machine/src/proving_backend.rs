@@ -362,10 +362,6 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.0.usage_info()
 	}
-
-	fn state_hashed_value(&self) -> bool {
-		self.0.state_hashed_value()
-	}
 }
 
 /// Create proof check backend.
@@ -456,11 +452,19 @@ mod tests {
 		proof_recorded_and_checked_inner(false);
 	}
 	fn proof_recorded_and_checked_inner(flagged: bool) {
-		let size_content = 33; // above hashable value treshold.
+		let size_content = 34; // above hashable value treshold.
 		let value_range = 0..64;
-		let contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
+		let mut contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
+		if flagged {
+			contents.push((
+				sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
+				Some(sp_core::storage::trie_threshold_encode(
+					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
+				)),
+			));
+		}
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(vec![(None, contents)], flagged);
+		let mut in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(std::iter::empty(), flagged).0;
 		value_range.clone().for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
@@ -481,16 +485,23 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked_old_hash() {
 		// test proof starting with old hash content and flagging in between.
-		let size_content = 33; // above hashable value treshold.
+		// TODO not that usefull (we do run with direct update). -> replace by change of threshold
+		// test.
+		let size_content = 34; // above hashable value treshold.
 		let value_range = 0..64;
 		let contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(vec![(None, contents)], false);
+		let mut in_memory = in_memory.update(vec![(None, contents)]);
 		value_range.clone().for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
-		in_memory = in_memory.update(vec![], true);
-		let in_memory_root = in_memory.storage_root(std::iter::empty(), false).0;
+		in_memory = in_memory.update(vec![(None, vec![(
+			sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
+			Some(sp_core::storage::trie_threshold_encode(
+				sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
+			)),
+		)])]);
+		let in_memory_root = in_memory.storage_root(std::iter::empty(), true).0;
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(std::iter::empty(), false).0;
+		let trie_root = trie.storage_root(std::iter::empty(), true).0;
 		assert_eq!(in_memory_root, trie_root);
 		value_range.clone().for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
@@ -513,20 +524,27 @@ mod tests {
 		let child_info_2 = ChildInfo::new_default(b"sub2");
 		let child_info_1 = &child_info_1;
 		let child_info_2 = &child_info_2;
-		let contents = vec![
-			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect()),
+		let mut contents = vec![
+			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>()),
 			(Some(child_info_1.clone()),
 				(28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some(child_info_2.clone()),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
+		if flagged {
+			contents[0].1.push((
+				sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
+				Some(sp_core::storage::trie_threshold_encode(
+					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
+				)),
+			));
+		}
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(contents, flagged);
+		let mut in_memory = in_memory.update(contents);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory.full_storage_root(
 			std::iter::empty(),
 			child_storage_keys.iter().map(|k|(k, std::iter::empty())),
-			flagged,
 		).0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),

@@ -261,10 +261,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn wipe(&self) -> Result<(), Self::Error> {
 		Ok(())
 	}
-
-	fn state_hashed_value(&self) -> bool {
-		self.essence.state_hashed_value()
-	}
 }
 
 #[cfg(test)]
@@ -305,6 +301,14 @@ pub mod tests {
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
 			trie.insert(b":code", b"return 42").expect("insert failed");
+			if hashed_value {
+				trie.insert(
+					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG,
+					sp_core::storage::trie_threshold_encode(
+						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
+					).as_slice(),
+				).unwrap();
+			}
 			for i in 128u8..255u8 {
 				trie.insert(&[i], &[i]).unwrap();
 			}
