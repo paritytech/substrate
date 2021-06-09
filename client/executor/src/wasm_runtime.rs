@@ -321,7 +321,7 @@ pub fn create_wasm_runtime_with_code(
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled => {
 			sc_executor_wasmtime::create_runtime(
-				sc_executor_wasmtime::CodeSupplyMode::Verbatim { blob },
+				blob,
 				sc_executor_wasmtime::Config {
 					heap_pages: heap_pages as u32,
 					allow_missing_func_imports,
