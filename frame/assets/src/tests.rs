@@ -180,9 +180,15 @@ fn destroy_with_bad_witness_should_not_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+		let mut w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+		// witness too low
 		assert_noop!(Assets::destroy(Origin::signed(1), 0, w), Error::<Test>::BadWitness);
+		// witness too high is okay though
+		w.accounts += 2;
+		w.sufficients += 2;
+		assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
+
 	});
 }
 
