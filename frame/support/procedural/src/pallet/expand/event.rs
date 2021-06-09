@@ -119,7 +119,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		#deposit_event
 
 		impl<#event_impl_gen> From<#event_ident<#event_use_gen>> for () #event_where_clause {
-			fn from(_: #event_ident<#event_use_gen>) -> () { () }
+			fn from(_: #event_ident<#event_use_gen>) {}
 		}
 	)
 }

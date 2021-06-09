@@ -394,7 +394,7 @@ fn pallet_expand_deposit_event() {
 		pallet::Call::<Runtime>::foo(3).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet(pallet::Event::Something(3)),
+			Event::Example(pallet::Event::Something(3)),
 		);
 	});
 
@@ -403,7 +403,7 @@ fn pallet_expand_deposit_event() {
 		pallet::Call::<Runtime, pallet::Instance1>::foo(3).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet_Instance1(pallet::Event::Something(3)),
+			Event::Instance1Example(pallet::Event::Something(3)),
 		);
 	});
 }
@@ -539,27 +539,27 @@ fn pallet_hooks_expand() {
 		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet_Instance1(pallet::Event::Something(11)),
+			Event::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::pallet(pallet::Event::Something(10)),
+			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::pallet_Instance1(pallet::Event::Something(21)),
+			Event::Instance1Example(pallet::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			Event::pallet(pallet::Event::Something(20)),
+			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::pallet_Instance1(pallet::Event::Something(31)),
+			Event::Instance1Example(pallet::Event::Something(31)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::pallet(pallet::Event::Something(30)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 	})
 }

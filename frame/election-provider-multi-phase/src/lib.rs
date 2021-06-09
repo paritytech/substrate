@@ -45,6 +45,7 @@
 //! Each of the phases can be disabled by essentially setting their length to zero. If both phases
 //! have length zero, then the pallet essentially runs only the fallback strategy, denoted by
 //! [`Config::Fallback`].
+//!
 //! ### Signed Phase
 //!
 //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
@@ -158,15 +159,15 @@
 //!
 //! ## Future Plans
 //!
-//! **Challenge Phase**. We plan adding a third phase to the pallet, called the challenge phase.
-//! This is phase in which no further solutions are processed, and the current best solution might
+//! **Challenge Phase**. We plan on adding a third phase to the pallet, called the challenge phase.
+//! This is a phase in which no further solutions are processed, and the current best solution might
 //! be challenged by anyone (signed or unsigned). The main plan here is to enforce the solution to
 //! be PJR. Checking PJR on-chain is quite expensive, yet proving that a solution is **not** PJR is
-//! rather cheap. If a queued solution is challenged:
+//! rather cheap. If a queued solution is successfully proven bad:
 //!
 //! 1. We must surely slash whoever submitted that solution (might be a challenge for unsigned
 //!    solutions).
-//! 2. It is probably fine to fallback to the on-chain election, as we expect this to happen rarely.
+//! 2. We will fallback to the emergency strategy (likely extending the current era).
 //!
 //! **Bailing out**. The functionality of bailing out of a queued solution is nice. A miner can
 //! submit a solution as soon as they _think_ it is high probability feasible, and do the checks
@@ -174,11 +175,11 @@
 //! portion of the bond).
 //!
 //! **Conditionally open unsigned phase**: Currently, the unsigned phase is always opened. This is
-//! useful because an honest validation will run our OCW code, which should be good enough to trump
-//! a mediocre or malicious signed submission (assuming in the absence of honest signed bots). If an
-//! when the signed submissions are checked against an absolute measure (e.g. PJR), then we can only
-//! open the unsigned phase in extreme conditions (i.e. "not good signed solution received") to
-//! spare some work in the validators
+//! useful because an honest validator will run substrate OCW code, which should be good enough to trump
+//! a mediocre or malicious signed submission (assuming in the absence of honest signed bots).
+//! If there are signed submissions, they can be checked against an absolute measure (e.g. PJR),
+//! then we can only open the unsigned phase in extreme conditions (i.e. "no good signed solution
+//! received") to spare some work for the active validators.
 //!
 //! **Allow smaller solutions and build up**: For now we only allow solutions that are exactly
 //! [`DesiredTargets`], no more, no less. Over time, we can change this to a [min, max] where any

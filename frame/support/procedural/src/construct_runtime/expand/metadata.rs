@@ -95,7 +95,7 @@ fn expand_pallet_metadata_storage(
 ) -> TokenStream {
 	if filtered_names.contains(&"Storage") {
 		let instance = decl.instance.as_ref().into_iter();
-		let path = &decl.pallet;
+		let path = &decl.path;
 
 		quote!{
 			Some(#path::Pallet::<#runtime #(, #path::#instance)*>::storage_metadata())
@@ -112,7 +112,7 @@ fn expand_pallet_metadata_calls(
 ) -> TokenStream {
 	if filtered_names.contains(&"Call") {
 		let instance = decl.instance.as_ref().into_iter();
-		let path = &decl.pallet;
+		let path = &decl.path;
 
 		quote!{
 			Some(#path::Pallet::<#runtime #(, #path::#instance)*>::call_functions())
@@ -128,7 +128,7 @@ fn expand_pallet_metadata_events(
 	decl: &Pallet,
 ) -> TokenStream {
 	if filtered_names.contains(&"Event") {
-		let path = &decl.pallet;
+		let path = &decl.path;
 		let part_is_generic =
 			!decl.find_part("Event").expect("Event part exists; qed").generics.params.is_empty();
 		let pallet_event = match (decl.instance.as_ref(), part_is_generic) {
@@ -150,7 +150,7 @@ fn expand_pallet_metadata_constants(
 	runtime: &Ident,
 	decl: &Pallet,
 ) -> TokenStream {
-	let path = &decl.pallet;
+	let path = &decl.path;
 	let instance = decl.instance.as_ref().into_iter();
 
 	quote!{
@@ -162,7 +162,7 @@ fn expand_pallet_metadata_errors(
 	runtime: &Ident,
 	decl: &Pallet,
 ) -> TokenStream {
-	let path = &decl.pallet;
+	let path = &decl.path;
 	let instance = decl.instance.as_ref().into_iter();
 
 	quote!{
