@@ -24,7 +24,7 @@ use hash_db::Prefix;
 use codec::{Decode, Encode};
 use parking_lot::RwLock;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
-use sp_trie::MemoryDBNoMeta as MemoryDB;
+use sp_trie::MemoryDB;
 use sc_client_api::backend::PrunableStateChangesTrieStorage;
 use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache, HeaderMetadataCache};
 use sp_core::{ChangesTrieConfiguration, ChangesTrieConfigurationRange, convert_hash};

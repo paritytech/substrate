@@ -35,7 +35,7 @@ use frame_support::{
 	decl_module, decl_storage, Parameter, print,
 	traits::{ValidatorSet, ValidatorSetWithIdentification},
 };
-use sp_trie::{MemoryDBNoMeta as MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
+use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
 

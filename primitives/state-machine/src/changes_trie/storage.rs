@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, HashSet, HashMap};
 use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
 use sp_core::storage::PrefixedStorageKey;
 use sp_trie::DBValue;
-use sp_trie::MemoryDBNoMeta as MemoryDB;
+use sp_trie::MemoryDB;
 use parking_lot::RwLock;
 use crate::{
 	StorageKey,
@@ -30,7 +30,7 @@ use crate::{
 };
 
 #[cfg(test)]
-use crate::backend::insert_into_memory_db_no_meta as insert_into_memory_db;
+use crate::backend::insert_into_memory_db;
 #[cfg(test)]
 use crate::changes_trie::input::{InputPair, ChildIndex};
 

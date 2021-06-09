@@ -350,41 +350,6 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 	}
 }
 
-/// Reimplement `NoMeta` `MetaHasher` with
-/// additional constraint.
-/// TODO remove the MetaHasher is ignored
-/// when no node have do_value_hash or layout defines it.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct NoMetaHasher;
-
-impl<H> MetaHasher<H, DBValue> for NoMetaHasher 
-	where
-		H: Hasher,
-{
-	type Meta = TrieMeta;
-	type GlobalMeta = bool;
-
-	fn hash(value: &[u8], _meta: &Self::Meta) -> H::Out {
-		H::hash(value)
-	}
-
-	fn stored_value(value: &[u8], _meta: Self::Meta) -> DBValue {
-		value.to_vec()
-	}
-
-	fn stored_value_owned(value: DBValue, _meta: Self::Meta) -> DBValue {
-		value
-	}
-
-	fn extract_value(stored: &[u8], _meta: Self::GlobalMeta) -> (&[u8], Self::Meta) {
-		(stored, Default::default())
-	}
-
-	fn extract_value_owned(stored: DBValue, _meta: Self::GlobalMeta) -> (DBValue, Self::Meta) {
-		(stored, Default::default())
-	}
-}
-
 impl<H, M> TrieConfiguration for Layout<H, M>
 	where
 		H: Hasher,
@@ -437,17 +402,6 @@ pub type MemoryDB<H> = memory_db::MemoryDB<
 	H, memory_db::HashKey<H>, trie_db::DBValue, StateHasher, MemTracker,
 >;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-/// This uses a noops `KeyFunction` (key addressing must be hashed or using
-/// an encoding scheme that avoid key conflict).
-pub type MemoryDBNoMeta<H> = memory_db::MemoryDB<
-	H, memory_db::HashKey<H>, trie_db::DBValue, NoMetaHasher, MemTracker,
->;
-/// MemoryDB with specific meta hasher.
-pub type MemoryDBMeta<H, M> = memory_db::MemoryDB<
-	H, memory_db::HashKey<H>, trie_db::DBValue, M, MemTracker,
->;
-
-/// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 pub type GenericMemoryDB<H, KF, MH> = memory_db::MemoryDB<
 	H, KF, trie_db::DBValue, MH, MemTracker,
 >;
@@ -465,16 +419,10 @@ pub type TrieHash<L> = <<L as TrieLayout>::Hash as Hasher>::Out;
 pub mod trie_types {
 	/// State layout.
 	pub type Layout<H> = super::Layout<H, super::StateHasher>;
-	/// Old state layout definition, do not use meta, do not
-	/// do internal value hashing.
-	pub type LayoutNoMeta<H> = super::Layout<H, super::NoMetaHasher>;
 	/// Persistent trie database read-access interface for the a given hasher.
 	pub type TrieDB<'a, H> = super::TrieDB<'a, Layout<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
 	pub type TrieDBMut<'a, H> = super::TrieDBMut<'a, Layout<H>>;
-	/// Persistent trie database write-access interface for the a given hasher,
-	/// old layout.
-	pub type TrieDBMutNoMeta<'a, H> = super::TrieDBMut<'a, LayoutNoMeta<H>>;
 	/// Querying interface, as in `trie_db` but less generic.
 	pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, Layout<H>, Q>;
 	/// As in `trie_db`, but less generic, error type for the crate.
@@ -923,6 +871,10 @@ mod tests {
 	use hex_literal::hex;
 
 	type Layout = super::trie_types::Layout<Blake2Hasher>;
+
+	type MemoryDBMeta<H, M> = memory_db::MemoryDB<
+		H, memory_db::HashKey<H>, trie_db::DBValue, M, MemTracker,
+	>;
 
 	fn hashed_null_node<T: TrieConfiguration>() -> TrieHash<T> {
 		<T::Codec as NodeCodecT<T::Meta>>::hashed_null_node()

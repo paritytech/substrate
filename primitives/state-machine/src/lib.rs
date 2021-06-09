@@ -144,7 +144,7 @@ mod changes_trie {
 #[cfg(feature = "std")]
 mod std_reexport {
 	pub use sp_trie::{trie_types::{Layout, TrieDBMut}, StorageProof, TrieMut,
-		DBValue, MemoryDB, MemoryDBNoMeta};
+		DBValue, MemoryDB};
 	pub use crate::testing::TestExternalities;
 	pub use crate::basic::BasicExternalities;
 	pub use crate::read_only::{ReadOnlyExternalities, InspectState};
@@ -195,7 +195,7 @@ mod execution {
 
 	/// Type of changes trie transaction.
 	pub type ChangesTrieTransaction<H, N> = (
-		MemoryDBNoMeta<H>,
+		MemoryDB<H>,
 		ChangesTrieCacheAction<<H as Hasher>::Out, N>,
 	);
 

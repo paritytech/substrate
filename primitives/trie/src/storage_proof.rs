@@ -63,6 +63,16 @@ impl StorageProof {
 		self.into()
 	}
 
+	/// Creates a `MemoryDB` from `Self`. In case we do not need
+	/// to check meta (using alt hashing will always be disabled).
+	pub fn into_memory_db_no_meta<H: Hasher>(self) -> crate::MemoryDB<H> {
+		let mut db = crate::MemoryDB::default();
+		for item in self.iter_nodes() {
+			db.insert(crate::EMPTY_PREFIX, &item);
+		}
+		db
+	}
+
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
 	/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
 	/// proofs due to deduplication of trie nodes.
@@ -120,16 +130,6 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 			// read state meta (required for value layout and AltHash node.
 			let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(encoded_node, &mut meta);
 			db.insert_with_meta(crate::EMPTY_PREFIX, encoded_node, meta);
-		}
-		db
-	}
-}
-
-impl<H: Hasher> From<StorageProof> for crate::MemoryDBNoMeta<H> {
-	fn from(proof: StorageProof) -> Self {
-		let mut db = crate::MemoryDBNoMeta::default();
-		for item in proof.iter_nodes() {
-			db.insert(crate::EMPTY_PREFIX, &item);
 		}
 		db
 	}
