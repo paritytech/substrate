@@ -17,7 +17,7 @@
 
 use super::helper;
 use core::convert::TryFrom;
-use syn::{Error, spanned::Spanned};
+use syn::spanned::Spanned;
 use quote::ToTokens;
 
 /// List of additional token to be used for parsing.
@@ -66,6 +66,8 @@ impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
 	type Error = syn::Error;
 
 	fn try_from(trait_ty: &syn::TraitItemType) -> Result<Self, Self::Error> {
+		let err = |span, msg|
+			syn::Error::new(span, format!("Invalid usage of `#[pallet::constant]`: {}", msg));
 		let doc = helper::get_doc_literals(&trait_ty.attrs);
 		let ident = trait_ty.ident.clone();
 		let bound = trait_ty.bounds
@@ -79,19 +81,19 @@ impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
 					None
 				}
 			)
-			.ok_or_else(|| Error::new(trait_ty.span(), "`Get<T>` trait bound not found"))?;
+			.ok_or_else(|| err(trait_ty.span(), "`Get<T>` trait bound not found"))?;
 		let type_arg = if let syn::PathArguments::AngleBracketed (ref ab) = bound.arguments {
 			if ab.args.len() == 1 {
 				if let syn::GenericArgument::Type(ref ty) = ab.args[0] {
 					Ok(ty)
 				} else {
-					Err(Error::new(ab.args[0].span(), "Expected a type argument"))
+					Err(err(ab.args[0].span(), "Expected a type argument"))
 				}
 			} else {
-				Err(Error::new(bound.span(), "Expected a single type argument"))
+				Err(err(bound.span(), "Expected a single type argument"))
 			}
 		} else {
-			Err(Error::new(bound.span(), "Expected trait generic args"))
+			Err(err(bound.span(), "Expected trait generic args"))
 		}?;
 		let type_ = syn::parse2::<syn::Type>(replace_self_by_t(type_arg.to_token_stream()))
 			.expect("Internal error: replacing `Self` by `T` should result in valid type");
@@ -343,15 +345,7 @@ impl ConfigDef {
 			if type_attrs_const.len() == 1 {
 				match trait_item {
 					syn::TraitItem::Type(ref type_) => {
-						let constant = ConstMetadataDef::try_from(type_)
-							.map_err(|e| {
-								let error_msg = "Invalid usage of `#[pallet::constant]`, syntax \
-									must be `type $SomeIdent: Get<$SomeType>;`";
-								let mut err = syn::Error::new(type_.span(), error_msg);
-								err.combine(e);
-								err
-							})?;
-
+						let constant = ConstMetadataDef::try_from(type_)?;
 						consts_metadata.push(constant);
 					},
 					_ => {

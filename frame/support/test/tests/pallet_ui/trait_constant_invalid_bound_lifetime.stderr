@@ -1,10 +1,4 @@
-error: Invalid usage of `#[pallet::constant]`, syntax must be `type $SomeIdent: Get<$SomeType>;`
- --> $DIR/trait_constant_invalid_bound_lifetime.rs:9:3
-  |
-9 |         type U: Get<'static>;
-  |         ^^^^
-
-error: Expected a type argument
+error: Invalid usage of `#[pallet::constant]`: Expected a type argument
  --> $DIR/trait_constant_invalid_bound_lifetime.rs:9:15
   |
 9 |         type U: Get<'static>;
