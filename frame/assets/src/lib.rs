@@ -468,6 +468,10 @@ pub mod pallet {
 		///
 		/// Emits `Destroyed` event when successful.
 		///
+		/// NOTE: It can be helpful to first freeze an asset before destroying it so that you
+		/// can provide accurate witness information and prevent users from manipulating state
+		/// in a way that can make it harder to destroy.
+		///
 		/// Weight: `O(c + p + a)` where:
 		/// - `c = (witness.accounts - witness.sufficients)`
 		/// - `s = witness.sufficients`
@@ -481,7 +485,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			witness: DestroyWitness,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
@@ -491,9 +495,9 @@ pub mod pallet {
 				if let Some(check_owner) = maybe_check_owner {
 					ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 				}
-				ensure!(details.accounts == witness.accounts, Error::<T, I>::BadWitness);
-				ensure!(details.sufficients == witness.sufficients, Error::<T, I>::BadWitness);
-				ensure!(details.approvals == witness.approvals, Error::<T, I>::BadWitness);
+				ensure!(details.accounts <= witness.accounts, Error::<T, I>::BadWitness);
+				ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
+				ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
 
 				for (who, v) in Account::<T, I>::drain_prefix(id) {
 					Self::dead_account(id, &who, &mut details, v.sufficient);
@@ -510,8 +514,13 @@ pub mod pallet {
 				Approvals::<T, I>::remove_prefix((&id,));
 				Self::deposit_event(Event::Destroyed(id));
 
-				// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
-				Ok(())
+				Ok(
+					Some(T::WeightInfo::destroy(
+						details.accounts.saturating_sub(details.sufficients),
+						details.sufficients,
+						details.approvals,
+					)).into()
+				)
 			})
 		}
 
