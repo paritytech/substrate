@@ -183,7 +183,11 @@ impl<H: Hasher> NodeCodec<H> {
 	}
 }
 
-impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
+impl<H, M> NodeCodecT<M> for NodeCodec<H>
+	where
+		H: Hasher,
+		M: Meta<StateMeta = bool, GlobalMeta = bool>,
+{
 	type Error = Error;
 	type HashOut = H::Out;
 
@@ -221,7 +225,7 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 		// With fix inner hashing alt hash can be use with all node, but
 		// that is not better (encoding can use an additional nibble byte
 		// sometime).
-		let mut output = if meta.do_value_hash() && value_do_hash(&value) {
+		let mut output = if meta.extract_global_meta() && value_do_hash(&value) {
 			partial_encode(partial, NodeKind::AltHashLeaf)
 		} else {
 			partial_encode(partial, NodeKind::Leaf)
@@ -271,7 +275,7 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 		value: Value,
 		meta: &mut M,
 	) -> Vec<u8> {
-		let mut output = match (&value, meta.do_value_hash() && value_do_hash(&value)) {
+		let mut output = match (&value, meta.extract_global_meta() && value_do_hash(&value)) {
 			(&Value::NoValue, _) => {
 				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue)
 			},

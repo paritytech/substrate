@@ -58,18 +58,12 @@ pub struct TrieMeta {
 	/// Defined in the trie layout, when used with
 	/// `TrieDbMut` it switch nodes to alternative hashing
 	/// method by setting `do_value_hash` to true.
-	/// TODO consider defining it without do_value
-	/// and set do_value on encoding only. TODO try_do_value_hash
-	pub switch_to_value_hash: bool,
+	pub try_inner_hashing: bool,
 	/// Does current encoded contains a hash instead of
 	/// a value (information stored in meta for proofs).
 	pub contain_hash: bool,
-	/// Flag indicating if alternative value hash can run.
-	/// This is read and written as a state meta of the node.
-	/// TODO replace by TrieDbMut node variant
-	/// TODO replace by Option<usize> being size treshold.
-	/// TODO apply_do_value_hash (and remove size testing)
-	pub do_value_hash: bool,
+	/// Flag indicating alternative value hash will be use.
+	pub apply_inner_hashing: bool,
 	/// Record if a value was accessed, this is
 	/// set as accessed by defalult, but can be
 	/// change on access explicitely: `HashDB::get_with_meta`.
@@ -86,26 +80,21 @@ impl Meta for TrieMeta {
 	type StateMeta = bool;
 
 	fn set_state_meta(&mut self, state_meta: Self::StateMeta) {
-		if !self.do_value_hash && state_meta {
-			self.do_value_hash = true;
-		}
+		self.apply_inner_hashing = state_meta;
 	}
 
-	// TODO remove upstream
+	// TODO rename upstream as read_global_meta
 	fn extract_global_meta(&self) -> Self::GlobalMeta {
-		self.switch_to_value_hash || self.do_value_hash
+		self.try_inner_hashing
 	}
 
 	fn set_global_meta(&mut self, global_meta: Self::GlobalMeta) {
-		if !self.do_value_hash && global_meta {
-			self.switch_to_value_hash = true;
-			self.do_value_hash = true;
-		}
+		self.try_inner_hashing = global_meta;
 	}
 
 	// TODO remove upstream?
 	fn has_state_meta(&self) -> bool {
-		self.do_value_hash && !self.switch_to_value_hash
+		self.apply_inner_hashing
 	}
 
 	// TODO consider removal upstream of this method (node type in codec)
@@ -167,12 +156,10 @@ impl Meta for TrieMeta {
 			ValuePlan::NoValue => return,
 		};
 
+		self.apply_inner_hashing = self.try_inner_hashing
+			&& range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD;
 		self.range = Some(range);
 		self.contain_hash = contain_hash;
-		if self.switch_to_value_hash {
-			// Switched value hashing.
-			self.switch_to_value_hash = false
-		}
 	}
 
 	fn decoded_callback(
@@ -194,11 +181,9 @@ impl Meta for TrieMeta {
 		self.contain_hash
 	}
 
-	// TODO could be rename to get_state_meta
-	// the type of node depend on it.
-	// Note that it is after encoding state meta here!!
+	// TODO remove upstream
 	fn do_value_hash(&self) -> bool {
-		self.do_value_hash
+		self.apply_inner_hashing
 	}
 }
 
@@ -292,13 +277,9 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 
 	fn hash(value: &[u8], meta: &Self::Meta) -> H::Out {
 		match &meta {
-			TrieMeta { range: Some(range), contain_hash: false, do_value_hash: true, switch_to_value_hash: false, .. } => {
-				if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
-					let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
-					H::hash(value.as_slice())
-				} else {
-					H::hash(value)
-				}
+			TrieMeta { range: Some(range), contain_hash: false, apply_inner_hashing: true, .. } => {
+				let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
+				H::hash(value.as_slice())
 			},
 			TrieMeta { range: Some(_range), contain_hash: true, .. } => {
 				// value contains a hash of data (already inner_hashed_value).
@@ -320,19 +301,17 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 			stored.extend_from_slice(value);
 			return stored;
 		}
-		if meta.unused_value && meta.do_value_hash && !meta.switch_to_value_hash {
-			if let Some(range) = meta.range.as_ref() {
-				if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
-					// Waring this assume that encoded value does not start by this, so it is tightly coupled
-					// with the header type of the codec: only for optimization.
-					stored.push(trie_constants::DEAD_HEADER_META_HASHED_VALUE);
-					let range = meta.range.as_ref().expect("Tested in condition");
-					meta.contain_hash = true; // useless but could be with meta as &mut
-					// store hash instead of value.
-					let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
-					stored.extend_from_slice(value.as_slice());
-					return stored;
-				}
+		if meta.unused_value && meta.apply_inner_hashing {
+			if meta.range.is_some() {
+				// Waring this assume that encoded value does not start by this, so it is tightly coupled
+				// with the header type of the codec: only for optimization.
+				stored.push(trie_constants::DEAD_HEADER_META_HASHED_VALUE);
+				let range = meta.range.as_ref().expect("Tested in condition");
+				meta.contain_hash = true; // useless but could be with meta as &mut
+				// store hash instead of value.
+				let value = inner_hashed_value::<H>(value, Some((range.start, range.end)));
+				stored.extend_from_slice(value.as_slice());
+				return stored;
 			}
 		}
 		stored.extend_from_slice(value);
@@ -355,8 +334,8 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 			range: None,
 			unused_value: contain_hash,
 			contain_hash,
-			do_value_hash: false,
-			switch_to_value_hash: false,
+			apply_inner_hashing: false,
+			try_inner_hashing: false,
 		};
 		meta.set_global_meta(global_meta);
 		(stored, meta)
@@ -887,14 +866,12 @@ fn inner_hashed_value<H: Hasher>(x: &[u8], range: Option<(usize, usize)>) -> Vec
 pub fn estimate_entry_size(entry: &(DBValue, TrieMeta), hash_len: usize) -> usize {
 	use codec::Encode;
 	let mut full_encoded = entry.0.encoded_size();
-	if entry.1.unused_value && entry.1.do_value_hash {
+	if entry.1.unused_value && entry.1.apply_inner_hashing {
 		if let Some(range) = entry.1.range.as_ref() {
 			let value_size = range.end - range.start;
-			if range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD {
-				full_encoded -= value_size;
-				full_encoded += hash_len;
-				full_encoded += 1;
-			}
+			full_encoded -= value_size;
+			full_encoded += hash_len;
+			full_encoded += 1;
 		}
 	}
 

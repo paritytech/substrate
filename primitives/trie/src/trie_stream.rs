@@ -142,22 +142,21 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn append_substream<H: Hasher>(&mut self, other: Self) {
-		let inner_value_hashing = other.apply_inner_hashing;
+		let apply_inner_hashing = other.apply_inner_hashing;
 		let range = other.current_value_range.clone();
 		let data = other.out();
 		match data.len() {
 			0..=31 => data.encode_to(&mut self.buffer),
 			_ => {
-				if inner_value_hashing
-					&& range.as_ref().map(|r| r.end - r.start >= trie_constants::INNER_HASH_TRESHOLD)
-						.unwrap_or_default() {
+				if apply_inner_hashing {
 					let meta = TrieMeta {
 						range: range,
 						unused_value: false,
 						contain_hash: false,
-						// No existing state, no need to use switch_to_value_hash
-						switch_to_value_hash: false,
-						do_value_hash: true,
+						// Using `inner_value_hashing` instead to check this.
+						// And unused in hasher.
+						try_inner_hashing: false,
+						apply_inner_hashing: true,
 					};
 					<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta).as_ref().encode_to(&mut self.buffer);
 				} else {
@@ -168,21 +167,18 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn hash_root<H: Hasher>(self) -> H::Out {
-		let inner_value_hashing = self.inner_value_hashing;
+		let apply_inner_hashing = self.apply_inner_hashing;
 		let range = self.current_value_range;
 		let data = self.buffer;
 		let meta = TrieMeta {
 			range: range,
 			unused_value: false,
 			contain_hash: false,
-			switch_to_value_hash: false,
-			do_value_hash: inner_value_hashing,
+			try_inner_hashing: false,
+			apply_inner_hashing: true,
 		};
 
-		if inner_value_hashing
-			&& meta.range.as_ref().map(|r| r.end - r.start >= trie_constants::INNER_HASH_TRESHOLD)
-				.unwrap_or_default() {
-		
+		if apply_inner_hashing {
 			<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta)
 		} else {
 			H::hash(&data)
