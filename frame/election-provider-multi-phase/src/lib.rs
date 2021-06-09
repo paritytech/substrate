@@ -1283,7 +1283,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 				Ok((supports, weight))
 			}
 			Err(why) => {
-				log!(error, "Entering emergency mode: {}", why);
+				log!(error, "Entering emergency mode: {:?}", why);
 				<CurrentPhase<T>>::put(Phase::Emergency);
 				Err(why)
 			}
