@@ -20,6 +20,7 @@
 use super::*;
 use frame_support::pallet_prelude::*;
 
+use frame_support::traits::{fungible, fungibles};
 use sp_runtime::{FixedPointNumber, FixedPointOperand, FixedU128};
 use sp_runtime::traits::Convert;
 
@@ -181,6 +182,10 @@ impl From<TransferFlags> for DebitFlags {
 	}
 }
 
+pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
+	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, ConversionError>;
+}
+
 /// Possible errors when converting between external and asset balances.
 #[derive(Eq, PartialEq, Copy, Clone, RuntimeDebug, Encode, Decode)]
 pub enum ConversionError {
@@ -192,27 +197,34 @@ pub enum ConversionError {
 	AssetNotSufficient,
 }
 
+type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+type AssetIdOf<T, I> = <T as Config<I>>::AssetId;
+type BalanceOf<F, T> = <F as fungible::Inspect<AccountIdOf<T>>>::Balance;
+type AssetBalanceOf<T, I> = <T as Config<I>>::Balance;
+
 /// Converts a balance value into an asset balance based on the ratio between the existential
 /// deposit and the minimum asset balance.
-pub struct BalanceToAssetBalance<T, CUR, CON>(PhantomData<(T, CUR, CON)>);
-impl<T: Config, CUR, CON> BalanceToAssetBalance<T, CUR, CON>
+pub struct BalanceToAssetBalance<F, A, T, CON, I = ()>(PhantomData<(F, A, T, CON, I)>);
+impl<F, A, T, CON, I> BalanceConversion<BalanceOf<F, T>, AssetIdOf<T, I>, AssetBalanceOf<T, I>> for BalanceToAssetBalance<F, A, T, CON, I>
 where
-	CUR: Currency<<T as frame_system::Config>::AccountId>,
-	CON: Convert<<CUR as Currency<<T as frame_system::Config>::AccountId>>::Balance, <T as Config>::Balance>,
-	<CUR as Currency<<T as frame_system::Config>::AccountId>>::Balance: FixedPointOperand + Zero,
-	<T as Config>::Balance: FixedPointOperand + Zero,
+	F: fungible::Inspect<AccountIdOf<T>>,
+	A: fungibles::Inspect<AccountIdOf<T>>,
+	T: Config<I>,
+	I: 'static,
+	CON: Convert<BalanceOf<F, T>, AssetBalanceOf<T, I>>,
+	BalanceOf<F, T>: FixedPointOperand + Zero,
+	AssetBalanceOf<T, I>: FixedPointOperand + Zero,
 {
 	/// Convert the given balance value into an asset balance based on the ratio between the existential
 	/// deposit and the minimum asset balance.
 	///
 	/// Will return `Err` if the asset is not found, not sufficient or the external minimum balance is zero.
-	pub fn to_asset_balance(balance: <CUR as Currency<<T as frame_system::Config>::AccountId>>::Balance, asset_id: <T as Config>::AssetId) -> Result<<T as Config>::Balance, ConversionError> {
-		let asset = Asset::<T>::get(asset_id).ok_or(ConversionError::AssetMissing)?;
+	fn to_asset_balance(balance: BalanceOf<F, T>, asset_id: AssetIdOf<T, I>) -> Result<AssetBalanceOf<T, I>, ConversionError> {
+		let asset = Asset::<T, I>::get(asset_id).ok_or(ConversionError::AssetMissing)?;
 		// only sufficient assets have a min balance with reliable value
 		ensure!(asset.is_sufficient, ConversionError::AssetNotSufficient);
-		let min_balance = CON::convert(<CUR as Currency<<T as frame_system::Config>::AccountId>>::minimum_balance());
+		let min_balance = CON::convert(F::minimum_balance());
 		// make sure we don't divide by zero
-		debug_assert!(!min_balance.is_zero(), "the minimum balance should not be zero");
 		ensure!(!min_balance.is_zero(), ConversionError::MinBalanceZero);
 		let balance = CON::convert(balance);
 		// balance * asset.min_balance / min_balance
