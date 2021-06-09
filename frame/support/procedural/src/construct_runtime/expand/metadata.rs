@@ -26,7 +26,7 @@ pub fn expand_runtime_metadata(
 	scrate: &TokenStream,
 	extrinsic: &TypePath,
 ) -> TokenStream {
-	let modules = pallet_declarations
+	let pallets = pallet_declarations
 		.iter()
 		.filter_map(|pallet_declaration| {
 			pallet_declaration.find_part("Pallet").map(|_| {
@@ -66,9 +66,9 @@ pub fn expand_runtime_metadata(
 		impl #runtime {
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
 				#scrate::metadata::RuntimeMetadataLastVersion {
-					modules: #scrate::::scale_info::prelude::vec![ #(#modules),* ],
+					pallets: #scrate::::scale_info::prelude::vec![ #(#pallets),* ],
 					extrinsic: #scrate::metadata::ExtrinsicMetadata {
-						ty: $crate::scale_info::meta_type::<#extrinsic>(),
+						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
 						signed_extensions: <
 								<
