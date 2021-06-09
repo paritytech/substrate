@@ -92,9 +92,10 @@ impl trie_root::TrieStream for TrieStream {
 			NodeKind::Leaf
 		};
 		self.buffer.extend(fuse_nibbles_node(key, kind));
+		let start = self.buffer.len();
 		Compact(value.len() as u32).encode_to(&mut self.buffer);
-		self.current_value_range = Some(self.buffer.len()..self.buffer.len() + value.len());
 		self.buffer.extend_from_slice(value);
+		self.current_value_range = Some(start..self.buffer.len());
 	}
 
 	fn begin_branch(
@@ -121,9 +122,10 @@ impl trie_root::TrieStream for TrieStream {
 			self.buffer.extend(&branch_node(maybe_value.is_some(), has_children));
 		}
 		if let Some(value) = maybe_value {
+			let start = self.buffer.len();
 			Compact(value.len() as u32).encode_to(&mut self.buffer);
-			self.current_value_range = Some(self.buffer.len()..self.buffer.len() + value.len());
 			self.buffer.extend_from_slice(value);
+			self.current_value_range = Some(start..self.buffer.len());
 		}
 	}
 

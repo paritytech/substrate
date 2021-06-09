@@ -990,8 +990,8 @@ mod tests {
 	fn check_input(input: &Vec<(&[u8], &[u8])>) {
 // TODO remove this iter
 		let layout = Layout::with_inner_hashing();
-		check_iteration::<Layout>(input, layout.clone());
 		check_equivalent::<Layout>(input, layout.clone());
+		check_iteration::<Layout>(input, layout.clone());
 
 
 		let layout = Layout::default();
