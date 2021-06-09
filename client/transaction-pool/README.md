@@ -19,7 +19,7 @@ such a way to:
 1. Maximize block author's profits (value of the produced block)
 2. Minimize block author's amount of work (time to produce block)
 
-In FRAME case the first property is simply making sure that the fee per weight
+In the case of FRAME the first property is simply making sure that the fee per weight
 unit is the highest (high `tip` values), the second is about avoiding feeding
 transactions that cannot be part of the next block (they are invalid, obsolete, etc).
 
@@ -32,7 +32,7 @@ Only valid transactions should be stored in the pool.
 Each imported block can affect validity of transactions already in the pool. Block
 authors expect from the pool to get most up to date information about transactions
 that can be included in the block that they are going to build on top of the just
-imported one.  The process of ensuring this property is called *pruning*. During
+imported one. The process of ensuring this property is called *pruning*. During
 pruning the pool should remove transactions which are considered invalid by the
 runtime (queried at current best imported block).
 
@@ -112,7 +112,7 @@ removing it from that graph.
 #### Rules & caveats
 
 - `provides` must not be empty
-- transactions with overlap in `provides` tags are mutually exclusive
+- transactions with an overlap in `provides` tags are mutually exclusive
 - checking validity of transaction that `requires` tag `A` after including
   transaction that provides that tag must not return `A` in `requires` again
 - runtime developers should avoid re-using `provides` tag (i.e. it should be unique)
@@ -199,7 +199,7 @@ it is expected for the transaction to be retried in the future.
 
 # Implementation
 
-Ideal transaction pool should be storing only transactions that are considered
+An ideal transaction pool should be storing only transactions that are considered
 valid by the runtime at current best imported block.
 After every block is imported, the pool should:
 
