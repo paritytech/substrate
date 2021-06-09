@@ -10,6 +10,9 @@ mod pallet {
 
 		#[pallet::constant]
 		type V: Get<u32> + From<u16>;
+
+		#[pallet::constant]
+		type W: From<u16> + Get<u32>;
 	}
 
 	#[pallet::pallet]
