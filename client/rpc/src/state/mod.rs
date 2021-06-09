@@ -173,7 +173,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	let child_backend = Box::new(
 		self::state_full::FullState::new(client.clone())
 	);
-	let backend = Box::new(self::state_full::FullState::new(client.clone()));
+	let backend = Arc::new(self::state_full::FullState::new(client.clone()));
 	(
 		State { backend, client, executor, deny_unsafe },
 		ChildState { backend: child_backend }
@@ -203,7 +203,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 			fetcher.clone(),
 	));
 
-	let backend = Box::new(self::state_light::LightState::new(
+	let backend = Arc::new(self::state_light::LightState::new(
 			client.clone(),
 			remote_blockchain,
 			fetcher,
@@ -216,7 +216,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 
 /// State API with subscriptions support.
 pub struct State<Block, Client> {
-	backend: Box<dyn StateBackend<Block, Client>>,
+	backend: Arc<dyn StateBackend<Block, Client>>,
 	executor: Arc<SubscriptionTaskExecutor>,
 	// TODO: this is pretty dumb. the `FullState` struct has a `client` in it, but I don't know how to get a
 	// reference to it. I could impl `ChainBackend` which has a `client()` method, but that's pretty lame. I could
@@ -394,31 +394,36 @@ impl<Block, Client> State<Block, Client>
 					.map_err(to_jsonrpsee_call_error)?;
 
 				let fut = async move {
-					let mut stream = rt_version_stream
-						.filter_map(move |_| {
-							let info = client.info();
-							let version = client
-								.runtime_version_at(&BlockId::hash(info.best_hash));
-								match version {
-									Ok(v) => if previous_version != v {
-											previous_version = v.clone();
-											future::ready(Some(v))
-										} else {
-											future::ready(None)
-										},
-									Err(e) => {
-										log::error!("Could not fetch current runtime version. Error={:?}", e);
-										future::ready(None)
-									}
-								}
-						});
-						stream.for_each(|data| {
-							if let Err(e) = sink.send(&data) {
-								log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
-							}
-							future::ready(())
-						}).await;
-				}.boxed();
+                    rt_version_stream
+                        .filter_map(|_| {
+                            let info = client.info();
+                            let version = client
+                                .runtime_version_at(&BlockId::hash(info.best_hash));
+                                match version {
+                                    Ok(v) => if previous_version != v {
+                                            previous_version = v.clone();
+                                            future::ready(Some(v))
+                                        } else {
+                                            future::ready(None)
+                                        },
+                                    Err(e) => {
+                                        log::error!("Could not fetch current runtime version. Error={:?}", e);
+                                        future::ready(None)
+                                    }
+                                }
+                        })
+                        .take_while(|version| {
+							future::ready(
+								sink.send(&version).map_or_else(|_| true, |e| {
+									log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
+									false
+								})
+							)
+
+                        })
+                        .into_future()
+                        .await;
+                }.boxed();
 				executor.execute_new(fut);
 				Ok(())
 		})?;
@@ -428,37 +433,61 @@ impl<Block, Client> State<Block, Client>
 			"state_unsubscribeStorage",
 			|params, mut sink, ctx| {
 				let executor = ctx.executor.clone();
+				let backend = ctx.backend.clone();
 				let keys = params.one::<Option<Vec<StorageKey>>>()?;
+
+				let initial = {
+					let block = ctx.client.info().best_hash;
+					let changes: Vec<(StorageKey, Option<StorageData>)> = keys.as_ref().map(|keys| {
+						keys
+							.iter()
+							.map(|storage_key| {
+								futures::executor::block_on(
+									StateBackend::storage(&*backend, Some(block.clone()).into(), storage_key.clone())
+										.map(|val| (storage_key.clone(), val.unwrap_or(None)))
+								)
+							})
+							.collect()
+					}).unwrap_or_default();
+					vec![StorageChangeSet { block, changes }]
+				};
+				sink.send(&initial)?;
+
 				let stream = ctx.client.storage_changes_notification_stream(
 					keys.as_ref().map(|keys| &**keys),
 					None
 					)
 					.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))
 					.map_err(to_jsonrpsee_call_error)?;
+
 				let fut = async move {
-					let stream = stream.map(|(block, changes)| {
+					stream.map(|(block, changes)| {
 						StorageChangeSet {
 							block,
 							changes: changes
 								.iter()
 								.filter_map(|(o_sk, k, v)| {
-								// Note: the first `Option<&StorageKey>` seems to be the parent key, so it's set only
-								// for storage events stemming from child storage, `None` otherwise. This RPC only
-								// returns non-child storage.
-								if o_sk.is_none() {
-									Some((k.clone(), v.cloned()))
-								} else {
-									None
-								}
-							}).collect(),
+									// Note: the first `Option<&StorageKey>` seems to be the parent key, so it's set only
+									// for storage events stemming from child storage, `None` otherwise. This RPC only
+									// returns non-child storage.
+									if o_sk.is_none() {
+										Some((k.clone(), v.cloned()))
+									} else {
+										None
+									}
+								}).collect(),
 						}
-					});
-					stream.for_each(|data| {
-						if let Err(e) = sink.send(&data) {
-							log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
-						}
-						future::ready(())
-					}).await;
+					})
+        			.take_while(|changes| {
+						future::ready(
+							sink.send(&changes).map_or_else(|_| true, |e| {
+								log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
+								false
+							})
+						)
+					})
+        			.into_future()
+					.await;
 				}.boxed();
 
 				executor.execute_new(fut);
