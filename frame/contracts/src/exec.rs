@@ -1357,7 +1357,7 @@ mod tests {
 		<frame_system::Pallet<Test>>::events()
 			.into_iter()
 			.filter_map(|meta| match meta.event {
-				MetaEvent::pallet_contracts(contract_event) => Some(contract_event),
+				MetaEvent::Contracts(contract_event) => Some(contract_event),
 				_ => None,
 			})
 			.collect()

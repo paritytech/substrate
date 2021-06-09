@@ -179,6 +179,24 @@ runtime call.
 This can be used by runtime developers to quickly reject transactions that for
 instance are not expected to be gossiped in the network.
 
+
+### `Invalid` transaction
+
+In case the runtime returns an `Invalid` error it means the transaction cannot
+be added to a block at all. Extracting the actual reason of invalidity gives
+more details about the source. For instance `Stale` transaction just indicates
+the transaction was already included in a block, while `BadProof` signifies
+invalid signature.
+Invalidity might also be temporary. In case of `ExhaustsResources` the
+transaction does not fit to the current block, but it might be okay for the next
+one.
+
+### `Unknown` transaction
+
+In case of `Unknown` validity, the runtime cannot determine if the transaction
+is valid or not in current block. However this situation might be temporary, so
+it is expected for the transaction to be retried in the future.
+
 # Implementation
 
 Ideal transaction pool should be storing only transactions that are considered
