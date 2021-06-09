@@ -62,10 +62,10 @@ pub struct ConstMetadataDef {
 	pub doc: Vec<syn::Lit>,
 }
 
-impl TryFrom<syn::TraitItemType> for ConstMetadataDef {
+impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
 	type Error = syn::Error;
 
-	fn try_from(value: syn::TraitItemType) -> Result<Self, Self::Error> {
+	fn try_from(value: &syn::TraitItemType) -> Result<Self, Self::Error> {
 		let doc = helper::get_doc_literals(&value.attrs);
 		let ident = value.ident.clone();
 		let bound = value.bounds
@@ -342,8 +342,8 @@ impl ConfigDef {
 
 			if type_attrs_const.len() == 1 {
 				match trait_item {
-					syn::TraitItem::Type(type_) => {
-						let constant = ConstMetadataDef::try_from(type_.clone())
+					syn::TraitItem::Type(ref type_) => {
+						let constant = ConstMetadataDef::try_from(type_)
 							.map_err(|e| {
 								let error_msg = "Invalid usage of `#[pallet::constant]`, syntax \
 									must be `type $SomeIdent: Get<$SomeType>;`";
