@@ -414,10 +414,10 @@ impl<Block, Client> State<Block, Client>
                         })
                         .take_while(|version| {
 							future::ready(
-								sink.send(&version).map_or_else(|_| true, |e| {
+								sink.send(&version).map_or_else(|e| {
 									log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
 									false
-								})
+								}, |_| true)
 							)
 
                         })
@@ -480,10 +480,10 @@ impl<Block, Client> State<Block, Client>
 					})
         			.take_while(|changes| {
 						future::ready(
-							sink.send(&changes).map_or_else(|_| true, |e| {
+							sink.send(&changes).map_or_else(|e| {
 								log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
 								false
-							})
+							}, |_| true)
 						)
 					})
         			.for_each(|_| future::ready(()))
