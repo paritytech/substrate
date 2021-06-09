@@ -17,7 +17,7 @@
 
 use super::helper;
 use core::convert::TryFrom;
-use syn::spanned::Spanned;
+use syn::{Error, spanned::Spanned};
 use quote::ToTokens;
 
 /// List of additional token to be used for parsing.
@@ -79,28 +79,19 @@ impl TryFrom<syn::TraitItemType> for ConstMetadataDef {
 					None
 				}
 			)
-			.ok_or_else(|| syn::Error::new(
-				value.bounds.span(),
-				"`Get<T>` trait bound not found")
-			)?;
+			.ok_or_else(|| Error::new(value.bounds.span(), "`Get<T>` trait bound not found"))?;
 		let type_arg = if let syn::PathArguments::AngleBracketed (ref ab) = bound.arguments {
 			if ab.args.len() == 1 {
 				if let syn::GenericArgument::Type(ref ty) = ab.args[0] {
 					Ok(ty)
 				} else {
-					Err(syn::Error::new(
-						ab.args[0].span(),
-						"Expected a type argument")
-					)
+					Err(Error::new(ab.args[0].span(), "Expected a type argument"))
 				}
 			} else {
-				Err(syn::Error::new(
-					ab.span(),
-					"Expected a single type argument")
-				)
+				Err(Error::new(ab.span(), "Expected a single type argument"))
 			}
 		} else {
-			Err(syn::Error::new(bound.arguments.span(), "Expected trait angle bracketed args"))
+			Err(Error::new(bound.arguments.span(), "Expected trait angle bracketed args"))
 		}?;
 		let type_ = syn::parse2::<syn::Type>(replace_self_by_t(type_arg.to_token_stream()))
 			.expect("Internal error: replacing `Self` by `T` should result in valid type");
