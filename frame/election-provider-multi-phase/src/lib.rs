@@ -900,7 +900,6 @@ pub mod pallet {
 					.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 			}
 
-			signed_submissions.put();
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
 			Ok(())
 		}
