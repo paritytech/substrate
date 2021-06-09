@@ -15,14 +15,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::pallet::{Def, parse::storage::StorageDef};
 use crate::pallet::parse::storage::{Metadata, QueryKind, StorageGenerics};
 use frame_support_procedural_tools::clean_type_string;
 
+fn literal_to_string(lit: &syn::Lit) -> String {
+	match lit {
+		syn::Lit::Str(s) => s.value(),
+		syn::Lit::ByteStr(s) =>
+			String::from_utf8(s.value()).expect("All byte strings are valid UTF-8 strings; qed"),
+		syn::Lit::Byte(b) => char::from(b.value()).to_string(),
+		syn::Lit::Char(c) => c.value().to_string(),
+		syn::Lit::Int(i) => i.base10_digits().to_owned(),
+		syn::Lit::Float(f) => f.base10_digits().to_owned(),
+		syn::Lit::Bool(b) => b.value.to_string(),
+		syn::Lit::Verbatim(l) => l.to_string(),
+	}
+}
+
 /// Generate the prefix_ident related the the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
-fn prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
-	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", storage_ident), storage_ident.span())
+fn prefix_ident(storage: &StorageDef) -> syn::Ident {
+	let storage_ident = &storage.ident;
+	let ident = storage.rename_as.as_ref().map(literal_to_string).unwrap_or(storage_ident.to_string());
+	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", ident), storage_ident.span())
 }
 
 /// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
@@ -50,7 +66,7 @@ pub fn process_generics(def: &mut Def) {
 			_ => unreachable!("Checked by def"),
 		};
 
-		let prefix_ident = prefix_ident(&storage_def.ident);
+		let prefix_ident = prefix_ident(&storage_def);
 		let type_use_gen = if def.config.has_instance {
 			quote::quote_spanned!(storage_def.attr_span => T, I)
 		} else {
@@ -344,9 +360,13 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let prefix_structs = def.storages.iter().map(|storage_def| {
 		let type_impl_gen = &def.type_impl_generics(storage_def.attr_span);
 		let type_use_gen = &def.type_use_generics(storage_def.attr_span);
-		let prefix_struct_ident = prefix_ident(&storage_def.ident);
+		let prefix_struct_ident = prefix_ident(&storage_def);
 		let prefix_struct_vis = &storage_def.vis;
-		let prefix_struct_const = storage_def.ident.to_string();
+		let prefix_struct_const = storage_def
+			.rename_as
+			.as_ref()
+			.map(literal_to_string)
+			.unwrap_or(storage_def.ident.to_string());
 		let config_where_clause = &def.config.where_clause;
 
 		let cfg_attrs = &storage_def.cfg_attrs;

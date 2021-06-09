@@ -35,14 +35,14 @@ mod keyword {
 /// * `#[pallet::storage_name = "CustomName"]`
 pub enum PalletStorageAttr {
 	Getter(syn::Ident),
-	StorageName(syn::Expr),
+	StorageName(syn::Lit),
 }
 
 impl PalletStorageAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
 			Self::Getter(ident) => ident.span(),
-			Self::StorageName(expr) => expr.span(),
+			Self::StorageName(lit) => lit.span(),
 		}
 	}
 }
@@ -67,7 +67,7 @@ impl syn::parse::Parse for PalletStorageAttr {
 			content.parse::<keyword::storage_name>()?;
 			content.parse::<syn::Token![=]>()?;
 
-			Ok(Self::StorageName(content.parse::<syn::Expr>()?))
+			Ok(Self::StorageName(content.parse::<syn::Lit>()?))
 		} else {
 			Err(lookahead.error())
 		}
@@ -114,7 +114,7 @@ pub struct StorageDef {
 	/// Optional getter to generate. If some then query_kind is ensured to be some as well.
 	pub getter: Option<syn::Ident>,
 	/// Optional expression that evaluates to a type that can be used as StoragePrefix instead of ident.
-	pub rename_as: Option<syn::Expr>,
+	pub rename_as: Option<syn::Lit>,
 	/// Whereas the querytype of the storage is OptionQuery or ValueQuery.
 	/// Note that this is best effort as it can't be determined when QueryKind is generic, and
 	/// result can be false if user do some unexpected type alias.
@@ -598,7 +598,7 @@ impl StorageDef {
 		});
 		let rename_as = names.pop().map(|attr| {
 			match attr {
-				PalletStorageAttr::StorageName(expr) => expr,
+				PalletStorageAttr::StorageName(lit) => lit,
 				_ => unreachable!(),
 			}
 		});
