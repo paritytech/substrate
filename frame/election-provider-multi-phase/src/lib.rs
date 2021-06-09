@@ -120,9 +120,8 @@
 //!
 //! If, for any of the below reasons:
 //!
-//! 1. No signed and unsigned solution submitted
+//! 1. No signed or unsigned solution submitted & Fallback is `None`
 //! 2. Internal error
-//! 3. Fallback being `None`
 //!
 //! A call to `T::ElectionProvider::elect` is made, and `Ok(_)` cannot be returned, then the pallet
 //! proceeds to the [`Phase::Emergency`]. During this phase, any solution can be submitted from
@@ -884,7 +883,7 @@ pub mod pallet {
 		PreDispatchWeakSubmission,
 		/// OCW submitted solution for wrong round
 		OcwCallWrongEra,
-		/// The call is now allowed at this point.
+		/// The call is not allowed at this point.
 		CallNotAllowed,
 	}
 
@@ -1284,7 +1283,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 				Ok((supports, weight))
 			}
 			Err(why) => {
-				log!(error, "Entering emergency mode.");
+				log!(error, "Entering emergency mode: {}", why);
 				<CurrentPhase<T>>::put(Phase::Emergency);
 				Err(why)
 			}

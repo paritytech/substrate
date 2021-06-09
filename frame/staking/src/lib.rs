@@ -1667,9 +1667,9 @@ decl_module! {
 		///
 		/// # Warning
 		///
-		/// The election process start multiple block before the end of the era.
-		/// Thus the election process may have started when this is called. In this case the
-		/// election will be ongoing until the next era is triggered.
+		/// The election process starts multiple blocks before the end of the era.
+		/// Thus the election process may be ongoing when this is called. In this case the
+		/// election will continue until the next era is triggered.
 		///
 		/// # <weight>
 		/// - No arguments.
@@ -1689,9 +1689,9 @@ decl_module! {
 		///
 		/// # Warning
 		///
-		/// The election process start multiple block before the end of the era.
+		/// The election process starts multiple blocks before the end of the era.
 		/// If this is called just before a new era is triggered, the election process may not
-		/// have enough block to get a result.
+		/// have enough blocks to get a result.
 		///
 		/// # <weight>
 		/// - No arguments.
@@ -1745,9 +1745,9 @@ decl_module! {
 		///
 		/// # Warning
 		///
-		/// The election process start multiple block before the end of the era.
+		/// The election process starts multiple blocks before the end of the era.
 		/// If this is called just before a new era is triggered, the election process may not
-		/// have enough block to get a result.
+		/// have enough blocks to get a result.
 		///
 		/// # <weight>
 		/// - Weight: O(1)
