@@ -166,7 +166,10 @@ the transaction is valid all that time though.
 
 This parameter instructs the pool propagate/gossip a transaction to node peers.
 By default this should be `true`, however in some cases it might be undesirable
-to propagate transactions further (heavy transactions, privacy leaking, etc).
+to propagate transactions further. Examples might include heavy transactions
+produced by block authors in offchain workers (DoS) or risking being front
+runned by someone else after finding some non trivial solution or equivocation,
+etc.
 
 ### 'TransactionSource`
 
@@ -210,12 +213,21 @@ After every block is imported, the pool should:
 1. On block author request, the graph should be copied and transactions should
    be removed one-by-one from the graph starting from the one with highest
    priority and all conditions satisfied.
-1. With current gossip protocol, networking should propagate transactions in the
-   same order as block author would include them. Most likely it's fine if we
-   propagate transactions with cummulative weight not exceeding upcoming `N`
-   blocks (choosing `N` is subject to networking conditions and block times).
 
-However, since the pool is expected to store more transactions than what can fit
+With current gossip protocol, networking should propagate transactions in the
+same order as block author would include them. Most likely it's fine if we
+propagate transactions with cummulative weight not exceeding upcoming `N`
+blocks (choosing `N` is subject to networking conditions and block times).
+
+Note that it's not a strict requirement though to propagate exactly the same
+transactions that are prepared for block inclusion. Propagation is best
+effort, especially for block authors and is not directly incentivised.
+However the networking protocol might penalise peers that send invalid or
+useless transactions so we should be nice to others. Also see below a proposal
+to instead of gossiping everyting have other peers request transactions they
+are interested in.
+
+Since the pool is expected to store more transactions than what can fit
 to a single block. Validating the entire pool on every block might not be
 feasible, so the actual implementation might need to take some shortcuts.
 
@@ -228,6 +240,9 @@ feasible, so the actual implementation might need to take some shortcuts.
 
 1. That means we don't have to revalidate every transaction after every block
    import, but we need to take care of removing potentially stale transactions.
+
+1. Transactions with exactly the same bytes are most likely going to give the
+   same validity results. We can essentially treat them as identical.
 
 1. Watch out for re-organisations and re-importing transactions from retracted
    blocks.
