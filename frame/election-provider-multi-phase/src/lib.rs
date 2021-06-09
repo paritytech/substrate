@@ -843,7 +843,7 @@ pub mod pallet {
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
 			// Note: we don't `rotate_round` at this point; the next call to
-			// `ElectionProvider::elect` will not succeed and take care of that.
+			// `ElectionProvider::elect` will succeed and take care of that.
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
