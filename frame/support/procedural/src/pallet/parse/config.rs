@@ -65,10 +65,10 @@ pub struct ConstMetadataDef {
 impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
 	type Error = syn::Error;
 
-	fn try_from(value: &syn::TraitItemType) -> Result<Self, Self::Error> {
-		let doc = helper::get_doc_literals(&value.attrs);
-		let ident = value.ident.clone();
-		let bound = value.bounds
+	fn try_from(trait_ty: &syn::TraitItemType) -> Result<Self, Self::Error> {
+		let doc = helper::get_doc_literals(&trait_ty.attrs);
+		let ident = trait_ty.ident.clone();
+		let bound = trait_ty.bounds
 			.iter()
 			.find_map(|b|
 				if let syn::TypeParamBound::Trait(tb) = b {
@@ -79,7 +79,7 @@ impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
 					None
 				}
 			)
-			.ok_or_else(|| Error::new(value.bounds.span(), "`Get<T>` trait bound not found"))?;
+			.ok_or_else(|| Error::new(trait_ty.span(), "`Get<T>` trait bound not found"))?;
 		let type_arg = if let syn::PathArguments::AngleBracketed (ref ab) = bound.arguments {
 			if ab.args.len() == 1 {
 				if let syn::GenericArgument::Type(ref ty) = ab.args[0] {
@@ -88,10 +88,10 @@ impl TryFrom<&syn::TraitItemType> for ConstMetadataDef {
 					Err(Error::new(ab.args[0].span(), "Expected a type argument"))
 				}
 			} else {
-				Err(Error::new(ab.span(), "Expected a single type argument"))
+				Err(Error::new(bound.span(), "Expected a single type argument"))
 			}
 		} else {
-			Err(Error::new(bound.arguments.span(), "Expected trait angle bracketed args"))
+			Err(Error::new(bound.span(), "Expected trait generic args"))
 		}?;
 		let type_ = syn::parse2::<syn::Type>(replace_self_by_t(type_arg.to_token_stream()))
 			.expect("Internal error: replacing `Self` by `T` should result in valid type");
