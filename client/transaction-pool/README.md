@@ -179,25 +179,153 @@ runtime call.
 This can be used by runtime developers to quickly reject transactions that for
 instance are not expected to be gossiped in the network.
 
-# Implementation caveats
+# Implementation
 
-TODO:
+Ideal transaction pool should be storing only transactions that are considered
+valid by the runtime at current best imported block.
+After every block is imported, the pool should:
 
-# Current implementation
+1. Revalidate all transactions in the pool and remove the invalid ones.
+1. Construct the transaction inclusion graph based on `provides/requires` tags.
+   Some transactions might not be reachable (have unsatisfied dependencies),
+   they should be just left out in the pool.
+1. On block author request, the graph should be copied and transactions should
+   be removed one-by-one from the graph starting from the one with highest
+   priority and all conditions satisfied.
+1. With current gossip protocol, networking should propagate transactions in the
+   same order as block author would include them. Most likely it's fine if we
+   propagate transactions with cummulative weight not exceeding upcoming `N`
+   blocks (choosing `N` is subject to networking conditions and block times).
 
-TODO:
-- ready / future
-- revalidation
+However, since the pool is expected to store more transactions than what can fit
+to a single block. Validating the entire pool on every block might not be
+feasible, so the actual implementation might need to take some shortcuts.
 
-# Future work
+## Suggestions & caveats
 
-TODO:
+1. The validity of transaction should not change significantly from block to
+   block. I.e. changes in validity should happen predicatbly, e.g. `longevity`
+   decrements by 1, `priority` stays the same, `requires` changes if transaction
+   that provided a tag was included in block. `provides` does not change, etc.
 
-## Gossiping
+1. That means we don't have to revalidate every transaction after every block
+   import, but we need to take care of removing potentially stale transactions.
 
-It was discussed in the past to use set reconciliation strategies instead of
+1. Watch out for re-organisations and re-importing transactions from retracted
+   blocks.
+
+1. In the past there were many issues found when running small networks with a
+   lot of re-orgs. Make sure that transactions are never lost.
+
+1. UTXO model is quite challenging. The transaction becomes valid right after
+   it's included in block, however it is waiting for exactly the same inputs to
+   be spent, so it will never really be included again.
+
+1. Note that in a non-ideal implementation the state of the pool will most
+   likely always be a bit off, i.e. some transactions might be still in the pool,
+   but they are invalid. The hard decision is about trade-offs you take.
+
+1. Note that import notification is not reliable - you might not receive a
+   notification about every imported block.
+
+## Potential implementation ideas
+
+1. Block authors remove transactions from the pool when they author a block. We
+   still store them around to re-import in case the block does not end up
+   canonical. This only works if the block is actively authoring blocks (also
+   see below).
+
+1. We don't prune, but rather remove a fixed amount of transactions from the front
+   of the pool (number based on average/max transactions per block from the
+   past) and re-validate them, reimporting the ones that are still valid.
+
+1. We periodically validate all transactions in the pool in batches.
+
+1. To minimize runtime calls, we introduce batch-verify call. Note it should reset
+   the state (overlay) after every verification.
+
+1. Consider leveraging finality. Maybe we could verify against latest finalised
+   block instead. With this the pool in different nodes can be more similar
+   which might help with gossiping (see set reconciliation). Note that finality
+   is not a strict requirement for a Substrate chain to have though.
+
+1. Perhaps we could avoid maintaining ready/future queues as currently, but
+   rather if transaction doesn't have all requirements satisfied by existing
+   transactions we attempt to re-import it in the future.
+
+1. Instead of maintaining a full pool with total ordering we attempt to maintain
+   a set of next (couple of) blocks. We could introduce batch-validate runtime
+   api  method that pretty much attempts to simulate actual block inclusion of
+   a set of such transactions (without necesasrily fully running/dispatching
+   them). Importing a transaction would consist of figuring out which next block
+   this transaction have a chance to be included in and then attempting to
+   either push it back or replace some of existing transactions.
+
+1. Perhaps we could use some immutable graph structure to easily add/remove
+   transactions. We need some traversal method that takes priority and
+   reachability into account.
+
+1. It was discussed in the past to use set reconciliation strategies instead of
 simply broadcasting all/some transactions to all/selected peers. An Ethereum's
 [EIP-2464](https://github.com/ethereum/EIPs/blob/5b9685bb9c7ba0f5f921e4d3f23504f7ef08d5b1/EIPS/eip-2464.md)
 might be a good first approach to reduce transaction gossip.
 
+# Current implementation
 
+Current implementation of the pool is a result of a experiences from Ethereum's
+pool implementation, but also has some warts coming from the learning process of
+Substrate's generic nature and light client support.
+
+The pool consists of basically two independent parts:
+
+1. The transaction pool itself.
+2. Maintenance background task.
+
+The pool is split into `ready` pool and `future` pool. The latter contains
+transactions that don't have their requirements satisfied, and the former holds
+transactions that can be used to build a graph of dependencies. Note that the
+graph is build ad-hoc during the traversal process (getting the `ready`
+iterator). This makes the importing process cheaper (we don't need to find the
+exact position in the queue or graph), but traversal process slower
+(logarithmic). However most of the time we will only need the beginning of the
+total ordering of transactions for block inclusion or network propagation, hence
+the decision.
+
+The maintenance task is responsible for:
+
+1. Periodically revalidating pool's transactions (revalidation queue).
+1. Handling block import notifications and doing pruning + re-importing of
+   transactions from retracted blocks.
+1. Handling finality notifications and relaying that to transaction-specific
+   listeners.
+
+Additionally we maintain a list of recently included/rejected transactions
+(`PoolRotator`) to quickly reject transactions that are unlikely to be valid
+to limit number of runtime verification calls.
+
+Each time a transaction is imported, we first verify it's validity and later
+find if the tags it `requires` can be satisfied by transactions already in
+`ready` pool. In case the transaction is imported to the `ready` pool we
+additionally *promote* transactions from `future` pool if the transaction
+happened to fulfill their requirements.
+Note we need to cater for cases where transaction might replace a already
+existing transaction in the pool. In such case we check the entire sub-tree of
+transactions that we are about to replace, compare their commulative priority to
+determine which subtree to keep.
+
+After a block is imported we kick-off pruning procedure. We first attempt to
+figure out what tags were satisfied by transaction in that block. For each block
+transaction we either call into runtime to get it's `ValidTransaction` object,
+or we check the pool if that transaction is already known to spare the runtime
+call. From this we gather full set of `provides` tags and perform pruning of
+`ready` pool based on that. Also we promote all transactions from `future` that
+have their tags satisfied.
+
+In case we remove transactions that we are unsure if they were already included
+in current block or some block in the past, it is being adedd to revalidation
+queue and attempted to be re-imported by the background task in the future.
+
+Runtime calls to verify transactions are performed from a seprate (limited)
+thread pool to avoid interferring too much with other subsystems of the node. We
+definitely don't want to have all cores validating network transactions, cause
+all of these transactions need to be considered untrusted (potentially DoS).
