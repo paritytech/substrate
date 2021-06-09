@@ -634,9 +634,9 @@ fn balance_conversion_should_work() {
 		let not_sufficient = 23;
 		assert_ok!(Assets::force_create(Origin::root(), not_sufficient, 1, false, 10));
 
-		assert_eq!(BalanceToAssetBalance::<Balances, Assets, Test, ConvertInto>::to_asset_balance(100, 1234), Err(ConversionError::AssetMissing));
-		assert_eq!(BalanceToAssetBalance::<Balances, Assets, Test, ConvertInto>::to_asset_balance(100, not_sufficient), Err(ConversionError::AssetNotSufficient));
+		assert_eq!(BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, 1234), Err(ConversionError::AssetMissing));
+		assert_eq!(BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, not_sufficient), Err(ConversionError::AssetNotSufficient));
 		// 10 / 1 == 10 -> the conversion should 10x the value
-		assert_eq!(BalanceToAssetBalance::<Balances, Assets, Test, ConvertInto>::to_asset_balance(100, id), Ok(100 * 10));
+		assert_eq!(BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, id), Ok(100 * 10));
 	});
 }
