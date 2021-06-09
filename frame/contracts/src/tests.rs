@@ -235,6 +235,7 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 }
+impl pallet_randomness_collective_flip::Config for Test {}
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
