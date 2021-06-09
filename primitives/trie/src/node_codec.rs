@@ -216,6 +216,11 @@ impl<H: Hasher, M: Meta<StateMeta = bool>> NodeCodecT<M> for NodeCodec<H> {
 	}
 
 	fn leaf_node(partial: Partial, value: Value, meta: &mut M) -> Vec<u8> {
+		// Note that we use AltHash type only if inner hashing will occur,
+		// this way we allow changing hash threshold.
+		// With fix inner hashing alt hash can be use with all node, but
+		// that is not better (encoding can use an additional nibble byte
+		// sometime).
 		let mut output = if meta.do_value_hash() && value_do_hash(&value) {
 			partial_encode(partial, NodeKind::AltHashLeaf)
 		} else {

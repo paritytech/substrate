@@ -32,8 +32,13 @@ const BRANCH_NODE_WITH_VALUE: u8 = 255;
 #[derive(Default, Clone)]
 /// Codec-flavored TrieStream.
 pub struct TrieStream {
+	/// Current node buffer.
 	buffer: Vec<u8>,
+	/// Global trie alt hashing activation.
 	inner_value_hashing: bool,
+	/// For current node, do we use alt hashing.
+	apply_inner_hashing: bool,
+	/// Keep trace of position of encoded value.
 	current_value_range: Option<Range<usize>>,
 }
 
@@ -77,6 +82,7 @@ impl trie_root::TrieStream for TrieStream {
 		Self {
 			buffer: Vec::new(),
 			inner_value_hashing: meta,
+			apply_inner_hashing: false,
 			current_value_range: None,
 		}
 	}
@@ -86,7 +92,8 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn append_leaf(&mut self, key: &[u8], value: &[u8]) {
-		let kind = if self.inner_value_hashing {
+		self.apply_inner_hashing = self.inner_value_hashing && value_do_hash(value);
+		let kind = if self.apply_inner_hashing {
 			NodeKind::AltHashLeaf
 		} else {
 			NodeKind::Leaf
@@ -105,8 +112,9 @@ impl trie_root::TrieStream for TrieStream {
 		has_children: impl Iterator<Item = bool>,
 	) {
 		if let Some(partial) = maybe_partial {
-			if maybe_value.is_some() {
-				let kind = if self.inner_value_hashing {
+			if let Some(value) = maybe_value {
+				self.apply_inner_hashing = self.inner_value_hashing && value_do_hash(value);
+				let kind = if self.apply_inner_hashing {
 					NodeKind::AltHashBranchWithValue
 				} else {
 					NodeKind::BranchWithValue
@@ -134,7 +142,7 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn append_substream<H: Hasher>(&mut self, other: Self) {
-		let inner_value_hashing = other.inner_value_hashing;
+		let inner_value_hashing = other.apply_inner_hashing;
 		let range = other.current_value_range.clone();
 		let data = other.out();
 		match data.len() {
@@ -201,4 +209,8 @@ fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8])
 	};
 	output[0] = first;
 	Bitmap::encode(has_children, &mut output[1..]);
+}
+
+fn value_do_hash(val: &[u8]) -> bool {
+	val.encoded_size() >= trie_constants::INNER_HASH_TRESHOLD 
 }

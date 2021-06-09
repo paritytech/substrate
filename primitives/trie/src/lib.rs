@@ -59,7 +59,7 @@ pub struct TrieMeta {
 	/// `TrieDbMut` it switch nodes to alternative hashing
 	/// method by setting `do_value_hash` to true.
 	/// TODO consider defining it without do_value
-	/// and set do_value on encoding only.
+	/// and set do_value on encoding only. TODO try_do_value_hash
 	pub switch_to_value_hash: bool,
 	/// Does current encoded contains a hash instead of
 	/// a value (information stored in meta for proofs).
@@ -68,6 +68,7 @@ pub struct TrieMeta {
 	/// This is read and written as a state meta of the node.
 	/// TODO replace by TrieDbMut node variant
 	/// TODO replace by Option<usize> being size treshold.
+	/// TODO apply_do_value_hash (and remove size testing)
 	pub do_value_hash: bool,
 	/// Record if a value was accessed, this is
 	/// set as accessed by defalult, but can be
@@ -920,6 +921,7 @@ mod trie_constants {
 	/// TODO attaching to storage proof in a compatible way could be
 	/// achieve by using a escaped header in first or last element of proof
 	/// and write it after.
+	/// TODO 33 is not good switch to 32 + 1 + 1: 34 (avoid hashing stored hash for a 1 byte gain).
 	pub const INNER_HASH_TRESHOLD: usize = 33;
 	const FIRST_PREFIX: u8 = 0b_00 << 6;
 	/// In proof this header is used when only hashed value is stored.
