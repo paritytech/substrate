@@ -506,6 +506,15 @@
 			"website": "https://manta.network"
 		},
 		{
+			"prefix": 101,
+			"network": "origintrail-parachain",
+			"displayName": "OriginTrail Parachain",
+			"symbols": ["TRAC"],
+			"decimals": [18],
+			"standardAccount": "ethereum",
+			"website": "https://origintrail.io"
+		},
+		{
 			"prefix": 252,
 			"network": "social-network",
 			"displayName": "Social Network",
