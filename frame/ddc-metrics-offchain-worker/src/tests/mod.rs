@@ -108,8 +108,8 @@ fn test_encode_get_current_period_ms() {
     assert_eq!(
         call_data,
         vec![
-        172, 228, 236, 179, // Selector
-    ]
+			172, 228, 236, 179, // Selector
+		]
     );
 }
 
@@ -194,19 +194,13 @@ fn should_submit_signed_transaction_on_chain() {
             });
         };
 
-        // List nodes from a boot node.
-        expect_request(
-            "https://TEST_DDC/api/rest/nodes",
-            include_bytes!("./test_data/ddc_nodes.json"),
-        );
-
         // List partitions from a boot node.
         expect_request("https://node-0.ddc.stage.cere.network/api/rest/metrics?isMaster=true&active=true&from=1608336000&to=1608337114",
-                       include_bytes!("test_data/ddc_metrics_node-0.json"));
+					   include_bytes!("test_data/ddc_metrics_node-0.json"));
 
         // List partitions from a boot node.
         expect_request("https://node-3.ddc.stage.cere.network/api/rest/metrics?isMaster=true&active=true&from=1608336000&to=1608337114",
-                       include_bytes!("test_data/ddc_metrics_node-3.json"));
+					   include_bytes!("test_data/ddc_metrics_node-3.json"));
     }
 
     t.execute_with(|| {
@@ -233,7 +227,7 @@ fn should_submit_signed_transaction_on_chain() {
         // Get the transaction from the worker.
         let transactions = pool_state.read().transactions.clone();
         eprintln!("Transactions: {:?}\n", transactions);
-        assert_eq!(transactions.len(), 2);
+        assert_eq!(transactions.len(), 4); // (2 x send_metrics_to_sc) + (2 x send_metrics_ddn_to_sc)
 
         // Check metrics of an app based on ddc_metrics_node-0.json and ddc_metrics_node-3.json.
         let app_id = AccountId32::from(hex!(
@@ -255,6 +249,20 @@ fn should_submit_signed_transaction_on_chain() {
         assert!(
             transactions[1].ends_with(&expected_call),
             "Expected a specific call to the report_metrics function"
+        );
+
+        let expected_call =
+            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".as_bytes(), INIT_DAY_MS, 101, 202);
+        assert!(
+            transactions[2].ends_with(&expected_call),
+            "Expected a specific call to the report_metrics_ddn function"
+        );
+
+		let expected_call =
+            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".as_bytes(), INIT_DAY_MS, 10, 20);
+        assert!(
+            transactions[3].ends_with(&expected_call),
+            "Expected a specific call to the report_metrics_ddn function"
         );
     });
 }
@@ -335,6 +343,28 @@ fn deploy_contract() -> AccountId {
         &contract_args,
         &alice,
     );
+
+	pub const ADD_DDC_NODE_SELECTOR: [u8; 4] = hex!("11a9e1b9");
+
+	let call_data_items = vec![
+		["12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "https://node-0.ddc.stage.cere.network"],
+		["12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "https://node-3.ddc.stage.cere.network"],
+	];
+
+	for call_data_item in call_data_items {
+		let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
+		call_data_item[0].encode_to(&mut call_data);
+		call_data_item[1].encode_to(&mut call_data);
+
+		let results = Contracts::call(
+			Origin::signed(alice.clone()),
+			contract_id.clone(),
+			0,
+			100_000_000_000,
+			call_data,
+		);
+		results.unwrap();
+	}
 
     contract_id
 }
