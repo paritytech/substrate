@@ -995,6 +995,19 @@ decl_storage! {
 		///
 		/// This is set to v6.0.0 for new networks.
 		StorageVersion build(|_: &GenesisConfig<T>| Releases::V6_0_0): Releases;
+
+		// The next three storage items collectively comprise the `nominator_list::NominatorList`
+		// data structure. They should not be accessed individually, but only through the interface
+		// provided by that type.
+
+		/// Count of nominators. Size of `NominatorList`.
+		NominatorCount: u32;
+
+		/// Linked list of nominators, sorted in decreasing order of stake.
+		NominatorList: nominator_list::NominatorList<T>;
+
+		/// Map of nodes in the nominator list.
+		NominatorNodes: map hasher(twox_64_concat) T::AccountId => nominator_list::Node<T>;
 	}
 	add_extra_genesis {
 		config(stakers):
