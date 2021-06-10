@@ -237,6 +237,15 @@ fn common_config(semantics: &Semantics) -> wasmtime::Config {
 		);
 	}
 
+	// Be clear and specific about the extensions we support. If an update brings new features
+	// they should be introduced here as well.
+	config.wasm_reference_types(false);
+	config.wasm_simd(false);
+	config.wasm_bulk_memory(false);
+	config.wasm_multi_value(false);
+	config.wasm_multi_memory(false);
+	config.wasm_module_linking(false);
+
 	config
 }
 
