@@ -88,6 +88,9 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 	));
 
+	// skip requirement for type params to implement `TypeInfo`
+	event_item.attrs.push(syn::parse_quote!( #[scale_info(skip_type_params(#event_use_gen))] ));
+
 	let deposit_event = if let Some((fn_vis, fn_span)) = &event.deposit_event {
 		let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
 		let trait_use_gen = &def.trait_use_generics(event.attr_span);
