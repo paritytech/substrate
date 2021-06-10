@@ -501,7 +501,7 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	decl_storage, construct_runtime, construct_runtime_v2, transactional, RuntimeDebugNoBound,
+	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]

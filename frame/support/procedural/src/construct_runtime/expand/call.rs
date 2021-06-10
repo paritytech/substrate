@@ -24,7 +24,6 @@ pub fn expand_outer_dispatch(
 	runtime: &Ident,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
-	use_v2: bool,
 ) -> TokenStream {
 	let mut variant_defs = TokenStream::new();
 	let mut variant_patterns = Vec::new();
@@ -43,12 +42,7 @@ pub fn expand_outer_dispatch(
 		variant_defs.extend(quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),));
 		variant_patterns.push(quote!(Call::#name(call)));
 		pallet_names.push(name);
-
-		if use_v2 {
-			query_call_part_macros.push(
-				quote!( #path::__is_call_part_defined!(#name); ),
-			);
-		}
+		query_call_part_macros.push(quote!( #path::__is_call_part_defined!(#name); ));
 	}
 
 	quote! {

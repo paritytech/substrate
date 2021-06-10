@@ -1,4 +1,4 @@
-use frame_support::construct_runtime_v2;
+use frame_support::construct_runtime;
 use sp_runtime::{generic, traits::BlakeTwo256};
 use sp_core::sr25519;
 
@@ -19,7 +19,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, 
 
 impl pallet::Config for Runtime {}
 
-construct_runtime_v2! {
+construct_runtime! {
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,

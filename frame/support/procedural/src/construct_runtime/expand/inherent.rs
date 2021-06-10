@@ -26,7 +26,6 @@ pub fn expand_outer_inherent(
 	unchecked_extrinsic: &TypePath,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
-	use_v2: bool,
 ) -> TokenStream {
 	let mut pallet_names = Vec::new();
 	let mut query_inherent_part_macros = Vec::new();
@@ -34,13 +33,10 @@ pub fn expand_outer_inherent(
 	for pallet_decl in pallet_decls {
 		if pallet_decl.exists_part("Inherent") {
 			let name = &pallet_decl.name;
+			let path = &pallet_decl.path;
 
 			pallet_names.push(name);
-
-			if use_v2 {
-				let path = &pallet_decl.path;
-				query_inherent_part_macros.push(quote!( #path::__is_inherent_part_defined!(#name); ));
-			}
+			query_inherent_part_macros.push(quote!( #path::__is_inherent_part_defined!(#name); ));
 		}
 	}
 

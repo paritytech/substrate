@@ -24,7 +24,6 @@ pub fn expand_outer_validate_unsigned(
 	runtime: &Ident,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
-	use_v2: bool,
 ) -> TokenStream {
 	let mut pallet_names = Vec::new();
 	let mut query_validate_unsigned_part_macros = Vec::new();
@@ -32,13 +31,10 @@ pub fn expand_outer_validate_unsigned(
 	for pallet_decl in pallet_decls {
 		if pallet_decl.exists_part("ValidateUnsigned") {
 			let name = &pallet_decl.name;
+			let path = &pallet_decl.path;
 
 			pallet_names.push(name);
-
-			if use_v2 {
-				let path = &pallet_decl.path;
-				query_validate_unsigned_part_macros.push(quote!( #path::__is_validate_unsigned_part_defined!(#name); ));
-			}
+			query_validate_unsigned_part_macros.push(quote!( #path::__is_validate_unsigned_part_defined!(#name); ));
 		}
 	}
 

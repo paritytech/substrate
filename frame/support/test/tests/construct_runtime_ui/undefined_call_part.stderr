@@ -4,7 +4,7 @@ error: `Pallet` does not have #[pallet::call] defined, perhaps you should remove
 5  |   #[frame_support::pallet]
    |   ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-22 | / construct_runtime_v2! {
+22 | / construct_runtime! {
 23 | |     pub enum Runtime where
 24 | |         Block = Block,
 25 | |         NodeBlock = Block,
@@ -24,7 +24,7 @@ error[E0433]: failed to resolve: use of undeclared crate or module `system`
 error[E0433]: failed to resolve: use of undeclared crate or module `system`
   --> $DIR/undefined_call_part.rs:22:1
    |
-22 | / construct_runtime_v2! {
+22 | / construct_runtime! {
 23 | |     pub enum Runtime where
 24 | |         Block = Block,
 25 | |         NodeBlock = Block,

@@ -24,7 +24,6 @@ pub fn expand_outer_event(
 	runtime: &Ident,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
-	use_v2: bool,
 ) -> syn::Result<TokenStream> {
 	let mut event_variants = TokenStream::new();
 	let mut event_conversions = TokenStream::new();
@@ -57,10 +56,7 @@ pub fn expand_outer_event(
 
 			event_variants.extend(expand_event_variant(runtime, pallet_decl, index, instance, generics));
 			event_conversions.extend(expand_event_conversion(scrate, pallet_decl, &pallet_event));
-
-			if use_v2 {
-				query_event_part_macros.push(quote!( #path::__is_event_part_defined!(#pallet_name); ));
-			}
+			query_event_part_macros.push(quote!( #path::__is_event_part_defined!(#pallet_name); ));
 		}
 	}
 

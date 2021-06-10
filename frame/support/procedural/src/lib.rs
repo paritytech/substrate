@@ -343,14 +343,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///   E.g. `type System = frame_system::Pallet<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
-	construct_runtime::construct_runtime(input, false)
-}
-
-/// Same as `construct_runtime!`, but with the caveat that any pallets referenced in this macro
-/// MUST be built using the FRAMEv2 attribute macros, i.e. the `#[frame_support::pallet]` syntax.
-#[proc_macro]
-pub fn construct_runtime_v2(input: TokenStream) -> TokenStream {
-	construct_runtime::construct_runtime(input, true)
+	construct_runtime::construct_runtime(input)
 }
 
 /// Macro to define a pallet. Docs are at `frame_support::pallet`.

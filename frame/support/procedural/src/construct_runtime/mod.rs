@@ -109,14 +109,14 @@ fn complete_pallets(decl: impl Iterator<Item = PalletDeclaration>) -> syn::Resul
 		.collect()
 }
 
-pub fn construct_runtime(input: TokenStream, use_v2: bool) -> TokenStream {
+pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
-	construct_runtime_parsed(definition, use_v2)
+	construct_runtime_parsed(definition)
 		.unwrap_or_else(|e| e.to_compile_error())
 		.into()
 }
 
-fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Result<TokenStream2> {
+fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
 	let RuntimeDefinition {
 		name,
 		where_section: WhereSection {
@@ -139,25 +139,23 @@ fn construct_runtime_parsed(definition: RuntimeDefinition, use_v2: bool) -> Resu
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
 
-	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate, use_v2)?;
+	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 
 	let outer_origin = expand::expand_outer_origin(&name, &pallets, pallets_token, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
 	let pallet_to_index = decl_pallet_runtime_setup(&pallets, &scrate);
 
-	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate, use_v2);
+	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
-	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate, use_v2);
+	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
 	let inherent = expand::expand_outer_inherent(
 		&name,
 		&block,
 		&unchecked_extrinsic,
 		&pallets,
 		&scrate,
-		use_v2,
 	);
-	let validate_unsigned =
-		expand::expand_outer_validate_unsigned(&name, &pallets, &scrate, use_v2);
+	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 
 	let res = quote!(

@@ -25,7 +25,6 @@ pub fn expand_outer_config(
 	runtime: &Ident,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
-	use_v2: bool,
 ) -> TokenStream {
 	let mut types = TokenStream::new();
 	let mut fields = TokenStream::new();
@@ -46,12 +45,9 @@ pub fn expand_outer_config(
 			types.extend(expand_config_types(runtime, decl, &config, part_is_generic));
 			fields.extend(quote!(pub #field_name: #config,));
 			build_storage_calls.extend(expand_config_build_storage_call(scrate, runtime, decl, &field_name));
-
-			if use_v2 {
-				query_genesis_config_part_macros.push(
-					quote!( #path::__is_genesis_config_defined!(#pallet_name); ),
-				);
-			}
+			query_genesis_config_part_macros.push(
+				quote!( #path::__is_genesis_config_defined!(#pallet_name); ),
+			);
 		}
 	}
 
