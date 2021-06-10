@@ -23,8 +23,8 @@ mod tests;
 
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
-use jsonrpsee_ws_server::RpcModule;
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
+use jsonrpsee::RpcModule;
+use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use sc_rpc_api::DenyUnsafe;
 use self::error::Error;
 use sp_core::{

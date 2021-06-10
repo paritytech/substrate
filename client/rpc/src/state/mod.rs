@@ -25,13 +25,12 @@ mod state_light;
 mod tests;
 
 use std::sync::Arc;
-use std::marker::PhantomData;
 
 use crate::SubscriptionTaskExecutor;
 
 use futures::{future, StreamExt};
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use jsonrpsee_ws_server::{RpcModule, SubscriptionSink};
+use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
+use jsonrpsee::RpcModule;
 use futures::FutureExt;
 
 use sc_rpc_api::{DenyUnsafe, state::ReadProof};

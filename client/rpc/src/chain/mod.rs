@@ -30,8 +30,8 @@ use crate::SubscriptionTaskExecutor;
 
 use futures::{StreamExt, FutureExt};
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
-use jsonrpsee_ws_server::RpcModule;
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
+use jsonrpsee::RpcModule;
+use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
