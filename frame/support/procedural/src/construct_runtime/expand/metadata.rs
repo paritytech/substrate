@@ -65,9 +65,9 @@ pub fn expand_runtime_metadata(
 	quote!{
 		impl #runtime {
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
-				#scrate::metadata::RuntimeMetadataLastVersion {
-					pallets: #scrate::::scale_info::prelude::vec![ #(#pallets),* ],
-					extrinsic: #scrate::metadata::ExtrinsicMetadata {
+				#scrate::metadata::RuntimeMetadataLastVersion::new(
+					#scrate::::scale_info::prelude::vec![ #(#pallets),* ],
+					#scrate::metadata::ExtrinsicMetadata {
 						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
 						signed_extensions: <
@@ -82,7 +82,7 @@ pub fn expand_runtime_metadata(
 								})
 								.collect(),
 					},
-				}.into()
+				).into()
 			}
 		}
 	}
