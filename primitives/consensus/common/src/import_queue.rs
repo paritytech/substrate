@@ -68,6 +68,8 @@ pub struct IncomingBlock<B: BlockT> {
 	pub header: Option<<B as BlockT>::Header>,
 	/// Block body if requested.
 	pub body: Option<Vec<<B as BlockT>::Extrinsic>>,
+	/// Indexed block body if requested.
+	pub indexed_body: Option<Vec<Vec<u8>>>,
 	/// Justification(s) if requested.
 	pub justifications: Option<Justifications>,
 	/// The peer, we received this from

@@ -1095,7 +1095,7 @@ fn syncs_state() {
 		let mut net = TestNet::new(0);
 		net.add_full_peer_with_config(Default::default());
 		net.add_full_peer_with_config(FullPeerConfig {
-			sync_mode: SyncMode::Fast { skip_proofs: *skip_proofs },
+			sync_mode: SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false },
 			..Default::default()
 		});
 		net.peer(0).push_blocks(64, false);
