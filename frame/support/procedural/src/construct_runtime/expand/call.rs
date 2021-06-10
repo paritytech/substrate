@@ -37,7 +37,7 @@ pub fn expand_outer_dispatch(
 
 	for pallet_declaration in pallets_with_call {
 		let name = &pallet_declaration.name;
-		let path = &pallet_declaration.pallet;
+		let path = &pallet_declaration.path;
 		let index = pallet_declaration.index;
 
 		variant_defs.extend(quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),));

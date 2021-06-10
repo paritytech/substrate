@@ -36,7 +36,7 @@ pub fn expand_outer_validate_unsigned(
 			pallet_names.push(name);
 
 			if use_v2 {
-				let path = &pallet_decl.pallet;
+				let path = &pallet_decl.path;
 				query_validate_unsigned_part_macros.push(quote!( #path::__is_validate_unsigned_part_defined!(#name); ));
 			}
 		}

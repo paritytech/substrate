@@ -38,7 +38,7 @@ pub fn expand_outer_inherent(
 			pallet_names.push(name);
 
 			if use_v2 {
-				let path = &pallet_decl.pallet;
+				let path = &pallet_decl.path;
 				query_inherent_part_macros.push(quote!( #path::__is_inherent_part_defined!(#name); ));
 			}
 		}

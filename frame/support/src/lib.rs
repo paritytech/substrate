@@ -46,6 +46,8 @@ pub use sp_io::{storage::root as storage_root, self};
 pub use sp_runtime::RuntimeDebug;
 #[doc(hidden)]
 pub use log;
+#[doc(hidden)]
+pub use frame_metadata as metadata;
 
 #[macro_use]
 mod origin;
@@ -55,8 +57,6 @@ pub mod storage;
 mod hash;
 #[macro_use]
 pub mod event;
-#[macro_use]
-pub mod metadata;
 #[macro_use]
 pub mod genesis_config;
 #[macro_use]
@@ -76,7 +76,7 @@ pub use self::hash::{
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StorageNMap, StoragePrefixedMap,
 	IterableStorageMap, IterableStorageDoubleMap, IterableStorageNMap, migration,
-	bounded_vec::BoundedVec, weak_bounded_vec::WeakBoundedVec,
+	bounded_vec::{BoundedVec, BoundedSlice}, weak_bounded_vec::WeakBoundedVec,
 };
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
