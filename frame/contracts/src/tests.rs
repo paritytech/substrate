@@ -481,50 +481,50 @@ fn instantiate_and_call_and_deposit_event() {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(ALICE.clone())),
+					event: Event::System(frame_system::Event::NewAccount(ALICE.clone())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Endowed(ALICE, 1_000_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(addr.clone())),
+					event: Event::System(frame_system::Event::NewAccount(addr.clone())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Endowed(addr.clone(), subsistence * 100)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Transfer(ALICE, addr.clone(), subsistence * 100)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(crate::Event::CodeStored(code_hash.into())),
+					event: Event::Contracts(crate::Event::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(
+					event: Event::Contracts(
 						crate::Event::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(crate::Event::Instantiated(ALICE, addr.clone())),
+					event: Event::Contracts(crate::Event::Instantiated(ALICE, addr.clone())),
 					topics: vec![],
 				},
 			]);
@@ -1210,45 +1210,45 @@ fn restoration(
 			let mut events = vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(ALICE)),
+					event: Event::System(frame_system::Event::NewAccount(ALICE)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Endowed(ALICE, 1_000_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(addr_bob.clone())),
+					event: Event::System(frame_system::Event::NewAccount(addr_bob.clone())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Endowed(addr_bob.clone(), 30_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Transfer(ALICE, addr_bob.clone(), 30_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(
+					event: Event::Contracts(
 						crate::Event::CodeStored(set_rent_code_hash.into())
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(
+					event: Event::Contracts(
 						crate::Event::Instantiated(ALICE, addr_bob.clone())
 					),
 					topics: vec![],
@@ -1271,26 +1271,26 @@ fn restoration(
 				events.extend([
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::frame_system(frame_system::Event::NewAccount(addr_dummy.clone())),
+						event: Event::System(frame_system::Event::NewAccount(addr_dummy.clone())),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_balances(
+						event: Event::Balances(
 							pallet_balances::Event::Endowed(addr_dummy.clone(), 20_000)
 						),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_balances(
+						event: Event::Balances(
 							pallet_balances::Event::Transfer(ALICE, addr_dummy.clone(), 20_000)
 						),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(
+						event: Event::Contracts(
 							crate::Event::Instantiated(ALICE, addr_dummy.clone())
 						),
 						topics: vec![],
@@ -1418,46 +1418,46 @@ fn restoration(
 						assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(crate::Event::Evicted(addr_bob)),
+								event: Event::Contracts(crate::Event::Evicted(addr_bob)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::frame_system(frame_system::Event::NewAccount(CHARLIE)),
+								event: Event::System(frame_system::Event::NewAccount(CHARLIE)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_balances(pallet_balances::Event::Endowed(CHARLIE, 1_000_000)),
+								event: Event::Balances(pallet_balances::Event::Endowed(CHARLIE, 1_000_000)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::frame_system(frame_system::Event::NewAccount(addr_django.clone())),
+								event: Event::System(frame_system::Event::NewAccount(addr_django.clone())),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_balances(pallet_balances::Event::Endowed(addr_django.clone(), 30_000)),
+								event: Event::Balances(pallet_balances::Event::Endowed(addr_django.clone(), 30_000)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_balances(
+								event: Event::Balances(
 									pallet_balances::Event::Transfer(CHARLIE, addr_django.clone(), 30_000)
 								),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(
+								event: Event::Contracts(
 									crate::Event::CodeStored(restoration_code_hash)
 								),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(
+								event: Event::Contracts(
 									crate::Event::Instantiated(CHARLIE, addr_django.clone())
 								),
 								topics: vec![],
@@ -1491,17 +1491,17 @@ fn restoration(
 				assert_eq!(System::events(), vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(crate::Event::CodeRemoved(restoration_code_hash)),
+						event: Event::Contracts(crate::Event::CodeRemoved(restoration_code_hash)),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::frame_system(system::Event::KilledAccount(addr_django.clone())),
+						event: Event::System(system::Event::KilledAccount(addr_django.clone())),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(
+						event: Event::Contracts(
 							crate::Event::Restored(
 								addr_django, addr_bob, bob_contract.code_hash, 50
 							)
@@ -1729,26 +1729,26 @@ fn self_destruct_works() {
 			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(
+					event: Event::System(
 						frame_system::Event::KilledAccount(addr.clone())
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_balances(
+					event: Event::Balances(
 						pallet_balances::Event::Transfer(addr.clone(), DJANGO, 93_086)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(crate::Event::CodeRemoved(code_hash)),
+					event: Event::Contracts(crate::Event::CodeRemoved(code_hash)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(
+					event: Event::Contracts(
 						crate::Event::Terminated(addr.clone(), DJANGO)
 					),
 					topics: vec![],
