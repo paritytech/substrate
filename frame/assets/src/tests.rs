@@ -347,6 +347,20 @@ fn transferring_frozen_asset_should_not_work() {
 }
 
 #[test]
+fn approve_transfer_frozen_asset_should_not_work() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+		assert_noop!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
+		assert_ok!(Assets::thaw_asset(Origin::signed(1), 0));
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+	});
+}
+
+#[test]
 fn origin_guards_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));

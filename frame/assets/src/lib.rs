@@ -1144,13 +1144,14 @@ pub mod pallet {
 			let delegate = T::Lookup::lookup(delegate)?;
 
 			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(!d.is_frozen, Error::<T, I>::Frozen);
 			Approvals::<T, I>::try_mutate((id, &owner, &delegate), |maybe_approved| -> DispatchResult {
 				let mut approved = match maybe_approved.take() {
 					// an approval already exists and is being updated
 					Some(a) => a,
 					// a new approval is created
 					None => {
-						d.approvals += 1;
+						d.approvals.saturating_inc();
 						Default::default()
 					}
 				};
