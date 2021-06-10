@@ -105,7 +105,7 @@ impl<B: traits::Block> System<B> {
 		})?;
 
 		rpc_module.register_method("system_properties", |_, system| {
-			Ok(system.info.chain_type.clone())
+			Ok(system.info.properties.clone())
 		})?;
 
 		rpc_module.register_async_method("system_health", |_, system| {
