@@ -49,7 +49,7 @@ pub struct Voter<AccountId> {
 
 impl<T: Config> Pallet<T> {
 	/// `Self` accessor for `NominatorList<T>`
-	pub fn nominator_list() -> NominatorList<T> {
+	pub fn voter_list() -> VoterList<T> {
 		crate::NominatorList::<T>::get()
 	}
 }
@@ -57,12 +57,12 @@ impl<T: Config> Pallet<T> {
 /// Linked list of nominstors, sorted by stake.
 #[derive(DefaultNoBound, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct NominatorList<T: Config> {
+pub struct VoterList<T: Config> {
 	head: Option<AccountIdOf<T>>,
 	tail: Option<AccountIdOf<T>>,
 }
 
-impl<T: Config> NominatorList<T> {
+impl<T: Config> VoterList<T> {
 	/// Decode the length of this list without actually iterating over it.
 	pub fn decode_len() -> Option<usize> {
 		crate::NominatorCount::try_get().ok().map(|n| n.saturated_into())

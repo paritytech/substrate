@@ -276,7 +276,7 @@ pub mod testing_utils;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
 
-pub mod nominator_list;
+pub mod voter_list;
 pub mod slashing;
 pub mod inflation;
 pub mod weights;
@@ -999,7 +999,7 @@ decl_storage! {
 		/// This is set to v6.0.0 for new networks.
 		StorageVersion build(|_: &GenesisConfig<T>| Releases::V6_0_0): Releases;
 
-		// The next three storage items collectively comprise the `nominator_list::NominatorList`
+		// The next three storage items collectively comprise the `voter_list::VoterList`
 		// data structure. They should not be accessed individually, but only through the interface
 		// provided by that type.
 
@@ -1007,10 +1007,10 @@ decl_storage! {
 		NominatorCount: u32;
 
 		/// Linked list of nominators, sorted in decreasing order of stake.
-		NominatorList: nominator_list::NominatorList<T>;
+		NominatorList: voter_list::VoterList<T>;
 
 		/// Map of nodes in the nominator list.
-		NominatorNodes: map hasher(twox_64_concat) T::AccountId => Option<nominator_list::Node<T>>;
+		NominatorNodes: map hasher(twox_64_concat) T::AccountId => Option<voter_list::Node<T>>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -2516,14 +2516,14 @@ impl<T: Config> Module<T> {
 		maybe_max_len: Option<usize>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		// nominator list contains all nominators and validators
-		let voter_count = nominator_list::NominatorList::<T>::decode_len().unwrap_or_default();
+		let voter_count = voter_list::VoterList::<T>::decode_len().unwrap_or_default();
 		let wanted_voter_count = maybe_max_len.unwrap_or(voter_count).min(voter_count);
 
 		let weight_of = Self::slashable_balance_of_fn();
 		// collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect();
 
-		Self::nominator_list()
+		Self::voter_list()
 			.iter()
 			.filter_map(|node| node.voting_data(&weight_of, &slashing_spans))
 			.take(wanted_voter_count)
@@ -2546,7 +2546,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<VotingDataOf<T>>, Weight)> {
-		let voter_count = nominator_list::NominatorList::<T>::decode_len().unwrap_or_default();
+		let voter_count = voter_list::VoterList::<T>::decode_len().unwrap_or_default();
 		let slashing_span_count = <SlashingSpans<T>>::iter().count();
 		let weight = T::WeightInfo::get_npos_voters(voter_count as u32, slashing_span_count as u32);
 		Ok((Self::get_npos_voters(maybe_max_len), weight))
