@@ -121,5 +121,15 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		impl<#event_impl_gen> From<#event_ident<#event_use_gen>> for () #event_where_clause {
 			fn from(_: #event_ident<#event_use_gen>) {}
 		}
+
+		impl<#event_impl_gen> #event_ident<#event_use_gen> #event_where_clause {
+			#[allow(dead_code)]
+			#[doc(hidden)]
+			pub fn metadata() -> #frame_support::metadata::PalletEventMetadata {
+				#frame_support::metadata::PalletEventMetadata {
+					ty: #frame_support::scale_info::meta_type::<Self>()
+				}
+			}
+		}
 	)
 }
