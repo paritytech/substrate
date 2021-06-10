@@ -511,7 +511,9 @@ pub mod pallet {
 					details.deposit.saturating_add(metadata.deposit),
 				);
 
-				Approvals::<T, I>::remove_prefix((&id,));
+				for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
+					T::Currency::unreserve(&owner, approval.deposit);
+				}
 				Self::deposit_event(Event::Destroyed(id));
 
 				Ok(

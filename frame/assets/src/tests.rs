@@ -227,6 +227,26 @@ fn destroy_with_bad_witness_should_not_work() {
 }
 
 #[test]
+fn destroy_should_refund_approvals() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 3, 50));
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 4, 50));
+		assert_eq!(Balances::reserved_balance(&1), 3);
+
+		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+		assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+
+		// all approvals are removed
+		assert!(Approvals::<Test>::iter().count().is_zero())
+	});
+}
+
+#[test]
 fn non_providing_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));
