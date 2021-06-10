@@ -156,7 +156,7 @@ pub struct PalletDeclaration {
 	pub name: Ident,
 	/// Optional fixed index (e.g. `MyPallet ...  = 3,`)
 	pub index: Option<u8>,
-	pub pallet: PalletPath,
+	pub path: PalletPath,
 	pub instance: Option<Ident>,
 	pub pallet_parts: Vec<PalletPart>,
 }
@@ -165,7 +165,7 @@ impl Parse for PalletDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let name = input.parse()?;
 		let _: Token![:] = input.parse()?;
-		let pallet = input.parse()?;
+		let path = input.parse()?;
 		let instance = if input.peek(Token![<]) {
 			let _: Token![<] = input.parse()?;
 			let res = Some(input.parse()?);
@@ -189,7 +189,7 @@ impl Parse for PalletDeclaration {
 
 		let parsed = Self {
 			name,
-			pallet,
+			path,
 			instance,
 			pallet_parts,
 			index,
@@ -244,30 +244,6 @@ impl Parse for PalletPath {
 				segments,
 			}
 		})
-	}
-}
-
-impl PalletPath {
-	/// Return the snake-cased module name for this path.
-	pub fn mod_name(&self) -> Ident {
-		let mut iter = self.inner.segments.iter();
-		let mut mod_name = match &iter.next().expect("Path should always have 1 segment; qed").ident {
-			ident if ident == "self" || ident == "super" || ident == "crate" => {
-				// Skip `crate`, `self` and `super` quasi-keywords when creating the module name
-				iter.next()
-					.expect("There must be a path segment pointing to a pallet following \
-						`crate`, `self` or `super`; qed")
-					.ident
-					.clone()
-			}
-			ident => ident.clone(),
-		};
-
-		for segment in iter {
-			mod_name = quote::format_ident!("{}_{}", mod_name, segment.ident);
-		}
-
-		mod_name
 	}
 }
 

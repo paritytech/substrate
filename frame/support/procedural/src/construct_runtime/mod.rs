@@ -35,7 +35,7 @@ const SYSTEM_PALLET_NAME: &str = "System";
 pub struct Pallet {
 	pub name: Ident,
 	pub index: u8,
-	pub pallet: PalletPath,
+	pub path: PalletPath,
 	pub instance: Option<Ident>,
 	pub pallet_parts: Vec<PalletPart>,
 }
@@ -101,7 +101,7 @@ fn complete_pallets(decl: impl Iterator<Item = PalletDeclaration>) -> syn::Resul
 			Ok(Pallet {
 				name: pallet.name,
 				index: final_index,
-				pallet: pallet.pallet,
+				path: pallet.path,
 				instance: pallet.instance,
 				pallet_parts: pallet.pallet_parts,
 			})
@@ -252,7 +252,7 @@ fn decl_outer_dispatch<'a>(
 	let pallets_tokens = pallet_declarations
 		.filter(|pallet_declaration| pallet_declaration.exists_part("Call"))
 		.map(|pallet_declaration| {
-			let pallet = &pallet_declaration.pallet.inner.segments.last().unwrap();
+			let pallet = &pallet_declaration.path.inner.segments.last().unwrap();
 			let name = &pallet_declaration.name;
 			let index = pallet_declaration.index;
 			quote!(#[codec(index = #index)] #pallet::#name)
@@ -275,7 +275,7 @@ fn decl_all_pallets<'a>(
 	let mut names = Vec::new();
 	for pallet_declaration in pallet_declarations {
 		let type_name = &pallet_declaration.name;
-		let pallet = &pallet_declaration.pallet;
+		let pallet = &pallet_declaration.path;
 		let mut generics = vec![quote!(#runtime)];
 		generics.extend(
 			pallet_declaration
