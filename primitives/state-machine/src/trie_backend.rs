@@ -32,6 +32,10 @@ use sp_std::{boxed::Box, vec::Vec};
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub (crate) essence: TrieBackendEssence<S, H>,
+	// Allows setting alt hashing at start for testing only
+	// (see in_memory_backend that cannot read from state as
+	// it changes.
+	pub (crate) force_alt_hashing: Option<Option<u32>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
@@ -39,6 +43,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root),
+			force_alt_hashing: None,
 		}
 	}
 
@@ -168,11 +173,16 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root_with_alt_hashing<'a>(
+	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		use_inner_hash_value: Option<u32>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
+		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
+			force.clone()
+		} else {
+			use_inner_hash_value
+		};
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
 
@@ -199,12 +209,18 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn child_storage_root_with_alt_hashing<'a>(
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		use_inner_hash_value: Option<u32>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
+		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
+			force.clone()
+		} else {
+			use_inner_hash_value
+		};
+	
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
 		};

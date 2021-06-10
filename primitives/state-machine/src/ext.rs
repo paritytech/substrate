@@ -28,7 +28,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
-	Externalities, Extensions, Extension, ExtensionStore, ExternalitiesHelpers,
+	Externalities, Extensions, Extension, ExtensionStore,
 };
 use codec::{Decode, Encode, EncodeAppend};
 
@@ -549,9 +549,9 @@ where
 			root.encode()
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
+				let alt_hashing = self.backend.get_trie_alt_hashing_threshold();
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				let alt_hashing = self.get_trie_alt_hashing_threshold();
-				Some(self.backend.child_storage_root_with_alt_hashing(info, delta, alt_hashing))
+				Some(self.backend.child_storage_root(info, delta, alt_hashing))
 			} else {
 				None
 			};

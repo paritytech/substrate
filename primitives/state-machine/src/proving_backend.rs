@@ -340,21 +340,21 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.child_keys(child_info, prefix)
 	}
 
-	fn storage_root_with_alt_hashing<'b>(
+	fn storage_root<'b>(
 		&self,
 		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
 		alt_hashing: Option<u32>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		self.0.storage_root_with_alt_hashing(delta, alt_hashing)
+		self.0.storage_root(delta, alt_hashing)
 	}
 
-	fn child_storage_root_with_alt_hashing<'b>(
+	fn child_storage_root<'b>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
 		alt_hashing: Option<u32>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
-		self.0.child_storage_root_with_alt_hashing(child_info, delta, alt_hashing)
+		self.0.child_storage_root(child_info, delta, alt_hashing)
 	}
 
 	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) { }

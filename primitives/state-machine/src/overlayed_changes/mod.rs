@@ -614,16 +614,6 @@ impl OverlayedChanges {
 		}
 	}
 
-	/// Utility function to get trie inner value hash threshold from
-	/// backend state or pending changes.
-	fn get_trie_alt_hashing_threshold<H: Hasher, B: Backend<H>>(&self, backend: &B) -> Option<u32> {
-		match self.storage(sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG) {
-			Some(Some(mut encoded)) => sp_core::storage::trie_threshold_decode(&mut encoded),
-			Some(None) => None,
-			None => backend.get_trie_alt_hashing_threshold(),
-		}
-	}
-
 	/// Generate the storage root using `backend` and all changes
 	/// as seen by the current transaction.
 	///
@@ -635,7 +625,7 @@ impl OverlayedChanges {
 	) -> H::Out
 		where H::Out: Ord + Encode,
 	{
-		let alt_hashing	= self.get_trie_alt_hashing_threshold(backend);
+		let alt_hashing	= backend.get_trie_alt_hashing_threshold();
 
 		let delta = self.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])));
 		let child_delta = self.children()
@@ -643,7 +633,7 @@ impl OverlayedChanges {
 				|(k, v)| (&k[..], v.value().map(|v| &v[..]))
 			)));
 
-		let (root, transaction) = backend.full_storage_root_with_alt_hashing(
+		let (root, transaction) = backend.full_storage_root(
 			delta,
 			child_delta,
 			alt_hashing,

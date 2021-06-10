@@ -126,43 +126,23 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// `alt_hashing` indicate if trie state should apply alternate hashing
 	/// scheme (inner value hashed).
 	/// Does not include child storage updates.
+	/// Alt hashing paremeter must contain possible changes from delta.
 	fn storage_root<'a>(
-		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		let alt_hashing = self.get_trie_alt_hashing_threshold();
-		self.storage_root_with_alt_hashing(delta, alt_hashing)
-	}
-
-	/// Calculate the child storage root, with given delta over what is already stored in
-	/// the backend, and produce a "transaction" that can be used to commit. The second argument
-	/// is true if child storage root equals default storage root.
-	fn child_storage_root<'a>(
-		&self,
-		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
-		let alt_hashing = self.get_trie_alt_hashing_threshold();
-		self.child_storage_root_with_alt_hashing(child_info, delta, alt_hashing)
-	}
-
-	/// Helpers function to avoid on query for full storage root.
-	/// See `storage_root`.
-	fn storage_root_with_alt_hashing<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		alt_hashing: Option<u32>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord;
 
-	/// Helpers function to avoid on query for full storage root.
-	/// See `child_storage_root`.
-	fn child_storage_root_with_alt_hashing<'a>(
+	/// Calculate the child storage root, with given delta over what is already stored in
+	/// the backend, and produce a "transaction" that can be used to commit. The second argument
+	/// is true if child storage root equals default storage root.
+	/// Alt hashing paremeter must contain possible changes from delta.
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		alt_hashing: Option<u32>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord;
-
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)>;
@@ -192,22 +172,8 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
-	/// TODO remove (getting alt_hashing from delta is required)
+	/// Alt hashing paremeter must contain possible changes from delta.
 	fn full_storage_root<'a>(
-		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		child_deltas: impl Iterator<Item = (
-			&'a ChildInfo,
-			impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		)>,
-	) -> (H::Out, Self::Transaction) where H::Out: Ord + Encode {
-		let alt_hashing = self.get_trie_alt_hashing_threshold();
-		self.full_storage_root_with_alt_hashing(delta, child_deltas, alt_hashing)
-	}
-
-	/// Helpers function to avoid on query for full storage root.
-	/// See `storage_root`.
-	fn full_storage_root_with_alt_hashing<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		child_deltas: impl Iterator<Item = (
@@ -220,7 +186,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
-			let (child_root, empty, child_txs) = self.child_storage_root_with_alt_hashing(
+			let (child_root, empty, child_txs) = self.child_storage_root(
 				&child_info,
 				child_delta,
 				alt_hashing,
@@ -233,7 +199,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
 			}
 		}
-		let (root, parent_txs) = self.storage_root_with_alt_hashing(delta
+		let (root, parent_txs) = self.storage_root(delta
 			.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
 			.chain(
 				child_roots

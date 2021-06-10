@@ -27,12 +27,14 @@ use codec::Codec;
 use sp_core::storage::{ChildInfo, Storage};
 
 /// Create a new empty instance of in-memory backend.
-pub fn new_in_mem<H: Hasher>() -> TrieBackend<MemoryDB<H>, H>
+pub fn new_in_mem<H: Hasher>(initial_alt_hashing: Option<u32>) -> TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
-	TrieBackend::new(db, empty_trie_root::<Layout<H>>())
+	let mut trie = TrieBackend::new(db, empty_trie_root::<Layout<H>>());
+	trie.force_alt_hashing = Some(initial_alt_hashing);
+	trie
 }
 
 impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
@@ -59,13 +61,13 @@ where
 		changes: T,
 	) {
 		let (top, child) = changes.into_iter().partition::<Vec<_>, _>(|v| v.0.is_none());
-		unimplemented!("get alt hashing changes here");
 		let (root, transaction) = self.full_storage_root(
 			top.iter().map(|(_, v)| v).flatten().map(|(k, v)| (&k[..], v.as_deref())),
 			child.iter()
 				.filter_map(|v|
 					v.0.as_ref().map(|c| (c, v.1.iter().map(|(k, v)| (&k[..], v.as_deref()))))
 				),
+			self.force_alt_hashing.clone().flatten(),
 		);
 
 		self.apply_transaction(root, transaction);
@@ -104,7 +106,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn default() -> Self {
-		new_in_mem()
+		new_in_mem(None)
 	}
 }
 
@@ -114,7 +116,10 @@ where
 	H::Out: Codec + Ord,
 {
 	fn from(inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>) -> Self {
-		let mut backend = new_in_mem();
+		let alt_hashing = inner.get(&None).map(|map|
+			sp_core::storage::alt_hashing::get_trie_alt_hashing_threshold(&map)
+		).flatten();
+		let mut backend = new_in_mem(alt_hashing);
 		backend.insert(
 			inner.into_iter().map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())),
 		);

@@ -33,19 +33,21 @@ use sp_core::{
 };
 use log::warn;
 use codec::Encode;
-use sp_externalities::{Extensions, Extension, ExternalitiesHelpers};
+use sp_externalities::{Extensions, Extension};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
+	alt_hashing: Option<u32>,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(inner: Storage) -> Self {
-		BasicExternalities { inner, extensions: Default::default() }
+		let alt_hashing = inner.get_trie_alt_hashing_threshold();
+		BasicExternalities { inner, extensions: Default::default(), alt_hashing }
 	}
 
 	/// New basic externalities with empty storage.
@@ -70,12 +72,14 @@ impl BasicExternalities {
 		storage: &mut sp_core::storage::Storage,
 		f: impl FnOnce() -> R,
 	) -> R {
+		let alt_hashing = storage.get_trie_alt_hashing_threshold();
 		let mut ext = Self {
 			inner: Storage {
 				top: std::mem::take(&mut storage.top),
 				children_default: std::mem::take(&mut storage.children_default),
 			},
 			extensions: Default::default(),
+			alt_hashing,
 		};
 
 		let r = ext.execute_with(f);
@@ -124,12 +128,14 @@ impl Default for BasicExternalities {
 
 impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 	fn from(hashmap: BTreeMap<StorageKey, StorageValue>) -> Self {
+		let alt_hashing = sp_core::storage::alt_hashing::get_trie_alt_hashing_threshold(&hashmap);
 		BasicExternalities {
 			inner: Storage {
 				top: hashmap,
 				children_default: Default::default(),
 			},
 			extensions: Default::default(),
+			alt_hashing,
 		}
 	}
 }
@@ -281,9 +287,8 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let alt_hashing = self.get_trie_alt_hashing_threshold();
-		let layout = if let Some(threshold) = alt_hashing {
-			Layout::<Blake2Hasher>::with_inner_hashing(threshold)
+		let layout = if let Some(threshold) = self.alt_hashing.as_ref() {
+			Layout::<Blake2Hasher>::with_inner_hashing(*threshold)
 		} else {
 			Layout::<Blake2Hasher>::default()
 		};
@@ -296,9 +301,8 @@ impl Externalities for BasicExternalities {
 	) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-			let alt_hashing = self.get_trie_alt_hashing_threshold();
-			crate::in_memory_backend::new_in_mem::<Blake2Hasher>()
-				.child_storage_root_with_alt_hashing(&child.child_info, delta, alt_hashing).0
+			crate::in_memory_backend::new_in_mem::<Blake2Hasher>(self.alt_hashing.clone())
+				.child_storage_root(&child.child_info, delta, self.alt_hashing.clone()).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()

@@ -224,21 +224,21 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root_with_alt_hashing<'a>(
+	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		alt_hashing: Option<u32>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.state.storage_root_with_alt_hashing(delta, alt_hashing)
+		self.state.storage_root(delta, alt_hashing)
 	}
 
-	fn child_storage_root_with_alt_hashing<'a>(
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		alt_hashing: Option<u32>,
 	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
-		self.state.child_storage_root_with_alt_hashing(child_info, delta, alt_hashing)
+		self.state.child_storage_root(child_info, delta, alt_hashing)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -779,7 +779,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
 		let alt_hashing = storage.get_trie_alt_hashing_threshold();
-		let (root, transaction) = self.old_state.full_storage_root_with_alt_hashing(
+		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| {
 				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
 					changes_trie_config = Some(

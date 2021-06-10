@@ -220,8 +220,7 @@ impl Storage {
 	/// Utility function to get trie inner value hash threshold from
 	/// backend state or pending changes.
 	pub fn get_trie_alt_hashing_threshold(&self) -> Option<u32> {
-		self.top.get(well_known_keys::TRIE_HASHING_CONFIG)
-			.and_then(|encoded| trie_threshold_decode(&mut encoded.as_slice()))
+		alt_hashing::get_trie_alt_hashing_threshold(&self.top)
 	}
 
 	/// Utility function to modify trie inner value hash threshold.
@@ -235,6 +234,19 @@ impl Storage {
 				self.top.remove(well_known_keys::TRIE_HASHING_CONFIG);
 			},
 		}
+	}
+}
+
+/// alt hashing related utils.
+#[cfg(feature = "std")]
+pub mod alt_hashing {
+	use super::*;
+
+	/// Utility function to get trie inner value hash threshold from
+	/// backend state or pending changes.
+	pub fn get_trie_alt_hashing_threshold(map: &StorageMap) -> Option<u32> {
+		map.get(well_known_keys::TRIE_HASHING_CONFIG)
+			.and_then(|encoded| trie_threshold_decode(&mut encoded.as_slice()))
 	}
 }
 
