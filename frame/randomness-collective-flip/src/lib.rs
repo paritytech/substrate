@@ -117,7 +117,7 @@ pub mod pallet {
 	/// the oldest hash.
     #[pallet::storage]
     #[pallet::getter(fn random_material)]
-    pub(super) type RandomMaterial<T: Config> = 
+    pub(super) type RandomMaterial<T: Config> =
         StorageValue<_, Vec<T::Hash>, ValueQuery>;
 }
 
@@ -163,7 +163,7 @@ mod tests {
 	use crate as pallet_randomness_collective_flip;
 	use super::*;
 
-    use sp_core::H256;
+	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
@@ -220,7 +220,7 @@ mod tests {
 		type OnSetCode = ();
 	}
 
-    impl pallet_randomness_collective_flip::Config for Test {} 
+    impl pallet_randomness_collective_flip::Config for Test {}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
