@@ -27,27 +27,53 @@ use std::sync::Arc;
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
 struct RuntimeBuilder {
+	code: Option<&'static str>,
 	fast_instance_reuse: bool,
 	canonicalize_nans: bool,
+	stack_depth_metering: bool,
 	heap_pages: u32,
 }
 
 impl RuntimeBuilder {
+	/// Returns a new builder that won't use the fast instance reuse mechanism, but instead will
+	/// create a new runtime instance each time.
 	fn new_on_demand() -> Self {
 		Self {
+			code: None,
 			fast_instance_reuse: false,
 			canonicalize_nans: false,
+			stack_depth_metering: false,
 			heap_pages: 1024,
 		}
+	}
+
+	fn use_wat(&mut self, code: &'static str) {
+		self.code = Some(code);
 	}
 
 	fn canonicalize_nans(&mut self, canonicalize_nans: bool) {
 		self.canonicalize_nans = canonicalize_nans;
 	}
 
+	fn stack_depth_metering(&mut self, stack_depth_metering: bool) {
+		self.stack_depth_metering = stack_depth_metering;
+	}
+
 	fn build(self) -> Arc<dyn WasmModule> {
-		let blob = RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..])
-			.expect("failed to create a runtime blob out of test runtime");
+		let blob = {
+			let wasm: Vec<u8>;
+
+			let wasm = match self.code {
+				None => wasm_binary_unwrap(),
+				Some(wat) => {
+					wasm = wat::parse_str(wat).unwrap();
+					&wasm
+				}
+			};
+
+			RuntimeBlob::uncompress_if_needed(&wasm)
+				.expect("failed to create a runtime blob out of test runtime")
+		};
 
 		let rt = crate::create_runtime(
 			blob,
@@ -57,7 +83,7 @@ impl RuntimeBuilder {
 				cache_path: None,
 				semantics: crate::Semantics {
 					fast_instance_reuse: self.fast_instance_reuse,
-					stack_depth_metering: false,
+					stack_depth_metering: self.stack_depth_metering,
 					canonicalize_nans: self.canonicalize_nans,
 				},
 			},
@@ -116,4 +142,25 @@ fn test_nan_canonicalization() {
 		u32::from_le_bytes(<[u8; 4]>::decode(&mut &raw_result[..]).unwrap())
 	};
 	assert_eq!(res, CANONICAL_NAN_BITS);
+}
+
+#[test]
+fn test_stack_depth_reaching() {
+	const TEST_GUARD_PAGE_SKIP: &str = include_str!("test-guard-page-skip.wat");
+
+	let runtime = {
+		let mut builder = RuntimeBuilder::new_on_demand();
+		builder.use_wat(TEST_GUARD_PAGE_SKIP);
+		builder.stack_depth_metering(true);
+		builder.build()
+	};
+	let instance = runtime
+		.new_instance()
+		.expect("failed to instantiate a runtime");
+
+	let err = instance.call_export("test-many-locals", &[]).unwrap_err();
+
+	assert!(
+		format!("{:?}", err).starts_with("Other(\"Wasm execution trapped: wasm trap: unreachable")
+	);
 }

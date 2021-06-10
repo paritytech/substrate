@@ -81,6 +81,25 @@ impl RuntimeBlob {
 		export_mutable_globals(&mut self.raw_module, "exported_internal_global");
 	}
 
+	/// Run a pass that instrument this module so as to introduce a deterministic stack height limit.
+	///
+	/// It will introduce a global mutable counter. The instrumentation will increase the counter
+	/// according to the "cost" of the callee. If the cost exceeds the `stack_depth_limit` constant,
+	/// the instrumentation will trap. The counter will be decreased as soon as the the callee returns.
+	///
+	/// The stack cost of a function is computed based on how much locals there are and the maximum
+	/// depth of the wasm operand stack.
+	pub fn inject_stack_depth_metering(self, stack_depth_limit: u32) -> Result<Self, WasmError> {
+		let injected_module =
+			pwasm_utils::stack_height::inject_limiter(self.raw_module, stack_depth_limit).map_err(
+				|e| WasmError::Other(format!("cannot inject the stack limiter: {:?}", e)),
+			)?;
+
+		Ok(Self {
+			raw_module: injected_module,
+		})
+	}
+
 	/// Returns an iterator of all globals which were exported by [`expose_mutable_globals`].
 	pub(super) fn exported_internal_global_names<'module>(
 		&'module self,

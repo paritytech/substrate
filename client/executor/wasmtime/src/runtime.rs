@@ -217,6 +217,26 @@ fn common_config(semantics: &Semantics) -> wasmtime::Config {
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
+
+	if semantics.stack_depth_metering {
+		// With `stack_depth_metering` is enabled, the wasm code will instrumented with its own
+		// stack depth tracker.
+		//
+		// We do not ever want the wasmtime's stack overflow guard to be hit. The amount of data
+		// a stack frame of a compiled function consumes may depend on the wasmtime version and
+		// the architecture the host is running. This introduces some non-determinism and
+		// the `stack_depth_metering` option aims to fix exactly that.
+		//
+		// Hence 256 MiB for the stack. It seems unlikely that this will be reached even with specially
+		// crafted code.
+		config.max_wasm_stack(256 * 1024 * 1024).expect(
+			"this value is a literal and trivially is not 0;
+				we do not supply the async max stack;
+				according to the docs only Ok can be returned;
+				qed",
+		);
+	}
+
 	config
 }
 
@@ -364,8 +384,8 @@ unsafe fn do_create_runtime(
 		.map_err(|e| WasmError::Other(format!("cannot create the engine for runtime: {}", e)))?;
 
 	let (module, snapshot_data) = match code_supply_mode {
-		CodeSupplyMode::Verbatim { mut blob } => {
-			instrument(&mut blob, &config.semantics);
+		CodeSupplyMode::Verbatim { blob } => {
+			let blob = instrument(blob, &config.semantics)?;
 
 			if config.semantics.fast_instance_reuse {
 				let data_segments_snapshot = DataSegmentsSnapshot::take(&blob).map_err(|e| {
@@ -407,23 +427,30 @@ unsafe fn do_create_runtime(
 	})
 }
 
-fn instrument(blob: &mut RuntimeBlob, semantics: &Semantics) {
+fn instrument(
+	mut blob: RuntimeBlob,
+	semantics: &Semantics,
+) -> std::result::Result<RuntimeBlob, WasmError> {
+	if semantics.stack_depth_metering {
+		const STACK_DEPTH_LIMIT: u32 = 65536;
+		blob = blob.inject_stack_depth_metering(STACK_DEPTH_LIMIT)?;
+	}
+
+	// If enabled, this should happen after all other passes that may introduce global variables.
 	if semantics.fast_instance_reuse {
 		blob.expose_mutable_globals();
 	}
 
-	if semantics.stack_depth_metering {
-		// TODO: implement deterministic stack metering https://github.com/paritytech/substrate/issues/8393
-	}
+	Ok(blob)
 }
 
 /// Takes a [`RuntimeBlob`] and precompiles it returning the serialized result of compilation. It
 /// can then be used for calling [`create_runtime`] avoiding long compilation times.
 pub fn prepare_runtime_artifact(
-	mut blob: RuntimeBlob,
+	blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<Vec<u8>, WasmError> {
-	instrument(&mut blob, semantics);
+	let blob = instrument(blob, semantics)?;
 
 	let engine = Engine::new(&common_config(semantics))
 		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;
