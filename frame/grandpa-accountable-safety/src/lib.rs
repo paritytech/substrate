@@ -116,6 +116,7 @@ impl<T: Config> Pallet<T> {
 			current_round: new_block.1,
 			set_id: new_block.2,
 			block_counter: 0u32.into(),
+			prevote_step: false,
 		};
 
 		AccountableSafetySession::<T>::put(state);
@@ -136,6 +137,7 @@ impl<T: Config> Pallet<T> {
 		// Updating the counter assuming this is called once per block
 		let block_timeout_reached = {
 			state.block_counter += 1u32.into();
+			AccountableSafetySession::<T>::put(state.clone());
 			state.block_counter > T::BlockTimeout::get()
 		};
 
@@ -156,23 +158,28 @@ impl<T: Config> Pallet<T> {
 			})
 			.flatten()
 			.collect::<Vec<_>>();
-		let mut all_precommits = AccountableSafetyQueries::<T>::iter()
-			.filter_map(|(_, reply)| match reply {
-				Query::Replied(QueryResponse::Precommits(precommits)) => Some(precommits),
-				_ => None,
-			})
-			.flatten()
-			.collect::<Vec<_>>();
 
-		// If this was for the round firectly after the round where the block that should have been
+		let mut all_precommits = if !state.prevote_step {
+			AccountableSafetyQueries::<T>::iter()
+				.filter_map(|(_, reply)| match reply {
+					Query::Replied(QueryResponse::Precommits(precommits)) => Some(precommits),
+					_ => None,
+				})
+				.flatten()
+				.collect::<Vec<_>>()
+		} else {
+			Vec::new()
+		};
+
+		// If this was for the round directly after the round where the block that should have been
 		// included, but wasn't, was finalized, then also check against the precommits in the commit
 		// message.
-		if state.current_round == state.block_not_included.1 + 1 {
+		if state.current_round == state.block_not_included.1 + 1 && !state.prevote_step {
 			let mut block_precommits = state.block_not_included.0.precommits.clone();
 			all_precommits.append(&mut block_precommits);
 		}
 
-		// Check for equivocatoins and collect
+		// Check for equivocations and collect
 		let prevote_equivocations = find_equivocations(&all_prevotes);
 		let precommit_equivocations = find_equivocations(&all_precommits);
 		let mut equivocations = prevote_equivocations
@@ -192,16 +199,39 @@ impl<T: Config> Pallet<T> {
 		};
 		AccountableSafetyEquivocations::<T>::put(equivocations);
 
+		// If these were found during the prevote stage, we are done
+		if state.prevote_step {
+			AccountableSafetySession::<T>::kill;
+			return;
+		}
+
 		// For the last round we also send out prevote queries to all voters that reported prevotes
 		// instead of precommits.
 		if state.current_round == state.block_not_included.1 + 1 {
-			// For the authorities that replied with prevotes, proceed to the prevote query stage
-			// WIP
+			// For the authorities that replied with prevotes, proceed to the prevote query stage.
+			// This means asking the voters in the commit message which prevotes they've seen
+			let mut precommit_voters_in_commit = state
+				.block_not_included
+				.0
+				.precommits
+				.iter()
+				.map(|precommit| precommit.id.clone())
+				.collect::<Vec<_>>();
+			precommit_voters_in_commit.sort_unstable();
+			precommit_voters_in_commit.dedup();
+
+			if !precommit_voters_in_commit.is_empty() {
+				state.prevote_step = true;
+			}
+			for voter in precommit_voters_in_commit {
+				AccountableSafetyQueries::<T>::insert(voter, Query::WaitingForPrevoteReply);
+			}
 		} else {
 			// If not, proceed to the next step, which is the preceding round.
 			// WIP: make this subtraction safely
 			state.current_round -= 1;
 			state.block_counter = 0u32.into();
+			AccountableSafetySession::<T>::put(state);
 
 			// Collect all the vote authors in the replies
 			// WIP: optimization opportunity
@@ -215,7 +245,6 @@ impl<T: Config> Pallet<T> {
 			voters.sort_unstable();
 			voters.dedup();
 
-			AccountableSafetySession::<T>::put(state);
 			for voter in voters {
 				AccountableSafetyQueries::<T>::insert(voter, Query::WaitingForReply);
 			}
@@ -357,6 +386,8 @@ pub struct StoredAccountableSafetySession<H, N> {
 	pub set_id: SetId,
 	/// Keep track on the number of elapsed blocks, to make sure we can timeout if needed.
 	pub block_counter: N,
+	/// If we are in the prevote step
+	pub prevote_step: bool,
 }
 
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
