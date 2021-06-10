@@ -3008,7 +3008,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#67e7c3db7305321b59ec408e9b65d26f24f0a3e8"
 dependencies = [
  "jsonrpsee-http-server",
  "jsonrpsee-utils",
@@ -3018,7 +3018,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#67e7c3db7305321b59ec408e9b65d26f24f0a3e8"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3039,7 +3039,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#67e7c3db7305321b59ec408e9b65d26f24f0a3e8"
 dependencies = [
  "Inflector",
  "proc-macro-crate 1.0.0",
@@ -3051,7 +3051,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#67e7c3db7305321b59ec408e9b65d26f24f0a3e8"
 dependencies = [
  "async-trait",
  "beef",
@@ -3068,7 +3068,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#67e7c3db7305321b59ec408e9b65d26f24f0a3e8"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3086,7 +3086,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#67e7c3db7305321b59ec408e9b65d26f24f0a3e8"
 dependencies = [
  "async-trait",
  "fnv",
@@ -3100,16 +3100,16 @@ dependencies = [
  "serde_json",
  "soketto 0.5.0",
  "thiserror",
- "tokio 1.6.0",
- "tokio-rustls 0.22.0",
- "tokio-util 0.6.3",
+ "tokio 0.2.25",
+ "tokio-rustls 0.15.0",
+ "tokio-util 0.3.1",
  "url 2.2.1",
 ]
 
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#d5ba2bd8d3bba846da56774fdc1955e9bea2a1ed"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#67e7c3db7305321b59ec408e9b65d26f24f0a3e8"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -4994,6 +4994,7 @@ name = "pallet-contracts"
 version = "3.0.0"
 dependencies = [
  "assert_matches",
+ "bitflags",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -6897,11 +6898,12 @@ dependencies = [
  "log",
  "pallet-elections-phragmen",
  "parity-scale-codec",
+ "serde",
  "serde_json",
  "sp-core",
  "sp-io",
  "sp-runtime",
- "tokio 1.6.0",
+ "tokio 0.2.25",
 ]
 
 [[package]]
@@ -10449,12 +10451,13 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.22.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
+checksum = "03d15e5669243a45f630a5167d101b942174ca94b615445b2057eace1c818736"
 dependencies = [
+ "futures-core",
  "rustls 0.19.1",
- "tokio 1.6.0",
+ "tokio 0.2.25",
  "webpki",
 ]
 
@@ -10572,6 +10575,7 @@ checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
 dependencies = [
  "bytes 0.5.6",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "log",
  "pin-project-lite 0.1.12",
@@ -10805,14 +10809,17 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "remote-externalities",
+ "sc-chain-spec",
  "sc-cli",
  "sc-client-api",
  "sc-executor",
  "sc-service",
+ "serde",
  "sp-api",
  "sp-blockchain",
  "sp-core",
  "sp-externalities",
+ "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
  "structopt",
