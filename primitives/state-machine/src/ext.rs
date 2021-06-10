@@ -519,7 +519,10 @@ where
 			return root.encode();
 		}
 
-		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
+		let root = self.overlay.storage_root(
+			self.backend,
+			self.storage_transaction_cache,
+		);
 		trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
 		root.encode()
 	}
@@ -547,8 +550,8 @@ where
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				let alt_hashing = self.get_trie_alt_hashing_threshold().is_some();
-				Some(self.backend.child_storage_root(info, delta, alt_hashing))
+				let alt_hashing = self.get_trie_alt_hashing_threshold();
+				Some(self.backend.child_storage_root_with_alt_hashing(info, delta, alt_hashing))
 			} else {
 				None
 			};

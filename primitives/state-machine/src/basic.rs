@@ -281,9 +281,9 @@ impl Externalities for BasicExternalities {
 			}
 		}
 
-		let alt_hashing = self.get_trie_alt_hashing_threshold().is_some();
-		let layout = if alt_hashing {
-			Layout::<Blake2Hasher>::with_inner_hashing()
+		let alt_hashing = self.get_trie_alt_hashing_threshold();
+		let layout = if let Some(threshold) = alt_hashing {
+			Layout::<Blake2Hasher>::with_inner_hashing(threshold)
 		} else {
 			Layout::<Blake2Hasher>::default()
 		};
@@ -296,9 +296,9 @@ impl Externalities for BasicExternalities {
 	) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-			let alt_hashing = self.get_trie_alt_hashing_threshold().is_some();
+			let alt_hashing = self.get_trie_alt_hashing_threshold();
 			crate::in_memory_backend::new_in_mem::<Blake2Hasher>()
-				.child_storage_root(&child.child_info, delta, alt_hashing).0
+				.child_storage_root_with_alt_hashing(&child.child_info, delta, alt_hashing).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()

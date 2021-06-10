@@ -855,7 +855,7 @@ mod execution {
 	where
 		H: Hasher,
 		H::Out: Ord + Codec,
-		MH: sp_trie::MetaHasher<H, sp_trie::DBValue, Meta = sp_trie::TrieMeta, GlobalMeta = bool>,
+		MH: sp_trie::MetaHasher<H, sp_trie::DBValue, Meta = sp_trie::TrieMeta, GlobalMeta = Option<u32>>,
 		KF: sp_trie::KeyFunction<H> + Send + Sync,
 	{
 		proving_backend.storage(key).map_err(|e| Box::new(e) as Box<dyn Error>)

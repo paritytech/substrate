@@ -168,10 +168,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<'a>(
+	fn storage_root_with_alt_hashing<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		use_inner_hash_value: bool,
+		use_inner_hash_value: Option<u32>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
@@ -182,8 +182,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 			let res = || {
-				let layout = if use_inner_hash_value {
-					sp_trie::Layout::with_inner_hashing()
+				let layout = if let Some(threshold) = use_inner_hash_value {
+					sp_trie::Layout::with_inner_hashing(threshold)
 				} else {
 					sp_trie::Layout::default()
 				};
@@ -199,17 +199,17 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn child_storage_root<'a>(
+	fn child_storage_root_with_alt_hashing<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		use_inner_hash_value: bool,
+		use_inner_hash_value: Option<u32>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
 		};
-		let layout = if use_inner_hash_value {
-			sp_trie::Layout::with_inner_hashing()
+		let layout = if let Some(threshold) = use_inner_hash_value {
+			sp_trie::Layout::with_inner_hashing(threshold)
 		} else {
 			sp_trie::Layout::default()
 		};

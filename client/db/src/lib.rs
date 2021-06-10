@@ -224,21 +224,21 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root<'a>(
+	fn storage_root_with_alt_hashing<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		alt_hashing: bool,
+		alt_hashing: Option<u32>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.state.storage_root(delta, alt_hashing)
+		self.state.storage_root_with_alt_hashing(delta, alt_hashing)
 	}
 
-	fn child_storage_root<'a>(
+	fn child_storage_root_with_alt_hashing<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		alt_hashing: bool,
+		alt_hashing: Option<u32>,
 	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
-		self.state.child_storage_root(child_info, delta, alt_hashing)
+		self.state.child_storage_root_with_alt_hashing(child_info, delta, alt_hashing)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -778,7 +778,8 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		let (root, transaction) = self.old_state.full_storage_root(
+		let alt_hashing = storage.get_trie_alt_hashing_threshold();
+		let (root, transaction) = self.old_state.full_storage_root_with_alt_hashing(
 			storage.top.iter().map(|(k, v)| {
 				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
 					changes_trie_config = Some(
@@ -789,6 +790,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 				(&k[..], Some(&v[..]))
 			}),
 			child_delta,
+			alt_hashing,
 		);
 
 		self.db_updates = transaction;
@@ -859,15 +861,21 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix, global: bool) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	fn get(
+		&self,
+		key: &Block::Hash,
+		prefix: Prefix,
+		global: Option<u32>,
+	) -> Result<Option<(DBValue, TrieMeta)>, String> {
 		if self.prefix_keys {
 			let key = prefixed_key::<HashFor<Block>>(key, prefix);
 			self.state_db.get(&key, self)
 		} else {
 			self.state_db.get(key.as_ref(), self)
 		}
-		.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)))
-		.map_err(|e| format!("Database backend error: {:?}", e))
+		.map(|result| result.map(|value|
+			<StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)
+		)).map_err(|e| format!("Database backend error: {:?}", e))
 	}
 
 	fn access_from(&self, _key: &Block::Hash) {
@@ -895,7 +903,12 @@ impl<Block: BlockT> DbGenesisStorage<Block> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStorage<Block> {
-	fn get(&self, _key: &Block::Hash, _prefix: Prefix, _global: bool) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	fn get(
+		&self,
+		_key: &Block::Hash,
+		_prefix: Prefix,
+		_global: Option<u32>,
+	) -> Result<Option<(DBValue, TrieMeta)>, String> {
 		Ok(None)
 	}
 	fn access_from(&self, _key: &Block::Hash) {

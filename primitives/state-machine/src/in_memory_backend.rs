@@ -58,8 +58,8 @@ where
 		&mut self,
 		changes: T,
 	) {
-		// Note that in case the threshold is changed, it will not be apply immediately.
 		let (top, child) = changes.into_iter().partition::<Vec<_>, _>(|v| v.0.is_none());
+		unimplemented!("get alt hashing changes here");
 		let (root, transaction) = self.full_storage_root(
 			top.iter().map(|(_, v)| v).flatten().map(|(k, v)| (&k[..], v.as_deref())),
 			child.iter()

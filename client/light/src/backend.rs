@@ -486,27 +486,28 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn storage_root<'a>(
+	fn storage_root_with_alt_hashing<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		alt_hashing: bool,
+		alt_hashing: Option<u32>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		match *self {
-			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.storage_root(delta, alt_hashing),
+			GenesisOrUnavailableState::Genesis(ref state) => state
+				.storage_root_with_alt_hashing(delta, alt_hashing),
 			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}
 
-	fn child_storage_root<'a>(
+	fn child_storage_root_with_alt_hashing<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		alt_hashing: bool,
+		alt_hashing: Option<u32>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(child_info, delta, alt_hashing);
+				let (root, is_equal, _) = state
+					.child_storage_root_with_alt_hashing(child_info, delta, alt_hashing);
 				(root, is_equal, Default::default())
 			},
 			GenesisOrUnavailableState::Unavailable =>

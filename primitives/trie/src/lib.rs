@@ -57,24 +57,27 @@ pub struct TrieMeta {
 	pub range: Option<core::ops::Range<usize>>,
 	/// Defined in the trie layout, when used with
 	/// `TrieDbMut` it switch nodes to alternative hashing
-	/// method by setting `do_value_hash` to true.
-	pub try_inner_hashing: bool,
+	/// method by defining the threshold to use with alternative
+	/// hashing.
+	pub try_inner_hashing: Option<u32>,
+	/// Flag indicating alternative value hash is currently use
+	/// or will be use.
+	pub apply_inner_hashing: bool,
 	/// Does current encoded contains a hash instead of
 	/// a value (information stored in meta for proofs).
 	pub contain_hash: bool,
-	/// Flag indicating alternative value hash will be use.
-	pub apply_inner_hashing: bool,
 	/// Record if a value was accessed, this is
 	/// set as accessed by defalult, but can be
 	/// change on access explicitely: `HashDB::get_with_meta`.
 	/// and reset on access explicitely: `HashDB::access_from`.
-	/// TODO!! remove from meta: only use in proof recorder context.
+	/// TODO!! could be remove from meta: only use in proof recorder context.
+	/// But does not add memory usage here.
 	pub unused_value: bool,
 }
 
 impl Meta for TrieMeta {
 	/// When true apply inner hashing of value.
-	type GlobalMeta = bool;
+	type GlobalMeta = Option<u32>;
 
 	/// When true apply inner hashing of value.
 	type StateMeta = bool;
@@ -156,8 +159,9 @@ impl Meta for TrieMeta {
 			ValuePlan::NoValue => return,
 		};
 
-		self.apply_inner_hashing = self.try_inner_hashing
-			&& range.end - range.start >= trie_constants::INNER_HASH_TRESHOLD;
+		self.apply_inner_hashing = self.try_inner_hashing.as_ref().map(|threshold|
+			range.end - range.start >= *threshold as usize
+		).unwrap_or(false);
 		self.range = Some(range);
 		self.contain_hash = contain_hash;
 	}
@@ -201,7 +205,7 @@ impl TrieMeta {
 }
 
 /// substrate trie layout
-pub struct Layout<H, M>(bool, sp_std::marker::PhantomData<(H, M)>);
+pub struct Layout<H, M>(Option<u32>, sp_std::marker::PhantomData<(H, M)>);
 
 impl<H, M> fmt::Debug for Layout<H, M> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -217,23 +221,23 @@ impl<H, M> Clone for Layout<H, M> {
 
 impl<H, M> Default for Layout<H, M> {
 	fn default() -> Self {
-		Layout(false, sp_std::marker::PhantomData)
+		Layout(None, sp_std::marker::PhantomData)
 	}
 }
 impl<H, M> Layout<H, M> {
 	/// Layout with inner hashing active.
 	/// Will flag trie for hashing.
 	/// TODO rename inner -> alt
-	pub fn with_inner_hashing() -> Self {
-		Layout(true, sp_std::marker::PhantomData)
+	pub fn with_inner_hashing(threshold: u32) -> Self {
+		Layout(Some(threshold), sp_std::marker::PhantomData)
 	}
 }
 
 impl<H, M> TrieLayout for Layout<H, M>
 	where
 		H: Hasher,
-		M: MetaHasher<H, DBValue, GlobalMeta = bool>,
-		M::Meta: Meta<GlobalMeta = bool, StateMeta = bool>,
+		M: MetaHasher<H, DBValue, GlobalMeta = Option<u32>>,
+		M::Meta: Meta<GlobalMeta = Option<u32>, StateMeta = bool>,
 {
 	const USE_EXTENSION: bool = false;
 	const ALLOW_EMPTY: bool = true;
@@ -273,7 +277,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		H: Hasher,
 {
 	type Meta = TrieMeta;
-	type GlobalMeta = bool;
+	type GlobalMeta = Option<u32>;
 
 	fn hash(value: &[u8], meta: &Self::Meta) -> H::Out {
 		match &meta {
@@ -335,7 +339,7 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 			unused_value: contain_hash,
 			contain_hash,
 			apply_inner_hashing: false,
-			try_inner_hashing: false,
+			try_inner_hashing: None,
 		};
 		meta.set_global_meta(global_meta);
 		(stored, meta)
@@ -353,8 +357,8 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 impl<H, M> TrieConfiguration for Layout<H, M>
 	where
 		H: Hasher,
-		M: MetaHasher<H, DBValue, GlobalMeta = bool>,
-		M::Meta: Meta<GlobalMeta = bool, StateMeta = bool>,
+		M: MetaHasher<H, DBValue, GlobalMeta = Option<u32>>,
+		M::Meta: Meta<GlobalMeta = Option<u32>, StateMeta = bool>,
 {
 	fn trie_root<I, A, B>(&self, input: I) -> <Self::Hash as Hasher>::Out where
 		I: IntoIterator<Item = (A, B)>,
@@ -812,18 +816,6 @@ pub fn resolve_encoded_meta<H: Hasher>(entry: &mut (DBValue, TrieMeta)) {
 
 /// Constants used into trie simplification codec.
 mod trie_constants {
-	/// Treshold for using hash of value instead of value
-	/// in encoded trie node when flagged.
-	/// TODO design would be to make it the global meta, but then
-	/// when serializing proof we would need to attach it (no way to
-	/// hash the nodes otherwhise), which would
-	/// break proof format.
-	/// TODO attaching to storage proof in a compatible way could be
-	/// achieve by using a escaped header in first or last element of proof
-	/// and write it after.
-	/// TODO 33 is not good switch to 32 + 1 + 1: 34 (avoid hashing stored hash for a 1 byte gain).
-	/// TODO replace with sp_storage test one.
-	pub const INNER_HASH_TRESHOLD: usize = 33;
 	const FIRST_PREFIX: u8 = 0b_00 << 6;
 	/// In proof this header is used when only hashed value is stored.
 	pub const DEAD_HEADER_META_HASHED_VALUE: u8 = EMPTY_TRIE | 0b_00_01;
@@ -895,12 +887,6 @@ mod tests {
 	}
 
 	fn check_input(input: &Vec<(&[u8], &[u8])>) {
-// TODO remove this iter
-		let layout = Layout::with_inner_hashing();
-		check_equivalent::<Layout>(input, layout.clone());
-		check_iteration::<Layout>(input, layout.clone());
-
-
 		let layout = Layout::default();
 		check_equivalent::<Layout>(input, layout.clone());
 		check_iteration::<Layout>(input, layout);

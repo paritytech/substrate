@@ -31,15 +31,15 @@ pub struct SimpleTrie<'a> {
 	pub overlay: &'a mut HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
-impl<'a> AsHashDB<Hasher, DBValue, TrieMeta, bool> for SimpleTrie<'a> {
-	fn as_hash_db(&self) -> &dyn hash_db::HashDB<Hasher, DBValue, TrieMeta, bool> { &*self }
+impl<'a> AsHashDB<Hasher, DBValue, TrieMeta, Option<u32>> for SimpleTrie<'a> {
+	fn as_hash_db(&self) -> &dyn hash_db::HashDB<Hasher, DBValue, TrieMeta, Option<u32>> { &*self }
 
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<Hasher, DBValue, TrieMeta, bool> + 'b) {
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<Hasher, DBValue, TrieMeta, Option<u32>> + 'b) {
 		&mut *self
 	}
 }
 
-impl<'a> HashDB<Hasher, DBValue, TrieMeta, bool> for SimpleTrie<'a> {
+impl<'a> HashDB<Hasher, DBValue, TrieMeta, Option<u32>> for SimpleTrie<'a> {
 	fn get(&self, key: &Hash, prefix: Prefix) -> Option<DBValue> {
 		let key = sp_trie::prefixed_key::<Hasher>(key, prefix);
 		if let Some(value) = self.overlay.get(&key) {
@@ -48,7 +48,7 @@ impl<'a> HashDB<Hasher, DBValue, TrieMeta, bool> for SimpleTrie<'a> {
 		self.db.get(0, &key).expect("Database backend error")
 	}
 
-	fn get_with_meta(&self, key: &Hash, prefix: Prefix, global: bool) -> Option<(DBValue, TrieMeta)> {
+	fn get_with_meta(&self, key: &Hash, prefix: Prefix, global: Option<u32>) -> Option<(DBValue, TrieMeta)> {
 		let result = self.get(key, prefix);
 		result.map(|value| <StateHasher as MetaHasher<Hasher, _>>::extract_value_owned(value, global))
 	}

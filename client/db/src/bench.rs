@@ -49,7 +49,12 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix, global: bool) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	fn get(
+		&self,
+		key: &Block::Hash,
+		prefix: Prefix,
+		global: Option<u32>,
+	) -> Result<Option<(DBValue, TrieMeta)>, String> {
 		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 		if let Some(recorder) = &self.proof_recorder {
 			if let Some(v) = recorder.get(&key) {
@@ -155,9 +160,12 @@ impl<B: BlockT> BenchmarkingState<B> {
 			&child_content.child_info,
 			child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 		));
-		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
+		let alt_hashing = genesis.get_trie_alt_hashing_threshold();
+		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap()
+			.full_storage_root_with_alt_hashing(
 			genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
+			alt_hashing,
 		);
 		state.genesis = transaction.clone().drain();
 		state.genesis_root = root.clone();
@@ -396,23 +404,24 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		}
 	}
 
-	fn storage_root<'a>(
+	fn storage_root_with_alt_hashing<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		alt_hashing: bool,
+		alt_hashing: Option<u32>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.state.borrow().as_ref().map_or(Default::default(), |s| s.storage_root(delta, alt_hashing))
+		self.state.borrow().as_ref()
+			.map_or(Default::default(), |s| s.storage_root_with_alt_hashing(delta, alt_hashing))
 	}
 
-	fn child_storage_root<'a>(
+	fn child_storage_root_with_alt_hashing<'a>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		alt_hashing: bool,
+		alt_hashing: Option<u32>,
 	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
 		self.state.borrow().as_ref().map_or(
 			Default::default(),
-			|s| s.child_storage_root(child_info, delta, alt_hashing),
+			|s| s.child_storage_root_with_alt_hashing(child_info, delta, alt_hashing),
 		)
 	}
 

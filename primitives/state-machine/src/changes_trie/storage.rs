@@ -207,7 +207,12 @@ impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 {
 	type Overlay = MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix, _global: bool) -> Result<Option<(DBValue, sp_trie::TrieMeta)>, String> {
+	fn get(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+		_global: Option<u32>,
+	) -> Result<Option<(DBValue, sp_trie::TrieMeta)>, String> {
 		match self.storage.get(key, prefix) {
 			// change trie do not use meta.
 			Ok(Some(v)) => Ok(Some((v, Default::default()))),

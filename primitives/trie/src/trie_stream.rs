@@ -35,7 +35,7 @@ pub struct TrieStream {
 	/// Current node buffer.
 	buffer: Vec<u8>,
 	/// Global trie alt hashing activation.
-	inner_value_hashing: bool,
+	inner_value_hashing: Option<u32>,
 	/// For current node, do we use alt hashing.
 	apply_inner_hashing: bool,
 	/// Keep trace of position of encoded value.
@@ -76,9 +76,9 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 
 
 impl trie_root::TrieStream for TrieStream {
-	type GlobalMeta = bool;
+	type GlobalMeta = Option<u32>;
 
-	fn new(meta: bool) -> Self {
+	fn new(meta: Option<u32>) -> Self {
 		Self {
 			buffer: Vec::new(),
 			inner_value_hashing: meta,
@@ -92,7 +92,9 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn append_leaf(&mut self, key: &[u8], value: &[u8]) {
-		self.apply_inner_hashing = self.inner_value_hashing && value_do_hash(value);
+		self.apply_inner_hashing = self.inner_value_hashing.as_ref().map(|threshold|
+			value_do_hash(value, threshold)
+		).unwrap_or(false);
 		let kind = if self.apply_inner_hashing {
 			NodeKind::AltHashLeaf
 		} else {
@@ -113,7 +115,9 @@ impl trie_root::TrieStream for TrieStream {
 	) {
 		if let Some(partial) = maybe_partial {
 			if let Some(value) = maybe_value {
-				self.apply_inner_hashing = self.inner_value_hashing && value_do_hash(value);
+				self.apply_inner_hashing = self.inner_value_hashing.as_ref().map(|threshold|
+					value_do_hash(value, threshold)
+				).unwrap_or(false);
 				let kind = if self.apply_inner_hashing {
 					NodeKind::AltHashBranchWithValue
 				} else {
@@ -155,7 +159,7 @@ impl trie_root::TrieStream for TrieStream {
 						contain_hash: false,
 						// Using `inner_value_hashing` instead to check this.
 						// And unused in hasher.
-						try_inner_hashing: false,
+						try_inner_hashing: None,
 						apply_inner_hashing: true,
 					};
 					<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta).as_ref().encode_to(&mut self.buffer);
@@ -174,7 +178,7 @@ impl trie_root::TrieStream for TrieStream {
 			range: range,
 			unused_value: false,
 			contain_hash: false,
-			try_inner_hashing: false,
+			try_inner_hashing: None,
 			apply_inner_hashing: true,
 		};
 
@@ -207,6 +211,6 @@ fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8])
 	Bitmap::encode(has_children, &mut output[1..]);
 }
 
-fn value_do_hash(val: &[u8]) -> bool {
-	val.encoded_size() >= trie_constants::INNER_HASH_TRESHOLD 
+fn value_do_hash(val: &[u8], threshold: &u32) -> bool {
+	val.encoded_size() >= *threshold as usize
 }
