@@ -31,44 +31,59 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 	);
 
 	quote::quote!(
-		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #genesis_config_macro_ident {
-			($pallet_name:ident) => {};
+		pub mod __substrate_genesis_config_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #genesis_config_macro_ident {
+				($pallet_name:ident) => {};
+			}
+			#[doc(hidden)]
+			pub use #genesis_config_macro_ident as is_genesis_config_defined;
 		}
-		#[doc(hidden)]
-		pub use #genesis_config_macro_ident as __is_genesis_config_defined;
 
-		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #event_macro_ident {
-			($pallet_name:ident) => {};
+		pub mod __substrate_event_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #event_macro_ident {
+				($pallet_name:ident) => {};
+			}
+			#[doc(hidden)]
+			pub use #event_macro_ident as is_event_part_defined;
 		}
-		#[doc(hidden)]
-		pub use #event_macro_ident as __is_event_part_defined;
 
-		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #inherent_macro_ident {
-			($pallet_name:ident) => {};
+		pub mod __substrate_inherent_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #inherent_macro_ident {
+				($pallet_name:ident) => {};
+			}
+			#[doc(hidden)]
+			pub use #inherent_macro_ident as is_inherent_part_defined;
 		}
-		#[doc(hidden)]
-		pub use #inherent_macro_ident as __is_inherent_part_defined;
 
-		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #validate_unsigned_macro_ident {
-			($pallet_name:ident) => {};
+		pub mod __substrate_validate_unsigned_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #validate_unsigned_macro_ident {
+				($pallet_name:ident) => {};
+			}
+			#[doc(hidden)]
+			pub use #validate_unsigned_macro_ident as is_validate_unsigned_part_defined;
 		}
-		#[doc(hidden)]
-		pub use #validate_unsigned_macro_ident as __is_validate_unsigned_part_defined;
 
-		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #call_macro_ident {
-			($pallet_name:ident) => {};
+		pub mod __substrate_call_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #call_macro_ident {
+				($pallet_name:ident) => {};
+			}
+			#[doc(hidden)]
+			pub use #call_macro_ident as is_call_part_defined;
 		}
-		#[doc(hidden)]
-		pub use #call_macro_ident as __is_call_part_defined;
 	).into()
 }
