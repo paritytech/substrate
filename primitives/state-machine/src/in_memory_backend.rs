@@ -27,14 +27,12 @@ use codec::Codec;
 use sp_core::storage::{ChildInfo, Storage};
 
 /// Create a new empty instance of in-memory backend.
-pub fn new_in_mem<H: Hasher>(initial_alt_hashing: Option<u32>) -> TrieBackend<MemoryDB<H>, H>
+pub fn new_in_mem<H: Hasher>() -> TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
-	let mut trie = TrieBackend::new(db, empty_trie_root::<Layout<H>>());
-	trie.force_alt_hashing = Some(initial_alt_hashing);
-	trie
+	TrieBackend::new(db, empty_trie_root::<Layout<H>>())
 }
 
 impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
@@ -90,8 +88,6 @@ where
 		self.root() == other.root()
 	}
 
-
-	/// To reset with threshold for genesis storage, this function allows
 	/// setting a alt hashing threshold at start.
 	pub fn force_alt_hashing(&mut self, threshold: Option<u32>) {
 		self.force_alt_hashing = Some(threshold);
@@ -112,7 +108,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn default() -> Self {
-		new_in_mem(None)
+		new_in_mem()
 	}
 }
 
@@ -122,10 +118,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn from(inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>) -> Self {
-		let alt_hashing = inner.get(&None).map(|map|
-			sp_core::storage::alt_hashing::get_trie_alt_hashing_threshold(&map)
-		).flatten();
-		let mut backend = new_in_mem(alt_hashing);
+		let mut backend = new_in_mem();
 		backend.insert(
 			inner.into_iter().map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())),
 		);
@@ -187,7 +180,7 @@ mod tests {
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let storage = new_in_mem::<BlakeTwo256>(None);
+		let storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
 		let mut storage = storage.update(
@@ -205,7 +198,7 @@ mod tests {
 
 	#[test]
 	fn insert_multiple_times_child_data_works() {
-		let mut storage = new_in_mem::<BlakeTwo256>(None);
+		let mut storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 
 		storage.insert(vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])]);

@@ -490,7 +490,7 @@ mod tests {
 		let child_info_2 = ChildInfo::new_default(b"sub2");
 		let child_info_1 = &child_info_1;
 		let child_info_2 = &child_info_2;
-		let mut contents = vec![
+		let contents = vec![
 			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>()),
 			(Some(child_info_1.clone()),
 				(28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
