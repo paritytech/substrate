@@ -108,7 +108,7 @@ pub mod pallet {
 				values[index] = parent_hash;
 			});
 
-			0
+			T::DbWeight::get().reads_writes(1, 1)
         }
     }
 
