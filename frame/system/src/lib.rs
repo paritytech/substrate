@@ -266,7 +266,7 @@ pub mod pallet {
 		/// that the runtime should know about the prefix in order to make use of it as
 		/// an identifier of the chain.
 		#[pallet::constant]
-		type SS58Prefix: Get<u8>;
+		type SS58Prefix: Get<u16>;
 
 		/// What to do if the user wants the code set to something. Just use `()` unless you are in
 		/// cumulus.
