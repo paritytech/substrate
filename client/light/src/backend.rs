@@ -324,7 +324,6 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 	fn reset_storage(&mut self, input: Storage) -> ClientResult<Block::Hash> {
 		check_genesis_storage(&input)?;
 
-		let alt_hashing = input.get_trie_alt_hashing_threshold();
 		// changes trie configuration
 		let changes_trie_config = input.top.iter()
 			.find(|(k, _)| &k[..] == well_known_keys::CHANGES_TRIE_CONFIG)
@@ -347,7 +346,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
-		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta, alt_hashing);
+		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -490,11 +489,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		alt_hashing: Option<u32>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => state
-				.storage_root(delta, alt_hashing),
+				.storage_root(delta),
 			GenesisOrUnavailableState::Unavailable => Default::default(),
 		}
 	}
@@ -503,12 +501,11 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		alt_hashing: Option<u32>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
 				let (root, is_equal, _) = state
-					.child_storage_root(child_info, delta, alt_hashing);
+					.child_storage_root(child_info, delta);
 				(root, is_equal, Default::default())
 			},
 			GenesisOrUnavailableState::Unavailable =>

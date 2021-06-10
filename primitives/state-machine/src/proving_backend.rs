@@ -343,18 +343,16 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	fn storage_root<'b>(
 		&self,
 		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
-		alt_hashing: Option<u32>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		self.0.storage_root(delta, alt_hashing)
+		self.0.storage_root(delta)
 	}
 
 	fn child_storage_root<'b>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
-		alt_hashing: Option<u32>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
-		self.0.child_storage_root(child_info, delta, alt_hashing)
+		self.0.child_storage_root(child_info, delta)
 	}
 
 	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) { }
@@ -440,8 +438,8 @@ mod tests {
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
-		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty(), flagged);
-		let (proving_root, mut proving_mdb) = proving_backend.storage_root(std::iter::empty(), flagged);
+		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty());
+		let (proving_root, mut proving_mdb) = proving_backend.storage_root(std::iter::empty());
 		assert_eq!(trie_root, proving_root);
 		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}
@@ -454,54 +452,22 @@ mod tests {
 	fn proof_recorded_and_checked_inner(flagged: bool) {
 		let size_content = 34; // above hashable value treshold.
 		let value_range = 0..64;
-		let mut contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
+		let contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
+		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		if flagged {
-			contents.push((
+			in_memory = in_memory.update(vec![(None, vec![(
 				sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
 				Some(sp_core::storage::trie_threshold_encode(
 					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
 				)),
-			));
+			)])]);
 		}
-		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)]);
-		let in_memory_root = in_memory.storage_root(std::iter::empty(), flagged).0;
+		let in_memory_root = in_memory.storage_root(std::iter::empty()).0;
 		value_range.clone().for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(std::iter::empty(), flagged).0;
-		assert_eq!(in_memory_root, trie_root);
-		value_range.clone().for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
-
-		let proving = ProvingBackend::new(trie);
-		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
-
-		let proof = proving.extract_proof();
-
-		let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
-		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
-	}
-
-	#[test]
-	fn proof_recorded_and_checked_old_hash() {
-		// test proof starting with old hash content and flagging in between.
-		// TODO not that usefull (we do run with direct update). -> replace by change of threshold
-		// test.
-		let size_content = 34; // above hashable value treshold.
-		let value_range = 0..64;
-		let contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
-		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(vec![(None, contents)]);
-		value_range.clone().for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
-		in_memory = in_memory.update(vec![(None, vec![(
-			sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-			Some(sp_core::storage::trie_threshold_encode(
-				sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-			)),
-		)])]);
-		let in_memory_root = in_memory.storage_root(std::iter::empty(), true).0;
-		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(std::iter::empty(), true).0;
+		let trie_root = trie.storage_root(std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		value_range.clone().for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
@@ -531,16 +497,16 @@ mod tests {
 			(Some(child_info_2.clone()),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
+		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		if flagged {
-			contents[0].1.push((
+			in_memory = in_memory.update(vec![(None, vec![(
 				sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
 				Some(sp_core::storage::trie_threshold_encode(
 					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
 				)),
-			));
+			)])]);
 		}
-		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let mut in_memory = in_memory.update(contents);
+		in_memory = in_memory.update(contents);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory.full_storage_root(
 			std::iter::empty(),
@@ -560,7 +526,7 @@ mod tests {
 		));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(std::iter::empty(), flagged).0;
+		let trie_root = trie.storage_root(std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(
 			trie.storage(&[i]).unwrap().unwrap(),

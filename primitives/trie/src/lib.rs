@@ -833,6 +833,7 @@ mod tests {
 	use super::*;
 	use codec::{Encode, Decode, Compact};
 	use sp_core::Blake2Hasher;
+	use sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD;
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie, NodeCodec as NodeCodecT};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
@@ -890,7 +891,7 @@ mod tests {
 		let layout = Layout::default();
 		check_equivalent::<Layout>(input, layout.clone());
 		check_iteration::<Layout>(input, layout);
-		let layout = Layout::with_inner_hashing();
+		let layout = Layout::with_inner_hashing(TRESHOLD);
 		check_equivalent::<Layout>(input, layout.clone());
 		check_iteration::<Layout>(input, layout);
 	}
@@ -1043,7 +1044,7 @@ mod tests {
 			}.make_with(seed.as_fixed_bytes_mut());
 
 			let layout = if flag {
-				Layout::with_inner_hashing()
+				Layout::with_inner_hashing(TRESHOLD)
 			} else {
 				Layout::default()
 			};
@@ -1140,7 +1141,7 @@ mod tests {
 	}
 	fn iterator_works_inner(flag: bool) {
 		let layout = if flag {
-			Layout::with_inner_hashing()
+			Layout::with_inner_hashing(TRESHOLD)
 		} else {
 			Layout::default()
 		};

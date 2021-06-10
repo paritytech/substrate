@@ -894,7 +894,7 @@ mod tests {
 		traits::CodeExecutor,
 	};
 	use crate::execution::CallResult;
-
+	use sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD;
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -1086,9 +1086,7 @@ mod tests {
 
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie(flagged);
-		let remote_root = remote_backend.storage_root(std::iter::empty(), flagged).0;
-		let remote_root_2 = remote_backend.storage_root(std::iter::empty(), false).0;
-		assert_eq!(remote_root, remote_root_2);
+		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _, _>(
 			remote_backend,
 			&mut Default::default(),
@@ -1244,7 +1242,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let mut state = new_in_mem::<BlakeTwo256>(None);
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1290,7 +1288,7 @@ mod tests {
 			b"d4".to_vec(),
 		];
 		let key = b"key".to_vec();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let mut state = new_in_mem::<BlakeTwo256>(None);
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1351,7 +1349,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let mut state = new_in_mem::<BlakeTwo256>(None);
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 
@@ -1444,7 +1442,7 @@ mod tests {
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie(flagged);
-		let remote_root = remote_backend.storage_root(::std::iter::empty(), flagged).0;
+		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
  		// check proof locally
 		let local_result1 = read_proof_check::<BlakeTwo256, _>(
@@ -1465,7 +1463,7 @@ mod tests {
 		assert_eq!(local_result2, false);
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie(flagged);
-		let remote_root = remote_backend.storage_root(::std::iter::empty(), false).0;
+		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
 			child_info,
@@ -1514,7 +1512,7 @@ mod tests {
 		
 		let check_proof = |mdb, root| -> StorageProof {
 			let remote_backend = TrieBackend::new(mdb, root);
-			let remote_root = remote_backend.storage_root(::std::iter::empty(), false).0;
+			let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 			let remote_proof = prove_read(remote_backend, &[b"foo222"]).unwrap();
 			// check proof locally
 			let local_result1 = read_proof_check::<BlakeTwo256, _>(
@@ -1540,7 +1538,7 @@ mod tests {
 
 
 		// do switch
-		layout = Layout::with_inner_hashing();
+		layout = Layout::with_inner_hashing(TRESHOLD);
 		// update with same value do not change
 		{
 			let mut trie = TrieDBMut::from_existing_with_layout(

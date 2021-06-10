@@ -573,11 +573,9 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 				 )
 			);
 
-		let alt_hashing = storage.get_trie_alt_hashing_threshold();
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
-			alt_hashing,
 		);
 
 		self.new_state = Some(transaction);

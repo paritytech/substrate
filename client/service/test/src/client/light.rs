@@ -459,11 +459,10 @@ fn prepare_for_read_proof_check(hashed_value: bool) -> (TestChecker, Header, Sto
 	// prepare remote client
 	let remote_client = substrate_test_runtime_client::new(hashed_value);
 	let remote_block_id = BlockId::Number(0);
-	let flagged = false;
 	let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 	let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
 	remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap()
-		.storage_root(std::iter::empty(), flagged).0.into();
+		.storage_root(std::iter::empty()).0.into();
 
 	// 'fetch' read proof from remote node
 	let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
@@ -496,7 +495,6 @@ fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, V
 	use substrate_test_runtime_client::TestClientBuilderExt;
 	let child_info = ChildInfo::new_default(b"child1");
 	let child_info = &child_info;
-	let flagged = false;
 	// prepare remote client
 	let remote_client = substrate_test_runtime_client::TestClientBuilder::new()
 		.add_extra_child_storage(
@@ -508,7 +506,7 @@ fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, V
 	let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 	let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
 	remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap()
-		.storage_root(std::iter::empty(), flagged).0.into();
+		.storage_root(std::iter::empty()).0.into();
 
 	// 'fetch' child read proof from remote node
 	let child_value = remote_client.child_storage(

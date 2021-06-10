@@ -67,7 +67,6 @@ where
 				.filter_map(|v|
 					v.0.as_ref().map(|c| (c, v.1.iter().map(|(k, v)| (&k[..], v.as_deref()))))
 				),
-			self.force_alt_hashing.clone().flatten(),
 		);
 
 		self.apply_transaction(root, transaction);
@@ -89,6 +88,13 @@ where
 	/// Compare with another in-memory backend.
 	pub fn eq(&self, other: &Self) -> bool {
 		self.root() == other.root()
+	}
+
+
+	/// To reset with threshold for genesis storage, this function allows
+	/// setting a alt hashing threshold at start.
+	pub fn force_alt_hashing(&mut self, threshold: Option<u32>) {
+		self.force_alt_hashing = Some(threshold);
 	}
 }
 
@@ -181,7 +187,7 @@ mod tests {
 	/// Assert in memory backend with only child trie keys works as trie backend.
 	#[test]
 	fn in_memory_with_child_trie_only() {
-		let storage = new_in_mem::<BlakeTwo256>();
+		let storage = new_in_mem::<BlakeTwo256>(None);
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
 		let mut storage = storage.update(
@@ -199,7 +205,7 @@ mod tests {
 
 	#[test]
 	fn insert_multiple_times_child_data_works() {
-		let mut storage = new_in_mem::<BlakeTwo256>();
+		let mut storage = new_in_mem::<BlakeTwo256>(None);
 		let child_info = ChildInfo::new_default(b"1");
 
 		storage.insert(vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])]);

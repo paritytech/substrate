@@ -176,12 +176,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		use_inner_hash_value: Option<u32>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
 			force.clone()
 		} else {
-			use_inner_hash_value
+			// TODO try memoize in force
+			self.get_trie_alt_hashing_threshold()
 		};
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
@@ -213,12 +213,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		use_inner_hash_value: Option<u32>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
 			force.clone()
 		} else {
-			use_inner_hash_value
+			self.get_trie_alt_hashing_threshold()
 		};
 	
 		let default_root = match child_info.child_type() {
@@ -283,6 +282,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 pub mod tests {
 	use std::{collections::HashSet, iter};
 	use sp_core::H256;
+	use sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD;
 	use codec::Encode;
 	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
 	use sp_runtime::traits::BlakeTwo256;
@@ -305,7 +305,7 @@ pub mod tests {
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
 			let mut trie = if hashed_value {
-				let layout = Layout::with_inner_hashing();
+				let layout = Layout::with_inner_hashing(TRESHOLD);
 				TrieDBMut::new_with_layout(&mut mdb, &mut root, layout)
 			} else {
 				TrieDBMut::new(&mut mdb, &mut root)
@@ -320,9 +320,7 @@ pub mod tests {
 			if hashed_value {
 				trie.insert(
 					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG,
-					sp_core::storage::trie_threshold_encode(
-						sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
-					).as_slice(),
+					sp_core::storage::trie_threshold_encode(TRESHOLD).as_slice(),
 				).unwrap();
 			}
 			for i in 128u8..255u8 {
@@ -391,41 +389,20 @@ pub mod tests {
 		storage_root_is_non_default_inner(true);
 	}
 	fn storage_root_is_non_default_inner(flagged: bool) {
-		assert!(test_trie(flagged).storage_root(iter::empty(), flagged).0 != H256::repeat_byte(0));
-	}
-
-	#[test]
-	fn storage_root_transaction_state_root_update() {
-		// a drop a insert of same hash: rc is 0
-		assert_eq!(test_trie(false).storage_root(iter::empty(), false).1.drain()
-			.into_iter().filter(|v| (v.1).1 != 0).count(), 0);
-		// Unchanged
-		assert_eq!(test_trie(false).storage_root(iter::empty(), true).1.drain()
-			.into_iter().filter(|v| (v.1).1 != 0).count(), 0);
-		// a drop a insert of same hash: rc is 0
-		assert_eq!(test_trie(true).storage_root(iter::empty(), true).1.drain()
-			.into_iter().filter(|v| (v.1).1 != 0).count(), 0);
-	}
-
-	#[test]
-	fn storage_root_flagged_is_empty() {
-		assert!(test_trie(false).storage_root(iter::empty(), true).1.drain().is_empty());
+		assert!(test_trie(flagged).storage_root(iter::empty()).0 != H256::repeat_byte(0));
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
-		storage_root_transaction_is_non_empty_inner(false, false);
-		storage_root_transaction_is_non_empty_inner(false, true);
-		storage_root_transaction_is_non_empty_inner(true, false);
-		storage_root_transaction_is_non_empty_inner(true, true);
+		storage_root_transaction_is_non_empty_inner(false);
+		storage_root_transaction_is_non_empty_inner(true);
 	}
-	fn storage_root_transaction_is_non_empty_inner(flagged: bool, do_flag: bool) {
+	fn storage_root_transaction_is_non_empty_inner(flagged: bool) {
 		let (new_root, mut tx) = test_trie(flagged).storage_root(
 			iter::once((&b"new-key"[..], Some(&b"new-value"[..]))),
-			do_flag,
 		);
 		assert!(!tx.drain().is_empty());
-		assert!(new_root != test_trie(false).storage_root(iter::empty(), false).0);
+		assert!(new_root != test_trie(false).storage_root(iter::empty()).0);
 	}
 
 	#[test]

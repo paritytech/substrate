@@ -625,8 +625,6 @@ impl OverlayedChanges {
 	) -> H::Out
 		where H::Out: Ord + Encode,
 	{
-		let alt_hashing	= backend.get_trie_alt_hashing_threshold();
-
 		let delta = self.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])));
 		let child_delta = self.children()
 			.map(|(changes, info)| (info, changes.map(
@@ -636,7 +634,6 @@ impl OverlayedChanges {
 		let (root, transaction) = backend.full_storage_root(
 			delta,
 			child_delta,
-			alt_hashing,
 		);
 
 		cache.transaction = Some(transaction);

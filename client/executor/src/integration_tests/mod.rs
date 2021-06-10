@@ -790,30 +790,60 @@ fn state_hashing_update(wasm_method: WasmExecutionMethod) {
 	// use externalities without storage flag.
 	let mut ext = TestExternalities::new(Default::default());
 
-	let mut ext = ext.ext();
-	ext.set_storage(b"foo".to_vec(), vec![1u8; 1_000]); // big inner hash
-	ext.set_storage(b"foo2".to_vec(), vec![3u8; 16]); // no inner hash
-	ext.set_storage(b"foo222".to_vec(), vec![5u8; 100]); // inner hash
+	let root1 = {
+		let mut ext = ext.ext();
+		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
+		let output = call_in_wasm(
+			"test_data_in",
+			&vec![1u8; 100].encode(),
+			wasm_method,
+			&mut ext,
+		).unwrap();
 
-	let output = call_in_wasm(
-		"test_data_in",
-		&b"Hello world".to_vec().encode(),
-		wasm_method,
-		&mut ext,
-	).unwrap();
+		assert_eq!(output, b"all ok!".to_vec().encode());
+		ext.storage_root()
+	};
 
-	assert_eq!(output, b"all ok!".to_vec().encode());
+	ext.commit_all().unwrap();
+	let root2 = {
+		let mut ext = ext.ext();
+		// flag state.
+		let _ = call_in_wasm(
+			"test_switch_state",
+			Default::default(),
+			wasm_method,
+			&mut ext,
+		).unwrap();
+		ext.storage_root()
+	};
 
-	let root1 = ext.storage_root();
-	// flag state.
-	let _ = call_in_wasm(
-		"test_switch_state",
-		Default::default(),
-		wasm_method,
-		&mut ext,
-	).unwrap();
-	let root2 = ext.storage_root();
-
-	// Note that in this case all the value did switch (in memory changes).
 	assert!(root1 != root2);
+
+	ext.commit_all().unwrap();
+	let root3 = {
+		let mut ext = ext.ext();
+		let _ = call_in_wasm(
+			"test_data_in",
+			&vec![2u8; 100].to_vec().encode(),
+			wasm_method,
+			&mut ext,
+		).unwrap();
+		ext.storage_root()
+	};
+	assert!(root2 != root3);
+
+	ext.commit_all().unwrap();
+	let root3 = {
+		let mut ext = ext.ext();
+		// revert to root 2 state, but this time
+		// inner hashing should apply
+		let _ = call_in_wasm(
+			"test_data_in",
+			&vec![1u8; 100].to_vec().encode(),
+			wasm_method,
+			&mut ext,
+		).unwrap();
+		ext.storage_root()
+	};
+	assert!(root2 != root3);
 }
