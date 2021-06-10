@@ -56,7 +56,7 @@ pub fn expand_runtime_metadata(
 					calls: #calls,
 					event: #event,
 					constants: #constants,
-					errors: #errors,
+					error: #errors,
 				}
 			}
 		})
