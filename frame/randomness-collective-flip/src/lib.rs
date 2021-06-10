@@ -85,20 +85,20 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-    use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::*;
-    use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+	use super::*;
 
-    #[pallet::pallet]
-    #[pallet::generate_store(pub(super) trait Store)]
-    pub struct Pallet<T>(_);
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
 
-    #[pallet::config]
-    pub trait Config: frame_system::Config {}
+	#[pallet::config]
+	pub trait Config: frame_system::Config {}
 
-    #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-        fn on_initialize(block_number: T::BlockNumber) -> Weight {
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(block_number: T::BlockNumber) -> Weight {
 			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 
 			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < RANDOM_MATERIAL_LEN as usize {
@@ -109,16 +109,16 @@ pub mod pallet {
 			});
 
 			T::DbWeight::get().reads_writes(1, 1)
-        }
-    }
+		}
+	}
 
 	/// Series of block headers from the last 81 blocks that acts as random seed material. This
 	/// is arranged as a ring buffer with `block_number % 81` being the index into the `Vec` of
 	/// the oldest hash.
-    #[pallet::storage]
-    #[pallet::getter(fn random_material)]
-    pub(super) type RandomMaterial<T: Config> =
-        StorageValue<_, Vec<T::Hash>, ValueQuery>;
+	#[pallet::storage]
+	#[pallet::getter(fn random_material)]
+	pub(super) type RandomMaterial<T: Config> =
+		StorageValue<_, Vec<T::Hash>, ValueQuery>;
 }
 
 impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Pallet<T> {
@@ -169,8 +169,8 @@ mod tests {
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
 	};
 
-	use frame_system::limits;
 	use frame_support::{parameter_types, traits::{Randomness, OnInitialize}};
+	use frame_system::limits;
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
