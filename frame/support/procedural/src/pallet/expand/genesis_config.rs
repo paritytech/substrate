@@ -36,21 +36,24 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 		);
 
 		return quote::quote! {
-			#[macro_export]
 			#[doc(hidden)]
-			macro_rules! #macro_ident {
-				($pallet_name:ident) => {
-					compile_error!(concat!(
-						"`",
-						stringify!($pallet_name),
-						"` does not have #[pallet::genesis_config] defined, perhaps you should \
-						remove `Config` from construct_runtime?",
-					));
+			pub mod __substrate_genesis_config_check {
+				#[macro_export]
+				#[doc(hidden)]
+				macro_rules! #macro_ident {
+					($pallet_name:ident) => {
+						compile_error!(concat!(
+							"`",
+							stringify!($pallet_name),
+							"` does not have #[pallet::genesis_config] defined, perhaps you should \
+							remove `Config` from construct_runtime?",
+						));
+					}
 				}
+	
+				#[doc(hidden)]
+				pub use #macro_ident as is_genesis_config_defined;
 			}
-
-			#[doc(hidden)]
-			pub use #macro_ident as __is_genesis_config_defined;
 		};
 	};
 	let frame_support = &def.frame_support;
@@ -87,13 +90,16 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 	}
 
 	quote::quote! {
-		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #macro_ident {
-			($pallet_name:ident) => {};
+		pub mod __substrate_genesis_config_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #macro_ident {
+				($pallet_name:ident) => {};
+			}
+	
+			#[doc(hidden)]
+			pub use #macro_ident as is_genesis_config_defined;
 		}
-
-		#[doc(hidden)]
-		pub use #macro_ident as __is_genesis_config_defined;
 	}
 }

@@ -39,15 +39,18 @@ pub fn expand_inherents(def: &mut Def) -> TokenStream {
 	};
 
 	quote! {
-		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #macro_ident {
-			($pallet_name:ident) => {
-				#maybe_compile_error
+		pub mod __substrate_inherent_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #macro_ident {
+				($pallet_name:ident) => {
+					#maybe_compile_error
+				}
 			}
+	
+			#[doc(hidden)]
+			pub use #macro_ident as is_inherent_part_defined;
 		}
-
-		#[doc(hidden)]
-		pub use #macro_ident as __is_inherent_part_defined;
 	}
 }

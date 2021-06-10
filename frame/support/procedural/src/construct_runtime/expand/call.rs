@@ -42,7 +42,9 @@ pub fn expand_outer_dispatch(
 		variant_defs.extend(quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),));
 		variant_patterns.push(quote!(Call::#name(call)));
 		pallet_names.push(name);
-		query_call_part_macros.push(quote!( #path::__is_call_part_defined!(#name); ));
+		query_call_part_macros.push(quote! {
+			#path::__substrate_call_check::is_call_part_defined!(#name);
+		});
 	}
 
 	quote! {

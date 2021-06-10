@@ -95,7 +95,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			compile_error!(concat!(
 				"`",
 				stringify!($pallet_name),
-				"` does not have #[pallet::call] defined, perhaps you should remove `Call` from construct_runtime?",
+				"` does not have #[pallet::call] defined, perhaps you should remove `Call` from \
+				construct_runtime?",
 			));
 		}
 	} else {
@@ -106,16 +107,19 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let macro_ident = syn::Ident::new(&format!("__is_call_part_defined_{}", count), span);
 
 	quote::quote_spanned!(span =>
-		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #macro_ident {
-			($pallet_name:ident) => {
-				#maybe_compile_error
-			};
-		}
+		pub mod __substrate_call_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #macro_ident {
+				($pallet_name:ident) => {
+					#maybe_compile_error
+				};
+			}
 
-		#[doc(hidden)]
-		pub use #macro_ident as __is_call_part_defined;
+			#[doc(hidden)]
+			pub use #macro_ident as is_call_part_defined;
+		}
 
 		#( #[doc = #docs] )*
 		#[derive(

@@ -34,7 +34,9 @@ pub fn expand_outer_validate_unsigned(
 			let path = &pallet_decl.path;
 
 			pallet_names.push(name);
-			query_validate_unsigned_part_macros.push(quote!( #path::__is_validate_unsigned_part_defined!(#name); ));
+			query_validate_unsigned_part_macros.push(quote! {
+				#path::__substrate_validate_unsigned_check::is_validate_unsigned_part_defined!(#name);
+			});
 		}
 	}
 

@@ -35,21 +35,24 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		);
 
 		return quote::quote! {
-			#[macro_export]
 			#[doc(hidden)]
-			macro_rules! #macro_ident {
-				($pallet_name:ident) => {
-					compile_error!(concat!(
-						"`",
-						stringify!($pallet_name),
-						"` does not have #[pallet::event] defined, perhaps you should \
-						remove `Event` from construct_runtime?",
-					));
+			pub mod __substrate_event_check {
+				#[macro_export]
+				#[doc(hidden)]
+				macro_rules! #macro_ident {
+					($pallet_name:ident) => {
+						compile_error!(concat!(
+							"`",
+							stringify!($pallet_name),
+							"` does not have #[pallet::event] defined, perhaps you should \
+							remove `Event` from construct_runtime?",
+						));
+					}
 				}
+	
+				#[doc(hidden)]
+				pub use #macro_ident as is_event_part_defined;
 			}
-
-			#[doc(hidden)]
-			pub use #macro_ident as __is_event_part_defined;
 		};
 	};
 
@@ -156,14 +159,17 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	quote::quote_spanned!(event.attr_span =>
-		#[macro_export]
 		#[doc(hidden)]
-		macro_rules! #macro_ident {
-			($pallet_name:ident) => {};
+		pub mod __substrate_event_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #macro_ident {
+				($pallet_name:ident) => {};
+			}
+	
+			#[doc(hidden)]
+			pub use #macro_ident as is_event_part_defined;
 		}
-
-		#[doc(hidden)]
-		pub use #macro_ident as __is_event_part_defined;
 
 		#deposit_event
 
