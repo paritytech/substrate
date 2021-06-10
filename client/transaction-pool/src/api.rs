@@ -88,7 +88,7 @@ impl<Client, Block> FullChainApi<Client, Block> {
 			}
 		});
 
-		let (sender, receiver) = mpsc::channel(1);
+		let (sender, receiver) = mpsc::channel(0);
 
 		let receiver = Arc::new(Mutex::new(receiver));
 		spawn_validation_pool_task("transaction-pool-task-0", receiver.clone(), spawner);
