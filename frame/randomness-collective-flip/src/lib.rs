@@ -220,7 +220,7 @@ mod tests {
 		type OnSetCode = ();
 	}
 
-    impl pallet_randomness_collective_flip::Config for Test {}
+	impl pallet_randomness_collective_flip::Config for Test {}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
