@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
-use crate::construct_runtime::{Pallet, parse::PalletPath};
+use crate::construct_runtime::Pallet;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::{Generics, Ident};
 
 pub fn expand_outer_event(
@@ -27,11 +27,10 @@ pub fn expand_outer_event(
 ) -> syn::Result<TokenStream> {
 	let mut event_variants = TokenStream::new();
 	let mut event_conversions = TokenStream::new();
-	let mut events_metadata = TokenStream::new();
 
 	for pallet_decl in pallet_decls {
 		if let Some(pallet_entry) = pallet_decl.find_part("Event") {
-			let path = &pallet_decl.pallet;
+			let path = &pallet_decl.path;
 			let index = pallet_decl.index;
 			let instance = pallet_decl.instance.as_ref();
 			let generics = &pallet_entry.generics;
@@ -53,9 +52,8 @@ pub fn expand_outer_event(
 				(None, false) => quote!(#path::Event),
 			};
 
-			event_variants.extend(expand_event_variant(runtime, path, index, instance, generics));
-			event_conversions.extend(expand_event_conversion(scrate, path, instance, &pallet_event));
-			events_metadata.extend(expand_event_metadata(scrate, path, &pallet_event));
+			event_variants.extend(expand_event_variant(runtime, pallet_decl, index, instance, generics));
+			event_conversions.extend(expand_event_conversion(scrate, pallet_decl, &pallet_event));
 		}
 	}
 
@@ -77,49 +75,42 @@ pub fn expand_outer_event(
 
 fn expand_event_variant(
 	runtime: &Ident,
-	path: &PalletPath,
+	pallet: &Pallet,
 	index: u8,
 	instance: Option<&Ident>,
 	generics: &Generics,
 ) -> TokenStream {
+	let path = &pallet.path;
+	let variant_name = &pallet.name;
 	let part_is_generic = !generics.params.is_empty();
-	let mod_name = &path.mod_name();
 
-	match (instance, part_is_generic) {
-		(Some(inst), true) => {
-			let variant = format_ident!("{}_{}", mod_name, inst);
-			quote!(#[codec(index = #index)] #variant(#path::Event<#runtime, #path::#inst>),)
+	match instance {
+		Some(inst) if part_is_generic => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime, #path::#inst>),)
 		}
-		(Some(inst), false) => {
-			let variant = format_ident!("{}_{}", mod_name, inst);
-			quote!(#[codec(index = #index)] #variant(#path::Event<#path::#inst>),)
+		Some(inst) => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Event<#path::#inst>),)
 		}
-		(None, true) => {
-			quote!(#[codec(index = #index)] #mod_name(#path::Event<#runtime>),)
+		None if part_is_generic => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime>),)
 		}
-		(None, false) => {
-			quote!(#[codec(index = #index)] #mod_name(#path::Event),)
+		None => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Event),)
 		}
 	}
 }
 
 fn expand_event_conversion(
 	scrate: &TokenStream,
-	path: &PalletPath,
-	instance: Option<&Ident>,
+	pallet: &Pallet,
 	pallet_event: &TokenStream,
 ) -> TokenStream {
-	let mod_name = path.mod_name();
-	let variant = if let Some(inst) = instance {
-		format_ident!("{}_{}", mod_name, inst)
-	} else {
-		mod_name
-	};
+	let variant_name = &pallet.name;
 
 	quote!{
 		impl From<#pallet_event> for Event {
 			fn from(x: #pallet_event) -> Self {
-				Event::#variant(x)
+				Event::#variant_name(x)
 			}
 		}
 		impl #scrate::sp_std::convert::TryInto<#pallet_event> for Event {
@@ -127,20 +118,10 @@ fn expand_event_conversion(
 
 			fn try_into(self) -> #scrate::sp_std::result::Result<#pallet_event, Self::Error> {
 				match self {
-					Self::#variant(evt) => Ok(evt),
+					Self::#variant_name(evt) => Ok(evt),
 					_ => Err(()),
 				}
 			}
 		}
 	}
-}
-
-fn expand_event_metadata(
-	scrate: &TokenStream,
-	path: &PalletPath,
-	pallet_event: &TokenStream,
-) -> TokenStream {
-	let mod_name = path.mod_name();
-
-	quote!{(stringify!(#mod_name), #scrate::event::FnEncode(#pallet_event::metadata)),}
 }
