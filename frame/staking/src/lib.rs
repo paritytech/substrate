@@ -2176,7 +2176,7 @@ impl<T: Config> Module<T> {
 			// New era.
 			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
 			if maybe_new_era_validators.is_some() && matches!(ForceEra::get(), Forcing::ForceNew) {
-				ForceEra::kill();
+				ForceEra::put(Forcing::NotForcing);
 			}
 
 			maybe_new_era_validators
@@ -2392,7 +2392,7 @@ impl<T: Config> Module<T> {
 		// Insert current era staking information
 		<ErasTotalStake<T>>::insert(&new_planned_era, total_stake);
 
-		// Collect the pref of all winners
+		// Collect the pref of all winners.
 		for stash in &elected_stashes {
 			let pref = Self::validators(stash);
 			<ErasValidatorPrefs<T>>::insert(&new_planned_era, stash, pref);
@@ -2423,7 +2423,7 @@ impl<T: Config> Module<T> {
 		supports
 			.into_iter()
 			.map(|(validator, support)| {
-				// Build `struct exposure` from `support`
+				// Build `struct exposure` from `support`.
 				let mut others = Vec::with_capacity(support.voters.len());
 				let mut own: BalanceOf<T> = Zero::zero();
 				let mut total: BalanceOf<T> = Zero::zero();
@@ -2558,7 +2558,7 @@ impl<T: Config> Module<T> {
 		let mut all_voters = Vec::new();
 
 		for (validator, _) in <Validators<T>>::iter() {
-			// Append self vote
+			// Append self vote.
 			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
 		}

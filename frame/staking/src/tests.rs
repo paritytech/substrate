@@ -458,7 +458,7 @@ fn no_candidate_emergency_condition() {
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
 			// The chill is still pending.
 			assert!(!<Staking as crate::Store>::Validators::contains_key(11));
-			// No new era is created
+			// No new era is created.
 			assert_eq!(current_era, CurrentEra::get());
 		});
 }
@@ -3998,7 +3998,7 @@ mod election_data_provider {
 			run_to_block(50);
 			// Election: failed, next session is a new election
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 50 + 5);
-			// The new era is still forced until a new era is planned
+			// The new era is still forced until a new era is planned.
 			assert_eq!(ForceEra::get(), Forcing::ForceNew);
 
 			MinimumValidatorCount::put(2);
@@ -4009,7 +4009,7 @@ mod election_data_provider {
 				*staking_events().last().unwrap(),
 				RawEvent::StakingElection
 			);
-			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`
+			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
 			assert_eq!(ForceEra::get(), Forcing::NotForcing);
 		})
 	}

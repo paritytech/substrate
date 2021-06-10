@@ -607,7 +607,8 @@ pub mod pallet {
 		/// Configuration for the fallback
 		type Fallback: Get<FallbackStrategy>;
 
-		/// Origin that can control this pallet.
+		/// Origin that can control this pallet. Note that any action taken by this origin (such)
+		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin. 
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The configuration of benchmarking.
@@ -1094,7 +1095,7 @@ impl<T: Config> Pallet<T> {
 		let (desired_targets, w3) =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
-		// Defensive-only
+		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
@@ -1407,7 +1408,7 @@ mod feasibility_check {
 			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
 			// ----------------------------------------------------^^ valid range is [0..7].
 
-			// Check that there is a index 7 in votes1, and flip to 8.
+			// Check that there is an index 7 in votes1, and flip to 8.
 			assert!(
 				solution
 					.compact
