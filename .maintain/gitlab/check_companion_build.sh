@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 #
 # check if a pr is compatible with companion pr or master if not available
 #
@@ -93,8 +93,23 @@ else
   boldprint "this is not a pull request - building ${REPO}:master"
 fi
 
-# Patch all Substrate crates in the repo
-diener patch --crates-to-patch ../ --substrate --path Cargo.toml
+# Patch polkadot, substrate or beefy deps as required
+declare -A match_arg
+match_arg=()
+match_arg["--substrate"]='source = "git+https://github.com/paritytech/substrate?'
+match_arg["--polkadot"]='source = "git+https://github.com/paritytech/polkadot?'
+match_arg["--beefy"]='source = "git+https://github.com/paritytech/parity-bridges-gadget?'
+
+# For each Cargo.lock
+while IFS= read -r cargo_lock; do
+  # If the Cargo.lock has a dependency, we patch with diener
+  for patch_arg in "${!match_arg[@]}"; do
+    if grep -q "${match_arg[$patch_arg]}" "$cargo_lock" ; then
+      echo "patching $patch_arg"
+      diener patch --crates-to-patch ../ "$patch_arg" --path Cargo.toml
+    fi
+  done
+done < <(find . -name Cargo.lock)
 
 # Test pr or master branch with this Substrate commit.
 eval "$BUILDSTRING"
