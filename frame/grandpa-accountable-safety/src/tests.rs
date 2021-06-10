@@ -20,7 +20,7 @@ use frame_support::parameter_types;
 use sp_core::H256;
 use sp_finality_grandpa::{
 	accountable_safety::{Query, QueryResponse},
-	AuthorityId, AuthoritySignature, Commit, RoundNumber, SetId,
+	Commit, RoundNumber, SetId,
 };
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
@@ -94,7 +94,7 @@ fn create_precommits(
 	round: RoundNumber,
 	set_id: SetId,
 	authorities: Vec<Ed25519Keyring>,
-) -> Vec<grandpa::SignedPrecommit<H256, RoundNumber, AuthoritySignature, AuthorityId>> {
+) -> Vec<crate::SignedPrecommit<H256, RoundNumber>> {
 	let mut precommits = Vec::new();
 	for keyring in authorities {
 		let precommit = grandpa::Precommit {

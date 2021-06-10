@@ -33,6 +33,9 @@ use sp_std::prelude::*;
 
 use vote::SignedVote;
 
+type SignedPrevote<H, N> = grandpa::SignedPrevote<H, N, AuthoritySignature, AuthorityId>;
+type SignedPrecommit<H, N> = grandpa::SignedPrecommit<H, N, AuthoritySignature, AuthorityId>;
+
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -309,9 +312,8 @@ where
 	let mut equivocations = Vec::new();
 	let len = votes.len();
 	for ii in 0..len {
-		for jj in 0..len {
+		for jj in ii..len {
 			if votes[ii].id() == votes[jj].id() && votes[ii].vote() != votes[jj].vote() {
-				// use sp_finality_grandpa::accountable_safety::From;
 				equivocations.push((votes[ii].clone(), votes[jj].clone()));
 			}
 		}
@@ -328,7 +330,7 @@ where
 }
 
 fn check_precommit_signatures<H, N>(
-	signed_precommits: &Vec<grandpa::SignedPrecommit<H, N, AuthoritySignature, AuthorityId>>,
+	signed_precommits: &Vec<SignedPrecommit<H, N>>,
 	round: RoundNumber,
 	set_id: SetId,
 ) -> bool
@@ -351,7 +353,7 @@ where
 }
 
 fn check_prevote_signatures<H, N>(
-	signed_prevotes: &Vec<grandpa::SignedPrevote<H, N, AuthoritySignature, AuthorityId>>,
+	signed_prevotes: &Vec<SignedPrevote<H, N>>,
 	round: RoundNumber,
 	set_id: SetId,
 ) -> bool
@@ -393,4 +395,83 @@ pub struct StoredAccountableSafetySession<H, N> {
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub struct StoredEquivocations<H, N> {
 	pub equivocations: Vec<Equivocation<H, N>>,
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use sp_core::H256;
+	use sp_keyring::Ed25519Keyring;
+
+	type BlockNumber = u64;
+	type SignedPrecommit<H, N> = grandpa::SignedPrecommit<H, N, AuthoritySignature, AuthorityId>;
+
+	fn append_precommit<H, N>(
+		precommits: &mut Vec<SignedPrecommit<H, N>>,
+		keyring: Ed25519Keyring,
+		target_hash: H,
+		target_number: N,
+		round: RoundNumber,
+		set_id: SetId,
+	) where
+		H: Clone + Encode,
+		N: Clone + Encode,
+	{
+		let precommit = grandpa::Precommit {
+			target_hash,
+			target_number,
+		};
+		let msg = grandpa::Message::Precommit(precommit.clone());
+		let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
+
+		let signature = keyring.sign(&encoded[..]).into();
+		let signed_precommit = grandpa::SignedPrecommit {
+			precommit,
+			signature,
+			id: keyring.public().into(),
+		};
+		precommits.push(signed_precommit);
+	}
+
+	#[test]
+	fn voting_for_different_target_number_is_equivocation() {
+		let mut precommits = Vec::new();
+		let round = 42;
+		let set_id = 8;
+		let hash = H256::random();
+		use Ed25519Keyring::*;
+
+		append_precommit(&mut precommits, Alice, hash, 3, round, set_id);
+		append_precommit(&mut precommits, Bob, hash, 3, round, set_id);
+		append_precommit(&mut precommits, Charlie, hash, 3, round, set_id);
+
+		assert!(find_equivocations(&precommits).is_empty());
+
+		append_precommit(&mut precommits, Bob, hash, 4, round, set_id);
+		assert_eq!(
+			find_equivocations(&precommits),
+			vec![(precommits[1].clone(), precommits[3].clone())],
+		)
+	}
+
+	#[test]
+	fn voting_for_different_hash_is_equivocation() {
+		let mut precommits = Vec::new();
+		let round = 42;
+		let set_id = 8;
+		let hash = H256::random();
+		use Ed25519Keyring::*;
+
+		append_precommit(&mut precommits, Alice, hash, 3, round, set_id);
+		append_precommit(&mut precommits, Bob, hash, 3, round, set_id);
+		append_precommit(&mut precommits, Charlie, hash, 3, round, set_id);
+
+		assert!(find_equivocations(&precommits).is_empty());
+
+		append_precommit(&mut precommits, Bob, H256::random(), 3, round, set_id);
+		assert_eq!(
+			find_equivocations(&precommits),
+			vec![(precommits[1].clone(), precommits[3].clone())],
+		)
+	}
 }

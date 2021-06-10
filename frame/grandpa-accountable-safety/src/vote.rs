@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_finality_grandpa::{AuthorityId, AuthoritySignature};
+use sp_finality_grandpa::AuthorityId;
 
 pub trait SignedVote<V, Id> {
 	fn vote(&self) -> &V;
@@ -24,7 +24,7 @@ pub trait SignedVote<V, Id> {
 }
 
 impl<H, N> SignedVote<grandpa::Prevote<H, N>, AuthorityId>
-	for grandpa::SignedPrevote<H, N, AuthoritySignature, AuthorityId>
+	for crate::SignedPrevote<H, N>
 {
 	fn vote(&self) -> &grandpa::Prevote<H, N> {
 		&self.prevote
@@ -36,7 +36,7 @@ impl<H, N> SignedVote<grandpa::Prevote<H, N>, AuthorityId>
 }
 
 impl<H, N> SignedVote<grandpa::Precommit<H, N>, AuthorityId>
-	for grandpa::SignedPrecommit<H, N, AuthoritySignature, AuthorityId>
+	for crate::SignedPrecommit<H, N>
 {
 	fn vote(&self) -> &grandpa::Precommit<H, N> {
 		&self.precommit
