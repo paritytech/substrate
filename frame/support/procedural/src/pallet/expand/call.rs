@@ -34,7 +34,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_scale_info_bounded_generics(span);
+	let type_impl_gen = &def.type_impl_generics(span);
 	let type_decl_bounded_gen = &def.type_decl_bounded_generics(span);
 	let type_use_gen = &def.type_use_generics(span);
 	let call_ident = syn::Ident::new("Call", span);
@@ -100,6 +100,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 		#[codec(encode_bound())]
 		#[codec(decode_bound())]
+		#[scale_info(skip_type_params(#type_use_gen))]
 		#[allow(non_camel_case_types)]
 		pub enum #call_ident<#type_decl_bounded_gen> #where_clause {
 			#[doc(hidden)]

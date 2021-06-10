@@ -27,7 +27,7 @@ use crate::pallet::{Def, expand::merge_where_clauses, parse::helper::get_doc_lit
 pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_scale_info_bounded_generics(def.pallet_struct.attr_span);
+	let type_impl_gen = &def.type_impl_generics(def.pallet_struct.attr_span);
 	let type_use_gen = &def.type_use_generics(def.pallet_struct.attr_span);
 	let type_decl_gen = &def.type_decl_generics(def.pallet_struct.attr_span);
 	let pallet_ident = &def.pallet_struct.pallet;
@@ -74,6 +74,9 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::scale_info::TypeInfo,
 		)]
 	));
+
+	// skip requirement for type params to implement `TypeInfo`
+	pallet_item.attrs.push(syn::parse_quote!( #[scale_info(skip_type_params(#type_use_gen))] ));
 
 	let pallet_error_metadata = if let Some(error_def) = &def.error {
 		let error_ident = &error_def.error;

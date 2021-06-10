@@ -271,20 +271,6 @@ impl Def {
 	}
 
 	/// Depending on if pallet is instantiable:
-	/// * either `T: Config + TypeInfo`
-	/// * or `T: Config<I> + TypeInfo, I: 'static + TypeInfo`
-	/// todo: [AJ] see if we can remove this by not requiring TypeInfo on all generic params in scale_info
-	pub fn type_impl_scale_info_bounded_generics(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
-		let frame_support = &self.frame_support;
-		let bound = quote::quote!(#frame_support::scale_info::TypeInfo);
-		if self.config.has_instance {
-			quote::quote_spanned!(span => T: Config<I> + #bound, I: 'static + #bound)
-		} else {
-			quote::quote_spanned!(span => T: Config + #bound)
-		}
-	}
-
-	/// Depending on if pallet is instantiable:
 	/// * either `T: Config`
 	/// * or `T: Config<I>, I: 'static = ()`
 	pub fn type_decl_bounded_generics(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
