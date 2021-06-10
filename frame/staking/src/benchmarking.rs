@@ -561,14 +561,14 @@ benchmarks! {
 	}
 
 	get_npos_voters {
-		// number of validator intention.
-		let v in 200 .. 400;
-		// number of nominator intention.
-		let n in 200 .. 400;
+		// total number of voters (validators + nominators)
+		let v in 400 .. 800;
 		// total number of slashing spans. Assigned to validators randomly.
 		let s in 1 .. 20;
 
-		let validators = create_validators_with_nominators_for_era::<T>(v, n, T::MAX_NOMINATIONS as usize, false, None)?
+		// this isn't ideal, but as we don't store the numbers of nominators and validators
+		// distinctly, we can't really parametrize this function with different quantities of each
+		let validators = create_validators_with_nominators_for_era::<T>(v / 2, n / 2, T::MAX_NOMINATIONS as usize, false, None)?
 			.into_iter()
 			.map(|v| T::Lookup::lookup(v).unwrap())
 			.collect::<Vec<_>>();

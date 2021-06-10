@@ -354,6 +354,9 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
+type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+type VotingDataOf<T> = (AccountIdOf<T>, VoteWeight, Vec<AccountIdOf<T>>);
+
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]
 pub struct ActiveEraInfo {
@@ -1007,7 +1010,7 @@ decl_storage! {
 		NominatorList: nominator_list::NominatorList<T>;
 
 		/// Map of nodes in the nominator list.
-		NominatorNodes: map hasher(twox_64_concat) T::AccountId => nominator_list::Node<T>;
+		NominatorNodes: map hasher(twox_64_concat) T::AccountId => Option<nominator_list::Node<T>>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -2509,37 +2512,22 @@ impl<T: Config> Module<T> {
 	/// auto-chilled.
 	///
 	/// Note that this is VERY expensive. Use with care.
-	pub fn get_npos_voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+	pub fn get_npos_voters(
+		maybe_max_len: Option<usize>,
+	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+		// nominator list contains all nominators and validators
+		let voter_count = nominator_list::NominatorList::<T>::decode_len().unwrap_or_default();
+		let wanted_voter_count = maybe_max_len.unwrap_or(voter_count).min(voter_count);
+
 		let weight_of = Self::slashable_balance_of_fn();
-		let mut all_voters = Vec::new();
-
-		for (validator, _) in <Validators<T>>::iter() {
-			// append self vote
-			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
-			all_voters.push(self_vote);
-		}
-
 		// collect all slashing spans into a BTreeMap for further queries.
-		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+		let slashing_spans = <SlashingSpans<T>>::iter().collect();
 
-		for (nominator, nominations) in <Nominators<T>>::iter() {
-			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
-
-			// Filter out nomination targets which were nominated before the most recent
-			// slashing span.
-			targets.retain(|stash| {
-				slashing_spans
-					.get(stash)
-					.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
-			});
-
-			if !targets.is_empty() {
-				let vote_weight = weight_of(&nominator);
-				all_voters.push((nominator, vote_weight, targets))
-			}
-		}
-
-		all_voters
+		Self::nominator_list()
+			.iter()
+			.filter_map(|node| node.voting_data(&weight_of, &slashing_spans))
+			.take(wanted_voter_count)
+			.collect()
 	}
 
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
@@ -2557,25 +2545,11 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
-		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
-		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
-		// report weight in failures.
-		let nominator_count = <Nominators<T>>::iter().count();
-		let validator_count = <Validators<T>>::iter().count();
-		let voter_count = nominator_count.saturating_add(validator_count);
-
-		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
-			return Err("Voter snapshot too big");
-		}
-
+	) -> data_provider::Result<(Vec<VotingDataOf<T>>, Weight)> {
+		let voter_count = nominator_list::NominatorList::<T>::decode_len().unwrap_or_default();
 		let slashing_span_count = <SlashingSpans<T>>::iter().count();
-		let weight = T::WeightInfo::get_npos_voters(
-			validator_count as u32,
-			nominator_count as u32,
-			slashing_span_count as u32,
-		);
-		Ok((Self::get_npos_voters(), weight))
+		let weight = T::WeightInfo::get_npos_voters(voter_count as u32, slashing_span_count as u32);
+		Ok((Self::get_npos_voters(maybe_max_len), weight))
 	}
 
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
