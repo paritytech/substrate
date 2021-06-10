@@ -2288,7 +2288,7 @@ impl<T: Config> Module<T> {
 	/// * Store staking information for the new planned era
 	///
 	/// Returns the new validator set.
-	pub fn new_era(
+	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
 		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
 	) -> Vec<T::AccountId> {
@@ -2362,7 +2362,7 @@ impl<T: Config> Module<T> {
 		}
 
 		Self::deposit_event(RawEvent::StakingElection);
-		Some(Self::new_era(start_session_index, exposures))
+		Some(Self::trigger_new_era(start_session_index, exposures))
 	}
 
 	/// Process the output of the election.
