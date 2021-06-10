@@ -190,7 +190,8 @@ where
 			Ok(())
 		})?;
 
-		rpc_module.register_subscription("chain_subscribeNewHeads", "chain_unsubscribeNewHeads", |_params, mut sink, ctx| {
+		// TODO(niklasad1): aliases for method names.
+		rpc_module.register_subscription("chain_subscribeNewHead", "chain_unsubscribeNewHead", |_params, mut sink, ctx| {
 			let executor = ctx.executor.clone();
 
 			let fut = async move {
