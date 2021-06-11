@@ -26,7 +26,7 @@ use crate::{
 	VotingDataOf, VoteWeight,
 };
 use codec::{Encode, Decode};
-use frame_support::{StorageMap, StorageValue, StorageDoubleMap};
+use frame_support::{DefaultNoBound, StorageMap, StorageValue, StorageDoubleMap};
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
@@ -69,6 +69,31 @@ impl<T: Config> VoterList<T> {
 	pub fn iter() -> impl Iterator<Item = Node<T>> {
 		(0..=BagIdx::MAX).filter_map(|bag_idx| Bag::get(bag_idx)).flat_map(|bag| bag.iter())
 	}
+
+	/// Insert a new voter into the appropriate bag in the voter list.
+	pub fn insert(voter: VoterOf<T>, weight_of: impl Fn(&T::AccountId) -> VoteWeight) {
+		Self::insert_many(sp_std::iter::once(voter), weight_of)
+	}
+
+	/// Insert several voters into the appropriate bags in the voter list.
+	///
+	/// This is more efficient than repeated calls to `Self::insert`.
+	pub fn insert_many(
+		voters: impl IntoIterator<Item = VoterOf<T>>,
+		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
+	) {
+		let mut bags = BTreeMap::new();
+
+		for voter in voters.into_iter() {
+			let weight = weight_of(&voter.id);
+			let bag = notional_bag_for(weight);
+			bags.entry(bag).or_insert_with(|| Bag::<T>::get_or_make(bag)).insert(voter);
+		}
+
+		for (_, bag) in bags {
+			bag.put();
+		}
+	}
 }
 
 /// A Bag contains a singly-linked list of voters.
@@ -78,7 +103,7 @@ impl<T: Config> VoterList<T> {
 /// more desirable to ensure that there is some element of first-come, first-serve to the list's
 /// iteration so that there's no incentive to churn voter positioning to improve the chances of
 /// appearing within the voter set.
-#[derive(Default, Encode, Decode)]
+#[derive(DefaultNoBound, Encode, Decode)]
 pub struct Bag<T: Config> {
 	head: Option<AccountIdOf<T>>,
 	tail: Option<AccountIdOf<T>>,
@@ -94,6 +119,11 @@ impl<T: Config> Bag<T> {
 			bag.bag_idx = bag_idx;
 			bag
 		})
+	}
+
+	/// Get a bag by idx or make it, appropriately initialized.
+	pub fn get_or_make(bag_idx: BagIdx) -> Bag<T> {
+		Self::get(bag_idx).unwrap_or(Bag { bag_idx, ..Default::default() })
 	}
 
 	/// Put the bag back into storage.
@@ -114,6 +144,33 @@ impl<T: Config> Bag<T> {
 	/// Iterate over the nodes in this bag.
 	pub fn iter(&self) -> impl Iterator<Item = Node<T>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
+	}
+
+	/// Insert a new voter into this bag.
+	///
+	/// This is private on purpose because it's naive: it doesn't check whether this is the
+	/// appropriate bag for this voter at all. Generally, use [`VoterList::insert`] instead.
+	///
+	/// Storage note: this modifies storage, but only for the nodes. You still need to call
+	/// `self.put()` after use.
+	fn insert(&mut self, voter: VoterOf<T>) {
+		let id = voter.id.clone();
+
+		// insert the actual voter
+		let voter_node = Node::<T> { voter, next: None, bag_idx: self.bag_idx };
+		voter_node.put();
+
+		// update the previous tail
+		if let Some(mut tail) = self.tail() {
+			tail.next = Some(id.clone());
+			tail.put();
+		}
+
+		// update the internal bag links
+		if self.head.is_none() {
+			self.head = Some(id.clone());
+		}
+		self.tail = Some(id);
 	}
 }
 
