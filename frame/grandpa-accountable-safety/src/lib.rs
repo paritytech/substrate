@@ -403,17 +403,16 @@ mod test {
 	use sp_core::H256;
 	use sp_keyring::Ed25519Keyring;
 
-	type BlockNumber = u64;
 	type SignedPrecommit<H, N> = grandpa::SignedPrecommit<H, N, AuthoritySignature, AuthorityId>;
 
-	fn append_precommit<H, N>(
-		precommits: &mut Vec<SignedPrecommit<H, N>>,
+	fn new_precommit<H, N>(
 		keyring: Ed25519Keyring,
 		target_hash: H,
 		target_number: N,
 		round: RoundNumber,
 		set_id: SetId,
-	) where
+	) -> SignedPrecommit<H, N>
+	where
 		H: Clone + Encode,
 		N: Clone + Encode,
 	{
@@ -425,29 +424,28 @@ mod test {
 		let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
 
 		let signature = keyring.sign(&encoded[..]).into();
-		let signed_precommit = grandpa::SignedPrecommit {
+		SignedPrecommit {
 			precommit,
 			signature,
 			id: keyring.public().into(),
-		};
-		precommits.push(signed_precommit);
+		}
 	}
 
 	#[test]
 	fn voting_for_different_target_number_is_equivocation() {
-		let mut precommits = Vec::new();
 		let round = 42;
 		let set_id = 8;
 		let hash = H256::random();
 		use Ed25519Keyring::*;
 
-		append_precommit(&mut precommits, Alice, hash, 3, round, set_id);
-		append_precommit(&mut precommits, Bob, hash, 3, round, set_id);
-		append_precommit(&mut precommits, Charlie, hash, 3, round, set_id);
+		let mut precommits = Vec::new();
+		precommits.push(new_precommit(Alice, hash, 3, round, set_id));
+		precommits.push(new_precommit(Bob, hash, 3, round, set_id));
+		precommits.push(new_precommit(Charlie, hash, 3, round, set_id));
 
 		assert!(find_equivocations(&precommits).is_empty());
 
-		append_precommit(&mut precommits, Bob, hash, 4, round, set_id);
+		precommits.push(new_precommit(Bob, hash, 4, round, set_id));
 		assert_eq!(
 			find_equivocations(&precommits),
 			vec![(precommits[1].clone(), precommits[3].clone())],
@@ -456,19 +454,19 @@ mod test {
 
 	#[test]
 	fn voting_for_different_hash_is_equivocation() {
-		let mut precommits = Vec::new();
 		let round = 42;
 		let set_id = 8;
 		let hash = H256::random();
 		use Ed25519Keyring::*;
 
-		append_precommit(&mut precommits, Alice, hash, 3, round, set_id);
-		append_precommit(&mut precommits, Bob, hash, 3, round, set_id);
-		append_precommit(&mut precommits, Charlie, hash, 3, round, set_id);
+		let mut precommits = Vec::new();
+		precommits.push(new_precommit(Alice, hash, 3, round, set_id));
+		precommits.push(new_precommit(Bob, hash, 3, round, set_id));
+		precommits.push(new_precommit(Charlie, hash, 3, round, set_id));
 
 		assert!(find_equivocations(&precommits).is_empty());
 
-		append_precommit(&mut precommits, Bob, H256::random(), 3, round, set_id);
+		precommits.push(new_precommit(Bob, H256::random(), 3, round, set_id));
 		assert_eq!(
 			find_equivocations(&precommits),
 			vec![(precommits[1].clone(), precommits[3].clone())],
