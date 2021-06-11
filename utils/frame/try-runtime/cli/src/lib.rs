@@ -397,7 +397,7 @@ where
 				transport: url.to_owned().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
-				at: Some(*parent_hash),
+				at: Some(parent_hash.to_owned()),
 				..Default::default()
 			});
 
