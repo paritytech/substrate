@@ -40,6 +40,7 @@ mod functions;
 mod impl_nonfungibles;
 pub use types::*;
 
+use scale_info::TypeInfo;
 use sp_std::prelude::*;
 use sp_runtime::{RuntimeDebug, ArithmeticError, traits::{Zero, StaticLookup, Saturating}};
 use codec::{Encode, Decode, HasCompact};
@@ -95,13 +96,13 @@ pub mod pallet {
 		type DepositPerByte: Get<DepositBalanceOf<Self, I>>;
 
 		/// The maximum length of data stored on-chain.
-		type StringLimit: Get<u32>;
+		type StringLimit: Get<u32> + TypeInfo;
 
 		/// The maximum length of an attribute key.
-		type KeyLimit: Get<u32>;
+		type KeyLimit: Get<u32> + TypeInfo;
 
 		/// The maximum length of an attribute value.
-		type ValueLimit: Get<u32>;
+		type ValueLimit: Get<u32> + TypeInfo;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
