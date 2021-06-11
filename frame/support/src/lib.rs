@@ -46,6 +46,8 @@ pub use sp_io::{storage::root as storage_root, self};
 pub use sp_runtime::RuntimeDebug;
 #[doc(hidden)]
 pub use log;
+#[doc(hidden)]
+pub use frame_metadata as metadata;
 
 #[macro_use]
 mod origin;
@@ -55,8 +57,6 @@ pub mod storage;
 mod hash;
 #[macro_use]
 pub mod event;
-#[macro_use]
-pub mod metadata;
 #[macro_use]
 pub mod genesis_config;
 #[macro_use]
@@ -76,7 +76,7 @@ pub use self::hash::{
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StorageNMap, StoragePrefixedMap,
 	IterableStorageMap, IterableStorageDoubleMap, IterableStorageNMap, migration,
-	bounded_vec::{self, BoundedVec},
+	bounded_vec::{BoundedVec, BoundedSlice}, weak_bounded_vec::WeakBoundedVec,
 };
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
@@ -397,7 +397,6 @@ macro_rules! parameter_types {
 }
 
 #[cfg(not(feature = "std"))]
-#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	( $( $any:tt )* ) => {
@@ -406,7 +405,6 @@ macro_rules! parameter_types_impl_thread_local {
 }
 
 #[cfg(feature = "std")]
-#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	(
@@ -1241,7 +1239,7 @@ pub mod pallet_prelude {
 		RuntimeDebug, storage,
 		traits::{
 			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
-			ConstU32, GetDefault,
+			ConstU32, GetDefault, MaxEncodedLen,
 		},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
@@ -2341,3 +2339,7 @@ pub mod pallet_prelude {
 /// * use the newest nightly possible.
 ///
 pub use frame_support_procedural::pallet;
+
+/// The `max_encoded_len` module contains the `MaxEncodedLen` trait and derive macro, which is
+/// useful for computing upper bounds on storage size.
+pub use max_encoded_len;

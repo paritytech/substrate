@@ -28,7 +28,7 @@ mod debug_no_bound;
 mod clone_no_bound;
 mod partial_eq_no_bound;
 mod default_no_bound;
-mod max_encoded_len;
+mod key_prefix;
 
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
@@ -446,8 +446,9 @@ pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
 /// and up to `NUMBER_OF_INSTANCE`.
 pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;
 
-/// Derive `MaxEncodedLen`.
-#[proc_macro_derive(MaxEncodedLen)]
-pub fn derive_max_encoded_len(input: TokenStream) -> TokenStream {
-	max_encoded_len::derive_max_encoded_len(input)
+/// This macro is meant to be used by frame-support only.
+/// It implements the trait `HasKeyPrefix` and `HasReversibleKeyPrefix` for tuple of `Key`.
+#[proc_macro]
+pub fn impl_key_prefix_for_tuples(input: TokenStream) -> TokenStream {
+	key_prefix::impl_key_prefix_for_tuples(input).unwrap_or_else(syn::Error::into_compile_error).into()
 }

@@ -44,14 +44,14 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
 /// Default block size limit in bytes used by [`Proposer`].
 ///
-/// Can be overwritten by [`ProposerFactory::set_block_size_limit`].
+/// Can be overwritten by [`ProposerFactory::set_default_block_size_limit`].
 ///
 /// Be aware that there is also an upper packet size on what the networking code
 /// will accept. If the block doesn't fit in such a package, it can not be
 /// transferred to other nodes.
 pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
-/// Proposer factory.
+/// [`Proposer`] factory.
 pub struct ProposerFactory<A, B, C, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	/// The client instance.
@@ -62,7 +62,7 @@ pub struct ProposerFactory<A, B, C, PR> {
 	metrics: PrometheusMetrics,
 	/// The default block size limit.
 	///
-	/// If no `block_size_limit` is passed to [`Proposer::propose`], this block size limit will be
+	/// If no `block_size_limit` is passed to [`sp_consensus::Proposer::propose`], this block size limit will be
 	/// used.
 	default_block_size_limit: usize,
 	telemetry: Option<TelemetryHandle>,
@@ -134,7 +134,7 @@ impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
 	/// The default value for the block size limit is:
 	/// [`DEFAULT_BLOCK_SIZE_LIMIT`].
 	///
-	/// If there is no block size limit passed to [`Proposer::propose`], this value will be used.
+	/// If there is no block size limit passed to [`sp_consensus::Proposer::propose`], this value will be used.
 	pub fn set_default_block_size_limit(&mut self, limit: usize) {
 		self.default_block_size_limit = limit;
 	}

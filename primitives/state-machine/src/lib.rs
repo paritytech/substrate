@@ -1432,6 +1432,13 @@ mod tests {
 		}
 	}
 
+	fn test_compact(remote_proof: StorageProof, remote_root: &sp_core::H256) -> StorageProof {
+		let compact_remote_proof = remote_proof.into_compact_proof::<BlakeTwo256>(
+			remote_root.clone(),
+		).unwrap();
+		compact_remote_proof.to_storage_proof::<BlakeTwo256>(Some(remote_root)).unwrap().0
+	}
+
 	#[test]
 	fn prove_read_and_proof_check_works() {
 		prove_read_and_proof_check_works_inner(false);
@@ -1442,8 +1449,9 @@ mod tests {
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie(flagged);
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
+		let remote_proof = test_compact(remote_proof, &remote_root);
  		// check proof locally
 		let local_result1 = read_proof_check::<BlakeTwo256, _>(
 			remote_root,
@@ -1463,12 +1471,13 @@ mod tests {
 		assert_eq!(local_result2, false);
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie(flagged);
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
 			child_info,
 			&[b"value3"],
 		).unwrap();
+		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone(),
@@ -1574,6 +1583,49 @@ mod tests {
 		assert!(remote_proof.encoded_size() < 1000);
 		assert_eq!(remote_proof.encode().len(),
 			remote_proof.encoded_size());
+	}
+
+	fn compact_multiple_child_trie() {
+		// this root will be queried
+		let child_info1 = ChildInfo::new_default(b"sub1");
+		// this root will not be include in proof
+		let child_info2 = ChildInfo::new_default(b"sub2");
+		// this root will be include in proof
+		let child_info3 = ChildInfo::new_default(b"sub");
+		let mut remote_backend = trie_backend::tests::test_trie();
+		let (remote_root, transaction) = remote_backend.full_storage_root(
+			std::iter::empty(),
+			vec![
+				(&child_info1, vec![
+					(&b"key1"[..], Some(&b"val2"[..])),
+					(&b"key2"[..], Some(&b"val3"[..])),
+				].into_iter()),
+				(&child_info2, vec![
+					(&b"key3"[..], Some(&b"val4"[..])),
+					(&b"key4"[..], Some(&b"val5"[..])),
+				].into_iter()),
+				(&child_info3, vec![
+					(&b"key5"[..], Some(&b"val6"[..])),
+					(&b"key6"[..], Some(&b"val7"[..])),
+				].into_iter()),
+			].into_iter(),
+		);
+		remote_backend.backend_storage_mut().consolidate(transaction);
+		remote_backend.essence.set_root(remote_root.clone());
+		let remote_proof = prove_child_read(
+			remote_backend,
+			&child_info1,
+			&[b"key1"],
+		).unwrap();
+		let remote_proof = test_compact(remote_proof, &remote_root);
+		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
+			remote_root,
+			remote_proof.clone(),
+			&child_info1,
+			&[b"key1"],
+		).unwrap();
+		assert_eq!(local_result1.len(), 1);
+		assert_eq!(local_result1.get(&b"key1"[..]), Some(&Some(b"val2".to_vec())));
 	}
 
 	#[test]

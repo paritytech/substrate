@@ -23,6 +23,7 @@ mod error;
 mod node_header;
 mod node_codec;
 mod storage_proof;
+mod trie_codec;
 mod trie_stream;
 
 use sp_std::{boxed::Box, marker::PhantomData, vec, vec::Vec, borrow::Borrow, fmt};
@@ -35,7 +36,7 @@ pub use error::Error;
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
-pub use storage_proof::StorageProof;
+pub use storage_proof::{StorageProof, CompactProof};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration,
@@ -48,6 +49,9 @@ pub use memory_db::prefixed_key;
 /// Various re-exports from the `hash-db` crate.
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX, MetaHasher};
 pub use hash_db::NoMeta;
+/// Trie codec reexport, mainly child trie support
+/// for trie compact proof.
+pub use trie_codec::{decode_compact, encode_compact, Error as CompactProofError};
 
 /// Meta use by trie state.
 #[derive(Default, Clone, Debug)]
@@ -224,6 +228,7 @@ impl<H, M> Default for Layout<H, M> {
 		Layout(None, sp_std::marker::PhantomData)
 	}
 }
+
 impl<H, M> Layout<H, M> {
 	/// Layout with inner hashing active.
 	/// Will flag trie for hashing.
