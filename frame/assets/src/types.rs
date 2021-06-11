@@ -207,7 +207,8 @@ type BalanceOf<F, T> = <F as fungible::Inspect<AccountIdOf<T>>>::Balance;
 /// Converts a balance value into an asset balance based on the ratio between the fungible's
 /// minimum balance and the minimum asset balance.
 pub struct BalanceToAssetBalance<F, T, CON, I = ()>(PhantomData<(F, T, CON, I)>);
-impl<F, T, CON, I> BalanceConversion<BalanceOf<F, T>, AssetIdOf<T, I>, AssetBalanceOf<T, I>> for BalanceToAssetBalance<F, T, CON, I>
+impl<F, T, CON, I> BalanceConversion<BalanceOf<F, T>, AssetIdOf<T, I>, AssetBalanceOf<T, I>>
+for BalanceToAssetBalance<F, T, CON, I>
 where
 	F: fungible::Inspect<AccountIdOf<T>>,
 	T: Config<I>,
@@ -222,7 +223,10 @@ where
 	/// minimum balance and the minimum asset balance.
 	///
 	/// Will return `Err` if the asset is not found, not sufficient or the fungible's minimum balance is zero.
-	fn to_asset_balance(balance: BalanceOf<F, T>, asset_id: AssetIdOf<T, I>) -> Result<AssetBalanceOf<T, I>, ConversionError> {
+	fn to_asset_balance(
+		balance: BalanceOf<F, T>,
+		asset_id: AssetIdOf<T, I>,
+	) -> Result<AssetBalanceOf<T, I>, ConversionError> {
 		let asset = Asset::<T, I>::get(asset_id).ok_or(ConversionError::AssetMissing)?;
 		// only sufficient assets have a min balance with reliable value
 		ensure!(asset.is_sufficient, ConversionError::AssetNotSufficient);
