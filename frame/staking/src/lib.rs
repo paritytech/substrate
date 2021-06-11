@@ -2521,8 +2521,10 @@ impl<T: Config> Module<T> {
 	/// auto-chilled.
 	///
 	/// Note that this is VERY expensive. Use with care.
-	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VotingDataOf<T>> {
-		let voter_count = voter_bags::VoterList::<T>::decode_len().unwrap_or_default();
+	pub fn get_npos_voters(
+		maybe_max_len: Option<usize>,
+		voter_count: usize,
+	) -> Vec<VotingDataOf<T>> {
 		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
 
 		let weight_of = Self::slashable_balance_of_fn();
@@ -2551,24 +2553,16 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
-		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
-		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
-		// report weight in failures.
-		let nominator_count = <Nominators<T>>::iter().count();
-		let validator_count = <Validators<T>>::iter().count();
-		let voter_count = nominator_count.saturating_add(validator_count);
-
-		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
-			return Err("Voter snapshot too big");
-		}
+		let voter_count = voter_bags::VoterList::<T>::decode_len().unwrap_or_default();
 
 		let slashing_span_count = <SlashingSpans<T>>::iter().count();
 		let weight = T::WeightInfo::get_npos_voters(
-			nominator_count as u32,
-			validator_count as u32,
+			// TODO: fix the weight calculation here
+			0 as u32,
+			voter_count as u32,
 			slashing_span_count as u32,
 		);
-		Ok((Self::get_npos_voters(maybe_max_len), weight))
+		Ok((Self::get_npos_voters(maybe_max_len, voter_count), weight))
 	}
 
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {

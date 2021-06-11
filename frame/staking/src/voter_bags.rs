@@ -22,11 +22,11 @@
 //!   voters doesn't particularly matter.
 
 use crate::{
-	slashing::SlashingSpans, AccountIdOf, Config, Nominations, Nominators, Pallet, VoterBagFor,
+	slashing::SlashingSpans, AccountIdOf, Config, Nominations, Nominators, VoterBagFor,
 	VotingDataOf, VoteWeight,
 };
 use codec::{Encode, Decode};
-use frame_support::{DefaultNoBound, StorageMap, StorageValue, StorageDoubleMap};
+use frame_support::{StorageMap, StorageValue, StorageDoubleMap};
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
@@ -34,7 +34,7 @@ use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 pub type BagIdx = u8;
 
 /// Given a certain vote weight, which bag should this voter contain?
-fn notional_bag_for(weight: VoteWeight) -> BagIdx {
+fn notional_bag_for(_weight: VoteWeight) -> BagIdx {
 	todo!("geometric series of some description; ask alfonso")
 }
 
