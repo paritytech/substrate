@@ -1320,14 +1320,12 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			sp_io::TestExternalities::new_empty().execute_with(||
-				assert!(
-					T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
-					"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
-					T::SlashDeferDuration::get(),
-					T::BondingDuration::get(),
-				)
-			);
+			assert!(
+				T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+				"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+				T::SlashDeferDuration::get(),
+				T::BondingDuration::get(),
+			)
 		}
 	}
 
