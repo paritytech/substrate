@@ -18,6 +18,9 @@
 use sp_std::vec::Vec;
 use codec::{Encode, Decode};
 use hash_db::{Hasher, HashDB};
+use hash_db::MetaHasher;
+use trie_db::NodeCodec;
+use crate::{trie_types::Layout, TrieLayout};
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -101,8 +104,8 @@ impl StorageProof {
 	pub fn into_compact_proof<H: Hasher>(
 		self,
 		root: H::Out,
-	) -> Result<CompactProof, crate::CompactProofError<crate::Layout<H>>> {
-		crate::encode_compact::<crate::Layout<H>>(self, root)
+	) -> Result<CompactProof, crate::CompactProofError<Layout<H>>> {
+		crate::encode_compact::<Layout<H>>(self, root)
 	}
 	
 	/// Returns the estimated encoded size of the compact proof.
@@ -130,9 +133,9 @@ impl CompactProof {
 	pub fn to_storage_proof<H: Hasher>(
 		&self,
 		expected_root: Option<&H::Out>,
-	) -> Result<(StorageProof, H::Out), crate::CompactProofError<crate::Layout<H>>> {
+	) -> Result<(StorageProof, H::Out), crate::CompactProofError<Layout<H>>> {
 		let mut db = crate::MemoryDB::<H>::new(&[]);
-		let root = crate::decode_compact::<crate::Layout<H>, _, _>(
+		let root = crate::decode_compact::<Layout<H>, _, _>(
 			&mut db,
 			self.iter_compact_encoded_nodes(),
 			expected_root,
@@ -171,9 +174,6 @@ impl Iterator for StorageProofNodeIterator {
 
 impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
-		use hash_db::MetaHasher;
-		use trie_db::NodeCodec;
-		use crate::{trie_types::Layout, TrieLayout};
 		let mut db = crate::MemoryDB::default();
 		// Needed because we do not read trie structure, so
 		// we do a heuristic related to the fact that host function

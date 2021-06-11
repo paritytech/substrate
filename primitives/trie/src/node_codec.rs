@@ -332,10 +332,14 @@ impl<H, M> NodeCodecT<M> for NodeCodec<H>
 // utils
 
 fn value_do_hash(val: &Value, threshold: &u32) -> bool {
-	if let Value::Value(val) = val {
-		val.encoded_size() >= *threshold as usize
-	} else {
-		false
+	match val {
+		Value::Value(val) => {
+			val.encoded_size() >= *threshold as usize
+		},
+		Value::HashedValue(..) => true, // can only keep hashed
+		Value::NoValue => {
+			false
+		},
 	}
 }
 

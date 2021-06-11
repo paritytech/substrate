@@ -1585,19 +1585,31 @@ mod tests {
 			remote_proof.encoded_size());
 	}
 
+	#[test]
 	fn compact_multiple_child_trie() {
+		let size_inner_hash = compact_multiple_child_trie_inner(true);
+		let size_no_inner_hash = compact_multiple_child_trie_inner(false);
+		assert!(size_inner_hash < size_no_inner_hash);
+	}
+	fn compact_multiple_child_trie_inner(flagged: bool) -> usize {
 		// this root will be queried
 		let child_info1 = ChildInfo::new_default(b"sub1");
 		// this root will not be include in proof
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let mut remote_backend = trie_backend::tests::test_trie();
+		let mut remote_backend = trie_backend::tests::test_trie(flagged);
+		let long_vec: Vec<u8> = (0..1024usize).map(|_| 8u8).collect();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
 			vec![
 				(&child_info1, vec![
-					(&b"key1"[..], Some(&b"val2"[..])),
+					// a inner hashable node 
+					(&b"k"[..], Some(&long_vec[..])),
+					// need to ensure this is not an inline node
+					// otherwhise we do not know what is accessed when
+					// storing proof.
+					(&b"key1"[..], Some(&vec![5u8; 32][..])),
 					(&b"key2"[..], Some(&b"val3"[..])),
 				].into_iter()),
 				(&child_info2, vec![
@@ -1612,11 +1624,13 @@ mod tests {
 		);
 		remote_backend.backend_storage_mut().consolidate(transaction);
 		remote_backend.essence.set_root(remote_root.clone());
+		println!("{:?}", remote_root);
 		let remote_proof = prove_child_read(
 			remote_backend,
 			&child_info1,
 			&[b"key1"],
 		).unwrap();
+		let size = remote_proof.encoded_size();
 		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
 			remote_root,
@@ -1625,7 +1639,8 @@ mod tests {
 			&[b"key1"],
 		).unwrap();
 		assert_eq!(local_result1.len(), 1);
-		assert_eq!(local_result1.get(&b"key1"[..]), Some(&Some(b"val2".to_vec())));
+		assert_eq!(local_result1.get(&b"key1"[..]), Some(&Some(vec![5u8; 32])));
+		size
 	}
 
 	#[test]

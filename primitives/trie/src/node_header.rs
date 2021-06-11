@@ -65,7 +65,7 @@ impl NodeHeader {
 		match self {
 			NodeHeader::Null
 			| NodeHeader::Leaf(..)
-			| NodeHeader::Branch(..)	=> false,
+			| NodeHeader::Branch(..) => false,
 			NodeHeader::AltHashBranch(..)
 			| NodeHeader::AltHashLeaf(..) => true,
 		}

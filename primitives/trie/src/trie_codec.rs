@@ -22,7 +22,7 @@
 
 use crate::{
 	EMPTY_PREFIX, HashDBT, TrieHash, TrieError, TrieConfiguration,
-	CompactProof, StorageProof,
+	CompactProof, StorageProof, GlobalMeta, TrieMeta,
 };
 use sp_std::boxed::Box;
 use sp_std::vec::Vec;
@@ -109,13 +109,17 @@ pub fn decode_compact<'a, L, DB, I>(
 ) -> Result<TrieHash<L>, Error<L>>
 	where
 		L: TrieConfiguration,
-		DB: HashDBT<L::Hash, trie_db::DBValue> + hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+		DB: HashDBT<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>
+			+ hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 		I: IntoIterator<Item = &'a [u8]>,
 {
 	let mut nodes_iter = encoded.into_iter();
-	let (top_root, _nb_used) = trie_db::decode_compact_from_iter::<L, _, _, _>(
+	// Layout does not change trie reading.
+	let layout = L::default();
+	let (top_root, _nb_used) = trie_db::decode_compact_from_iter::<L, _, _>(
 		db,
 		&mut nodes_iter,
+		&layout,
 	)?;
 
 	// Only check root if expected root is passed as argument.
@@ -128,7 +132,7 @@ pub fn decode_compact<'a, L, DB, I>(
 	let mut child_tries = Vec::new();
 	{
 		// fetch child trie roots
-		let trie = crate::TrieDB::<L>::new(db, &top_root)?;
+		let trie = crate::TrieDB::<L>::new_with_layout(db, &top_root, layout.clone())?;
 
 		let mut iter = trie.iter()?;
 
@@ -159,16 +163,17 @@ pub fn decode_compact<'a, L, DB, I>(
 		}
 	}
 
-	if !HashDBT::<L::Hash, _>::contains(db, &top_root, EMPTY_PREFIX) {
+	if !HashDBT::<L::Hash, _, _, _>::contains(db, &top_root, EMPTY_PREFIX) {
 		return Err(Error::IncompleteProof);
 	}
 
 	let mut previous_extracted_child_trie = None;
 	for child_root in child_tries.into_iter() {
 		if previous_extracted_child_trie.is_none() {
-			let (top_root, _) = trie_db::decode_compact_from_iter::<L, _, _, _>(
+			let (top_root, _) = trie_db::decode_compact_from_iter::<L, _, _>(
 				db,
 				&mut nodes_iter,
+				&layout,
 			)?;
 			previous_extracted_child_trie = Some(top_root);
 		}
@@ -206,11 +211,14 @@ pub fn encode_compact<L>(
 	root: TrieHash<L>,
 ) -> Result<CompactProof, Error<L>>
 	where
-		L: TrieConfiguration,
+		L: TrieConfiguration<Meta = TrieMeta>,
 {
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
 	let mut compact_proof = {
+		// Layout does not change trie reading.
+		// And meta for writing are read from state
+		// (no new node so using trie without threshold is safe here).
 		let trie = crate::TrieDB::<L>::new(&partial_db, &root)?;
 
 		let mut iter = trie.iter()?;
@@ -243,7 +251,7 @@ pub fn encode_compact<L>(
 	};
 
 	for child_root in child_tries {
-		if !HashDBT::<L::Hash, _>::contains(&partial_db, &child_root, EMPTY_PREFIX) {
+		if !HashDBT::<L::Hash, _, _, _>::contains(&partial_db, &child_root, EMPTY_PREFIX) {
 			// child proof are allowed to be missing (unused root can be included
 			// due to trie structure modification).
 			continue;
