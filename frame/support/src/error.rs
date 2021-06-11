@@ -86,6 +86,7 @@ macro_rules! decl_error {
 	) => {
 		$(#[$attr])*
 		#[derive($crate::scale_info::TypeInfo)]
+		#[scale_info(skip_type_params($generic, $($inst_generic)?))]
 		pub enum $error<$generic: $trait $(, $inst_generic: $instance)?>
 		$( where $( $where_ty: $where_bound ),* )?
 		{

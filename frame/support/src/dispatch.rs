@@ -2344,8 +2344,7 @@ macro_rules! __impl_error_metadata {
 		$error_type:tt
 		$($rest:tt)*
 	) => {
-		// todo: [AJ] remove TypeInfo bounds on Instance, depends on skipping the T in PhantomData<T>
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable + $crate::scale_info::TypeInfo)?> $mod_type<$trait_instance $(, $instance)?>
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
