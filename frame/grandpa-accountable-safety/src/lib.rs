@@ -96,6 +96,11 @@ impl<T: Config> Pallet<T> {
 		block_not_included: (Commit<T::Hash, T::BlockNumber>, RoundNumber, SetId),
 		new_block: (Commit<T::Hash, T::BlockNumber>, RoundNumber, SetId),
 	) -> Option<()> {
+		// Don't start another session if we are already running one.
+		if Pallet::<T>::session().is_some() {
+			return None;
+		}
+
 		// Verify all signatures.
 		if !check_commit_signatures(&block_not_included) || !check_commit_signatures(&new_block) {
 			return None;
