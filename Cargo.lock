@@ -8319,7 +8319,7 @@ dependencies = [
 [[package]]
 name = "scale-info"
 version = "0.6.0"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#62213f82460fd1c7ee245e5819c65a09ae0ea16f"
+source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#1e99eb88bbd84de0d18a224075a7c53412eb49cf"
 dependencies = [
  "cfg-if 1.0.0",
  "derive_more",
@@ -8331,7 +8331,7 @@ dependencies = [
 [[package]]
 name = "scale-info-derive"
 version = "0.4.0"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#62213f82460fd1c7ee245e5819c65a09ae0ea16f"
+source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#1e99eb88bbd84de0d18a224075a7c53412eb49cf"
 dependencies = [
  "proc-macro-crate 1.0.0",
  "proc-macro2",
