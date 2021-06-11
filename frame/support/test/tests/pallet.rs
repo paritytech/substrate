@@ -343,7 +343,7 @@ pub mod pallet {
 			match d.get_data::<bool>(b"required") {
 				Ok(Some(true)) => Ok(Some(InherentError::Fatal)),
 				Ok(Some(false)) | Ok(None) => Ok(None),
-				Err(_) => unreachable!("should now happen in tests"),
+				Err(_) => unreachable!("should not happen in tests"),
 			}
 		}
 	}
