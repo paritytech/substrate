@@ -30,8 +30,6 @@ use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 pub enum Error {
 	#[error("attempted to insert into the wrong position in the list")]
 	WrongInsertPosition,
-	#[error("list internal consistency error: {0}")]
-	Consistency(&'static str),
 }
 
 /// Type of voter.
@@ -170,6 +168,46 @@ impl<T: Config> VoterList<T> {
 
 		Ok(())
 	}
+
+	/// Remove a voter from the list.
+	///
+	/// Returns `true` when the voter had previously existed in the list.
+	///
+	/// This is an immediate operation which modifies storage directly.
+	pub fn remove(mut self, id: AccountIdOf<T>) -> Result<bool, Error> {
+		let maybe_node = Node::<T>::from_id(&id);
+		let existed = maybe_node.is_some();
+		if let Some(node) = maybe_node {
+			let predecessor = node.prev();
+			let successor = node.next();
+
+			let predecessor_id = predecessor.as_ref().map(|prev| prev.voter.id.clone());
+			let successor_id = successor.as_ref().map(|next| next.voter.id.clone());
+
+			// update list
+			if predecessor.is_none() {
+				self.head = successor_id.clone();
+			}
+			if successor.is_none() {
+				self.tail = predecessor_id.clone();
+			}
+			self.put();
+
+			// update adjacent nodes
+			if let Some(mut prev) = predecessor {
+				prev.next = successor_id;
+				prev.put();
+			}
+			if let Some(mut next) = successor {
+				next.prev = predecessor_id;
+				next.put();
+			}
+
+			// remove the node itself
+			node.remove();
+		}
+		Ok(existed)
+	}
 }
 
 #[derive(Encode, Decode)]
@@ -189,6 +227,14 @@ impl<T: Config> Node<T> {
 	/// Update the node in storage.
 	pub fn put(self) {
 		crate::NominatorNodes::<T>::insert(self.voter.id.clone(), self);
+	}
+
+	/// Remove the node from storage.
+	///
+	/// This function is intentionally private, because it's naive.
+	/// [`VoterList::<T>::remove`] is the better option for general use.
+	fn remove(self) {
+		crate::NominatorNodes::<T>::remove(self.voter.id);
 	}
 
 	/// Get the previous node.
