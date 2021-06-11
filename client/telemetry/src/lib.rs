@@ -122,21 +122,11 @@ impl TelemetryWorker {
 	///
 	/// Only one is needed per process.
 	pub fn new(buffer_size: usize) -> Result<Self> {
-		let transport = initialize_transport(None)?;
-		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
-		let (register_sender, register_receiver) = mpsc::unbounded();
-
-		Ok(Self {
-			message_receiver,
-			message_sender,
-			register_receiver,
-			register_sender,
-			id_counter: Arc::new(atomic::AtomicU64::new(1)),
-			transport,
-		})
+		Self::with_transport(buffer_size, None)
 	}
 
-	/// Instantiate a new [`TelemetryWorker`] which can run in background.
+	/// Instantiate a new [`TelemetryWorker`] with the given [`ExtTransport`]
+	/// which can run in background.
 	///
 	/// Only one is needed per process.
 	pub fn with_transport(buffer_size: usize, transport: Option<ExtTransport>) -> Result<Self> {
@@ -312,12 +302,6 @@ impl TelemetryWorker {
 
 		for (node_max_verbosity, addr) in nodes {
 			if verbosity > *node_max_verbosity {
-				log::trace!(
-					target: "telemetry",
-					"Skipping {} for log entry with verbosity {:?}",
-					addr,
-					verbosity,
-				);
 				continue;
 			}
 
@@ -389,10 +373,7 @@ impl Telemetry {
 	/// The `connection_message` argument is a JSON object that is sent every time the connection
 	/// (re-)establishes.
 	pub fn start_telemetry(&mut self, connection_message: ConnectionMessage) -> Result<()> {
-		let endpoints = match self.endpoints.take() {
-			Some(x) => x,
-			None => return Err(Error::TelemetryAlreadyInitialized),
-		};
+		let endpoints = self.endpoints.take().ok_or_else(|| Error::TelemetryAlreadyInitialized)?;
 
 		self.register_sender
 			.unbounded_send(Register::Telemetry {
@@ -403,7 +384,7 @@ impl Telemetry {
 			.map_err(|_| Error::TelemetryWorkerDropped)
 	}
 
-	/// Make a new clonable handle to this [`Telemetry`]. This is used for reporting telemetries.
+	/// Make a new cloneable handle to this [`Telemetry`]. This is used for reporting telemetries.
 	pub fn handle(&self) -> TelemetryHandle {
 		TelemetryHandle {
 			message_sender: Arc::new(Mutex::new(self.message_sender.clone())),

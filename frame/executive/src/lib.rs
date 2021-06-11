@@ -206,10 +206,10 @@ where
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
 		let mut weight = 0;
+		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
 		weight = weight.saturating_add(
 			<frame_system::Pallet<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
 		);
-		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
 		weight = weight.saturating_add(<AllPallets as OnRuntimeUpgrade>::on_runtime_upgrade());
 
 		weight
@@ -619,7 +619,7 @@ mod tests {
 			}
 		}
 
-		impl<T: Config> sp_inherents::ProvideInherent for Module<T> {
+		impl<T: Config> frame_support::inherent::ProvideInherent for Module<T> {
 			type Call = Call<T>;
 			type Error = sp_inherents::MakeFatalError<()>;
 			const INHERENT_IDENTIFIER: [u8; 8] = *b"test1234";
@@ -721,6 +721,8 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type MaxLocks = ();
+		type MaxReserves = ();
+		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
 	}
 
@@ -833,7 +835,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("6e70de4fa07bac443dc7f8a812c8a0c941aacfa892bb373c5899f7d511d4c25b").into(),
+					state_root: hex!("ec6bb58b0e4bc7fdf0151a0f601eb825f529fbf90b5be5b2024deba30c5cbbcb").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

@@ -289,14 +289,10 @@ where
 			fn consume(
 				mut self,
 			) -> Option<(AuthoritySet<H, N>, SharedDataLocked<'a, AuthoritySet<H, N>>)> {
-				if let Some(old) = self.old.take() {
-					Some((
+				self.old.take().map(|old| (
 						old,
 						self.guard.take().expect("only taken on deconstruction; qed"),
-					))
-				} else {
-					None
-				}
+				))
 			}
 		}
 
@@ -650,9 +646,10 @@ where
 		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
 		if justification.0 != GRANDPA_ENGINE_ID {
-			return Err(ConsensusError::ClientImport(
-				"GRANDPA can only import GRANDPA Justifications.".into(),
-			));
+			return Err(ConsensusError::ClientImport(format!(
+				"Expected GRANDPA Justification, got {}.",
+				String::from_utf8_lossy(&justification.0)
+			)));
 		}
 
 		let justification = GrandpaJustification::decode_and_verify_finalizes(

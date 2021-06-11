@@ -87,6 +87,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -127,6 +129,7 @@ parameter_types! {
 	pub const DataDepositPerByte: u64 = 1;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const MaximumReasonLength: u32 = 16384;
+	pub const MaxApprovals: u32 = 100;
 }
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
@@ -142,6 +145,7 @@ impl pallet_treasury::Config for Test {
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
+	type MaxApprovals = MaxApprovals;
 }
 parameter_types! {
 	pub const TipCountdown: u64 = 1;
@@ -172,7 +176,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 fn last_event() -> RawEvent<u64, u128, H256> {
 	System::events().into_iter().map(|r| r.event)
 		.filter_map(|e| {
-			if let Event::tips(inner) = e { Some(inner) } else { None }
+			if let Event::TipsModTestInst(inner) = e { Some(inner) } else { None }
 		})
 		.last()
 		.unwrap()

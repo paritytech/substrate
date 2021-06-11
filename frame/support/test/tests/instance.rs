@@ -26,8 +26,8 @@ use frame_support::{
 		StorageEntryMetadata, StorageHasher,
 	},
 	StorageValue, StorageMap, StorageDoubleMap,
+	inherent::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError},
 };
-use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
 use sp_core::{H256, sr25519};
 
 mod system;
@@ -112,7 +112,7 @@ mod module1 {
 		T::BlockNumber: From<u32>
 	{
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<sp_inherents::Error>;
+		type Error = MakeFatalError<()>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -176,7 +176,7 @@ mod module2 {
 
 	impl<T: Config<I>, I: Instance> ProvideInherent for Module<T, I> {
 		type Call = Call<T, I>;
-		type Error = MakeFatalError<sp_inherents::Error>;
+		type Error = MakeFatalError<()>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
@@ -299,26 +299,26 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, 
 
 fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig{
-		module1_Instance1: module1::GenesisConfig {
+		module_1_1: module1::GenesisConfig {
 			value: 3,
 			test: 2,
 		},
-		module1_Instance2: module1::GenesisConfig {
+		module_1_2: module1::GenesisConfig {
 			value: 4,
 			test: 5,
 		},
-		module2: module2::GenesisConfig {
+		module_2: module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
 			double_map: vec![(0, 0, 0)],
 		},
-		module2_Instance1: module2::GenesisConfig {
+		module_2_1: module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
 			double_map: vec![(0, 0, 0)],
 		},
-		module2_Instance2: Default::default(),
-		module2_Instance3: Default::default(),
+		module_2_2: Default::default(),
+		module_2_3: Default::default(),
 	}.build_storage().unwrap().into()
 }
 

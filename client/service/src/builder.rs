@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, MallocSizeOfWasm, RpcHandlers, NetworkStatusSinks,
+	error::Error, MallocSizeOfWasm, RpcHandlers,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
@@ -50,7 +50,7 @@ use sp_runtime::traits::{
 };
 use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
-use std::sync::Arc;
+use std::{sync::Arc, str::FromStr};
 use wasm_timer::SystemTime;
 use sc_telemetry::{
 	telemetry,
@@ -150,6 +150,7 @@ pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 
 /// Full client call executor type.
 pub type TFullCallExecutor<TBl, TExecDisp> = crate::client::LocalCallExecutor<
+	TBl,
 	sc_client_db::Backend<TBl>,
 	NativeExecutor<TExecDisp>,
 >;
@@ -172,6 +173,7 @@ pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
 		HashFor<TBl>
 	>,
 	crate::client::LocalCallExecutor<
+		TBl,
 		sc_light::Backend<
 			sc_client_db::light::LightStorage<TBl>,
 			HashFor<TBl>
@@ -206,7 +208,7 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 	TBackend,
 	sc_light::GenesisCallExecutor<
 		TBackend,
-		crate::client::LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>,
+		crate::client::LocalCallExecutor<TBl, TBackend, NativeExecutor<TExecDisp>>,
 	>,
 	TBl,
 	TRtApi,
@@ -250,7 +252,7 @@ impl KeystoreContainer {
 	/// Should be called right away at startup and not at runtime:
 	/// even though this overrides any previously set remote store, it
 	/// does not reset any references previously handed out - they will
-	/// stick araound.
+	/// stick around.
 	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
 		where T: CryptoStore + SyncCryptoStore + 'static
 	{
@@ -266,7 +268,7 @@ impl KeystoreContainer {
 		}
 	}
 
-	/// Returns the synchrnous keystore wrapper
+	/// Returns the synchronous keystore wrapper
 	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
 		if let Some(c) = self.remote.as_ref() {
 			c.sync_keystore_ref()
@@ -295,6 +297,7 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
+	TBl::Hash: FromStr,
 {
 	new_full_parts(config, telemetry).map(|parts| parts.0)
 }
@@ -303,9 +306,10 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
+) -> Result<TFullParts<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
+	TBl::Hash: FromStr,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
@@ -349,6 +353,16 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
 		);
 
+		let wasm_runtime_substitutes = config.chain_spec.code_substitutes().into_iter().map(|(h, c)| {
+			let hash = TBl::Hash::from_str(&h)
+				.map_err(|_|
+					 Error::Application(Box::from(
+						format!("Failed to parse `{}` as block hash for code substitutes.", h)
+					))
+				)?;
+			Ok((hash, c))
+		}).collect::<Result<std::collections::HashMap<_, _>, Error>>()?;
+
 		let client = new_client(
 			backend.clone(),
 			executor,
@@ -363,6 +377,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 				offchain_worker_enabled : config.offchain_worker.enabled,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
+				wasm_runtime_substitutes,
 			},
 		)?;
 
@@ -453,11 +468,11 @@ pub fn new_client<E, Block, RA>(
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
-	config: ClientConfig,
+	config: ClientConfig<Block>,
 ) -> Result<
 	crate::client::Client<
 		Backend<Block>,
-		crate::client::LocalCallExecutor<Backend<Block>, E>,
+		crate::client::LocalCallExecutor<Block, Backend<Block>, E>,
 		Block,
 		RA,
 	>,
@@ -504,8 +519,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
 	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	/// Sinks to propagate network status updates.
-	pub network_status_sinks: NetworkStatusSinks<TBl>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Telemetry instance for this node.
@@ -575,7 +588,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		rpc_extensions_builder,
 		remote_blockchain,
 		network,
-		network_status_sinks,
 		system_rpc_tx,
 		telemetry,
 	} = params;
@@ -639,7 +651,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		metrics_service.run(
 			client.clone(),
 			transaction_pool.clone(),
-			network_status_sinks.clone()
+			network.clone(),
 		)
 	);
 
@@ -664,7 +676,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	// Spawn informant task
 	spawn_handle.spawn("informant", sc_informant::build(
 		client.clone(),
-		network_status_sinks.status.clone(),
+		network.clone(),
 		transaction_pool.clone(),
 		config.informant_output_format,
 	));
@@ -838,7 +850,7 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub import_queue: TImpQu,
 	/// An optional, shared data fetcher for light clients.
 	pub on_demand: Option<Arc<OnDemand<TBl>>>,
-	/// A block annouce validator builder.
+	/// A block announce validator builder.
 	pub block_announce_validator_builder: Option<Box<
 		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
@@ -850,7 +862,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-		NetworkStatusSinks<TBl>,
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 		NetworkStarter,
 	),
@@ -944,7 +955,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
-	let network_status_sinks = NetworkStatusSinks::new();
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 
@@ -952,7 +962,6 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		config.role.clone(),
 		network_mut,
 		client,
-		network_status_sinks.clone(),
 		system_rpc_rx,
 		has_bootnodes,
 		config.announce_block,
@@ -995,7 +1004,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		future.await
 	});
 
-	Ok((network, network_status_sinks, system_rpc_tx, NetworkStarter(network_start_tx)))
+	Ok((network, system_rpc_tx, NetworkStarter(network_start_tx)))
 }
 
 /// Object used to start the network.

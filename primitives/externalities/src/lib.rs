@@ -229,12 +229,12 @@ pub trait Externalities: ExtensionStore {
 	fn storage_commit_transaction(&mut self) -> Result<(), ()>;
 
 	/// Index specified transaction slice and store it.
-	fn storage_index_transaction(&mut self, _index: u32, _offset: u32) {
+	fn storage_index_transaction(&mut self, _index: u32, _hash: &[u8], _size: u32) {
 		unimplemented!("storage_index_transaction");
 	}
 
 	/// Renew existing piece of transaction storage.
-	fn storage_renew_transaction_index(&mut self, _index: u32, _hash: &[u8], _size: u32) {
+	fn storage_renew_transaction_index(&mut self, _index: u32, _hash: &[u8]) {
 		unimplemented!("storage_renew_transaction_index");
 	}
 
@@ -312,7 +312,7 @@ pub trait ExternalitiesExt {
 
 impl ExternalitiesExt for &mut dyn Externalities {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
-		self.extension_by_type_id(TypeId::of::<T>()).and_then(Any::downcast_mut)
+		self.extension_by_type_id(TypeId::of::<T>()).and_then(<dyn Any>::downcast_mut)
 	}
 
 	fn register_extension<T: Extension>(&mut self, ext: T) -> Result<(), Error> {

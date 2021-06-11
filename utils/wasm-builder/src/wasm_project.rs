@@ -109,7 +109,7 @@ pub(crate) fn create_and_compile(
 		project_cargo_toml,
 		&wasm_workspace,
 		&crate_metadata,
-		&crate_metadata.workspace_root,
+		crate_metadata.workspace_root.as_ref(),
 		features_to_enable,
 	);
 
@@ -232,7 +232,8 @@ fn create_project_cargo_toml(
 	wasm_workspace_toml.insert("profile".into(), profile.into());
 
 	// Add patch section from the project root `Cargo.toml`
-	if let Some(mut patch) = workspace_toml.remove("patch").and_then(|p| p.try_into::<Table>().ok()) {
+	while let Some(mut patch) = workspace_toml.remove("patch")
+		.and_then(|p| p.try_into::<Table>().ok()) {
 		// Iterate over all patches and make the patch path absolute from the workspace root path.
 		patch.iter_mut()
 			.filter_map(|p|
