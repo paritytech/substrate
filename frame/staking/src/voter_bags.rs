@@ -22,7 +22,7 @@
 //!   voters doesn't particularly matter.
 
 use crate::{
-	slashing::SlashingSpans, AccountIdOf, Config, Nominations, Pallet, VotingDataOf, VoteWeight,
+	slashing::SlashingSpans, AccountIdOf, Config, Nominations, Pallet, VoterBagFor, VotingDataOf, VoteWeight,
 };
 use codec::{Encode, Decode};
 use frame_support::{DefaultNoBound, StorageMap, StorageValue, StorageDoubleMap};
@@ -33,18 +33,104 @@ use sp_std::marker::PhantomData;
 pub type BagIdx = u8;
 
 /// Given a certain vote weight, which bag should this voter contain?
-fn bag_for(weight: VoteWeight) -> BagIdx {
+fn notional_bag_for(weight: VoteWeight) -> BagIdx {
 	todo!("geometric series of some description; ask alfonso")
 }
 
-/// Type of voter.
+/// Find the actual bag containing the current voter.
+fn current_bag_for<T: Config>(id: &AccountIdOf<T>) -> Option<BagIdx> {
+	VoterBagFor::<T>::try_get(id).ok()
+}
+
+/// Data structure providing efficient mostly-accurate selection of the top N voters by stake.
 ///
-/// Similar to [`crate::StakerStatus`], but somewhat more limited.
-#[derive(Clone, Copy, Encode, Decode, PartialEq, Eq)]
+/// It's implemented as a set of linked lists. Each linked list comprises a bag of voters of
+/// arbitrary and unbounded length, all having a vote weight within a particular constant range.
+/// This structure means that voters can be added and removed in `O(1)` time.
+///
+/// Iteration is accomplished by chaining the iteration of each bag, from greatest to least.
+/// While the users within any particular bag are sorted in an entirely arbitrary order, the overall
+/// stake decreases as successive bags are reached. This means that it is valid to truncate
+/// iteration at any desired point; only those voters in the lowest bag (who are known to have
+/// relatively little power to affect the outcome) can be excluded. This satisfies both the desire
+/// for fairness and the requirement for efficiency.
+pub struct VoterList<T: Config>(PhantomData<T>);
+
+impl<T: Config> VoterList<T> {
+	pub fn decode_len() -> Option<usize> {
+		crate::VoterCount::try_get().ok().map(|n| n.saturated_into())
+	}
+}
+
+/// A Bag contains a singly-linked list of voters.
+///
+/// Note that we maintain both head and tail pointers. While it would be possible to get away
+/// with maintaining only a head pointer and cons-ing elements onto the front of the list, it's
+/// more desirable to ensure that there is some element of first-come, first-serve to the list's
+/// iteration so that there's no incentive to churn voter positioning to improve the chances of
+/// appearing within the voter set.
+#[derive(Default, Encode, Decode)]
+pub struct Bag<T: Config> {
+	head: Option<AccountIdOf<T>>,
+	tail: Option<AccountIdOf<T>>,
+
+	#[codec(skip)]
+	bag_idx: BagIdx,
+}
+
+impl<T: Config> Bag<T> {
+	/// Get a bag by idx.
+	pub fn get(bag_idx: BagIdx) -> Option<Bag<T>> {
+		crate::VoterBags::<T>::try_get(bag_idx).ok().map(|mut bag| {
+			bag.bag_idx = bag_idx;
+			bag
+		})
+	}
+
+	/// Put the bag back into storage.
+	pub fn put(self) {
+		crate::VoterBags::<T>::insert(self.bag_idx, self);
+	}
+}
+
+/// A Node is the fundamental element comprising the singly-linked lists which for each bag.
+#[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum VoterType {
-	Validator,
-	Nominator,
+pub struct Node<T: Config> {
+	voter: Voter<AccountIdOf<T>>,
+	next: Option<AccountIdOf<T>>,
+
+	#[codec(skip)]
+	bag_idx: BagIdx,
+}
+
+impl<T: Config> Node<T> {
+	/// Get a node by bag idx and account id.
+	pub fn get(bag_idx: BagIdx, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
+		crate::VoterNodes::<T>::try_get(&bag_idx, account_id).ok().map(|mut node| {
+			node.bag_idx = bag_idx;
+			node
+		})
+	}
+
+	/// Get a node by account id.
+	///
+	/// Note that this must perform two storage lookups: one to identify which bag is appropriate,
+	/// and another to actually fetch the node.
+	pub fn from_id(account_id: &AccountIdOf<T>) -> Option<Node<T>> {
+		let bag = current_bag_for::<T>(account_id)?;
+		Self::get(bag, account_id)
+	}
+
+	/// Get a node by account id, assuming it's in the same bag as this node.
+	pub fn in_bag(&self, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
+		Self::get(self.bag_idx, account_id)
+	}
+
+	/// Put the node back into storage.
+	pub fn put(self) {
+		crate::VoterNodes::<T>::insert(self.bag_idx, self.voter.id.clone(), self);
+	}
 }
 
 /// Fundamental information about a voter.
@@ -59,43 +145,12 @@ pub struct Voter<AccountId> {
 
 pub type VoterOf<T> = Voter<AccountIdOf<T>>;
 
-/// Data structure providing efficient mostly-accurate selection of the top N voters by stake.
+/// Type of voter.
 ///
-/// It's implemented as a set of linked lists. Each linked list comprises a bag of voters of
-/// arbitrary and unbounded length, all having a vote weight within a particular constant range.
-/// This structure means that voters can be added and removed in `O(1)` time.
-///
-/// Iteration is accomplished by chaining the iteration of each bag, from greatest to least.
-/// While the users within any particular bag are sorted in an entirely arbitrary order, the overall
-/// stake decreases as successive bags are reached. This means that it is valid to truncate
-/// iteration at any desired point; only those voters in the lowest bag (who are known to have
-/// relatively little power to affect the outcome) can be excluded. This satisfies both the desire
-/// for fairness and the requirement for efficiency.
-pub struct VoterList<AccountId>(PhantomData<AccountId>);
-
-pub type VoterListOf<T> = VoterList<AccountIdOf<T>>;
-
-/// A Bag contains a singly-linked list of voters.
-///
-/// Note that we maintain both head and tail pointers. While it would be possible to get away
-/// with maintaining only a head pointer and cons-ing elements onto the front of the list, it's
-/// more desirable to ensure that there is some element of first-come, first-serve to the list's
-/// iteration so that there's no incentive to churn voter positioning to improve the chances of
-/// appearing within the voter set.
-#[derive(Default, Encode, Decode)]
-pub struct Bag<AccountId> {
-	head: Option<AccountId>,
-	tail: Option<AccountId>,
-}
-
-pub type BagOf<T> = Bag<AccountIdOf<T>>;
-
-/// A Node is the fundamental element comprising the singly-linked lists which for each bag.
-#[derive(Encode, Decode)]
+/// Similar to [`crate::StakerStatus`], but somewhat more limited.
+#[derive(Clone, Copy, Encode, Decode, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Node<AccountId> {
-	voter: Voter<AccountId>,
-	next: Option<AccountId>,
+pub enum VoterType {
+	Validator,
+	Nominator,
 }
-
-pub type NodeOf<T> = Node<AccountIdOf<T>>;

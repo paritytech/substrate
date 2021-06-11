@@ -1003,6 +1003,9 @@ decl_storage! {
 		// designed to allow efficient iteration of the top N voters by stake, mostly. See
 		// `mod voter_bags` for details.
 
+		/// How many voters are registered.
+		VoterCount: u32;
+
 		/// Which bag currently contains a particular voter.
 		///
 		/// This may not be the appropriate bag for the voter's weight if they have been rewarded or
@@ -1010,13 +1013,13 @@ decl_storage! {
 		VoterBagFor: map hasher(twox_64_concat) T::AccountId => voter_bags::BagIdx;
 
 		/// The head and tail of each bag of voters.
-		VoterBags: map hasher(twox_64_concat) voter_bags::BagIdx => voter_bags::Bag<T::AccountId>;
+		VoterBags: map hasher(twox_64_concat) voter_bags::BagIdx => Option<voter_bags::Bag<T>>;
 
 		/// The nodes comprising each bag.
 		VoterNodes: double_map
 			hasher(twox_64_concat) voter_bags::BagIdx,
 			hasher(twox_64_concat) T::AccountId =>
-			Option<voter_bags::Node<T::AccountId>>;
+			Option<voter_bags::Node<T>>;
 	}
 	add_extra_genesis {
 		config(stakers):
