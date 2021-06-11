@@ -895,6 +895,9 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::type_value]
+	pub(crate) fn HistoryDepthOnEmpty() -> u32 { 84u32 }
+
 	/// Number of eras to keep in history.
 	///
 	/// Information is kept for eras in `[current_era - history_depth; current_era]`.
@@ -904,7 +907,7 @@ pub mod pallet {
 	/// guaranteed.
 	#[pallet::storage]
 	#[pallet::getter(fn history_depth)]
-	pub(crate) type HistoryDepth<T> = StorageValue<_, u32, ValueQuery>;
+	pub(crate) type HistoryDepth<T> = StorageValue<_, u32, ValueQuery, HistoryDepthOnEmpty>;
 
 	/// The ideal number of staking participants.
 	#[pallet::storage]
@@ -1159,7 +1162,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig {
-				history_depth: 84,
+				history_depth: 84u32,
 				validator_count: Default::default(),
 				minimum_validator_count: Default::default(),
 				invulnerables: Default::default(),
