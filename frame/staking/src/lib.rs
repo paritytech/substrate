@@ -1424,7 +1424,7 @@ pub mod pallet {
 		/// - Write: [Origin Account], Locks, Ledger
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::bond_extra())]
-		pub(crate) fn bond_extra(
+		pub fn bond_extra(
 			origin: OriginFor<T>,
 			#[pallet::compact] max_additional: BalanceOf<T>,
 		) -> DispatchResult {
@@ -1480,7 +1480,7 @@ pub mod pallet {
 		/// - Write: Locks, Ledger, BalanceOf Stash,
 		/// </weight>
 		#[pallet::weight(T::WeightInfo::unbond())]
-		pub(crate) fn unbond(origin: OriginFor<T>, #[pallet::compact] value: BalanceOf<T>) -> DispatchResult {
+		pub fn unbond(origin: OriginFor<T>, #[pallet::compact] value: BalanceOf<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(
@@ -1540,7 +1540,7 @@ pub mod pallet {
 		/// NOTE: Weight annotation is the kill scenario, we refund otherwise.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans))]
-		pub(crate) fn withdraw_unbonded(
+		pub fn withdraw_unbonded(
 			origin: OriginFor<T>,
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
@@ -1677,7 +1677,7 @@ pub mod pallet {
 		/// - Write: Validators, Nominators
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::chill())]
-		pub(crate) fn chill(origin: OriginFor<T>) -> DispatchResult {
+		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
@@ -1701,7 +1701,7 @@ pub mod pallet {
 		///     - Write: Payee
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_payee())]
-		pub(crate) fn set_payee(
+		pub fn set_payee(
 			origin: OriginFor<T>,
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
@@ -1729,7 +1729,7 @@ pub mod pallet {
 		/// - Write: Bonded, Ledger New Controller, Ledger Old Controller
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_controller())]
-		pub(crate) fn set_controller(
+		pub fn set_controller(
 			origin: OriginFor<T>,
 			controller: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
@@ -1757,7 +1757,7 @@ pub mod pallet {
 		/// Write: Validator Count
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
-		pub(crate) fn set_validator_count(
+		pub fn set_validator_count(
 			origin: OriginFor<T>,
 			#[pallet::compact] new: u32,
 		) -> DispatchResult {
@@ -1774,7 +1774,7 @@ pub mod pallet {
 		/// Same as [`set_validator_count`].
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
-		pub(crate) fn increase_validator_count(
+		pub fn increase_validator_count(
 			origin: OriginFor<T>,
 			#[pallet::compact] additional: u32,
 		) -> DispatchResult {
@@ -1791,7 +1791,7 @@ pub mod pallet {
 		/// Same as [`set_validator_count`].
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
-		pub(crate) fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
+		pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
 			ensure_root(origin)?;
 			ValidatorCount::<T>::mutate(|n| *n += factor * *n);
 			Ok(())
@@ -1807,7 +1807,7 @@ pub mod pallet {
 		/// - Write: ForceEra
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::force_no_eras())]
-		pub(crate) fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
+		pub fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			ForceEra::<T>::put(Forcing::ForceNone);
 			Ok(())
@@ -1824,7 +1824,7 @@ pub mod pallet {
 		/// - Write ForceEra
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::force_new_era())]
-		pub(crate) fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
+		pub fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			ForceEra::<T>::put(Forcing::ForceNew);
 			Ok(())
@@ -1839,7 +1839,7 @@ pub mod pallet {
 		/// - Write: Invulnerables
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_invulnerables(invulnerables.len() as u32))]
-		pub(crate) fn set_invulnerables(
+		pub fn set_invulnerables(
 			origin: OriginFor<T>,
 			invulnerables: Vec<T::AccountId>,
 		) -> DispatchResult {
@@ -1859,7 +1859,7 @@ pub mod pallet {
 		/// Writes Each: SpanSlash * S
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
-		pub(crate) fn force_unstake(
+		pub fn force_unstake(
 			origin: OriginFor<T>,
 			stash: T::AccountId,
 			num_slashing_spans: u32,
@@ -1883,7 +1883,7 @@ pub mod pallet {
 		/// - Write: ForceEra
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::force_new_era_always())]
-		pub(crate) fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
+		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			ForceEra::<T>::put(Forcing::ForceAlways);
 			Ok(())
@@ -1903,7 +1903,7 @@ pub mod pallet {
 		/// - Write: Unapplied Slashes
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::cancel_deferred_slash(slash_indices.len() as u32))]
-		pub(crate) fn cancel_deferred_slash(
+		pub fn cancel_deferred_slash(
 			origin: OriginFor<T>,
 			era: EraIndex,
 			slash_indices: Vec<u32>,
@@ -1979,7 +1979,7 @@ pub mod pallet {
 		///     - Writes: [Origin Account], Locks, Ledger
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::rebond(MAX_UNLOCKING_CHUNKS as u32))]
-		pub(crate) fn rebond(
+		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
@@ -2022,7 +2022,7 @@ pub mod pallet {
 		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake, ErasStartSessionIndex
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_history_depth(*_era_items_deleted))]
-		pub(crate) fn set_history_depth(origin: OriginFor<T>,
+		pub fn set_history_depth(origin: OriginFor<T>,
 			#[pallet::compact] new_history_depth: EraIndex,
 			#[pallet::compact] _era_items_deleted: u32,
 		) -> DispatchResult {
@@ -2056,7 +2056,7 @@ pub mod pallet {
 		/// - Writes Each: SpanSlash * S
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::reap_stash(*num_slashing_spans))]
-		pub(crate) fn reap_stash(
+		pub fn reap_stash(
 			_origin: OriginFor<T>,
 			stash: T::AccountId,
 			num_slashing_spans: u32,
