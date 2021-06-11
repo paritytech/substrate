@@ -20,6 +20,8 @@
 mod vote;
 
 #[cfg(all(feature = "std", test))]
+mod mock;
+#[cfg(all(feature = "std", test))]
 mod tests;
 
 use codec::{self as codec, Decode, Encode};
@@ -204,7 +206,7 @@ impl<T: Config> Pallet<T> {
 
 		// If these were found during the prevote stage, we are done
 		if state.prevote_step {
-			AccountableSafetySession::<T>::kill;
+			AccountableSafetySession::<T>::kill();
 			return;
 		}
 
@@ -400,35 +402,21 @@ pub struct StoredEquivocations<H, N> {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use crate::mock::*;
 	use sp_core::H256;
 	use sp_keyring::Ed25519Keyring;
 
-	type SignedPrecommit<H, N> = grandpa::SignedPrecommit<H, N, AuthoritySignature, AuthorityId>;
-
-	fn new_precommit<H, N>(
-		keyring: Ed25519Keyring,
-		target_hash: H,
-		target_number: N,
-		round: RoundNumber,
-		set_id: SetId,
-	) -> SignedPrecommit<H, N>
-	where
-		H: Clone + Encode,
-		N: Clone + Encode,
-	{
-		let precommit = grandpa::Precommit {
-			target_hash,
-			target_number,
-		};
-		let msg = grandpa::Message::Precommit(precommit.clone());
-		let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
-
-		let signature = keyring.sign(&encoded[..]).into();
-		SignedPrecommit {
-			precommit,
-			signature,
-			id: keyring.public().into(),
-		}
+	#[test]
+	fn verify_commit_signatures() {
+		let authorities = vec![
+			Ed25519Keyring::Alice,
+			Ed25519Keyring::Bob,
+			Ed25519Keyring::Charlie,
+		];
+		let round = 42;
+		let set_id = 4;
+		let commit = create_commit(authorities, H256::random(), 5, round, set_id);
+		assert!(check_commit_signatures(&(commit, round, set_id)));
 	}
 
 	#[test]

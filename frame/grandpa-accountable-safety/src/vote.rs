@@ -23,9 +23,7 @@ pub trait SignedVote<V, Id> {
 	fn id(&self) -> &Id;
 }
 
-impl<H, N> SignedVote<grandpa::Prevote<H, N>, AuthorityId>
-	for crate::SignedPrevote<H, N>
-{
+impl<H, N> SignedVote<grandpa::Prevote<H, N>, AuthorityId> for crate::SignedPrevote<H, N> {
 	fn vote(&self) -> &grandpa::Prevote<H, N> {
 		&self.prevote
 	}
@@ -35,9 +33,7 @@ impl<H, N> SignedVote<grandpa::Prevote<H, N>, AuthorityId>
 	}
 }
 
-impl<H, N> SignedVote<grandpa::Precommit<H, N>, AuthorityId>
-	for crate::SignedPrecommit<H, N>
-{
+impl<H, N> SignedVote<grandpa::Precommit<H, N>, AuthorityId> for crate::SignedPrecommit<H, N> {
 	fn vote(&self) -> &grandpa::Precommit<H, N> {
 		&self.precommit
 	}
