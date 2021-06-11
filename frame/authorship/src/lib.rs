@@ -226,7 +226,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Provide a set of uncles.
 		#[pallet::weight((0, DispatchClass::Mandatory))]
-		fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
+		pub fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
 

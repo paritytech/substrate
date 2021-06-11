@@ -786,7 +786,7 @@ pub mod pallet {
 		///
 		/// This check can be turned off by setting the value to `None`.
 		#[pallet::weight(T::DbWeight::get().writes(1))]
-		fn set_minimum_untrusted_score(
+		pub fn set_minimum_untrusted_score(
 			origin: OriginFor<T>,
 			maybe_next_score: Option<ElectionScore>,
 		) -> DispatchResult {
