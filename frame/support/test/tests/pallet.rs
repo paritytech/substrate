@@ -152,7 +152,7 @@ pub mod pallet {
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
 		#[frame_support::transactional]
-		fn foo_transactional(
+		pub fn foo_transactional(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
@@ -166,7 +166,7 @@ pub mod pallet {
 
 		// Test for DispatchResult return type
 		#[pallet::weight(1)]
-		fn foo_no_post_info(
+		pub fn foo_no_post_info(
 			_origin: OriginFor<T>,
 		) -> DispatchResult {
 			Ok(())
