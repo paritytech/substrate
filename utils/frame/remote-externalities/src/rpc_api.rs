@@ -18,7 +18,7 @@
 //! WS RPC API for one off RPC calls to a substrate node.
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
-use sp_runtime::{generic::SignedBlock, traits::Block as BlockT};
+use sp_runtime::{generic::SignedBlock, traits::{Block as BlockT, Header as HeaderT}};
 use jsonrpsee_ws_client::{WsClientBuilder, WsClient, v2::params::JsonRpcParams, traits::Client};
 
 /// Get the header of the block identified by `at`
@@ -52,12 +52,14 @@ where
 /// Get the signed block identified by `at`.
 pub async fn get_block<Block, S>(from: S, at: Block::Hash) -> Result<Block, String>
 where
-	Block: BlockT + serde::de::DeserializeOwned,
 	S: AsRef<str>,
+	Block: BlockT + serde::de::DeserializeOwned,
+	Block::Header: HeaderT,
 {
 	let params = vec![hash_to_json::<Block>(at)?];
 	let client = build_client(from).await?;
-	let signed_block = client.request::<SignedBlock<Block>>("chain_getBlock", JsonRpcParams::Array(params))
+	let signed_block = client
+		.request::<SignedBlock<Block>>("chain_getBlock", JsonRpcParams::Array(params))
 		.await
 		.map_err(|e| format!("chain_getBlock request failed due to {:?}", e))?;
 
