@@ -26,15 +26,21 @@ use frame_support::{DefaultNoBound, StorageMap, StorageValue};
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	#[error("attempted to insert into the wrong position in the list")]
+	WrongInsertPosition,
+	#[error("list internal consistency error: {0}")]
+	Consistency(&'static str),
+}
+
 /// Type of voter.
 ///
 /// Similar to [`crate::StakerStatus`], but somewhat more limited.
 #[derive(Clone, Copy, Encode, Decode, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum VoterType {
-	/// Validator (self-vote)
 	Validator,
-	/// Nominator
 	Nominator,
 }
 
@@ -42,15 +48,25 @@ pub enum VoterType {
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Voter<AccountId> {
-	id: AccountId,
-	voter_type: VoterType,
-	cache_weight: VoteWeight,
+	/// Account Id of this voter
+	pub id: AccountId,
+	/// Whether the voter is a validator or nominator
+	pub voter_type: VoterType,
+	/// The current slashable balance this voter brings.
+	///
+	/// This value is cached because the actual vote weight is likely to change frequently due to
+	/// various rewards and slashes, without substantially affecting the overall position in the
+	/// list. It's cheaper and easier to operate on a cache than to look up the actual value for
+	/// each voter each time.
+	pub cache_weight: VoteWeight,
 }
+
+pub type VoterOf<T> = Voter<AccountIdOf<T>>;
 
 impl<T: Config> Pallet<T> {
 	/// `Self` accessor for `NominatorList<T>`
 	pub fn voter_list() -> VoterList<T> {
-		crate::NominatorList::<T>::get()
+		VoterList::<T>::get()
 	}
 }
 
@@ -68,6 +84,16 @@ impl<T: Config> VoterList<T> {
 		crate::NominatorCount::try_get().ok().map(|n| n.saturated_into())
 	}
 
+	/// Get this list from storage.
+	pub fn get() -> Self {
+		crate::NominatorList::<T>::get()
+	}
+
+	/// Update this list in storage.
+	pub fn put(self) {
+		crate::NominatorList::<T>::put(self);
+	}
+
 	/// Get the first member of the list.
 	pub fn head(&self) -> Option<Node<T>> {
 		self.head.as_ref().and_then(|head| crate::NominatorNodes::try_get(head).ok())
@@ -82,6 +108,68 @@ impl<T: Config> VoterList<T> {
 	pub fn iter(&self) -> Iter<T> {
 		Iter { _lifetime: PhantomData, upcoming: self.head() }
 	}
+
+	/// Insert a new voter into the list.
+	///
+	/// It is always necessary to specify the position in the list into which the voter's node
+	/// should be inserted. This ensures that, while _someone_ has to iterate the list to discover
+	/// the proper insertion position, that iteration happens off the blockchain.
+	///
+	/// If `after.is_none()`, then the voter should be inserted at the list head.
+	///
+	/// This function does _not_ check that `voter.cache_weight` is accurate. That value should be
+	/// computed in a higher-level function calling this one.
+	///
+	/// This is an immediate operation which modifies storage directly.
+	pub fn insert(mut self, voter: VoterOf<T>, after: Option<AccountIdOf<T>>) -> Result<(), Error> {
+		let predecessor = after.as_ref().and_then(Node::<T>::from_id);
+		let successor = after.map_or_else(|| self.head(), |id| Node::<T>::from_id(&id));
+
+		// an insert position is legal if it is not less than its predecessor and not greater than
+		// its successor.
+		if let Some(predecessor) = predecessor.as_ref() {
+			if predecessor.voter.cache_weight < voter.cache_weight {
+				return Err(Error::WrongInsertPosition);
+			}
+		}
+		if let Some(successor) = successor.as_ref() {
+			if successor.voter.cache_weight > voter.cache_weight {
+				return Err(Error::WrongInsertPosition);
+			}
+		}
+
+		let id = voter.id.clone();
+
+		// insert the actual voter
+		let voter_node = Node::<T> {
+			voter,
+			prev: predecessor.as_ref().map(|prev| prev.voter.id.clone()),
+			next: successor.as_ref().map(|next| next.voter.id.clone()),
+		};
+		voter_node.put();
+
+		// update the list links
+		if predecessor.is_none() {
+			self.head = Some(id.clone());
+		}
+		if successor.is_none() {
+			self.tail = Some(id.clone());
+		}
+		self.put();
+
+		// update the node links
+		if let Some(mut predecessor) = predecessor {
+			predecessor.next = Some(id.clone());
+			predecessor.put();
+
+		}
+		if let Some(mut successor) = successor {
+			successor.prev = Some(id.clone());
+			successor.put();
+		}
+
+		Ok(())
+	}
 }
 
 #[derive(Encode, Decode)]
@@ -93,14 +181,24 @@ pub struct Node<T: Config> {
 }
 
 impl<T: Config> Node<T> {
+	/// Get a node by account id.
+	pub fn from_id(id: &AccountIdOf<T>) -> Option<Node<T>> {
+		crate::NominatorNodes::<T>::try_get(id).ok()
+	}
+
+	/// Update the node in storage.
+	pub fn put(self) {
+		crate::NominatorNodes::<T>::insert(self.voter.id.clone(), self);
+	}
+
 	/// Get the previous node.
 	pub fn prev(&self) -> Option<Node<T>> {
-		self.prev.as_ref().and_then(|prev| crate::NominatorNodes::try_get(prev).ok())
+		self.prev.as_ref().and_then(Self::from_id)
 	}
 
 	/// Get the next node.
 	pub fn next(&self) -> Option<Node<T>> {
-		self.next.as_ref().and_then(|next| crate::NominatorNodes::try_get(next).ok())
+		self.next.as_ref().and_then(Self::from_id)
 	}
 
 	/// Get this voter's voting data.
