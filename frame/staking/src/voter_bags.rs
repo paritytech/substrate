@@ -60,6 +60,14 @@ impl<T: Config> VoterList<T> {
 	pub fn decode_len() -> Option<usize> {
 		crate::VoterCount::try_get().ok().map(|n| n.saturated_into())
 	}
+
+	/// Iterate over all nodes in all bags in the voter list.
+	///
+	/// Note that this exhaustively attempts to try all possible bag indices. Full iteration can be
+	/// expensive; it's recommended to limit the number of items with `.take(n)`.
+	pub fn iter() -> impl Iterator<Item = Node<T>> {
+		(0..=BagIdx::MAX).filter_map(|bag_idx| Bag::get(bag_idx)).flat_map(|bag| bag.iter())
+	}
 }
 
 /// A Bag contains a singly-linked list of voters.
@@ -90,6 +98,21 @@ impl<T: Config> Bag<T> {
 	/// Put the bag back into storage.
 	pub fn put(self) {
 		crate::VoterBags::<T>::insert(self.bag_idx, self);
+	}
+
+	/// Get the head node in this bag.
+	pub fn head(&self) -> Option<Node<T>> {
+		self.head.as_ref().and_then(|id| Node::get(self.bag_idx, id))
+	}
+
+	/// Get the tail node in this bag.
+	pub fn tail(&self) -> Option<Node<T>> {
+		self.tail.as_ref().and_then(|id| Node::get(self.bag_idx, id))
+	}
+
+	/// Iterate over the nodes in this bag.
+	pub fn iter(&self) -> impl Iterator<Item = Node<T>> {
+		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
 }
 
@@ -130,6 +153,11 @@ impl<T: Config> Node<T> {
 	/// Put the node back into storage.
 	pub fn put(self) {
 		crate::VoterNodes::<T>::insert(self.bag_idx, self.voter.id.clone(), self);
+	}
+
+	/// Get the next node in the bag.
+	pub fn next(&self) -> Option<Node<T>> {
+		self.next.as_ref().and_then(|id| self.in_bag(id))
 	}
 }
 
