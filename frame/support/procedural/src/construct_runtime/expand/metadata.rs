@@ -44,7 +44,7 @@ pub fn expand_runtime_metadata(
 			let index = &decl.index;
 			let storage = expand_pallet_metadata_storage(&filtered_names, runtime, decl);
 			let calls = expand_pallet_metadata_calls(&filtered_names, runtime, decl);
-			let event = expand_pallet_metadata_events(&filtered_names, runtime, decl);
+			let event = expand_pallet_metadata_events(&filtered_names, runtime, scrate, decl);
 			let constants = expand_pallet_metadata_constants(runtime, decl);
 			let errors = expand_pallet_metadata_errors(runtime, decl);
 
@@ -125,6 +125,7 @@ fn expand_pallet_metadata_calls(
 fn expand_pallet_metadata_events(
 	filtered_names: &[&'static str],
 	runtime: &Ident,
+	scrate: &TokenStream,
 	decl: &Pallet,
 ) -> TokenStream {
 	if filtered_names.contains(&"Event") {
@@ -139,7 +140,11 @@ fn expand_pallet_metadata_events(
 		};
 
 		quote!{
-			Some(#pallet_event::metadata())
+			Some(
+				#scrate::metadata::PalletEventMetadata {
+					ty: #scrate::scale_info::meta_type::<#pallet_event>()
+				}
+			)
 		}
 	} else {
 		quote!(None)
