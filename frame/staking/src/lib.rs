@@ -1820,6 +1820,7 @@ decl_module! {
 			// last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
+			Self::deposit_event(RawEvent::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
 			Ok(Some(
 				35 * WEIGHT_PER_MICROS
@@ -2518,8 +2519,10 @@ impl<T: Config> Module<T> {
 					.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 			});
 
-			let vote_weight = weight_of(&nominator);
-			all_voters.push((nominator, vote_weight, targets))
+			if !targets.is_empty() {
+				let vote_weight = weight_of(&nominator);
+				all_voters.push((nominator, vote_weight, targets))
+			}
 		}
 
 		all_voters
