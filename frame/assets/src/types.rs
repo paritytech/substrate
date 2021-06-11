@@ -184,7 +184,8 @@ impl From<TransferFlags> for DebitFlags {
 
 /// Converts a balance value into an asset balance.
 pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
-	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, ConversionError>;
+	type Error;
+	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
 }
 
 /// Possible errors when converting between external and asset balances.
@@ -215,6 +216,8 @@ where
 	BalanceOf<F, T>: FixedPointOperand + Zero,
 	AssetBalanceOf<T, I>: FixedPointOperand + Zero,
 {
+	type Error = ConversionError;
+
 	/// Convert the given balance value into an asset balance based on the ratio between the fungible's
 	/// minimum balance and the minimum asset balance.
 	///
