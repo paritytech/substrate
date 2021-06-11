@@ -135,7 +135,7 @@ mod nested {
 			}
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+		#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, scale_info::TypeInfo)]
 		pub struct Origin;
 
 		frame_support::decl_event! {
@@ -175,7 +175,7 @@ pub mod module3 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, scale_info::TypeInfo)]
 	pub struct Origin<T>(pub core::marker::PhantomData<T>);
 
 	frame_support::decl_event! {

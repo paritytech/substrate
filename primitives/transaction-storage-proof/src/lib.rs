@@ -49,7 +49,7 @@ impl IsFatalError for InherentError {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+#[derive(Encode, Decode, Clone, PartialEq, Debug, scale_info::TypeInfo)]
 pub struct TransactionStorageProof {
 	/// Data chunk that is proved to exist.
 	pub chunk: Vec<u8>,
