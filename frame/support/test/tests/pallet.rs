@@ -133,11 +133,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
-	where T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1
+		where T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1
 	{
 		/// Doc comment put in metadata
 		#[pallet::weight(Weight::from(*_foo))]
-		fn foo(
+		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
 			_bar: u32,
