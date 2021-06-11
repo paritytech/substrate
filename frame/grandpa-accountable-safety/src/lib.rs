@@ -407,7 +407,48 @@ mod test {
 	use sp_keyring::Ed25519Keyring;
 
 	#[test]
-	fn verify_commit_signatures() {
+	fn check_precommit_signatures_when_invalid() {
+		let auth = vec![Ed25519Keyring::Alice, Ed25519Keyring::Bob];
+		let hash = H256::random();
+		let number = 5;
+		let round = 42;
+		let set_id = 4;
+
+		let mut alice_precommit = new_precommit(auth[0], hash, number, round, set_id);
+		let bob_precommit = new_precommit(auth[1], hash, number + 1, round, set_id);
+
+		// The signature is valid
+		assert!(check_precommit_signatures(
+			&vec![alice_precommit.clone()],
+			round,
+			set_id
+		));
+
+		// Invalid for a different round
+		assert!(!check_precommit_signatures(
+			&vec![alice_precommit.clone()],
+			round + 1,
+			set_id
+		));
+
+		// Invalid for a different set_id
+		assert!(!check_precommit_signatures(
+			&vec![alice_precommit.clone()],
+			round,
+			set_id + 1
+		));
+
+		// Changing the underlying `Precommit` invalidates the signature
+		alice_precommit.precommit = bob_precommit.precommit.clone();
+		assert!(!check_precommit_signatures(
+			&vec![alice_precommit.clone()],
+			round,
+			set_id
+		));
+	}
+
+	#[test]
+	fn check_commit_signatures_are_valid() {
 		let authorities = vec![
 			Ed25519Keyring::Alice,
 			Ed25519Keyring::Bob,
@@ -420,7 +461,7 @@ mod test {
 	}
 
 	#[test]
-	fn voting_for_different_target_number_is_equivocation() {
+	fn find_equivocations_for_different_target_number() {
 		let round = 42;
 		let set_id = 8;
 		let hash = H256::random();
@@ -441,7 +482,7 @@ mod test {
 	}
 
 	#[test]
-	fn voting_for_different_hash_is_equivocation() {
+	fn find_equivocations_for_different_hash() {
 		let round = 42;
 		let set_id = 8;
 		let hash = H256::random();
