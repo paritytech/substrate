@@ -94,9 +94,54 @@ impl<T: Config> VoterList<T> {
 			bag.put();
 		}
 	}
+
+	/// Remove a voter (by id) from the voter list.
+	pub fn remove(voter: &AccountIdOf<T>) {
+		Self::remove_many(sp_std::iter::once(voter))
+	}
+
+	/// Remove many voters (by id) from the voter list.
+	///
+	/// This is more efficient than repeated calls to `Self::remove`.
+	pub fn remove_many<'a>(voters: impl IntoIterator<Item = &'a AccountIdOf<T>>) {
+		let mut bags = BTreeMap::new();
+
+		for voter_id in voters.into_iter() {
+			let node = match Node::<T>::from_id(voter_id) {
+				Some(node) => node,
+				None => continue,
+			};
+
+			// modify the surrounding nodes
+			if let Some(mut prev) = node.prev() {
+				prev.next = node.next.clone();
+				prev.put();
+			}
+			if let Some(mut next) = node.next() {
+				next.prev = node.prev.clone();
+				next.put();
+			}
+
+			// clear the bag head/tail pointers as necessary
+			let mut bag = bags.entry(node.bag_idx).or_insert_with(|| Bag::<T>::get_or_make(node.bag_idx));
+			if bag.head.as_ref() == Some(voter_id) {
+				bag.head = node.next;
+			}
+			if bag.tail.as_ref() == Some(voter_id) {
+				bag.tail = node.prev;
+			}
+
+			// now get rid of the node itself
+			crate::VoterNodes::<T>::remove(node.bag_idx, voter_id);
+		}
+
+		for (_, bag) in bags {
+			bag.put();
+		}
+	}
 }
 
-/// A Bag contains a singly-linked list of voters.
+/// A Bag is a doubly-linked list of voters.
 ///
 /// Note that we maintain both head and tail pointers. While it would be possible to get away
 /// with maintaining only a head pointer and cons-ing elements onto the front of the list, it's
@@ -155,13 +200,19 @@ impl<T: Config> Bag<T> {
 	/// `self.put()` after use.
 	fn insert(&mut self, voter: VoterOf<T>) {
 		let id = voter.id.clone();
+		let tail = self.tail();
 
 		// insert the actual voter
-		let voter_node = Node::<T> { voter, next: None, bag_idx: self.bag_idx };
+		let voter_node = Node::<T> {
+			voter,
+			prev: tail.as_ref().map(|prev| prev.voter.id.clone()),
+			next: None,
+			bag_idx: self.bag_idx,
+		};
 		voter_node.put();
 
 		// update the previous tail
-		if let Some(mut tail) = self.tail() {
+		if let Some(mut tail) = tail {
 			tail.next = Some(id.clone());
 			tail.put();
 		}
@@ -179,6 +230,7 @@ impl<T: Config> Bag<T> {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Node<T: Config> {
 	voter: Voter<AccountIdOf<T>>,
+	prev: Option<AccountIdOf<T>>,
 	next: Option<AccountIdOf<T>>,
 
 	#[codec(skip)]
@@ -211,6 +263,11 @@ impl<T: Config> Node<T> {
 	/// Put the node back into storage.
 	pub fn put(self) {
 		crate::VoterNodes::<T>::insert(self.bag_idx, self.voter.id.clone(), self);
+	}
+
+	/// Get the previous node in the bag.
+	pub fn prev(&self) -> Option<Node<T>> {
+		self.prev.as_ref().and_then(|id| self.in_bag(id))
 	}
 
 	/// Get the next node in the bag.
