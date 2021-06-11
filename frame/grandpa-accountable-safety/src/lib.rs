@@ -107,7 +107,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// New block that conflicts with the old block should be from a later round.
-		if new_block.1 <= block_not_included.2 && block_not_included.2 > 0 {
+		if new_block.1 <= block_not_included.1 && block_not_included.1 > 0 {
 			return None;
 		}
 
@@ -274,13 +274,16 @@ impl<T: Config> Pallet<T> {
 			None => return None,
 		};
 
+		// The response will be for the round before the current
+		let round_for_responses = state.current_round - 1;
+
 		// Verify signatures of the precommits or prevotes in the response
 		if !match query_response {
 			QueryResponse::Precommits(ref signed_precommits) => {
-				check_precommit_signatures(signed_precommits, state.current_round, state.set_id)
+				check_precommit_signatures(signed_precommits, round_for_responses, state.set_id)
 			}
 			QueryResponse::Prevotes(ref signed_prevotes) => {
-				check_prevote_signatures(signed_prevotes, state.current_round, state.set_id)
+				check_prevote_signatures(signed_prevotes, round_for_responses, state.set_id)
 			}
 		} {
 			return None;

@@ -33,18 +33,42 @@ fn accountable_safety_start_twice() {
 		let hash = H256::random();
 		let number = 5;
 
-		let precommit_alice = new_precommit(Alice, hash, number, round, set_id);
-		let precommit_bob = new_precommit(Bob, H256::random(), number + 1, round, set_id);
-
-		let precommits = vec![precommit_alice, precommit_bob];
-		let commit = sp_finality_grandpa::Commit {
-			target_hash: hash,
-			target_number: number,
-			precommits,
+		let block_not_included = {
+			let commit = sp_finality_grandpa::Commit {
+				target_hash: hash,
+				target_number: number,
+				precommits: vec![
+					new_precommit(Alice, hash, number, round, set_id),
+					new_precommit(Bob, hash, number, round, set_id),
+				],
+			};
+			(commit, round, set_id)
 		};
-		// Same block for both, since we are not actually running the protocol in this test
-		let block_not_included = (commit.clone(), round.clone(), set_id);
-		let new_block = (commit.clone(), round, set_id);
+
+		let round = round + 1;
+		let hash = H256::random();
+		let number = 6;
+
+		let new_block = {
+			let commit = sp_finality_grandpa::Commit {
+				target_hash: hash,
+				target_number: number,
+				precommits: vec![
+					new_precommit(Alice, hash, number, round, set_id),
+					new_precommit(Bob, hash, number, round, set_id),
+				],
+			};
+			(commit, round, set_id)
+		};
+
+		// Fail, since the newer block isn't from a later round
+		assert_eq!(
+			GrandpaAccountableSafety::start_accountable_safety(
+				block_not_included.clone(),
+				block_not_included.clone()
+			),
+			None,
+		);
 
 		// Success!
 		assert_eq!(
@@ -72,11 +96,51 @@ fn accountable_safety_start_with_invalid_signature() {
 		let hash = H256::random();
 		let number = 5;
 
-		let precommit_alice = new_precommit(Alice, hash, number, round, set_id);
-		let mut precommit_bob = new_precommit(Bob, H256::random(), number + 1, round, set_id);
+		let block_not_included = {
+			let precommit_alice = new_precommit(Alice, hash, number, round, set_id);
+			let mut precommit_bob = new_precommit(Bob, H256::random(), number + 1, round, set_id);
 
-		// Overwrite the Precommit, invalidating the signature
-		precommit_bob.precommit = new_precommit(Bob, hash, number + 3, round, set_id).precommit;
+			// Overwrite the Precommit, invalidating the signature
+			precommit_bob.precommit = new_precommit(Bob, hash, number + 3, round, set_id).precommit;
+
+			let commit = sp_finality_grandpa::Commit {
+				target_hash: hash,
+				target_number: number,
+				precommits: vec![precommit_alice, precommit_bob],
+			};
+			(commit, round, set_id)
+		};
+
+		let new_block = {
+			let precommit_alice = new_precommit(Alice, hash, number, round + 1, set_id);
+			let precommit_bob = new_precommit(Bob, H256::random(), number + 1, round + 1, set_id);
+
+			let commit = sp_finality_grandpa::Commit {
+				target_hash: hash,
+				target_number: number,
+				precommits: vec![precommit_alice, precommit_bob],
+			};
+			(commit, round, set_id)
+		};
+
+		assert_eq!(
+			GrandpaAccountableSafety::start_accountable_safety(block_not_included, new_block),
+			None,
+		);
+	});
+}
+
+#[test]
+fn accountable_safety_start_with_commits_inverted() {
+	new_test_ext().execute_with(|| {
+		use Ed25519Keyring::{Alice, Bob};
+		let round = 42;
+		let set_id = 4;
+		let hash = H256::random();
+		let number = 5;
+
+		let precommit_alice = new_precommit(Alice, hash, number, round, set_id);
+		let precommit_bob = new_precommit(Bob, H256::random(), number + 1, round, set_id);
 
 		let precommits = vec![precommit_alice, precommit_bob];
 		let commit = sp_finality_grandpa::Commit {
@@ -103,15 +167,14 @@ fn accountable_safety_setup_and_submit_reply() {
 		let auth = vec![Alice, Bob];
 		let pub_ids: Vec<AuthorityId> =
 			auth.iter().map(|keyring| keyring.public().into()).collect();
-		let alice = &auth[0].public().into();
 		let round = 42;
 		let set_id = 4;
 
 		let commit0 = new_commit(auth.clone(), H256::random(), 5, round, set_id);
 		let block_not_included = (commit0.clone(), round.clone(), set_id);
 
-		let commit1 = new_commit(auth.clone(), H256::random(), 6, round, set_id);
-		let new_block = (commit1, round, set_id);
+		let commit1 = new_commit(auth.clone(), H256::random(), 6, round + 1, set_id);
+		let new_block = (commit1, round + 1, set_id);
 
 		assert!(check_commit_signatures(&block_not_included));
 		assert!(check_commit_signatures(&new_block));
@@ -141,9 +204,12 @@ fn accountable_safety_setup_and_submit_reply() {
 		);
 
 		// Add response and check that it is registered
-		GrandpaAccountableSafety::add_response(
-			alice,
-			QueryResponse::Precommits(commit0.precommits.clone()),
+		assert_eq!(
+			GrandpaAccountableSafety::add_response(
+				&pub_ids[0],
+				QueryResponse::Precommits(commit0.precommits.clone()),
+			),
+			Some(())
 		);
 		assert_eq!(
 			GrandpaAccountableSafety::query_state_for_voter(&pub_ids[0]),
@@ -178,16 +244,19 @@ fn accountable_safety_proceed_to_previous_round() {
 		let commit0 = new_commit(auth.clone(), H256::random(), 5, round, set_id);
 		let block_not_included = (commit0.clone(), round.clone(), set_id);
 
-		let commit1 = new_commit(auth.clone(), H256::random(), 6, round, set_id);
-		let new_block = (commit1, round, set_id);
+		let commit1 = new_commit(auth.clone(), H256::random(), 6, round + 1, set_id);
+		let new_block = (commit1, round + 1, set_id);
 
 		GrandpaAccountableSafety::start_accountable_safety(block_not_included, new_block);
 
 		// All authorities submit their replies
 		for pub_id in &pub_ids {
-			GrandpaAccountableSafety::add_response(
-				pub_id,
-				QueryResponse::Precommits(commit0.precommits.clone()),
+			assert_eq!(
+				GrandpaAccountableSafety::add_response(
+					pub_id,
+					QueryResponse::Precommits(commit0.precommits.clone()),
+				),
+				Some(())
 			);
 		}
 
@@ -204,12 +273,12 @@ fn accountable_safety_proceed_to_previous_round() {
 		// the previous round
 		assert_eq!(
 			GrandpaAccountableSafety::session().unwrap().current_round,
-			42
+			43
 		);
 		GrandpaAccountableSafety::update();
 		assert_eq!(
 			GrandpaAccountableSafety::session().unwrap().current_round,
-			41
+			42
 		);
 
 		// Again waiting for replies from the requested authorities
