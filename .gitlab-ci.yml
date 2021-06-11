@@ -355,6 +355,7 @@ test-frame-examples-compile-to-wasm:
 
 test-linux-stable-int:
   <<:                              *test-linux
+  stage:                           test
   script:
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
@@ -567,9 +568,11 @@ build-rust-doc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout "$IMAGE_NAME"
-    # pass artifacts to the trigger-simnet job
-    - echo "IMAGE_NAME=${IMAGE_NAME}" > ./artifacts/$PRODUCT/build.env
-    - echo "IMAGE_TAG=${VERSION}" >> ./artifacts/$PRODUCT/build.env
+    # pass artifacts to the trigger-simnet job 
+    - echo "IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
+    - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
+    - echo "IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
+    - cat ./artifacts/$PRODUCT/build.env
 
 publish-docker-substrate:
   stage:                           publish
@@ -708,4 +711,4 @@ trigger-simnet:
     DWNSTRM_ID:                    332
   script:
     # API trigger for a simnet job
-    - .maintain/gitlab/trigger_pipeline.sh
+    - .maintain/gitlab/trigger_pipeline.sh --simnet-version=${SIMNET_REF}
