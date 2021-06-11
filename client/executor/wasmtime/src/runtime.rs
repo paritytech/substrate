@@ -179,6 +179,19 @@ impl WasmInstance for WasmtimeInstance {
 			}
 		}
 	}
+
+	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
+		match &self.strategy {
+			Strategy::RecreateInstance(_) => {
+				// We do not keep the wasm instance around, therefore there is no linear memory
+				// associated with it.
+				None
+			}
+			Strategy::FastInstanceReuse {
+				instance_wrapper, ..
+			} => Some(instance_wrapper.base_ptr()),
+		}
+	}
 }
 
 /// Prepare a directory structure and a config file to enable wasmtime caching.

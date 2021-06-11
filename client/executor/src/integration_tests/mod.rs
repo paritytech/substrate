@@ -15,6 +15,9 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+#[cfg(target_os = "linux")]
+mod linux;
 mod sandbox;
 
 use std::sync::Arc;
@@ -783,83 +786,4 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 	).unwrap_err();
 
 	assert!(format!("{}", error_result).contains("Spawned task"));
-}
-
-
-#[cfg(target_os = "linux")]
-mod linux {
-	use super::*;
-
-	/// Gets the rollup of for the current process from procfs.
-	///
-	/// See the description here: https://www.kernel.org/doc/Documentation/ABI/testing/procfs-smaps_rollup
-	fn obtain_rss() -> u32 {
-		let smaps_rollup = std::fs::read("/proc/self/smaps_rollup").expect("failed to read smaps");
-		let smaps_rollup = String::from_utf8(smaps_rollup).expect("expected proper utf8");
-
-		for line in smaps_rollup.lines() {
-			// We are looking for a line that looks something like below. We are interested only in the
-			// number there.
-			//
-			// Rss:               63624 kB
-			//                    ^^^^^
-			//                    |
-			//                    = our target
-			//
-			// we don't even care about the suffix since it appears to be hardcoded to kB.
-
-			let line = match line.strip_prefix("Rss:") {
-				None => continue,
-				Some(line) => line,
-			};
-
-			let line = match line.strip_suffix("kB") {
-				None => {
-					panic!("weird, we expected that the smaps output is always terminated with `kB`");
-				}
-				Some(line) => line,
-			};
-
-			let line = line.trim();
-
-			let rss = line.parse::<u32>()
-				.expect("failed to parse the RSS");
-
-			return rss
-		}
-
-		panic!("smaps doesn't contain rss!");
-	}
-
-	test_wasm_execution!(compiled_only memory_consumption);
-	fn memory_consumption(wasm_method: WasmExecutionMethod) {
-		let runtime = mk_test_runtime(wasm_method, 1024);
-
-		let instance = runtime.new_instance().unwrap();
-		let heap_base = instance.get_global_const("__heap_base")
-			.expect("`__heap_base` is valid")
-			.expect("`__heap_base` exists")
-			.as_i32()
-			.expect("`__heap_base` is an `i32`");
-
-		instance.call_export("test_dirty_plenty_memory", &(heap_base as u32, 1u32).encode()).unwrap();
-
-		let rss_pre = obtain_rss();
-		instance.call_export("test_dirty_plenty_memory", &(heap_base as u32, 1024u32).encode()).unwrap();
-		let rss_post = obtain_rss();
-
-		// In case the memory is sucessfully decommited we expect only a slight increase of resident memory
-		// usage.
-		//
-		// However, in practice the memory usage can either go up and sometimes down (hence
-		// `saturating_sub` below). This is because this test is run along with other concurrently
-		// and the other tests may allocate or deallocate memory. This in theory makes this test
-		// flaky. This problem should be excaberated with the number of CPU cores
-		//
-		// However, empirically, this works just fine on the "build host" (numcpus=128) and is able
-		// reliably to tell if the decommiting really works or not.
-		//
-		// That said, if the test fails randomly we should consider turning it off.
-		assert!(rss_post.saturating_sub(rss_pre) < 32768 /* kB */);
-	}
 }

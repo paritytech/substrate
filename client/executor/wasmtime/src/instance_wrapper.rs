@@ -416,6 +416,11 @@ impl InstanceWrapper {
 		}
 	}
 
+	/// Returns the pointer to the first byte of the linear memory for this instance.
+	pub fn base_ptr(&self) -> *const u8 {
+		self.memory.data_ptr()
+	}
+
 	/// Removes physical backing from the allocated linear memory. This leads to returning the memory
 	/// back to the system. While the memory is zeroed this is considered as a side-effect and is not
 	/// relied upon. Thus this function acts as a hint.
