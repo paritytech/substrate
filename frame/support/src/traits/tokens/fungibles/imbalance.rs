@@ -20,7 +20,7 @@
 
 use super::*;
 use sp_std::marker::PhantomData;
-use sp_runtime::traits::Zero;
+use sp_runtime::{RuntimeDebug, traits::Zero};
 use super::fungibles::{AssetId, Balance};
 use super::balanced::Balanced;
 use crate::traits::misc::{TryDrop, SameOrOther};
