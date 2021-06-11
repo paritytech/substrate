@@ -63,6 +63,8 @@ pub struct TrieMeta {
 	/// `TrieDbMut` it switch nodes to alternative hashing
 	/// method by defining the threshold to use with alternative
 	/// hashing.
+	/// Trie codec or other proof manipulation will always use
+	/// `None` in order to prevent state change on reencoding.
 	pub try_inner_hashing: Option<u32>,
 	/// Flag indicating alternative value hash is currently use
 	/// or will be use.
@@ -163,9 +165,10 @@ impl Meta for TrieMeta {
 			ValuePlan::NoValue => return,
 		};
 
-		self.apply_inner_hashing = self.try_inner_hashing.as_ref().map(|threshold|
-			range.end - range.start >= *threshold as usize
-		).unwrap_or(false);
+		if let Some(threshold) = self.try_inner_hashing.clone() {
+			self.apply_inner_hashing = range.end - range.start >= threshold as usize;
+		}
+
 		self.range = Some(range);
 		self.contain_hash = contain_hash;
 	}
@@ -189,7 +192,7 @@ impl Meta for TrieMeta {
 		self.contain_hash
 	}
 
-	// TODO remove upstream
+	// TODO rename to get state meta
 	fn do_value_hash(&self) -> bool {
 		self.apply_inner_hashing
 	}
