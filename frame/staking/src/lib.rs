@@ -276,8 +276,9 @@ pub mod testing_utils;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
 
-pub mod slashing;
 pub mod inflation;
+pub mod slashing;
+pub mod voter_bags;
 pub mod weights;
 
 use sp_std::{
@@ -352,6 +353,9 @@ type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+
+type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+type VotingDataOf<T> = (AccountIdOf<T>, VoteWeight, Vec<AccountIdOf<T>>);
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]
@@ -994,6 +998,25 @@ decl_storage! {
 		///
 		/// This is set to v6.0.0 for new networks.
 		StorageVersion build(|_: &GenesisConfig<T>| Releases::V6_0_0): Releases;
+
+		// The next storage items collectively comprise the voter bags: a composite data structure
+		// designed to allow efficient iteration of the top N voters by stake, mostly. See
+		// `mod voter_bags` for details.
+
+		/// Which bag currently contains a particular voter.
+		///
+		/// This may not be the appropriate bag for the voter's weight if they have been rewarded or
+		/// slashed.
+		VoterBagFor: map hasher(twox_64_concat) T::AccountId => voter_bags::BagIdx;
+
+		/// The head and tail of each bag of voters.
+		VoterBags: map hasher(twox_64_concat) voter_bags::BagIdx => voter_bags::Bag<T::AccountId>;
+
+		/// The nodes comprising each bag.
+		VoterNodes: double_map
+			hasher(twox_64_concat) voter_bags::BagIdx,
+			hasher(twox_64_concat) T::AccountId =>
+			Option<voter_bags::Node<T::AccountId>>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -2495,7 +2518,9 @@ impl<T: Config> Module<T> {
 	/// auto-chilled.
 	///
 	/// Note that this is VERY expensive. Use with care.
-	pub fn get_npos_voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+	pub fn get_npos_voters(
+		maybe_max_len: Option<usize>,
+	) -> Vec<VotingDataOf<T>> {
 		let weight_of = Self::slashable_balance_of_fn();
 		let mut all_voters = Vec::new();
 
@@ -2561,7 +2586,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 			validator_count as u32,
 			slashing_span_count as u32,
 		);
-		Ok((Self::get_npos_voters(), weight))
+		Ok((Self::get_npos_voters(maybe_max_len), weight))
 	}
 
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
