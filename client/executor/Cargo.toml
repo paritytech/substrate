@@ -48,7 +48,7 @@ sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sc-tracing = { version = "3.0.0", path = "../tracing" }
 tracing = "0.1.25"
-tracing-subscriber = "0.2.15"
+tracing-subscriber = "0.2.18"
 paste = "1.0"
 
 [features]

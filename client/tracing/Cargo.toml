@@ -26,8 +26,8 @@ serde = "1.0.101"
 serde_json = "1.0.41"
 thiserror = "1.0.21"
 tracing = "0.1.25"
-tracing-log = "0.1.1"
-tracing-subscriber = "0.2.15"
+tracing-log = "0.1.2"
+tracing-subscriber = "0.2.18"
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sp-rpc = { version = "3.0.0", path = "../../primitives/rpc" }
 sp-block-builder = { version = "3.0.0", path = "../../primitives/block-builder" }
