@@ -17,8 +17,11 @@
 
 #![cfg(test)]
 
+use super::Error;
 use crate::check_commit_signatures;
 use crate::mock::*;
+use frame_support::assert_err;
+use frame_support::assert_ok;
 use sp_core::H256;
 use sp_finality_grandpa::accountable_safety::{Query, QueryResponse};
 use sp_finality_grandpa::AuthorityId;
@@ -62,27 +65,24 @@ fn accountable_safety_start_twice() {
 		};
 
 		// Fail, since the newer block isn't from a later round
-		assert_eq!(
+		assert_err!(
 			GrandpaAccountableSafety::start_accountable_safety(
 				block_not_included.clone(),
 				block_not_included.clone()
 			),
-			None,
+			Error::<Test>::BlockIsNotFromLaterRound,
 		);
 
 		// Success!
-		assert_eq!(
-			GrandpaAccountableSafety::start_accountable_safety(
-				block_not_included.clone(),
-				new_block.clone()
-			),
-			Some(()),
-		);
+		assert_ok!(GrandpaAccountableSafety::start_accountable_safety(
+			block_not_included.clone(),
+			new_block.clone()
+		));
 
 		// ... but we currently don't support running more than one session in parallel
-		assert_eq!(
+		assert_err!(
 			GrandpaAccountableSafety::start_accountable_safety(block_not_included, new_block),
-			None,
+			Error::<Test>::SessionAlreadyRunning,
 		);
 	});
 }
@@ -123,9 +123,9 @@ fn accountable_safety_start_with_invalid_signature() {
 			(commit, round, set_id)
 		};
 
-		assert_eq!(
+		assert_err!(
 			GrandpaAccountableSafety::start_accountable_safety(block_not_included, new_block),
-			None,
+			Error::<Test>::InvalidSignature,
 		);
 	});
 }
@@ -153,9 +153,9 @@ fn accountable_safety_start_with_commits_inverted() {
 		let block_not_included = (commit.clone(), round.clone(), set_id);
 		let new_block = (commit.clone(), round, set_id);
 
-		assert_eq!(
+		assert_err!(
 			GrandpaAccountableSafety::start_accountable_safety(block_not_included, new_block),
-			None,
+			Error::<Test>::BlockIsNotFromLaterRound,
 		);
 	});
 }
@@ -186,9 +186,8 @@ fn accountable_safety_setup_and_submit_reply() {
 				None,
 			);
 		}
-		assert_eq!(
+		assert_ok!(
 			GrandpaAccountableSafety::start_accountable_safety(block_not_included, new_block),
-			Some(())
 		);
 		for pub_id in &pub_ids {
 			assert_eq!(
@@ -204,12 +203,11 @@ fn accountable_safety_setup_and_submit_reply() {
 		);
 
 		// Add response and check that it is registered
-		assert_eq!(
+		assert_ok!(
 			GrandpaAccountableSafety::add_response(
 				&pub_ids[0],
 				QueryResponse::Precommits(commit0.precommits.clone()),
 			),
-			Some(())
 		);
 		assert_eq!(
 			GrandpaAccountableSafety::query_state_for_voter(&pub_ids[0]),
@@ -251,12 +249,11 @@ fn accountable_safety_proceed_to_previous_round() {
 
 		// All authorities submit their replies
 		for pub_id in &pub_ids {
-			assert_eq!(
+			assert_ok!(
 				GrandpaAccountableSafety::add_response(
 					pub_id,
 					QueryResponse::Precommits(commit0.precommits.clone()),
 				),
-				Some(())
 			);
 		}
 

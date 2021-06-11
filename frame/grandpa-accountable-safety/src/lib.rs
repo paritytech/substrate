@@ -30,7 +30,7 @@ use sp_finality_grandpa::{
 	accountable_safety::{Equivocation, Query, QueryResponse},
 	AuthorityId, AuthoritySignature, Commit, RoundNumber, SetId,
 };
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{DispatchResultWithInfo, RuntimeDebug};
 use sp_std::prelude::*;
 
 use vote::SignedVote;
@@ -89,26 +89,38 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		SessionAlreadyRunning,
+		InvalidSignature,
+		BlockIsNotFromLaterRound,
+		NoSessionRunning,
+		AlreadyReplied,
+		PrevoteReplyExpected,
+		UnsolicitedReply,
+	}
 }
 
 impl<T: Config> Pallet<T> {
 	pub fn start_accountable_safety(
 		block_not_included: (Commit<T::Hash, T::BlockNumber>, RoundNumber, SetId),
 		new_block: (Commit<T::Hash, T::BlockNumber>, RoundNumber, SetId),
-	) -> Option<()> {
+		// ) -> Option<()> {
+	) -> DispatchResultWithInfo<()> {
 		// Don't start another session if we are already running one.
 		if Pallet::<T>::session().is_some() {
-			return None;
+			return Err(Error::<T>::SessionAlreadyRunning)?;
 		}
 
 		// Verify all signatures.
 		if !check_commit_signatures(&block_not_included) || !check_commit_signatures(&new_block) {
-			return None;
+			return Err(Error::<T>::InvalidSignature)?;
 		}
 
 		// New block that conflicts with the old block should be from a later round.
 		if new_block.1 <= block_not_included.1 && block_not_included.1 > 0 {
-			return None;
+			return Err(Error::<T>::BlockIsNotFromLaterRound)?;
 		}
 
 		// WIP: It is not enough to verify signatures, the commit needs to be _validated_ that it
@@ -134,7 +146,7 @@ impl<T: Config> Pallet<T> {
 			AccountableSafetyQueries::<T>::insert(voter, Query::WaitingForReply);
 		}
 
-		Some(())
+		Ok(())
 	}
 
 	fn update() {
@@ -268,10 +280,12 @@ impl<T: Config> Pallet<T> {
 	pub fn add_response(
 		responder: &AuthorityId,
 		query_response: QueryResponse<T::Hash, T::BlockNumber>,
-	) -> Option<()> {
+	) -> DispatchResultWithInfo<()> {
 		let state = match Pallet::<T>::session() {
 			Some(state) => state,
-			None => return None,
+			None => {
+				return Err(Error::<T>::NoSessionRunning)?;
+			}
 		};
 
 		// The response will be for the round before the current
@@ -286,7 +300,7 @@ impl<T: Config> Pallet<T> {
 				check_prevote_signatures(signed_prevotes, round_for_responses, state.set_id)
 			}
 		} {
-			return None;
+			return Err(Error::<T>::InvalidSignature)?;
 		}
 
 		// WIP: validate the reply
@@ -298,18 +312,22 @@ impl<T: Config> Pallet<T> {
 		// type, and that it isn't an unsolicited response.
 		// WIP: consider allowing unsolicited responses.
 		match Pallet::<T>::query_state_for_voter(responder) {
-			Some(Query::Replied(..)) => return None,
+			Some(Query::Replied(..)) => {
+				return Err(Error::<T>::AlreadyReplied)?;
+			}
 			Some(Query::WaitingForPrevoteReply) => {
 				if !matches!(query_response, QueryResponse::Prevotes(..)) {
-					return None;
+					return Err(Error::<T>::PrevoteReplyExpected)?;
 				}
 			}
-			None => return None,
+			None => {
+				return Err(Error::<T>::UnsolicitedReply)?;
+			}
 			_ => (),
 		}
 
 		AccountableSafetyQueries::<T>::insert(responder, Query::Replied(query_response));
-		Some(())
+		Ok(())
 	}
 }
 
