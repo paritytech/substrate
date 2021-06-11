@@ -346,7 +346,7 @@ pub mod pallet {
 		/// - Will use base weight of 25 which should be good for up to 30 scheduled calls
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn schedule(
+		pub fn schedule(
 			origin: OriginFor<T>,
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -376,7 +376,7 @@ pub mod pallet {
 		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn cancel(origin: OriginFor<T>, when: T::BlockNumber, index: u32) -> DispatchResult {
+		pub fn cancel(origin: OriginFor<T>, when: T::BlockNumber, index: u32) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
 			Self::do_cancel(Some(origin.caller().clone()), (when, index))?;
@@ -394,7 +394,7 @@ pub mod pallet {
 		/// - Will use base weight of 35 which should be good for more than 30 scheduled calls
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn schedule_named(
+		pub fn schedule_named(
 			origin: OriginFor<T>,
 			id: Vec<u8>,
 			when: T::BlockNumber,
@@ -426,7 +426,7 @@ pub mod pallet {
 		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
+		pub fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::Origin::from(origin);
 			Self::do_cancel_named(Some(origin.caller().clone()), id)?;
@@ -439,7 +439,7 @@ pub mod pallet {
 		/// Same as [`schedule`].
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn schedule_after(
+		pub fn schedule_after(
 			origin: OriginFor<T>,
 			after: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -464,7 +464,7 @@ pub mod pallet {
 		/// Same as [`schedule_named`].
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
-		pub(crate) fn schedule_named_after(
+		pub fn schedule_named_after(
 			origin: OriginFor<T>,
 			id: Vec<u8>,
 			after: T::BlockNumber,

@@ -214,7 +214,7 @@ pub mod pallet {
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
-		pub(super) fn report_equivocation_unsigned(
+		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,

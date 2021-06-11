@@ -291,7 +291,7 @@ pub mod pallet {
 			T::WeightInfo::set_balance_creating() // Creates a new account.
 				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
 		)]
-		pub(super) fn set_balance(
+		pub fn set_balance(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] new_free: T::Balance,
@@ -1696,7 +1696,7 @@ impl<T: Config<I>, I: 'static> NamedReservableCurrency<T::AccountId> for Pallet<
 	/// Is a no-op if value to be reserved is zero.
 	fn reserve_named(id: &Self::ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> DispatchResult {
 		if value.is_zero() { return Ok(()) }
-		
+
 		Reserves::<T, I>::try_mutate(who, |reserves| -> DispatchResult {
 			match reserves.binary_search_by_key(id, |data| data.id) {
 				Ok(index) => {
