@@ -1804,6 +1804,7 @@ macro_rules! decl_module {
 		///
 		/// Each variant of this enum maps to a dispatchable function from the associated module.
 		#[derive($crate::codec::Encode, $crate::codec::Decode, $crate::scale_info::TypeInfo)]
+		#[scale_info(skip_type_params($trait_instance, $($instance)?))]
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?>
 			where $( $other_where_bounds )*
 		{
@@ -2317,8 +2318,7 @@ macro_rules! __dispatch_impl_metadata {
 		$call_type:ident
 		$($rest:tt)*
 	) => {
-		// todo: [AJ] another Instance: TypeInfo bound to remove
-		impl<$trait_instance: $trait_name $(<I> + $crate::scale_info::TypeInfo, $instance: $instantiable + $crate::scale_info::TypeInfo)? + $crate::scale_info::TypeInfo> $mod_type<$trait_instance $(, $instance)?>
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
