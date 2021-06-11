@@ -116,13 +116,17 @@ where
 	}
 }
 
-pub fn create_precommits(
+pub fn new_precommits<H, N>(
 	authorities: Vec<Ed25519Keyring>,
-	target_hash: H256,
-	target_number: u64,
+	target_hash: H,
+	target_number: N,
 	round: RoundNumber,
 	set_id: SetId,
-) -> Vec<SignedPrecommit<H256, RoundNumber>> {
+) -> Vec<SignedPrecommit<H, N>>
+where
+	H: Copy + Clone + Encode,
+	N: Copy + Clone + Encode,
+{
 	let mut precommits = Vec::new();
 	for keyring in authorities {
 		precommits.push(new_precommit(
@@ -136,16 +140,20 @@ pub fn create_precommits(
 	precommits
 }
 
-pub fn create_commit(
+pub fn new_commit<H, N>(
 	authorities: Vec<Ed25519Keyring>,
-	target_hash: H256,
-	target_number: u64,
+	target_hash: H,
+	target_number: N,
 	round: RoundNumber,
 	set_id: SetId,
-) -> Commit<H256, RoundNumber> {
+) -> Commit<H, N>
+where
+	H: Copy + Clone + Encode,
+	N: Copy + Clone + Encode,
+{
 	sp_finality_grandpa::Commit {
 		target_hash,
 		target_number,
-		precommits: create_precommits(authorities, target_hash, target_number, round, set_id),
+		precommits: new_precommits(authorities, target_hash, target_number, round, set_id),
 	}
 }

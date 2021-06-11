@@ -24,19 +24,6 @@ use sp_finality_grandpa::accountable_safety::{Query, QueryResponse};
 use sp_keyring::Ed25519Keyring;
 
 #[test]
-fn verify_commit_signatures() {
-	let authorities = vec![
-		Ed25519Keyring::Alice,
-		Ed25519Keyring::Bob,
-		Ed25519Keyring::Charlie,
-	];
-	let round = 42;
-	let set_id = 4;
-	let commit = create_commit(authorities, H256::random(), 5, round, set_id);
-	assert!(check_commit_signatures(&(commit, round, set_id)));
-}
-
-#[test]
 fn accountable_safety_setup_and_submit_reply() {
 	new_test_ext().execute_with(|| {
 		let authorities = vec![
@@ -47,7 +34,7 @@ fn accountable_safety_setup_and_submit_reply() {
 		let alice = &authorities[0].public().into();
 		let round = 42;
 		let set_id = 4;
-		let commit = create_commit(authorities.clone(), H256::random(), 5, round, set_id);
+		let commit = new_commit(authorities.clone(), H256::random(), 5, round, set_id);
 		let block_not_included = (commit.clone(), round.clone(), set_id);
 		let new_block = (commit.clone(), round, set_id);
 
@@ -84,7 +71,7 @@ fn accountable_safety_proceed_to_previous_round() {
 
 		let round = 42;
 		let set_id = 4;
-		let commit = create_commit(authorities.clone(), H256::random(), 5, round, set_id);
+		let commit = new_commit(authorities.clone(), H256::random(), 5, round, set_id);
 		let block_not_included = (commit.clone(), round.clone(), set_id);
 		let new_block = (commit.clone(), round, set_id);
 

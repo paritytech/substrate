@@ -415,7 +415,7 @@ mod test {
 		];
 		let round = 42;
 		let set_id = 4;
-		let commit = create_commit(authorities, H256::random(), 5, round, set_id);
+		let commit = new_commit(authorities, H256::random(), 5, round, set_id);
 		assert!(check_commit_signatures(&(commit, round, set_id)));
 	}
 
