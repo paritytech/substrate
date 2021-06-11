@@ -22,12 +22,13 @@
 //!   voters doesn't particularly matter.
 
 use crate::{
-	slashing::SlashingSpans, AccountIdOf, Config, Nominations, Pallet, VoterBagFor, VotingDataOf, VoteWeight,
+	slashing::SlashingSpans, AccountIdOf, Config, Nominations, Nominators, Pallet, VoterBagFor,
+	VotingDataOf, VoteWeight,
 };
 use codec::{Encode, Decode};
 use frame_support::{DefaultNoBound, StorageMap, StorageValue, StorageDoubleMap};
 use sp_runtime::SaturatedConversion;
-use sp_std::marker::PhantomData;
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
 /// Index type for a bag.
 pub type BagIdx = u8;
@@ -158,6 +159,35 @@ impl<T: Config> Node<T> {
 	/// Get the next node in the bag.
 	pub fn next(&self) -> Option<Node<T>> {
 		self.next.as_ref().and_then(|id| self.in_bag(id))
+	}
+
+	/// Get this voter's voting data.
+	pub fn voting_data(
+		&self,
+		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
+		slashing_spans: &BTreeMap<AccountIdOf<T>, SlashingSpans>,
+	) -> Option<VotingDataOf<T>> {
+		match self.voter.voter_type {
+			VoterType::Validator => Some((
+				self.voter.id.clone(),
+				weight_of(&self.voter.id),
+				vec![self.voter.id.clone()],
+			)),
+			VoterType::Nominator => {
+				let Nominations { submitted_in, mut targets, .. } =
+					Nominators::<T>::get(self.voter.id.clone())?;
+				// Filter out nomination targets which were nominated before the most recent
+				// slashing span.
+				targets.retain(|stash| {
+					slashing_spans
+						.get(stash)
+						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
+				});
+
+				(!targets.is_empty())
+					.then(move || (self.voter.id.clone(), weight_of(&self.voter.id), targets))
+			}
+		}
 	}
 }
 

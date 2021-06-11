@@ -2521,39 +2521,18 @@ impl<T: Config> Module<T> {
 	/// auto-chilled.
 	///
 	/// Note that this is VERY expensive. Use with care.
-	pub fn get_npos_voters(
-		maybe_max_len: Option<usize>,
-	) -> Vec<VotingDataOf<T>> {
+	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VotingDataOf<T>> {
+		let voter_count = voter_bags::VoterList::<T>::decode_len().unwrap_or_default();
+		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
+
 		let weight_of = Self::slashable_balance_of_fn();
-		let mut all_voters = Vec::new();
-
-		for (validator, _) in <Validators<T>>::iter() {
-			// append self vote
-			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
-			all_voters.push(self_vote);
-		}
-
 		// collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
-		for (nominator, nominations) in <Nominators<T>>::iter() {
-			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
-
-			// Filter out nomination targets which were nominated before the most recent
-			// slashing span.
-			targets.retain(|stash| {
-				slashing_spans
-					.get(stash)
-					.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
-			});
-
-			if !targets.is_empty() {
-				let vote_weight = weight_of(&nominator);
-				all_voters.push((nominator, vote_weight, targets))
-			}
-		}
-
-		all_voters
+		voter_bags::VoterList::<T>::iter()
+			.filter_map(|node| node.voting_data(&weight_of, &slashing_spans))
+			.take(wanted_voters)
+			.collect()
 	}
 
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
