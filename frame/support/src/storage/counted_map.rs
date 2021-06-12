@@ -299,9 +299,16 @@ where
 	///
 	/// This function iterates through all the items in the map and sets the counter. This operation
 	/// can be very heavy, so use with caution.
+	///
+	/// Returns the number of items in the map which is used to set the counter.
 	pub fn initialize_counter() -> u32 {
 		let count = Self::iter_values().count() as u32;
 		Counter::set(count);
 		count
+	}
+
+	/// Return the count.
+	pub fn count() -> u32 {
+		Counter::get()
 	}
 }
