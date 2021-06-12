@@ -40,9 +40,9 @@ use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero},
+	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero, Header as HeaderT},
 };
-use sp_core::traits::SpawnNamed;
+use sp_core::traits::SpawnEssentialNamed;
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
@@ -195,20 +195,26 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		pool_api: Arc<PoolApi>,
 		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
-		spawner: impl SpawnNamed,
+		spawner: impl SpawnEssentialNamed,
 		best_block_number: NumberFor<Block>,
 	) -> Self {
 		let pool = Arc::new(sc_transaction_graph::Pool::new(options, is_validator, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
-			RevalidationType::Light => (revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
+			RevalidationType::Light => (
+				revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()),
+				None,
+			),
 			RevalidationType::Full => {
-				let (queue, background) = revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
+				let (queue, background) = revalidation::RevalidationQueue::new_background(
+					pool_api.clone(),
+					pool.clone(),
+				);
 				(queue, Some(background))
 			},
 		};
 
 		if let Some(background_task) = background_task {
-			spawner.spawn("txpool-background", background_task);
+			spawner.spawn_essential("txpool-background", background_task);
 		}
 
 		Self {
@@ -357,7 +363,7 @@ where
 	pub fn new_light(
 		options: sc_transaction_graph::Options,
 		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed,
+		spawner: impl SpawnEssentialNamed,
 		client: Arc<Client>,
 		fetcher: Arc<Fetcher>,
 	) -> Self {
@@ -379,6 +385,7 @@ where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
 		+ sc_client_api::BlockBackend<Block>
+		+ sc_client_api::blockchain::HeaderBackend<Block>
 		+ sp_runtime::traits::BlockIdTo<Block>
 		+ sc_client_api::ExecutorProvider<Block>
 		+ sc_client_api::UsageProvider<Block>
@@ -392,10 +399,10 @@ where
 		options: sc_transaction_graph::Options,
 		is_validator: txpool::IsValidator,
 		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed,
+		spawner: impl SpawnEssentialNamed,
 		client: Arc<Client>,
 	) -> Arc<Self> {
-		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
+		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus, &spawner));
 		let pool = Arc::new(Self::with_revalidation_type(
 			options,
 			is_validator,
@@ -419,6 +426,7 @@ where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
 		+ sc_client_api::BlockBackend<Block>
+		+ sc_client_api::blockchain::HeaderBackend<Block>
 		+ sp_runtime::traits::BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
@@ -555,19 +563,32 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
 	api: &Api,
 	pool: &sc_transaction_graph::Pool<Api>,
 ) -> Vec<ExtrinsicHash<Api>> {
-	let hashes = api.block_body(&block_id).await
+	let extrinsics = api.block_body(&block_id).await
 		.unwrap_or_else(|e| {
 			log::warn!("Prune known transactions: error request {:?}!", e);
 			None
 		})
-		.unwrap_or_default()
-		.into_iter()
+		.unwrap_or_default();
+
+	let hashes = extrinsics.iter()
 		.map(|tx| pool.hash_of(&tx))
 		.collect::<Vec<_>>();
 
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
-	if let Err(e) = pool.prune_known(&block_id, &hashes) {
+	let header = match api.block_header(&block_id) {
+		Ok(Some(h)) => h,
+		Ok(None) => {
+			log::debug!(target: "txpool", "Could not find header for {:?}.", block_id);
+			return hashes
+		},
+		Err(e) => {
+			log::debug!(target: "txpool", "Error retrieving header for {:?}: {:?}", block_id, e);
+			return hashes
+		}
+	};
+
+	if let Err(e) = pool.prune(&block_id, &BlockId::hash(*header.parent_hash()), &extrinsics).await {
 		log::error!("Cannot prune known in the pool {:?}!", e);
 	}
 

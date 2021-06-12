@@ -21,7 +21,8 @@
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use codec::{Decode, Encode};
 use futures::{
-	channel::oneshot, executor::{ThreadPool, ThreadPoolBuilder}, future::{Future, FutureExt, ready, Ready},
+	channel::{oneshot, mpsc}, future::{Future, FutureExt, ready, Ready}, lock::Mutex, SinkExt,
+	StreamExt,
 };
 
 use sc_client_api::{
@@ -34,15 +35,36 @@ use sp_runtime::{
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use prometheus_endpoint::Registry as PrometheusRegistry;
+use sp_core::traits::SpawnEssentialNamed;
 
 use crate::{metrics::{ApiMetrics, ApiMetricsExt}, error::{self, Error}};
 
 /// The transaction pool logic for full client.
 pub struct FullChainApi<Client, Block> {
 	client: Arc<Client>,
-	pool: ThreadPool,
 	_marker: PhantomData<Block>,
 	metrics: Option<Arc<ApiMetrics>>,
+	validation_pool: Arc<Mutex<mpsc::Sender<Pin<Box<dyn Future<Output = ()> + Send>>>>>,
+}
+
+/// Spawn a validation task that will be used by the transaction pool to validate transactions.
+fn spawn_validation_pool_task(
+	name: &'static str,
+	receiver: Arc<Mutex<mpsc::Receiver<Pin<Box<dyn Future<Output = ()> + Send>>>>>,
+	spawner: &impl SpawnEssentialNamed,
+) {
+	spawner.spawn_essential_blocking(
+		name,
+		async move {
+			loop {
+				let task = receiver.lock().await.next().await;
+				match task {
+					None => return,
+					Some(task) => task.await,
+				}
+			}
+		}.boxed(),
+	);
 }
 
 impl<Client, Block> FullChainApi<Client, Block> {
@@ -50,6 +72,7 @@ impl<Client, Block> FullChainApi<Client, Block> {
 	pub fn new(
 		client: Arc<Client>,
 		prometheus: Option<&PrometheusRegistry>,
+		spawner: &impl SpawnEssentialNamed,
 	) -> Self {
 		let metrics = prometheus.map(ApiMetrics::register).and_then(|r| {
 			match r {
@@ -65,13 +88,15 @@ impl<Client, Block> FullChainApi<Client, Block> {
 			}
 		});
 
+		let (sender, receiver) = mpsc::channel(0);
+
+		let receiver = Arc::new(Mutex::new(receiver));
+		spawn_validation_pool_task("transaction-pool-task-0", receiver.clone(), spawner);
+		spawn_validation_pool_task("transaction-pool-task-1", receiver, spawner);
+
 		FullChainApi {
 			client,
-			pool: ThreadPoolBuilder::new()
-				.pool_size(2)
-				.name_prefix("txpool-verifier")
-				.create()
-				.expect("Failed to spawn verifier threads, that are critical for node operation."),
+			validation_pool: Arc::new(Mutex::new(sender)),
 			_marker: Default::default(),
 			metrics,
 		}
@@ -81,7 +106,7 @@ impl<Client, Block> FullChainApi<Client, Block> {
 impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
+	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -105,27 +130,29 @@ where
 		let (tx, rx) = oneshot::channel();
 		let client = self.client.clone();
 		let at = at.clone();
-
+		let validation_pool = self.validation_pool.clone();
 		let metrics = self.metrics.clone();
-		metrics.report(|m| m.validations_scheduled.inc());
 
-		self.pool.spawn_ok(futures_diagnose::diagnose(
-			"validate-transaction",
-			async move {
-				let res = validate_transaction_blocking(&*client, &at, source, uxt);
-				if let Err(e) = tx.send(res) {
-					log::warn!("Unable to send a validate transaction result: {:?}", e);
-				}
-				metrics.report(|m| m.validations_finished.inc());
-			},
-		));
+		async move {
+			metrics.report(|m| m.validations_scheduled.inc());
 
-		Box::pin(async move {
+			validation_pool.lock()
+				.await
+				.send(
+					async move {
+						let res = validate_transaction_blocking(&*client, &at, source, uxt);
+						let _ = tx.send(res);
+						metrics.report(|m| m.validations_finished.inc());
+					}.boxed()
+				)
+				.await
+				.map_err(|e| Error::RuntimeApi(format!("Validation pool down: {:?}", e)))?;
+
 			match rx.await {
 				Ok(r) => r,
 				Err(_) => Err(Error::RuntimeApi("Validation was canceled".into())),
 			}
-		})
+		}.boxed()
 	}
 
 	fn block_id_to_number(
@@ -150,6 +177,13 @@ where
 			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
 		})
 	}
+
+	fn block_header(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
+		self.client.header(*at).map_err(Into::into)
+	}
 }
 
 /// Helper function to validate a transaction using a full chain API.
@@ -162,7 +196,7 @@ fn validate_transaction_blocking<Client, Block>(
 ) -> error::Result<TransactionValidity>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
+	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -193,7 +227,7 @@ where
 impl<Client, Block> FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
+	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -332,5 +366,12 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for
 
 			Ok(Some(transactions))
 		}.boxed()
+	}
+
+	fn block_header(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
+		self.client.header(*at).map_err(Into::into)
 	}
 }
