@@ -37,6 +37,7 @@ pub mod bounded_btree_map;
 pub mod bounded_btree_set;
 pub mod bounded_vec;
 pub mod weak_bounded_vec;
+pub mod counted_map;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
