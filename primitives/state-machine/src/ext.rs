@@ -23,7 +23,7 @@ use crate::{
 };
 use hash_db::Hasher;
 use sp_core::{
-	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
+	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey, StorageInfo},
 	hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
@@ -777,6 +777,10 @@ where
 
 	fn proof_size(&self) -> Option<u32> {
 		self.backend.proof_size()
+	}
+
+	fn extend_storage_info(&mut self, new: StorageInfo) {
+		self.backend.extend_storage_info(new)
 	}
 }
 

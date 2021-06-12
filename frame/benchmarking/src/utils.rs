@@ -20,7 +20,7 @@
 use codec::{Encode, Decode};
 use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
-use sp_storage::TrackedStorageKey;
+use sp_storage::{TrackedStorageKey, StorageInfo};
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
@@ -162,6 +162,10 @@ pub trait Benchmarking {
 		let mut whitelist = self.get_whitelist();
 		whitelist.retain(|x| x.key != remove);
 		self.set_whitelist(whitelist);
+	}
+
+	fn extend_storage_info(&mut self, add: StorageInfo) {
+		self.extend_storage_info(add);
 	}
 
 	/// Get current estimated proof size.

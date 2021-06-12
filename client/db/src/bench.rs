@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use hash_db::{Prefix, Hasher};
 use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey},
+	storage::{ChildInfo, TrackedStorageKey, StorageInfo},
 	hexdisplay::HexDisplay
 };
 use sp_runtime::traits::{Block as BlockT, HashFor};
@@ -118,6 +118,8 @@ pub struct BenchmarkingState<B: BlockT> {
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
 	proof_recorder: Option<ProofRecorder<B::Hash>>,
 	proof_recorder_root: Cell<B::Hash>,
+	/// Storage info identified by their storage prefix, which is always 32 bytes.
+	storage_info: RefCell<HashMap<[u8; 32], StorageInfo>>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -141,6 +143,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
 			proof_recorder_root: Cell::new(root.clone()),
+			storage_info: Default::default(),
 		};
 
 		state.add_whitelist_to_tracker();
@@ -510,6 +513,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 	fn set_whitelist(&self, new: Vec<TrackedStorageKey>) {
 		*self.whitelist.borrow_mut() = new;
+	}
+
+	fn extend_storage_info(&self, new: StorageInfo) {
+		let prefix = new.prefix;
+		self.storage_info.borrow_mut().insert(prefix, new);
 	}
 
 	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {

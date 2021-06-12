@@ -27,7 +27,7 @@
 
 use sp_std::{any::{Any, TypeId}, vec::Vec, boxed::Box};
 
-use sp_storage::{ChildInfo, TrackedStorageKey};
+use sp_storage::{ChildInfo, TrackedStorageKey, StorageInfo};
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
 pub use extensions::{Extension, Extensions, ExtensionStore};
@@ -291,6 +291,13 @@ pub trait Externalities: ExtensionStore {
 	fn proof_size(&self) -> Option<u32> {
 		None
 	}
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Adds new storage info to the benchmarking DB.
+	fn extend_storage_info(&mut self, new: StorageInfo);
 }
 
 /// Extension for the [`Externalities`] trait.

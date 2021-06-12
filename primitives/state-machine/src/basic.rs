@@ -27,7 +27,7 @@ use sp_trie::trie_types::Layout;
 use sp_core::{
 	storage::{
 		well_known_keys::is_child_storage_key, Storage,
-		ChildInfo, StorageChild, TrackedStorageKey,
+		ChildInfo, StorageChild, TrackedStorageKey, StorageInfo,
 	},
 	traits::Externalities, Blake2Hasher,
 };
@@ -331,6 +331,10 @@ impl Externalities for BasicExternalities {
 
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in Basic")
+	}
+
+	fn extend_storage_info(&mut self, _: StorageInfo) {
+		unimplemented!("extend_storage_info is not supported in Basic")
 	}
 }
 

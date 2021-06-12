@@ -60,6 +60,21 @@ impl From<Vec<u8>> for TrackedStorageKey {
 	}
 }
 
+/// Metadata about storage from the runtime.
+#[derive(Encode, Decode, Default, Clone, Debug)]
+pub struct StorageInfo {
+	/// Encoded string of pallet name.
+	pub pallet_name: Vec<u8>,
+	/// Encoded string of storage name.
+	pub storage_name: Vec<u8>,
+	/// The prefix of the storage. All keys after the prefix are considered part of the storage
+	pub prefix: [u8; 32],
+	/// The maximum number of values in the storage, or none if no maximum specified.
+	pub max_values: Option<u32>,
+	/// The maximum size of key/values in the storage, or none if no maximum specified.
+	pub max_size: Option<u32>,
+}
+
 /// Storage key of a child trie, it contains the prefix to the key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
