@@ -2071,7 +2071,7 @@ pub mod pallet_prelude {
 /// 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 /// 		/// Doc comment put in metadata
 /// 		#[pallet::weight(0)]
-/// 		fn toto(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
+/// 		pub fn toto(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
 /// 			let _ = origin;
 /// 			unimplemented!();
 /// 		}
