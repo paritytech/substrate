@@ -551,14 +551,18 @@ fn error_expand() {
 
 #[test]
 fn instance_expand() {
+	// Assert same type.
+	let _: pallet::__InherentHiddenInstance = ();
+}
+
+#[test]
+fn inherent_expand() {
 	use frame_support::{
 		inherent::{BlockT, InherentData},
 		traits::EnsureInherentsAreFirst,
 	};
 	use sp_core::Hasher;
 	use sp_runtime::{traits::{BlakeTwo256, Header}, Digest};
-	// Assert same type.
-	let _: pallet::__InherentHiddenInstance = ();
 
 	let inherents = InherentData::new().create_extrinsics();
 
