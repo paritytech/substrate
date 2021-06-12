@@ -1959,7 +1959,7 @@ pub mod pallet {
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxNominatorRewardedPerValidator::get()))]
-		pub(super) fn payout_stakers(
+		pub fn payout_stakers(
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,
 			era: EraIndex,
