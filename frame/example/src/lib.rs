@@ -598,6 +598,14 @@ pub mod pallet {
 	#[pallet::getter(fn foo)]
 	pub(super) type Foo<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
+	#[pallet::storage]
+	pub type MyMap<T> = StorageMap<_, Blake2_128Concat, u8, u16>;
+
+	#[pallet::storage]
+	pub type MyCounter<T> = StorageValue<_, u32, ValueQuery>;
+
+	pub type CountedMap<T> = CountedStorageMap<u8, u16, MyMap<T>, MyCounter<T>>;
+
 	// The genesis config type.
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
