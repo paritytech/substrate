@@ -34,15 +34,14 @@ mod keyword {
 /// * `#[pallet::getter(fn dummy)]`
 /// * `#[pallet::storage_prefix = "CustomName"]`
 pub enum PalletStorageAttr {
-	Getter(syn::Ident),
-	StorageName(syn::LitStr),
+	Getter(syn::Ident, proc_macro2::Span),
+	StorageName(syn::LitStr, proc_macro2::Span),
 }
 
 impl PalletStorageAttr {
-	fn span(&self) -> proc_macro2::Span {
+	fn attr_span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Getter(ident) => ident.span(),
-			Self::StorageName(lit) => lit.span(),
+			Self::Getter(_, span) | Self::StorageName(_, span) => *span,
 		}
 	}
 }
@@ -50,6 +49,7 @@ impl PalletStorageAttr {
 impl syn::parse::Parse for PalletStorageAttr {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 		input.parse::<syn::Token![#]>()?;
+		let attr_span = input.span();
 		let content;
 		syn::bracketed!(content in input);
 		content.parse::<keyword::pallet>()?;
@@ -62,12 +62,12 @@ impl syn::parse::Parse for PalletStorageAttr {
 			let generate_content;
 			syn::parenthesized!(generate_content in content);
 			generate_content.parse::<syn::Token![fn]>()?;
-			Ok(Self::Getter(generate_content.parse::<syn::Ident>()?))
+			Ok(Self::Getter(generate_content.parse::<syn::Ident>()?, attr_span))
 		} else if lookahead.peek(keyword::storage_prefix) {
 			content.parse::<keyword::storage_prefix>()?;
 			content.parse::<syn::Token![=]>()?;
 
-			Ok(Self::StorageName(content.parse::<syn::LitStr>()?))
+			Ok(Self::StorageName(content.parse::<syn::LitStr>()?, attr_span))
 		} else {
 			Err(lookahead.error())
 		}
@@ -575,7 +575,8 @@ impl StorageDef {
 			.unwrap_or(self.ident.to_string())
 	}
 
-	/// Return either the span of the ident or the span of the #[storage_prefix] attribute
+	/// Return either the span of the ident or the span of the literal in the
+	/// #[storage_prefix] attribute
 	pub fn prefix_span(&self) -> proc_macro2::Span {
 		self
 			.rename_as
@@ -598,24 +599,24 @@ impl StorageDef {
 		let attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
 		let (mut getters, mut names) = attrs
 			.into_iter()
-			.partition::<Vec<_>, _>(|attr| matches!(attr, PalletStorageAttr::Getter(_)));
+			.partition::<Vec<_>, _>(|attr| matches!(attr, PalletStorageAttr::Getter(..)));
 		if getters.len() > 1 {
 			let msg = "Invalid pallet::storage, multiple argument pallet::getter found";
-			return Err(syn::Error::new(getters[1].span(), msg));
+			return Err(syn::Error::new(getters[1].attr_span(), msg));
 		}
 		if names.len() > 1 {
 			let msg = "Invalid pallet::storage, multiple argument pallet::storage_prefix found";
-			return Err(syn::Error::new(names[1].span(), msg));
+			return Err(syn::Error::new(names[1].attr_span(), msg));
 		}
 		let getter = getters.pop().map(|attr| {
 			match attr {
-				PalletStorageAttr::Getter(ident) => ident,
+				PalletStorageAttr::Getter(ident, _) => ident,
 				_ => unreachable!(),
 			}
 		});
 		let rename_as = names.pop().map(|attr| {
 			match attr {
-				PalletStorageAttr::StorageName(lit) => lit,
+				PalletStorageAttr::StorageName(lit, _) => lit,
 				_ => unreachable!(),
 			}
 		});
