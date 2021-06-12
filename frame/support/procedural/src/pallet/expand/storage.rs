@@ -24,8 +24,7 @@ use std::collections::HashSet;
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
 fn prefix_ident(storage: &StorageDef) -> syn::Ident {
 	let storage_ident = &storage.ident;
-	let ident = storage.prefix();
-	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", ident), storage_ident.span())
+	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", storage_ident), storage_ident.span())
 }
 
 /// Check for duplicated storage prefixes. This step is necessary since users can specify an

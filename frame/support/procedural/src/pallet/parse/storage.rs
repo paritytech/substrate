@@ -67,7 +67,15 @@ impl syn::parse::Parse for PalletStorageAttr {
 			content.parse::<keyword::storage_prefix>()?;
 			content.parse::<syn::Token![=]>()?;
 
-			Ok(Self::StorageName(content.parse::<syn::LitStr>()?, attr_span))
+			let renamed_prefix = content.parse::<syn::LitStr>()?;
+			// Ensure the renamed prefix is a proper Rust identifier
+			syn::parse_str::<syn::Ident>(&renamed_prefix.value())
+				.map_err(|_| {
+					let msg = format!("`{}` is not a valid identifier", renamed_prefix.value());
+					syn::Error::new(renamed_prefix.span(), msg)
+				})?;
+
+			Ok(Self::StorageName(renamed_prefix, attr_span))
 		} else {
 			Err(lookahead.error())
 		}
