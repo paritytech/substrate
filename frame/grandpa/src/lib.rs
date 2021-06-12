@@ -190,7 +190,7 @@ pub mod pallet {
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
-		fn report_equivocation(
+		pub fn report_equivocation(
 			origin: OriginFor<T>,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
@@ -236,7 +236,7 @@ pub mod pallet {
 		/// will start the new authority set using the given finalized block as base.
 		/// Only callable by root.
 		#[pallet::weight(T::WeightInfo::note_stalled())]
-		fn note_stalled(
+		pub fn note_stalled(
 			origin: OriginFor<T>,
 			delay: T::BlockNumber,
 			best_finalized_block_number: T::BlockNumber,
