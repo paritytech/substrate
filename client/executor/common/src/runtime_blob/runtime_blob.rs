@@ -81,6 +81,23 @@ impl RuntimeBlob {
 		export_mutable_globals(&mut self.raw_module, "exported_internal_global");
 	}
 
+	/// Perform an instrumentation that makes sure that a specific function `entry_point` is exported
+	pub fn entry_point_exists(blob: &RuntimeBlob, entry_point: &str) -> bool {
+		if let Some(entries) = blob.raw_module.export_section().map(|e| e.entries()) {
+			if entries.iter().any(|e| {
+				if let Internal::Function(_) = e.internal() {
+					e.field() == entry_point
+				} else {
+					false
+				}
+			}) {
+				return true;
+			}
+		}
+
+		false
+	}
+
 	/// Returns an iterator of all globals which were exported by [`expose_mutable_globals`].
 	pub(super) fn exported_internal_global_names<'module>(
 		&'module self,
