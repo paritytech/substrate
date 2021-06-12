@@ -469,6 +469,8 @@ where
 	fn storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
 				prefix: Self::final_prefix(),
 				max_values: MaxValues::get(),
 				max_size: Some(
