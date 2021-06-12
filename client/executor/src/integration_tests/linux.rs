@@ -33,8 +33,6 @@ use self::smaps::Smaps;
 
 #[test]
 fn memory_consumption_compiled() {
-	use sc_executor_common::wasm_runtime::WasmModule as _;
-
 	let runtime = mk_test_runtime(WasmExecutionMethod::Compiled, 1024);
 
 	let instance = runtime.new_instance().unwrap();
