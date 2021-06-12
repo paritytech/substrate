@@ -35,7 +35,7 @@ mod keyword {
 /// * `#[pallet::storage_prefix = "CustomName"]`
 pub enum PalletStorageAttr {
 	Getter(syn::Ident),
-	StorageName(syn::Lit),
+	StorageName(syn::LitStr),
 }
 
 impl PalletStorageAttr {
@@ -67,7 +67,7 @@ impl syn::parse::Parse for PalletStorageAttr {
 			content.parse::<keyword::storage_prefix>()?;
 			content.parse::<syn::Token![=]>()?;
 
-			Ok(Self::StorageName(content.parse::<syn::Lit>()?))
+			Ok(Self::StorageName(content.parse::<syn::LitStr>()?))
 		} else {
 			Err(lookahead.error())
 		}
@@ -114,7 +114,7 @@ pub struct StorageDef {
 	/// Optional getter to generate. If some then query_kind is ensured to be some as well.
 	pub getter: Option<syn::Ident>,
 	/// Optional expression that evaluates to a type that can be used as StoragePrefix instead of ident.
-	pub rename_as: Option<syn::Lit>,
+	pub rename_as: Option<syn::LitStr>,
 	/// Whereas the querytype of the storage is OptionQuery or ValueQuery.
 	/// Note that this is best effort as it can't be determined when QueryKind is generic, and
 	/// result can be false if user do some unexpected type alias.
@@ -200,21 +200,6 @@ enum StorageKind {
 	Map,
 	DoubleMap,
 	NMap,
-}
-
-/// Convert syn::Lit to its string representation
-fn literal_to_string(lit: &syn::Lit) -> String {
-	match lit {
-		syn::Lit::Str(s) => s.value(),
-		syn::Lit::ByteStr(s) =>
-			String::from_utf8(s.value()).expect("All byte strings are valid UTF-8 strings; qed"),
-		syn::Lit::Byte(b) => char::from(b.value()).to_string(),
-		syn::Lit::Char(c) => c.value().to_string(),
-		syn::Lit::Int(i) => i.base10_digits().to_owned(),
-		syn::Lit::Float(f) => f.base10_digits().to_owned(),
-		syn::Lit::Bool(b) => b.value.to_string(),
-		syn::Lit::Verbatim(l) => l.to_string(),
-	}
 }
 
 /// Check the generics in the `map` contains the generics in `gen` may contains generics in
@@ -586,7 +571,7 @@ impl StorageDef {
 		self
 			.rename_as
 			.as_ref()
-			.map(literal_to_string)
+			.map(syn::LitStr::value)
 			.unwrap_or(self.ident.to_string())
 	}
 
@@ -595,7 +580,7 @@ impl StorageDef {
 		self
 			.rename_as
 			.as_ref()
-			.map(syn::Lit::span)
+			.map(syn::LitStr::span)
 			.unwrap_or(self.ident.span())
 	}
 
