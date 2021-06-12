@@ -131,7 +131,6 @@ pub struct StorageDef {
 	pub named_generics: Option<StorageGenerics>,
 }
 
-
 /// The parsed generic from the
 #[derive(Clone)]
 pub enum StorageGenerics {
@@ -201,6 +200,21 @@ enum StorageKind {
 	Map,
 	DoubleMap,
 	NMap,
+}
+
+/// Convert syn::Lit to its string representation
+fn literal_to_string(lit: &syn::Lit) -> String {
+	match lit {
+		syn::Lit::Str(s) => s.value(),
+		syn::Lit::ByteStr(s) =>
+			String::from_utf8(s.value()).expect("All byte strings are valid UTF-8 strings; qed"),
+		syn::Lit::Byte(b) => char::from(b.value()).to_string(),
+		syn::Lit::Char(c) => c.value().to_string(),
+		syn::Lit::Int(i) => i.base10_digits().to_owned(),
+		syn::Lit::Float(f) => f.base10_digits().to_owned(),
+		syn::Lit::Bool(b) => b.value.to_string(),
+		syn::Lit::Verbatim(l) => l.to_string(),
+	}
 }
 
 /// Check the generics in the `map` contains the generics in `gen` may contains generics in
@@ -567,6 +581,24 @@ fn extract_key(ty: &syn::Type) -> syn::Result<syn::Type> {
 }
 
 impl StorageDef {
+	/// Return the storage prefix for this storage item
+	pub fn prefix(&self) -> String {
+		self
+			.rename_as
+			.as_ref()
+			.map(literal_to_string)
+			.unwrap_or(self.ident.to_string())
+	}
+
+	/// Return either the span of the ident or the span of the #[storage_prefix] attribute
+	pub fn prefix_span(&self) -> proc_macro2::Span {
+		self
+			.rename_as
+			.as_ref()
+			.map(syn::Lit::span)
+			.unwrap_or(self.ident.span())
+	}
+
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
 		index: usize,

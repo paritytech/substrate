@@ -18,35 +18,46 @@
 use crate::pallet::{Def, parse::storage::StorageDef};
 use crate::pallet::parse::storage::{Metadata, QueryKind, StorageGenerics};
 use frame_support_procedural_tools::clean_type_string;
-
-fn literal_to_string(lit: &syn::Lit) -> String {
-	match lit {
-		syn::Lit::Str(s) => s.value(),
-		syn::Lit::ByteStr(s) =>
-			String::from_utf8(s.value()).expect("All byte strings are valid UTF-8 strings; qed"),
-		syn::Lit::Byte(b) => char::from(b.value()).to_string(),
-		syn::Lit::Char(c) => c.value().to_string(),
-		syn::Lit::Int(i) => i.base10_digits().to_owned(),
-		syn::Lit::Float(f) => f.base10_digits().to_owned(),
-		syn::Lit::Bool(b) => b.value.to_string(),
-		syn::Lit::Verbatim(l) => l.to_string(),
-	}
-}
+use std::collections::HashSet;
 
 /// Generate the prefix_ident related the the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
 fn prefix_ident(storage: &StorageDef) -> syn::Ident {
 	let storage_ident = &storage.ident;
-	let ident = storage.rename_as.as_ref().map(literal_to_string).unwrap_or(storage_ident.to_string());
+	let ident = storage.prefix();
 	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", ident), storage_ident.span())
+}
+
+/// Check for duplicated storage prefixes. This step is necessary since users can specify an
+/// alternative storage prefix using the #[pallet::storage_prefix] syntax, and we need to ensure
+/// that the prefix specified by the user is not a duplicate of an existing one.
+fn check_prefix_duplicates(
+	storage_def: &StorageDef,
+	set: &mut HashSet<String>,
+) -> syn::Result<()> {
+	let prefix = storage_def.prefix();
+
+	if !set.insert(prefix.clone()) {
+		let err = syn::Error::new(
+			storage_def.prefix_span(),
+			format!("Duplicate storage prefixes found for `{}`", prefix),
+		);
+		return Err(err);
+	}
+
+	Ok(())
 }
 
 /// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
 /// * if generics are named: reorder the generic, remove their name, and add the missing ones.
 /// * Add `#[allow(type_alias_bounds)]`
-pub fn process_generics(def: &mut Def) {
+pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 	let frame_support = &def.frame_support;
+	let mut prefix_set = HashSet::new();
+
 	for storage_def in def.storages.iter_mut() {
+		check_prefix_duplicates(storage_def, &mut prefix_set)?;
+
 		let item = &mut def.item.content.as_mut().expect("Checked by def").1[storage_def.index];
 
 		let typ_item = match item {
@@ -132,6 +143,8 @@ pub fn process_generics(def: &mut Def) {
 			args.args[0] = syn::parse_quote!( #prefix_ident<#type_use_gen> );
 		}
 	}
+
+	Ok(())
 }
 
 /// * generate StoragePrefix structs (e.g. for a storage `MyStorage` a struct with the name
@@ -141,7 +154,9 @@ pub fn process_generics(def: &mut Def) {
 /// * Add `#[allow(type_alias_bounds)]` on storages type alias
 /// * generate metadatas
 pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
-	process_generics(def);
+	if let Err(e) = process_generics(def) {
+		return e.into_compile_error().into();
+	}
 
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
@@ -362,11 +377,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		let type_use_gen = &def.type_use_generics(storage_def.attr_span);
 		let prefix_struct_ident = prefix_ident(&storage_def);
 		let prefix_struct_vis = &storage_def.vis;
-		let prefix_struct_const = storage_def
-			.rename_as
-			.as_ref()
-			.map(literal_to_string)
-			.unwrap_or(storage_def.ident.to_string());
+		let prefix_struct_const = storage_def.prefix();
 		let config_where_clause = &def.config.where_clause;
 
 		let cfg_attrs = &storage_def.cfg_attrs;
