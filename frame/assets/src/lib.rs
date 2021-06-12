@@ -468,6 +468,10 @@ pub mod pallet {
 		///
 		/// Emits `Destroyed` event when successful.
 		///
+		/// NOTE: It can be helpful to first freeze an asset before destroying it so that you
+		/// can provide accurate witness information and prevent users from manipulating state
+		/// in a way that can make it harder to destroy.
+		///
 		/// Weight: `O(c + p + a)` where:
 		/// - `c = (witness.accounts - witness.sufficients)`
 		/// - `s = witness.sufficients`
@@ -481,7 +485,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			witness: DestroyWitness,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
@@ -491,9 +495,9 @@ pub mod pallet {
 				if let Some(check_owner) = maybe_check_owner {
 					ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 				}
-				ensure!(details.accounts == witness.accounts, Error::<T, I>::BadWitness);
-				ensure!(details.sufficients == witness.sufficients, Error::<T, I>::BadWitness);
-				ensure!(details.approvals == witness.approvals, Error::<T, I>::BadWitness);
+				ensure!(details.accounts <= witness.accounts, Error::<T, I>::BadWitness);
+				ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
+				ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
 
 				for (who, v) in Account::<T, I>::drain_prefix(id) {
 					Self::dead_account(id, &who, &mut details, v.sufficient);
@@ -507,11 +511,18 @@ pub mod pallet {
 					details.deposit.saturating_add(metadata.deposit),
 				);
 
-				Approvals::<T, I>::remove_prefix((&id,));
+				for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
+					T::Currency::unreserve(&owner, approval.deposit);
+				}
 				Self::deposit_event(Event::Destroyed(id));
 
-				// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
-				Ok(())
+				Ok(
+					Some(T::WeightInfo::destroy(
+						details.accounts.saturating_sub(details.sufficients),
+						details.sufficients,
+						details.approvals,
+					)).into()
+				)
 			})
 		}
 
@@ -1134,8 +1145,18 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 
+			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(!d.is_frozen, Error::<T, I>::Frozen);
 			Approvals::<T, I>::try_mutate((id, &owner, &delegate), |maybe_approved| -> DispatchResult {
-				let mut approved = maybe_approved.take().unwrap_or_default();
+				let mut approved = match maybe_approved.take() {
+					// an approval already exists and is being updated
+					Some(a) => a,
+					// a new approval is created
+					None => {
+						d.approvals.saturating_inc();
+						Default::default()
+					}
+				};
 				let deposit_required = T::ApprovalDeposit::get();
 				if approved.deposit < deposit_required {
 					T::Currency::reserve(&owner, deposit_required - approved.deposit)?;
@@ -1145,6 +1166,7 @@ pub mod pallet {
 				*maybe_approved = Some(approved);
 				Ok(())
 			})?;
+			Asset::<T, I>::insert(id, d);
 			Self::deposit_event(Event::ApprovedTransfer(id, owner, delegate, amount));
 
 			Ok(())
@@ -1171,8 +1193,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
+			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			let approval = Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
+
+			d.approvals.saturating_dec();
+			Asset::<T, I>::insert(id, d);
 
 			Self::deposit_event(Event::ApprovalCancelled(id, owner, delegate));
 			Ok(())
@@ -1198,11 +1224,11 @@ pub mod pallet {
 			owner: <T::Lookup as StaticLookup>::Source,
 			delegate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
+			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(|origin| -> DispatchResult {
 					let origin = ensure_signed(origin)?;
-					let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 					ensure!(&origin == &d.admin, Error::<T, I>::NoPermission);
 					Ok(())
 				})?;
@@ -1212,6 +1238,8 @@ pub mod pallet {
 
 			let approval = Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
+			d.approvals.saturating_dec();
+			Asset::<T, I>::insert(id, d);
 
 			Self::deposit_event(Event::ApprovalCancelled(id, owner, delegate));
 			Ok(())
@@ -1263,6 +1291,11 @@ pub mod pallet {
 
 				if remaining.is_zero() {
 					T::Currency::unreserve(&owner, approved.deposit);
+					Asset::<T, I>::mutate(id, |maybe_details| {
+						if let Some(details) = maybe_details {
+							details.approvals.saturating_dec();
+						}
+					});
 				} else {
 					approved.amount = remaining;
 					*maybe_approved = Some(approved);
