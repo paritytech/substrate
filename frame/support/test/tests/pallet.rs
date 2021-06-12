@@ -689,6 +689,22 @@ fn inherent_expand() {
 }
 
 #[test]
+fn validate_unsigned_expand() {
+	use frame_support::pallet_prelude::{
+		InvalidTransaction, TransactionSource, TransactionValidityError, ValidTransaction, ValidateUnsigned,
+	};
+	let call = pallet::Call::<Runtime>::foo_no_post_info();
+
+	let validity = pallet::Pallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err();
+	assert_eq!(validity, TransactionValidityError::Invalid(InvalidTransaction::Call));
+
+	let call = pallet::Call::<Runtime>::foo_transactional(0);
+
+	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
+	assert_eq!(validity, ValidTransaction::default());
+}
+
+#[test]
 fn trait_store_expand() {
 	TestExternalities::default().execute_with(|| {
 		<pallet::Pallet<Runtime> as pallet::Store>::Value::get();
