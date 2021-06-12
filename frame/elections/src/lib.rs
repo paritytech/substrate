@@ -240,12 +240,14 @@ pub mod pallet {
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
 		//TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		/// The chunk size of the voter vector.
 		#[allow(non_snake_case)]
 		fn VOTER_SET_SIZE() -> u32 {
 			VOTER_SET_SIZE as u32
 		}
 
 		//TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
+		/// The chunk size of the approval vector.
 		#[allow(non_snake_case)]
 		fn APPROVAL_SET_SIZE() -> u32 {
 			APPROVAL_SET_SIZE as u32
@@ -464,7 +466,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId")]
+	#[pallet::metadata(T::AccountId = "AccountId", Vec<T::AccountId> = "Vec<AccountId>")]
 	pub enum Event<T: Config> {
 		/// Reaped \[voter, reaper\].
 		VoterReaped(T::AccountId, T::AccountId),
