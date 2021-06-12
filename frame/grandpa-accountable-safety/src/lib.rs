@@ -94,11 +94,12 @@ pub mod pallet {
 	pub enum Error<T> {
 		SessionAlreadyRunning,
 		InvalidSignature,
-		BlockIsNotFromLaterRound,
+		ConflictingBlockIsNotFromLaterRound,
 		NoSessionRunning,
 		AlreadyReplied,
 		PrevoteReplyExpected,
 		UnsolicitedReply,
+		NoSupportForDifferentSetId,
 	}
 }
 
@@ -120,7 +121,12 @@ impl<T: Config> Pallet<T> {
 
 		// New block that conflicts with the old block should be from a later round.
 		if new_block.1 <= block_not_included.1 && block_not_included.1 > 0 {
-			return Err(Error::<T>::BlockIsNotFromLaterRound)?;
+			return Err(Error::<T>::ConflictingBlockIsNotFromLaterRound)?;
+		}
+
+		// The protocol does (currently) only support staying with a single set id.
+		if new_block.2 != block_not_included.2 {
+			return Err(Error::<T>::NoSupportForDifferentSetId)?;
 		}
 
 		// WIP: It is not enough to verify signatures, the commit needs to be _validated_ that it
@@ -213,13 +219,15 @@ impl<T: Config> Pallet<T> {
 					.map(|v| Equivocation::Precommit(vec![v.0, v.1])),
 			)
 			.collect::<Vec<_>>();
-		let equivocations = if let Some(mut equ) = Pallet::<T>::equivocations() {
-			equ.equivocations.append(&mut equivocations);
-			equ
-		} else {
-			StoredEquivocations { equivocations }
-		};
-		AccountableSafetyEquivocations::<T>::put(equivocations);
+		if !equivocations.is_empty() {
+			let equivocations = if let Some(mut stored) = Pallet::<T>::equivocations() {
+				stored.equivocations.append(&mut equivocations);
+				stored
+			} else {
+				StoredEquivocations { equivocations }
+			};
+			AccountableSafetyEquivocations::<T>::put(equivocations);
+		}
 
 		// If these were found during the prevote stage, we are done
 		if state.prevote_step {
@@ -300,12 +308,35 @@ impl<T: Config> Pallet<T> {
 				check_prevote_signatures(signed_prevotes, round_for_responses, state.set_id)
 			}
 		} {
+			// Note: this will occur when the the signature is valid, but a response for the wrong
+			// round was submitted
 			return Err(Error::<T>::InvalidSignature)?;
 		}
 
+		// Check the reply for equivocations
+		let mut maybe_equivocations = match query_response {
+			QueryResponse::Precommits(ref votes) => find_equivocations(&votes)
+				.into_iter()
+				.map(|(v0, v1)| Equivocation::Precommit(vec![v0, v1]))
+				.collect::<Vec<_>>(),
+			QueryResponse::Prevotes(ref votes) => find_equivocations(&votes)
+				.into_iter()
+				.map(|(v0, v1)| Equivocation::Prevote(vec![v0, v1]))
+				.collect::<Vec<_>>(),
+		};
+		if !maybe_equivocations.is_empty() {
+			let stored_equivocations = if let Some(mut stored) = Pallet::<T>::equivocations() {
+				stored.equivocations.append(&mut maybe_equivocations);
+				stored
+			} else {
+				StoredEquivocations {
+					equivocations: maybe_equivocations,
+				}
+			};
+			AccountableSafetyEquivocations::<T>::put(stored_equivocations);
+		}
+
 		// WIP: validate the reply
-		// - check that the round number is for the current one.
-		// - check for equivocations in set of votes.
 		// - check that it's impossible to have a supermajority for the block in question.
 
 		// Check that the responder hasn't already responded, that the reply is the correct
@@ -420,7 +451,7 @@ pub struct StoredAccountableSafetySession<H, N> {
 	pub prevote_step: bool,
 }
 
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
 pub struct StoredEquivocations<H, N> {
 	pub equivocations: Vec<Equivocation<H, N>>,
 }

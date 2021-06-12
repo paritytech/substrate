@@ -347,7 +347,7 @@ pub mod accountable_safety {
 		}
 	}
 
-	#[derive(Clone, Encode, Decode, RuntimeDebug)]
+	#[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq)]
 	pub enum Equivocation<H, N> {
 		Prevote(Vec<grandpa::SignedPrevote<H, N, AuthoritySignature, AuthorityId>>),
 		Precommit(Vec<grandpa::SignedPrecommit<H, N, AuthoritySignature, AuthorityId>>),

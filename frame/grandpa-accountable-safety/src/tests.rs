@@ -18,11 +18,12 @@
 #![cfg(test)]
 
 use super::Error;
-use crate::check_commit_signatures;
 use crate::mock::*;
+use crate::{check_commit_signatures, StoredEquivocations};
 use frame_support::assert_err;
 use frame_support::assert_ok;
 use sp_core::H256;
+use sp_finality_grandpa::accountable_safety::Equivocation;
 use sp_finality_grandpa::accountable_safety::{Query, QueryResponse};
 use sp_finality_grandpa::AuthorityId;
 use sp_keyring::Ed25519Keyring;
@@ -31,38 +32,29 @@ use sp_keyring::Ed25519Keyring;
 fn accountable_safety_start_twice() {
 	new_test_ext().execute_with(|| {
 		use Ed25519Keyring::{Alice, Bob};
-		let round = 42;
 		let set_id = 4;
+
+		// First commit
+		let round = 42;
 		let hash = H256::random();
 		let number = 5;
 
-		let block_not_included = {
-			let commit = sp_finality_grandpa::Commit {
-				target_hash: hash,
-				target_number: number,
-				precommits: vec![
-					new_precommit(Alice, hash, number, round, set_id),
-					new_precommit(Bob, hash, number, round, set_id),
-				],
-			};
-			(commit, round, set_id)
-		};
+		let block_not_included = (
+			new_commit(vec![Alice, Bob], hash, number, round, set_id),
+			round,
+			set_id,
+		);
 
+		// Second commit, for the block that is claimed to be contradicting the first
 		let round = round + 1;
 		let hash = H256::random();
 		let number = 6;
 
-		let new_block = {
-			let commit = sp_finality_grandpa::Commit {
-				target_hash: hash,
-				target_number: number,
-				precommits: vec![
-					new_precommit(Alice, hash, number, round, set_id),
-					new_precommit(Bob, hash, number, round, set_id),
-				],
-			};
-			(commit, round, set_id)
-		};
+		let new_block = (
+			new_commit(vec![Alice, Bob], hash, number, round, set_id),
+			round,
+			set_id,
+		);
 
 		// Fail, since the newer block isn't from a later round
 		assert_err!(
@@ -70,7 +62,7 @@ fn accountable_safety_start_twice() {
 				block_not_included.clone(),
 				block_not_included.clone()
 			),
-			Error::<Test>::BlockIsNotFromLaterRound,
+			Error::<Test>::ConflictingBlockIsNotFromLaterRound,
 		);
 
 		// Success!
@@ -139,23 +131,21 @@ fn accountable_safety_start_with_commits_inverted() {
 		let hash = H256::random();
 		let number = 5;
 
-		let precommit_alice = new_precommit(Alice, hash, number, round, set_id);
-		let precommit_bob = new_precommit(Bob, H256::random(), number + 1, round, set_id);
-
-		let precommits = vec![precommit_alice, precommit_bob];
 		let commit = sp_finality_grandpa::Commit {
 			target_hash: hash,
 			target_number: number,
-			precommits,
+			precommits: vec![
+				new_precommit(Alice, hash, number, round, set_id),
+				new_precommit(Bob, H256::random(), number + 1, round, set_id),
+			],
 		};
 
-		// Same block for both, since we are not actually running the protocol in this test
 		let block_not_included = (commit.clone(), round.clone(), set_id);
 		let new_block = (commit.clone(), round, set_id);
 
 		assert_err!(
 			GrandpaAccountableSafety::start_accountable_safety(block_not_included, new_block),
-			Error::<Test>::BlockIsNotFromLaterRound,
+			Error::<Test>::ConflictingBlockIsNotFromLaterRound,
 		);
 	});
 }
@@ -170,14 +160,29 @@ fn accountable_safety_setup_and_submit_reply() {
 		let round = 42;
 		let set_id = 4;
 
-		let commit0 = new_commit(auth.clone(), H256::random(), 5, round, set_id);
-		let block_not_included = (commit0.clone(), round.clone(), set_id);
+		let block_not_included = (
+			new_commit(auth.clone(), H256::random(), 5, round, set_id),
+			round.clone(),
+			set_id,
+		);
 
-		let commit1 = new_commit(auth.clone(), H256::random(), 6, round + 1, set_id);
-		let new_block = (commit1, round + 1, set_id);
+		let new_block = (
+			new_commit(auth.clone(), H256::random(), 6, round + 1, set_id),
+			round + 1,
+			set_id,
+		);
 
 		assert!(check_commit_signatures(&block_not_included));
 		assert!(check_commit_signatures(&new_block));
+
+		// Adding a response without a running sessions fails
+		assert_err!(
+			GrandpaAccountableSafety::add_response(
+				&pub_ids[0],
+				QueryResponse::Precommits(block_not_included.0.precommits.clone()),
+			),
+			Error::<Test>::NoSessionRunning,
+		);
 
 		// Start the protocol and check that we are now waiting for replies
 		for pub_id in &pub_ids {
@@ -186,9 +191,10 @@ fn accountable_safety_setup_and_submit_reply() {
 				None,
 			);
 		}
-		assert_ok!(
-			GrandpaAccountableSafety::start_accountable_safety(block_not_included, new_block),
-		);
+		assert_ok!(GrandpaAccountableSafety::start_accountable_safety(
+			block_not_included.clone(),
+			new_block
+		));
 		for pub_id in &pub_ids {
 			assert_eq!(
 				GrandpaAccountableSafety::query_state_for_voter(&pub_id),
@@ -203,16 +209,14 @@ fn accountable_safety_setup_and_submit_reply() {
 		);
 
 		// Add response and check that it is registered
-		assert_ok!(
-			GrandpaAccountableSafety::add_response(
-				&pub_ids[0],
-				QueryResponse::Precommits(commit0.precommits.clone()),
-			),
-		);
+		assert_ok!(GrandpaAccountableSafety::add_response(
+			&pub_ids[0],
+			QueryResponse::Precommits(block_not_included.0.precommits.clone()),
+		));
 		assert_eq!(
 			GrandpaAccountableSafety::query_state_for_voter(&pub_ids[0]),
 			Some(Query::Replied(QueryResponse::Precommits(
-				commit0.precommits
+				block_not_included.0.precommits.clone(),
 			))),
 		);
 		assert_eq!(
@@ -225,6 +229,90 @@ fn accountable_safety_setup_and_submit_reply() {
 		assert_eq!(
 			GrandpaAccountableSafety::query_state_for_voter(&Charlie.public().into()),
 			None,
+		);
+
+		// Trying to add a new response for the same voter in the same round fails
+		assert_err!(
+			GrandpaAccountableSafety::add_response(
+				&pub_ids[0],
+				QueryResponse::Precommits(block_not_included.0.precommits.clone()),
+			),
+			Error::<Test>::AlreadyReplied
+		);
+	});
+}
+
+#[test]
+fn accountable_safety_submit_invalid_reply() {
+	new_test_ext().execute_with(|| {
+		use Ed25519Keyring::{Alice, Bob};
+		let auth = vec![Alice, Bob];
+		let pub_ids: Vec<AuthorityId> =
+			auth.iter().map(|keyring| keyring.public().into()).collect();
+		let round = 42;
+		let set_id = 4;
+
+		let block_not_included = (
+			new_commit(auth.clone(), H256::random(), 5, round, set_id),
+			round.clone(),
+			set_id,
+		);
+
+		let new_block = (
+			new_commit(auth.clone(), H256::random(), 6, round + 1, set_id),
+			round + 1,
+			set_id,
+		);
+
+		assert_ok!(GrandpaAccountableSafety::start_accountable_safety(
+			block_not_included.clone(),
+			new_block
+		));
+
+		// Add response with an invalid signature
+		let precommit = {
+			let mut precommit = new_precommit(Alice, H256::random(), 5, round, set_id);
+			let other_precommit = new_precommit(Alice, H256::random(), 5 + 1, round, set_id);
+			precommit.precommit = other_precommit.precommit;
+			precommit
+		};
+		assert_err!(
+			GrandpaAccountableSafety::add_response(
+				&pub_ids[0],
+				QueryResponse::Precommits(vec![precommit]),
+			),
+			Error::<Test>::InvalidSignature
+		);
+		assert_eq!(
+			GrandpaAccountableSafety::query_state_for_voter(&pub_ids[0]),
+			Some(Query::WaitingForReply)
+		);
+
+		// Add response with equivocations
+		let precommits = vec![
+			new_precommit(Alice, H256::random(), 5, round, set_id),
+			new_precommit(Alice, H256::random(), 5 + 1, round, set_id),
+		];
+		assert!(GrandpaAccountableSafety::equivocations().is_none());
+		assert_ok!(GrandpaAccountableSafety::add_response(
+			&pub_ids[0],
+			QueryResponse::Precommits(precommits.clone()),
+		));
+
+		// The response is recorded ...
+		assert_eq!(
+			GrandpaAccountableSafety::query_state_for_voter(&pub_ids[0]),
+			Some(Query::Replied(QueryResponse::Precommits(
+				precommits.clone()
+			))),
+		);
+
+		// ... but the equivocations are noted
+		assert_eq!(
+			GrandpaAccountableSafety::equivocations(),
+			Some(StoredEquivocations {
+				equivocations: vec![Equivocation::Precommit(precommits)],
+			}),
 		);
 	});
 }
@@ -239,29 +327,36 @@ fn accountable_safety_proceed_to_previous_round() {
 		let round = 42;
 		let set_id = 4;
 
-		let commit0 = new_commit(auth.clone(), H256::random(), 5, round, set_id);
-		let block_not_included = (commit0.clone(), round.clone(), set_id);
+		let block_not_included = (
+			new_commit(auth.clone(), H256::random(), 5, round, set_id),
+			round.clone(),
+			set_id,
+		);
 
-		let commit1 = new_commit(auth.clone(), H256::random(), 6, round + 1, set_id);
-		let new_block = (commit1, round + 1, set_id);
+		let new_block = (
+			new_commit(auth.clone(), H256::random(), 6, round + 1, set_id),
+			round + 1,
+			set_id,
+		);
 
-		GrandpaAccountableSafety::start_accountable_safety(block_not_included, new_block);
+		assert_ok!(GrandpaAccountableSafety::start_accountable_safety(
+			block_not_included.clone(),
+			new_block
+		));
 
 		// All authorities submit their replies
 		for pub_id in &pub_ids {
-			assert_ok!(
-				GrandpaAccountableSafety::add_response(
-					pub_id,
-					QueryResponse::Precommits(commit0.precommits.clone()),
-				),
-			);
+			assert_ok!(GrandpaAccountableSafety::add_response(
+				pub_id,
+				QueryResponse::Precommits(block_not_included.0.precommits.clone()),
+			));
 		}
 
 		for pub_id in &pub_ids {
 			assert_eq!(
 				GrandpaAccountableSafety::query_state_for_voter(pub_id),
 				Some(Query::Replied(QueryResponse::Precommits(
-					commit0.precommits.clone()
+					block_not_included.0.precommits.clone()
 				))),
 			);
 		}
