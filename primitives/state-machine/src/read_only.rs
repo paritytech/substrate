@@ -203,7 +203,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
 
-	fn extend_storage_info(&mut self, _: StorageInfo) {
+	fn extend_storage_info(&mut self, _: Vec<StorageInfo>) {
 		unimplemented!("extend_storage_info is not supported in ReadOnlyExternalities")
 	}
 }

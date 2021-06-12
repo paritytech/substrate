@@ -728,6 +728,9 @@ macro_rules! impl_benchmark {
 				whitelist.push(whitelisted_caller_key.into());
 				$crate::benchmarking::set_whitelist(whitelist);
 
+				// Add StorageInfo to DB
+				//$crate::benchmarking::extend_storage_info()
+
 				// Warm up the DB
 				$crate::benchmarking::commit_db();
 				$crate::benchmarking::wipe_db();

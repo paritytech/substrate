@@ -515,9 +515,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		*self.whitelist.borrow_mut() = new;
 	}
 
-	fn extend_storage_info(&self, new: StorageInfo) {
-		let prefix = new.prefix;
-		self.storage_info.borrow_mut().insert(prefix, new);
+	fn extend_storage_info(&self, new: Vec<StorageInfo>) {
+		for item in new {
+			let prefix = item.prefix;
+			self.storage_info.borrow_mut().insert(prefix, item);
+		}
 	}
 
 	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {

@@ -297,7 +297,7 @@ pub trait Externalities: ExtensionStore {
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	///
 	/// Adds new storage info to the benchmarking DB.
-	fn extend_storage_info(&mut self, new: StorageInfo);
+	fn extend_storage_info(&mut self, new: Vec<StorageInfo>);
 }
 
 /// Extension for the [`Externalities`] trait.

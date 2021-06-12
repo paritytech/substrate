@@ -779,7 +779,7 @@ where
 		self.backend.proof_size()
 	}
 
-	fn extend_storage_info(&mut self, new: StorageInfo) {
+	fn extend_storage_info(&mut self, new: Vec<StorageInfo>) {
 		self.backend.extend_storage_info(new)
 	}
 }

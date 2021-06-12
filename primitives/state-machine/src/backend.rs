@@ -252,7 +252,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// Extend storage info for benchmarking db
-	fn extend_storage_info(&self, _: StorageInfo) {}
+	fn extend_storage_info(&self, _: Vec<StorageInfo>) {}
 }
 
 /// Trait that allows consolidate two transactions together.

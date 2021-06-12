@@ -164,8 +164,8 @@ pub trait Benchmarking {
 		self.set_whitelist(whitelist);
 	}
 
-	fn extend_storage_info(&mut self, add: StorageInfo) {
-		self.extend_storage_info(add);
+	fn extend_storage_info(&mut self, new: Vec<StorageInfo>) {
+		self.extend_storage_info(new);
 	}
 
 	/// Get current estimated proof size.

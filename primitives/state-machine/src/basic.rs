@@ -333,7 +333,7 @@ impl Externalities for BasicExternalities {
 		unimplemented!("set_whitelist is not supported in Basic")
 	}
 
-	fn extend_storage_info(&mut self, _: StorageInfo) {
+	fn extend_storage_info(&mut self, _: Vec<StorageInfo>) {
 		unimplemented!("extend_storage_info is not supported in Basic")
 	}
 }
