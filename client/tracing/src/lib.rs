@@ -28,25 +28,23 @@
 
 #![warn(missing_docs)]
 
+pub mod block;
 pub mod logging;
 
 use rustc_hash::FxHashMap;
+use serde::ser::{Serialize, SerializeMap, Serializer};
+use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 use std::fmt;
 use std::time::{Duration, Instant};
-use parking_lot::Mutex;
-use serde::ser::{Serialize, Serializer, SerializeMap};
 use tracing::{
 	event::Event,
-	field::{Visit, Field},
-	Level,
+	field::{Field, Visit},
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
+	Level,
 };
-use tracing_subscriber::{
-	CurrentSpan,
-	layer::{Layer, Context},
-};
-use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+use tracing_subscriber::layer::{Context, Layer};
+use tracing_subscriber::registry::LookupSpan;
 
 #[doc(hidden)]
 pub use tracing;
@@ -57,8 +55,6 @@ const ZERO_DURATION: Duration = Duration::from_nanos(0);
 pub struct ProfilingLayer {
 	targets: Vec<(String, Level)>,
 	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
-	current_span: CurrentSpan,
 }
 
 /// Used to configure how to receive the metrics
@@ -86,7 +82,7 @@ pub trait TraceHandler: Send + Sync {
 #[derive(Debug)]
 pub struct TraceEvent {
 	/// Name of the event.
-	pub name: &'static str,
+	pub name: String,
 	/// Target of the event.
 	pub target: String,
 	/// Level of the event.
@@ -123,13 +119,13 @@ pub struct SpanDatum {
 /// Holds associated values for a tracing span
 #[derive(Default, Clone, Debug)]
 pub struct Values {
-	/// HashMap of `bool` values
+	/// FxHashMap of `bool` values
 	pub bool_values: FxHashMap<String, bool>,
-	/// HashMap of `i64` values
+	/// FxHashMap of `i64` values
 	pub i64_values: FxHashMap<String, i64>,
-	/// HashMap of `u64` values
+	/// FxHashMap of `u64` values
 	pub u64_values: FxHashMap<String, u64>,
-	/// HashMap of `String` values
+	/// FxHashMap of `String` values
 	pub string_values: FxHashMap<String, String>,
 }
 
@@ -141,10 +137,10 @@ impl Values {
 
 	/// Checks if all individual collections are empty
 	pub fn is_empty(&self) -> bool {
-		self.bool_values.is_empty() &&
-			self.i64_values.is_empty() &&
-			self.u64_values.is_empty() &&
-			self.string_values.is_empty()
+		self.bool_values.is_empty()
+			&& self.i64_values.is_empty()
+			&& self.u64_values.is_empty()
+			&& self.string_values.is_empty()
 	}
 }
 
@@ -224,8 +220,6 @@ impl ProfilingLayer {
 		Self {
 			targets,
 			trace_handler,
-			span_data: Mutex::new(FxHashMap::default()),
-			current_span: Default::default(),
 		}
 	}
 
@@ -246,7 +240,7 @@ fn parse_target(s: &str) -> (String, Level) {
 		Some(i) => {
 			let target = s[0..i].to_string();
 			if s.len() > i {
-				let level = s[i + 1..s.len()].parse::<Level>().unwrap_or(Level::TRACE);
+				let level = s[i + 1..].parse::<Level>().unwrap_or(Level::TRACE);
 				(target, level)
 			} else {
 				(target, Level::TRACE)
@@ -256,83 +250,106 @@ fn parse_target(s: &str) -> (String, Level) {
 	}
 }
 
-impl<S: Subscriber> Layer<S> for ProfilingLayer {
-	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, _ctx: Context<S>) {
-		let mut values = Values::default();
-		attrs.record(&mut values);
-		let span_datum = SpanDatum {
-			id: id.clone(),
-			parent_id: attrs.parent().cloned().or_else(|| self.current_span.id()),
-			name: attrs.metadata().name().to_owned(),
-			target: attrs.metadata().target().to_owned(),
-			level: attrs.metadata().level().clone(),
-			line: attrs.metadata().line().unwrap_or(0),
-			start_time: Instant::now(),
-			overall_time: ZERO_DURATION,
-			values,
-		};
-		self.span_data.lock().insert(id.clone(), span_datum);
-	}
+impl<S> Layer<S> for ProfilingLayer
+where
+	S: Subscriber + for<'span> LookupSpan<'span>,
+{
+	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<S>) {
+		if let Some(span) = ctx.span(id) {
+			let mut extension = span.extensions_mut();
+			let parent_id = attrs.parent().cloned().or_else(|| {
+				if attrs.is_contextual() {
+					ctx.lookup_current().map(|span| span.id())
+				} else {
+					None
+				}
+			});
 
-	fn on_record(&self, span: &Id, values: &Record<'_>, _ctx: Context<S>) {
-		let mut span_data = self.span_data.lock();
-		if let Some(s) = span_data.get_mut(span) {
-			values.record(&mut s.values);
+			let mut values = Values::default();
+			attrs.record(&mut values);
+			let span_datum = SpanDatum {
+				id: id.clone(),
+				parent_id,
+				name: attrs.metadata().name().to_owned(),
+				target: attrs.metadata().target().to_owned(),
+				level: *attrs.metadata().level(),
+				line: attrs.metadata().line().unwrap_or(0),
+				start_time: Instant::now(),
+				overall_time: ZERO_DURATION,
+				values,
+			};
+			extension.insert(span_datum);
 		}
 	}
 
-	fn on_event(&self, event: &Event<'_>, _ctx: Context<S>) {
+	fn on_record(&self, id: &Id, values: &Record<'_>, ctx: Context<S>) {
+		if let Some(span) = ctx.span(id) {
+			let mut extensions = span.extensions_mut();
+			if let Some(s) = extensions.get_mut::<SpanDatum>() {
+				values.record(&mut s.values);
+			}
+		}
+	}
+
+	fn on_event(&self, event: &Event<'_>, ctx: Context<S>) {
+		let parent_id = event.parent().cloned().or_else(|| {
+			if event.is_contextual() {
+				ctx.lookup_current().map(|span| span.id())
+			} else {
+				None
+			}
+		});
+
 		let mut values = Values::default();
 		event.record(&mut values);
 		let trace_event = TraceEvent {
-			name: event.metadata().name(),
+			name: event.metadata().name().to_owned(),
 			target: event.metadata().target().to_owned(),
-			level: event.metadata().level().clone(),
+			level: *event.metadata().level(),
 			values,
-			parent_id: event.parent().cloned().or_else(|| self.current_span.id()),
+			parent_id,
 		};
 		self.trace_handler.handle_event(trace_event);
 	}
 
-	fn on_enter(&self, span: &Id, _ctx: Context<S>) {
-		self.current_span.enter(span.clone());
-		let mut span_data = self.span_data.lock();
-		let start_time = Instant::now();
-		if let Some(mut s) = span_data.get_mut(&span) {
-			s.start_time = start_time;
+	fn on_enter(&self, span: &Id, ctx: Context<S>) {
+		if let Some(span) = ctx.span(span) {
+			let mut extensions = span.extensions_mut();
+			if let Some(s) = extensions.get_mut::<SpanDatum>() {
+				let start_time = Instant::now();
+				s.start_time = start_time;
+			}
 		}
 	}
 
-	fn on_exit(&self, span: &Id, _ctx: Context<S>) {
-		self.current_span.exit();
-		let end_time = Instant::now();
-		let span_datum = {
-			let mut span_data = self.span_data.lock();
-			span_data.remove(&span)
-		};
-
-		if let Some(mut span_datum) = span_datum {
-			span_datum.overall_time += end_time - span_datum.start_time;
-			if span_datum.name == WASM_TRACE_IDENTIFIER {
-				span_datum.values.bool_values.insert("wasm".to_owned(), true);
-				if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
-					span_datum.name = n;
-				}
-				if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
-					span_datum.target = t;
-				}
-				if self.check_target(&span_datum.target, &span_datum.level) {
+	fn on_exit(&self, span: &Id, ctx: Context<S>) {
+		if let Some(span) = ctx.span(span) {
+			let end_time = Instant::now();
+			let mut extensions = span.extensions_mut();
+			if let Some(mut span_datum) = extensions.remove::<SpanDatum>() {
+				span_datum.overall_time += end_time - span_datum.start_time;
+				if span_datum.name == WASM_TRACE_IDENTIFIER {
+					span_datum
+						.values
+						.bool_values
+						.insert("wasm".to_owned(), true);
+					if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
+						span_datum.name = n;
+					}
+					if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
+						span_datum.target = t;
+					}
+					if self.check_target(&span_datum.target, &span_datum.level) {
+						self.trace_handler.handle_span(span_datum);
+					}
+				} else {
 					self.trace_handler.handle_span(span_datum);
 				}
-			} else {
-				self.trace_handler.handle_span(span_datum);
 			}
-		};
+		}
 	}
 
-	fn on_close(&self, span: Id, ctx: Context<S>) {
-		self.on_exit(&span, ctx)
-	}
+	fn on_close(&self, _span: Id, _ctx: Context<S>) {}
 }
 
 /// TraceHandler for sending span data to the logger
@@ -385,9 +402,36 @@ impl TraceHandler for LogTraceHandler {
 	}
 }
 
+impl From<TraceEvent> for sp_rpc::tracing::Event {
+	fn from(trace_event: TraceEvent) -> Self {
+		let data = sp_rpc::tracing::Data {
+			string_values: trace_event.values.string_values
+		};
+		sp_rpc::tracing::Event {
+			target: trace_event.target,
+			data,
+			parent_id: trace_event.parent_id.map(|id| id.into_u64())
+		}
+	}
+}
+
+impl From<SpanDatum> for sp_rpc::tracing::Span {
+	fn from(span_datum: SpanDatum) -> Self {
+		let wasm = span_datum.values.bool_values.get("wasm").is_some();
+		sp_rpc::tracing::Span {
+			id: span_datum.id.into_u64(),
+			parent_id: span_datum.parent_id.map(|id| id.into_u64()),
+			name: span_datum.name,
+			target: span_datum.target,
+			wasm,
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use parking_lot::Mutex;
 	use std::sync::Arc;
 	use tracing_subscriber::layer::SubscriberExt;
 
@@ -555,7 +599,7 @@ mod tests {
 						break;
 					}
 				}
-				// gard2 and span2 dropped / exited
+				// guard2 and span2 dropped / exited
 			});
 
 			// wait for Event to be dispatched and stored

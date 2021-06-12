@@ -70,6 +70,20 @@ macro_rules! enable_log_reloading {
 	}};
 }
 
+/// Convert a `Option<LevelFilter>` to a [`log::LevelFilter`].
+///
+/// `None` is interpreted as `Info`.
+fn to_log_level_filter(level_filter: Option<LevelFilter>) -> log::LevelFilter {
+	match level_filter {
+		Some(LevelFilter::INFO) | None => log::LevelFilter::Info,
+		Some(LevelFilter::TRACE) => log::LevelFilter::Trace,
+		Some(LevelFilter::WARN) => log::LevelFilter::Warn,
+		Some(LevelFilter::ERROR) => log::LevelFilter::Error,
+		Some(LevelFilter::DEBUG) => log::LevelFilter::Debug,
+		Some(LevelFilter::OFF) => log::LevelFilter::Off,
+	}
+}
+
 /// Common implementation to get the subscriber.
 fn prepare_subscriber<N, E, F, W>(
 	directives: &str,
@@ -108,6 +122,9 @@ where
 		.add_directive(parse_default_directive("ws=off").expect("provided directive is valid"))
 		.add_directive(parse_default_directive("yamux=off").expect("provided directive is valid"))
 		.add_directive(
+			parse_default_directive("regalloc=off").expect("provided directive is valid"),
+		)
+		.add_directive(
 			parse_default_directive("cranelift_codegen=off").expect("provided directive is valid"),
 		)
 		// Set warn logging by default for some modules.
@@ -134,15 +151,7 @@ where
 	}
 
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
-
-	let max_level = match max_level_hint {
-		Some(LevelFilter::INFO) | None => log::LevelFilter::Info,
-		Some(LevelFilter::TRACE) => log::LevelFilter::Trace,
-		Some(LevelFilter::WARN) => log::LevelFilter::Warn,
-		Some(LevelFilter::ERROR) => log::LevelFilter::Error,
-		Some(LevelFilter::DEBUG) => log::LevelFilter::Debug,
-		Some(LevelFilter::OFF) => log::LevelFilter::Off,
-	};
+	let max_level = to_log_level_filter(max_level_hint);
 
 	tracing_log::LogTracer::builder()
 		.with_max_level(max_level)
@@ -170,6 +179,9 @@ where
 		dup_to_stdout: !atty::is(atty::Stream::Stderr) && atty::is(atty::Stream::Stdout),
 	};
 	let builder = FmtSubscriber::builder().with_env_filter(env_filter);
+
+	#[cfg(not(target_os = "unknown"))]
+	let builder = builder.with_span_events(format::FmtSpan::NONE);
 
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.with_writer(std::io::stderr as _);
@@ -386,7 +398,7 @@ mod tests {
 	#[test]
 	fn prefix_in_log_lines() {
 		let re = regex::Regex::new(&format!(
-			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  \[{}\] {}$",
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}} \[{}\] {}$",
 			EXPECTED_NODE_NAME, EXPECTED_LOG_MESSAGE,
 		))
 		.unwrap();
@@ -436,7 +448,7 @@ mod tests {
 	#[test]
 	fn do_not_write_with_colors_on_tty() {
 		let re = regex::Regex::new(&format!(
-			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  {}$",
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}} {}$",
 			EXPECTED_LOG_MESSAGE,
 		))
 		.unwrap();

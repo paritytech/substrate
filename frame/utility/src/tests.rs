@@ -41,14 +41,14 @@ pub mod example {
 
 	decl_module! {
 		pub struct Module<T: Config> for enum Call where origin: <T as frame_system::Config>::Origin {
-			#[weight = *weight]
-			fn noop(_origin, weight: Weight) { }
+			#[weight = *_weight]
+			fn noop(_origin, _weight: Weight) { }
 
-			#[weight = *start_weight]
+			#[weight = *_start_weight]
 			fn foobar(
 				origin,
 				err: bool,
-				start_weight: Weight,
+				_start_weight: Weight,
 				end_weight: Option<Weight>,
 			) -> DispatchResultWithPostInfo {
 				let _ = ensure_signed(origin)?;
@@ -118,6 +118,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
@@ -169,14 +171,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
-}
-
-fn last_event() -> Event {
-	frame_system::Pallet::<Test>::events().pop().map(|e| e.event).expect("Event expected")
-}
-
-fn expect_event<E: Into<Event>>(e: E) {
-	assert_eq!(last_event(), e.into());
 }
 
 #[test]
@@ -313,7 +307,7 @@ fn batch_with_signed_filters() {
 				Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))
 			]),
 		);
-		expect_event(utility::Event::BatchInterrupted(0, DispatchError::BadOrigin));
+		System::assert_last_event(utility::Event::BatchInterrupted(0, DispatchError::BadOrigin).into());
 	});
 }
 
@@ -387,7 +381,7 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
+		System::assert_last_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")).into());
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
 
@@ -400,7 +394,7 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
+		System::assert_last_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")).into());
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
 		// Partial batch completion
@@ -411,7 +405,7 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
+		System::assert_last_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")).into());
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
@@ -525,5 +519,46 @@ fn batch_all_handles_weight_refund() {
 			// Real weight is 2 calls at end_weight
 			<Test as Config>::WeightInfo::batch_all(2) + end_weight * 2,
 		);
+	});
+}
+
+#[test]
+fn batch_all_does_not_nest() {
+	new_test_ext().execute_with(|| {
+		let batch_all = Call::Utility(
+			UtilityCall::batch_all(
+				vec![
+					Call::Balances(BalancesCall::transfer(2, 1)),
+					Call::Balances(BalancesCall::transfer(2, 1)),
+					Call::Balances(BalancesCall::transfer(2, 1)),
+				]
+			)
+		);
+
+		let info = batch_all.get_dispatch_info();
+
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
+		// A nested batch_all call will not pass the filter, and fail with `BadOrigin`.
+		assert_noop!(
+			Utility::batch_all(Origin::signed(1), vec![batch_all.clone()]),
+			DispatchErrorWithPostInfo {
+				post_info: PostDispatchInfo {
+					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(1) + info.weight),
+					pays_fee: Pays::Yes
+				},
+				error: DispatchError::BadOrigin,
+			}
+		);
+
+		// And for those who want to get a little fancy, we check that the filter persists across
+		// other kinds of dispatch wrapping functions... in this case `batch_all(batch(batch_all(..)))`
+		let batch_nested = Call::Utility(UtilityCall::batch(vec![batch_all]));
+		// Batch will end with `Ok`, but does not actually execute as we can see from the event
+		// and balances.
+		assert_ok!(Utility::batch_all(Origin::signed(1), vec![batch_nested]));
+		System::assert_has_event(utility::Event::BatchInterrupted(0, DispatchError::BadOrigin).into());
+		assert_eq!(Balances::free_balance(1), 10);
+		assert_eq!(Balances::free_balance(2), 10);
 	});
 }

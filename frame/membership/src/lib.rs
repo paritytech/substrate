@@ -18,7 +18,7 @@
 //! # Membership Module
 //!
 //! Allows control of membership of a set of `AccountId`s, useful for managing membership of of a
-//! collective. A prime member may be set.
+//! collective. A prime member may be set
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -26,11 +26,14 @@
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
-	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains, SortedMembers},
+	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains, SortedMembers, Get},
 };
 use frame_system::ensure_signed;
 
-pub trait Config<I=DefaultInstance>: frame_system::Config {
+pub mod weights;
+pub use weights::WeightInfo;
+
+pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
@@ -56,6 +59,16 @@ pub trait Config<I=DefaultInstance>: frame_system::Config {
 
 	/// The receiver of the signal for when the membership has changed.
 	type MembershipChanged: ChangeMembers<Self::AccountId>;
+
+	/// The maximum number of members that this membership can have.
+	///
+	/// This is used for benchmarking. Re-run the benchmarks if this changes.
+	///
+	/// This is not enforced in the code; the membership size can exceed this limit.
+	type MaxMembers: Get<u32>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -127,6 +140,8 @@ decl_module! {
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).err().ok_or(Error::<T, I>::AlreadyMember)?;
 			members.insert(location, who.clone());
+
+			Self::maybe_warn_max_members(&members);
 			<Members<T, I>>::put(&members);
 
 			T::MembershipChanged::change_members_sorted(&[who], &[], &members[..]);
@@ -144,6 +159,8 @@ decl_module! {
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
 			members.remove(location);
+
+			Self::maybe_warn_max_members(&members);
 			<Members<T, I>>::put(&members);
 
 			T::MembershipChanged::change_members_sorted(&[], &[who], &members[..]);
@@ -168,6 +185,8 @@ decl_module! {
 			let _ = members.binary_search(&add).err().ok_or(Error::<T, I>::AlreadyMember)?;
 			members[location] = add.clone();
 			members.sort();
+
+			Self::maybe_warn_max_members(&members);
 			<Members<T, I>>::put(&members);
 
 			T::MembershipChanged::change_members_sorted(
@@ -193,9 +212,9 @@ decl_module! {
 			<Members<T, I>>::mutate(|m| {
 				T::MembershipChanged::set_members_sorted(&members[..], m);
 				Self::rejig_prime(&members);
+				Self::maybe_warn_max_members(&members);
 				*m = members;
 			});
-
 
 			Self::deposit_event(RawEvent::MembersReset);
 		}
@@ -215,6 +234,8 @@ decl_module! {
 				let _ = members.binary_search(&new).err().ok_or(Error::<T, I>::AlreadyMember)?;
 				members[location] = new.clone();
 				members.sort();
+
+				Self::maybe_warn_max_members(&members);
 				<Members<T, I>>::put(&members);
 
 				T::MembershipChanged::change_members_sorted(
@@ -264,6 +285,17 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			}
 		}
 	}
+
+	fn maybe_warn_max_members(members: &[T::AccountId]) {
+		if members.len() as u32 > T::MaxMembers::get() {
+			log::error!(
+				target: "runtime::membership",
+				"maximum number of members used for weight is exceeded, weights can be underestimated [{} > {}].",
+				members.len(),
+				T::MaxMembers::get(),
+			)
+		}
+	}
 }
 
 impl<T: Config<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
@@ -280,6 +312,149 @@ impl<T: Config<I>, I: Instance> SortedMembers<T::AccountId> for Module<T, I> {
 	fn count() -> usize {
 		Members::<T, I>::decode_len().unwrap_or(0)
 	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmark {
+	use super::{*, Module as Membership};
+	use frame_system::RawOrigin;
+	use frame_support::{traits::EnsureOrigin, assert_ok};
+	use frame_benchmarking::{benchmarks_instance, whitelist, account, impl_benchmark_test_suite};
+
+	const SEED: u32 = 0;
+
+	fn set_members<T: Config<I>, I: Instance>(members: Vec<T::AccountId>, prime: Option<usize>) {
+		let reset_origin = T::ResetOrigin::successful_origin();
+		let prime_origin = T::PrimeOrigin::successful_origin();
+
+		assert_ok!(<Membership<T, _>>::reset_members(reset_origin, members.clone()));
+		if let Some(prime) = prime.map(|i| members[i].clone()) {
+			assert_ok!(<Membership<T, _>>::set_prime(prime_origin, prime));
+		} else {
+			assert_ok!(<Membership<T, _>>::clear_prime(prime_origin));
+		}
+	}
+
+	benchmarks_instance! {
+		add_member {
+			let m in 1 .. T::MaxMembers::get();
+
+			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			set_members::<T, I>(members.clone(), None);
+			let new_member = account::<T::AccountId>("add", m, SEED);
+		}: {
+			assert_ok!(<Membership<T, _>>::add_member(T::AddOrigin::successful_origin(), new_member.clone()));
+		}
+		verify {
+			assert!(<Members<T, _>>::get().contains(&new_member));
+			#[cfg(test)] crate::tests::clean();
+		}
+
+		// the case of no prime or the prime being removed is surely cheaper than the case of
+		// reporting a new prime via `MembershipChanged`.
+		remove_member {
+			let m in 2 .. T::MaxMembers::get();
+
+			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			set_members::<T, I>(members.clone(), Some(members.len() - 1));
+
+			let to_remove = members.first().cloned().unwrap();
+		}: {
+			assert_ok!(<Membership<T, _>>::remove_member(T::RemoveOrigin::successful_origin(), to_remove.clone()));
+		} verify {
+			assert!(!<Members<T, _>>::get().contains(&to_remove));
+			// prime is rejigged
+			assert!(<Prime<T, _>>::get().is_some() && T::MembershipChanged::get_prime().is_some());
+			#[cfg(test)] crate::tests::clean();
+		}
+
+		// we remove a non-prime to make sure it needs to be set again.
+		swap_member {
+			let m in 2 .. T::MaxMembers::get();
+
+			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			set_members::<T, I>(members.clone(), Some(members.len() - 1));
+			let add = account::<T::AccountId>("member", m, SEED);
+			let remove = members.first().cloned().unwrap();
+		}: {
+			assert_ok!(<Membership<T, _>>::swap_member(
+				T::SwapOrigin::successful_origin(),
+				remove.clone(),
+				add.clone(),
+			));
+		} verify {
+			assert!(!<Members<T, _>>::get().contains(&remove));
+			assert!(<Members<T, _>>::get().contains(&add));
+			// prime is rejigged
+			assert!(<Prime<T, _>>::get().is_some() && T::MembershipChanged::get_prime().is_some());
+			#[cfg(test)] crate::tests::clean();
+		}
+
+		// er keep the prime common between incoming and outgoing to make sure it is rejigged.
+		reset_member {
+			let m in 1 .. T::MaxMembers::get();
+
+			let members = (1..m+1).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			set_members::<T, I>(members.clone(), Some(members.len() - 1));
+			let mut new_members = (m..2*m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+		}: {
+			assert_ok!(<Membership<T, _>>::reset_members(T::ResetOrigin::successful_origin(), new_members.clone()));
+		} verify {
+			new_members.sort();
+			assert_eq!(<Members<T, _>>::get(), new_members);
+			// prime is rejigged
+			assert!(<Prime<T, _>>::get().is_some() && T::MembershipChanged::get_prime().is_some());
+			#[cfg(test)] crate::tests::clean();
+		}
+
+		change_key {
+			let m in 1 .. T::MaxMembers::get();
+
+			// worse case would be to change the prime
+			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let prime = members.last().cloned().unwrap();
+			set_members::<T, I>(members.clone(), Some(members.len() - 1));
+
+			let add = account::<T::AccountId>("member", m, SEED);
+			whitelist!(prime);
+		}: {
+			assert_ok!(<Membership<T, _>>::change_key(RawOrigin::Signed(prime.clone()).into(), add.clone()));
+		} verify {
+			assert!(!<Members<T, _>>::get().contains(&prime));
+			assert!(<Members<T, _>>::get().contains(&add));
+			// prime is rejigged
+			assert_eq!(<Prime<T, _>>::get().unwrap(), add);
+			#[cfg(test)] crate::tests::clean();
+		}
+
+		set_prime {
+			let m in 1 .. T::MaxMembers::get();
+			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let prime = members.last().cloned().unwrap();
+			set_members::<T, I>(members, None);
+		}: {
+			assert_ok!(<Membership<T, _>>::set_prime(T::PrimeOrigin::successful_origin(), prime));
+		} verify {
+			assert!(<Prime<T, _>>::get().is_some());
+			assert!(<T::MembershipChanged>::get_prime().is_some());
+			#[cfg(test)] crate::tests::clean();
+		}
+
+		clear_prime {
+			let m in 1 .. T::MaxMembers::get();
+			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
+			let prime = members.last().cloned().unwrap();
+			set_members::<T, I>(members, None);
+		}: {
+			assert_ok!(<Membership<T, _>>::clear_prime(T::PrimeOrigin::successful_origin()));
+		} verify {
+			assert!(<Prime<T, _>>::get().is_none());
+			assert!(<T::MembershipChanged>::get_prime().is_none());
+			#[cfg(test)] crate::tests::clean();
+		}
+	}
+
+	impl_benchmark_test_suite!(Membership, crate::tests::new_bench_ext(), crate::tests::Test,);
 }
 
 #[cfg(test)]
@@ -308,11 +483,13 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaxMembers: u32 = 10;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 		pub static Members: Vec<u64> = vec![];
 		pub static Prime: Option<u64> = None;
 	}
+
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
 		type BlockWeights = ();
@@ -349,7 +526,7 @@ mod tests {
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
 		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
-			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
+			let mut old_plus_incoming = Members::get();
 			old_plus_incoming.extend_from_slice(incoming);
 			old_plus_incoming.sort();
 			let mut new_plus_outgoing = new.to_vec();
@@ -357,13 +534,17 @@ mod tests {
 			new_plus_outgoing.sort();
 			assert_eq!(old_plus_incoming, new_plus_outgoing);
 
-			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
-			PRIME.with(|p| *p.borrow_mut() = None);
+			Members::set(new.to_vec());
+			Prime::set(None);
 		}
 		fn set_prime(who: Option<u64>) {
-			PRIME.with(|p| *p.borrow_mut() = who);
+			Prime::set(who);
+		}
+		fn get_prime() -> Option<u64> {
+			Prime::get()
 		}
 	}
+
 	impl InitializeMembers<u64> for TestChangeMembers {
 		fn initialize_members(members: &[u64]) {
 			MEMBERS.with(|m| *m.borrow_mut() = members.to_vec());
@@ -379,9 +560,11 @@ mod tests {
 		type PrimeOrigin = EnsureSignedBy<Five, u64>;
 		type MembershipInitialized = TestChangeMembers;
 		type MembershipChanged = TestChangeMembers;
+		type MaxMembers = MaxMembers;
+		type WeightInfo = ();
 	}
 
-	fn new_test_ext() -> sp_io::TestExternalities {
+	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		pallet_membership::GenesisConfig::<Test>{
@@ -389,6 +572,17 @@ mod tests {
 			.. Default::default()
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub(crate) fn new_bench_ext() -> sp_io::TestExternalities {
+		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub(crate) fn clean() {
+		Members::set(vec![]);
+		Prime::set(None);
 	}
 
 	#[test]

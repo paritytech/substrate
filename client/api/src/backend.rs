@@ -475,6 +475,12 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		revert_finalized: bool,
 	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)>;
 
+	/// Discard non-best, unfinalized leaf block.
+	fn remove_leaf_block(
+		&self,
+		hash: &Block::Hash,
+	) -> sp_blockchain::Result<()>;
+
 	/// Attemps to "ghost" the given block and all forks descending from it. This will remove all
 	/// leaves descending from this block and will re-org the chain to a new best block. If there's
 	/// no alternative longer fork descending from the given block then its parent will be set as the

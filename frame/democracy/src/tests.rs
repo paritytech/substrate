@@ -22,7 +22,7 @@ use super::*;
 use codec::Encode;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types, ord_parameter_types,
-	traits::{SortedMembers, OnInitialize, Filter},
+	traits::{SortedMembers, OnInitialize, Filter, GenesisBuild},
 	weights::Weight,
 };
 use sp_core::H256;
@@ -63,7 +63,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Config, Event<T>},
-		Democracy: pallet_democracy::{Pallet, Call, Storage, Config, Event<T>},
+		Democracy: pallet_democracy::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -120,9 +120,12 @@ impl pallet_scheduler::Config for Test {
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
+	pub const MaxLocks: u32 = 10;
 }
 impl pallet_balances::Config for Test {
-	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+	type MaxLocks = MaxLocks;
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -194,7 +197,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_balances::GenesisConfig::<Test>{
 		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_democracy::GenesisConfig::default().assimilate_storage(&mut t).unwrap();
+	pallet_democracy::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext

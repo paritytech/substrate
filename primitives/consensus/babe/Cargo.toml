@@ -25,8 +25,9 @@ sp-core = { version = "3.0.0", default-features = false, path = "../../core" }
 sp-inherents = { version = "3.0.0", default-features = false, path = "../../inherents" }
 sp-keystore = { version = "0.9.0", default-features = false, path = "../../keystore", optional = true }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtime" }
-sp-timestamp = { version = "3.0.0", default-features = false, path = "../../timestamp" }
+sp-timestamp = { version = "3.0.0", path = "../../timestamp", optional = true }
 serde = { version = "1.0.123", features = ["derive"], optional = true }
+async-trait = { version = "0.1.48", optional = true }
 
 [features]
 default = ["std"]
@@ -43,6 +44,7 @@ std = [
 	"sp-inherents/std",
 	"sp-keystore",
 	"sp-runtime/std",
-	"sp-timestamp/std",
 	"serde",
+	"sp-timestamp",
+	"async-trait",
 ]

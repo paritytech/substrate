@@ -159,6 +159,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 		is_dev: bool,
+		is_validator: bool,
 		net_config_dir: PathBuf,
 		client_id: &str,
 		node_name: &str,
@@ -169,6 +170,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			network_params.network_config(
 				chain_spec,
 				is_dev,
+				is_validator,
 				Some(net_config_dir),
 				client_id,
 				node_name,
@@ -356,6 +358,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(None)
 	}
 
+	/// Get the RPC HTTP thread pool size (`None` for a default 4-thread pool config).
+	///
+	/// By default this is `None`.
+	fn rpc_http_threads(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
 	/// Get the RPC cors (`None` if disabled)
 	///
 	/// By default this is `Some(Vec::new())`.
@@ -501,6 +510,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			network: self.network_config(
 				&chain_spec,
 				is_dev,
+				is_validator,
 				net_config_dir,
 				client_id.as_str(),
 				self.node_name()?.as_str(),
@@ -523,6 +533,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ipc: self.rpc_ipc()?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
+			rpc_http_threads: self.rpc_http_threads()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
 			telemetry_endpoints,

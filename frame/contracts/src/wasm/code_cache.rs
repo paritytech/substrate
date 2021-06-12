@@ -132,12 +132,10 @@ where
 	prefab_module.code_hash = code_hash;
 
 	if let Some((schedule, gas_meter)) = reinstrument {
-		if prefab_module.schedule_version < schedule.version {
-			// The current schedule version is greater than the version of the one cached
-			// in the storage.
-			//
-			// We need to re-instrument the code with the latest schedule here.
-			gas_meter.charge(&(), InstrumentToken(prefab_module.original_code_len))?;
+		if prefab_module.instruction_weights_version < schedule.instruction_weights.version {
+			// The instruction weights have changed.
+			// We need to re-instrument the code with the new instruction weights.
+			gas_meter.charge(InstrumentToken(prefab_module.original_code_len))?;
 			private::reinstrument(&mut prefab_module, schedule)?;
 		}
 	}
@@ -158,7 +156,7 @@ mod private {
 		let original_code = <PristineCode<T>>::get(&prefab_module.code_hash)
 			.ok_or_else(|| Error::<T>::CodeNotFound)?;
 		prefab_module.code = prepare::reinstrument_contract::<T>(original_code, schedule)?;
-		prefab_module.schedule_version = schedule.version;
+		prefab_module.instruction_weights_version = schedule.instruction_weights.version;
 		<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
 		Ok(())
 	}
@@ -194,9 +192,7 @@ fn increment_64(refcount: &mut u64) {
 struct InstrumentToken(u32);
 
 impl<T: Config> Token<T> for InstrumentToken {
-	type Metadata = ();
-
-	fn calculate_amount(&self, _metadata: &Self::Metadata) -> Weight {
+	fn weight(&self) -> Weight {
 		T::WeightInfo::instrument(self.0 / 1024)
 	}
 }

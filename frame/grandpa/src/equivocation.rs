@@ -54,7 +54,7 @@ use sp_staking::{
 	SessionIndex,
 };
 
-use super::{Call, Module, Config};
+use super::{Call, Pallet, Config};
 
 /// A trait with utility methods for handling equivocation reports in GRANDPA.
 /// The offence type is generic, and the trait provides , reporting an offence
@@ -186,7 +186,7 @@ where
 	}
 
 	fn block_author() -> Option<T::AccountId> {
-		Some(<pallet_authorship::Module<T>>::author())
+		Some(<pallet_authorship::Pallet<T>>::author())
 	}
 }
 
@@ -200,12 +200,12 @@ pub struct GrandpaTimeSlot {
 	pub round: RoundNumber,
 }
 
-/// A `ValidateUnsigned` implementation that restricts calls to `report_equivocation_unsigned`
-/// to local calls (i.e. extrinsics generated on this node) or that already in a block. This
-/// guarantees that only block authors can include unsigned equivocation reports.
-impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
-	type Call = Call<T>;
-	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+/// Methods for the `ValidateUnsigned` implementation:
+/// It restricts calls to `report_equivocation_unsigned` to local calls (i.e. extrinsics generated
+/// on this node) or that already in a block. This guarantees that only block authors can include
+/// unsigned equivocation reports.
+impl<T: Config> Pallet<T> {
+	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			// discard equivocation report not coming from the local node
 			match source {
@@ -243,7 +243,7 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 	}
 
-	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			is_known_offence::<T>(equivocation_proof, key_owner_proof)
 		} else {
