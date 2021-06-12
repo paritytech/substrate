@@ -16,7 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Tests that are only relevant for Linux
+//! Tests that are only relevant for Linux.
+
+// Constrain this only to wasmtime for the time being. Without this rustc will complain on unused
+// imports and items. The alternative is to plop `cfg(feature = wasmtime)` everywhere which seems
+// borthersome.
+#![cfg(feature = "wasmtime")]
 
 use crate::WasmExecutionMethod;
 use super::mk_test_runtime;
@@ -26,7 +31,6 @@ mod smaps;
 
 use self::smaps::Smaps;
 
-#[cfg(feature = "wasmtime")]
 #[test]
 fn memory_consumption_compiled() {
 	use sc_executor_common::wasm_runtime::WasmModule as _;
