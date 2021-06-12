@@ -19,7 +19,7 @@
 //! bonding validators, nominators, and generating different types of solutions.
 
 use crate::*;
-use crate::Module as Staking;
+use crate::Pallet as Staking;
 use frame_benchmarking::account;
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
@@ -166,12 +166,12 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), selected_validators)?;
 	}
 
-	ValidatorCount::put(validators);
+	ValidatorCount::<T>::put(validators);
 
 	Ok(validator_chosen)
 }
 
 /// get the current era.
 pub fn current_era<T: Config>() -> EraIndex {
-	<Module<T>>::current_era().unwrap_or(0)
+	<Pallet<T>>::current_era().unwrap_or(0)
 }
