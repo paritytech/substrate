@@ -21,9 +21,8 @@ use crate::*;
 use crate as staking;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize, OneSessionHandler},
+	traits::{Currency, FindAuthor, Get, OnInitialize, OneSessionHandler},
 	weights::constants::RocksDbWeight,
-	IterableStorageMap, StorageDoubleMap, StorageMap, StorageValue,
 };
 use sp_core::H256;
 use sp_io;
@@ -194,7 +193,7 @@ impl pallet_authorship::Config for Test {
 	type FindAuthor = Author11;
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
-	type EventHandler = Module<Test>;
+	type EventHandler = Pallet<Test>;
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
@@ -459,7 +458,7 @@ impl ExtBuilder {
 			ext.execute_with(|| {
 				System::set_block_number(1);
 				Session::on_initialize(1);
-				Staking::on_initialize(1);
+				<Staking as Hooks<u64>>::on_initialize(1);
 				Timestamp::set_timestamp(INIT_TIMESTAMP);
 			});
 		}
@@ -610,7 +609,7 @@ pub(crate) fn run_to_block(n: BlockNumber) {
 	for b in (System::block_number() + 1)..=n {
 		System::set_block_number(b);
 		Session::on_initialize(b);
-		Staking::on_initialize(b);
+		<Staking as Hooks<u64>>::on_initialize(b);
 		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
 		if b != n {
 			Staking::on_finalize(System::block_number());
@@ -696,7 +695,7 @@ pub(crate) fn reward_all_elected() {
 		.into_iter()
 		.map(|v| (v, 1));
 
-	<Module<Test>>::reward_by_ids(rewards)
+	<Pallet<Test>>::reward_by_ids(rewards)
 }
 
 pub(crate) fn validator_controllers() -> Vec<AccountId> {
@@ -714,7 +713,7 @@ pub(crate) fn on_offence_in_era(
 	slash_fraction: &[Perbill],
 	era: EraIndex,
 ) {
-	let bonded_eras = crate::BondedEras::get();
+	let bonded_eras = crate::BondedEras::<Test>::get();
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
 			let _ = Staking::on_offence(offenders, slash_fraction, start_session);
