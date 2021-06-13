@@ -31,7 +31,7 @@ use sp_runtime::testing::Header;
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256};
 use sp_core::H256;
 use frame_support::{
-	parameter_types, StorageMap, StorageDoubleMap,
+	parameter_types,
 	weights::{Weight, constants::{WEIGHT_PER_SECOND, RocksDbWeight}},
 };
 use crate as offences;
@@ -169,4 +169,9 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 	) -> Perbill {
 		Perbill::from_percent(5 + offenders_count * 100 / validator_set_count)
 	}
+}
+
+/// Create the report id for the given `offender` and `time_slot` combination.
+pub fn report_id(time_slot: u128, offender: u64) -> H256 {
+	Offences::report_id::<Offence<u64>>(&time_slot, &offender)
 }

@@ -105,7 +105,7 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Request response configuration for the block request protocol.
 	///
-	/// [`RequestResponseConfig`] [`name`] is used to tag outgoing block requests with the correct
+	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
 	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
 	/// requests, if enabled.
 	///
@@ -141,6 +141,11 @@ impl Role {
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Role::Authority { .. })
 	}
+
+	/// True for `Role::Light`
+	pub fn is_light(&self) -> bool {
+		matches!(self, Role::Light { .. })
+	}
 }
 
 impl fmt::Display for Role {
@@ -166,7 +171,7 @@ pub enum TransactionImport {
 	None,
 }
 
-/// Fuure resolving to transaction import result.
+/// Future resolving to transaction import result.
 pub type TransactionImportFuture = Pin<Box<dyn Future<Output=TransactionImport> + Send>>;
 
 /// Transaction pool interface
@@ -541,6 +546,13 @@ pub struct NonDefaultSetConfig {
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// >           by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
+	/// If the remote reports that it doesn't support the protocol indicated in the
+	/// `notifications_protocol` field, then each of these fallback names will be tried one by
+	/// one.
+	///
+	/// If a fallback is used, it will be reported in
+	/// [`crate::Event::NotificationStreamOpened::negotiated_fallback`].
+	pub fallback_names: Vec<Cow<'static, str>>,
 	/// Maximum allowed size of single notifications.
 	pub max_notification_size: u64,
 	/// Base configuration.
@@ -553,6 +565,7 @@ impl NonDefaultSetConfig {
 		NonDefaultSetConfig {
 			notifications_protocol,
 			max_notification_size,
+			fallback_names: Vec::new(),
 			set_config: SetConfig {
 				in_peers: 0,
 				out_peers: 0,
@@ -586,8 +599,7 @@ pub enum TransportConfig {
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
-		/// been passed in [`NetworkConfiguration::reserved_nodes`] or
-		/// [`NetworkConfiguration::boot_nodes`].
+		/// been passed in [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we

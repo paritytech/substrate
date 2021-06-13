@@ -17,10 +17,11 @@
 
 //! Miscellaneous types.
 
+use sp_std::fmt::Debug;
 use codec::{Encode, Decode, FullCodec};
 use sp_core::RuntimeDebug;
 use sp_arithmetic::traits::{Zero, AtLeast32BitUnsigned};
-use sp_runtime::TokenError;
+use sp_runtime::{DispatchError, ArithmeticError, TokenError};
 
 /// One of a number of consequences of withdrawing a fungible from an account.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -50,17 +51,17 @@ pub enum WithdrawConsequence<Balance> {
 }
 
 impl<Balance: Zero> WithdrawConsequence<Balance> {
-	/// Convert the type into a `Result` with `TokenError` as the error or the additional `Balance`
+	/// Convert the type into a `Result` with `DispatchError` as the error or the additional `Balance`
 	/// by which the account will be reduced.
-	pub fn into_result(self) -> Result<Balance, TokenError> {
+	pub fn into_result(self) -> Result<Balance, DispatchError> {
 		use WithdrawConsequence::*;
 		match self {
-			NoFunds => Err(TokenError::NoFunds),
-			WouldDie => Err(TokenError::WouldDie),
-			UnknownAsset => Err(TokenError::UnknownAsset),
-			Underflow => Err(TokenError::Underflow),
-			Overflow => Err(TokenError::Overflow),
-			Frozen => Err(TokenError::Frozen),
+			NoFunds => Err(TokenError::NoFunds.into()),
+			WouldDie => Err(TokenError::WouldDie.into()),
+			UnknownAsset => Err(TokenError::UnknownAsset.into()),
+			Underflow => Err(ArithmeticError::Underflow.into()),
+			Overflow => Err(ArithmeticError::Overflow.into()),
+			Frozen => Err(TokenError::Frozen.into()),
 			ReducedToZero(result) => Ok(result),
 			Success => Ok(Zero::zero()),
 		}
@@ -90,13 +91,13 @@ pub enum DepositConsequence {
 
 impl DepositConsequence {
 	/// Convert the type into a `Result` with `TokenError` as the error.
-	pub fn into_result(self) -> Result<(), TokenError> {
+	pub fn into_result(self) -> Result<(), DispatchError> {
 		use DepositConsequence::*;
 		Err(match self {
-			BelowMinimum => TokenError::BelowMinimum,
-			CannotCreate => TokenError::CannotCreate,
-			UnknownAsset => TokenError::UnknownAsset,
-			Overflow => TokenError::Overflow,
+			BelowMinimum => TokenError::BelowMinimum.into(),
+			CannotCreate => TokenError::CannotCreate.into(),
+			UnknownAsset => TokenError::UnknownAsset.into(),
+			Overflow => ArithmeticError::Overflow.into(),
 			Success => return Ok(()),
 		})
 	}
@@ -160,9 +161,9 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq {}
-impl<T: FullCodec + Copy + Default + Eq + PartialEq> AssetId for T {}
+pub trait AssetId: FullCodec + Copy  + Eq + PartialEq + Debug {}
+impl<T: FullCodec + Copy + Eq + PartialEq + Debug> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
-pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default {}
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default> Balance for T {}
+pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug {}
+impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug> Balance for T {}

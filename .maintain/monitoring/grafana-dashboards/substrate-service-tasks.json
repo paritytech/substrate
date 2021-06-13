@@ -84,7 +84,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1613393319015,
+  "iteration": 1621244116095,
   "links": [],
   "panels": [
     {
@@ -130,7 +130,7 @@
     },
     {
       "aliasColors": {},
-      "bars": true,
+      "bars": false,
       "dashLength": 10,
       "dashes": false,
       "datasource": "$data_source",
@@ -141,7 +141,7 @@
         },
         "overrides": []
       },
-      "fill": 2,
+      "fill": 3,
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
@@ -151,7 +151,7 @@
       },
       "hiddenSeries": false,
       "id": 11,
-      "interval": "1m",
+      "interval": "",
       "legend": {
         "alignAsTable": true,
         "avg": true,
@@ -165,9 +165,9 @@
         "total": false,
         "values": true
       },
-      "lines": false,
+      "lines": true,
       "linewidth": 1,
-      "nullPointMode": "null",
+      "nullPointMode": "connected",
       "options": {
         "alertThreshold": true
       },
@@ -183,7 +183,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(${metric_namespace}_tasks_polling_duration_sum{instance=~\"${nodename}\"}[$__rate_interval])",
+          "expr": "rate(${metric_namespace}_tasks_polling_duration_sum{instance=~\"${nodename}\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "{{task_name}}",
           "refId": "A"
@@ -245,7 +245,7 @@
         },
         "overrides": []
       },
-      "fill": 0,
+      "fill": 3,
       "fillGradient": 0,
       "gridPos": {
         "h": 6,
@@ -270,7 +270,7 @@
         "values": true
       },
       "lines": true,
-      "linewidth": 2,
+      "linewidth": 1,
       "nullPointMode": "connected",
       "options": {
         "alertThreshold": true
@@ -283,11 +283,11 @@
       "repeat": "nodename",
       "seriesOverrides": [],
       "spaceLength": 10,
-      "stack": false,
-      "steppedLine": true,
+      "stack": true,
+      "steppedLine": false,
       "targets": [
         {
-          "expr": "irate(${metric_namespace}_tasks_polling_duration_count{instance=~\"${nodename}\"}[$__rate_interval])",
+          "expr": "rate(${metric_namespace}_tasks_polling_duration_count{instance=~\"${nodename}\"}[$__rate_interval])",
           "interval": "",
           "legendFormat": "{{task_name}}",
           "refId": "A"
@@ -358,13 +358,15 @@
         "y": 14
       },
       "hiddenSeries": false,
-      "id": 15,
+      "id": 43,
       "interval": "",
       "legend": {
         "alignAsTable": true,
         "avg": true,
-        "current": false,
-        "max": false,
+        "current": true,
+        "hideEmpty": true,
+        "hideZero": false,
+        "max": true,
         "min": false,
         "rightSide": true,
         "show": true,
@@ -372,6 +374,108 @@
         "values": true
       },
       "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "connected",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.3.6",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeat": "nodename",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "increase(${metric_namespace}_tasks_polling_duration_sum{instance=~\"${nodename}\"}[$__rate_interval]) / increase(${metric_namespace}_tasks_polling_duration_count{instance=~\"${nodename}\"}[$__rate_interval])",
+          "interval": "",
+          "legendFormat": "{{task_name}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Average time it takes to call Future::poll()",
+      "tooltip": {
+        "shared": true,
+        "sort": 2,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:2571",
+          "format": "s",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": "0",
+          "show": true
+        },
+        {
+          "$$hashKey": "object:2572",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$data_source",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "hiddenSeries": false,
+      "id": 15,
+      "interval": "",
+      "legend": {
+        "alignAsTable": true,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": true,
+        "values": true
+      },
+      "lines": false,
       "linewidth": 1,
       "nullPointMode": "null as zero",
       "options": {
@@ -385,12 +489,13 @@
       "repeat": "nodename",
       "seriesOverrides": [],
       "spaceLength": 10,
-      "stack": false,
+      "stack": true,
       "steppedLine": true,
       "targets": [
         {
-          "expr": "irate(${metric_namespace}_tasks_spawned_total{instance=~\"${nodename}\"}[$__rate_interval])",
+          "expr": "increase(${metric_namespace}_tasks_spawned_total{instance=~\"${nodename}\"}[$__rate_interval])",
           "interval": "",
+          "intervalFactor": 1,
           "legendFormat": "{{task_name}}",
           "refId": "A"
         }
@@ -399,7 +504,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Number of tasks started per second",
+      "title": "Number of tasks started",
       "tooltip": {
         "shared": true,
         "sort": 2,
@@ -457,17 +562,17 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 26
       },
       "hiddenSeries": false,
       "id": 2,
       "interval": "",
       "legend": {
         "alignAsTable": true,
-        "avg": true,
-        "current": false,
-        "max": false,
-        "min": false,
+        "avg": false,
+        "current": true,
+        "max": true,
+        "min": true,
         "rightSide": true,
         "show": true,
         "total": false,
@@ -488,7 +593,7 @@
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": true,
+      "steppedLine": false,
       "targets": [
         {
           "expr": "${metric_namespace}_tasks_spawned_total{instance=~\"${nodename}\"} - sum(${metric_namespace}_tasks_ended_total{instance=~\"${nodename}\"}) without(reason)\n\n# Fallback if tasks_ended_total is null for that task\nor on(instance, task_name) ${metric_namespace}_tasks_spawned_total{instance=~\"${nodename}\"}",
@@ -520,7 +625,7 @@
           "$$hashKey": "object:919",
           "format": "short",
           "label": null,
-          "logBase": 10,
+          "logBase": 1,
           "max": null,
           "min": "0",
           "show": true
@@ -560,7 +665,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 32
       },
       "hiddenSeries": false,
       "id": 7,
@@ -653,7 +758,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 38
       },
       "id": 27,
       "panels": [],
@@ -679,7 +784,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 39
       },
       "hiddenSeries": false,
       "id": 32,
@@ -780,7 +885,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 46
       },
       "hiddenSeries": false,
       "id": 33,
@@ -955,5 +1060,5 @@
   "timezone": "utc",
   "title": "Substrate Service Tasks",
   "uid": "3LA6XNqZz",
-  "version": 60
+  "version": 69
 }

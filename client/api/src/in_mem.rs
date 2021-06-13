@@ -419,6 +419,13 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		unimplemented!("Not supported by the in-mem backend.")
 	}
+
+	fn block_indexed_body(
+		&self,
+		_id: BlockId<Block>
+	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
+		unimplemented!("Not supported by the in-mem backend.")
+	}
 }
 
 impl<Block: BlockT> blockchain::ProvideCache<Block> for Blockchain<Block> {
@@ -768,6 +775,13 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		_revert_finalized: bool,
 	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)> {
 		Ok((Zero::zero(), HashSet::new()))
+	}
+
+	fn remove_leaf_block(
+		&self,
+		_hash: &Block::Hash,
+	) -> sp_blockchain::Result<()> {
+		Ok(())
 	}
 
 	fn get_import_lock(&self) -> &RwLock<()> {

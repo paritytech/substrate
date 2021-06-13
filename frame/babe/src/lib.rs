@@ -31,7 +31,7 @@ use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
-	ConsensusEngineId, KeyTypeId, Percent,
+	ConsensusEngineId, KeyTypeId, Permill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_std::prelude::*;
@@ -401,10 +401,22 @@ pub mod pallet {
 		pub fn plan_config_change(
 			origin: OriginFor<T>,
 			config: NextConfigDescriptor,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			PendingEpochConfigChange::<T>::put(config);
-			Ok(().into())
+			Ok(())
+		}
+	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			Self::validate_unsigned(source, call)
+		}
+
+		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+			Self::pre_dispatch(call)
 		}
 	}
 }
@@ -836,11 +848,11 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
 		T::EpochDuration::get().saturated_into()
 	}
 
-	fn estimate_current_session_progress(_now: T::BlockNumber) -> (Option<Percent>, Weight) {
+	fn estimate_current_session_progress(_now: T::BlockNumber) -> (Option<Permill>, Weight) {
 		let elapsed = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start()) + 1;
 
 		(
-			Some(Percent::from_rational(
+			Some(Permill::from_rational(
 				*elapsed,
 				T::EpochDuration::get(),
 			)),

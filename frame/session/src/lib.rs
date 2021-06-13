@@ -118,7 +118,7 @@ use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
-	KeyTypeId, Perbill, Percent, RuntimeAppPublic,
+	KeyTypeId, Perbill, Permill, RuntimeAppPublic,
 };
 use sp_staking::SessionIndex;
 use frame_support::{
@@ -168,7 +168,7 @@ impl<
 		Period::get()
 	}
 
-	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Percent>, Weight) {
+	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Permill>, Weight) {
 		let offset = Offset::get();
 		let period = Period::get();
 
@@ -177,12 +177,12 @@ impl<
 		// (0% is never returned).
 		let progress = if now >= offset {
 			let current = (now - offset) % period.clone() + One::one();
-			Some(Percent::from_rational(
+			Some(Permill::from_rational(
 				current.clone(),
 				period.clone(),
 			))
 		} else {
-			Some(Percent::from_rational(
+			Some(Permill::from_rational(
 				now + One::one(),
 				offset,
 			))
@@ -442,11 +442,13 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				assert!(
-					frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
-					"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
-					account,
-				);
+				if frame_system::Pallet::<T>::inc_consumers(&account).is_err() {
+					// This will leak a provider reference, however it only happens once (at
+					// genesis) so it's really not a big deal and we assume that the user wants to
+					// do this since it's the only way a non-endowed account can contain a session
+					// key.
+					frame_system::Pallet::<T>::inc_providers(&account);
+				}
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)

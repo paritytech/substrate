@@ -574,9 +574,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	}
 
 	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
-		let with_peer_id = addr.clone()
-			.with(Protocol::P2p(self.local_peer_id.clone().into()));
-		self.known_external_addresses.remove(&with_peer_id);
+		// We intentionally don't remove the element from `known_external_addresses` in order
+		// to not print the log line again.
 
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_expired_external_addr(k, addr)
