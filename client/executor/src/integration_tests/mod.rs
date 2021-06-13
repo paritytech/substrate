@@ -591,17 +591,17 @@ fn returns_mutable_static_bss(wasm_method: WasmExecutionMethod) {
 
 	let instance = runtime.new_instance().unwrap();
 	let res = instance
-		.call_export("returns_mutable_static_bss", &1u32.encode())
+		.call_export("returns_mutable_static_bss", &[0])
 		.unwrap();
-	assert_eq!(1, u8::decode(&mut &res[..]).unwrap());
+	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
 
 	// We expect that every invocation will need to return the initial
 	// value plus one. If the value increases more than that then it is
 	// a sign that the wasm runtime preserves the memory content.
 	let res = instance
-		.call_export("returns_mutable_static_bss", &1u32.encode())
+		.call_export("returns_mutable_static_bss", &[0])
 		.unwrap();
-	assert_eq!(1, u8::decode(&mut &res[..]).unwrap());
+	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
 }
 
 // If we didn't restore the wasm instance properly, on a trap the stack pointer would not be

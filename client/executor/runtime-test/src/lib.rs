@@ -45,7 +45,7 @@ static mut MUTABLE_STATIC: u64 = 32;
 ///
 /// `MUTABLE_STATIC_BSS` on the other hand focuses on the zeroed data. This is important since there
 /// may be differences in handling zeroed and non-zeroed data.
-static mut MUTABLE_STATIC_BSS: [u8; 32] = [0; 32];
+static mut MUTABLE_STATIC_BSS: u64 = 0;
 
 sp_core::wasm_export_functions! {
 	fn test_calling_missing_external() {
@@ -287,10 +287,10 @@ sp_core::wasm_export_functions! {
 		}
 	}
 
-	fn returns_mutable_static_bss(idx: u32) -> u8 {
+	fn returns_mutable_static_bss() -> u64 {
 		unsafe {
-			MUTABLE_STATIC_BSS[idx as usize] += 1;
-			MUTABLE_STATIC_BSS[idx as usize]
+			MUTABLE_STATIC_BSS += 1;
+			MUTABLE_STATIC_BSS
 		}
 	}
 
