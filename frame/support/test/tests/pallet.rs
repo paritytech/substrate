@@ -133,11 +133,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
-	where T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1
+		where T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1
 	{
 		/// Doc comment put in metadata
 		#[pallet::weight(Weight::from(*_foo))]
-		fn foo(
+		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
 			_bar: u32,
@@ -152,7 +152,7 @@ pub mod pallet {
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
 		#[frame_support::transactional]
-		fn foo_transactional(
+		pub fn foo_transactional(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
@@ -166,7 +166,7 @@ pub mod pallet {
 
 		// Test for DispatchResult return type
 		#[pallet::weight(1)]
-		fn foo_no_post_info(
+		pub fn foo_no_post_info(
 			_origin: OriginFor<T>,
 		) -> DispatchResult {
 			Ok(())
@@ -485,7 +485,7 @@ fn transactional_works() {
 		pallet::Call::<Runtime>::foo_transactional(1).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events().iter().map(|e| &e.event).collect::<Vec<_>>(),
-			vec![&Event::pallet(pallet::Event::Something(0))],
+			vec![&Event::Example(pallet::Event::Something(0))],
 		);
 	})
 }
@@ -550,7 +550,7 @@ fn pallet_expand_deposit_event() {
 		pallet::Call::<Runtime>::foo(3, 0).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet(pallet::Event::Something(3)),
+			Event::Example(pallet::Event::Something(3)),
 		);
 	})
 }
@@ -643,15 +643,15 @@ fn pallet_hooks_expand() {
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet(pallet::Event::Something(10)),
+			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::pallet(pallet::Event::Something(20)),
+			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::pallet(pallet::Event::Something(30)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 	})
 }
