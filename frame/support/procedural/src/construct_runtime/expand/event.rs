@@ -54,6 +54,15 @@ pub fn expand_outer_event(
 
 			event_variants.extend(expand_event_variant(runtime, pallet_decl, index, instance, generics));
 			event_conversions.extend(expand_event_conversion(scrate, pallet_decl, &pallet_event));
+		} else {
+			let pallet_name = &pallet_decl.name;
+			let deprecation_note = format!("`{}` does not have the `Event` part imported in \
+				`construct_runtime`, perhaps you have forgotten to include it?", pallet_name);
+
+			event_variants.extend(quote! {
+				#[deprecated(note = #deprecation_note)]
+				#pallet_name,
+			});
 		}
 	}
 
@@ -64,6 +73,7 @@ pub fn expand_outer_event(
 			#scrate::codec::Decode,
 			#scrate::RuntimeDebug,
 		)]
+		#[allow(deprecated)]
 		#[allow(non_camel_case_types)]
 		pub enum Event {
 			#event_variants

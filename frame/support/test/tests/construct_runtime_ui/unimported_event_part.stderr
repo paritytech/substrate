@@ -1,0 +1,44 @@
+error[E0433]: failed to resolve: use of undeclared crate or module `system`
+  --> $DIR/unimported_event_part.rs:38:11
+   |
+38 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
+   |                 ^^^^^^ use of undeclared crate or module `system`
+
+error[E0433]: failed to resolve: use of undeclared crate or module `system`
+  --> $DIR/unimported_event_part.rs:32:1
+   |
+32 | / construct_runtime! {
+33 | |     pub enum Runtime where
+34 | |         Block = Block,
+35 | |         NodeBlock = Block,
+...  |
+40 | |     }
+41 | | }
+   | |_^ not found in `system`
+   |
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this enum
+   |
+2  | use frame_system::RawOrigin;
+   |
+
+error: use of deprecated unit variant `Event::Pallet`: `Pallet` does not have the `Event` part imported in `construct_runtime`, perhaps you have forgotten to include it?
+  --> $DIR/unimported_event_part.rs:44:10
+   |
+44 |     let _ = Event::Pallet(pallet::Event::Foo);
+   |             ^^^^^^^^^^^^^
+   |
+note: the lint level is defined here
+  --> $DIR/unimported_event_part.rs:1:9
+   |
+1  | #![deny(deprecated)]
+   |         ^^^^^^^^^^
+
+error[E0277]: the trait bound `Runtime: frame_system::Config` is not satisfied
+  --> $DIR/unimported_event_part.rs:30:6
+   |
+11 |     pub trait Config: frame_system::Config {
+   |                       -------------------- required by this bound in `pallet::Config`
+...
+30 | impl pallet::Config for Runtime {}
+   |      ^^^^^^^^^^^^^^ the trait `frame_system::Config` is not implemented for `Runtime`
