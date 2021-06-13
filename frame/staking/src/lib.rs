@@ -755,6 +755,34 @@ impl Default for Releases {
 pub mod migrations {
 	use super::*;
 
+	pub mod v7 {
+		use super::*;
+
+		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
+			assert!(ValidatorsCount::get().is_zero(), "ValidatorsCount already set.");
+			assert!(NominatorsCount::get().is_zero(), "NominatorsCount already set.");
+			assert!(StorageVersion::get() == Releases::V6_0_0);
+			Ok(())
+		}
+
+		pub fn migrate<T: Config>() -> Weight {
+			log!(info, "Migrating staking to Releases::V6_1_0");
+			let validator_count = Validators::<T>::iter().count() as u32;
+			let nominator_count = Nominators::<T>::iter().count() as u32;
+
+			ValidatorsCount::put(validator_count);
+			NominatorsCount::put(nominator_count);
+
+			StorageVersion::put(Releases::V6_1_0);
+			log!(info, "Done.");
+
+			T::DbWeight::get().reads_writes(
+				validator_count.saturating_add(nominator_count).into(),
+				2,
+			)
+		}
+	}
+
 	pub mod v6 {
 		use super::*;
 		use frame_support::{traits::Get, weights::Weight, generate_storage_alias};
@@ -1310,35 +1338,6 @@ pub mod pallet {
 		TooManyNominators,
 		/// Too many validators are in the system.
 		TooManyValidators,
-	}
-
-
-		pub mod v7 {
-		use super::*;
-
-		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
-			assert!(ValidatorsCount::get().is_zero(), "ValidatorsCount already set.");
-			assert!(NominatorsCount::get().is_zero(), "NominatorsCount already set.");
-			assert!(StorageVersion::get() == Releases::V6_0_0);
-			Ok(())
-		}
-
-		pub fn migrate<T: Config>() -> Weight {
-			log!(info, "Migrating staking to Releases::V6_1_0");
-			let validator_count = Validators::<T>::iter().count() as u32;
-			let nominator_count = Nominators::<T>::iter().count() as u32;
-
-			ValidatorsCount::put(validator_count);
-			NominatorsCount::put(nominator_count);
-
-			StorageVersion::put(Releases::V6_1_0);
-			log!(info, "Done.");
-
-			T::DbWeight::get().reads_writes(
-				validator_count.saturating_add(nominator_count).into(),
-				2,
-			)
-		}
 	}
 
 	#[pallet::hooks]
