@@ -117,6 +117,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	read_write_tracker: RefCell<ReadWriteTracker>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
 	proof_recorder: Option<ProofRecorder<B::Hash>>,
+	proof_recorder_root: Cell<B::Hash>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -129,7 +130,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
 			db: Cell::new(None),
-			root: Cell::new(root),
+			root: Cell::new(root.clone()),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
@@ -139,6 +140,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			read_write_tracker: Default::default(),
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
+			proof_recorder_root: Cell::new(root.clone()),
 		};
 
 		state.add_whitelist_to_tracker();
@@ -166,7 +168,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 			None => Arc::new(kvdb_memorydb::create(1)),
 		};
 		self.db.set(Some(db.clone()));
-		self.proof_recorder.as_ref().map(|r| r.reset());
+		if let Some(recorder) = &self.proof_recorder {
+			recorder.reset();
+			self.proof_recorder_root.set(self.root.get());
+		}
 		let storage_db = Arc::new(StorageDb::<B> {
 			db,
 			proof_recorder: self.proof_recorder.clone(),
@@ -516,7 +521,27 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn proof_size(&self) -> Option<u32> {
-		self.proof_recorder.as_ref().map(|recorder| recorder.estimate_encoded_size() as u32)
+		self.proof_recorder.as_ref().map(|recorder| {
+			let proof_size = recorder.estimate_encoded_size() as u32;
+			let proof = recorder.to_storage_proof();
+			let proof_recorder_root = self.proof_recorder_root.get();
+			if proof_recorder_root == Default::default() || proof_size == 1 {
+				// empty trie
+				proof_size
+			} else {
+				if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root) {
+					size as u32
+				} else {
+					panic!(
+						"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
+						self.proof_recorder_root.get(),
+						self.root.get(),
+						self.genesis_root,
+						proof_size,
+					);
+				}
+			}
+		})
 	}
 }
 

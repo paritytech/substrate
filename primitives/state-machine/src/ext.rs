@@ -629,33 +629,34 @@ where
 		}
 	}
 
-	fn storage_index_transaction(&mut self, index: u32, offset: u32) {
+	fn storage_index_transaction(&mut self, index: u32, hash: &[u8], size: u32) {
 		trace!(
 			target: "state",
-			"{:04x}: IndexTransaction ({}): [{}..]",
+			"{:04x}: IndexTransaction ({}): {}, {} bytes",
 			self.id,
 			index,
-			offset,
+			HexDisplay::from(&hash),
+			size,
 		);
 		self.overlay.add_transaction_index(IndexOperation::Insert {
 			extrinsic: index,
-			offset,
+			hash: hash.to_vec(),
+			size,
 		});
 	}
 
 	/// Renew existing piece of data storage.
-	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8], size: u32) {
+	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8]) {
 		trace!(
 			target: "state",
-			"{:04x}: RenewTransactionIndex ({}) {} bytes",
+			"{:04x}: RenewTransactionIndex ({}): {}",
 			self.id,
+			index,
 			HexDisplay::from(&hash),
-			size,
 		);
 		self.overlay.add_transaction_index(IndexOperation::Renew {
 			extrinsic: index,
 			hash: hash.to_vec(),
-			size
 		});
 	}
 

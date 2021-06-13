@@ -26,7 +26,7 @@ use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
 use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
 use sp_runtime::traits::{BlakeTwo256, ConvertInto, IdentityLookup};
-use sp_runtime::{Perbill, Percent};
+use sp_runtime::{Perbill, Permill};
 use sp_staking::{
 	offence::{OffenceError, ReportOffence},
 	SessionIndex,
@@ -182,7 +182,7 @@ impl pallet_authorship::Config for Runtime {
 }
 
 thread_local! {
-	pub static MOCK_CURRENT_SESSION_PROGRESS: RefCell<Option<Option<Percent>>> = RefCell::new(None);
+	pub static MOCK_CURRENT_SESSION_PROGRESS: RefCell<Option<Option<Permill>>> = RefCell::new(None);
 }
 
 thread_local! {
@@ -199,7 +199,7 @@ impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSession
 		mock.unwrap_or(pallet_session::PeriodicSessions::<Period, Offset>::average_session_length())
 	}
 
-	fn estimate_current_session_progress(now: u64) -> (Option<Percent>, Weight) {
+	fn estimate_current_session_progress(now: u64) -> (Option<Permill>, Weight) {
 		let (estimate, weight) =
 			pallet_session::PeriodicSessions::<Period, Offset>::estimate_current_session_progress(
 				now,
