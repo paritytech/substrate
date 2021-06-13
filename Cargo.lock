@@ -2068,22 +2068,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "futures-diagnose"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdcef58a173af8148b182684c9f2d5250875adbcaff7b5794073894f9d8634a9"
-dependencies = [
- "futures 0.1.31",
- "futures 0.3.15",
- "lazy_static",
- "log",
- "parking_lot 0.9.0",
- "pin-project 0.4.27",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "futures-executor"
 version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8215,7 +8199,6 @@ version = "3.0.0"
 dependencies = [
  "assert_matches",
  "futures 0.3.15",
- "futures-diagnose",
  "hex",
  "intervalier",
  "log",
@@ -8264,7 +8247,6 @@ dependencies = [
  "merlin",
  "rand 0.7.3",
  "rand_core 0.5.1",
- "serde",
  "sha2 0.8.2",
  "subtle 2.4.0",
  "zeroize",
@@ -10519,9 +10501,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.16"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ab8966ac3ca27126141f7999361cc97dd6fb4b71da04c02044fa9045d98bb96"
+checksum = "aa5553bf0883ba7c9cbe493b085c29926bd41b66afc31ff72cf17ff4fb60dcd5"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",
