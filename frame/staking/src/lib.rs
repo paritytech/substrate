@@ -303,7 +303,7 @@ use sp_runtime::{
 	Percent, Perbill, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
-		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
+		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
 		AtLeast32BitUnsigned,
 	},
 };
@@ -759,9 +759,9 @@ pub mod migrations {
 		use super::*;
 
 		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
-			assert!(ValidatorsCount::get().is_zero(), "ValidatorsCount already set.");
-			assert!(NominatorsCount::get().is_zero(), "NominatorsCount already set.");
-			assert!(StorageVersion::get() == Releases::V6_0_0);
+			assert!(ValidatorsCount::<T>::get().is_zero(), "ValidatorsCount already set.");
+			assert!(NominatorsCount::<T>::get().is_zero(), "NominatorsCount already set.");
+			assert!(StorageVersion::<T>::get() == Releases::V6_0_0);
 			Ok(())
 		}
 
@@ -770,10 +770,10 @@ pub mod migrations {
 			let validator_count = Validators::<T>::iter().count() as u32;
 			let nominator_count = Nominators::<T>::iter().count() as u32;
 
-			ValidatorsCount::put(validator_count);
-			NominatorsCount::put(nominator_count);
+			ValidatorsCount::<T>::put(validator_count);
+			NominatorsCount::<T>::put(nominator_count);
 
-			StorageVersion::put(Releases::V6_1_0);
+			StorageVersion::<T>::put(Releases::V6_1_0);
 			log!(info, "Done.");
 
 			T::DbWeight::get().reads_writes(
@@ -994,7 +994,7 @@ pub mod pallet {
 
 	/// A tracker to keep count of the number of items in the `Validators` map.
 	#[pallet::storage]
-	pub type ValidatorsCount<T> = StorageValue<_, u32>;
+	pub type ValidatorsCount<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 	#[pallet::storage]
@@ -1003,7 +1003,7 @@ pub mod pallet {
 
 	/// A tracker to keep count of the number of items in the `Nominators` map.
 	#[pallet::storage]
-	pub type NominatorsCount<T> = StorageValue<_, u32>;
+	pub type NominatorsCount<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// The current era index.
 	///
@@ -1660,15 +1660,14 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= T::MinValidatorBond::get(), Error::<T>::InsufficientValue);
-			ensure!(ValidatorsCount::get() < T::MaxValidators::get(), Error::<T>::TooManyValidators);
 
 			let stash = &ledger.stash;
 			if Nominators::<T>::contains_key(stash) {
 				Nominators::<T>::remove(stash);
-				NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+				NominatorsCount::<T>::mutate(|x| x.saturating_dec());
 			}
 			if !Validators::<T>::contains_key(stash) {
-				ValidatorsCount::mutate(|x| *x = x.saturating_add(One::one()));
+				ValidatorsCount::<T>::mutate(|x| x.saturating_inc());
 			}
 			Validators::<T>::insert(stash, prefs);
 			Ok(())
@@ -1703,7 +1702,6 @@ pub mod pallet {
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
-			ensure!(NominatorsCount::get() < T::MaxNominators::get(), Error::<T>::TooManyValidators);
 
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
 
@@ -1725,10 +1723,10 @@ pub mod pallet {
 
 			if Validators::<T>::contains_key(stash) {
 				Validators::<T>::remove(stash);
-				ValidatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+				ValidatorsCount::<T>::mutate(|x| x.saturating_dec());
 			}
 			if !Nominators::<T>::contains_key(stash) {
-				NominatorsCount::mutate(|x| *x = x.saturating_add(One::one()));
+				NominatorsCount::<T>::mutate(|x| x.saturating_inc());
 			}
 
 			Nominators::<T>::insert(stash, &nominations);
@@ -2341,11 +2339,11 @@ impl<T: Config> Pallet<T> {
 	fn chill_stash(stash: &T::AccountId) {
 		if Validators::<T>::contains_key(stash) {
 			Validators::<T>::remove(stash);
-			ValidatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+			ValidatorsCount::<T>::mutate(|x| x.saturating_dec());
 		}
 		if Nominators::<T>::contains_key(stash) {
 			Nominators::<T>::remove(stash);
-			NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+			NominatorsCount::<T>::mutate(|x| x.saturating_dec());
 		}
 	}
 
@@ -2665,11 +2663,11 @@ impl<T: Config> Pallet<T> {
 		<Payee<T>>::remove(stash);
 		if Validators::<T>::contains_key(stash) {
 			Validators::<T>::remove(stash);
-			ValidatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+			ValidatorsCount::<T>::mutate(|x| x.saturating_dec());
 		}
 		if Nominators::<T>::contains_key(stash) {
 			Nominators::<T>::remove(stash);
-			NominatorsCount::mutate(|x| *x = x.saturating_sub(One::one()));
+			NominatorsCount::<T>::mutate(|x| x.saturating_dec());
 		}
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
@@ -2812,8 +2810,8 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
 		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
 		// report weight in failures.
-		let nominator_count = NominatorsCount::get();
-		let validator_count = ValidatorsCount::get();
+		let nominator_count = NominatorsCount::<T>::get();
+		let validator_count = ValidatorsCount::<T>::get();
 		let voter_count = nominator_count.saturating_add(validator_count) as usize;
 
 		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
@@ -2830,7 +2828,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	}
 
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
-		let target_count = ValidatorsCount::get() as usize;
+		let target_count = ValidatorsCount::<T>::get() as usize;
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
 			return Err("Target snapshot too big");
@@ -2890,7 +2888,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 				},
 			);
 			if !Validators::<T>::contains_key(&v) {
-				ValidatorsCount::mutate(|x| *x = x.saturating_add(One::one()))
+				ValidatorsCount::<T>::mutate(|x| x.saturating_inc())
 			}
 
 			Validators::<T>::insert(
@@ -2915,7 +2913,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 				},
 			);
 			if !Nominators::<T>::contains_key(&v) {
-				NominatorsCount::mutate(|x| *x = x.saturating_add(One::one()))
+				NominatorsCount::<T>::mutate(|x| x.saturating_inc())
 			}
 
 			Nominators::<T>::insert(
