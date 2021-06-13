@@ -64,12 +64,12 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 #[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, MaxEncodedLen)]
 pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 	/// The account which may act on behalf of another.
-	delegate: AccountId,
+	pub delegate: AccountId,
 	/// A value defining the subset of calls that it is allowed to make.
-	proxy_type: ProxyType,
+	pub proxy_type: ProxyType,
 	/// The number of blocks that an announcement must be in place for before the corresponding call
 	/// may be dispatched. If zero, then no announcement is needed.
-	delay: BlockNumber,
+	pub delay: BlockNumber,
 }
 
 /// Details surrounding a specific instance of an announcement to make a call.
@@ -734,7 +734,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn find_proxy(
+	pub fn find_proxy(
 		real: &T::AccountId,
 		delegate: &T::AccountId,
 		force_proxy_type: Option<T::ProxyType>,
