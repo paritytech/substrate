@@ -170,6 +170,15 @@ where
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
+	let event_format_file = EventFormat {
+		timer: timer.clone(),
+		display_target: !simple,
+		display_level: !simple,
+		display_thread_name: !simple,
+		enable_color: false,
+		dup_to_stdout: false,
+	};
+
 	let event_format = EventFormat {
 		timer,
 		display_target: !simple,
@@ -195,7 +204,14 @@ where
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder_hook(builder);
 
-	let subscriber = builder.finish().with(PrefixLayer);
+	let (dir, day) = ("log", 10);
+	let file_appender = tracing_appender::rolling::minutely(dir, "chainx.log");
+	let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+	let rotation = tracing_subscriber::fmt::Layer::new()
+		.with_writer(non_blocking)
+		.event_format(event_format_file);
+	let cleaner = CleanLayer::new(day, dir.to_string()).with_format(String::from("%Y-%m-%d-%H-%M"));
+	let subscriber = builder.finish().with(PrefixLayer).with(cleaner).with(rotation);
 
 	#[cfg(target_os = "unknown")]
 	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
