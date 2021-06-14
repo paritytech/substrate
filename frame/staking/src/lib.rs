@@ -1008,6 +1008,8 @@ pub mod pallet {
 	pub type CurrentValidatorsCount<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// The maximum validator count before we stop allowing new validators to join.
+	///
+	/// When this value is not set, no limits are enforced.
 	#[pallet::storage]
 	pub type MaxValidatorsCount<T> = StorageValue<_, u32, OptionQuery>;
 
@@ -1023,6 +1025,8 @@ pub mod pallet {
 	pub type CurrentNominatorsCount<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// The maximum nominator count before we stop allowing new validators to join.
+	///
+	/// When this value is not set, no limits are enforced.
 	#[pallet::storage]
 	pub type MaxNominatorsCount<T> = StorageValue<_, u32, OptionQuery>;
 
