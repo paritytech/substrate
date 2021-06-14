@@ -52,7 +52,7 @@ pub trait Storage<H: Hasher>: Send + Sync {
 
 #[cfg(feature = "std")]
 /// Local cache for child root.
-struct Cache {
+pub(crate) struct Cache {
 	pub child_root: HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -71,7 +71,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	root: H::Out,
 	empty: H::Out,
 	#[cfg(feature = "std")]
-	cache: Arc<RwLock<Cache>>,
+	pub(crate) cache: Arc<RwLock<Cache>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Encode {
