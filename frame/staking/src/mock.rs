@@ -244,8 +244,6 @@ impl onchain::Config for Test {
 }
 
 parameter_types! {
-	pub const MaxValidators: u32 = 100;
-	pub const MaxNominators: u32 = 1000;
 	pub static MinValidatorBond: Balance = ExistentialDeposit::get();
 	pub static MinBond: Balance = ExistentialDeposit::get();
 }

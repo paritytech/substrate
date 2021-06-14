@@ -2836,8 +2836,8 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		let nominator_count = CurrentNominatorsCount::<T>::get();
 		let validator_count = CurrentValidatorsCount::<T>::get();
 		let voter_count = nominator_count.saturating_add(validator_count) as usize;
-		debug_assert!(<Nominators<T>>::iter().count() == CurrentNominatorsCount::<T>::get());
-		debug_assert!(<Validators<T>>::iter().count() == CurrentValidatorsCount::<T>::get());
+		debug_assert!(<Nominators<T>>::iter().count() as u32 == CurrentNominatorsCount::<T>::get());
+		debug_assert!(<Validators<T>>::iter().count() as u32 == CurrentValidatorsCount::<T>::get());
 
 		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
 			return Err("Voter snapshot too big");
