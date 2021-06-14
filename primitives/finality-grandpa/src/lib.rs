@@ -391,6 +391,20 @@ pub mod accountable_safety {
 		Precommit(Vec<grandpa::SignedPrecommit<H, N, AuthoritySignature, AuthorityId>>),
 		InvalidResponse(AuthorityId),
 	}
+
+	impl<H, N> Equivocation<H, N> {
+		pub fn id(&self) -> Vec<AuthorityId> {
+			match self {
+				Equivocation::Prevote(votes) => {
+					Vec::new()
+				},
+				Equivocation::Precommit(votes) => {
+					Vec::new()
+				},
+				Equivocation::InvalidResponse(id) => vec![id.clone()],
+			}
+		}
+	}
 }
 
 /// Encode round message localized to a given round and set id.

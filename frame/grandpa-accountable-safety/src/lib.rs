@@ -325,6 +325,15 @@ impl<T: Config> Pallet<T> {
 				.map(|(v0, v1)| Equivocation::Prevote(vec![v0, v1]))
 				.collect::<Vec<_>>(),
 		};
+
+		let mut equivocating_voters = maybe_equivocations
+			.iter()
+			.map(|equivocation| equivocation.id().clone())
+			.flatten()
+			.collect::<Vec<_>>();
+		equivocating_voters.sort_unstable();
+		equivocating_voters.dedup();
+
 		if !maybe_equivocations.is_empty() {
 			let stored_equivocations = if let Some(mut stored) = Pallet::<T>::equivocations() {
 				stored.equivocations.append(&mut maybe_equivocations);
@@ -339,38 +348,16 @@ impl<T: Config> Pallet<T> {
 
 		// Check that it's impossible to have a supermajority for the block in question
 		// (`state.block_not_included`).
-
 		// Recall: It is impossible for a set S to have a supermajority for B if at least (n + f + 1)/2
 		// voters either vote for a block />= B or equivocate in S.
-
-		// WIP: Get the number of equivocating voters when finding them above.
-		let num_equivocating_voters = 0;
-		let is_equivocating = |id: &AuthorityId| -> bool {
-			false
-		};
-		// WIP: Get this from grandpa pallet or some else?
-		let num_all_voters = query_response.authorities().iter().count();
-		// WIP: Get this threshold f from somewhere instead of hardcoding.
-		let f = (num_all_voters as f64 / 3 as f64).floor();
-
-		let is_descendent = |block: &T::BlockNumber, ancestor: &T::BlockNumber| -> bool {
-			false
-		};
-
 		let block_number_not_included = state.block_not_included.0.target_number;
+		let is_impossible = supermajority_is_impossible(
+			&query_response,
+			block_number_not_included,
+			equivocating_voters,
+		);
 
-		let num_votes_doesnt_include_block = query_response
-			.id_and_targets()
-			.iter()
-			.filter(|(id,_)| !is_equivocating(id))
-			.filter(|(_, number)| !is_descendent(number, &block_number_not_included))
-			.count();
-
-		let impossible = 
-			num_votes_doesnt_include_block as f64 + num_equivocating_voters as f64
-			>= (num_all_voters as f64 + f + 1.0) / 2.0;
-		
-		if !impossible {
+		if !is_impossible {
 			let invalid_response = Equivocation::InvalidResponse(responder.clone());
 
 			let stored_equivocations = if let Some(mut stored) = Pallet::<T>::equivocations() {
@@ -405,6 +392,37 @@ impl<T: Config> Pallet<T> {
 		AccountableSafetyQueries::<T>::insert(responder, Query::Replied(query_response));
 		Ok(())
 	}
+}
+
+fn supermajority_is_impossible<H, N>(
+	query_response: &QueryResponse<H, N>,
+	block_number_not_included: N,
+	equivocating_voters: Vec<AuthorityId>,
+) -> bool
+where
+	H: Clone,
+	N: Clone,
+{
+	let is_equivocating = |id: &AuthorityId| -> bool { equivocating_voters.contains(id) };
+	// WIP: Get this from grandpa pallet or some else?
+	let num_all_voters = query_response.authorities().iter().count();
+	// WIP: Get this threshold f from somewhere instead of hardcoding.
+	let f = (num_all_voters as f64 / 3 as f64).floor();
+	// WIP: This will require querying the chain
+	let is_descendent = |_block: &N, _ancestor: &N| -> bool { false };
+
+	let num_votes_doesnt_include_block = query_response
+		.id_and_targets()
+		.iter()
+		.filter(|(id, _)| !is_equivocating(id))
+		.filter(|(_, number)| !is_descendent(number, &block_number_not_included))
+		.count();
+
+	let num_equivocating_voters = equivocating_voters.iter().count();
+
+	let is_impossible = num_votes_doesnt_include_block as f64 + num_equivocating_voters as f64
+		>= (num_all_voters as f64 + f + 1.0) / 2.0;
+	is_impossible
 }
 
 fn find_equivocations<SV, V>(votes: &Vec<SV>) -> Vec<(SV, SV)>
