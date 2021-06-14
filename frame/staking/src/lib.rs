@@ -2997,7 +2997,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 				},
 			);
 			Self::do_add_validator(
-				v,
+				&v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
 			);
 		});
