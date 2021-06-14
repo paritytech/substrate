@@ -3742,7 +3742,8 @@ fn cannot_rebond_to_lower_than_ed() {
 				}
 			);
 
-			// unbond all of it.
+			// unbond all of it. must be chilled first.
+			assert_ok!(Staking::chill(Origin::signed(20)));
 			assert_ok!(Staking::unbond(Origin::signed(20), 1000));
 			assert_eq!(
 				Staking::ledger(&20).unwrap(),
@@ -3785,7 +3786,8 @@ fn cannot_bond_extra_to_lower_than_ed() {
 				}
 			);
 
-			// unbond all of it.
+			// unbond all of it. must be chilled first.
+			assert_ok!(Staking::chill(Origin::signed(20)));
 			assert_ok!(Staking::unbond(Origin::signed(20), 1000));
 			assert_eq!(
 				Staking::ledger(&20).unwrap(),

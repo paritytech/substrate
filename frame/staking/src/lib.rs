@@ -1577,6 +1577,18 @@ pub mod pallet {
 					ledger.active = Zero::zero();
 				}
 
+				let min_active_bond = if Nominators::<T>::contains_key(&ledger.stash) {
+					MinBond::<T>::get()
+				} else if Validators::<T>::contains_key(&ledger.stash) {
+					MinValidatorBond::<T>::get()
+				} else {
+					Zero::zero()
+				};
+
+				// Make sure that the user maintains enough active bond for their role.
+				// If a user runs into this error, they should chill first.
+				ensure!(ledger.active >= min_active_bond, Error::<T>::BondTooLow);
+
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
@@ -1629,13 +1641,7 @@ pub mod pallet {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let is_validator = Validators::<T>::contains_key(&stash);
-
-			// The minimum bond allowed for a stash before we clean it up.
-			// Requirements to be a validator are likely higher than normal.
-			let min_bond = if is_validator { MinValidatorBond::<T>::get() } else { MinBond::<T>::get() };
-
-			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < min_bond {
+			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
@@ -1721,6 +1727,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(ledger.active >= MinBond::<T>::get(), Error::<T>::InsufficientValue);
+
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
@@ -2249,7 +2257,7 @@ pub mod pallet {
 					Zero::zero()
 				};
 
-				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
+				ensure!(ledger.active >= min_active_bond, Error::<T>::CannotChillOther);
 			}
 
 			Self::chill_stash(&stash);
