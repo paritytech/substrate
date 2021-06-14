@@ -67,15 +67,6 @@ macro_rules! test_wasm_execution {
 			}
 		}
 	};
-
-	(compiled_only $method_name:ident) => {
-		paste::item! {
-			#[test]
-			fn [<$method_name _compiled>]() {
-				$method_name(WasmExecutionMethod::Compiled);
-			}
-		}
-	};
 }
 
 fn call_in_wasm<E: Externalities>(
