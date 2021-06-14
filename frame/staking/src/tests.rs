@@ -4102,6 +4102,46 @@ mod election_data_provider {
 				assert_ok!(Staking::chill_other(Origin::signed(1), 2));
 				assert_ok!(Staking::chill_other(Origin::signed(1), 4));
 			})
+	}
 
+	#[test]
+	fn capped_stakers_works() {
+		ExtBuilder::default().build_and_execute(|| {
+
+			let validator_count = CurrentValidatorsCount::<Test>::get();
+			assert_eq!(validator_count, 3);
+			let nominator_count = CurrentNominatorsCount::<Test>::get();
+			assert_eq!(nominator_count, 1);
+
+			// Change the maximums
+			let max = 10;
+			assert_ok!(Staking::update_staking_limits(Origin::root(), 10, 10, Some(max), Some(max)));
+
+			// can create `max - validator_count` validators
+			assert_ok!(testing_utils::create_validators::<Test>(max - validator_count, 100));
+
+			// but no more
+			let (_, controller) = testing_utils::create_stash_controller::<Test>(
+				1337, 100, RewardDestination::Controller,
+			).unwrap();
+			assert_noop!(
+				Staking::validate(Origin::signed(controller), ValidatorPrefs::default()),
+				Error::<Test>::TooManyValidators,
+			);
+
+			// same with nominators
+			for i in 0 .. max - nominator_count {
+				let (_, controller) = testing_utils::create_stash_controller::<Test>(
+					i + 10_000_000, 100, RewardDestination::Controller,
+				).unwrap();
+				assert_ok!(Staking::nominate(Origin::signed(controller), vec![1]));
+			}
+
+			// one more is too many
+			let (_, controller) = testing_utils::create_stash_controller::<Test>(
+				20_000_000, 100, RewardDestination::Controller,
+			).unwrap();
+			assert_noop!(Staking::nominate(Origin::signed(controller), vec![1]), Error::<Test>::TooManyNominators);
+		})
 	}
 }
