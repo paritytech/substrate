@@ -594,6 +594,28 @@ benchmarks! {
 		let targets = <Staking<T>>::get_npos_targets();
 		assert_eq!(targets.len() as u32, v);
 	}
+
+	update_staking_limits {
+		// This function always does the same thing... just write to 4 storage items.
+	}: _(RawOrigin::Root, 1234u32.into(), 5678u32.into(), Some(100), Some(200))
+	verify {
+		assert_eq!(MinNominatorBond::<T>::get(), 1234u32.into());
+		assert_eq!(MinValidatorBond::<T>::get(), 5678u32.into());
+		assert_eq!(MaxNominatorsCount::<T>::get(), Some(100u32));
+		assert_eq!(MaxValidatorsCount::<T>::get(), Some(200u32));
+	}
+
+	chill_other {
+		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
+		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), ValidatorPrefs::default())?;
+		Staking::<T>::update_staking_limits(
+			RawOrigin::Root.into(), BalanceOf::<T>::max_value(), BalanceOf::<T>::max_value(), None, None,
+		)?;
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), controller.clone())
+	verify {
+		assert!(!Validators::<T>::contains_key(controller));
+	}
 }
 
 #[cfg(test)]

@@ -70,6 +70,8 @@ pub trait WeightInfo {
 	fn new_era(v: u32, n: u32, ) -> Weight;
 	fn get_npos_voters(v: u32, n: u32, s: u32, ) -> Weight;
 	fn get_npos_targets(v: u32, ) -> Weight;
+	fn update_staking_limits() -> Weight;
+	fn chill_other() -> Weight;
 }
 
 /// Weights for pallet_staking using the Substrate node and recommended hardware.
@@ -251,6 +253,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
 	}
+	fn update_staking_limits() -> Weight { 0 }
+	fn chill_other() -> Weight { 0 }
 }
 
 // For backwards compatibility and tests
@@ -431,4 +435,6 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
 	}
+	fn update_staking_limits() -> Weight { 0 }
+	fn chill_other() -> Weight { 0 }
 }

@@ -2263,7 +2263,7 @@ pub mod pallet {
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
 		/// to kick people under the new limits, `chill_other` should be called.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::update_staking_limits())]
 		pub fn update_staking_limits(
 			origin: OriginFor<T>,
 			min_nominator_bond: BalanceOf<T>,
@@ -2295,7 +2295,7 @@ pub mod pallet {
 		/// who do not satisfy these requirements.
 		///
 		/// TODO: Maybe we can deprecate `chill` in the future.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::chill_other())]
 		pub fn chill_other(
 			origin: OriginFor<T>,
 			controller: T::AccountId,
