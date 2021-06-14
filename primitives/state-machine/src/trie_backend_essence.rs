@@ -20,6 +20,10 @@
 
 #[cfg(feature = "std")]
 use std::sync::Arc;
+#[cfg(feature = "std")]
+use parking_lot::RwLock;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 use sp_std::{ops::Deref, boxed::Box, vec::Vec};
 use crate::{warn, debug};
 use hash_db::{self, Hasher, Prefix};
@@ -46,11 +50,28 @@ pub trait Storage<H: Hasher>: Send + Sync {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 }
 
+#[cfg(feature = "std")]
+/// Local cache for child root.
+struct Cache {
+	pub child_root: HashMap<Vec<u8>, Option<Vec<u8>>>,
+}
+
+#[cfg(feature = "std")]
+impl Cache {
+	fn new() -> Self {
+		Cache {
+			child_root: HashMap::new(),
+		}
+	}
+}
+
 /// Patricia trie-based pairs storage essence.
 pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	storage: S,
 	root: H::Out,
 	empty: H::Out,
+	#[cfg(feature = "std")]
+	cache: Arc<RwLock<Cache>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Encode {
@@ -60,6 +81,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			storage,
 			root,
 			empty: H::hash(&[0u8]),
+			#[cfg(feature = "std")]
+			cache: Arc::new(RwLock::new(Cache::new())),
 		}
 	}
 
@@ -96,7 +119,21 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Access the root of the child storage in its parent trie
 	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>> {
-		self.storage(child_info.prefixed_storage_key().as_slice())
+		#[cfg(feature = "std")]
+		{
+			if let Some(result) = self.cache.read().child_root.get(child_info.storage_key()) {
+				return Ok(result.clone());
+			}
+		}
+
+		let result = self.storage(child_info.prefixed_storage_key().as_slice())?;
+
+		#[cfg(feature = "std")]
+		{
+			self.cache.write().child_root.insert(child_info.storage_key().to_vec(), result.clone());
+		}
+
+		Ok(result)
 	}
 
 	/// Return the next key in the child trie i.e. the minimum key that is strictly superior to
