@@ -965,11 +965,11 @@ pub mod pallet {
 	/// This balance in enforced for all validators and nominators, however validators will
 	/// have an additional requirement to also have more than `MinValidatorBond`.
 	#[pallet::storage]
-	pub type MinBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+	pub type MinNominatorBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	/// The minimum balance required to be bonded into the staking system as a validator.
 	///
-	/// This balance is different than `MinBond` since the requirements to be a validator
+	/// This balance is different than `MinNominatorBond` since the requirements to be a validator
 	/// is expected to be higher than other roles in the staking system.
 	#[pallet::storage]
 	pub type MinValidatorBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
@@ -1211,7 +1211,7 @@ pub mod pallet {
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
 		pub stakers: Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>,
-		pub min_bond: BalanceOf<T>,
+		pub min_nominator_bond: BalanceOf<T>,
 		pub min_validator_bond: BalanceOf<T>,
 	}
 
@@ -1227,7 +1227,7 @@ pub mod pallet {
 				slash_reward_fraction: Default::default(),
 				canceled_payout: Default::default(),
 				stakers: Default::default(),
-				min_bond: T::Currency::minimum_balance(),
+				min_nominator_bond: T::Currency::minimum_balance(),
 				min_validator_bond: T::Currency::minimum_balance(),
 			}
 		}
@@ -1244,12 +1244,12 @@ pub mod pallet {
 			CanceledSlashPayout::<T>::put(self.canceled_payout);
 			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
 			StorageVersion::<T>::put(Releases::V6_0_0);
-			MinBond::<T>::put(self.min_bond);
+			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 
 			assert!(
-				MinBond::<T>::get() >= T::Currency::minimum_balance(),
-				"`MinBond` should be at least the existential deposit.",
+				MinNominatorBond::<T>::get() >= T::Currency::minimum_balance(),
+				"`MinNominatorBond` should be at least the existential deposit.",
 			);
 			assert!(
 				MinValidatorBond::<T>::get() >= T::Currency::minimum_balance(),
@@ -1578,7 +1578,7 @@ pub mod pallet {
 				}
 
 				let min_active_bond = if Nominators::<T>::contains_key(&ledger.stash) {
-					MinBond::<T>::get()
+					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&ledger.stash) {
 					MinValidatorBond::<T>::get()
 				} else {
@@ -1727,7 +1727,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.active >= MinBond::<T>::get(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientValue);
 
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
@@ -2085,8 +2085,8 @@ pub mod pallet {
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let ledger = ledger.rebond(value);
-			// last check: the new active amount of ledger must be more than the min bond.
-			ensure!(ledger.active >= MinBond::<T>::get(), Error::<T>::InsufficientValue);
+			// last check: the new active amount of ledger must be more than the ED.
+			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
@@ -2200,7 +2200,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Update the `MinBond` and `MinValidatorBond` values for this pallet.
+		/// Update the `MinNominatorBond` and `MinValidatorBond` values for this pallet.
 		///
 		/// Origin must be Root to call this function.
 		///
@@ -2209,13 +2209,13 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn update_bonds(
 			origin: OriginFor<T>,
-			min_bond: BalanceOf<T>,
+			min_nominator_bond: BalanceOf<T>,
 			min_validator_bond: BalanceOf<T>
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			let min_bond = min_bond.max(T::Currency::minimum_balance());
+			let min_nominator_bond = min_nominator_bond.max(T::Currency::minimum_balance());
 			let min_validator_bond = min_validator_bond.max(T::Currency::minimum_balance());
-			MinBond::<T>::put(min_bond);
+			MinNominatorBond::<T>::put(min_nominator_bond);
 			MinValidatorBond::<T>::put(min_validator_bond);
 			Ok(())
 		}
@@ -2250,7 +2250,7 @@ pub mod pallet {
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
 			if caller != controller {
 				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
-					MinBond::<T>::get()
+					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&stash) {
 					MinValidatorBond::<T>::get()
 				} else {
@@ -2993,7 +2993,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
-				.unwrap_or(MinBond::<T>::get() * 100u32.into());
+				.unwrap_or(MinNominatorBond::<T>::get() * 100u32.into());
 			<Bonded<T>>::insert(v.clone(), v.clone());
 			<Ledger<T>>::insert(
 				v.clone(),

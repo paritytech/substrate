@@ -286,7 +286,7 @@ pub struct ExtBuilder {
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
 	initialize_first_session: bool,
-	min_bond: Balance,
+	min_nominator_bond: Balance,
 	min_validator_bond: Balance,
 }
 
@@ -302,7 +302,7 @@ impl Default for ExtBuilder {
 			invulnerables: vec![],
 			has_stakers: true,
 			initialize_first_session: true,
-			min_bond: ExistentialDeposit::get(),
+			min_nominator_bond: ExistentialDeposit::get(),
 			min_validator_bond: ExistentialDeposit::get(),
 		}
 	}
@@ -365,8 +365,8 @@ impl ExtBuilder {
 		OFFSET.with(|v| *v.borrow_mut() = offset);
 		self
 	}
-	pub fn min_bond(mut self, amount: Balance) -> Self {
-		self.min_bond = amount;
+	pub fn min_nominator_bond(mut self, amount: Balance) -> Self {
+		self.min_nominator_bond = amount;
 		self
 	}
 	pub fn min_validator_bond(mut self, amount: Balance) -> Self {
@@ -446,7 +446,7 @@ impl ExtBuilder {
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
 			slash_reward_fraction: Perbill::from_percent(10),
-			min_bond: self.min_bond,
+			min_nominator_bond: self.min_nominator_bond,
 			min_validator_bond: self.min_validator_bond,
 			..Default::default()
 		}
