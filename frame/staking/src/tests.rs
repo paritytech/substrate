@@ -1534,7 +1534,11 @@ fn reward_to_stake_works() {
 fn on_free_balance_zero_stash_removes_validator() {
 	// Tests that validator storage items are cleaned up when stash is empty
 	// Tests that storage items are untouched when controller is empty
-	ExtBuilder::default().existential_deposit(10).build_and_execute(|| {
+	ExtBuilder::default()
+	.existential_deposit(10)
+	.min_bond(10)
+	.min_validator_bond(10)
+	.build_and_execute(|| {
 		// Check the balance of the validator account
 		assert_eq!(Balances::free_balance(10), 256);
 		// Check the balance of the stash account
@@ -1587,7 +1591,11 @@ fn on_free_balance_zero_stash_removes_validator() {
 fn on_free_balance_zero_stash_removes_nominator() {
 	// Tests that nominator storage items are cleaned up when stash is empty
 	// Tests that storage items are untouched when controller is empty
-	ExtBuilder::default().existential_deposit(10).build_and_execute(|| {
+	ExtBuilder::default()
+	.existential_deposit(10)
+	.min_bond(10)
+	.min_validator_bond(10)
+	.build_and_execute(|| {
 		// Make 10 a nominator
 		assert_ok!(Staking::nominate(Origin::signed(10), vec![20]));
 		// Check that account 10 is a nominator
@@ -1712,6 +1720,8 @@ fn bond_with_no_staked_value() {
 	ExtBuilder::default()
 		.validator_count(3)
 		.existential_deposit(5)
+		.min_bond(5)
+		.min_validator_bond(5)
 		.nominate(false)
 		.minimum_validator_count(1)
 		.build()
@@ -2453,7 +2463,11 @@ fn only_slash_for_max_in_era() {
 #[test]
 fn garbage_collection_after_slashing() {
 	// ensures that `SlashingSpans` and `SpanSlash` of an account is removed after reaping.
-	ExtBuilder::default().existential_deposit(2).build_and_execute(|| {
+	ExtBuilder::default()
+	.existential_deposit(2)
+	.min_bond(2)
+	.min_validator_bond(2)
+	.build_and_execute(|| {
 		assert_eq!(Balances::free_balance(11), 256_000);
 
 		on_offence_now(
@@ -3710,6 +3724,8 @@ fn session_buffering_no_offset() {
 fn cannot_rebond_to_lower_than_ed() {
 	ExtBuilder::default()
 		.existential_deposit(10)
+		.min_bond(10)
+		.min_validator_bond(10)
 		.build_and_execute(|| {
 			// stash must have more balance than bonded for this to work.
 			assert_eq!(Balances::free_balance(&21), 512_000);
@@ -3751,6 +3767,8 @@ fn cannot_rebond_to_lower_than_ed() {
 fn cannot_bond_extra_to_lower_than_ed() {
 	ExtBuilder::default()
 		.existential_deposit(10)
+		.min_bond(10)
+		.min_validator_bond(10)
 		.build_and_execute(|| {
 			// stash must have more balance than bonded for this to work.
 			assert_eq!(Balances::free_balance(&21), 512_000);
@@ -3796,6 +3814,8 @@ fn do_not_die_when_active_is_ed() {
 	let ed = 10;
 	ExtBuilder::default()
 		.existential_deposit(ed)
+		.min_bond(ed)
+		.min_validator_bond(ed)
 		.build_and_execute(|| {
 			// initial stuff.
 			assert_eq!(

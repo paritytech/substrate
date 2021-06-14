@@ -911,14 +911,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
-		/// The minimum bonded to be a validator.
-		#[pallet::constant]
-		type MinValidatorBond: Get<BalanceOf<Self>>;
-
-		/// The minimum bond.
-		#[pallet::constant]
-		type MinBond: Get<BalanceOf<Self>>;
-
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -967,6 +959,20 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn bonded)]
 	pub type Bonded<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::AccountId>;
+
+	/// The minimum balance required to be bonded into the staking system.
+	///
+	/// This balance in enforced for all validators and nominators, however validators will
+	/// have an additional requirement to also have more than `MinValidatorBond`.
+	#[pallet::storage]
+	pub type MinBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	/// The minimum balance required to be bonded into the staking system as a validator.
+	///
+	/// This balance is different than `MinBond` since the requirements to be a validator
+	/// is expected to be higher than other roles in the staking system.
+	#[pallet::storage]
+	pub type MinValidatorBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 	#[pallet::storage]
@@ -1205,6 +1211,8 @@ pub mod pallet {
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
 		pub stakers: Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>,
+		pub min_bond: BalanceOf<T>,
+		pub min_validator_bond: BalanceOf<T>,
 	}
 
 	#[cfg(feature = "std")]
@@ -1219,6 +1227,8 @@ pub mod pallet {
 				slash_reward_fraction: Default::default(),
 				canceled_payout: Default::default(),
 				stakers: Default::default(),
+				min_bond: T::Currency::minimum_balance(),
+				min_validator_bond: T::Currency::minimum_balance(),
 			}
 		}
 	}
@@ -1234,6 +1244,17 @@ pub mod pallet {
 			CanceledSlashPayout::<T>::put(self.canceled_payout);
 			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
 			StorageVersion::<T>::put(Releases::V6_0_0);
+			MinBond::<T>::put(self.min_bond);
+			MinValidatorBond::<T>::put(self.min_validator_bond);
+
+			assert!(
+				MinBond::<T>::get() >= T::Currency::minimum_balance(),
+				"`MinBond` should be at least the existential deposit.",
+			);
+			assert!(
+				MinValidatorBond::<T>::get() >= T::Currency::minimum_balance(),
+				"`MinValidatorBond` should be at least the existential deposit.",
+			);
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
 				assert!(
@@ -1430,7 +1451,7 @@ pub mod pallet {
 			}
 
 			// reject a bond which is too low.
-			if value < T::MinBond::get() {
+			if value < MinBond::<T>::get() {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
@@ -1496,7 +1517,7 @@ pub mod pallet {
 				ledger.total += extra;
 				ledger.active += extra;
 				// last check: the new active amount of ledger must be at least min bond.
-				ensure!(ledger.active >= T::MinBond::get(), Error::<T>::InsufficientValue);
+				ensure!(ledger.active >= MinBond::<T>::get(), Error::<T>::InsufficientValue);
 
 				Self::deposit_event(Event::<T>::Bonded(stash, extra));
 				Self::update_ledger(&controller, &ledger);
@@ -1506,7 +1527,7 @@ pub mod pallet {
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
-		/// T::MinBond::get(), then it is increased to the full amount.
+		/// MinBond::<T>::get(), then it is increased to the full amount.
 		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
@@ -1551,7 +1572,7 @@ pub mod pallet {
 				ledger.active -= value;
 
 				// Avoid there being a less than a minimum bond left in the staking system.
-				if ledger.active < T::MinBond::get() {
+				if ledger.active < MinBond::<T>::get() {
 					value += ledger.active;
 					ledger.active = Zero::zero();
 				}
@@ -1612,7 +1633,7 @@ pub mod pallet {
 
 			// The minimum bond allowed for a stash before we clean it up.
 			// Requirements to be a validator are likely higher than normal.
-			let min_bond = if is_validator { T::MinValidatorBond::get() } else { T::MinBond::get() };
+			let min_bond = if is_validator { MinValidatorBond::<T>::get() } else { MinBond::<T>::get() };
 
 			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < min_bond {
 				// This account must have called `unbond()` with some value that caused the active
@@ -1663,7 +1684,7 @@ pub mod pallet {
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.active >= T::MinValidatorBond::get(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientValue);
 
 			let stash = &ledger.stash;
 			Self::do_remove_nominator(stash);
@@ -2057,7 +2078,7 @@ pub mod pallet {
 
 			let ledger = ledger.rebond(value);
 			// last check: the new active amount of ledger must be more than the min bond.
-			ensure!(ledger.active >= T::MinBond::get(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= MinBond::<T>::get(), Error::<T>::InsufficientValue);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
@@ -2900,7 +2921,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
-				.unwrap_or(T::MinBond::get() * 100u32.into());
+				.unwrap_or(MinBond::<T>::get() * 100u32.into());
 			<Bonded<T>>::insert(v.clone(), v.clone());
 			<Ledger<T>>::insert(
 				v.clone(),
