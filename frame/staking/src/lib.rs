@@ -745,12 +745,12 @@ enum Releases {
 	V4_0_0,
 	V5_0_0, // blockable validators.
 	V6_0_0, // removal of all storage associated with offchain phragmen.
-	V6_1_0, // keep track of number of nominators / validators in map, not used yet.
+	V7_0_0, // keep track of number of nominators / validators in map
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V6_0_0
+		Releases::V7_0_0
 	}
 }
 
@@ -768,14 +768,14 @@ pub mod migrations {
 		}
 
 		pub fn migrate<T: Config>() -> Weight {
-			log!(info, "Migrating staking to Releases::V6_1_0");
+			log!(info, "Migrating staking to Releases::V7_0_0");
 			let validator_count = Validators::<T>::iter().count() as u32;
 			let nominator_count = Nominators::<T>::iter().count() as u32;
 
 			CurrentValidatorsCount::<T>::put(validator_count);
 			CurrentNominatorsCount::<T>::put(nominator_count);
 
-			StorageVersion::<T>::put(Releases::V6_1_0);
+			StorageVersion::<T>::put(Releases::V7_0_0);
 			log!(info, "Done.");
 
 			T::DbWeight::get().reads_writes(
