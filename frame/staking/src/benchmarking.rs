@@ -604,7 +604,7 @@ mod tests {
 
 	#[test]
 	fn create_validators_with_nominators_for_era_works() {
-		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
 			let v = 10;
 			let n = 100;
 
@@ -626,7 +626,7 @@ mod tests {
 
 	#[test]
 	fn create_validator_with_nominators_works() {
-		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
 			let n = 10;
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
@@ -650,7 +650,7 @@ mod tests {
 
 	#[test]
 	fn add_slashing_spans_works() {
-		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
 			let n = 10;
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
@@ -681,7 +681,7 @@ mod tests {
 
 	#[test]
 	fn test_payout_all() {
-		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
 			let v = 10;
 			let n = 100;
 
@@ -701,6 +701,7 @@ mod tests {
 
 impl_benchmark_test_suite!(
 	Staking,
-	crate::mock::ExtBuilder::default().has_stakers(true).build(),
+	crate::mock::ExtBuilder::default().has_stakers(true),
 	crate::mock::Test,
+	exec_name = build_and_execute
 );

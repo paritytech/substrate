@@ -374,7 +374,7 @@ impl ExtBuilder {
 		self.min_validator_bond = amount;
 		self
 	}
-	pub fn build(self) -> sp_io::TestExternalities {
+	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
@@ -492,6 +492,14 @@ fn post_conditions() {
 	check_nominators();
 	check_exposures();
 	check_ledgers();
+	check_count();
+}
+
+fn check_count() {
+	let nominator_count = Nominators::<Test>::iter().count() as u32;
+	let validator_count = Validators::<Test>::iter().count() as u32;
+	assert_eq!(nominator_count, CurrentNominatorsCount::<Test>::get());
+	assert_eq!(validator_count, CurrentValidatorsCount::<Test>::get());
 }
 
 fn check_ledgers() {
