@@ -86,7 +86,7 @@ macro_rules! trace {
 // This number corresponds to the number of powers between the minimum possible allocation and
 // maximum possible allocation, or: 2^3...2^24 (both ends inclusive, hence 22).
 const N_ORDERS: usize = 22;
-const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes, 16 MiB
+const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
 const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
 
 /// The exponent for the power of two sized block adjusted to the minimum size.
@@ -100,6 +100,7 @@ const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
 /// 64                | 3
 /// ...
 /// 16777216          | 21
+/// 33554432          | 22
 ///
 /// and so on.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
