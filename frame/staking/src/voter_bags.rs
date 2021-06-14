@@ -125,6 +125,7 @@ impl<T: Config> VoterList<T> {
 
 			// now get rid of the node itself
 			crate::VoterNodes::<T>::remove(node.bag_idx, voter_id);
+			crate::VoterBagFor::<T>::remove(voter_id);
 		}
 
 		for (_, bag) in bags {
@@ -256,7 +257,9 @@ impl<T: Config> Bag<T> {
 		if self.head.is_none() {
 			self.head = Some(id.clone());
 		}
-		self.tail = Some(id);
+		self.tail = Some(id.clone());
+
+		crate::VoterBagFor::<T>::insert(id, self.bag_idx);
 	}
 
 	/// Remove a voter node from this bag.
