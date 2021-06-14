@@ -4121,11 +4121,11 @@ mod election_data_provider {
 			assert_ok!(testing_utils::create_validators::<Test>(max - validator_count, 100));
 
 			// but no more
-			let (_, controller) = testing_utils::create_stash_controller::<Test>(
+			let (_, last_validator) = testing_utils::create_stash_controller::<Test>(
 				1337, 100, RewardDestination::Controller,
 			).unwrap();
 			assert_noop!(
-				Staking::validate(Origin::signed(controller), ValidatorPrefs::default()),
+				Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()),
 				Error::<Test>::TooManyValidators,
 			);
 
@@ -4138,10 +4138,15 @@ mod election_data_provider {
 			}
 
 			// one more is too many
-			let (_, controller) = testing_utils::create_stash_controller::<Test>(
+			let (_, last_nominator) = testing_utils::create_stash_controller::<Test>(
 				20_000_000, 100, RewardDestination::Controller,
 			).unwrap();
-			assert_noop!(Staking::nominate(Origin::signed(controller), vec![1]), Error::<Test>::TooManyNominators);
+			assert_noop!(Staking::nominate(Origin::signed(last_nominator), vec![1]), Error::<Test>::TooManyNominators);
+
+			// No problem when we set to `None` again
+			assert_ok!(Staking::update_staking_limits(Origin::root(), 10, 10, None, None));
+			assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
+			assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
 		})
 	}
 }
