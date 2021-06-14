@@ -4360,6 +4360,7 @@ name = "node-runtime"
 version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
+ "frame-election-provider-support",
  "frame-executive",
  "frame-support",
  "frame-system",
@@ -5425,6 +5426,7 @@ dependencies = [
  "frame-system",
  "impl-trait-for-tuples",
  "lazy_static",
+ "log",
  "pallet-timestamp",
  "parity-scale-codec",
  "sp-application-crypto",

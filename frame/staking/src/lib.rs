@@ -304,7 +304,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
-		AtLeast32BitUnsigned,
+		AtLeast32BitUnsigned, Bounded,
 	},
 };
 use sp_staking::{
@@ -542,7 +542,7 @@ impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
 			if !slash_from_target.is_zero() {
 				*target -= slash_from_target;
 
-				// don't leave a dust balance in the staking system.
+				// Don't leave a dust balance in the staking system.
 				if *target <= minimum_balance {
 					slash_from_target += *target;
 					*value += sp_std::mem::replace(target, Zero::zero());
@@ -560,10 +560,10 @@ impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
 				slash_out_of(total, &mut chunk.value, &mut value);
 				chunk.value
 			})
-			.take_while(|value| value.is_zero()) // take all fully-consumed chunks out.
+			.take_while(|value| value.is_zero()) // Take all fully-consumed chunks out.
 			.count();
 
-		// kill all drained chunks.
+		// Kill all drained chunks.
 		let _ = self.unlocking.drain(..i);
 
 		pre_total.saturating_sub(*total)
@@ -719,6 +719,8 @@ pub enum Forcing {
 	/// Not forcing anything - just let whatever happen.
 	NotForcing,
 	/// Force a new era, then reset to `NotForcing` as soon as it is done.
+	/// Note that this will force to trigger an election until a new era is triggered, if the
+	/// election failed, the next session end will trigger a new election again, until success.
 	ForceNew,
 	/// Avoid a new era indefinitely.
 	ForceNone,
@@ -828,6 +830,13 @@ pub mod pallet {
 			Self::AccountId,
 			Self::BlockNumber,
 			// we only accept an election provider that has staking as data provider.
+			DataProvider = Pallet<Self>,
+		>;
+
+		/// Something that provides the election functionality at genesis.
+		type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
+			Self::AccountId,
+			Self::BlockNumber,
 			DataProvider = Pallet<Self>,
 		>;
 
@@ -1245,6 +1254,8 @@ pub mod pallet {
 		Withdrawn(T::AccountId, BalanceOf<T>),
 		/// A nominator has been kicked from a validator. \[nominator, stash\]
 		Kicked(T::AccountId, T::AccountId),
+		/// The election failed. No new era is planned.
+		StakingElectionFailed,
 	}
 
 	#[pallet::error]
@@ -1376,7 +1387,7 @@ pub mod pallet {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 
-			// reject a bond which is considered to be _dust_.
+			// Reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
 				Err(Error::<T>::InsufficientValue)?
 			}
@@ -1442,7 +1453,7 @@ pub mod pallet {
 				let extra = extra.min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
-				// last check: the new active amount of ledger must be more than ED.
+				// Last check: the new active amount of ledger must be more than ED.
 				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
 				Self::deposit_event(Event::<T>::Bonded(stash, extra));
@@ -1560,7 +1571,7 @@ pub mod pallet {
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
 				Self::kill_stash(&stash, num_slashing_spans)?;
-				// remove the lock.
+				// Remove the lock.
 				T::Currency::remove_lock(STAKING_ID, &stash);
 				// This is worst case scenario, so we use the full weight and return None
 				None
@@ -1653,7 +1664,7 @@ pub mod pallet {
 
 			let nominations = Nominations {
 				targets,
-				// initial nominations are considered submitted at era 0. See `Nominations` doc
+				// Initial nominations are considered submitted at era 0. See `Nominations` doc
 				submitted_in: Self::current_era().unwrap_or(0),
 				suppressed: false,
 			};
@@ -1805,6 +1816,12 @@ pub mod pallet {
 		///
 		/// The dispatch origin must be Root.
 		///
+		/// # Warning
+		///
+		/// The election process starts multiple blocks before the end of the era.
+		/// Thus the election process may be ongoing when this is called. In this case the
+		/// election will continue until the next era is triggered.
+		///
 		/// # <weight>
 		/// - No arguments.
 		/// - Weight: O(1)
@@ -1821,6 +1838,12 @@ pub mod pallet {
 		/// reset to normal (non-forced) behaviour.
 		///
 		/// The dispatch origin must be Root.
+		///
+		/// # Warning
+		///
+		/// The election process starts multiple blocks before the end of the era.
+		/// If this is called just before a new era is triggered, the election process may not
+		/// have enough blocks to get a result.
 		///
 		/// # <weight>
 		/// - No arguments.
@@ -1870,10 +1893,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			// remove all staking-related information.
+			// Remove all staking-related information.
 			Self::kill_stash(&stash, num_slashing_spans)?;
 
-			// remove the lock.
+			// Remove the lock.
 			T::Currency::remove_lock(STAKING_ID, &stash);
 			Ok(())
 		}
@@ -1881,6 +1904,12 @@ pub mod pallet {
 		/// Force there to be a new era at the end of sessions indefinitely.
 		///
 		/// The dispatch origin must be Root.
+		///
+		/// # Warning
+		///
+		/// The election process starts multiple blocks before the end of the era.
+		/// If this is called just before a new era is triggered, the election process may not
+		/// have enough blocks to get a result.
 		///
 		/// # <weight>
 		/// - Weight: O(1)
@@ -1992,7 +2021,7 @@ pub mod pallet {
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let ledger = ledger.rebond(value);
-			// last check: the new active amount of ledger must be more than ED.
+			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
@@ -2299,10 +2328,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Plan a new session potentially trigger a new era.
-	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
-
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
 				.unwrap_or_else(|| {
 					frame_support::print("Error: start_session_index must be set for current_era");
@@ -2313,25 +2341,32 @@ impl<T: Config> Pallet<T> {
 				.unwrap_or(0); // Must never happen.
 
 			match ForceEra::<T>::get() {
-				// Will set to default again, which is `NotForcing`.
-				Forcing::ForceNew => ForceEra::<T>::kill(),
-				// Short circuit to `new_era`.
+				// Will be set to `NotForcing` again if a new era has been triggered.
+				Forcing::ForceNew => (),
+				// Short circuit to `try_trigger_new_era`.
 				Forcing::ForceAlways => (),
-				// Only go to `new_era` if deadline reached.
+				// Only go to `try_trigger_new_era` if deadline reached.
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 				_ => {
-					// either `Forcing::ForceNone`,
+					// Either `Forcing::ForceNone`,
 					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
 					return None
 				},
 			}
 
-			// new era.
-			Self::new_era(session_index)
+			// New era.
+			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
+			if maybe_new_era_validators.is_some()
+				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
+			{
+				ForceEra::<T>::put(Forcing::NotForcing);
+			}
+
+			maybe_new_era_validators
 		} else {
-			// Set initial era
+			// Set initial era.
 			log!(debug, "Starting the first era.");
-			Self::new_era(session_index)
+			Self::try_trigger_new_era(session_index, is_genesis)
 		}
 	}
 
@@ -2390,12 +2425,12 @@ impl<T: Config> Pallet<T> {
 			if active_era > bonding_duration {
 				let first_kept = active_era - bonding_duration;
 
-				// prune out everything that's from before the first-kept index.
+				// Prune out everything that's from before the first-kept index.
 				let n_to_prune = bonded.iter()
 					.take_while(|&&(era_idx, _)| era_idx < first_kept)
 					.count();
 
-				// kill slashing metadata.
+				// Kill slashing metadata.
 				for (pruned_era, _) in bonded.drain(..n_to_prune) {
 					slashing::clear_era_metadata::<T>(pruned_era);
 				}
@@ -2428,77 +2463,105 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Plan a new era. Return the potential new staking set.
-	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+	/// Plan a new era.
+	///
+	/// * Bump the current era storage (which holds the latest planned era).
+	/// * Store start session index for the new planned era.
+	/// * Clean old era information.
+	/// * Store staking information for the new planned era
+	///
+	/// Returns the new validator set.
+	pub fn trigger_new_era(
+		start_session_index: SessionIndex,
+		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+	) -> Vec<T::AccountId> {
 		// Increment or set current era.
-		let current_era = CurrentEra::<T>::mutate(|s| {
+		let new_planned_era = CurrentEra::<T>::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
 			s.unwrap()
 		});
-		ErasStartSessionIndex::<T>::insert(&current_era, &start_session_index);
+		ErasStartSessionIndex::<T>::insert(&new_planned_era, &start_session_index);
 
 		// Clean old era information.
-		if let Some(old_era) = current_era.checked_sub(Self::history_depth() + 1) {
+		if let Some(old_era) = new_planned_era.checked_sub(Self::history_depth() + 1) {
 			Self::clear_era_information(old_era);
 		}
 
-		// Set staking information for new era.
-		let maybe_new_validators = Self::enact_election(current_era);
-
-		maybe_new_validators
+		// Set staking information for the new era.
+		Self::store_stakers_info(exposures, new_planned_era)
 	}
 
-	/// Enact and process the election using the `ElectionProvider` type.
+	/// Potentially plan a new era.
 	///
-	/// This will also process the election, as noted in [`process_election`].
-	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		T::ElectionProvider::elect()
-			.map_err(|e| {
-				log!(warn, "election provider failed due to {:?}", e)
+	/// Get election result from `T::ElectionProvider`.
+	/// In case election result has more than [`MinimumValidatorCount`] validator trigger a new era.
+	///
+	/// In case a new era is planned, the new validator set is returned.
+	fn try_trigger_new_era(start_session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
+		let (election_result, weight) = if is_genesis {
+			T::GenesisElectionProvider::elect().map_err(|e| {
+				log!(warn, "genesis election provider failed due to {:?}", e);
+				Self::deposit_event(Event::StakingElectionFailed);
 			})
-			.and_then(|(res, weight)| {
-				<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-					weight,
-					frame_support::weights::DispatchClass::Mandatory,
-				);
-				Self::process_election(res, current_era)
+		} else {
+			T::ElectionProvider::elect().map_err(|e| {
+				log!(warn, "election provider failed due to {:?}", e);
+				Self::deposit_event(Event::StakingElectionFailed);
 			})
-			.ok()
+		}
+		.ok()?;
+
+		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
+			weight,
+			frame_support::weights::DispatchClass::Mandatory,
+		);
+
+		let exposures = Self::collect_exposures(election_result);
+
+		if (exposures.len() as u32) < Self::minimum_validator_count().max(1) {
+			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
+			match CurrentEra::<T>::get() {
+				Some(current_era) if current_era > 0 => log!(
+					warn,
+					"chain does not have enough staking candidates to operate for era {:?} ({} \
+					elected, minimum is {})",
+					CurrentEra::<T>::get().unwrap_or(0),
+					exposures.len(),
+					Self::minimum_validator_count(),
+				),
+				None => {
+					// The initial era is allowed to have no exposures.
+					// In this case the SessionManager is expected to choose a sensible validator
+					// set.
+					// TODO: this should be simplified #8911
+					CurrentEra::<T>::put(0);
+					ErasStartSessionIndex::<T>::insert(&0, &start_session_index);
+				},
+				_ => ()
+			}
+
+			Self::deposit_event(Event::StakingElectionFailed);
+			return None
+		}
+
+		Self::deposit_event(Event::StakingElection);
+		Some(Self::trigger_new_era(start_session_index, exposures))
 	}
 
 	/// Process the output of the election.
 	///
-	/// This ensures enough validators have been elected, converts all supports to exposures and
-	/// writes them to the associated storage.
-	///
-	/// Returns `Err(())` if less than [`MinimumValidatorCount`] validators have been elected, `Ok`
-	/// otherwise.
-	pub fn process_election(
-		flat_supports: frame_election_provider_support::Supports<T::AccountId>,
-		current_era: EraIndex,
-	) -> Result<Vec<T::AccountId>, ()> {
-		let exposures = Self::collect_exposures(flat_supports);
+	/// Store staking information for the new planned era
+	pub fn store_stakers_info(
+		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		new_planned_era: EraIndex,
+	) -> Vec<T::AccountId> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
-
-		if (elected_stashes.len() as u32) < Self::minimum_validator_count().max(1) {
-			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
-			if current_era > 0 {
-				log!(
-					warn,
-					"chain does not have enough staking candidates to operate for era {:?} ({} elected, minimum is {})",
-					current_era,
-					elected_stashes.len(),
-					Self::minimum_validator_count(),
-				);
-			}
-			return Err(());
-		}
 
 		// Populate stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
 		exposures.into_iter().for_each(|(stash, exposure)| {
 			total_stake = total_stake.saturating_add(exposure.total);
-			<ErasStakers<T>>::insert(current_era, &stash, &exposure);
+			<ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
 
 			let mut exposure_clipped = exposure;
 			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
@@ -2506,31 +2569,28 @@ impl<T: Config> Pallet<T> {
 				exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
 				exposure_clipped.others.truncate(clipped_max_len);
 			}
-			<ErasStakersClipped<T>>::insert(&current_era, &stash, exposure_clipped);
+			<ErasStakersClipped<T>>::insert(&new_planned_era, &stash, exposure_clipped);
 		});
 
 		// Insert current era staking information
-		<ErasTotalStake<T>>::insert(&current_era, total_stake);
+		<ErasTotalStake<T>>::insert(&new_planned_era, total_stake);
 
-		// collect the pref of all winners
+		// Collect the pref of all winners.
 		for stash in &elected_stashes {
 			let pref = Self::validators(stash);
-			<ErasValidatorPrefs<T>>::insert(&current_era, stash, pref);
+			<ErasValidatorPrefs<T>>::insert(&new_planned_era, stash, pref);
 		}
 
-		// emit event
-		Self::deposit_event(Event::<T>::StakingElection);
-
-		if current_era > 0 {
+		if new_planned_era > 0 {
 			log!(
 				info,
 				"new validator set of size {:?} has been processed for era {:?}",
 				elected_stashes.len(),
-				current_era,
+				new_planned_era,
 			);
 		}
 
-		Ok(elected_stashes)
+		elected_stashes
 	}
 
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
@@ -2546,7 +2606,7 @@ impl<T: Config> Pallet<T> {
 		supports
 			.into_iter()
 			.map(|(validator, support)| {
-				// build `struct exposure` from `support`
+				// Build `struct exposure` from `support`.
 				let mut others = Vec::with_capacity(support.voters.len());
 				let mut own: BalanceOf<T> = Zero::zero();
 				let mut total: BalanceOf<T> = Zero::zero();
@@ -2681,12 +2741,12 @@ impl<T: Config> Pallet<T> {
 		let mut all_voters = Vec::new();
 
 		for (validator, _) in <Validators<T>>::iter() {
-			// append self vote
+			// Append self vote.
 			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
 		}
 
-		// collect all slashing spans into a BTreeMap for further queries.
+		// Collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
 		for (nominator, nominations) in <Nominators<T>>::iter() {
@@ -2765,18 +2825,23 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 			.saturating_sub(current_era_start_session_index)
 			.min(T::SessionsPerEra::get());
 
-		let session_length = T::NextNewSession::average_session_length();
-
 		let until_this_session_end = T::NextNewSession::estimate_next_new_session(now)
 			.0
 			.unwrap_or_default()
 			.saturating_sub(now);
 
-		let sessions_left: T::BlockNumber = T::SessionsPerEra::get()
-			.saturating_sub(era_length)
-			// one session is computed in this_session_end.
-			.saturating_sub(1)
-			.into();
+		let session_length = T::NextNewSession::average_session_length();
+
+		let sessions_left: T::BlockNumber = match ForceEra::<T>::get() {
+			Forcing::ForceNone => Bounded::max_value(),
+			Forcing::ForceNew | Forcing::ForceAlways => Zero::zero(),
+			Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => Zero::zero(),
+			Forcing::NotForcing => T::SessionsPerEra::get()
+				.saturating_sub(era_length)
+				// One session is computed in this_session_end.
+				.saturating_sub(1)
+				.into(),
+		};
 
 		now.saturating_add(
 			until_this_session_end.saturating_add(sessions_left.saturating_mul(session_length)),
@@ -2841,16 +2906,21 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		log!(trace, "planning new_session({})", new_index);
+		log!(trace, "planning new session {}", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
-		Self::new_session(new_index)
+		Self::new_session(new_index, false)
+	}
+	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+		log!(trace, "planning new session {} at genesis", new_index);
+		CurrentPlannedSession::<T>::put(new_index);
+		Self::new_session(new_index, true)
 	}
 	fn start_session(start_index: SessionIndex) {
-		log!(trace, "starting start_session({})", start_index);
+		log!(trace, "starting session {}", start_index);
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
-		log!(trace, "ending end_session({})", end_index);
+		log!(trace, "ending session {}", end_index);
 		Self::end_session(end_index)
 	}
 }
@@ -2862,6 +2932,20 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 		new_index: SessionIndex,
 	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
+			let current_era = Self::current_era()
+				// Must be some as a new era has been created.
+				.unwrap_or(0);
+
+			validators.into_iter().map(|v| {
+				let exposure = Self::eras_stakers(current_era, &v);
+				(v, exposure)
+			}).collect()
+		})
+	}
+	fn new_session_genesis(
+		new_index: SessionIndex,
+	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
+		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
 				.unwrap_or(0);
@@ -2960,7 +3044,7 @@ where
 			let active_era = Self::active_era();
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
-				// this offence need not be re-submitted.
+				// This offence need not be re-submitted.
 				return consumed_weight
 			}
 			active_era.expect("value checked not to be `None`; qed").index
@@ -2974,7 +3058,7 @@ where
 
 		let window_start = active_era.saturating_sub(T::BondingDuration::get());
 
-		// fast path for active-era report - most likely.
+		// Fast path for active-era report - most likely.
 		// `slash_session` cannot be in a future active era. It must be in `active_era` or before.
 		let slash_era = if slash_session >= active_era_start_session_index {
 			active_era
@@ -2982,10 +3066,10 @@ where
 			let eras = BondedEras::<T>::get();
 			add_db_reads_writes(1, 0);
 
-			// reverse because it's more likely to find reports from recent eras.
+			// Reverse because it's more likely to find reports from recent eras.
 			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
 				Some(&(ref slash_era, _)) => *slash_era,
-				// before bonding period. defensive - should be filtered out.
+				// Before bonding period. defensive - should be filtered out.
 				None => return consumed_weight,
 			}
 		};
@@ -3031,7 +3115,7 @@ where
 				}
 				unapplied.reporters = details.reporters.clone();
 				if slash_defer_duration == 0 {
-					// apply right away.
+					// Apply right away.
 					slashing::apply_slash::<T>(unapplied);
 					{
 						let slash_cost = (6, 5);
@@ -3042,7 +3126,7 @@ where
 						);
 					}
 				} else {
-					// defer to end of some `slash_defer_duration` from now.
+					// Defer to end of some `slash_defer_duration` from now.
 					<Self as Store>::UnappliedSlashes::mutate(
 						active_era,
 						move |for_later| for_later.push(unapplied),
@@ -3071,7 +3155,7 @@ where
 	O: Offence<Offender>,
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
-		// disallow any slashing from before the current bonding period.
+		// Disallow any slashing from before the current bonding period.
 		let offence_session = offence.session_index();
 		let bonded_eras = BondedEras::<T>::get();
 
