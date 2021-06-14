@@ -58,6 +58,7 @@ fn current_bag_for<T: Config>(id: &AccountIdOf<T>) -> Option<BagIdx> {
 pub struct VoterList<T: Config>(PhantomData<T>);
 
 impl<T: Config> VoterList<T> {
+	/// Decode the length of the voter list.
 	pub fn decode_len() -> Option<usize> {
 		crate::VoterCount::<T>::try_get().ok().map(|n| n.saturated_into())
 	}
@@ -83,16 +84,20 @@ impl<T: Config> VoterList<T> {
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
 	) {
 		let mut bags = BTreeMap::new();
+		let mut count = 0;
 
 		for voter in voters.into_iter() {
 			let weight = weight_of(&voter.id);
 			let bag = notional_bag_for(weight);
 			bags.entry(bag).or_insert_with(|| Bag::<T>::get_or_make(bag)).insert(voter);
+			count += 1;
 		}
 
 		for (_, bag) in bags {
 			bag.put();
 		}
+
+		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_add(count));
 	}
 
 	/// Remove a voter (by id) from the voter list.
@@ -105,31 +110,18 @@ impl<T: Config> VoterList<T> {
 	/// This is more efficient than repeated calls to `Self::remove`.
 	pub fn remove_many<'a>(voters: impl IntoIterator<Item = &'a AccountIdOf<T>>) {
 		let mut bags = BTreeMap::new();
+		let mut count = 0;
 
 		for voter_id in voters.into_iter() {
 			let node = match Node::<T>::from_id(voter_id) {
 				Some(node) => node,
 				None => continue,
 			};
-
-			// modify the surrounding nodes
-			if let Some(mut prev) = node.prev() {
-				prev.next = node.next.clone();
-				prev.put();
-			}
-			if let Some(mut next) = node.next() {
-				next.prev = node.prev.clone();
-				next.put();
-			}
+			count += 1;
 
 			// clear the bag head/tail pointers as necessary
-			let mut bag = bags.entry(node.bag_idx).or_insert_with(|| Bag::<T>::get_or_make(node.bag_idx));
-			if bag.head.as_ref() == Some(voter_id) {
-				bag.head = node.next;
-			}
-			if bag.tail.as_ref() == Some(voter_id) {
-				bag.tail = node.prev;
-			}
+			let bag = bags.entry(node.bag_idx).or_insert_with(|| Bag::<T>::get_or_make(node.bag_idx));
+			bag.remove_node(&node);
 
 			// now get rid of the node itself
 			crate::VoterNodes::<T>::remove(node.bag_idx, voter_id);
@@ -138,6 +130,39 @@ impl<T: Config> VoterList<T> {
 		for (_, bag) in bags {
 			bag.put();
 		}
+
+		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_sub(count));
+	}
+
+	/// Update a voter's position in the voter list.
+	///
+	/// If the voter was in the correct bag, no effect. If the voter was in the incorrect bag, they
+	/// are moved into the correct bag.
+	///
+	/// Returns `true` if the voter moved.
+	///
+	/// This operation is somewhat more efficient than simply calling [`self.remove`] followed by
+	/// [`self.insert`]. However, given large quantities of voters to move, it may be more efficient
+	/// to call [`self.remove_many`] followed by [`self.insert_many`].
+	pub fn update_position_for(
+		mut node: Node<T>,
+		weight_of: impl Fn(&AccountIdOf<T>) -> VoteWeight,
+	) -> bool {
+		let was_misplaced = node.is_misplaced(&weight_of);
+		if was_misplaced {
+			// clear the old bag head/tail pointers as necessary
+			if let Some(mut bag) = Bag::<T>::get(node.bag_idx) {
+				bag.remove_node(&node);
+				bag.put();
+			}
+
+			// put the voter into the appropriate new bag
+			node.bag_idx = notional_bag_for(weight_of(&node.voter.id));
+			let mut bag = Bag::<T>::get_or_make(node.bag_idx);
+			bag.insert_node(node);
+			bag.put();
+		}
+		was_misplaced
 	}
 }
 
@@ -199,20 +224,30 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
 	fn insert(&mut self, voter: VoterOf<T>) {
-		let id = voter.id.clone();
-		let tail = self.tail();
-
-		// insert the actual voter
-		let voter_node = Node::<T> {
+		self.insert_node(Node::<T> {
 			voter,
-			prev: tail.as_ref().map(|prev| prev.voter.id.clone()),
+			prev: None,
 			next: None,
 			bag_idx: self.bag_idx,
-		};
-		voter_node.put();
+		});
+	}
+
+	/// Insert a voter node into this bag.
+	///
+	/// This is private on purpose because it's naive; it doesn't check whether this is the
+	/// appropriate bag for this voter at all. Generally, use [`VoterList::insert`] instead.
+	///
+	/// Storage note: this modifies storage, but only for the node. You still need to call
+	/// `self.put()` after use.
+	fn insert_node(&mut self, mut node: Node<T>) {
+		let id = node.voter.id.clone();
+
+		node.prev = self.tail.clone();
+		node.next = None;
+		node.put();
 
 		// update the previous tail
-		if let Some(mut tail) = tail {
+		if let Some(mut tail) = self.tail() {
 			tail.next = Some(id.clone());
 			tail.put();
 		}
@@ -222,6 +257,25 @@ impl<T: Config> Bag<T> {
 			self.head = Some(id.clone());
 		}
 		self.tail = Some(id);
+	}
+
+	/// Remove a voter node from this bag.
+	///
+	/// This is private on purpose because it doesn't check whether this bag contains the voter in
+	/// the first place. Generally, use [`VoterList::remove`] instead.
+	///
+	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
+	/// `self.put()` and `node.put()` after use.
+	fn remove_node(&mut self, node: &Node<T>) {
+		node.excise();
+
+		// clear the bag head/tail pointers as necessary
+		if self.head.as_ref() == Some(&node.voter.id) {
+			self.head = node.next.clone();
+		}
+		if self.tail.as_ref() == Some(&node.voter.id) {
+			self.tail = node.prev.clone();
+		}
 	}
 }
 
@@ -302,6 +356,25 @@ impl<T: Config> Node<T> {
 					.then(move || (self.voter.id.clone(), weight_of(&self.voter.id), targets))
 			}
 		}
+	}
+
+	/// Remove this node from the linked list.
+	///
+	/// Modifies storage, but only modifies the adjacent nodes. Does not modify `self` or any bag.
+	fn excise(&self) {
+		if let Some(mut prev) = self.prev() {
+			prev.next = self.next.clone();
+			prev.put();
+		}
+		if let Some(mut next) = self.next() {
+			next.prev = self.prev.clone();
+			next.put();
+		}
+	}
+
+	/// `true` when this voter is in the wrong bag.
+	pub fn is_misplaced(&self, weight_of: impl Fn(&T::AccountId) -> VoteWeight) -> bool {
+		notional_bag_for(weight_of(&self.voter.id)) != self.bag_idx
 	}
 }
 
