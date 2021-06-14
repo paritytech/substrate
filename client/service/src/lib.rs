@@ -340,7 +340,7 @@ mod waiting {
 /// Once this is called, no more methods can be added to the server.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
-	R: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>,
+	R: FnOnce(sc_rpc::DenyUnsafe) -> RpcModule<()>,
 >(
 	config: &Configuration,
 	mut gen_rpc_module: R,

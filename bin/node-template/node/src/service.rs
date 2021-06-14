@@ -12,6 +12,7 @@ use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_consensus::SlotData;
+use jsonrpsee_ws_server::RpcModule;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -196,6 +197,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			task_manager: &mut task_manager,
 			transaction_pool: transaction_pool.clone(),
 			rpc_extensions_builder,
+			rpsee_modules: RpcModule::new(()),
 			on_demand: None,
 			remote_blockchain: None,
 			backend,
@@ -413,6 +415,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		task_manager: &mut task_manager,
 		on_demand: Some(on_demand),
 		rpc_extensions_builder: Box::new(|_, _| ()),
+		rpsee_modules: RpcModule::new(()),
 		config,
 		client,
 		keystore: keystore_container.sync_keystore(),

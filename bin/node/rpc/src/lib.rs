@@ -41,6 +41,7 @@ use sc_finality_grandpa::{
 	SharedVoterState, SharedAuthoritySet, FinalityProofProvider, GrandpaJustificationStream
 };
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
+use sc_finality_grandpa_rpc::GrandpaRpsee;
 pub use sc_rpc_api::DenyUnsafe;
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
@@ -50,6 +51,9 @@ use sp_consensus_babe::BabeApi;
 use sc_rpc::SubscriptionTaskExecutor;
 use sp_transaction_pool::TransactionPool;
 use sc_client_api::AuxStore;
+
+use jsonrpsee_types::error::Error as JsonRpseeError;
+use jsonrpsee_ws_server::RpcModule;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -103,6 +107,34 @@ pub struct FullDeps<C, P, SC, B> {
 	pub babe: BabeDeps,
 	/// GRANDPA specific dependencies.
 	pub grandpa: GrandpaDeps<B>,
+}
+
+// TODO: I hope we don't need this at all. Not wired up atm.
+/// TODO: docs
+pub fn init_rpc_modules<B>(grandpa_deps: GrandpaDeps<B>)
+-> Result<RpcModule<()>, JsonRpseeError>
+where
+	B: sc_client_api::Backend<Block> + Send + Sync + 'static,
+	B::State: sc_client_api::backend::StateBackend<sp_runtime::traits::HashFor<Block>>,
+
+{
+	let GrandpaDeps {
+		shared_voter_state,
+		shared_authority_set,
+		justification_stream,
+		subscription_executor,
+		finality_provider,
+	} = grandpa_deps;
+	let grandpa_rpc_module = GrandpaRpsee::new(
+		shared_authority_set.clone(),
+		shared_voter_state,
+		justification_stream,
+		finality_provider,
+	).into_rpc_module().expect("TODO: error handling");
+
+	let mut module = RpcModule::<()>::new(());
+	module.merge(grandpa_rpc_module).expect("TODO: error handling");
+	Ok(module)
 }
 
 /// A IO handler that uses all Full RPC extensions.

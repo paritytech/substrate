@@ -622,6 +622,7 @@ fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
 }
 
+// TODO: make available to other code?
 fn to_jsonrpsee_call_error(err: Error) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(err))
 }

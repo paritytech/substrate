@@ -31,6 +31,9 @@ use jsonrpc_core::futures::{
 	future::Executor as Executor01,
 };
 
+use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
+use jsonrpsee_ws_server::{RpcModule, SubscriptionSink};
+
 mod error;
 mod finality;
 mod notification;
@@ -90,6 +93,78 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 		block: Number,
 	) -> FutureResult<Option<EncodedFinalityProof>>;
 }
+
+// TODO: better name
+/// TODO: docs
+pub struct GrandpaRpsee<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
+	authority_set: AuthoritySet,
+	voter_state: VoterState,
+	justification_stream: GrandpaJustificationStream<Block>,
+	finality_proof_provider: Arc<ProofProvider>,
+}
+
+impl<AuthoritySet, VoterState, Block, ProofProvider> GrandpaRpsee<AuthoritySet, VoterState, Block, ProofProvider>
+where
+	VoterState: ReportVoterState + Send + Sync + 'static,
+	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
+	Block: BlockT,
+	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
+{
+	/// TODO: docs
+	pub fn new(
+		authority_set: AuthoritySet,
+		voter_state: VoterState,
+		justification_stream: GrandpaJustificationStream<Block>,
+		finality_proof_provider: Arc<ProofProvider>,
+	) -> Self {
+		Self {
+			authority_set,
+			voter_state,
+			justification_stream,
+			finality_proof_provider,
+		}
+	}
+
+	/// Convert this to a RPC module.
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut module = RpcModule::new(self);
+		// TODO: implement all RPCs here
+		module.register_method("grandpa_hi", |_p, _cx| {
+			Ok("hi grandpa")
+		});
+
+		module.register_method("grandpa_roundState", |_params, grandpa| {
+			ReportedRoundStates::from(&grandpa.authority_set, &grandpa.voter_state)
+				.map_err(to_jsonrpsee_call_error)
+			// async move {
+			// 	ReportedRoundStates::from(&grandpa.authority_set, &grandpa.voter_state)
+			// }
+			// Orig
+			// let round_states = ReportedRoundStates::from(&grandpa.authority_set, &grandpa.voter_state);
+			// let future = async move { round_states }.boxed();
+			// Box::new(future.map_err(jsonrpc_core::Error::from).compat())
+
+
+			// From state
+			// let (method, data, block) = match params.parse() {
+			// 	Ok(params) => params,
+			// 	Err(e) => return Box::pin(future::err(e)),
+			// };
+
+			// async move {
+			// 	state.backend.call(block, method, data).await.map_err(to_jsonrpsee_call_error)
+			// }.boxed()
+		})?;
+
+		Ok(module)
+	}
+}
+
+// TODO: make available to other code?
+fn to_jsonrpsee_call_error(err: error::Error) -> JsonRpseeCallError {
+	JsonRpseeCallError::Failed(Box::new(err))
+}
+
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
 pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {

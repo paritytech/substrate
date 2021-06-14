@@ -514,7 +514,11 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub transaction_pool: Arc<TExPool>,
 	/// A RPC extension builder. Use `NoopRpcExtensionBuilder` if you just want to pass in the
 	/// extensions directly.
+	// TODO: remove before merge
 	pub rpc_extensions_builder: Box<dyn RpcExtensionBuilder<Output = TRpc> + Send>,
+	/// Additional [`RpcModule`]s that should be added to the server
+	// TODO: should be a vec? Or merge all methods before we get here? I think it must be a "squashed" `RpcModule<()>` for the context type.
+	pub rpsee_modules: RpcModule<()>,
 	/// An optional, shared remote blockchain instance. Used for light clients.
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
@@ -585,7 +589,9 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		backend,
 		keystore,
 		transaction_pool,
+		// TODO: this closure is where extra RPCs are passed in, e.g. grandpa.
 		rpc_extensions_builder,
+		rpsee_modules,
 		remote_blockchain,
 		network,
 		system_rpc_tx,
@@ -667,7 +673,8 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 			keystore.clone(),
 			system_rpc_tx.clone(),
 			&config,
-			backend.offchain_storage()
+			backend.offchain_storage(),
+			rpsee_modules,
 		)
 	};
 
@@ -759,6 +766,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
+	additional_rpsee_modules: RpcModule<()>,
 ) -> RpcModule<()>
 	where
 		TBl: BlockT,
@@ -817,11 +825,13 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	});
 
 	// only unique method names used; qed
-	rpc_api.merge(chain_rpc).unwrap();
-	rpc_api.merge(author_rpc).unwrap();
-	rpc_api.merge(system_rpc).unwrap();
-	rpc_api.merge(state_rpc).unwrap();
-	rpc_api.merge(child_state_rpc).unwrap();
+	rpc_api.merge(chain_rpc).expect("Method names are unique; qed");
+	rpc_api.merge(author_rpc).expect("Method names are unique; qed");
+	rpc_api.merge(system_rpc).expect("Method names are unique; qed");
+	rpc_api.merge(state_rpc).expect("Method names are unique; qed");
+	rpc_api.merge(child_state_rpc).expect("Method names are unique; qed");
+	// Additional [`RpcModule`]s defined in the node to fit the specific blockchain
+	rpc_api.merge(additional_rpsee_modules).expect("Method names are unique; qed");
 
 	rpc_api
 }
