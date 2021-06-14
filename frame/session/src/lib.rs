@@ -118,7 +118,7 @@ use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
-	KeyTypeId, Perbill, Percent, RuntimeAppPublic,
+	KeyTypeId, Perbill, Permill, RuntimeAppPublic,
 };
 use sp_staking::SessionIndex;
 use frame_support::{
@@ -168,7 +168,7 @@ impl<
 		Period::get()
 	}
 
-	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Percent>, Weight) {
+	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Permill>, Weight) {
 		let offset = Offset::get();
 		let period = Period::get();
 
@@ -177,12 +177,12 @@ impl<
 		// (0% is never returned).
 		let progress = if now >= offset {
 			let current = (now - offset) % period.clone() + One::one();
-			Some(Percent::from_rational(
+			Some(Permill::from_rational(
 				current.clone(),
 				period.clone(),
 			))
 		} else {
-			Some(Percent::from_rational(
+			Some(Permill::from_rational(
 				now + One::one(),
 				offset,
 			))
