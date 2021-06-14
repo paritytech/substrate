@@ -367,7 +367,7 @@ impl<T: Trait> Module<T> {
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
 
-            if one_metric.stored_bytes == 0 && one_metric.wcu_used == 0 && one_metric.rcu_used == 0 {
+            if one_metric.stored_bytes == 0 && one_metric.wcu_used == 0 {
                 continue;
             }
 
