@@ -337,6 +337,7 @@ mod waiting {
 }
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+/// Once this is called, no more methods can be added to the server.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
 	R: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>,
