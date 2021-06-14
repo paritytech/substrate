@@ -205,11 +205,11 @@ where
 	let builder = builder_hook(builder);
 
 	let (dir, day) = ("log", 10);
-	let file_appender = move || tracing_appender::rolling::minutely(dir, "chainx.log");
+	let file_appender = move || tracing_appender::rolling::daily(dir, "chainx.log");
 	let rotation = tracing_subscriber::fmt::Layer::new()
 		.with_writer(file_appender)
 		.event_format(event_format_file);
-	let cleaner = CleanLayer::new(day, dir.to_string()).with_format(String::from("%Y-%m-%d-%H-%M"));
+	let cleaner = CleanLayer::new(day, dir.to_string()).with_format(String::from("%Y-%m-%d"));
 	let subscriber = builder.finish().with(PrefixLayer).with(cleaner).with(rotation);
 
 	#[cfg(target_os = "unknown")]
