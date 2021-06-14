@@ -66,17 +66,17 @@ struct MetricInfo {
     appPubKey: String,
     #[serde(deserialize_with = "de_string_to_bytes")]
     partitionId: Vec<u8>,
-    storageBytes: u128,
-    wcuUsed: u128,
-    rcuUsed: u128,
+    stored_bytes: u128,
+    wcu_used: u128,
+    rcu_used: u128,
 }
 
 #[derive(Default, Debug)]
 struct DDNMetricInfo {
 	ddn_id: Vec<u8>,
-	storageBytes: u128,
-    wcuUsed: u128,
-    rcuUsed: u128,
+	stored_bytes: u128,
+    wcu_used: u128,
+    rcu_used: u128,
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -367,7 +367,7 @@ impl<T: Trait> Module<T> {
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
 
-            if one_metric.storageBytes == 0 && one_metric.wcuUsed == 0 && one_metric.rcuUsed == 0 {
+            if one_metric.stored_bytes == 0 && one_metric.wcu_used == 0 && one_metric.rcu_used == 0 {
                 continue;
             }
 
@@ -377,17 +377,17 @@ impl<T: Trait> Module<T> {
                     account.id,
                     one_metric.appPubKey,
                     day_start_ms,
-                    one_metric.storageBytes,
-                    one_metric.wcuUsed,
-                    one_metric.rcuUsed,
+                    one_metric.stored_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let call_data = Self::encode_report_metrics(
                     &app_id,
                     day_start_ms,
-                    one_metric.storageBytes,
-                    one_metric.wcuUsed,
-                    one_metric.rcuUsed,
+                    one_metric.stored_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let contract_id_unl =
@@ -421,7 +421,7 @@ impl<T: Trait> Module<T> {
         info!("[OCW] Using Contract Address: {:?}", contract_id);
 
         for one_metric in metrics.iter() {
-            if one_metric.storageBytes == 0 {
+            if one_metric.stored_bytes == 0 {
                 continue;
             }
 
@@ -431,17 +431,17 @@ impl<T: Trait> Module<T> {
                     account.id,
 					one_metric.ddn_id,
                     day_start_ms,
-                    one_metric.storageBytes,
-                    one_metric.wcuUsed,
-                    one_metric.rcuUsed,
+                    one_metric.stored_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let call_data = Self::encode_report_metrics_ddn(
                     &one_metric.ddn_id,
                     day_start_ms,
-                    one_metric.storageBytes,
-                    one_metric.wcuUsed,
-                    one_metric.rcuUsed,
+                    one_metric.stored_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let contract_id_unl =
@@ -674,16 +674,16 @@ impl MetricsAggregator {
             let new_metric_obj = MetricInfo {
                 appPubKey: metrics.appPubKey.clone(),
                 partitionId: metrics.partitionId.clone(),
-                storageBytes: metrics.storageBytes,
-                wcuUsed: metrics.wcuUsed,
-                rcuUsed: metrics.rcuUsed,
+                stored_bytes: metrics.stored_bytes,
+                wcu_used: metrics.wcu_used,
+                rcu_used: metrics.rcu_used,
             };
             self.0.push(new_metric_obj);
         } else {
             // Add to metrics of an existing app.
-            self.0[existing_pubkey_index.unwrap()].storageBytes += metrics.storageBytes;
-            self.0[existing_pubkey_index.unwrap()].wcuUsed += metrics.wcuUsed;
-            self.0[existing_pubkey_index.unwrap()].rcuUsed += metrics.rcuUsed;
+            self.0[existing_pubkey_index.unwrap()].stored_bytes += metrics.stored_bytes;
+            self.0[existing_pubkey_index.unwrap()].wcu_used += metrics.wcu_used;
+            self.0[existing_pubkey_index.unwrap()].rcu_used += metrics.rcu_used;
         }
     }
 
@@ -709,16 +709,16 @@ impl DDnMetricsAggregator {
             let mut rcu_used_sum = 0;
 
 			for metric_item in metrics.iter() {
-				storage_bytes_sum += metric_item.storageBytes;
-				wcu_used_sum += metric_item.wcuUsed;
-                rcu_used_sum += metric_item.rcuUsed;
+				storage_bytes_sum += metric_item.stored_bytes;
+				wcu_used_sum += metric_item.wcu_used;
+                rcu_used_sum += metric_item.rcu_used;
 			}
 
 			let new_metric_obj = DDNMetricInfo {
                 ddn_id,
-                storageBytes: storage_bytes_sum,
-                wcuUsed: wcu_used_sum,
-                rcuUsed: rcu_used_sum,
+                stored_bytes: storage_bytes_sum,
+                wcu_used: wcu_used_sum,
+                rcu_used: rcu_used_sum,
             };
 			self.0.push(new_metric_obj);
 		}

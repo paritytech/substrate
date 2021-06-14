@@ -229,7 +229,7 @@ fn should_submit_signed_transaction_on_chain() {
         // Get the transaction from the worker.
         let transactions = pool_state.read().transactions.clone();
         eprintln!("Transactions: {:?}\n", transactions);
-        // assert_eq!(transactions.len(), 4); // (2 x send_metrics_to_sc) + (2 x send_metrics_ddn_to_sc)
+        assert_eq!(transactions.len(), 4); // (2 x send_metrics_to_sc) + (2 x send_metrics_ddn_to_sc)
 
         // Check metrics of an app based on ddc_metrics_node-0.json and ddc_metrics_node-3.json.
         let app_id = AccountId32::from(hex!(
