@@ -217,6 +217,8 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 }
 
+impl pallet_randomness_collective_flip::Config for Runtime {}
+
 impl pallet_utility::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
@@ -268,6 +270,8 @@ impl InstanceFilter<Call> for ProxyType {
 			ProxyType::NonTransfer => !matches!(
 				c,
 				Call::Balances(..) |
+				Call::Assets(..) |
+				Call::Uniques(..) |
 				Call::Vesting(pallet_vesting::Call::vested_transfer(..)) |
 				Call::Indices(pallet_indices::Call::transfer(..))
 			),

@@ -586,6 +586,10 @@ ss58_address_format!(
 		(78, "calamari", "Manta Canary Network, standard account (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
+	Moonbeam =>
+		(1284, "moonbeam", "Moonbeam, session key (*25519).")
+	Moonriver =>
+		(1285, "moonriver", "Moonriver, session key (*25519).")
 	BasiliskAccount =>
 		(10041, "basilisk", "Basilisk standard account (*25519).")
 

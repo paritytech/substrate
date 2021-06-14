@@ -26,7 +26,7 @@ use crate::{
 	VotingDataOf, VoteWeight,
 };
 use codec::{Encode, Decode};
-use frame_support::{DefaultNoBound, StorageMap, StorageValue, StorageDoubleMap};
+use frame_support::DefaultNoBound;
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
@@ -59,7 +59,7 @@ pub struct VoterList<T: Config>(PhantomData<T>);
 
 impl<T: Config> VoterList<T> {
 	pub fn decode_len() -> Option<usize> {
-		crate::VoterCount::try_get().ok().map(|n| n.saturated_into())
+		crate::VoterCount::<T>::try_get().ok().map(|n| n.saturated_into())
 	}
 
 	/// Iterate over all nodes in all bags in the voter list.
