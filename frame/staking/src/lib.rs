@@ -1359,10 +1359,8 @@ pub mod pallet {
 		TooManyTargets,
 		/// A nomination target was supplied that was blocked or otherwise not a validator.
 		BadTarget,
-		/// Too many nominators are in the system.
-		TooManyNominators,
-		/// Too many validators are in the system.
-		TooManyValidators,
+		/// The specified bond is too low to complete the operation.
+		BondTooLow,
 	}
 
 	#[pallet::hooks]
@@ -1450,8 +1448,8 @@ pub mod pallet {
 				Err(Error::<T>::AlreadyPaired)?
 			}
 
-			// reject a bond which is too low.
-			if value < MinBond::<T>::get() {
+			// reject a bond which is considered to be _dust_.
+			if value < T::Currency::minimum_balance() {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
@@ -1516,8 +1514,8 @@ pub mod pallet {
 				let extra = extra.min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
-				// last check: the new active amount of ledger must be at least min bond.
-				ensure!(ledger.active >= MinBond::<T>::get(), Error::<T>::InsufficientValue);
+				// last check: the new active amount of ledger must be more than ED.
+				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
 
 				Self::deposit_event(Event::<T>::Bonded(stash, extra));
 				Self::update_ledger(&controller, &ledger);
@@ -1527,7 +1525,7 @@ pub mod pallet {
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
-		/// MinBond::<T>::get(), then it is increased to the full amount.
+		/// T::Currency::minimum_balance(), then it is increased to the full amount.
 		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
@@ -1546,7 +1544,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - Independent of the arguments. Limited but potentially exploitable complexity.
 		/// - Contains a limited number of reads.
-		/// - Each call (requires the remainder of the bonded balance to be above `MinBond`)
+		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance`)
 		///   will cause a new entry to be inserted into a vector (`Ledger.unlocking`) kept in storage.
 		///   The only way to clean the aforementioned storage item is also user-controlled via
 		///   `withdraw_unbonded`.
@@ -1571,8 +1569,8 @@ pub mod pallet {
 			if !value.is_zero() {
 				ledger.active -= value;
 
-				// Avoid there being a less than a minimum bond left in the staking system.
-				if ledger.active < MinBond::<T>::get() {
+				// Avoid there being a dust balance left in the staking system.
+				if ledger.active < T::Currency::minimum_balance() {
 					value += ledger.active;
 					ledger.active = Zero::zero();
 				}
@@ -2189,6 +2187,44 @@ pub mod pallet {
 				});
 			}
 
+			Ok(())
+		}
+
+		/// Update the `MinBond` and `MinValidatorBond` values for this pallet.
+		///
+		/// Origin must be Root to call this function.
+		///
+		/// NOTE: Existing nominators and validators will not be affected by this update.
+		/// to kick people under the new threshold, `chill_other` should be called.
+		#[pallet::weight(0)]
+		pub fn update_bonds(
+			origin: OriginFor<T>,
+			min_bond: BalanceOf<T>,
+			min_validator_bond: BalanceOf<T>
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let min_bond = min_bond.max(T::Currency::minimum_balance());
+			let min_validator_bond = min_validator_bond.max(T::Currency::minimum_balance());
+			MinBond::<T>::put(min_bond);
+			MinValidatorBond::<T>::put(min_validator_bond);
+			Ok(())
+		}
+
+		/// Update the `MinBond` and `MinValidatorBond` values for this pallet.
+		///
+		/// Origin must be Root to call this function.
+		///
+		/// NOTE: Existing nominators and validators will not be affected by this update.
+		/// to kick people under the new threshold, `chill_other` should be called.
+		#[pallet::weight(0)]
+		pub fn chill_other(
+			origin: OriginFor<T>,
+			stash: T::AccountId,
+		) -> DispatchResult {
+			// Anyone can call this function.
+			let _ = ensure_signed(origin)?;
+
+			Self::chill_stash(&stash);
 			Ok(())
 		}
 	}
