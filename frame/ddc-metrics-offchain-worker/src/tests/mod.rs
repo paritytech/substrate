@@ -236,7 +236,7 @@ fn should_submit_signed_transaction_on_chain() {
             "00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830"
         ));
         let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 1 + 10, 2 + 20, 3 + 30);
+            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 1 + 10, 2 + 20, 2 + 20);
         assert!(
             transactions[0].ends_with(&expected_call),
             "Expected a specific call to the report_metrics function"
