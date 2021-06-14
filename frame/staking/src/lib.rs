@@ -960,17 +960,11 @@ pub mod pallet {
 	#[pallet::getter(fn bonded)]
 	pub type Bonded<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::AccountId>;
 
-	/// The minimum balance required to be bonded into the staking system.
-	///
-	/// This balance in enforced for all validators and nominators, however validators will
-	/// have an additional requirement to also have more than `MinValidatorBond`.
+	/// The minimum active bond to become and maintain the role of a nominator.
 	#[pallet::storage]
 	pub type MinNominatorBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
-	/// The minimum balance required to be bonded into the staking system as a validator.
-	///
-	/// This balance is different than `MinNominatorBond` since the requirements to be a validator
-	/// is expected to be higher than other roles in the staking system.
+	/// The minimum active bond to become and maintain the role of a validator.
 	#[pallet::storage]
 	pub type MinValidatorBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
