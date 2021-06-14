@@ -256,10 +256,10 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
 }
 
-/// Construct a runtime, with the given name and the given modules.
+/// Construct a runtime, with the given name and the given pallets.
 ///
 /// The parameters here are specific types for `Block`, `NodeBlock`, and `UncheckedExtrinsic`
-/// and the modules that are used by the runtime.
+/// and the pallets that are used by the runtime.
 /// `Block` is the block type that is used in the runtime and `NodeBlock` is the block type
 /// that is used in the node. For instance they can differ in the extrinsics type.
 ///
@@ -276,7 +276,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         Test: test::{Pallet, Call} = 1,
 ///         Test2: test_with_long_module::{Pallet, Event<T>},
 ///
-///         // Module with instances
+///         // Pallets with instances
 ///         Test3_Instance1: test3::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
 ///         Test3_DefaultInstance: test3::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
 ///     }
@@ -284,38 +284,39 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// The identifier `System` is the name of the pallet and the lower case identifier `system` is the
-/// name of the Rust module/crate for this Substrate module. The identifiers between the braces are
-/// the module parts provided by the pallet. It is important to list these parts here to export
+/// name of the Rust module/crate for this Substrate pallet. The identifiers between the braces are
+/// the pallet parts provided by the pallet. It is important to list these parts here to export
 /// them correctly in the metadata or to make the pallet usable in the runtime.
 ///
 /// We provide support for the following module parts in a pallet:
 ///
-/// - `Module`
-/// - `Call`
-/// - `Storage`
-/// - `Event` or `Event<T>` (if the event is generic)
-/// - `Origin` or `Origin<T>` (if the origin is generic)
-/// - `Config` or `Config<T>` (if the config is generic)
-/// - `Inherent` - If the module provides/can check inherents.
-/// - `ValidateUnsigned` - If the module validates unsigned extrinsics.
+/// - `Pallet` - Required for all pallets
+/// - `Call` - If the pallet has callable functions
+/// - `Storage` - If the pallet uses storage
+/// - `Event` or `Event<T>` (if the event is generic) - If the pallet emits events
+/// - `Origin` or `Origin<T>` (if the origin is generic) - If the pallet has instanciable origins
+/// - `Config` or `Config<T>` (if the config is generic) - If the pallet builds the genesis storage
+///   with `GenesisConfig`
+/// - `Inherent` - If the pallet provides/can check inherents.
+/// - `ValidateUnsigned` - If the pallet validates unsigned extrinsics.
 ///
-/// `= $n` is an optional part allowing to define at which index the module variants in
+/// `= $n` is an optional part allowing to define at which index the pallet variants in
 /// `OriginCaller`, `Call` and `Event` are encoded, and to define the ModuleToIndex value.
 ///
 /// if `= $n` is not given, then index is resolved same as fieldless enum in Rust
 /// (i.e. incrementedly from previous index):
 /// ```nocompile
-/// module1 .. = 2,
-/// module2 .., // Here module2 is given index 3
-/// module3 .. = 0,
-/// module4 .., // Here module4 is given index 1
+/// pallet1 .. = 2,
+/// pallet2 .., // Here pallet2 is given index 3
+/// pallet3 .. = 0,
+/// pallet4 .., // Here pallet4 is given index 1
 /// ```
 ///
 /// # Note
 ///
-/// The population of the genesis storage depends on the order of modules. So, if one of your
-/// modules depends on another module, the module that is depended upon needs to come before
-/// the module depending on it.
+/// The population of the genesis storage depends on the order of pallets. So, if one of your
+/// pallets depends on another pallet, the pallet that is depended upon needs to come before
+/// the pallet depending on it.
 ///
 /// # Type definitions
 ///
