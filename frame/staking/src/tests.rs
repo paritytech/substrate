@@ -4075,4 +4075,33 @@ mod election_data_provider {
 				assert_ok!(Staking::unbond(Origin::signed(4), 1000));
 			})
 	}
+
+	#[test]
+	fn chill_other_works() {
+		ExtBuilder::default()
+			.existential_deposit(100)
+			.min_nominator_bond(1_000)
+			.min_validator_bond(1_500)
+			.build_and_execute(|| {
+				// Nominator
+				assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
+				assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
+
+				// Validator
+				assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
+				assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
+
+				// Can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1), 2), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1), 4), Error::<Test>::CannotChillOther);
+
+				// Change the minimum bond
+				assert_ok!(Staking::update_staking_limits(Origin::root(), 1_500, 2_000, None, None));
+
+				// Users can now be chilled
+				assert_ok!(Staking::chill_other(Origin::signed(1), 2));
+				assert_ok!(Staking::chill_other(Origin::signed(1), 4));
+			})
+
+	}
 }

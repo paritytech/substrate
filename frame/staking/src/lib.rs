@@ -2318,7 +2318,7 @@ pub mod pallet {
 					Zero::zero()
 				};
 
-				ensure!(ledger.active >= min_active_bond, Error::<T>::CannotChillOther);
+				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
 			}
 
 			Self::chill_stash(&stash);
