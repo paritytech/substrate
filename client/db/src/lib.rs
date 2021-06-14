@@ -1072,7 +1072,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	fn new_test_with_tx_storage(
+	pub fn new_test_with_tx_storage(
 		keep_blocks: u32,
 		canonicalization_delay: u64,
 		transaction_storage: TransactionStorageMode,
@@ -1897,7 +1897,11 @@ fn apply_indexed_body<Block: BlockT>(
 )  {
 	for extrinsic in body {
 		let hash = sp_runtime::traits::BlakeTwo256::hash(&extrinsic);
-		transaction.reference(columns::TRANSACTION, DbHash::from_slice(hash.as_ref()));
+		transaction.store(
+			columns::TRANSACTION,
+			DbHash::from_slice(hash.as_ref()),
+			extrinsic,
+		);
 	}
 }
 

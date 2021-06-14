@@ -1127,3 +1127,39 @@ fn syncs_state() {
 	}
 }
 
+#[test]
+fn syncs_indexed_blocks() {
+	use sp_runtime::traits::Hash;
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(0);
+	let mut n: u64 = 0;
+	net.add_full_peer_with_config(FullPeerConfig {
+		storage_chain: true,
+		..Default::default()
+	});
+	net.add_full_peer_with_config(FullPeerConfig {
+		storage_chain: true,
+		sync_mode: SyncMode::Fast { skip_proofs: false, storage_chain_mode: true },
+		..Default::default()
+	});
+	net.peer(0).generate_blocks_at(
+		BlockId::number(0),
+		64,
+		BlockOrigin::Own, |mut builder| {
+			let ex = Extrinsic::Store(n.to_le_bytes().to_vec());
+			n += 1;
+			builder.push(ex).unwrap();
+			builder.build().unwrap().block
+		},
+		false,
+		true,
+		true,
+	);
+	let indexed_key = sp_runtime::traits::BlakeTwo256::hash(&42u64.to_le_bytes());
+	assert!(net.peer(0).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_some());
+	assert!(net.peer(1).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_none());
+
+	net.block_until_sync();
+	assert!(net.peer(1).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_some());
+}
+

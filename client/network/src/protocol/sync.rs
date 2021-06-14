@@ -1850,9 +1850,8 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	//fn drain_blocks<B: BlockT>(best_num: NumberFor<Block>, blocks: &mut BlockCollection<B>)
-	fn drain_blocks(&mut self) -> Vec<IncomingBlock<B>>
-	{
+	/// Drain the downloaded block set up to the first gap.
+	fn drain_blocks(&mut self) -> Vec<IncomingBlock<B>> {
 		self.blocks
 			.drain(self.best_queued_number + One::one())
 			.into_iter()
