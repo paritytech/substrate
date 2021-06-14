@@ -673,7 +673,7 @@ impl MetricsAggregator {
             // New app.
             let new_metric_obj = MetricInfo {
                 appPubKey: metrics.appPubKey.clone(),
-                partitionId: metrics.partitionId.clone(),
+                partitionId: vec![], // Ignored in aggregates.
                 stored_bytes: metrics.stored_bytes,
                 wcu_used: metrics.wcu_used,
                 rcu_used: metrics.rcu_used,

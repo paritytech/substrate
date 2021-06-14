@@ -217,7 +217,7 @@ fn should_submit_signed_transaction_on_chain() {
         sp_io::offchain::local_storage_set(
             kind,
             b"ddc-metrics-offchain-worker::ddc_url",
-            b"https://node-0.ddc.dev.cere.network",
+            b"https://TEST_DDC",
         );
 
         // Trigger the worker.
