@@ -293,7 +293,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::create())]
-		pub(super) fn create(
+		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			admin: <T::Lookup as StaticLookup>::Source,
@@ -342,7 +342,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::force_create())]
-		pub(super) fn force_create(
+		pub fn force_create(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
@@ -392,7 +392,7 @@ pub mod pallet {
  			witness.instance_metadatas,
 			witness.attributes,
  		))]
-		pub(super) fn destroy(
+		pub fn destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			witness: DestroyWitness,
@@ -437,7 +437,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::mint())]
-		pub(super) fn mint(
+		pub fn mint(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
@@ -466,7 +466,7 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		/// Modes: `check_owner.is_some()`.
 		#[pallet::weight(T::WeightInfo::burn())]
-		pub(super) fn burn(
+		pub fn burn(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
@@ -499,7 +499,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::transfer())]
-		pub(super) fn transfer(
+		pub fn transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
@@ -535,7 +535,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(instances.len())`
 		#[pallet::weight(T::WeightInfo::redeposit(instances.len() as u32))]
-		pub(super) fn redeposit(
+		pub fn redeposit(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			instances: Vec<T::InstanceId>,
@@ -591,7 +591,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::freeze())]
-		pub(super) fn freeze(
+		pub fn freeze(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
@@ -621,7 +621,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::thaw())]
-		pub(super) fn thaw(
+		pub fn thaw(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
@@ -650,7 +650,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::freeze_class())]
-		pub(super) fn freeze_class(
+		pub fn freeze_class(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId
 		) -> DispatchResult {
@@ -677,7 +677,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::thaw_class())]
-		pub(super) fn thaw_class(
+		pub fn thaw_class(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId
 		) -> DispatchResult {
@@ -705,7 +705,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::transfer_ownership())]
-		pub(super) fn transfer_ownership(
+		pub fn transfer_ownership(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
@@ -747,7 +747,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::set_team())]
-		pub(super) fn set_team(
+		pub fn set_team(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			issuer: <T::Lookup as StaticLookup>::Source,
@@ -784,7 +784,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
-		pub(super) fn approve_transfer(
+		pub fn approve_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
@@ -831,7 +831,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::cancel_approval())]
-		pub(super) fn cancel_approval(
+		pub fn cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
@@ -878,7 +878,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::force_asset_status())]
-		pub(super) fn force_asset_status(
+		pub fn force_asset_status(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
@@ -923,7 +923,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::set_attribute())]
-		pub(super) fn set_attribute(
+		pub fn set_attribute(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
@@ -988,7 +988,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_attribute())]
-		pub(super) fn clear_attribute(
+		pub fn clear_attribute(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
@@ -1037,7 +1037,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::set_metadata())]
-		pub(super) fn set_metadata(
+		pub fn set_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
@@ -1103,7 +1103,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_metadata())]
-		pub(super) fn clear_metadata(
+		pub fn clear_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			#[pallet::compact] instance: T::InstanceId,
@@ -1152,7 +1152,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::set_class_metadata())]
-		pub(super) fn set_class_metadata(
+		pub fn set_class_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 			data: BoundedVec<u8, T::StringLimit>,
@@ -1212,7 +1212,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_class_metadata())]
-		pub(super) fn clear_class_metadata(
+		pub fn clear_class_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
 		) -> DispatchResult {
