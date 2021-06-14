@@ -33,6 +33,11 @@ use self::smaps::Smaps;
 
 #[test]
 fn memory_consumption_compiled() {
+	// This aims to see if linear memory stays backed by the physical memory after a runtime call.
+	//
+	// For that we make a series of runtime calls, probing the RSS for the VMA matching the linear
+	// memory. After the call we expect RSS to be equal to 0.
+
 	let runtime = mk_test_runtime(WasmExecutionMethod::Compiled, 1024);
 
 	let instance = runtime.new_instance().unwrap();
@@ -43,7 +48,10 @@ fn memory_consumption_compiled() {
 		.as_i32()
 		.expect("`__heap_base` is an `i32`");
 
-	let smaps = Smaps::new();
+	fn probe_rss(instance: &dyn sc_executor_common::wasm_runtime::WasmInstance) -> usize {
+		let base_addr = instance.linear_memory_base_ptr().unwrap() as usize;
+		Smaps::new().get_rss(base_addr).expect("failed to get rss")
+	}
 
 	instance
 		.call_export(
@@ -51,18 +59,15 @@ fn memory_consumption_compiled() {
 			&(heap_base as u32, 1u32).encode(),
 		)
 		.unwrap();
-
-	// Just assume that the linear memory is backed by a single memory mapping.
-	let base_addr = instance.linear_memory_base_ptr().unwrap() as usize;
-	let rss_pre = smaps.get_rss(base_addr).unwrap();
-
+	let probe_1 = probe_rss(&*instance);
 	instance
 		.call_export(
 			"test_dirty_plenty_memory",
 			&(heap_base as u32, 1024u32).encode(),
 		)
 		.unwrap();
-	let rss_post = smaps.get_rss(base_addr).unwrap();
+	let probe_2 = probe_rss(&*instance);
 
-	assert_eq!(rss_post.saturating_sub(rss_pre), 0);
+	assert_eq!(probe_1, 0);
+	assert_eq!(probe_2, 0);
 }
