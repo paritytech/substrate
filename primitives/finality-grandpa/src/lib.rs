@@ -337,12 +337,50 @@ pub mod accountable_safety {
 	impl<H, N> QueryResponse<H, N> {
 		pub fn authorities(&self) -> Vec<AuthorityId> {
 			match self {
-				QueryResponse::Prevotes(prevotes) => {
-					prevotes.iter().map(|prevote| prevote.id.clone()).collect()
+				QueryResponse::Prevotes(votes) => {
+					votes.iter().map(|vote| vote.id.clone()).collect()
 				},
-				QueryResponse::Precommits(precommits) => {
-					precommits.iter().map(|precommit| precommit.id.clone()).collect()
+				QueryResponse::Precommits(votes) => {
+					votes.iter().map(|vote| vote.id.clone()).collect()
 				},
+			}
+		}
+
+		pub fn target_numbers(&self) -> Vec<N>
+		where
+			N: Clone,
+		{
+			match self {
+				QueryResponse::Prevotes(votes) => {
+					votes.iter().map(|vote| vote.prevote.target_number.clone()).collect()
+				}
+				QueryResponse::Precommits(votes) => {
+					votes.iter().map(|vote| vote.precommit.target_number.clone()).collect()
+				}
+			}
+		}
+
+		pub fn id_and_targets(&self) -> Vec<(AuthorityId, N)>
+		where
+			N: Clone,
+		{
+			match self {
+				QueryResponse::Prevotes(votes) => {
+					votes.iter().map(|vote| {
+						(
+							vote.id.clone(), 
+							vote.prevote.target_number.clone(),
+						)
+					}).collect()
+				}
+				QueryResponse::Precommits(votes) => {
+					votes.iter().map(|vote| {
+						(
+							vote.id.clone(), 
+							vote.precommit.target_number.clone(),
+						)
+					}).collect()
+				}
 			}
 		}
 	}

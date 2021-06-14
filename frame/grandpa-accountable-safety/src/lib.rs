@@ -100,6 +100,7 @@ pub mod pallet {
 		PrevoteReplyExpected,
 		UnsolicitedReply,
 		NoSupportForDifferentSetId,
+		NotImpossibleToHaveSupermajority,
 	}
 }
 
@@ -336,8 +337,52 @@ impl<T: Config> Pallet<T> {
 			AccountableSafetyEquivocations::<T>::put(stored_equivocations);
 		}
 
-		// WIP: validate the reply
-		// - check that it's impossible to have a supermajority for the block in question.
+		// Check that it's impossible to have a supermajority for the block in question
+		// (`state.block_not_included`).
+
+		// Recall: It is impossible for a set S to have a supermajority for B if at least (n + f + 1)/2
+		// voters either vote for a block />= B or equivocate in S.
+
+		// WIP: Get the number of equivocating voters when finding them above.
+		let num_equivocating_voters = 0;
+		let is_equivocating = |id: &AuthorityId| -> bool {
+			false
+		};
+		// WIP: Get this from grandpa pallet or some else?
+		let num_all_voters = query_response.authorities().iter().count();
+		// WIP: Get this threshold f from somewhere instead of hardcoding.
+		let f = (num_all_voters as f64 / 3 as f64).floor();
+
+		let is_descendent = |block: &T::BlockNumber, ancestor: &T::BlockNumber| -> bool {
+			false
+		};
+
+		let block_number_not_included = state.block_not_included.0.target_number;
+
+		let num_votes_doesnt_include_block = query_response
+			.id_and_targets()
+			.iter()
+			.filter(|(id,_)| !is_equivocating(id))
+			.filter(|(_, number)| !is_descendent(number, &block_number_not_included))
+			.count();
+
+		let impossible = 
+			num_votes_doesnt_include_block as f64 + num_equivocating_voters as f64
+			>= (num_all_voters as f64 + f + 1.0) / 2.0;
+		
+		if !impossible {
+			let invalid_response = Equivocation::InvalidResponse(responder.clone());
+
+			let stored_equivocations = if let Some(mut stored) = Pallet::<T>::equivocations() {
+				stored.equivocations.push(invalid_response);
+				stored
+			} else {
+				StoredEquivocations {
+					equivocations: vec![invalid_response],
+				}
+			};
+			AccountableSafetyEquivocations::<T>::put(stored_equivocations);
+		}
 
 		// Check that the responder hasn't already responded, that the reply is the correct
 		// type, and that it isn't an unsolicited response.

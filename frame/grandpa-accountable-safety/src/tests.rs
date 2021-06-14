@@ -239,6 +239,12 @@ fn accountable_safety_setup_and_submit_reply() {
 			),
 			Error::<Test>::AlreadyReplied
 		);
+
+		// Make sure we don't flag any equivocations, or invalid replies
+		assert_eq!(
+			GrandpaAccountableSafety::equivocations(),
+			None,
+		);
 	});
 }
 
@@ -313,6 +319,51 @@ fn accountable_safety_submit_invalid_reply() {
 			Some(StoredEquivocations {
 				equivocations: vec![Equivocation::Precommit(precommits)],
 			}),
+		);
+	});
+}
+
+#[test]
+#[ignore]
+fn accountable_safety_submit_reply_that_doesnt_show_impossibility_for_supermajority() {
+	new_test_ext().execute_with(|| {
+		use Ed25519Keyring::{Alice, Bob};
+		let auth = vec![Alice, Bob];
+		let pub_ids: Vec<AuthorityId> =
+			auth.iter().map(|keyring| keyring.public().into()).collect();
+		let round = 42;
+		let set_id = 4;
+
+		let block_not_included = (
+			new_commit(auth.clone(), H256::random(), 5, round, set_id),
+			round.clone(),
+			set_id,
+		);
+
+		let new_block = (
+			new_commit(auth.clone(), H256::random(), 6, round + 1, set_id),
+			round + 1,
+			set_id,
+		);
+
+		assert_ok!(GrandpaAccountableSafety::start_accountable_safety(
+			block_not_included.clone(),
+			new_block
+		));
+
+		// Add response which does not show that it's impossible to have a supermajority for the
+		// block not included. This makes it an invalid reply.
+		let precommit = new_precommit(Alice, H256::random(), 5, round, set_id);
+		assert_err!(
+			GrandpaAccountableSafety::add_response(
+				&pub_ids[0],
+				QueryResponse::Precommits(vec![precommit]),
+			),
+			Error::<Test>::NotImpossibleToHaveSupermajority,
+		);
+		assert_eq!(
+			GrandpaAccountableSafety::query_state_for_voter(&pub_ids[0]),
+			Some(Query::WaitingForReply)
 		);
 	});
 }
