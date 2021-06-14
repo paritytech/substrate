@@ -176,6 +176,9 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Decode the length of the signed submissions without actually reading the entire struct into
 	/// memory.
+	///
+	/// Note that if you hold an instance of `SignedSubmissions`, this function does _not_
+	/// track its current length. This only decodes what is currently stored in memory.
 	pub fn decode_len() -> Option<usize> {
 		SignedSubmissionIndices::<T>::decode_len()
 	}
