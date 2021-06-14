@@ -225,7 +225,7 @@ impl<T: Config> Bag<T> {
 	}
 }
 
-/// A Node is the fundamental element comprising the singly-linked lists which for each bag.
+/// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
 #[derive(Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Node<T: Config> {
