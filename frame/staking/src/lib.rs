@@ -998,6 +998,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CurrentValidatorsCount<T> = StorageValue<_, u32, ValueQuery>;
 
+	/// The maximum validator count before we stop allowing new validators to join.
+	#[pallet::storage]
+	pub type MaxValidatorsCount<T> = StorageValue<_, u32, OptionQuery>;
+
 	/// The map from nominator stash key to the set of stash keys of all validators to nominate.
 	///
 	/// When updating this storage item, you must also update the `CurrentNominatorsCount`.
@@ -1008,6 +1012,10 @@ pub mod pallet {
 	/// A tracker to keep count of the number of items in the `Nominators` map.
 	#[pallet::storage]
 	pub type CurrentNominatorsCount<T> = StorageValue<_, u32, ValueQuery>;
+
+	/// The maximum nominator count before we stop allowing new validators to join.
+	#[pallet::storage]
+	pub type MaxNominatorsCount<T> = StorageValue<_, u32, OptionQuery>;
 
 	/// The current era index.
 	///
@@ -1357,6 +1365,12 @@ pub mod pallet {
 		BondTooLow,
 		/// The user has enough bond and thus cannot be chilled forcefully by an external person.
 		CannotChillOther,
+		/// There are too many nominators in the system. Governance needs to adjust the staking settings
+		/// to keep things safe for the runtime.
+		TooManyNominators,
+		/// There are too many validators in the system. Governance needs to adjust the staking settings
+		/// to keep things safe for the runtime.
+		TooManyValidators,
 	}
 
 	#[pallet::hooks]
@@ -1683,6 +1697,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::validate())]
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
+
+			// If this error is reached, we need to adjust the `MinValidatorBond` and start calling `chill_other`.
+			// Until then, we explicitly block new validators to protect the runtime.
+			if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
+				ensure!(CurrentValidatorsCount::<T>::get() < max_validators, Error::<T>::TooManyValidators);
+			}
+
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientValue);
 
@@ -1717,6 +1738,13 @@ pub mod pallet {
 			targets: Vec<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
+
+			// If this error is reached, we need to adjust the `MinNominatorBond` and start calling `chill_other`.
+			// Until then, we explicitly block new nominators to protect the runtime.
+			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
+				ensure!(CurrentNominatorsCount::<T>::get() < max_nominators, Error::<T>::TooManyNominators);
+			}
+
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientValue);
 
@@ -2191,23 +2219,34 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Update the `MinNominatorBond` and `MinValidatorBond` values for this pallet.
+		/// Update the various staking limits this pallet.
+		///
+		/// * `min_nominator_bond`: The minimum active bond needed to be a nominator.
+		/// * `min_validator_bond`: The minimum active bond needed to be a validator.
+		/// * `max_nominator_count`: The max number of users who can be a nominator at once.
+		///   When set to `None`, no limit is enforced.
+		/// * `max_validator_count`: The max number of users who can be a validator at once.
+		///   When set to `None`, no limit is enforced.
 		///
 		/// Origin must be Root to call this function.
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
-		/// to kick people under the new threshold, `chill_other` should be called.
+		/// to kick people under the new limits, `chill_other` should be called.
 		#[pallet::weight(0)]
-		pub fn update_bonds(
+		pub fn update_staking_limits(
 			origin: OriginFor<T>,
 			min_nominator_bond: BalanceOf<T>,
-			min_validator_bond: BalanceOf<T>
+			min_validator_bond: BalanceOf<T>,
+			max_nominator_count: Option<u32>,
+			max_validator_count: Option<u32>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			let min_nominator_bond = min_nominator_bond.max(T::Currency::minimum_balance());
 			let min_validator_bond = min_validator_bond.max(T::Currency::minimum_balance());
-			MinNominatorBond::<T>::put(min_nominator_bond);
-			MinValidatorBond::<T>::put(min_validator_bond);
+			MinNominatorBond::<T>::set(min_nominator_bond);
+			MinValidatorBond::<T>::set(min_validator_bond);
+			MaxNominatorsCount::<T>::set(max_nominator_count);
+			MaxValidatorsCount::<T>::set(max_validator_count);
 			Ok(())
 		}
 
