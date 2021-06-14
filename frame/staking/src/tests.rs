@@ -1734,7 +1734,7 @@ fn bond_with_no_staked_value() {
 			// Can't bond with 1
 			assert_noop!(
 				Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
-				Error::<Test>::InsufficientValue,
+				Error::<Test>::InsufficientBond,
 			);
 			// bonded with absolute minimum value possible.
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Controller));
@@ -3760,7 +3760,7 @@ fn cannot_rebond_to_lower_than_ed() {
 			// now bond a wee bit more
 			assert_noop!(
 				Staking::rebond(Origin::signed(20), 5),
-				Error::<Test>::InsufficientValue,
+				Error::<Test>::InsufficientBond,
 			);
 		})
 }
@@ -3807,7 +3807,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 			// now bond a wee bit more
 			assert_noop!(
 				Staking::bond_extra(Origin::signed(21), 5),
-				Error::<Test>::InsufficientValue,
+				Error::<Test>::InsufficientBond,
 			);
 		})
 }
@@ -4038,5 +4038,41 @@ mod election_data_provider {
 				suppressed: false,
 			});
 		})
+	}
+
+	#[test]
+	fn min_bond_checks_work() {
+		ExtBuilder::default()
+			.existential_deposit(100)
+			.min_nominator_bond(1_000)
+			.min_validator_bond(1_500)
+			.build_and_execute(|| {
+				// 500 is not enough for any role
+				assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
+				assert_noop!(Staking::nominate(Origin::signed(4), vec![1]), Error::<Test>::InsufficientBond);
+				assert_noop!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()), Error::<Test>::InsufficientBond);
+
+				// 1000 is enough for nominator
+				assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
+				assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+				assert_noop!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()), Error::<Test>::InsufficientBond);
+
+				// 1500 is enough for validator
+				assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
+				assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+				assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
+
+				// Can't unbond anything as validator
+				assert_noop!(Staking::unbond(Origin::signed(4), 500), Error::<Test>::InsufficientBond);
+
+				// Once they are a nominator, they can unbond 500
+				assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+				assert_ok!(Staking::unbond(Origin::signed(4), 500));
+				assert_noop!(Staking::unbond(Origin::signed(4), 500), Error::<Test>::InsufficientBond);
+
+				// Once they are chilled they can unbond everything
+				assert_ok!(Staking::chill(Origin::signed(4)));
+				assert_ok!(Staking::unbond(Origin::signed(4), 1000));
+			})
 	}
 }

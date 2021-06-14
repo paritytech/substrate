@@ -1350,8 +1350,8 @@ pub mod pallet {
 		DuplicateIndex,
 		/// Slash record index out of bounds.
 		InvalidSlashIndex,
-		/// Can not bond with value less than minimum balance.
-		InsufficientValue,
+		/// Can not bond with value less than minimum required.
+		InsufficientBond,
 		/// Can not schedule more unlock chunks.
 		NoMoreChunks,
 		/// Can not rebond without unlocking chunks.
@@ -1376,8 +1376,6 @@ pub mod pallet {
 		TooManyTargets,
 		/// A nomination target was supplied that was blocked or otherwise not a validator.
 		BadTarget,
-		/// The specified bond is too low to complete the operation.
-		BondTooLow,
 		/// The user has enough bond and thus cannot be chilled forcefully by an external person.
 		CannotChillOther,
 		/// There are too many nominators in the system. Governance needs to adjust the staking settings
@@ -1475,7 +1473,7 @@ pub mod pallet {
 
 			// Reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
-				Err(Error::<T>::InsufficientValue)?
+				Err(Error::<T>::InsufficientBond)?
 			}
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
@@ -1540,7 +1538,7 @@ pub mod pallet {
 				ledger.total += extra;
 				ledger.active += extra;
 				// Last check: the new active amount of ledger must be more than ED.
-				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
 				Self::deposit_event(Event::<T>::Bonded(stash, extra));
 				Self::update_ledger(&controller, &ledger);
@@ -1610,7 +1608,7 @@ pub mod pallet {
 
 				// Make sure that the user maintains enough active bond for their role.
 				// If a user runs into this error, they should chill first.
-				ensure!(ledger.active >= min_active_bond, Error::<T>::BondTooLow);
+				ensure!(ledger.active >= min_active_bond, Error::<T>::InsufficientBond);
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
@@ -1720,7 +1718,7 @@ pub mod pallet {
 			}
 
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
 
 			let stash = &ledger.stash;
 			Self::do_remove_nominator(stash);
@@ -1761,7 +1759,7 @@ pub mod pallet {
 			}
 
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
 
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
@@ -2138,7 +2136,7 @@ pub mod pallet {
 
 			let ledger = ledger.rebond(value);
 			// Last check: the new active amount of ledger must be more than ED.
-			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
