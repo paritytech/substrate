@@ -1361,6 +1361,8 @@ pub mod pallet {
 		BadTarget,
 		/// The specified bond is too low to complete the operation.
 		BondTooLow,
+		/// The user has enough bond and thus cannot be chilled forcefully by an external person.
+		CannotChillOther,
 	}
 
 	#[pallet::hooks]
@@ -2210,19 +2212,45 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Update the `MinBond` and `MinValidatorBond` values for this pallet.
+		/// Declare a `controller` as having no desire to either validator or nominate.
 		///
-		/// Origin must be Root to call this function.
+		/// Effects will be felt at the beginning of the next era.
 		///
-		/// NOTE: Existing nominators and validators will not be affected by this update.
-		/// to kick people under the new threshold, `chill_other` should be called.
+		/// The dispatch origin for this call must be _Signed_, but can be called by anyone.
+		///
+		/// If the caller is the same as the controller being targeted, then no further checks
+		/// are enforced. However, this call can also be made by an third party user who witnesses
+		/// that this controller does not satisfy the minimum bond requirements to be in their role.
+		///
+		/// This can be helpful if bond requirements are updated, and we need to remove old users
+		/// who do not satisfy these requirements.
+		///
+		/// TODO: Maybe we can deprecate `chill` in the future.
 		#[pallet::weight(0)]
 		pub fn chill_other(
 			origin: OriginFor<T>,
-			stash: T::AccountId,
+			controller: T::AccountId,
 		) -> DispatchResult {
 			// Anyone can call this function.
-			let _ = ensure_signed(origin)?;
+			let caller = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let stash = ledger.stash;
+
+			// If the caller is not the controller, we want to check that the minimum bond
+			// requirements are not satisfied, and thus we have reason to chill this user.
+			//
+			// Otherwise, if caller is the same as the controller, this is just like `chill`.
+			if caller != controller {
+				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
+					MinBond::<T>::get()
+				} else if Validators::<T>::contains_key(&stash) {
+					MinValidatorBond::<T>::get()
+				} else {
+					Zero::zero()
+				};
+
+				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
+			}
 
 			Self::chill_stash(&stash);
 			Ok(())
