@@ -77,7 +77,6 @@ pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StorageNMap, StoragePrefixedMap,
 	IterableStorageMap, IterableStorageDoubleMap, IterableStorageNMap, migration,
 	bounded_vec::{BoundedVec, BoundedSlice}, weak_bounded_vec::WeakBoundedVec,
-	counted_map::CountedStorageMap,
 };
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
@@ -1246,10 +1245,9 @@ pub mod pallet_prelude {
 		weights::{DispatchClass, Pays, Weight},
 		storage::types::{
 			Key as NMapKey, StorageDoubleMap, StorageMap, StorageNMap, StorageValue, ValueQuery,
-			OptionQuery,
+			OptionQuery, CountedStorageMap,
 		},
 		storage::bounded_vec::BoundedVec,
-		CountedStorageMap,
 	};
 	pub use codec::{Encode, Decode};
 	pub use crate::inherent::{InherentData, InherentIdentifier, ProvideInherent};

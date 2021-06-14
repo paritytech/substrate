@@ -1,13 +1,20 @@
 use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
+	traits::{StorageInstance, GetDefault, Get, StorageInfo},
 	storage::{
-		StorageMap, StorageValue,
-		StorageAppend, StorageTryAppend, StorageDecodeLength, StoragePrefixedMap,
-		generator::{StorageMap as StorageMapT, StorageValue as StorageValueT},
+		StorageAppend, StorageTryAppend, StorageDecodeLength,
+		types::{
+			OptionQuery, ValueQuery, StorageMap, StorageValue, QueryKindTrait,
+			StorageMapMetadata, StorageValueMetadata
+		},
 	},
 };
 use sp_std::prelude::*;
 use sp_runtime::traits::Saturating;
+use frame_metadata::{
+	DefaultByteGetter, StorageEntryModifier,
+};
+use max_encoded_len::MaxEncodedLen;
 
 /// A wrapper around a `StorageMap` and a `StorageValue<u32>` to keep track of how many items are in
 /// a map, without needing to iterate all the values.
@@ -21,58 +28,46 @@ use sp_runtime::traits::Saturating;
 ///
 /// Whenever the counter needs to be updated, an additional read and write occurs to update that
 /// counter.
-pub struct CountedStorageMap<Key, Value, Map, Counter>(
-	core::marker::PhantomData<(Key, Value, Map, Counter)>
+///
+/// The storage prefix for the storage value is the given prefix concatenated with `"Counter"`.
+pub struct CountedStorageMap<
+	Prefix, Hasher, Key, Value, QueryKind=OptionQuery, OnEmpty=GetDefault, MaxValues=GetDefault,
+>(
+	core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>
 );
 
-impl<Key, Value, Map, Counter>
-	StorageMapT<Key, Value>
-	for CountedStorageMap<Key, Value, Map, Counter>
-where
-	Key: FullCodec,
-	Value: FullCodec,
-	Map: StorageMapT<Key, Value>,
-	Counter: StorageValueT<u32>
-{
-	type Query = Map::Query;
-	type Hasher = Map::Hasher;
-	fn module_prefix() -> &'static [u8] {
-		Map::module_prefix()
-	}
-	fn storage_prefix() -> &'static [u8] {
-		Map::storage_prefix()
-	}
-	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
-		Map::from_optional_value_to_query(v)
-	}
-	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
-		Map::from_query_to_optional_value(v)
-	}
+/// The requirement for an instance of [`CountedStorageMap`].
+pub trait CountedStorageMapInstance: StorageInstance {
+	/// The prefix to use for the counter storage value.
+	type CounterPrefix: StorageInstance;
 }
 
-impl<Key, Value, Map, Counter>
-	StoragePrefixedMap<Value> for
-	CountedStorageMap<Key, Value, Map, Counter>
-where
-	Value: FullCodec,
-	Map: crate::StoragePrefixedMap<Value>,
-	Counter: StorageValueT<u32>
-{
-	fn module_prefix() -> &'static [u8] {
-		Map::module_prefix()
-	}
-	fn storage_prefix() -> &'static [u8] {
-		Map::storage_prefix()
-	}
+// Internal helper trait to access map from counted storage map.
+trait Helper {
+	type Map;
+	type Counter;
 }
 
-impl<Key, Value, Map, Counter>
-	CountedStorageMap<Key, Value, Map, Counter>
+impl<P: CountedStorageMapInstance, H, K, V, Q, O, M>
+	Helper
+	for CountedStorageMap<P, H, K, V, Q, O, M>
+{
+	type Map = StorageMap<P, H, K, V, Q, O, M>;
+	type Counter = StorageValue<P::CounterPrefix, u32, ValueQuery>;
+}
+
+// Do not use storage value, simply implement some get/set/inc/dec
+
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
+	Prefix: CountedStorageMapInstance,
+	Hasher: crate::hash::StorageHasher,
 	Key: FullCodec,
 	Value: FullCodec,
-	Map: StorageMapT<Key, Value> + crate::StoragePrefixedMap<Value>,
-	Counter: StorageValueT<u32, Query=u32>,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	// Internal helper function to track the counter as a value is mutated.
 	fn mutate_counter<
@@ -82,16 +77,16 @@ where
 		I,
 		R,
 	>(m: M, key: KeyArg, f: F) -> R {
-		let val_existed = Map::contains_key(key.clone());
-		let res = m(&key, f);
-		let val_exists = Map::contains_key(key);
+		let val_existed = <Self as Helper>::Map::contains_key(key.clone());
+		let res = m(key.clone(), f);
+		let val_exists = <Self as Helper>::Map::contains_key(key);
 
 		if val_existed && !val_exists {
 			// Value was deleted
-			Counter::mutate(|value| value.saturating_dec());
+			<Self as Helper>::Counter::mutate(|value| value.saturating_dec());
 		} else if !val_existed && val_exists {
 			// Value was added
-			Counter::mutate(|value| value.saturating_inc());
+			<Self as Helper>::Counter::mutate(|value| value.saturating_inc());
 		}
 
 		res
@@ -99,54 +94,54 @@ where
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Vec<u8> {
-		Map::hashed_key_for(key)
+		<Self as Helper>::Map::hashed_key_for(key)
 	}
 
 	/// Does the value (explicitly) exist in storage?
 	pub fn contains_key<KeyArg: EncodeLike<Key>>(key: KeyArg) -> bool {
-		Map::contains_key(key)
+		<Self as Helper>::Map::contains_key(key)
 	}
 
 	/// Load the value associated with the given key from the map.
-	pub fn get<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Map::Query {
-		Map::get(key)
+	pub fn get<KeyArg: EncodeLike<Key>>(key: KeyArg) -> QueryKind::Query {
+		<Self as Helper>::Map::get(key)
 	}
 
 	/// Try to get the value for the given key from the map.
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
 	pub fn try_get<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Result<Value, ()> {
-		Map::try_get(key)
+		<Self as Helper>::Map::try_get(key)
 	}
 
 	/// Swap the values of two keys.
 	pub fn swap<KeyArg1: EncodeLike<Key>, KeyArg2: EncodeLike<Key>>(key1: KeyArg1, key2: KeyArg2) {
-		Map::swap(key1, key2)
+		<Self as Helper>::Map::swap(key1, key2)
 	}
 
 	/// Store a value to be associated with the given key from the map.
 	pub fn insert<KeyArg: EncodeLike<Key> + Clone, ValArg: EncodeLike<Value>>(key: KeyArg, val: ValArg) {
-		if !Map::contains_key(&key) {
-			Counter::mutate(|value| value.saturating_inc());
+		if !<Self as Helper>::Map::contains_key(key.clone()) {
+			<Self as Helper>::Counter::mutate(|value| value.saturating_inc());
 		}
-		Map::insert(key, val)
+		<Self as Helper>::Map::insert(key, val)
 	}
 
 	/// Remove the value under a key.
 	pub fn remove<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) {
-		if Map::contains_key(&key) {
-			Counter::mutate(|value| value.saturating_dec());
+		if <Self as Helper>::Map::contains_key(key.clone()) {
+			<Self as Helper>::Counter::mutate(|value| value.saturating_dec());
 		}
-		Map::remove(key)
+		<Self as Helper>::Map::remove(key)
 	}
 
 	/// Mutate the value under a key.
-	pub fn mutate<KeyArg: EncodeLike<Key> + Clone, R, F: FnOnce(&mut Map::Query) -> R>(
+	pub fn mutate<KeyArg: EncodeLike<Key> + Clone, R, F: FnOnce(&mut QueryKind::Query) -> R>(
 		key: KeyArg,
 		f: F
 	) -> R {
 		Self::mutate_counter(
-			Map::mutate,
+			<Self as Helper>::Map::mutate,
 			key,
 			f,
 		)
@@ -156,10 +151,10 @@ where
 	pub fn try_mutate<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
 		KeyArg: EncodeLike<Key> + Clone,
-		F: FnOnce(&mut Map::Query) -> Result<R, E>,
+		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
 	{
 		Self::mutate_counter(
-			Map::try_mutate,
+			<Self as Helper>::Map::try_mutate,
 			key,
 			f,
 		)
@@ -171,7 +166,7 @@ where
 		f: F
 	) -> R {
 		Self::mutate_counter(
-			Map::mutate_exists,
+			<Self as Helper>::Map::mutate_exists,
 			key,
 			f,
 		)
@@ -184,18 +179,18 @@ where
 		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
 	{
 		Self::mutate_counter(
-			Map::try_mutate_exists,
+			<Self as Helper>::Map::try_mutate_exists,
 			key,
 			f,
 		)
 	}
 
 	/// Take the value under a key.
-	pub fn take<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) -> Map::Query {
-		if Map::contains_key(key.clone()) {
-			Counter::mutate(|value| value.saturating_dec());
+	pub fn take<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) -> QueryKind::Query {
+		if <Self as Helper>::Map::contains_key(key.clone()) {
+			<Self as Helper>::Counter::mutate(|value| value.saturating_dec());
 		}
-		Map::take(key)
+		<Self as Helper>::Map::take(key)
 	}
 
 	/// Append the given items to the value in the storage.
@@ -213,10 +208,10 @@ where
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageAppend<Item>
 	{
-		if !Map::contains_key(&key) {
-			Counter::mutate(|value| value.saturating_inc());
+		if !<Self as Helper>::Map::contains_key(key.clone()) {
+			<Self as Helper>::Counter::mutate(|value| value.saturating_inc());
 		}
-		Map::append(key, item)
+		<Self as Helper>::Map::append(key, item)
 	}
 
 	/// Read the length of the storage value without decoding the entire value under the given
@@ -234,7 +229,7 @@ where
 	pub fn decode_len<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Option<usize>
 		where Value: StorageDecodeLength,
 	{
-		Map::decode_len(key)
+		<Self as Helper>::Map::decode_len(key)
 	}
 
 	/// Migrate an item with the given `key` from a defunct `OldHasher` to the current hasher.
@@ -243,20 +238,20 @@ where
 	pub fn migrate_key<OldHasher: crate::hash::StorageHasher, KeyArg: EncodeLike<Key>>(
 		key: KeyArg
 	) -> Option<Value> {
-		Map::migrate_key::<OldHasher, _>(key)
+		<Self as Helper>::Map::migrate_key::<OldHasher, _>(key)
 	}
 
 	/// Remove all value of the storage.
 	pub fn remove_all() {
-		Counter::set(0u32);
-		Map::remove_all()
+		<Self as Helper>::Counter::set(0u32);
+		<Self as Helper>::Map::remove_all()
 	}
 
 	/// Iter over all value of the storage.
 	///
 	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value> {
-		Map::iter_values()
+		<Self as Helper>::Map::iter_values()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -274,7 +269,7 @@ where
 	///
 	/// This would typically be called inside the module implementation of on_runtime_upgrade.
 	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(f: F) {
-		Map::translate_values(f)
+		<Self as Helper>::Map::translate_values(f)
 	}
 
 	/// Try and append the given item to the value in the storage.
@@ -290,9 +285,16 @@ where
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageTryAppend<Item>,
 	{
-		<
-			Self as crate::storage::TryAppendMap<Key, Value, Item>
-		>::try_append(key, item)
+		let bound = Value::bound();
+		let current = <Self as Helper>::Map::decode_len(key.clone()).unwrap_or_default();
+		if current < bound {
+			<Self as Helper>::Counter::mutate(|value| value.saturating_inc());
+			let key = <Self as Helper>::Map::hashed_key_for(key);
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
 	}
 
 	/// Initialize the counter with the actual number of items in the map.
@@ -303,12 +305,63 @@ where
 	/// Returns the number of items in the map which is used to set the counter.
 	pub fn initialize_counter() -> u32 {
 		let count = Self::iter_values().count() as u32;
-		Counter::set(count);
+		<Self as Helper>::Counter::set(count);
 		count
 	}
 
 	/// Return the count.
 	pub fn count() -> u32 {
-		Counter::get()
+		<Self as Helper>::Counter::get()
+	}
+}
+
+/// Part of storage metadata for a counted storage map.
+pub trait CountedStorageMapMetadata {
+	const MODIFIER: StorageEntryModifier;
+	const NAME: &'static str;
+	const DEFAULT: DefaultByteGetter;
+	const HASHER: frame_metadata::StorageHasher;
+	const COUNTER_NAME: &'static str;
+	const COUNTER_MODIFIER: StorageEntryModifier;
+	const COUNTER_TY: &'static str;
+	const COUNTER_DEFAULT: DefaultByteGetter;
+	const COUNTER_DOC: &'static str;
+}
+
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> CountedStorageMapMetadata
+	for CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> where
+	Prefix: CountedStorageMapInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	const MODIFIER: StorageEntryModifier = <Self as Helper>::Map::MODIFIER;
+	const HASHER: frame_metadata::StorageHasher = <Self as Helper>::Map::HASHER;
+	const NAME: &'static str = <Self as Helper>::Map::NAME;
+	const DEFAULT: DefaultByteGetter = <Self as Helper>::Map::DEFAULT;
+	const COUNTER_NAME: &'static str = <Self as Helper>::Counter::NAME;
+	const COUNTER_MODIFIER: StorageEntryModifier = <Self as Helper>::Counter::MODIFIER;
+	const COUNTER_TY: &'static str = "u32";
+	const COUNTER_DEFAULT: DefaultByteGetter = <Self as Helper>::Counter::DEFAULT;
+	const COUNTER_DOC: &'static str = &"Counter for the related counted storage map";
+}
+
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::StorageInfoTrait for
+	CountedStorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: CountedStorageMapInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec + MaxEncodedLen,
+	Value: FullCodec + MaxEncodedLen,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn storage_info() -> Vec<StorageInfo> {
+		[<Self as Helper>::Map::storage_info(), <Self as Helper>::Counter::storage_info()].concat()
 	}
 }

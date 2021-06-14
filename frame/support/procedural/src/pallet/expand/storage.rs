@@ -19,10 +19,19 @@ use crate::pallet::Def;
 use crate::pallet::parse::storage::{Metadata, QueryKind, StorageGenerics};
 use frame_support_procedural_tools::clean_type_string;
 
-/// Generate the prefix_ident related the the storage.
+/// Generate the prefix_ident related to the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
 fn prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
 	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", storage_ident), storage_ident.span())
+}
+
+/// Generate the counter_prefix_ident related to the storage.
+/// counter_prefix_ident is used for the prefix struct to be given to counted storage map.
+fn counter_prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
+	syn::Ident::new(
+		&format!("_GeneratedCounterPrefixForStorage{}", storage_ident),
+		storage_ident.span(),
+	)
 }
 
 /// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
@@ -76,6 +85,19 @@ pub fn process_generics(def: &mut Def) {
 					args.args.push(syn::GenericArgument::Type(on_empty));
 				}
 				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values } => {
+					args.args.push(syn::GenericArgument::Type(hasher));
+					args.args.push(syn::GenericArgument::Type(key));
+					args.args.push(syn::GenericArgument::Type(value));
+					let query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
+					args.args.push(syn::GenericArgument::Type(query_kind));
+					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
+					args.args.push(syn::GenericArgument::Type(on_empty));
+					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					args.args.push(syn::GenericArgument::Type(max_values));
+				}
+				StorageGenerics::CountedMap {
+					hasher, key, value, query_kind, on_empty, max_values
+				} => {
 					args.args.push(syn::GenericArgument::Type(hasher));
 					args.args.push(syn::GenericArgument::Type(key));
 					args.args.push(syn::GenericArgument::Type(value));
@@ -149,6 +171,9 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				Metadata::Map { .. } => quote::quote_spanned!(storage.attr_span =>
 					#frame_support::storage::types::StorageMapMetadata
 				),
+				Metadata::CountedMap { .. } => quote::quote_spanned!(storage.attr_span =>
+					#frame_support::storage::types::CountedStorageMapMetadata
+				),
 				Metadata::DoubleMap { .. } => quote::quote_spanned!(storage.attr_span =>
 					#frame_support::storage::types::StorageDoubleMapMetadata
 				),
@@ -167,6 +192,18 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 					)
 				},
 				Metadata::Map { key, value } => {
+					let value = clean_type_string(&quote::quote!(#value).to_string());
+					let key = clean_type_string(&quote::quote!(#key).to_string());
+					quote::quote_spanned!(storage.attr_span =>
+						#frame_support::metadata::StorageEntryType::Map {
+							hasher: <#full_ident as #metadata_trait>::HASHER,
+							key: #frame_support::metadata::DecodeDifferent::Encode(#key),
+							value: #frame_support::metadata::DecodeDifferent::Encode(#value),
+							unused: false,
+						}
+					)
+				},
+				Metadata::CountedMap { key, value } => {
 					let value = clean_type_string(&quote::quote!(#value).to_string());
 					let key = clean_type_string(&quote::quote!(#key).to_string());
 					quote::quote_spanned!(storage.attr_span =>
@@ -212,7 +249,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				}
 			};
 
-			quote::quote_spanned!(storage.attr_span =>
+			let mut metadata = quote::quote_spanned!(storage.attr_span =>
 				#(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
 					name: #frame_support::metadata::DecodeDifferent::Encode(
 						<#full_ident as #metadata_trait>::NAME
@@ -226,7 +263,32 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						#( #docs, )*
 					]),
 				}
-			)
+			);
+
+			// Additional metadata for some storages:
+			if let Metadata::CountedMap { .. } = storage.metadata {
+				metadata.extend(quote::quote_spanned!(storage.attr_span =>
+					, #(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
+						name: #frame_support::metadata::DecodeDifferent::Encode(
+							<#full_ident as #metadata_trait>::COUNTER_NAME
+						),
+						modifier: <#full_ident as #metadata_trait>::COUNTER_MODIFIER,
+						ty: #frame_support::metadata::StorageEntryType::Plain(
+							#frame_support::metadata::DecodeDifferent::Encode(
+								<#full_ident as #metadata_trait>::COUNTER_TY
+							)
+						),
+						default: #frame_support::metadata::DecodeDifferent::Encode(
+							<#full_ident as #metadata_trait>::COUNTER_DEFAULT
+						),
+						documentation: #frame_support::metadata::DecodeDifferent::Encode(&[
+							<#full_ident as #metadata_trait>::COUNTER_DOC
+						]),
+					}
+				));
+			}
+
+			metadata
 		});
 
 	let getters = def.storages.iter()
@@ -283,6 +345,27 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 								<
 									#full_ident as #frame_support::storage::StorageMap<#key, #value>
 								>::get(k)
+							}
+						}
+					)
+				},
+				Metadata::CountedMap { key, value } => {
+					let query = match storage.query_kind.as_ref().expect("Checked by def") {
+						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
+							Option<#value>
+						),
+						QueryKind::ValueQuery => quote::quote!(#value),
+					};
+					quote::quote_spanned!(storage.attr_span =>
+						#(#cfg_attrs)*
+						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
+							#( #docs )*
+							pub fn #getter<KArg>(k: KArg) -> #query where
+								KArg: #frame_support::codec::EncodeLike<#key>,
+							{
+								// NOTE: we can't use any trait here because CountedStorageMap
+								// doesn't implement any.
+								#full_ident::get(k)
 							}
 						}
 					)
@@ -351,7 +434,44 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 		let cfg_attrs = &storage_def.cfg_attrs;
 
+		let maybe_counter = if let Metadata::CountedMap { .. } = storage_def.metadata {
+			let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
+			let counter_prefix_struct_const = format!("CounterFor{}", prefix_struct_const);
+
+			quote::quote_spanned!(storage_def.attr_span =>
+				#(#cfg_attrs)*
+				#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
+					core::marker::PhantomData<(#type_use_gen,)>
+				);
+				#(#cfg_attrs)*
+				impl<#type_impl_gen> #frame_support::traits::StorageInstance
+					for #counter_prefix_struct_ident<#type_use_gen>
+					#config_where_clause
+				{
+					fn pallet_prefix() -> &'static str {
+						<
+							<T as #frame_system::Config>::PalletInfo
+							as #frame_support::traits::PalletInfo
+						>::name::<Pallet<#type_use_gen>>()
+							.expect("Every active pallet has a name in the runtime; qed")
+					}
+					const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
+				}
+				#(#cfg_attrs)*
+				impl<#type_impl_gen> #frame_support::storage::types::CountedStorageMapInstance
+					for #prefix_struct_ident<#type_use_gen>
+					#config_where_clause
+				{
+					type CounterPrefix = #counter_prefix_struct_ident<#type_use_gen>;
+				}
+			)
+		} else {
+			proc_macro2::TokenStream::default()
+		};
+
 		quote::quote_spanned!(storage_def.attr_span =>
+			#maybe_counter
+
 			#(#cfg_attrs)*
 			#prefix_struct_vis struct #prefix_struct_ident<#type_use_gen>(
 				core::marker::PhantomData<(#type_use_gen,)>
