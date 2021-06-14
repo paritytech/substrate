@@ -222,9 +222,9 @@ impl<H, M> NodeCodecT<M> for NodeCodec<H>
 		// With fix inner hashing alt hash can be use with all node, but
 		// that is not better (encoding can use an additional nibble byte
 		// sometime).
-		let mut output = if meta.extract_global_meta().as_ref().map(|threshold|
+		let mut output = if meta.read_global_meta().as_ref().map(|threshold|
 			value_do_hash(&value, threshold)
-		).unwrap_or(meta.do_value_hash()) {
+		).unwrap_or(meta.read_state_meta()) {
 			partial_encode(partial, NodeKind::AltHashLeaf)
 		} else {
 			partial_encode(partial, NodeKind::Leaf)
@@ -274,9 +274,9 @@ impl<H, M> NodeCodecT<M> for NodeCodec<H>
 		value: Value,
 		meta: &mut M,
 	) -> Vec<u8> {
-		let mut output = match (&value,  meta.extract_global_meta().as_ref().map(|threshold|
+		let mut output = match (&value,  meta.read_global_meta().as_ref().map(|threshold|
 			value_do_hash(&value, threshold)
-		).unwrap_or(meta.do_value_hash())) {
+		).unwrap_or(meta.read_state_meta())) {
 			(&Value::NoValue, _) => {
 				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue)
 			},

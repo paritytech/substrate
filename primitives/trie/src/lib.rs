@@ -91,45 +91,16 @@ impl Meta for TrieMeta {
 		self.apply_inner_hashing = state_meta;
 	}
 
-	// TODO rename upstream as read_global_meta
-	fn extract_global_meta(&self) -> Self::GlobalMeta {
+	fn read_state_meta(&self) -> Self::StateMeta {
+		self.apply_inner_hashing
+	}
+
+	fn read_global_meta(&self) -> Self::GlobalMeta {
 		self.try_inner_hashing
 	}
 
 	fn set_global_meta(&mut self, global_meta: Self::GlobalMeta) {
 		self.try_inner_hashing = global_meta;
-	}
-
-	// TODO remove upstream?
-	fn has_state_meta(&self) -> bool {
-		self.apply_inner_hashing
-	}
-
-	// TODO consider removal upstream of this method (node type in codec)
-	fn read_state_meta(&mut self, _data: &[u8]) -> Result<usize, &'static str> {
-		unreachable!()
-		// TODO read directly from codec.
-/*		let offset = if data[0] == trie_constants::ENCODED_META_ALLOW_HASH {
-			self.recorded_do_value_hash = true;
-			self.do_value_hash = true;
-			1
-		} else {
-			0
-		};
-		Ok(offset)*/
-	}
-
-	// TODO consider removal upstream of this method (node type in codec)
-	// `do_value_hash` method is enough function to write with codec.
-	fn write_state_meta(&self) -> Vec<u8> {
-		unreachable!()
-/*		if self.do_value_hash {
-			// Note that this only works with sp_trie codec.
-			// Acts as a boolean result.
-			[trie_constants::ENCODED_META_ALLOW_HASH].to_vec()
-		} else {
-			Vec::new()
-		}*/
 	}
 
 	fn meta_for_new(
@@ -146,14 +117,12 @@ impl Meta for TrieMeta {
 		Self::meta_for_new(global)
 	}
 
-	// TODO meta for empty is unused: can consider removal upstream.
 	fn meta_for_empty(
 		global: Self::GlobalMeta,
 	) -> Self {
 		Self::meta_for_new(global)
 	}
 
-	// TODO if removing all meta, the Option<ValueRange> will replace it.
 	fn encoded_value_callback(
 		&mut self,
 		value_plan: ValuePlan,
@@ -189,11 +158,6 @@ impl Meta for TrieMeta {
 
 	fn contains_hash_of_value(&self) -> bool {
 		self.contain_hash
-	}
-
-	// TODO rename to get state meta
-	fn do_value_hash(&self) -> bool {
-		self.apply_inner_hashing
 	}
 }
 
@@ -234,8 +198,7 @@ impl<H, M> Default for Layout<H, M> {
 impl<H, M> Layout<H, M> {
 	/// Layout with inner hashing active.
 	/// Will flag trie for hashing.
-	/// TODO rename inner -> alt
-	pub fn with_inner_hashing(threshold: u32) -> Self {
+	pub fn with_alt_hashing(threshold: u32) -> Self {
 		Layout(Some(threshold), sp_std::marker::PhantomData)
 	}
 }
@@ -249,7 +212,6 @@ impl<H, M> TrieLayout for Layout<H, M>
 	const USE_EXTENSION: bool = false;
 	const ALLOW_EMPTY: bool = true;
 	const USE_META: bool = true;
-	const READ_ROOT_STATE_META: bool = false; // TODO rem
 
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
@@ -258,20 +220,6 @@ impl<H, M> TrieLayout for Layout<H, M>
 
 	fn layout_meta(&self) -> GlobalMeta<Self> {
 		self.0
-	}
-
-	// TODO remove upstream
-	fn initialize_from_root_meta(&mut self, _root_meta: &Self::Meta) {
-		unreachable!()
-		/*if root_meta.extract_global_meta() {
-			self.0 = true;
-		}*/
-	}
-
-	// TODO remove upstream
-	fn set_root_meta(_root_meta: &mut Self::Meta, _global_meta: GlobalMeta<Self>) {
-		unreachable!()
-//		root_meta.set_global_meta(global_meta);
 	}
 }
 
@@ -302,8 +250,6 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		}
 	}
 
-	// TODO if removing meta upstream, still need to get DEAD_HEADER_META_HASHED_VALUE
-	// from proof.
 	fn stored_value(value: &[u8], mut meta: Self::Meta) -> DBValue {
 		let mut stored = Vec::with_capacity(value.len() + 1);
 		if meta.contain_hash {
@@ -314,8 +260,8 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		}
 		if meta.unused_value && meta.apply_inner_hashing {
 			if meta.range.is_some() {
-				// Waring this assume that encoded value does not start by this, so it is tightly coupled
-				// with the header type of the codec: only for optimization.
+				// Warning this assumes that encoded value cannot start by this,
+				// so it is tightly coupled with the header type of the codec.
 				stored.push(trie_constants::DEAD_HEADER_META_HASHED_VALUE);
 				let range = meta.range.as_ref().expect("Tested in condition");
 				meta.contain_hash = true; // useless but could be with meta as &mut
@@ -333,7 +279,6 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		<Self as MetaHasher<H, DBValue>>::stored_value(value.as_slice(), meta)
 	}
 
-	// TODO remove upstream?
 	fn extract_value(mut stored: &[u8], global_meta: Self::GlobalMeta) -> (&[u8], Self::Meta) {
 		let input = &mut stored;
 		let mut contain_hash = false;
@@ -352,7 +297,6 @@ impl<H> MetaHasher<H, DBValue> for StateHasher
 		(stored, meta)
 	}
 
-	// TODO remove upstream
 	fn extract_value_owned(mut stored: DBValue, global: Self::GlobalMeta) -> (DBValue, Self::Meta) {
 		let len = stored.len();
 		let (v, meta) = <Self as MetaHasher<H, DBValue>>::extract_value(stored.as_slice(), global);
@@ -941,7 +885,7 @@ mod tests {
 		let layout = Layout::default();
 		check_equivalent::<Layout>(input, layout.clone());
 		check_iteration::<Layout>(input, layout);
-		let layout = Layout::with_inner_hashing(TRESHOLD);
+		let layout = Layout::with_alt_hashing(TRESHOLD);
 		check_equivalent::<Layout>(input, layout.clone());
 		check_iteration::<Layout>(input, layout);
 	}
@@ -1094,7 +1038,7 @@ mod tests {
 			}.make_with(seed.as_fixed_bytes_mut());
 
 			let layout = if flag {
-				Layout::with_inner_hashing(TRESHOLD)
+				Layout::with_alt_hashing(TRESHOLD)
 			} else {
 				Layout::default()
 			};
@@ -1191,7 +1135,7 @@ mod tests {
 	}
 	fn iterator_works_inner(flag: bool) {
 		let layout = if flag {
-			Layout::with_inner_hashing(TRESHOLD)
+			Layout::with_alt_hashing(TRESHOLD)
 		} else {
 			Layout::default()
 		};

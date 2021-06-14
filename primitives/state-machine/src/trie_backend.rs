@@ -192,7 +192,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			);
 			let res = || {
 				let layout = if let Some(threshold) = use_inner_hash_value {
-					sp_trie::Layout::with_inner_hashing(threshold)
+					sp_trie::Layout::with_alt_hashing(threshold)
 				} else {
 					sp_trie::Layout::default()
 				};
@@ -223,7 +223,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
 		};
 		let layout = if let Some(threshold) = use_inner_hash_value {
-			sp_trie::Layout::with_inner_hashing(threshold)
+			sp_trie::Layout::with_alt_hashing(threshold)
 		} else {
 			sp_trie::Layout::default()
 		};
@@ -304,7 +304,7 @@ pub mod tests {
 			let mut sub_root = Vec::new();
 			root.encode_to(&mut sub_root);
 			let mut trie = if hashed_value {
-				let layout = Layout::with_inner_hashing(TRESHOLD);
+				let layout = Layout::with_alt_hashing(TRESHOLD);
 				TrieDBMut::new_with_layout(&mut mdb, &mut root, layout)
 			} else {
 				TrieDBMut::new(&mut mdb, &mut root)

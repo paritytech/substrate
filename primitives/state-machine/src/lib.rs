@@ -1547,7 +1547,7 @@ mod tests {
 
 
 		// do switch
-		layout = Layout::with_inner_hashing(TRESHOLD);
+		layout = Layout::with_alt_hashing(TRESHOLD);
 		// update with same value do not change
 		{
 			let mut trie = TrieDBMut::from_existing_with_layout(

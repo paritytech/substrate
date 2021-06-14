@@ -45,7 +45,7 @@ pub fn generate_trie(
 		{
 
 			let mut trie_db = if let Some(threshold) = alt_hashing {
-				let layout = sp_trie::Layout::with_inner_hashing(threshold);
+				let layout = sp_trie::Layout::with_alt_hashing(threshold);
 				TrieDBMut::<crate::simple_trie::Hasher>::new_with_layout(&mut trie, &mut root, layout)
 			} else {
 				TrieDBMut::new(&mut trie, &mut root)

@@ -288,7 +288,7 @@ impl Externalities for BasicExternalities {
 		}
 
 		let layout = if let Some(threshold) = self.alt_hashing.as_ref() {
-			Layout::<Blake2Hasher>::with_inner_hashing(*threshold)
+			Layout::<Blake2Hasher>::with_alt_hashing(*threshold)
 		} else {
 			Layout::<Blake2Hasher>::default()
 		};
