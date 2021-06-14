@@ -36,7 +36,7 @@
 //!
 //! For implementing freeing we maintain a linked lists for each order. The maximum supported
 //! allocation size is capped, therefore the number of orders and thus the linked lists is as well
-//! limited. Currently, the maximum size of an allocation is 16 MiB.
+//! limited. Currently, the maximum size of an allocation is 32 MiB.
 //!
 //! When the allocator serves an allocation request it first checks the linked list for the respective
 //! order. If it doesn't have any free chunks, the allocator requests memory from the bump allocator.
@@ -78,14 +78,14 @@ macro_rules! trace {
 // The minimum possible allocation size is chosen to be 8 bytes because in that case we would have
 // easier time to provide the guaranteed alignment of 8.
 //
-// The maximum possible allocation size was chosen rather arbitrary. 16 MiB should be enough for
+// The maximum possible allocation size was chosen rather arbitrary. 32 MiB should be enough for
 // everybody.
 //
 // N_ORDERS - represents the number of orders supported.
 //
 // This number corresponds to the number of powers between the minimum possible allocation and
-// maximum possible allocation, or: 2^3...2^24 (both ends inclusive, hence 22).
-const N_ORDERS: usize = 22;
+// maximum possible allocation, or: 2^3...2^25 (both ends inclusive, hence 23).
+const N_ORDERS: usize = 23;
 const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
 const MIN_POSSIBLE_ALLOCATION: u32 = 8; // 2^3 bytes, 8 bytes
 
@@ -330,7 +330,7 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	/// Gets requested number of bytes to allocate and returns a pointer.
-	/// The maximum size which can be allocated at once is 16 MiB.
+	/// The maximum size which can be allocated at once is 32 MiB.
 	/// There is no minimum size, but whatever size is passed into
 	/// this function is rounded to the next power of two. If the requested
 	/// size is below 8 bytes it will be rounded up to 8 bytes.
@@ -814,7 +814,7 @@ mod tests {
 	#[test]
 	fn should_get_max_item_size_from_index() {
 		// given
-		let raw_order = 21;
+		let raw_order = 22;
 
 		// when
 		let item_size = Order::from_raw(raw_order).unwrap().size();
