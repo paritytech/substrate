@@ -837,7 +837,7 @@ pub mod pallet {
 		/// feasibility check itself can in principle cause the election process to fail (due to
 		/// memory/weight constrains).
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		fn set_emergency_election_result(
+		pub fn set_emergency_election_result(
 			origin: OriginFor<T>,
 			solution: ReadySolution<T::AccountId>,
 		) -> DispatchResult {
