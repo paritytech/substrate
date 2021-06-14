@@ -83,7 +83,7 @@ where
 		R,
 	>(m: M, key: KeyArg, f: F) -> R {
 		let val_existed = Map::contains_key(key.clone());
-		let res = m(key.clone(), f);
+		let res = m(&key, f);
 		let val_exists = Map::contains_key(key);
 
 		if val_existed && !val_exists {
@@ -126,7 +126,7 @@ where
 
 	/// Store a value to be associated with the given key from the map.
 	pub fn insert<KeyArg: EncodeLike<Key> + Clone, ValArg: EncodeLike<Value>>(key: KeyArg, val: ValArg) {
-		if !Map::contains_key(key.clone()) {
+		if !Map::contains_key(&key) {
 			Counter::mutate(|value| value.saturating_inc());
 		}
 		Map::insert(key, val)
@@ -134,7 +134,7 @@ where
 
 	/// Remove the value under a key.
 	pub fn remove<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) {
-		if Map::contains_key(key.clone()) {
+		if Map::contains_key(&key) {
 			Counter::mutate(|value| value.saturating_dec());
 		}
 		Map::remove(key)
@@ -213,7 +213,7 @@ where
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageAppend<Item>
 	{
-		if !Map::contains_key(key.clone()) {
+		if !Map::contains_key(&key) {
 			Counter::mutate(|value| value.saturating_inc());
 		}
 		Map::append(key, item)
