@@ -44,6 +44,24 @@
 //!
 //! Upon deallocation we get the order of the allocation from its header and then add that
 //! allocation to the linked list for the respective order.
+//!
+//! # Caveats
+//!
+//! This is a fast allocator but it is also dumb. There are specifically two main shortcomings
+//! that the user should keep in mind:
+//!
+//! - Once the bump allocator space is exhausted, there is no way to reclaim the memory. This means
+//!   that it's possible to end up in a situation where there are no live allocations yet a new
+//!   allocation will fail.
+//!
+//!   Let's look into an example. Given a heap of 32 MiB. The user makes a 32 MiB allocation that we
+//!   call `X` . Now the heap is full. Then user deallocates `X`. Since all the space in the bump
+//!   allocator was consumed by the 32 MiB allocation, allocations of all sizes except 32 MiB will
+//!   fail.
+//!
+//! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001 MiB
+//!   will be put into the bucket of 4 MiB. Therefore, typically more than half of the space in allocation
+//!   will be wasted. This is more pronounced with larger allocation sizes.
 
 use crate::Error;
 use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
