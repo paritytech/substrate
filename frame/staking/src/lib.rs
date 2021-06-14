@@ -1688,10 +1688,7 @@ pub mod pallet {
 
 			let stash = &ledger.stash;
 			Self::do_remove_nominator(stash);
-			if !Validators::<T>::contains_key(stash) {
-				CurrentValidatorsCount::<T>::mutate(|x| x.saturating_inc());
-			}
-			Validators::<T>::insert(stash, prefs);
+			Self::do_add_validator(stash, prefs);
 			Ok(())
 		}
 
@@ -2999,11 +2996,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 					claimed_rewards: vec![],
 				},
 			);
-			if !Validators::<T>::contains_key(&v) {
-				CurrentValidatorsCount::<T>::mutate(|x| x.saturating_inc())
-			}
-
-			Validators::<T>::insert(
+			Self::do_add_validator(
 				v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
 			);
