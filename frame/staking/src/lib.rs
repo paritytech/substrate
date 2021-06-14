@@ -988,6 +988,8 @@ pub mod pallet {
 	>;
 
 	/// The map from (wannabe) validator stash key to the preferences of that validator.
+	///
+	/// When updating this storage item, you must also update the `CurrentValidatorsCount`.
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
 	pub type Validators<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, ValidatorPrefs, ValueQuery>;
@@ -997,6 +999,8 @@ pub mod pallet {
 	pub type CurrentValidatorsCount<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// The map from nominator stash key to the set of stash keys of all validators to nominate.
+	///
+	/// When updating this storage item, you must also update the `CurrentNominatorsCount`.
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
@@ -1662,10 +1666,7 @@ pub mod pallet {
 			ensure!(ledger.active >= T::MinValidatorBond::get(), Error::<T>::InsufficientValue);
 
 			let stash = &ledger.stash;
-			if Nominators::<T>::contains_key(stash) {
-				Nominators::<T>::remove(stash);
-				CurrentNominatorsCount::<T>::mutate(|x| x.saturating_dec());
-			}
+			Self::do_remove_nominator(stash);
 			if !Validators::<T>::contains_key(stash) {
 				CurrentValidatorsCount::<T>::mutate(|x| x.saturating_inc());
 			}
@@ -1721,15 +1722,8 @@ pub mod pallet {
 				suppressed: false,
 			};
 
-			if Validators::<T>::contains_key(stash) {
-				Validators::<T>::remove(stash);
-				CurrentValidatorsCount::<T>::mutate(|x| x.saturating_dec());
-			}
-			if !Nominators::<T>::contains_key(stash) {
-				CurrentNominatorsCount::<T>::mutate(|x| x.saturating_inc());
-			}
-
-			Nominators::<T>::insert(stash, &nominations);
+			Self::do_remove_validator(stash);
+			Self::do_add_nominator(stash, nominations);
 			Ok(())
 		}
 
@@ -2337,14 +2331,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Chill a stash account.
 	fn chill_stash(stash: &T::AccountId) {
-		if Validators::<T>::contains_key(stash) {
-			Validators::<T>::remove(stash);
-			CurrentValidatorsCount::<T>::mutate(|x| x.saturating_dec());
-		}
-		if Nominators::<T>::contains_key(stash) {
-			Nominators::<T>::remove(stash);
-			CurrentNominatorsCount::<T>::mutate(|x| x.saturating_dec());
-		}
+		Self::do_remove_validator(stash);
+		Self::do_remove_nominator(stash);
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -2661,14 +2649,8 @@ impl<T: Config> Pallet<T> {
 		<Ledger<T>>::remove(&controller);
 
 		<Payee<T>>::remove(stash);
-		if Validators::<T>::contains_key(stash) {
-			Validators::<T>::remove(stash);
-			CurrentValidatorsCount::<T>::mutate(|x| x.saturating_dec());
-		}
-		if Nominators::<T>::contains_key(stash) {
-			Nominators::<T>::remove(stash);
-			CurrentNominatorsCount::<T>::mutate(|x| x.saturating_dec());
-		}
+		Self::do_remove_validator(stash);
+		Self::do_remove_nominator(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
 
@@ -2791,8 +2773,49 @@ impl<T: Config> Pallet<T> {
 		all_voters
 	}
 
+	/// This is a very expensive function and result should be cached versus being called multiple times.
 	pub fn get_npos_targets() -> Vec<T::AccountId> {
 		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
+	}
+
+	/// This function will add a nominator to the `Nominators` storage map,
+	/// and keep track of the `CurrentNominatorsCount`.
+	///
+	/// If the nominator already exists, their nominations will be updated.
+	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
+		if !Nominators::<T>::contains_key(who) {
+			CurrentNominatorsCount::<T>::mutate(|x| x.saturating_inc())
+		}
+		Nominators::<T>::insert(who, nominations);
+	}
+
+	/// This function will remove a nominator from the `Nominators` storage map,
+	/// and keep track of the `CurrentNominatorsCount`.
+	pub fn do_remove_nominator(who: &T::AccountId) {
+		if Nominators::<T>::contains_key(who) {
+			Nominators::<T>::remove(who);
+			CurrentNominatorsCount::<T>::mutate(|x| x.saturating_dec());
+		}
+	}
+
+	/// This function will add a validator to the `Validators` storage map,
+	/// and keep track of the `CurrentValidatorsCount`.
+	///
+	/// If the validator already exists, their preferences will be updated.
+	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
+		if !Validators::<T>::contains_key(who) {
+			CurrentValidatorsCount::<T>::mutate(|x| x.saturating_inc())
+		}
+		Validators::<T>::insert(who, prefs);
+	}
+
+	/// This function will remove a validator from the `Validators` storage map,
+	/// and keep track of the `CurrentValidatorsCount`.
+	pub fn do_remove_validator(who: &T::AccountId) {
+		if Validators::<T>::contains_key(who) {
+			Validators::<T>::remove(who);
+			CurrentValidatorsCount::<T>::mutate(|x| x.saturating_dec());
+		}
 	}
 }
 
@@ -2912,12 +2935,8 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 					claimed_rewards: vec![],
 				},
 			);
-			if !Nominators::<T>::contains_key(&v) {
-				CurrentNominatorsCount::<T>::mutate(|x| x.saturating_inc())
-			}
-
-			Nominators::<T>::insert(
-				v,
+			Self::do_add_nominator(
+				&v,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },
 			);
 		});
