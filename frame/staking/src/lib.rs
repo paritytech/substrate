@@ -2821,7 +2821,8 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		let current_session = Self::current_planned_session();
 		let current_era_start_session_index =
 			Self::eras_start_session_index(current_era).unwrap_or(0);
-		let era_length = current_session
+		// Number of session in the current era or the maximum session per era if reached.
+		let era_progress = current_session
 			.saturating_sub(current_era_start_session_index)
 			.min(T::SessionsPerEra::get());
 
@@ -2835,9 +2836,9 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		let sessions_left: T::BlockNumber = match ForceEra::<T>::get() {
 			Forcing::ForceNone => Bounded::max_value(),
 			Forcing::ForceNew | Forcing::ForceAlways => Zero::zero(),
-			Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => Zero::zero(),
+			Forcing::NotForcing if era_progress >= T::SessionsPerEra::get() => Zero::zero(),
 			Forcing::NotForcing => T::SessionsPerEra::get()
-				.saturating_sub(era_length)
+				.saturating_sub(era_progress)
 				// One session is computed in this_session_end.
 				.saturating_sub(1)
 				.into(),
