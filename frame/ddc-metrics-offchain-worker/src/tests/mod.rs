@@ -97,9 +97,9 @@ fn test_encode_report_metrics() {
             2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
             2, 2, 2, // 32 bytes, app_id
             3, 4, 0, 0, 0, 0, 0, 0, // 8 bytes, day_start_ms
-            5, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, stored_bytes
-            7, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, wcu_used
-            9, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, rcu_used
+            5, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, storageBytes
+            7, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, wcuUsed
+            9, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, rcuUsed
         ]
     );
 }
@@ -236,7 +236,7 @@ fn should_submit_signed_transaction_on_chain() {
             "00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830"
         ));
         let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 1 + 10, 2 + 20, 2 + 20);
+            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 2 + 20, 0, 0);
         assert!(
             transactions[0].ends_with(&expected_call),
             "Expected a specific call to the report_metrics function"
@@ -247,21 +247,21 @@ fn should_submit_signed_transaction_on_chain() {
             "100ad4097b6e60700a5d5c5294cb6d663090ef5f547e84cc20ec6bcc7a552f13"
         ));
         let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 100, 200, 200);
+            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 200, 0, 0);
         assert!(
             transactions[1].ends_with(&expected_call),
             "Expected a specific call to the report_metrics function"
         );
 
         let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".as_bytes(), INIT_DAY_MS, 101, 202, 202);
+            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".as_bytes(), INIT_DAY_MS, 2 + 200, 0, 0);
         assert!(
             transactions[2].ends_with(&expected_call),
             "Expected a specific call to the report_metrics_ddn function"
         );
 
 		let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".as_bytes(), INIT_DAY_MS, 10, 20, 20);
+            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".as_bytes(), INIT_DAY_MS, 20, 0, 0);
         assert!(
             transactions[3].ends_with(&expected_call),
             "Expected a specific call to the report_metrics_ddn function"
