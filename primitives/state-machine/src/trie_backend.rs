@@ -180,7 +180,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
 			force.clone()
 		} else {
-			// TODO try memoize in force
 			self.get_trie_alt_hashing_threshold()
 		};
 		let mut write_overlay = S::Overlay::default();

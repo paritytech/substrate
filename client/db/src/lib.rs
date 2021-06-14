@@ -807,7 +807,6 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		// TODO test genesis init with a threshold
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| {
 				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {

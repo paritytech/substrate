@@ -76,8 +76,7 @@ pub struct TrieMeta {
 	/// set as accessed by defalult, but can be
 	/// change on access explicitely: `HashDB::get_with_meta`.
 	/// and reset on access explicitely: `HashDB::access_from`.
-	/// TODO!! could be remove from meta: only use in proof recorder context.
-	/// But does not add memory usage here.
+	/// Not strictly needed in this struct, but does not add memory usage here.
 	pub unused_value: bool,
 }
 
@@ -859,10 +858,7 @@ pub fn estimate_entry_size(entry: &(DBValue, TrieMeta), hash_len: usize) -> usiz
 	full_encoded
 }
 
-/// If needed, call to decode plan in order to update meta earlier.
-/// TODO if removing fully meta, this will still be needed but with
-/// a less generic name: read variant of node from db value and indicate
-/// if can hash value.
+/// Decode plan in order to update meta early (needed to register proofs).
 pub fn resolve_encoded_meta<H: Hasher>(entry: &mut (DBValue, TrieMeta)) {
 	use trie_db::NodeCodec;
 	let _ = <trie_types::Layout::<H> as TrieLayout>::Codec::decode_plan(entry.0.as_slice(), &mut entry.1);

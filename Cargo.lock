@@ -2370,7 +2370,7 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.15.2"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
+source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
 
 [[package]]
 name = "hash256-std-hasher"
@@ -2384,7 +2384,7 @@ dependencies = [
 [[package]]
 name = "hash256-std-hasher"
 version = "0.15.2"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
+source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
 dependencies = [
  "crunchy",
 ]
@@ -3066,10 +3066,10 @@ dependencies = [
 [[package]]
 name = "keccak-hasher"
 version = "0.15.3"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
+source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
 dependencies = [
  "hash-db",
- "hash256-std-hasher 0.15.2 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4)",
+ "hash256-std-hasher 0.15.2 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact)",
  "tiny-keccak",
 ]
 
@@ -3881,7 +3881,7 @@ dependencies = [
 [[package]]
 name = "memory-db"
 version = "0.26.0"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
+source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
 dependencies = [
  "hash-db",
  "hashbrown",
@@ -10565,22 +10565,22 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 [[package]]
 name = "trie-bench"
 version = "0.27.0"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
+source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
 dependencies = [
  "criterion",
  "hash-db",
- "keccak-hasher 0.15.3 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4)",
+ "keccak-hasher 0.15.3 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact)",
  "memory-db",
  "parity-scale-codec",
  "trie-db",
  "trie-root",
- "trie-standardmap 0.15.2 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4)",
+ "trie-standardmap 0.15.2 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact)",
 ]
 
 [[package]]
 name = "trie-db"
 version = "0.22.5"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
+source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
 dependencies = [
  "hash-db",
  "hashbrown",
@@ -10592,7 +10592,7 @@ dependencies = [
 [[package]]
 name = "trie-root"
 version = "0.16.0"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
+source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
 dependencies = [
  "hash-db",
 ]
@@ -10610,10 +10610,10 @@ dependencies = [
 [[package]]
 name = "trie-standardmap"
 version = "0.15.2"
-source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
+source = "git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact#3ba095cf3543b7b8140467741d90c8be0c69f5f3"
 dependencies = [
  "hash-db",
- "keccak-hasher 0.15.3 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4)",
+ "keccak-hasher 0.15.3 (git+https://github.com/cheme/trie.git?branch=hashed-value-simple4-refact)",
 ]
 
 [[package]]

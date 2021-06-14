@@ -90,16 +90,14 @@ pub struct NodeCodec<H>(PhantomData<H>);
 impl<H: Hasher> NodeCodec<H> {
 	fn decode_plan_inner_hashed<M: Meta<StateMeta = bool>>(
 		data: &[u8],
-		mut meta: Option<&mut M>, // TODO when remove no meta, remove option
+		meta: &mut M,
 	) -> Result<NodePlan, Error> {
 		let mut input = ByteSliceInput::new(data);
 
-		let contains_hash = meta.as_ref()
-			.map(|m| m.contains_hash_of_value()).unwrap_or_default();
+		let contains_hash = meta.contains_hash_of_value();
 		let header = NodeHeader::decode(&mut input)?;
 		let alt_hashing = header.alt_hashing();
-		meta.as_mut()
-			.map(|m| m.set_state_meta(alt_hashing));
+		meta.set_state_meta(alt_hashing);
 
 		let branch_has_value = if let NodeHeader::Branch(has_value, _) = &header {
 			*has_value
@@ -196,15 +194,14 @@ impl<H, M> NodeCodecT<M> for NodeCodec<H>
 	}
 
 	fn decode_plan(data: &[u8], meta: &mut M) -> Result<NodePlan, Self::Error> {
-		Self::decode_plan_inner_hashed(data, Some(meta)).map(|plan| {
+		Self::decode_plan_inner_hashed(data, meta).map(|plan| {
 			meta.decoded_callback(&plan);
 			plan
 		})
 	}
 
-	fn decode_plan_inner(data: &[u8]) -> Result<NodePlan, Self::Error> {
-		let meta: Option<&mut M> = None;
-		Self::decode_plan_inner_hashed(data, meta)
+	fn decode_plan_inner(_data: &[u8]) -> Result<NodePlan, Self::Error> {
+		unreachable!("decode_plan is implemented")
 	}
 
 	fn is_empty_node(data: &[u8]) -> bool {

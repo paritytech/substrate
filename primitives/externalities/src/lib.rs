@@ -323,30 +323,3 @@ impl ExternalitiesExt for &mut dyn Externalities {
 		self.deregister_extension_by_type_id(TypeId::of::<T>())
 	}
 }
-
-/// Helpers method for the [`Externalities`] trait.
-pub trait ExternalitiesHelpers: Externalities {
-	/* No we use backend in this case TODO remove function
-	/// Utility function to get trie inner value hash threshold from
-	/// backend state or pending changes.
-	fn get_trie_alt_hashing_threshold(&self) -> Option<u32> {
-		self.storage(sp_storage::well_known_keys::TRIE_HASHING_CONFIG)
-			.and_then(|encoded| sp_storage::trie_threshold_decode(&mut encoded.as_slice()))
-	}
-	*/
-
-	/// Utility function to modify trie inner value hash threshold.
-	fn modify_trie_alt_hashing_threshold(&mut self, threshold: Option<u32>) {
-		match threshold {
-			Some(threshold) => {
-				let encoded = sp_storage::trie_threshold_encode(threshold);
-				self.set_storage(sp_storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(), encoded);
-			},
-			None => {
-				self.clear_storage(sp_storage::well_known_keys::TRIE_HASHING_CONFIG);
-			},
-		}
-	}
-}
-
-impl<E: Externalities> ExternalitiesHelpers for E { }
