@@ -1,3 +1,4 @@
+#[cfg(feature = "conditional-storage")]
 #[frame_support::pallet]
 mod pallet {
 	use frame_support::pallet_prelude::{Hooks, StorageNMap, Twox64Concat, NMapKey};
