@@ -218,7 +218,7 @@ impl<H, M> TrieLayout for Layout<H, M>
 	type MetaHasher = M;
 	type Meta = M::Meta;
 
-	fn layout_meta(&self) -> GlobalMeta<Self> {
+	fn global_meta(&self) -> GlobalMeta<Self> {
 		self.0
 	}
 }
@@ -316,7 +316,7 @@ impl<H, M> TrieConfiguration for Layout<H, M>
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::trie_root_no_extension::<H, M, TrieStream, _, _, _>(input, self.layout_meta())
+		trie_root::trie_root_no_extension::<H, M, TrieStream, _, _, _>(input, self.global_meta())
 	}
 
 	fn trie_root_unhashed<I, A, B>(&self, input: I) -> Vec<u8> where
@@ -324,7 +324,7 @@ impl<H, M> TrieConfiguration for Layout<H, M>
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::unhashed_trie_no_extension::<H, M, TrieStream, _, _, _>(input, self.layout_meta())
+		trie_root::unhashed_trie_no_extension::<H, M, TrieStream, _, _, _>(input, self.global_meta())
 	}
 
 	fn encode_index(input: u32) -> Vec<u8> {

@@ -26,7 +26,7 @@ use sp_api::ProvideRuntimeApi;
 
 fn sp_api_benchmark(c: &mut Criterion) {
 	c.bench_function("add one with same runtime api", |b| {
-		let client = substrate_test_runtime_client::new(ture);
+		let client = substrate_test_runtime_client::new(true);
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
