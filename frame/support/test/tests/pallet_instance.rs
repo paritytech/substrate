@@ -81,7 +81,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
 		#[pallet::weight(Weight::from(*_foo))]
-		fn foo(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
+		pub fn foo(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
 			let _ = origin;
 			Self::deposit_event(Event::Something(3));
 			Ok(().into())
@@ -90,7 +90,7 @@ pub mod pallet {
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
 		#[frame_support::transactional]
-		fn foo_transactional(
+		pub fn foo_transactional(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32
 		) -> DispatchResultWithPostInfo {

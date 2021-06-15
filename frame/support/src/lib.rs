@@ -1441,7 +1441,7 @@ pub mod pallet_prelude {
 /// impl<T: Config> Pallet<T> {
 /// 	/// $some_doc
 /// 	#[pallet::weight($ExpressionResultingInWeight)]
-/// 	$vis fn $fn_name(
+/// 	pub fn $fn_name(
 /// 		origin: OriginFor<T>,
 /// 		$some_arg: $some_type,
 /// 		// or with compact attribute: #[pallet::compact] $some_arg: $some_type,
@@ -1900,7 +1900,7 @@ pub mod pallet_prelude {
 /// 	impl<T: Config> Pallet<T> {
 /// 		/// Doc comment put in metadata
 /// 		#[pallet::weight(0)] // Defines weight for call (function parameters are in scope)
-/// 		fn toto(
+/// 		pub fn toto(
 /// 			origin: OriginFor<T>,
 /// 			#[pallet::compact] _foo: u32,
 /// 		) -> DispatchResultWithPostInfo {
@@ -2074,7 +2074,7 @@ pub mod pallet_prelude {
 /// 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 /// 		/// Doc comment put in metadata
 /// 		#[pallet::weight(0)]
-/// 		fn toto(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
+/// 		pub fn toto(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
 /// 			let _ = origin;
 /// 			unimplemented!();
 /// 		}
