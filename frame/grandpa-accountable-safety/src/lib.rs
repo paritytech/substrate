@@ -108,7 +108,6 @@ impl<T: Config> Pallet<T> {
 	pub fn start_accountable_safety(
 		block_not_included: (Commit<T::Hash, T::BlockNumber>, RoundNumber, SetId),
 		new_block: (Commit<T::Hash, T::BlockNumber>, RoundNumber, SetId),
-		// ) -> Option<()> {
 	) -> DispatchResultWithInfo<()> {
 		// Don't start another session if we are already running one.
 		if Pallet::<T>::session().is_some() {
