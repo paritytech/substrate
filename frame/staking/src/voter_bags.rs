@@ -33,9 +33,68 @@ use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 /// Index type for a bag.
 pub type BagIdx = u8;
 
+/// How many bags there are
+const N_BAGS: BagIdx = 200;
+
 /// Given a certain vote weight, which bag should this voter contain?
-fn notional_bag_for(_weight: VoteWeight) -> BagIdx {
-	todo!("geometric series of some description; ask alfonso")
+///
+/// Bags are separated by fixed thresholds. The formula for a threshold is, for `t` in `0..=N_BAGS`:
+///
+///   10 ^ ((t / 10) - 10)
+///
+/// Given `N_BAGS == 200`, this means that the lowest threshold is `10^-10`, and the highest is
+/// `10^10`. A given vote weight always fits into the bag `t` such that `threshold(t-1) <= weight <
+/// threshold(t)`. We can determine an appropriate value for `t` by binary search.
+///
+/// It is important for the correctness of the iteration algorithm that the bags of highest value
+/// have the lowest threshold. Therefore, the appropriate `BagIdx` for a given value `T` is
+/// `N_BAGS - t`.
+fn notional_bag_for<T: Config>(weight: VoteWeight) -> BagIdx {
+	// the input to this threshold function is _not_ reversed; `threshold(0) == 0`
+	let threshold = |bag: BagIdx| -> u64 {
+		// The goal is to segment the full range of `u64` into `N_BAGS`, such that `threshold(0) != 0`,
+		// `threshold(N_BAGS) == u64::MAX`, and for all `t` in `0..N_BAGS`,
+		// `threshold(t + 1) as f64 / threshold(t) as f64 == CONSTANT_RATIO`. For `N_BAGS == 200`,
+		// `CONSTANT_RATIO ~= 1.25`.
+		//
+		// The natural, simple implementation here is
+		//
+		// ```rust
+		// // float exp and ln are not constant functions, unfortunately
+		// let CONSTANT_RATIO = ((u64::MAX as f64).ln() / (N_BAGS as f64)).exp();
+		// CONSTANT_RATIO.powi(bag.into()).into()
+		// ```
+		//
+		// Unfortunately, that doesn't quite work, for two reasons:
+		//
+		// - floats are nondeterministic and not allowed on the blockchain
+		// - f64 has insufficient capacity to completely and accurately compute f64
+		//
+		// Perhaps the answer is going to end up being to bring in a fixed-point bignum implementation.
+		// See: https://docs.rs/fixed/1.9.0/fixed/struct.FixedU128.html
+		todo!()
+	};
+
+	// `want_bag` is the highest bag for which `threshold(want_bag) >= weight`
+	let want_bag = {
+		// TODO: use a binary search instead
+		let mut t = N_BAGS;
+		while t > 0 {
+			if threshold(t) >= weight {
+				break;
+			}
+			t -= 1;
+		}
+		t
+	};
+
+	debug_assert!(
+		(0..=N_BAGS).contains(&want_bag),
+		"must have computed a valid want_bag"
+	);
+
+	// reverse the index so that iteration works properly
+	N_BAGS - want_bag
 }
 
 /// Find the actual bag containing the current voter.
@@ -102,7 +161,7 @@ impl<T: Config> VoterList<T> {
 
 		for voter in voters.into_iter() {
 			let weight = weight_of(&voter.id);
-			let bag = notional_bag_for(weight);
+			let bag = notional_bag_for::<T>(weight);
 			bags.entry(bag).or_insert_with(|| Bag::<T>::get_or_make(bag)).insert(voter);
 			count += 1;
 		}
@@ -172,7 +231,7 @@ impl<T: Config> VoterList<T> {
 			}
 
 			// put the voter into the appropriate new bag
-			node.bag_idx = notional_bag_for(weight_of(&node.voter.id));
+			node.bag_idx = notional_bag_for::<T>(weight_of(&node.voter.id));
 			let mut bag = Bag::<T>::get_or_make(node.bag_idx);
 			bag.insert_node(node);
 			bag.put();
@@ -391,7 +450,7 @@ impl<T: Config> Node<T> {
 
 	/// `true` when this voter is in the wrong bag.
 	pub fn is_misplaced(&self, weight_of: impl Fn(&T::AccountId) -> VoteWeight) -> bool {
-		notional_bag_for(weight_of(&self.voter.id)) != self.bag_idx
+		notional_bag_for::<T>(weight_of(&self.voter.id)) != self.bag_idx
 	}
 
 	/// Update the voter type associated with a particular node by id.
