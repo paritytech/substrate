@@ -13,7 +13,7 @@ use test_runtime::{
     Timestamp,
 };
 
-use crate::{CURRENT_PERIOD_MS, FINALIZE_METRIC_PERIOD, REPORT_METRICS_SELECTOR};
+use crate::{CURRENT_PERIOD_MS, FINALIZE_METRIC_PERIOD, REPORT_METRICS_SELECTOR, REPORT_DDN_STATUS_SELECTOR};
 use codec::Encode;
 use hex_literal::hex;
 use sp_core::bytes::from_hex;
@@ -79,6 +79,26 @@ fn test_contract_api() {
         FINALIZE_METRIC_PERIOD.to_vec(),
         selector_finalize_metric_period
     );
+
+    // Find the report_ddn_status function.
+    let report_ddn_status = messages
+        .iter()
+        .find(|msg| msg.pointer("/name/0").unwrap().as_str().unwrap() == "report_ddn_status")
+        .unwrap();
+
+    // Check the selector for report_ddn_status
+    let selector_report_ddn_status = from_hex(
+        report_ddn_status
+            .get("selector")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        REPORT_DDN_STATUS_SELECTOR.to_vec(),
+        selector_report_ddn_status
+    );
 }
 
 #[test]
@@ -123,6 +143,22 @@ fn test_encode_finalize_metric_period() {
             80, 152, 94, 120, 118, 1, 0, 0, // 8 bytes, in_day_start_ms
         ]
     );
+}
+
+#[test]
+fn test_encode_report_ddn_status() {
+    let call_data = DdcMetricsOffchainWorker::encode_report_ddn_status(
+        &String::from_utf8(vec![0, 1, 2, 3]).unwrap(),
+        true,
+    );
+    assert_eq!(call_data, [
+        REPORT_DDN_STATUS_SELECTOR.to_vec(), // Selector
+        vec![
+            16, // size of p2p_id
+            0, 1, 2, 3, // p2p_id
+            1 // is_online
+        ],
+    ].concat());
 }
 
 fn build_ext() -> sp_io::TestExternalities {

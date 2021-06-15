@@ -195,12 +195,20 @@ impl<T: Trait> Module<T> {
 
         let day_end_ms = day_start_ms + MS_PER_DAY;
 
-        let (aggregated_metrics, ddn_aggregated_metrics) = Self::fetch_all_metrics(contract_address.clone(), day_start_ms)
+        let (aggregated_metrics, ddn_aggregated_metrics, offline_nodes) = Self::fetch_all_metrics(contract_address.clone(), day_start_ms)
             .map_err(|err| {
                 error!("[OCW] HTTP error occurred: {:?}", err);
                 "could not fetch metrics"
             })?;
 
+        for offline_node in offline_nodes {
+            let p2p_id = String::from_utf8(offline_node.id).unwrap();
+            Self::report_ddn_status_to_sc(contract_address.clone(), &signer, &p2p_id, false).map_err(|err| {
+                error!("[OCW] Contract error occurred: {:?}", err);
+                "could not submit report_ddn_status TX"
+            })?;
+        }
+    
         Self::send_metrics_to_sc(
             contract_address.clone(),
             &signer,
@@ -503,7 +511,7 @@ impl<T: Trait> Module<T> {
     fn fetch_all_metrics(
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         day_start_ms: u64,
-    ) -> ResultStr<(Vec<MetricInfo>, Vec<DDNMetricInfo>)> {
+    ) -> ResultStr<(Vec<MetricInfo>, Vec<DDNMetricInfo>, Vec<NodeInfo>)> {
         let a_moment_ago_ms = sp_io::offchain::timestamp()
             .sub(Duration::from_millis(END_TIME_DELAY_MS))
             .unix_millis();
@@ -512,15 +520,15 @@ impl<T: Trait> Module<T> {
         let mut ddn_aggregated_metrics = DDnMetricsAggregator::default();
 
         let nodes = Self::fetch_nodes(contract_id)?;
+        let mut offline_nodes: Vec<NodeInfo> = Vec::new();
 
-        for node in &nodes {
+        for node in nodes {
             let metrics_of_node = match Self::fetch_node_metrics(&node.httpAddr, day_start_ms, a_moment_ago_ms) {
                 Ok(value) => value,
-				// TODO
-                Err(error) => {
-
-                    Self::report_ddn_status_to_sc(contract_id, signer, &p2p_id, false);
-                }
+                Err(_) => {
+                    offline_nodes.push(node);
+                    continue
+                },
             };
 
 			ddn_aggregated_metrics.add(node.id.clone(), &metrics_of_node);
@@ -530,7 +538,7 @@ impl<T: Trait> Module<T> {
             }
         }
 
-        Ok((aggregated_metrics.finish(), ddn_aggregated_metrics.finish()))
+        Ok((aggregated_metrics.finish(), ddn_aggregated_metrics.finish(), offline_nodes))
     }
 
     fn fetch_nodes(
