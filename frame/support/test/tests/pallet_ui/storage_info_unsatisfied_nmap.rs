@@ -25,5 +25,4 @@ mod pallet {
 }
 
 fn main() {
-	compile_error!("Temporarily disabled due to test flakiness");
 }
