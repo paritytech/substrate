@@ -23,42 +23,41 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use finality_grandpa::{
+	round::State as RoundState, voter, voter_set::VoterSet, BlockNumberOps, Error as GrandpaError,
+};
 use futures::prelude::*;
 use futures_timer::Delay;
 use log::{debug, warn};
 use parity_scale_codec::{Decode, Encode};
 use parking_lot::RwLock;
+use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
 
-use sc_client_api::{backend::{Backend, apply_aux}, utils::is_descendent_of};
-use finality_grandpa::{
-	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
-};
-use sp_blockchain::HeaderMetadata;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero,
+use sc_client_api::{
+	backend::{apply_aux, Backend},
+	utils::is_descendent_of,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sp_blockchain::HeaderMetadata;
+use sp_consensus::SelectChain;
+use sp_finality_grandpa::{
+	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GrandpaApi, RoundNumber,
+	SetId, GRANDPA_ENGINE_ID,
+};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use crate::{
-	local_authority_id, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
+	authorities::{AuthoritySet, SharedAuthoritySet},
+	communication::Network as NetworkT,
+	justification::GrandpaJustification,
+	local_authority_id,
+	notification::GrandpaJustificationSender,
+	until_imported::UntilVoteTargetImported,
+	voting_rule::VotingRule,
+	ClientForGrandpa, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, VoterCommand,
 };
-
-use sp_consensus::SelectChain;
-
-use crate::authorities::{AuthoritySet, SharedAuthoritySet};
-use crate::communication::Network as NetworkT;
-use crate::notification::GrandpaJustificationSender;
-use crate::justification::GrandpaJustification;
-use crate::until_imported::UntilVoteTargetImported;
-use crate::voting_rule::VotingRule;
-use sp_finality_grandpa::{
-	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GRANDPA_ENGINE_ID,
-	GrandpaApi, RoundNumber, SetId,
-};
-use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -480,7 +479,7 @@ impl<BE, Block, C, N, SC, VR> Environment<BE, Block, C, N, SC, VR>
 where
 	Block: BlockT,
 	BE: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, BE>,
+	C: ClientForGrandpa<Block, BE>,
 	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block>,
 	SC: SelectChain<Block>,
@@ -583,7 +582,7 @@ impl<BE, Block, C, N, SC, VR> finality_grandpa::Chain<Block::Hash, NumberFor<Blo
 where
 	Block: BlockT,
 	BE: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, BE>,
+	C: ClientForGrandpa<Block, BE>,
 	N: NetworkT<Block>,
 	SC: SelectChain<Block>,
 	VR: VotingRule<Block, C>,
@@ -639,7 +638,7 @@ impl<B, Block, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
 where
 	Block: BlockT,
 	B: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, B> + 'static,
+	C: ClientForGrandpa<Block, B> + 'static,
 	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block>,
 	SC: SelectChain<Block>,
@@ -1245,7 +1244,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 where
 	Block: BlockT,
 	BE: Backend<Block>,
-	Client: crate::ClientForGrandpa<Block, BE>,
+	Client: ClientForGrandpa<Block, BE>,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number
