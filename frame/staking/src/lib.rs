@@ -1566,6 +1566,9 @@ pub mod pallet {
 		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
 		/// to be called first to remove some of the chunks (if possible).
 		///
+		/// If a user encounters the `InsufficientBond` error when calling this extrinsic,
+		/// they should call `chill` first in order to free up their bonded funds.
+		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
@@ -2854,9 +2857,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear all era information for given era.
 	fn clear_era_information(era_index: EraIndex) {
-		<ErasStakers<T>>::remove_prefix(era_index);
-		<ErasStakersClipped<T>>::remove_prefix(era_index);
-		<ErasValidatorPrefs<T>>::remove_prefix(era_index);
+		<ErasStakers<T>>::remove_prefix(era_index, None);
+		<ErasStakersClipped<T>>::remove_prefix(era_index, None);
+		<ErasValidatorPrefs<T>>::remove_prefix(era_index, None);
 		<ErasValidatorReward<T>>::remove(era_index);
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);

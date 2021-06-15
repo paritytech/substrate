@@ -461,14 +461,15 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn apply_to_child_keys_while<A: FnMut(&[u8]) -> bool>(
+	fn apply_to_keys_while<A: FnMut(&[u8]) -> bool>(
 		&self,
-		child_info: &ChildInfo,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
 		action: A,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.apply_to_child_keys_while(child_info, action),
+				state.apply_to_keys_while(child_info, prefix, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}

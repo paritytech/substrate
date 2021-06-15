@@ -205,8 +205,9 @@ where
 	}
 
 	/// Remove all values under the first key.
-	pub fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<Key1> {
-		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::remove_prefix(k1)
+	pub fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+		where KArg1: ?Sized + EncodeLike<Key1> {
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::remove_prefix(k1, limit)
 	}
 
 	/// Iterate over values that share the first key.
@@ -316,8 +317,8 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all() {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -615,7 +616,7 @@ mod test {
 
 			A::insert(3, 30, 10);
 			A::insert(4, 40, 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key(3, 30), false);
 			assert_eq!(A::contains_key(4, 40), false);
 
@@ -655,7 +656,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len(3, 30), None);
 			WithLen::append(0, 100, 10);
 			assert_eq!(WithLen::decode_len(0, 100), Some(1));
@@ -669,7 +670,7 @@ mod test {
 			assert_eq!(A::iter_prefix_values(4).collect::<Vec<_>>(), vec![13, 14]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 
-			A::remove_prefix(3);
+			A::remove_prefix(3, None);
 			assert_eq!(A::iter_prefix(3).collect::<Vec<_>>(), vec![]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 

@@ -7468,6 +7468,7 @@ dependencies = [
  "parity-wasm 0.42.2",
  "parking_lot 0.11.1",
  "paste 1.0.4",
+ "regex",
  "sc-executor-common",
  "sc-executor-wasmi",
  "sc-executor-wasmtime",
@@ -7529,6 +7530,8 @@ name = "sc-executor-wasmtime"
 version = "0.9.0"
 dependencies = [
  "assert_matches",
+ "cfg-if 1.0.0",
+ "libc",
  "log",
  "parity-scale-codec",
  "parity-wasm 0.42.2",
