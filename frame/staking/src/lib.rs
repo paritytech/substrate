@@ -1557,6 +1557,9 @@ pub mod pallet {
 		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
 		/// to be called first to remove some of the chunks (if possible).
 		///
+		/// If a user encounters the `InsufficientBond` error when calling this extrinsic,
+		/// they should call `chill` first in order to free up their bonded funds.
+		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
