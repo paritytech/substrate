@@ -182,9 +182,9 @@ pub fn new_full<BE, Block: BlockT, Client>(
 /// Create new state API that works on light node.
 pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
+	executor: Arc<SubscriptionTaskExecutor>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
-	executor: Arc<SubscriptionTaskExecutor>,
 	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where

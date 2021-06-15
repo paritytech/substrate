@@ -20,6 +20,7 @@
 
 mod chain_full;
 mod chain_light;
+mod helpers;
 
 #[cfg(test)]
 mod tests;
@@ -28,9 +29,9 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use futures::{StreamExt, FutureExt};
+use futures::{future, FutureExt, StreamExt};
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
-use jsonrpsee::RpcModule;
+use jsonrpsee::{RpcModule, ws_server::SubscriptionSink};
 use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
@@ -38,7 +39,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header, NumberFor},
 };
 
-use self::error::Error as StateError;
+use self::error::Error;
 
 pub use sc_rpc_api::chain::*;
 use sp_blockchain::HeaderBackend;
@@ -63,16 +64,16 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	}
 
 	/// Get header of a relay chain block.
-	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, StateError>;
+	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
 
 	/// Get header and body of a relay chain block.
 	async fn block(&self, hash: Option<Block::Hash>)
-		-> Result<Option<SignedBlock<Block>>, StateError>;
+		-> Result<Option<SignedBlock<Block>>, Error>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
-	fn block_hash(&self, number: Option<NumberOrHex>) -> Result<Option<Block::Hash>, StateError> {
+	fn block_hash(&self, number: Option<NumberOrHex>) -> Result<Option<Block::Hash>, Error> {
 		match number {
 			None => Ok(Some(self.client().info().best_hash)),
 			Some(num_or_hex) => {
@@ -80,7 +81,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 
 				// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 				let block_num: u32 = num_or_hex.try_into().map_err(|_| {
-					StateError::from(format!(
+					Error::from(format!(
 						"`{:?}` > u32::max_value(), the max block number is u32.",
 						num_or_hex
 					))
@@ -96,9 +97,18 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	}
 
 	/// Get hash of the last finalized block in the canon chain.
-	fn finalized_head(&self) -> Result<Block::Hash, StateError> {
+	fn finalized_head(&self) -> Result<Block::Hash, Error> {
 		Ok(self.client().info().finalized_hash)
 	}
+
+	/// All new head subscription
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> Result<(), Error>;
+
+	/// New best head subscription
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> Result<(), Error>;
+
+	/// Finalized head subscription
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> Result<(), Error>;
 }
 
 /// Create new state API that works on full node.
@@ -111,17 +121,16 @@ pub fn new_full<Block: BlockT, Client>(
 		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	Chain {
-		backend: Box::new(self::chain_full::FullChain::new(client)),
-		executor,
+		backend: Box::new(self::chain_full::FullChain::new(client, executor)),
 	}
 }
 
 /// Create new state API that works on light node.
 pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
+	executor: Arc<SubscriptionTaskExecutor>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
-	executor: Arc<SubscriptionTaskExecutor>,
 ) -> Chain<Block, Client>
 	where
 		Block: BlockT + 'static,
@@ -133,15 +142,14 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 			client,
 			remote_blockchain,
 			fetcher,
+			executor,
 		)),
-		executor,
 	}
 }
 
 /// Chain API with subscriptions support.
 pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
-	executor: Arc<SubscriptionTaskExecutor>,
 }
 
 impl<Block: BlockT, Client> Chain<Block, Client>
@@ -172,71 +180,28 @@ where
 		})?;
 
 		rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads", |_params, mut sink, ctx| {
-			let executor = ctx.executor.clone();
-
-			let fut = async move {
-				let hash = ctx.backend.client().info().best_hash;
-				let best_head = ctx.backend.header(Some(hash)).await.expect("hash is valid; qed");
-				// TODO(niklasad1): error to detect when the subscription is closed.
-				let _ = sink.send(&best_head);
-				let stream = ctx.backend.client().import_notification_stream();
-				stream.for_each(|item| {
-					let _ = sink.send(&item.header);
-					futures::future::ready(())
-				}).await;
-			};
-
-			executor.execute_new(Box::pin(fut));
-			Ok(())
+			ctx.backend.subscribe_all_heads(sink).map_err(Into::into)
 		})?;
 
 		// TODO(niklasad1): aliases for method names.
 		rpc_module.register_subscription("chain_subscribeNewHead", "chain_unsubscribeNewHead", |_params, mut sink, ctx| {
-			let executor = ctx.executor.clone();
-
-			let fut = async move {
-				let hash = ctx.backend.client().info().best_hash;
-				let best_head = ctx.backend.header(Some(hash)).await.expect("hash is valid; qed");
-				let _ = sink.send(&best_head);
-				let stream = ctx.backend.client().import_notification_stream();
-				stream.for_each(|item| {
-					let _ = sink.send(&item.header);
-					futures::future::ready(())
-				}).await;
-			};
-
-			executor.execute_new(Box::pin(fut));
-			Ok(())
+			ctx.backend.subscribe_new_heads(sink).map_err(Into::into)
 		})?;
 
 		rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads", |_params, mut sink, ctx| {
-			let executor = ctx.executor.clone();
-
-			let fut = async move {
-				let hash = ctx.backend.client().info().finalized_hash;
-				let finalized_head = ctx.backend.header(Some(hash)).await.expect("hash is valid; qed");
-				let _ = sink.send(&finalized_head);
-				let stream = ctx.backend.client().finality_notification_stream();
-				stream.for_each(|item| {
-					let _ = sink.send(&item.header);
-					futures::future::ready(())
-				}).await;
-			};
-
-			executor.execute_new(Box::pin(fut));
-			Ok(())
+			ctx.backend.subscribe_finalized_heads(sink).map_err(Into::into)
 		})?;
 
 		Ok(rpc_module)
 	}
 
 	/// TODO: document this
-	pub async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, StateError> {
+	pub async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
 		self.backend.header(hash).await
 	}
 
 	/// TODO: document this
-	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, StateError> {
+	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
 		self.backend.block(hash).await
 	}
 
@@ -244,7 +209,7 @@ where
 	fn block_hash(
 		&self,
 		number: Option<ListOrValue<NumberOrHex>>,
-	) -> Result<ListOrValue<Option<Block::Hash>>, StateError> {
+	) -> Result<ListOrValue<Option<Block::Hash>>, Error> {
 		match number {
 			None => self.backend.block_hash(None).map(ListOrValue::Value),
 			Some(ListOrValue::Value(number)) => self.backend.block_hash(Some(number)).map(ListOrValue::Value),
@@ -257,15 +222,16 @@ where
 	}
 
 	/// TODO: document this
-	fn finalized_head(&self) -> Result<Block::Hash, StateError> {
+	fn finalized_head(&self) -> Result<Block::Hash, Error> {
 		self.backend.finalized_head()
 	}
 }
 
-fn client_err(err: sp_blockchain::Error) -> StateError {
-	StateError::Client(Box::new(err))
+fn client_err(err: sp_blockchain::Error) -> Error {
+	Error::Client(Box::new(err))
 }
 
-fn rpc_err(err: StateError) -> JsonRpseeCallError {
+fn rpc_err(err: Error) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(err))
 }
+

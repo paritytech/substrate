@@ -19,13 +19,14 @@
 //! Blockchain API backend for full nodes.
 
 use std::sync::Arc;
+use std::marker::PhantomData;
+use crate::{SubscriptionTaskExecutor, chain::helpers};
+use super::{ChainBackend, client_err, Error};
 
+use jsonrpsee::ws_server::SubscriptionSink;
+use sp_blockchain::HeaderBackend;
 use sc_client_api::{BlockchainEvents, BlockBackend};
 use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
-
-use super::{ChainBackend, client_err, StateError};
-use std::marker::PhantomData;
-use sp_blockchain::HeaderBackend;
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<Block: BlockT, Client> {
@@ -33,14 +34,17 @@ pub struct FullChain<Block: BlockT, Client> {
 	client: Arc<Client>,
 	/// phantom member to pin the block type
 	_phantom: PhantomData<Block>,
+	/// Subscription executor.
+	executor: Arc<SubscriptionTaskExecutor>,
 }
 
 impl<Block: BlockT, Client> FullChain<Block, Client> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client>) -> Self {
+	pub fn new(client: Arc<Client>, executor: Arc<SubscriptionTaskExecutor>) -> Self {
 		Self {
 			client,
 			_phantom: PhantomData,
+			executor,
 		}
 	}
 }
@@ -54,15 +58,42 @@ impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> whe
 		&self.client
 	}
 
-	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, StateError> {
+	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
 		self.client
 			.header(BlockId::Hash(self.unwrap_or_best(hash)))
 			.map_err(client_err)
 	}
 
-	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, StateError> {
+	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
 		self.client
 			.block(&BlockId::Hash(self.unwrap_or_best(hash)))
 			.map_err(client_err)
+	}
+
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
+		let client = self.client.clone();
+		let executor = self.executor.clone();
+
+		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeAllHead");
+		executor.execute_new(Box::pin(fut));
+		Ok(())
+	}
+
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
+		let client = self.client.clone();
+		let executor = self.executor.clone();
+
+		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeNewHeads");
+		executor.execute_new(Box::pin(fut));
+		Ok(())
+	}
+
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
+		let client = self.client.clone();
+		let executor = self.executor.clone();
+
+		let fut = helpers::subscribe_finalized_headers(client, sink, "chain_subscribeFinalizedHeads");
+		executor.execute_new(Box::pin(fut));
+		Ok(())
 	}
 }

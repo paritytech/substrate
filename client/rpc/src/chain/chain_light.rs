@@ -19,16 +19,17 @@
 //! Blockchain API backend for light nodes.
 
 use std::sync::Arc;
+use crate::{SubscriptionTaskExecutor, chain::helpers};
+use super::{ChainBackend, client_err, Error};
 
+use jsonrpsee::ws_server::SubscriptionSink;
 use sc_client_api::light::{Fetcher, RemoteBodyRequest, RemoteBlockchain};
+use sc_client_api::BlockchainEvents;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT},
 };
-
-use super::{ChainBackend, client_err, StateError};
 use sp_blockchain::HeaderBackend;
-use sc_client_api::BlockchainEvents;
 
 /// Blockchain API backend for light nodes. Reads all the data from local
 /// database, if available, or fetches it from remote node otherwise.
@@ -39,6 +40,8 @@ pub struct LightChain<Block: BlockT, Client, F> {
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	/// Remote fetcher reference.
 	fetcher: Arc<F>,
+	/// Subscription executor.
+	executor: Arc<SubscriptionTaskExecutor>,
 }
 
 impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
@@ -47,11 +50,13 @@ impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
 		client: Arc<Client>,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
+		executor: Arc<SubscriptionTaskExecutor>,
 	) -> Self {
 		Self {
 			client,
 			remote_blockchain,
 			fetcher,
+			executor,
 		}
 	}
 }
@@ -66,7 +71,7 @@ impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client,
 		&self.client
 	}
 
-	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, StateError> {
+	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
 		let hash = self.unwrap_or_best(hash);
 
 		let fetcher = self.fetcher.clone();
@@ -82,7 +87,7 @@ impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client,
 	async fn block(
 		&self,
 		hash: Option<Block::Hash>
-	) -> Result<Option<SignedBlock<Block>>, StateError>
+	) -> Result<Option<SignedBlock<Block>>, Error>
 	{
 		let fetcher = self.fetcher.clone();
 		let header = self.header(hash).await?;
@@ -102,5 +107,32 @@ impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client,
 			}
 			None => Ok(None),
 		}
+	}
+
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
+		let client = self.client.clone();
+		let executor = self.executor.clone();
+
+		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeAllHead");
+		executor.execute_new(Box::pin(fut));
+		Ok(())
+	}
+
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
+		let client = self.client.clone();
+		let executor = self.executor.clone();
+
+		let fut = helpers::subscribe_headers(client, sink, "chain_subscribeNewHeads");
+		executor.execute_new(Box::pin(fut));
+		Ok(())
+	}
+
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
+		let client = self.client.clone();
+		let executor = self.executor.clone();
+
+		let fut = helpers::subscribe_finalized_headers(client, sink, "chain_subscribeFinalizedHeads");
+		executor.execute_new(Box::pin(fut));
+		Ok(())
 	}
 }
