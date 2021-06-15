@@ -1242,8 +1242,8 @@ pub mod pallet {
 				slash_reward_fraction: Default::default(),
 				canceled_payout: Default::default(),
 				stakers: Default::default(),
-				min_nominator_bond: T::Currency::minimum_balance(),
-				min_validator_bond: T::Currency::minimum_balance(),
+				min_nominator_bond: Default::default(),
+				min_validator_bond: Default::default(),
 			}
 		}
 	}
@@ -1261,15 +1261,6 @@ pub mod pallet {
 			StorageVersion::<T>::put(Releases::V6_0_0);
 			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
-
-			assert!(
-				MinNominatorBond::<T>::get() >= T::Currency::minimum_balance(),
-				"`MinNominatorBond` should be at least the existential deposit.",
-			);
-			assert!(
-				MinValidatorBond::<T>::get() >= T::Currency::minimum_balance(),
-				"`MinValidatorBond` should be at least the existential deposit.",
-			);
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
 				assert!(
@@ -2284,8 +2275,6 @@ pub mod pallet {
 			max_validator_count: Option<u32>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			let min_nominator_bond = min_nominator_bond.max(T::Currency::minimum_balance());
-			let min_validator_bond = min_validator_bond.max(T::Currency::minimum_balance());
 			MinNominatorBond::<T>::set(min_nominator_bond);
 			MinValidatorBond::<T>::set(min_validator_bond);
 			MaxNominatorsCount::<T>::set(max_nominator_count);
