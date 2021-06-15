@@ -348,10 +348,8 @@ impl<T: Config> Pallet<T> {
 
 		// Check that it's impossible to have a supermajority for the block in question
 		// (`state.block_not_included`).
-		// Recall: It is impossible for a set S to have a supermajority for B if at least (n + f + 1)/2
-		// voters either vote for a block />= B or equivocate in S.
 		let block_number_not_included = state.block_not_included.0.target_number;
-		let is_impossible = supermajority_is_impossible(
+		let is_impossible = verify_supermajority_is_impossible(
 			&query_response,
 			block_number_not_included,
 			equivocating_voters,
@@ -394,7 +392,11 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-fn supermajority_is_impossible<H, N>(
+// Verify that supermajority for `block_number_not_included` is impossible. This is at the core of
+// what the query reply is answering, which asks why that block was not included in the estimate.
+// Recall: It is impossible for a set S to have a supermajority for B if at least (n + f + 1)/2
+// voters either vote for a block />= B or equivocate in S.
+fn verify_supermajority_is_impossible<H, N>(
 	query_response: &QueryResponse<H, N>,
 	block_number_not_included: N,
 	equivocating_voters: Vec<AuthorityId>,
@@ -408,7 +410,7 @@ where
 	let num_all_voters = query_response.authorities().iter().count();
 	// WIP: Get this threshold f from somewhere instead of hardcoding.
 	let f = (num_all_voters as f64 / 3 as f64).floor();
-	// WIP: This will require querying the chain
+	// WIP: This will require querying the chain.
 	let is_descendent = |_block: &N, _ancestor: &N| -> bool { false };
 
 	let num_votes_doesnt_include_block = query_response
