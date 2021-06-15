@@ -460,33 +460,7 @@ where
 		let _guard = guard();
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
-		let mut num_deleted: u32 = 0;
-
-		if let Some(limit) = limit {
-			let mut all_deleted = true;
-			self.backend.apply_to_keys_while(Some(child_info), None, |key| {
-				if num_deleted == limit {
-					all_deleted = false;
-					return false;
-				}
-				if let Some(num) = num_deleted.checked_add(1) {
-					num_deleted = num;
-				} else {
-					all_deleted = false;
-					return false;
-				}
-				self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				true
-			});
-			(all_deleted, num_deleted)
-		} else {
-			self.backend.apply_to_keys_while(Some(child_info), None, |key| {
-				num_deleted = num_deleted.saturating_add(1);
-				self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				true
-			});
-			(true, num_deleted)
-		}
+		self.limit_remove_from_backend(Some(child_info), None, limit)
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32) {
@@ -503,33 +477,7 @@ where
 
 		self.mark_dirty();
 		self.overlay.clear_prefix(prefix);
-		let mut num_deleted: u32 = 0;
-
-		if let Some(limit) = limit {
-			let mut all_deleted = true;
-			self.backend.apply_to_keys_while(None, Some(prefix), |key| {
-				if num_deleted == limit {
-					all_deleted = false;
-					return false;
-				}
-				if let Some(num) = num_deleted.checked_add(1) {
-					num_deleted = num;
-				} else {
-					all_deleted = false;
-					return false;
-				}
-				self.overlay.set_storage(key.to_vec(), None);
-				true
-			});
-			(all_deleted, num_deleted)
-		} else {
-			self.backend.apply_to_keys_while(None, Some(prefix), |key| {
-				num_deleted = num_deleted.saturating_add(1);
-				self.overlay.set_storage(key.to_vec(), None);
-				true
-			});
-			(true, num_deleted)
-		}
+		self.limit_remove_from_backend(None, Some(prefix), limit)
 	}
 
 	fn clear_child_prefix(
@@ -547,33 +495,7 @@ where
 
 		self.mark_dirty();
 		self.overlay.clear_child_prefix(child_info, prefix);
-		let mut num_deleted: u32 = 0;
-
-		if let Some(limit) = limit {
-			let mut all_deleted = true;
-			self.backend.apply_to_keys_while(Some(child_info), Some(prefix), |key| {
-				if num_deleted == limit {
-					all_deleted = false;
-					return false;
-				}
-				if let Some(num) = num_deleted.checked_add(1) {
-					num_deleted = num;
-				} else {
-					all_deleted = false;
-					return false;
-				}
-				self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				true
-			});
-			(all_deleted, num_deleted)
-		} else {
-			self.backend.apply_to_keys_while(Some(child_info), Some(prefix), |key| {
-				num_deleted = num_deleted.saturating_add(1);
-				self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				true
-			});
-			(true, num_deleted)
-		}
+		self.limit_remove_from_backend(Some(child_info), Some(prefix), limit)
 	}
 
 	fn storage_append(
@@ -826,6 +748,57 @@ where
 
 	fn proof_size(&self) -> Option<u32> {
 		self.backend.proof_size()
+	}
+}
+
+impl<'a, H, N, B> Ext<'a, H, N, B>
+where
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>,
+	N: crate::changes_trie::BlockNumber,
+{
+	fn limit_remove_from_backend(
+		&mut self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		limit: Option<u32>,
+	) -> (bool, u32) {
+		let mut num_deleted: u32 = 0;
+
+		if let Some(limit) = limit {
+			let mut all_deleted = true;
+			self.backend.apply_to_keys_while(child_info, prefix, |key| {
+				if num_deleted == limit {
+					all_deleted = false;
+					return false;
+				}
+				if let Some(num) = num_deleted.checked_add(1) {
+					num_deleted = num;
+				} else {
+					all_deleted = false;
+					return false;
+				}
+				if let Some(child_info) = child_info {
+					self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				} else {
+					self.overlay.set_storage(key.to_vec(), None);
+				}
+				true
+			});
+			(all_deleted, num_deleted)
+		} else {
+			self.backend.apply_to_keys_while(child_info, prefix, |key| {
+				num_deleted = num_deleted.saturating_add(1);
+				if let Some(child_info) = child_info {
+					self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				} else {
+					self.overlay.set_storage(key.to_vec(), None);
+				}
+				true
+			});
+			(true, num_deleted)
+		}
 	}
 }
 
