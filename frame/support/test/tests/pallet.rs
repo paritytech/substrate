@@ -198,6 +198,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Value<T> = StorageValue<Value = u32>;
 
+	#[pallet::storage]
+	#[pallet::storage_prefix = "Value2"]
+	pub type RenamedValue<T> = StorageValue<Value = u64>;
+
 	#[pallet::type_value]
 	pub fn MyDefault<T: Config>() -> u16
 	where T::AccountId: From<SomeType7> + From<SomeType1> + SomeAssociation1
@@ -577,6 +581,10 @@ fn storage_expand() {
 		let k = [twox_128(b"Example"), twox_128(b"Value")].concat();
 		assert_eq!(unhashed::get::<u32>(&k), Some(1u32));
 
+		pallet::RenamedValue::<Runtime>::put(2);
+		let k = [twox_128(b"Example"), twox_128(b"Value2")].concat();
+		assert_eq!(unhashed::get::<u64>(&k), Some(2));
+
 		pallet::Map::<Runtime>::insert(1, 2);
 		let mut k = [twox_128(b"Example"), twox_128(b"Map")].concat();
 		k.extend(1u8.using_encoded(blake2_128_concat));
@@ -694,6 +702,13 @@ fn metadata() {
 					name: DecodeDifferent::Decoded("Value".to_string()),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("Value2".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u64".to_string())),
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
@@ -992,6 +1007,11 @@ fn test_storage_info() {
 				prefix: prefix(b"Example", b"Value"),
 				max_values: Some(1),
 				max_size: Some(4),
+			},
+			StorageInfo {
+				prefix: prefix(b"Example", b"Value2"),
+				max_values: Some(1),
+				max_size: Some(8),
 			},
 			StorageInfo {
 				prefix: prefix(b"Example", b"Map"),
