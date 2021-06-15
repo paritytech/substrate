@@ -3016,9 +3016,6 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
-		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
-		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
-		// report weight in failures.
 		let nominator_count = CurrentNominatorsCount::<T>::get();
 		let validator_count = CurrentValidatorsCount::<T>::get();
 		let voter_count = nominator_count.saturating_add(validator_count) as usize;
