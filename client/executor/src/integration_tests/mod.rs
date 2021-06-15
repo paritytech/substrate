@@ -16,8 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#[cfg(target_os = "linux")]
-mod linux;
+mod resident_memory;
 mod sandbox;
 
 use std::sync::Arc;

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,13 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! A set of common definitions that are needed for defining execution engines.
+//! Helper functions that are useful during testing. Those are mostly operating system
+//! dependend because they are used to inspect the current state of the system.
 
-#![warn(missing_docs)]
-#![deny(unused_crate_dependencies)]
+#[cfg(target_os = "linux")]
+mod linux;
 
-pub mod error;
-pub mod sandbox;
-pub mod wasm_runtime;
-pub mod runtime_blob;
-pub mod test_utils;
+#[cfg(target_os = "linux")]
+pub use linux::*;
+
+#[cfg(target_os = "macos")]
+mod macos;
+
+#[cfg(target_os = "macos")]
+pub use macos::*;

@@ -7501,6 +7501,7 @@ name = "sc-executor-common"
 version = "0.9.0"
 dependencies = [
  "derive_more",
+ "mach",
  "parity-scale-codec",
  "pwasm-utils",
  "sp-allocator",
@@ -7531,9 +7532,11 @@ name = "sc-executor-wasmtime"
 version = "0.9.0"
 dependencies = [
  "assert_matches",
+ "bitflags",
  "cfg-if 1.0.0",
  "libc",
  "log",
+ "mach",
  "parity-scale-codec",
  "parity-wasm 0.42.2",
  "sc-executor-common",

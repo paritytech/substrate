@@ -16,11 +16,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! A tool for extracting information about the memory consumption of the current process from
-//! the procfs.
+//! Implementation of Linux specific tests and/or helper functions.
 
-use std::ops::Range;
-use std::collections::BTreeMap;
+use std::{
+	ops::Range,
+	collections::BTreeMap,
+};
+use sc_executor_common::wasm_runtime::WasmInstance;
+
+/// Returns how much bytes of the instance's memory is currently resident (backed by phys mem)
+pub fn instance_resident_bytes(instance: &dyn WasmInstance) -> usize {
+	let base_addr = instance.linear_memory_range().unwrap().start;
+	Smaps::new().get_rss(base_addr).expect("failed to get rss")
+}
 
 /// An interface to the /proc/self/smaps
 ///

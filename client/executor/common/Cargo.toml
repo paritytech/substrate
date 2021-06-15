@@ -13,6 +13,9 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[target.'cfg(target_os = "macos")'.dependencies]
+mach = "0.3"
+
 [dependencies]
 derive_more = "0.99.2"
 pwasm-utils = "0.18.0"

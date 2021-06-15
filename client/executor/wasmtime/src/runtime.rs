@@ -18,12 +18,15 @@
 
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
+#[cfg(target_os = "macos")]
+mod mach_memory;
+
 use crate::host::HostState;
 use crate::imports::{Imports, resolve_imports};
 use crate::instance_wrapper::{InstanceWrapper, EntryPoint};
 use crate::state_holder;
 
-use std::{path::PathBuf, rc::Rc};
+use std::{path::PathBuf, rc::Rc, ops::Range};
 use std::sync::Arc;
 use std::path::Path;
 use sc_executor_common::{
@@ -180,7 +183,7 @@ impl WasmInstance for WasmtimeInstance {
 		}
 	}
 
-	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
+	fn linear_memory_range(&self) -> Option<Range<usize>> {
 		match &self.strategy {
 			Strategy::RecreateInstance(_) => {
 				// We do not keep the wasm instance around, therefore there is no linear memory
@@ -189,7 +192,7 @@ impl WasmInstance for WasmtimeInstance {
 			}
 			Strategy::FastInstanceReuse {
 				instance_wrapper, ..
-			} => Some(instance_wrapper.base_ptr()),
+			} => Some(instance_wrapper.linear_memory_range()),
 		}
 	}
 }
@@ -235,6 +238,12 @@ directory = \"{cache_dir}\"
 fn common_config() -> wasmtime::Config {
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
+
+	// On macOS we need to allocate the instance memory in a special way so that
+	// we can purge it when the instance is recycled during caching.
+	#[cfg(target_os = "macos")]
+	config.with_host_memory(Arc::new(mach_memory::Allocator::default()));
+
 	config
 }
 

@@ -12,6 +12,10 @@ readme = "README.md"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[target.'cfg(target_os = "macos")'.dependencies]
+mach = "0.3"
+bitflags = "1"
+
 [dependencies]
 libc = "0.2.90"
 cfg-if = "1.0"

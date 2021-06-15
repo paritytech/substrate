@@ -22,7 +22,7 @@
 use crate::util;
 use crate::imports::Imports;
 
-use std::{slice, marker};
+use std::{slice, marker, ops::Range};
 use sc_executor_common::{
 	error::{Error, Result},
 	runtime_blob,
@@ -416,9 +416,11 @@ impl InstanceWrapper {
 		}
 	}
 
-	/// Returns the pointer to the first byte of the linear memory for this instance.
-	pub fn base_ptr(&self) -> *const u8 {
-		self.memory.data_ptr()
+	/// Returns the virtual addresses that cover this instance's linear memory.
+	pub fn linear_memory_range(&self) -> Range<usize> {
+		let start = self.memory.data_ptr() as usize;
+		let end = start + self.memory.data_size();
+		start..end
 	}
 
 	/// Removes physical backing from the allocated linear memory. This leads to returning the memory
@@ -449,7 +451,64 @@ impl InstanceWrapper {
 						});
 					}
 				}
+			} else if #[cfg(target_os = "macos")] {
+				self.macos_decommit();
 			}
+		}
+	}
+
+	/// Drop the instance's memory from the resident set.
+	///
+	/// All access to this memory range will return `0` after doing so.
+	#[cfg(target_os = "macos")]
+	fn macos_decommit(&self) {
+		use mach::vm_purgable::{VM_PURGABLE_EMPTY, VM_PURGABLE_NONVOLATILE};
+
+		// # Safety
+		//
+		// We immediatly set the memory to non-volatile so that it will never be accessed
+		// in a volatile state.
+		unsafe {
+			// drop the instance's memory from the resident set
+			self.purge_control(VM_PURGABLE_EMPTY);
+
+			// re-activate memory and prevent it from being automatically purged
+			self.purge_control(VM_PURGABLE_NONVOLATILE);
+		}
+	}
+
+	/// Set the purgable state of the instance's memory mapping.
+	///
+	/// # Safety
+	///
+	/// - The caller must make sure to set the memmory to a non-volatile state before
+	///		any write will occur to it.
+	#[cfg(target_os = "macos")]
+	unsafe fn purge_control(&self, mut state: libc::c_int) {
+		use std::sync::Once;
+		use mach::{
+			kern_return::KERN_SUCCESS,
+			traps::mach_task_self,
+			vm::mach_vm_purgable_control,
+			vm_purgable::{VM_PURGABLE_SET_STATE},
+		};
+
+		// # Safety
+		//
+		// Unsafe because this a C-API. However, we make sure to pass in
+		// the correct address and assume that the caller uses proper values for
+		// `state`.
+		let result = mach_vm_purgable_control(
+			mach_task_self(),
+			self.memory.data_ptr() as _,
+			VM_PURGABLE_SET_STATE,
+			&mut state,
+		);
+		if result != KERN_SUCCESS {
+			static LOGGED: Once = Once::new();
+			LOGGED.call_once(|| {
+				log::warn!("mach_vm_purgeable_control({}) failed: {}", state, result);
+			});
 		}
 	}
 }

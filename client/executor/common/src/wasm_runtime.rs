@@ -20,6 +20,7 @@
 
 use crate::error::Error;
 use sp_wasm_interface::Value;
+use std::ops::Range;
 
 /// A method to be used to find the entrypoint when calling into the runtime
 ///
@@ -94,12 +95,14 @@ pub trait WasmInstance: Send {
 	/// This method is only suitable for getting immutable globals.
 	fn get_global_const(&self, name: &str) -> Result<Option<Value>, Error>;
 
-	/// **Testing Only**. This function returns the base address of the linear memory.
+	/// **Testing Only**. This function returns the memory range covered by linear memory.
 	///
-	/// This is meant to be the starting address of the memory mapped area for the linear memory.
+	/// The start of the range is the starting address of the memory mapped area for the
+	/// linear memory as host memory virtual address.
 	///
-	/// This function is intended only for a specific test that measures physical memory consumption.
-	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
+	/// This function is intended only for a specific test that measures physical memory
+	/// consumption.
+	fn linear_memory_range(&self) -> Option<Range<usize>> {
 		None
 	}
 }
