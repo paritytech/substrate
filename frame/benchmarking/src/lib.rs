@@ -1332,7 +1332,7 @@ pub fn show_benchmark_debug_info(
 
 #[macro_export]
 macro_rules! add_benchmark {
-	( $params:ident, $batches:ident, $name:path,  $( $location:tt )* ) => (
+	( $params:ident, $batches:ident, $name:path, $( $location:tt )* ) => (
 		if $params.config.list {
 			let ref_param = &mut $params;
 			list_benchmark!(ref_param, $name, $( $location )*);
