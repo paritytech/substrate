@@ -136,7 +136,7 @@ pub enum State {
 		// TODO This is a temporary hack; the url is used just to get the header/block. We should try
 		// and get that out of state, OR allow the user to feed in a header/block via file.
 		// https://github.com/paritytech/substrate/issues/9027
-		#[structopt(default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
+		#[structopt(short, long, default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
 		url: String,
 	},
 
@@ -156,7 +156,7 @@ pub enum State {
 		modules: Option<Vec<String>>,
 
 		/// The url to connect to.
-		#[structopt(default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
+		#[structopt(short, long, default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
 		url: String,
 	},
 }
@@ -176,11 +176,7 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
-	let heap_pages = if shared.heap_pages.is_some() {
-		shared.heap_pages
-	} else {
-		config.default_heap_pages
-	};
+	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
@@ -259,11 +255,7 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
-	let heap_pages = if shared.heap_pages.is_some() {
-		shared.heap_pages
-	} else {
-		config.default_heap_pages
-	};
+	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
@@ -355,11 +347,7 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
-	let heap_pages = if shared.heap_pages.is_some() {
-		shared.heap_pages
-	} else {
-		config.default_heap_pages
-	};
+	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
@@ -427,7 +415,7 @@ where
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
 
-	let _ = StateMachine::<_, _, NumberFor<Block>, _>::new(
+	let _encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
 		&ext.backend,
 		None,
 		&mut changes,
@@ -440,6 +428,7 @@ where
 	)
 	.execute(execution.into())
 	.map_err(|e| format!("failed to execute 'Core_execute_block' due to {:?}", e))?;
+	debug_assert!(_encoded_result == vec![1]);
 
 	log::info!("Core_execute_block executed without errors.");
 

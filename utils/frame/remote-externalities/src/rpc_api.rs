@@ -33,7 +33,7 @@ where
 
 	client.request::<Block::Header>("chain_getHeader", JsonRpcParams::Array(params))
 		.await
-		.map_err(|e| format!("chain_getHeader request failed due to {:?}", e))
+		.map_err(|e| format!("chain_getHeader request failed: {:?}", e))
 }
 
 /// Get the finalized head
@@ -46,7 +46,7 @@ where
 
 	client.request::<Block::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams)
 		.await
-		.map_err(|e| format!("chain_getFinalizedHead request failed due to {:?}", e))
+		.map_err(|e| format!("chain_getFinalizedHead request failed: {:?}", e))
 }
 
 /// Get the signed block identified by `at`.
@@ -61,7 +61,7 @@ where
 	let signed_block = client
 		.request::<SignedBlock<Block>>("chain_getBlock", JsonRpcParams::Array(params))
 		.await
-		.map_err(|e| format!("chain_getBlock request failed due to {:?}", e))?;
+		.map_err(|e| format!("chain_getBlock request failed: {:?}", e))?;
 
 	Ok(signed_block.block)
 }
@@ -69,7 +69,7 @@ where
 /// Convert a block hash to a serde json value.
 fn hash_to_json<Block: BlockT>(hash: Block::Hash) -> Result<serde_json::Value, String> {
 	serde_json::to_value(hash)
-		.map_err(|e| format!("Block hash could not be converted to JSON due to {:?}", e))
+		.map_err(|e| format!("Block hash could not be converted to JSON: {:?}", e))
 }
 
 /// Build a website client that connects to `from`.
@@ -78,5 +78,5 @@ async fn build_client<S: AsRef<str>>(from: S) -> Result<WsClient, String> {
 		.max_request_body_size(u32::MAX)
 		.build(from.as_ref())
 		.await
-		.map_err(|e| format!("`WsClientBuilder` failed to build do to {:?}", e))
+		.map_err(|e| format!("`WsClientBuilder` failed to build: {:?}", e))
 }
