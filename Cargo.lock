@@ -5758,9 +5758,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "2.1.1"
+version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0f518afaa5a47d0d6386229b0a6e01e86427291d643aa4cabb4992219f504f8"
+checksum = "b310f220c335f9df1b3d2e9fbe3890bbfeef5030dad771620f48c5c229877cd3"
 dependencies = [
  "arrayvec 0.7.0",
  "bitvec",
@@ -5771,11 +5771,11 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "2.1.0"
+version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f44c5f94427bd0b5076e8f7e15ca3f60a4d8ac0077e4793884e6fdfd8915344e"
+checksum = "81038e13ca2c32587201d544ea2e6b6c47120f1e4eae04478f9f60b6bcb89145"
 dependencies = [
- "proc-macro-crate 0.1.5",
+ "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
  "syn",
