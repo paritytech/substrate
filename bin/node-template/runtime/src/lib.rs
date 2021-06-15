@@ -489,10 +489,10 @@ impl_runtime_apis! {
 				info: info,
 			};
 
-			add_benchmark!(params, info, batches, frame_system, SystemBench::<Runtime>);
-			add_benchmark!(params, info, batches, pallet_balances, Balances);
-			add_benchmark!(params, info, batches, pallet_timestamp, Timestamp);
-			add_benchmark!(params, info, batches, pallet_template, TemplateModule);
+			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
+			add_benchmark!(params, batches, pallet_balances, Balances);
+			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
+			add_benchmark!(params, batches, pallet_template, TemplateModule);
 
 			if config.list {
 				Ok(AvailableBenchmarks(params.info))
