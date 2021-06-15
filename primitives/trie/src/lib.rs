@@ -279,35 +279,6 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 	)
 }
 
-/// Call `f` for all keys in a child trie.
-/// Aborts as soon as `f` returns false.
-pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]) -> bool, DB>(
-	keyspace: &[u8],
-	db: &DB,
-	root_slice: &[u8],
-	mut f: F
-) -> Result<(), Box<TrieError<L>>>
-	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-{
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
-	let db = KeySpacedDB::new(&*db, keyspace);
-	let trie = TrieDB::<L>::new(&db, &root)?;
-	let iter = trie.iter()?;
-
-	for x in iter {
-		let (key, _) = x?;
-		if !f(&key) {
-			break;
-		}
-	}
-
-	Ok(())
-}
-
 /// Record all keys for a given root.
 pub fn record_all_keys<L: TrieConfiguration, DB>(
 	db: &DB,
