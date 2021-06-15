@@ -440,13 +440,26 @@ fn no_candidate_emergency_condition() {
 			let res = Staking::chill(Origin::signed(10));
 			assert_ok!(res);
 
-			// trigger era
-			mock::start_active_era(1);
+			let current_era = CurrentEra::<Test>::get();
 
-			// Previous ones are elected. chill is invalidates. TODO: #2494
+			// try trigger new era
+			mock::run_to_block(20);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				Event::StakingElectionFailed,
+			);
+			// No new era is created
+			assert_eq!(current_era, CurrentEra::<Test>::get());
+
+			// Go to far further session to see if validator have changed
+			mock::run_to_block(100);
+
+			// Previous ones are elected. chill is not effective in active era (as era hasn't changed)
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			// Though the validator preferences has been removed.
-			assert!(Staking::validators(11) != prefs);
+			// The chill is still pending.
+			assert!(!<Staking as crate::Store>::Validators::contains_key(11));
+			// No new era is created.
+			assert_eq!(current_era, CurrentEra::<Test>::get());
 		});
 }
 
@@ -3970,6 +3983,34 @@ mod election_data_provider {
 				*staking_events().last().unwrap(),
 				Event::StakingElection
 			);
+
+			Staking::force_no_eras(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::max_value());
+
+			Staking::force_new_era_always(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+
+			Staking::force_new_era(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+
+			// Do a fail election
+			MinimumValidatorCount::<Test>::put(1000);
+			run_to_block(50);
+			// Election: failed, next session is a new election
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 50 + 5);
+			// The new era is still forced until a new era is planned.
+			assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
+
+			MinimumValidatorCount::<Test>::put(2);
+			run_to_block(55);
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
+			assert_eq!(staking_events().len(), 6);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				Event::StakingElection
+			);
+			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
+			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})
 	}
 }

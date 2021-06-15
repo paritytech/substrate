@@ -15,13 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::pallet::{Def, parse::storage::StorageDef};
 use crate::pallet::parse::storage::{Metadata, QueryKind, StorageGenerics};
 use frame_support_procedural_tools::clean_type_string;
+use std::collections::HashMap;
 
 /// Generate the prefix_ident related to the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
-fn prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
+fn prefix_ident(storage: &StorageDef) -> syn::Ident {
+	let storage_ident = &storage.ident;
 	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", storage_ident), storage_ident.span())
 }
 
@@ -34,11 +36,59 @@ fn counter_prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
 	)
 }
 
+/// Generate the counter_prefix related to the storage.
+/// counter_prefix is used by counted storage map.
+fn counter_prefix(prefix: &str) -> String {
+	format!("CounterFor{}", prefix)
+}
+
+/// Check for duplicated storage prefixes. This step is necessary since users can specify an
+/// alternative storage prefix using the #[pallet::storage_prefix] syntax, and we need to ensure
+/// that the prefix specified by the user is not a duplicate of an existing one.
+fn check_prefix_duplicates(
+	storage_def: &StorageDef,
+	// A hashmap of all already used prefix and their associated error if duplication
+	set: &mut HashMap<String, syn::Error>,
+) -> syn::Result<()> {
+	let prefix = storage_def.prefix();
+	let dup_err = syn::Error::new(
+		storage_def.prefix_span(),
+		format!("Duplicate storage prefixes found for `{}`", prefix),
+	);
+
+	if let Some(other_dup_err) = set.insert(prefix.clone(), dup_err.clone()) {
+		let mut err = dup_err;
+		err.combine(other_dup_err);
+		return Err(err);
+	}
+
+	if let Metadata::CountedMap { .. } = storage_def.metadata {
+		let counter_prefix = counter_prefix(&prefix);
+		let counter_dup_err = syn::Error::new(
+			storage_def.prefix_span(),
+			format!(
+				"Duplicate storage prefixes found for `{}`, used for counter associated to \
+				counted storage map",
+				counter_prefix,
+			),
+		);
+
+		if let Some(other_dup_err) = set.insert(counter_prefix.clone(), counter_dup_err.clone()) {
+			let mut err = counter_dup_err;
+			err.combine(other_dup_err);
+			return Err(err);
+		}
+	}
+
+	Ok(())
+}
+
 /// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
 /// * if generics are named: reorder the generic, remove their name, and add the missing ones.
 /// * Add `#[allow(type_alias_bounds)]`
-pub fn process_generics(def: &mut Def) {
+pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 	let frame_support = &def.frame_support;
+
 	for storage_def in def.storages.iter_mut() {
 		let item = &mut def.item.content.as_mut().expect("Checked by def").1[storage_def.index];
 
@@ -59,7 +109,7 @@ pub fn process_generics(def: &mut Def) {
 			_ => unreachable!("Checked by def"),
 		};
 
-		let prefix_ident = prefix_ident(&storage_def.ident);
+		let prefix_ident = prefix_ident(&storage_def);
 		let type_use_gen = if def.config.has_instance {
 			quote::quote_spanned!(storage_def.attr_span => T, I)
 		} else {
@@ -138,6 +188,8 @@ pub fn process_generics(def: &mut Def) {
 			args.args[0] = syn::parse_quote!( #prefix_ident<#type_use_gen> );
 		}
 	}
+
+	Ok(())
 }
 
 /// * generate StoragePrefix structs (e.g. for a storage `MyStorage` a struct with the name
@@ -147,12 +199,22 @@ pub fn process_generics(def: &mut Def) {
 /// * Add `#[allow(type_alias_bounds)]` on storages type alias
 /// * generate metadatas
 pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
-	process_generics(def);
+	if let Err(e) = process_generics(def) {
+		return e.into_compile_error().into();
+	}
+
+	// Check for duplicate prefixes
+	let mut prefix_set = HashMap::new();
+	let mut errors = def.storages.iter()
+		.filter_map(|storage_def| check_prefix_duplicates(storage_def, &mut prefix_set).err());
+	if let Some(mut final_error) = errors.next() {
+		errors.for_each(|error| final_error.combine(error));
+		return final_error.into_compile_error()
+	}
 
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
 	let pallet_ident = &def.pallet_struct.pallet;
-
 
 	let entries = def.storages.iter()
 		.map(|storage| {
@@ -427,16 +489,16 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let prefix_structs = def.storages.iter().map(|storage_def| {
 		let type_impl_gen = &def.type_impl_generics(storage_def.attr_span);
 		let type_use_gen = &def.type_use_generics(storage_def.attr_span);
-		let prefix_struct_ident = prefix_ident(&storage_def.ident);
+		let prefix_struct_ident = prefix_ident(&storage_def);
 		let prefix_struct_vis = &storage_def.vis;
-		let prefix_struct_const = storage_def.ident.to_string();
+		let prefix_struct_const = storage_def.prefix();
 		let config_where_clause = &def.config.where_clause;
 
 		let cfg_attrs = &storage_def.cfg_attrs;
 
 		let maybe_counter = if let Metadata::CountedMap { .. } = storage_def.metadata {
 			let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
-			let counter_prefix_struct_const = format!("CounterFor{}", prefix_struct_const);
+			let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
 
 			quote::quote_spanned!(storage_def.attr_span =>
 				#(#cfg_attrs)*
