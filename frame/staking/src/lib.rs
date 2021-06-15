@@ -776,7 +776,7 @@ pub mod migrations {
 			CurrentNominatorsCount::<T>::put(nominator_count);
 
 			StorageVersion::<T>::put(Releases::V7_0_0);
-			log!(info, "Done.");
+			log!(info, "Completed staking migration to Releases::V7_0_0");
 
 			T::DbWeight::get().reads_writes(
 				validator_count.saturating_add(nominator_count).into(),
