@@ -85,6 +85,13 @@ pub struct BenchmarkResults {
 	pub proof_size: u32,
 }
 
+// Benchmark configuration passed to add_benchmark! macro in runtime
+pub struct BenchmarkArguement<'a> {
+	pub config: &'a BenchmarkConfig,
+	pub whitelist: &'a Vec<TrackedStorageKey>,
+	pub info: Vec<BenchmarkInfo>,
+}
+
 /// Configuration used to setup and run runtime benchmarks.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct BenchmarkConfig {
