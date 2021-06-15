@@ -483,7 +483,7 @@ where
 	C: crate::ClientForGrandpa<Block, BE>,
 	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block>,
-	SC: SelectChain<Block> + 'static,
+	SC: SelectChain<Block>,
 {
 	/// Report the given equivocation to the GRANDPA runtime module. This method
 	/// generates a session membership proof of the offender and then submits an
@@ -578,23 +578,25 @@ where
 	}
 }
 
-impl<BE, Block: BlockT, C, N, SC, VR>
-	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<BE, Block, C, N, SC, VR>
+impl<BE, Block, C, N, SC, VR> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
+	for Environment<BE, Block, C, N, SC, VR>
 where
-	Block: 'static,
+	Block: BlockT,
 	BE: Backend<Block>,
 	C: crate::ClientForGrandpa<Block, BE>,
-	N: NetworkT<Block> + 'static + Send,
-	SC: SelectChain<Block> + 'static,
+	N: NetworkT<Block>,
+	SC: SelectChain<Block>,
 	VR: VotingRule<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+	fn ancestry(
+		&self,
+		base: Block::Hash,
+		block: Block::Hash,
+	) -> Result<Vec<Block::Hash>, GrandpaError> {
 		ancestry(&self.client, base, block)
 	}
 }
-
 
 pub(crate) fn ancestry<Block: BlockT, Client>(
 	client: &Arc<Client>,
@@ -624,27 +626,31 @@ where
 
 	// skip one because our ancestry is meant to start from the parent of `block`,
 	// and `tree_route` includes it.
-	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
+	Ok(tree_route
+		.retracted()
+		.iter()
+		.skip(1)
+		.map(|e| e.hash)
+		.collect())
 }
 
-impl<B, Block: BlockT, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
+impl<B, Block, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
 	for Environment<B, Block, C, N, SC, VR>
 where
-	Block: 'static,
+	Block: BlockT,
 	B: Backend<Block>,
 	C: crate::ClientForGrandpa<Block, B> + 'static,
 	C::Api: GrandpaApi<Block>,
-	N: NetworkT<Block> + 'static + Send + Sync,
-	SC: SelectChain<Block> + 'static,
+	N: NetworkT<Block>,
+	SC: SelectChain<Block>,
 	VR: VotingRule<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + Sync>>;
+	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type BestChain = Pin<
 		Box<
 			dyn Future<Output = Result<Option<(Block::Hash, NumberFor<Block>)>, Self::Error>>
-				+ Send
-				+ Sync
+				+ Send,
 		>,
 	>;
 
@@ -652,13 +658,29 @@ where
 	type Signature = AuthoritySignature;
 
 	// regular round message streams
-	type In = Pin<Box<dyn Stream<
-		Item = Result<::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>, Self::Error>
-	> + Send + Sync>>;
-	type Out = Pin<Box<dyn Sink<
-		::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
-		Error = Self::Error,
-	> + Send + Sync>>;
+	type In = Pin<
+		Box<
+			dyn Stream<
+					Item = Result<
+						::finality_grandpa::SignedMessage<
+							Block::Hash,
+							NumberFor<Block>,
+							Self::Signature,
+							Self::Id,
+						>,
+						Self::Error,
+					>,
+				> + Send,
+		>,
+	>;
+	type Out = Pin<
+		Box<
+			dyn Sink<
+					::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
+					Error = Self::Error,
+				> + Send,
+		>,
+	>;
 
 	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
 

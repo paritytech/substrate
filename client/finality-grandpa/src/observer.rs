@@ -160,11 +160,11 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 	config: Config,
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
-) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static>
+) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
 	BE: Backend<Block> + Unpin + 'static,
-	N: NetworkT<Block> + Send + Clone + 'static,
-	SC: SelectChain<Block> + 'static,
+	N: NetworkT<Block>,
+	SC: SelectChain<Block>,
 	NumberFor<Block>: BlockNumberOps,
 	Client: crate::ClientForGrandpa<Block, BE> + 'static,
 {

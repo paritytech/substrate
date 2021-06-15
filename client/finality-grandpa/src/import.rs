@@ -219,8 +219,7 @@ pub fn find_forced_change<B: BlockT>(
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
 }
 
-impl<BE, Block: BlockT, Client, SC>
-	GrandpaBlockImport<BE, Block, Client, SC>
+impl<BE, Block: BlockT, Client, SC> GrandpaBlockImport<BE, Block, Client, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	DigestFor<Block>: Encode,
@@ -416,21 +415,25 @@ where
 
 		let just_in_case = just_in_case.map(|(o, i)| (o, i.release_mutex()));
 
-		Ok(PendingSetChanges { just_in_case, applied_changes, do_pause })
+		Ok(PendingSetChanges {
+			just_in_case,
+			applied_changes,
+			do_pause,
+		})
 	}
 }
 
 #[async_trait::async_trait]
-impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
-	for GrandpaBlockImport<BE, Block, Client, SC> where
-		NumberFor<Block>: finality_grandpa::BlockNumberOps,
-		DigestFor<Block>: Encode,
-		BE: Backend<Block>,
-		Client: crate::ClientForGrandpa<Block, BE>,
-		for<'a> &'a Client:
-			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
-		TransactionFor<Client, Block>: Send + 'static,
-		SC: Send,
+impl<BE, Block: BlockT, Client, SC> BlockImport<Block> for GrandpaBlockImport<BE, Block, Client, SC>
+where
+	NumberFor<Block>: finality_grandpa::BlockNumberOps,
+	DigestFor<Block>: Encode,
+	BE: Backend<Block>,
+	Client: crate::ClientForGrandpa<Block, BE>,
+	for<'a> &'a Client:
+		BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
+	TransactionFor<Client, Block>: 'static,
+	SC: Send,
 {
 	type Error = ConsensusError;
 	type Transaction = TransactionFor<Client, Block>;

@@ -1679,9 +1679,8 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6447e2f8178843749e8c8003206def83ec124a7859475395777a28b5338647c"
+version = "0.14.1"
+source = "git+https://github.com/paritytech/finality-grandpa?branch=andre/cleanup-sync#ab0b7281e3888d15046179affdc0e85e9ecd2905"
 dependencies = [
  "either",
  "futures 0.3.15",
