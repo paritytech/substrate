@@ -181,41 +181,6 @@ fn counted_map_works() {
 		assert_eq!(CountedMap::<Test>::count(), 0);
 		CountedMap::<Test>::insert(3, 3);
 		assert_eq!(CountedMap::<Test>::count(), 1);
-		CountedMap::<Test>::insert(3, 5);
-		assert_eq!(CountedMap::<Test>::count(), 1);
-		CountedMap::<Test>::insert(5, 5);
-		assert_eq!(CountedMap::<Test>::count(), 2);
-		CountedMap::<Test>::remove(5);
-		assert_eq!(CountedMap::<Test>::count(), 1);
-		// Does nothing
-		CountedMap::<Test>::take(4);
-		assert_eq!(CountedMap::<Test>::count(), 1);
-		CountedMap::<Test>::take(3);
-		assert_eq!(CountedMap::<Test>::count(), 0);
-
-		CountedMap::<Test>::mutate(3, |old| {
-			if old.is_none() {
-				*old = Some(69)
-			} else {
-				*old = Some(420)
-			}
-		});
-		assert_eq!(CountedMap::<Test>::get(3), Some(69));
-		assert_eq!(CountedMap::<Test>::count(), 1);
-
-		CountedMap::<Test>::mutate(3, |old| {
-			if old.is_none() {
-				*old = Some(69)
-			} else {
-				*old = Some(420)
-			}
-		});
-		assert_eq!(CountedMap::<Test>::get(3), Some(420));
-		assert_eq!(CountedMap::<Test>::count(), 1);
-
-		CountedMap::<Test>::mutate(3, |old| *old = None);
-		assert_eq!(CountedMap::<Test>::get(3), None);
-		assert_eq!(CountedMap::<Test>::count(), 0);
 	})
 }
 
