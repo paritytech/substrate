@@ -291,7 +291,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 						&BlockId::Hash(block), prefix.as_ref(), start_key.as_ref()
 					)
 				)
-				.map(|v| v.take(count as usize).collect())
+				.map(|iter| iter.take(count as usize).collect())
 				.map_err(client_err)))
 	}
 
@@ -626,7 +626,7 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 						&BlockId::Hash(block), child_info, prefix.as_ref(), start_key.as_ref(),
 					)
 				})
-				.map(|v| v.take(count as usize).collect())
+				.map(|iter| iter.take(count as usize).collect())
 				.map_err(client_err)))
 	}
 
