@@ -427,7 +427,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							{
 								// NOTE: we can't use any trait here because CountedStorageMap
 								// doesn't implement any.
-								#full_ident::get(k)
+								<#full_ident>::get(k)
 							}
 						}
 					)
