@@ -464,12 +464,18 @@ benchmarks! {
 	reap_stash {
 		let s in 1 .. MAX_SPANS;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
+		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), ValidatorPrefs::default())?;
 		add_slashing_spans::<T>(&stash, s);
 		T::Currency::make_free_balance_be(&stash, T::Currency::minimum_balance());
 		whitelist_account!(controller);
+
+		assert!(Bonded::<T>::contains_key(&stash));
+		assert!(Validators::<T>::contains_key(&stash));
+
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
+		assert!(!Validators::<T>::contains_key(&stash));
 	}
 
 	new_era {
