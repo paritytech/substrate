@@ -164,7 +164,7 @@ fn print_benchmarks(benchmark_info: Vec<BenchmarkInfo>) {
 	}
 }
 
-/// Outputs
+/// Outputs information on executed benchmarks
 fn output_batches(cmd: &BenchmarkCmd, batches: Vec<BenchmarkBatch>) -> std::result::Result<(), std::io::Error> {
 	if let Some(output_path) = &cmd.output {
 		crate::writer::write_results(&batches, output_path, cmd)?;
