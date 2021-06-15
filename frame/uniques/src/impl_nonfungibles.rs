@@ -19,7 +19,7 @@
 
 use super::*;
 use sp_std::convert::TryFrom;
-use frame_support::traits::tokens::nonfungibles::{Inspect, Mutate, Transfer};
+use frame_support::traits::tokens::nonfungibles::{Inspect, InspectEnumerable, Mutate, Transfer};
 use frame_support::BoundedSlice;
 use sp_runtime::DispatchResult;
 
@@ -104,5 +104,27 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		destination: &T::AccountId,
 	) -> DispatchResult {
 		Self::do_transfer(class.clone(), instance.clone(), destination.clone(), |_, _| Ok(()))
+	}
+}
+
+impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {
+	/// Returns the asset classes in existence.
+	fn classes() -> Vec<Self::ClassId> {
+		ClassMetadataOf::<T, I>::iter().map(|(k, _v)| k).collect()
+	}
+
+	/// Returns the instances of an asset `class` in existence.
+	fn instances(class: &Self::ClassId) -> Vec<Self::InstanceId> {
+		InstanceMetadataOf::<T, I>::iter_prefix(class).map(|(i, _v)| i).collect()
+	}
+
+	/// Returns the asset instances of all classes owned by `who`.
+	fn owned(who: &T::AccountId) -> Vec<(Self::ClassId, Self::InstanceId)> {
+		Account::<T, I>::iter_prefix((who,)).map(|(p, _v)| p).collect()
+	}
+
+	/// Returns the asset instances of `class` owned by `who`.
+	fn owned_in_class(class: &Self::ClassId, who: &T::AccountId) -> Vec<Self::InstanceId> {
+		Account::<T, I>::iter_prefix((who, class)).map(|(i, _v)| i).collect()
 	}
 }
