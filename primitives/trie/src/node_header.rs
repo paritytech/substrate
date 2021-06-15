@@ -102,7 +102,11 @@ impl Decode for NodeHeader {
 /// Returns an iterator over encoded bytes for node header and size.
 /// Size encoding allows unlimited, length inefficient, representation, but
 /// is bounded to 16 bit maximum value to avoid possible DOS.
-pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8, prefix_mask: usize) -> impl Iterator<Item = u8> {
+pub(crate) fn size_and_prefix_iterator(
+	size: usize,
+	prefix: u8,
+	prefix_mask: usize,
+) -> impl Iterator<Item = u8> {
 	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
 
 	let max_value = 255u8 >> prefix_mask;
@@ -139,7 +143,11 @@ fn encode_size_and_prefix<W>(size: usize, prefix: u8, prefix_mask: usize, out: &
 }
 
 /// Decode size only from stream input and header byte.
-fn decode_size(first: u8, input: &mut impl Input, prefix_mask: usize) -> Result<usize, codec::Error> {
+fn decode_size(
+	first: u8,
+	input: &mut impl Input,
+	prefix_mask: usize,
+) -> Result<usize, codec::Error> {
 	let max_value = 255u8 >> prefix_mask;
 	let mut result = (first & max_value) as usize;
 	if result < max_value as usize {

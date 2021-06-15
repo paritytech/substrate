@@ -329,7 +329,9 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie(hashed_value: bool) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
+	pub(crate) fn test_trie(
+		hashed_value: bool,
+	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db(hashed_value);
 		TrieBackend::new(mdb, root)
 	}

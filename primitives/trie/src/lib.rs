@@ -461,25 +461,30 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 }
 
 /// Read a value from the trie.
-pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>>(
+pub fn read_trie_value<L, DB>(
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8]
-) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
+) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
+	where
+		L: TrieConfiguration,
+		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
+{
 	Ok(TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Read a value from the trie with given Query.
-pub fn read_trie_value_with<
-	L: TrieConfiguration,
-	Q: Query<L::Hash, L::Meta, Item=DBValue>,
-	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>
->(
+pub fn read_trie_value_with<L, Q, DB> (
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8],
 	query: Q
-) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
+) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
+	where
+		L: TrieConfiguration,
+		Q: Query<L::Hash, L::Meta, Item=DBValue>,
+		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>
+{
 	Ok(TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
@@ -608,7 +613,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 }
 
 /// Read a value from the child trie with given query.
-pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, L::Meta, Item=DBValue>, DB>(
+pub fn read_child_trie_value_with<L, Q, DB>(
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],
@@ -616,6 +621,8 @@ pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, L::Met
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 	where
+		L: TrieConfiguration,
+		Q: Query<L::Hash, L::Meta, Item=DBValue>,
 		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
 {
 	let mut root = TrieHash::<L>::default();

@@ -355,7 +355,8 @@ fn partial_from_iterator_encode<I: Iterator<Item = u8>>(
 		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
 		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count).encode_to(&mut output),
-		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count)
+			.encode_to(&mut output),
 	};
 	output.extend(partial);
 	output
@@ -375,7 +376,8 @@ fn partial_encode(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
 		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count).encode_to(&mut output),
-		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count)
+			.encode_to(&mut output),
 	};
 	if number_nibble_encoded > 0 {
 		output.push(nibble_ops::pad_right((partial.0).1));

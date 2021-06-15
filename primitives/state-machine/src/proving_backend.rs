@@ -242,7 +242,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 {
 	type Overlay = S::Overlay;
 
-	fn get(&self, key: &H::Out, prefix: Prefix, global: Option<u32>) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	fn get(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+		global: Option<u32>,
+	) -> Result<Option<(DBValue, TrieMeta)>, String> {
 		if let Some(v) = self.proof_recorder.get(key) {
 			return Ok(v);
 		}
@@ -452,7 +457,8 @@ mod tests {
 	fn proof_recorded_and_checked_inner(flagged: bool) {
 		let size_content = 34; // above hashable value treshold.
 		let value_range = 0..64;
-		let contents = value_range.clone().map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
+		let contents = value_range.clone()
+			.map(|i| (vec![i], Some(vec![i; size_content]))).collect::<Vec<_>>();
 		let mut in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		if flagged {
 			in_memory = in_memory.update(vec![(None, vec![(
@@ -464,12 +470,14 @@ mod tests {
 		}
 		let mut in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(std::iter::empty()).0;
-		value_range.clone().for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
+		value_range.clone()
+			.for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
 		let trie = in_memory.as_trie_backend().unwrap();
 		let trie_root = trie.storage_root(std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
-		value_range.clone().for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
+		value_range.clone()
+			.for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
 		let proving = ProvingBackend::new(trie);
 		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);

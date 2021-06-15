@@ -22,7 +22,7 @@
 use std::sync::Arc;
 use sp_std::{ops::Deref, boxed::Box, vec::Vec};
 use crate::{warn, debug};
-use hash_db::{self, Hasher, Prefix};
+use hash_db::{self, Hasher, Prefix, AsHashDB, HashDB, HashDBRef};
 use sp_trie::{Trie, PrefixedMemoryDB, DBValue,
 	empty_child_trie_root, read_trie_value, read_child_trie_value,
 	for_keys_in_child_trie, KeySpacedDB, TrieDBIterator, TrieDBKeyIterator,
@@ -137,7 +137,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: Option<&ChildInfo>,
 		key: &[u8],
 	) -> Result<Option<StorageKey>> {
-		let dyn_eph: &dyn hash_db::HashDBRef<_, _, _, _>;
+		let dyn_eph: &dyn HashDBRef<_, _, _, _>;
 		let keyspace_eph;
 		if let Some(child_info) = child_info.as_ref() {
 			keyspace_eph = KeySpacedDB::new(self, child_info.keyspace());
@@ -305,11 +305,13 @@ pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	overlay: &'a mut S::Overlay,
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> hash_db::AsHashDB<H, DBValue, TrieMeta, Option<u32>>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> AsHashDB<H, DBValue, TrieMeta, Option<u32>>
 	for Ephemeral<'a, S, H>
 {
-	fn as_hash_db<'b>(&'b self) -> &'b (dyn hash_db::HashDB<H, DBValue, TrieMeta, Option<u32>> + 'b) { self }
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, DBValue, TrieMeta, Option<u32>> + 'b) { self }
+	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue, TrieMeta, Option<u32>> + 'b) { self }
+	fn as_hash_db_mut<'b>(
+		&'b mut self,
+	) -> &'b mut (dyn HashDB<H, DBValue, TrieMeta, Option<u32>> + 'b) { self }
 }
 
 impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
@@ -321,15 +323,20 @@ impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue, TrieMeta, Option<u32>>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue, TrieMeta, Option<u32>>
 	for Ephemeral<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		Self::get_with_meta(self, key, prefix, Default::default()).map(|r| r.0)
+		HashDB::get_with_meta(self, key, prefix, Default::default()).map(|r| r.0)
 	}
 
-	fn get_with_meta(&self, key: &H::Out, prefix: Prefix, global: Option<u32>) -> Option<(DBValue, TrieMeta)> {
-		if let Some(val) = hash_db::HashDB::get_with_meta(self.overlay, key, prefix, global) {
+	fn get_with_meta(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+		global: Option<u32>,
+	) -> Option<(DBValue, TrieMeta)> {
+		if let Some(val) = HashDB::get_with_meta(self.overlay, key, prefix, global) {
 			Some(val)
 		} else {
 			match self.storage.get(&key, prefix, global) {
@@ -349,11 +356,11 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue, T
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::get(self, key, prefix).is_some()
+		HashDB::get(self, key, prefix).is_some()
 	}
 
 	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
-		hash_db::HashDB::insert(self.overlay, prefix, value)
+		HashDB::insert(self.overlay, prefix, value)
 	}
 
 	fn insert_with_meta(
@@ -362,42 +369,47 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue, T
 		value: &[u8],
 		meta: TrieMeta,
 	) -> H::Out {
-		hash_db::HashDB::insert_with_meta(self.overlay, prefix, value, meta)
+		HashDB::insert_with_meta(self.overlay, prefix, value, meta)
 	}
 
 	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: DBValue) {
-		hash_db::HashDB::emplace(self.overlay, key, prefix, value)
+		HashDB::emplace(self.overlay, key, prefix, value)
 	}
 
 	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
-		hash_db::HashDB::remove(self.overlay, key, prefix)
+		HashDB::remove(self.overlay, key, prefix)
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue, TrieMeta, Option<u32>>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue, TrieMeta, Option<u32>>
 	for Ephemeral<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		hash_db::HashDB::get(self, key, prefix)
+		HashDB::get(self, key, prefix)
 	}
 
-	fn get_with_meta(&self, key: &H::Out, prefix: Prefix, global: Option<u32>) -> Option<(DBValue, TrieMeta)> {
-		hash_db::HashDB::get_with_meta(self, key, prefix, global)
+	fn get_with_meta(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+		global: Option<u32>,
+	) -> Option<(DBValue, TrieMeta)> {
+		HashDB::get_with_meta(self, key, prefix, global)
 	}
 
 	fn access_from(&self, key: &H::Out, at: Option<&H::Out>) -> Option<DBValue> {
-		hash_db::HashDB::access_from(self, key, at)
+		HashDB::access_from(self, key, at)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::contains(self, key, prefix)
+		HashDB::contains(self, key, prefix)
 	}
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	/// Type of in-memory overlay.
-	type Overlay: hash_db::HashDB<H, DBValue, TrieMeta, Option<u32>> + Default + Consolidate;
+	type Overlay: HashDB<H, DBValue, TrieMeta, Option<u32>> + Default + Consolidate;
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix, global: Option<u32>) -> Result<Option<(DBValue, TrieMeta)>>;
 	/// Call back when value get accessed in trie.
@@ -437,26 +449,28 @@ impl<H, KF, MH> TrieBackendStorage<H> for sp_trie::GenericMemoryDB<H, KF, MH>
 		prefix: Prefix,
 		global: Option<u32>,
 	) -> Result<Option<(DBValue, TrieMeta)>> {
-		Ok(hash_db::HashDB::get_with_meta(self, key, prefix, global))
+		Ok(HashDB::get_with_meta(self, key, prefix, global))
 	}
 
 	fn access_from(&self, key: &H::Out) {
-		hash_db::HashDB::access_from(self, key, None);
+		HashDB::access_from(self, key, None);
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::AsHashDB<H, DBValue, TrieMeta, Option<u32>>
+impl<S: TrieBackendStorage<H>, H: Hasher> AsHashDB<H, DBValue, TrieMeta, Option<u32>>
 	for TrieBackendEssence<S, H>
 {
-	fn as_hash_db<'b>(&'b self) -> &'b (dyn hash_db::HashDB<H, DBValue, TrieMeta, Option<u32>> + 'b) { self }
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, DBValue, TrieMeta, Option<u32>> + 'b) { self }
+	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue, TrieMeta, Option<u32>> + 'b) { self }
+	fn as_hash_db_mut<'b>(
+		&'b mut self,
+	) -> &'b mut (dyn HashDB<H, DBValue, TrieMeta, Option<u32>> + 'b) { self }
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue, TrieMeta, Option<u32>>
+impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue, TrieMeta, Option<u32>>
 	for TrieBackendEssence<S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		self.get_with_meta(key, prefix, Default::default()).map(|r| r.0)
+		HashDB::get_with_meta(self, key, prefix, Default::default()).map(|r| r.0)
 	}
 
 	fn get_with_meta(
@@ -484,7 +498,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue, TrieMeta, 
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::get(self, key, prefix).is_some()
+		HashDB::get(self, key, prefix).is_some()
 	}
 
 	fn insert_with_meta(&mut self, _prefix: Prefix, _value: &[u8], _meta: TrieMeta) -> H::Out {
@@ -504,23 +518,28 @@ impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue, TrieMeta, 
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue, TrieMeta, Option<u32>>
+impl<S: TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue, TrieMeta, Option<u32>>
 	for TrieBackendEssence<S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		hash_db::HashDB::get(self, key, prefix)
+		HashDB::get(self, key, prefix)
 	}
 
-	fn get_with_meta(&self, key: &H::Out, prefix: Prefix, global: Option<u32>) -> Option<(DBValue, TrieMeta)> {
-		hash_db::HashDB::get_with_meta(self, key, prefix, global)
+	fn get_with_meta(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+		global: Option<u32>,
+	) -> Option<(DBValue, TrieMeta)> {
+		HashDB::get_with_meta(self, key, prefix, global)
 	}
 
 	fn access_from(&self, key: &H::Out, at: Option<&H::Out>) -> Option<DBValue> {
-		hash_db::HashDB::access_from(self, key, at)
+		HashDB::access_from(self, key, at)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::contains(self, key, prefix)
+		HashDB::contains(self, key, prefix)
 	}
 }
 

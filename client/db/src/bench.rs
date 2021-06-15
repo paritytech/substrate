@@ -61,14 +61,16 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 				return Ok(v.clone());
 			}
 			let backend_value = self.db.get(0, &prefixed_key)
-				.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)))
-				.map_err(|e| format!("Database backend error: {:?}", e))?;
+				.map(|result| result.map(|value|
+					<StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)
+				)).map_err(|e| format!("Database backend error: {:?}", e))?;
 			recorder.record::<HashFor<Block>>(key.clone(), backend_value.clone());
 			Ok(backend_value)
 		} else {
 			self.db.get(0, &prefixed_key)
-				.map(|result| result.map(|value| <StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)))
-				.map_err(|e| format!("Database backend error: {:?}", e))
+				.map(|result| result.map(|value|
+					<StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)
+				)).map_err(|e| format!("Database backend error: {:?}", e))
 		}
 	}
 	fn access_from(&self, key: &Block::Hash) {

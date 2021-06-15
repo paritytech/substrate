@@ -66,8 +66,10 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK, 2),
 		NodeKind::BranchNoValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK, 2),
 		NodeKind::BranchWithValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK, 2),
-		NodeKind::AltHashLeaf => size_and_prefix_iterator(size, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3),
-		NodeKind::AltHashBranchWithValue => size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4),
+		NodeKind::AltHashLeaf =>
+			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3),
+		NodeKind::AltHashBranchWithValue =>
+			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4),
 	};
 	iter_start
 		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })
@@ -162,7 +164,8 @@ impl trie_root::TrieStream for TrieStream {
 						try_inner_hashing: None,
 						apply_inner_hashing: true,
 					};
-					<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta).as_ref().encode_to(&mut self.buffer);
+					<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta).as_ref()
+						.encode_to(&mut self.buffer);
 				} else {
 					H::hash(&data).as_ref().encode_to(&mut self.buffer);
 				}

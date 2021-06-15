@@ -625,7 +625,12 @@ fn header_proof_is_generated_and_checked() {
 	header_proof_is_generated_and_checked_inner(false);
 }
 fn header_proof_is_generated_and_checked_inner(hashed: bool) {
-	let (local_checker, local_cht_root, remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true, hashed);
+	let (
+		local_checker,
+		local_cht_root,
+		remote_block_header,
+		remote_header_proof,
+	) = prepare_for_header_proof_check(true, hashed);
 	assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 		cht_root: local_cht_root,
 		block: 1,
