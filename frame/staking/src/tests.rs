@@ -17,7 +17,7 @@
 
 //! Tests for the module.
 
-use super::*;
+use super::{*, Event};
 use mock::*;
 use sp_runtime::{
 	assert_eq_error_rate,
@@ -25,7 +25,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
-	assert_ok, assert_noop, StorageMap,
+	assert_ok, assert_noop,
 	traits::{Currency, ReservableCurrency, OnInitialize},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
@@ -187,10 +187,10 @@ fn rewards_should_work() {
 		Payee::<Test>::insert(21, RewardDestination::Controller);
 		Payee::<Test>::insert(101, RewardDestination::Controller);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 50)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 50)]);
 		// This is the second validator of the current elected set.
-		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
+		<Pallet<Test>>::reward_by_ids(vec![(21, 50)]);
 
 		// Compute total payout now for whole duration of the session.
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
@@ -227,7 +227,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			RawEvent::EraPayout(0, total_payout_0, maximum_payout - total_payout_0)
+			Event::EraPayout(0, total_payout_0, maximum_payout - total_payout_0)
 		);
 		mock::make_all_reward_payment(0);
 
@@ -253,7 +253,7 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
@@ -265,7 +265,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			RawEvent::EraPayout(1, total_payout_1, maximum_payout - total_payout_1)
+			Event::EraPayout(1, total_payout_1, maximum_payout - total_payout_1)
 		);
 		mock::make_all_reward_payment(1);
 
@@ -440,13 +440,26 @@ fn no_candidate_emergency_condition() {
 			let res = Staking::chill(Origin::signed(10));
 			assert_ok!(res);
 
-			// trigger era
-			mock::start_active_era(1);
+			let current_era = CurrentEra::<Test>::get();
 
-			// Previous ones are elected. chill is invalidates. TODO: #2494
+			// try trigger new era
+			mock::run_to_block(20);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				Event::StakingElectionFailed,
+			);
+			// No new era is created
+			assert_eq!(current_era, CurrentEra::<Test>::get());
+
+			// Go to far further session to see if validator have changed
+			mock::run_to_block(100);
+
+			// Previous ones are elected. chill is not effective in active era (as era hasn't changed)
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			// Though the validator preferences has been removed.
-			assert!(Staking::validators(11) != prefs);
+			// The chill is still pending.
+			assert!(!<Staking as crate::Store>::Validators::contains_key(11));
+			// No new era is created.
+			assert_eq!(current_era, CurrentEra::<Test>::get());
 		});
 }
 
@@ -482,8 +495,8 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 0
 			let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-			<Module<Test>>::reward_by_ids(vec![(41, 1)]);
-			<Module<Test>>::reward_by_ids(vec![(31, 1)]);
+			<Pallet<Test>>::reward_by_ids(vec![(41, 1)]);
+			<Pallet<Test>>::reward_by_ids(vec![(31, 1)]);
 
 			mock::start_active_era(1);
 
@@ -524,8 +537,8 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 1
 			let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-			<Module<Test>>::reward_by_ids(vec![(21, 2)]);
-			<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+			<Pallet<Test>>::reward_by_ids(vec![(21, 2)]);
+			<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 			mock::start_active_era(2);
 
@@ -779,7 +792,7 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 1);
 
 		// no era change.
-		ForceEra::put(Forcing::ForceNone);
+		ForceEra::<Test>::put(Forcing::ForceNone);
 
 		start_session(4);
 		assert_eq!(active_era(), 1);
@@ -795,7 +808,7 @@ fn forcing_new_era_works() {
 
 		// back to normal.
 		// this immediately starts a new session.
-		ForceEra::put(Forcing::NotForcing);
+		ForceEra::<Test>::put(Forcing::NotForcing);
 
 		start_session(8);
 		assert_eq!(active_era(), 1);
@@ -803,7 +816,7 @@ fn forcing_new_era_works() {
 		start_session(9);
 		assert_eq!(active_era(), 2);
 		// forceful change
-		ForceEra::put(Forcing::ForceAlways);
+		ForceEra::<Test>::put(Forcing::ForceAlways);
 
 		start_session(10);
 		assert_eq!(active_era(), 2);
@@ -815,10 +828,10 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 4);
 
 		// just one forceful change
-		ForceEra::put(Forcing::ForceNew);
+		ForceEra::<Test>::put(Forcing::ForceNew);
 		start_session(13);
 		assert_eq!(active_era(), 5);
-		assert_eq!(ForceEra::get(), Forcing::NotForcing);
+		assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 
 		start_session(14);
 		assert_eq!(active_era(), 6);
@@ -917,7 +930,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(1);
 		mock::make_all_reward_payment(0);
@@ -940,7 +953,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
@@ -968,7 +981,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(3);
 		mock::make_all_reward_payment(2);
@@ -1015,7 +1028,7 @@ fn validator_payment_prefs_work() {
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 		let exposure_1 = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
@@ -1508,8 +1521,8 @@ fn reward_to_stake_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
-		<Module<Test>>::reward_by_ids(vec![(21, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(21, 1)]);
 
 		// New era --> rewards are paid --> stakes are changed
 		mock::start_active_era(1);
@@ -2009,10 +2022,10 @@ fn reward_from_authorship_event_handler_works() {
 
 		assert_eq!(<pallet_authorship::Pallet<Test>>::author(), 11);
 
-		<Module<Test>>::note_author(11);
-		<Module<Test>>::note_uncle(21, 1);
+		<Pallet<Test>>::note_author(11);
+		<Pallet<Test>>::note_uncle(21, 1);
 		// Rewarding the same two times works.
-		<Module<Test>>::note_uncle(11, 1);
+		<Pallet<Test>>::note_uncle(11, 1);
 
 		// Not mandatory but must be coherent with rewards
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
@@ -2035,13 +2048,13 @@ fn add_reward_points_fns_works() {
 		// Not mandatory but must be coherent with rewards
 		assert_eq_uvec!(Session::validators(), vec![21, 11]);
 
-		<Module<Test>>::reward_by_ids(vec![
+		<Pallet<Test>>::reward_by_ids(vec![
 			(21, 1),
 			(11, 1),
 			(11, 1),
 		]);
 
-		<Module<Test>>::reward_by_ids(vec![
+		<Pallet<Test>>::reward_by_ids(vec![
 			(21, 1),
 			(11, 1),
 			(11, 1),
@@ -2084,7 +2097,7 @@ fn era_is_always_same_length() {
 		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session_per_era * 2u32);
 
 		let session = Session::current_index();
-		ForceEra::put(Forcing::ForceNew);
+		ForceEra::<Test>::put(Forcing::ForceNew);
 		advance_session();
 		advance_session();
 		assert_eq!(current_era(), 3);
@@ -2992,13 +3005,13 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		Payee::<Test>::insert(11, RewardDestination::Controller);
 		Payee::<Test>::insert(101, RewardDestination::Controller);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 
 		mock::start_active_era(1);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -3007,7 +3020,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 
 		mock::start_active_era(2);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -3168,7 +3181,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		}
 		mock::start_active_era(1);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 
@@ -3832,7 +3845,7 @@ fn do_not_die_when_active_is_ed() {
 fn on_finalize_weight_is_nonzero() {
 	ExtBuilder::default().build_and_execute(|| {
 		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
-		assert!(Staking::on_initialize(1) >= on_finalize_weight);
+		assert!(<Staking as Hooks<u64>>::on_initialize(1) >= on_finalize_weight);
 	})
 }
 
@@ -3954,7 +3967,7 @@ mod election_data_provider {
 			assert_eq!(staking_events().len(), 1);
 			assert_eq!(
 				*staking_events().last().unwrap(),
-				RawEvent::StakingElection
+				Event::StakingElection
 			);
 
 			for b in 21..45 {
@@ -3968,8 +3981,36 @@ mod election_data_provider {
 			assert_eq!(staking_events().len(), 3);
 			assert_eq!(
 				*staking_events().last().unwrap(),
-				RawEvent::StakingElection
+				Event::StakingElection
 			);
+
+			Staking::force_no_eras(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::max_value());
+
+			Staking::force_new_era_always(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+
+			Staking::force_new_era(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+
+			// Do a fail election
+			MinimumValidatorCount::<Test>::put(1000);
+			run_to_block(50);
+			// Election: failed, next session is a new election
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 50 + 5);
+			// The new era is still forced until a new era is planned.
+			assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
+
+			MinimumValidatorCount::<Test>::put(2);
+			run_to_block(55);
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
+			assert_eq!(staking_events().len(), 6);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				Event::StakingElection
+			);
+			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
+			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})
 	}
 }

@@ -69,6 +69,36 @@ sp_core::wasm_export_functions! {
 
 	fn test_empty_return() {}
 
+	fn test_dirty_plenty_memory(heap_base: u32, heap_pages: u32) {
+		// This piece of code will dirty multiple pages of memory. The number of pages is given by
+		// the `heap_pages`. It's unit is a wasm page (64KiB). The first page to be cleared
+		// is a wasm page that that follows the one that holds the `heap_base` address.
+		//
+		// This function dirties the **host** pages. I.e. we dirty 4KiB at a time and it will take
+		// 16 writes to process a single wasm page.
+
+		let mut heap_ptr = heap_base as usize;
+
+		// Find the next wasm page boundary.
+		let heap_ptr = round_up_to(heap_ptr, 65536);
+
+		// Make it an actual pointer
+		let heap_ptr = heap_ptr as *mut u8;
+
+		// Traverse the host pages and make each one dirty
+		let host_pages = heap_pages as usize * 16;
+		for i in 0..host_pages {
+			unsafe {
+				// technically this is an UB, but there is no way Rust can find this out.
+				heap_ptr.add(i * 4096).write(0);
+			}
+		}
+
+		fn round_up_to(n: usize, divisor: usize) -> usize {
+			(n + divisor - 1) / divisor
+		}
+	}
+
 	fn test_exhaust_heap() -> Vec<u8> { Vec::with_capacity(16777216) }
 
 	fn test_panic() { panic!("test panic") }

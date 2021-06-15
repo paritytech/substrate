@@ -37,15 +37,43 @@ fn basic_minting_should_work() {
 #[test]
 fn approval_lifecycle_works() {
 	new_test_ext().execute_with(|| {
+		// can't approve non-existent token
+		assert_noop!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Unknown);
+		// so we create it :)
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		Balances::make_free_balance_be(&1, 1);
 		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_eq!(Balances::reserved_balance(&1), 1);
 		assert_ok!(Assets::transfer_approved(Origin::signed(2), 0, 1, 3, 40));
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_ok!(Assets::cancel_approval(Origin::signed(1), 0, 2));
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 0);
 		assert_eq!(Assets::balance(0, 1), 60);
 		assert_eq!(Assets::balance(0, 3), 40);
+		assert_eq!(Balances::reserved_balance(&1), 0);
+	});
+}
+
+#[test]
+fn transfer_approved_all_funds() {
+	new_test_ext().execute_with(|| {
+		// can't approve non-existent token
+		assert_noop!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Unknown);
+		// so we create it :)
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		Balances::make_free_balance_be(&1, 1);
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
+		assert_eq!(Balances::reserved_balance(&1), 1);
+
+		// transfer the full amount, which should trigger auto-cleanup
+		assert_ok!(Assets::transfer_approved(Origin::signed(2), 0, 1, 3, 50));
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 0);
+		assert_eq!(Assets::balance(0, 1), 50);
+		assert_eq!(Assets::balance(0, 3), 50);
 		assert_eq!(Balances::reserved_balance(&1), 0);
 	});
 }
@@ -102,10 +130,13 @@ fn cancel_approval_works() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		Balances::make_free_balance_be(&1, 1);
 		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_noop!(Assets::cancel_approval(Origin::signed(1), 1, 2), Error::<Test>::Unknown);
 		assert_noop!(Assets::cancel_approval(Origin::signed(2), 0, 2), Error::<Test>::Unknown);
 		assert_noop!(Assets::cancel_approval(Origin::signed(1), 0, 3), Error::<Test>::Unknown);
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_ok!(Assets::cancel_approval(Origin::signed(1), 0, 2));
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 0);
 		assert_noop!(Assets::cancel_approval(Origin::signed(1), 0, 2), Error::<Test>::Unknown);
 	});
 }
@@ -117,12 +148,15 @@ fn force_cancel_approval_works() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		Balances::make_free_balance_be(&1, 1);
 		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		let e = Error::<Test>::NoPermission;
 		assert_noop!(Assets::force_cancel_approval(Origin::signed(2), 0, 1, 2), e);
 		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 1, 1, 2), Error::<Test>::Unknown);
 		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 0, 2, 2), Error::<Test>::Unknown);
 		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 0, 1, 3), Error::<Test>::Unknown);
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 1);
 		assert_ok!(Assets::force_cancel_approval(Origin::signed(1), 0, 1, 2));
+		assert_eq!(Asset::<Test>::get(0).unwrap().approvals, 0);
 		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 0, 1, 2), Error::<Test>::Unknown);
 	});
 }
@@ -180,9 +214,35 @@ fn destroy_with_bad_witness_should_not_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+		let mut w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+		// witness too low
 		assert_noop!(Assets::destroy(Origin::signed(1), 0, w), Error::<Test>::BadWitness);
+		// witness too high is okay though
+		w.accounts += 2;
+		w.sufficients += 2;
+		assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
+
+	});
+}
+
+#[test]
+fn destroy_should_refund_approvals() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 3, 50));
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 4, 50));
+		assert_eq!(Balances::reserved_balance(&1), 3);
+
+		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+		assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+
+		// all approvals are removed
+		assert!(Approvals::<Test>::iter().count().is_zero())
 	});
 }
 
@@ -303,6 +363,20 @@ fn transferring_frozen_asset_should_not_work() {
 		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
 		assert_ok!(Assets::thaw_asset(Origin::signed(1), 0));
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+	});
+}
+
+#[test]
+fn approve_transfer_frozen_asset_should_not_work() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+		assert_noop!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
+		assert_ok!(Assets::thaw_asset(Origin::signed(1), 0));
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
 	});
 }
 

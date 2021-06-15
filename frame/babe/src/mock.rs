@@ -28,7 +28,7 @@ use sp_runtime::{
 use frame_system::InitKind;
 use frame_support::{
 	parameter_types,
-	traits::{KeyOwnerProofSystem, OnInitialize},
+	traits::{KeyOwnerProofSystem, OnInitialize, GenesisBuild},
 };
 use sp_io;
 use sp_core::{H256, U256, crypto::{IsWrappedBy, KeyTypeId, Pair}};
@@ -213,6 +213,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 }
 

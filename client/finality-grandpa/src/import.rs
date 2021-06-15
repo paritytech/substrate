@@ -646,10 +646,12 @@ where
 		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
 		if justification.0 != GRANDPA_ENGINE_ID {
-			return Err(ConsensusError::ClientImport(format!(
-				"Expected GRANDPA Justification, got {}.",
-				String::from_utf8_lossy(&justification.0)
-			)));
+			// TODO: the import queue needs to be refactored to be able dispatch to the correct
+			// `JustificationImport` instance based on `ConsensusEngineId`, or we need to build a
+			// justification import pipeline similar to what we do for `BlockImport`. In the
+			// meantime we'll just drop the justification, since this is only used for BEEFY which
+			// is still WIP.
+			return Ok(());
 		}
 
 		let justification = GrandpaJustification::decode_and_verify_finalizes(
