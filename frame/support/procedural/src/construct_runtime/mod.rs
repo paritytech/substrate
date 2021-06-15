@@ -367,7 +367,7 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 
 			#[test]
 			pub fn runtime_integrity_tests() {
-				<AllPallets as #scrate::traits::IntegrityTest>::integrity_test();
+				<AllPalletsWithSystem as #scrate::traits::IntegrityTest>::integrity_test();
 			}
 		}
 	)

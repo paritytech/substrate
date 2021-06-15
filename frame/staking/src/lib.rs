@@ -776,7 +776,7 @@ pub mod migrations {
 			CurrentNominatorsCount::<T>::put(nominator_count);
 
 			StorageVersion::<T>::put(Releases::V7_0_0);
-			log!(info, "Done.");
+			log!(info, "Completed staking migration to Releases::V7_0_0");
 
 			T::DbWeight::get().reads_writes(
 				validator_count.saturating_add(nominator_count).into(),
@@ -1350,8 +1350,8 @@ pub mod pallet {
 		DuplicateIndex,
 		/// Slash record index out of bounds.
 		InvalidSlashIndex,
-		/// Can not bond with value less than minimum balance.
-		InsufficientValue,
+		/// Can not bond with value less than minimum required.
+		InsufficientBond,
 		/// Can not schedule more unlock chunks.
 		NoMoreChunks,
 		/// Can not rebond without unlocking chunks.
@@ -1376,8 +1376,6 @@ pub mod pallet {
 		TooManyTargets,
 		/// A nomination target was supplied that was blocked or otherwise not a validator.
 		BadTarget,
-		/// The specified bond is too low to complete the operation.
-		BondTooLow,
 		/// The user has enough bond and thus cannot be chilled forcefully by an external person.
 		CannotChillOther,
 		/// There are too many nominators in the system. Governance needs to adjust the staking settings
@@ -1484,7 +1482,7 @@ pub mod pallet {
 
 			// Reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
-				Err(Error::<T>::InsufficientValue)?
+				Err(Error::<T>::InsufficientBond)?
 			}
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
@@ -1549,7 +1547,7 @@ pub mod pallet {
 				ledger.total += extra;
 				ledger.active += extra;
 				// Last check: the new active amount of ledger must be more than ED.
-				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
 				Self::deposit_event(Event::<T>::Bonded(stash, extra));
 				Self::update_ledger(&controller, &ledger);
@@ -1619,7 +1617,7 @@ pub mod pallet {
 
 				// Make sure that the user maintains enough active bond for their role.
 				// If a user runs into this error, they should chill first.
-				ensure!(ledger.active >= min_active_bond, Error::<T>::BondTooLow);
+				ensure!(ledger.active >= min_active_bond, Error::<T>::InsufficientBond);
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
@@ -1729,7 +1727,7 @@ pub mod pallet {
 			}
 
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
 
 			let stash = &ledger.stash;
 			Self::do_remove_nominator(stash);
@@ -1770,7 +1768,7 @@ pub mod pallet {
 			}
 
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
 
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
@@ -2147,7 +2145,7 @@ pub mod pallet {
 
 			let ledger = ledger.rebond(value);
 			// Last check: the new active amount of ledger must be more than ED.
-			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientValue);
+			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
 			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), value));
 			Self::update_ledger(&controller, &ledger);
@@ -2274,7 +2272,7 @@ pub mod pallet {
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
 		/// to kick people under the new limits, `chill_other` should be called.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::update_staking_limits())]
 		pub fn update_staking_limits(
 			origin: OriginFor<T>,
 			min_nominator_bond: BalanceOf<T>,
@@ -2305,8 +2303,9 @@ pub mod pallet {
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
 		///
-		/// TODO: Maybe we can deprecate `chill` in the future.
-		#[pallet::weight(0)]
+		// TODO: Maybe we can deprecate `chill` in the future.
+		// https://github.com/paritytech/substrate/issues/9111
+		#[pallet::weight(T::WeightInfo::chill_other())]
 		pub fn chill_other(
 			origin: OriginFor<T>,
 			controller: T::AccountId,
@@ -2329,7 +2328,7 @@ pub mod pallet {
 					Zero::zero()
 				};
 
-				ensure!(ledger.active >= min_active_bond, Error::<T>::CannotChillOther);
+				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
 			}
 
 			Self::chill_stash(&stash);
@@ -3026,9 +3025,6 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
-		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
-		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
-		// report weight in failures.
 		let nominator_count = CurrentNominatorsCount::<T>::get();
 		let validator_count = CurrentValidatorsCount::<T>::get();
 		let voter_count = nominator_count.saturating_add(validator_count) as usize;
@@ -3064,7 +3060,8 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		let current_session = Self::current_planned_session();
 		let current_era_start_session_index =
 			Self::eras_start_session_index(current_era).unwrap_or(0);
-		let era_length = current_session
+		// Number of session in the current era or the maximum session per era if reached.
+		let era_progress = current_session
 			.saturating_sub(current_era_start_session_index)
 			.min(T::SessionsPerEra::get());
 
@@ -3078,9 +3075,9 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		let sessions_left: T::BlockNumber = match ForceEra::<T>::get() {
 			Forcing::ForceNone => Bounded::max_value(),
 			Forcing::ForceNew | Forcing::ForceAlways => Zero::zero(),
-			Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => Zero::zero(),
+			Forcing::NotForcing if era_progress >= T::SessionsPerEra::get() => Zero::zero(),
 			Forcing::NotForcing => T::SessionsPerEra::get()
-				.saturating_sub(era_length)
+				.saturating_sub(era_progress)
 				// One session is computed in this_session_end.
 				.saturating_sub(1)
 				.into(),
