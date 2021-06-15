@@ -301,7 +301,7 @@ pub mod pallet {
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the pallet macro).
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
-		pub(crate) fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
+		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Ok(().into())
 		}
@@ -312,7 +312,7 @@ pub mod pallet {
 		/// - `O(1)`
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
-		pub(crate) fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			Ok(().into())
 		}
@@ -326,7 +326,7 @@ pub mod pallet {
 		/// - 1 write to HEAP_PAGES
 		/// # </weight>
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
-		pub(crate) fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
+		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 			Ok(().into())
@@ -414,7 +414,7 @@ pub mod pallet {
 			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
 		))]
-		pub(crate) fn set_storage(origin: OriginFor<T>, items: Vec<KeyValue>) -> DispatchResultWithPostInfo {
+		pub fn set_storage(origin: OriginFor<T>, items: Vec<KeyValue>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
@@ -434,7 +434,7 @@ pub mod pallet {
 			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
 		))]
-		pub(crate) fn kill_storage(origin: OriginFor<T>, keys: Vec<Key>) -> DispatchResultWithPostInfo {
+		pub fn kill_storage(origin: OriginFor<T>, keys: Vec<Key>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			for key in &keys {
 				storage::unhashed::kill(&key);
@@ -457,7 +457,7 @@ pub mod pallet {
 			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,
 		))]
-		pub(crate) fn kill_prefix(
+		pub fn kill_prefix(
 			origin: OriginFor<T>,
 			prefix: Key,
 			_subkeys: u32,
@@ -474,7 +474,7 @@ pub mod pallet {
 		/// - 1 event.
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark_with_event(remark.len() as u32))]
-		pub(crate) fn remark_with_event(origin: OriginFor<T>, remark: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub fn remark_with_event(origin: OriginFor<T>, remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let hash = T::Hashing::hash(&remark[..]);
 			Self::deposit_event(Event::Remarked(who, hash));
