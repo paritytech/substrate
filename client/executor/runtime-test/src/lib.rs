@@ -71,7 +71,7 @@ sp_core::wasm_export_functions! {
 	}
 
 	fn test_clear_prefix(input: Vec<u8>) -> Vec<u8> {
-		storage::clear_prefix(&input);
+		storage::clear_prefix(&input, None);
 		b"all ok!".to_vec()
 	}
 

@@ -373,13 +373,14 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		}
 	}
 
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
+	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
-		child_info: &ChildInfo,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
 		f: F,
 	) {
 		if let Some(ref state) = *self.state.borrow() {
-			state.apply_to_child_keys_while(child_info, f)
+			state.apply_to_keys_while(child_info, prefix, f)
 		}
 	}
 
