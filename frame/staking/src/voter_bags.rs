@@ -22,8 +22,8 @@
 //!   voters doesn't particularly matter.
 
 use crate::{
-	slashing::SlashingSpans, AccountIdOf, Config, Nominations, Nominators, VoterBagFor,
-	VotingDataOf, VoteWeight,
+	AccountIdOf, Config, Nominations, Nominators, Pallet, VoteWeight, VoterBagFor, VotingDataOf,
+	slashing::SlashingSpans,
 };
 use codec::{Encode, Decode};
 use frame_support::DefaultNoBound;
@@ -69,6 +69,20 @@ impl<T: Config> VoterList<T> {
 	/// expensive; it's recommended to limit the number of items with `.take(n)`.
 	pub fn iter() -> impl Iterator<Item = Node<T>> {
 		(0..=BagIdx::MAX).filter_map(|bag_idx| Bag::get(bag_idx)).flat_map(|bag| bag.iter())
+	}
+
+	/// Insert a new voter into the appropriate bag in the voter list.
+	///
+	/// If the voter is already present in the list, their type will be updated.
+	/// That case is cheaper than inserting a new voter.
+	pub fn insert_as(account_id: &AccountIdOf<T>, voter_type: VoterType) {
+		// if this is an update operation we can complete this easily and cheaply
+		if !Node::<T>::update_voter_type_for(account_id, voter_type) {
+			// otherwise, we need to insert from scratch
+			let weight_of = Pallet::<T>::slashable_balance_of_fn();
+			let voter = Voter { id: account_id.clone(), voter_type };
+			Self::insert(voter, weight_of);
+		}
 	}
 
 	/// Insert a new voter into the appropriate bag in the voter list.
@@ -378,6 +392,21 @@ impl<T: Config> Node<T> {
 	/// `true` when this voter is in the wrong bag.
 	pub fn is_misplaced(&self, weight_of: impl Fn(&T::AccountId) -> VoteWeight) -> bool {
 		notional_bag_for(weight_of(&self.voter.id)) != self.bag_idx
+	}
+
+	/// Update the voter type associated with a particular node by id.
+	///
+	/// This updates storage immediately.
+	///
+	/// Returns whether the voter existed and was successfully updated.
+	pub fn update_voter_type_for(account_id: &AccountIdOf<T>, voter_type: VoterType) -> bool {
+		let node = Self::from_id(account_id);
+		let existed = node.is_some();
+		if let Some(mut node) = node {
+			node.voter.voter_type = voter_type;
+			node.put();
+		}
+		existed
 	}
 }
 

@@ -312,11 +312,9 @@ use sp_staking::{
 	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence, OffenceError},
 };
-use frame_system::{
-	ensure_signed, ensure_root, pallet_prelude::*,
-	offchain::SendTransactionTypes,
-};
+use frame_system::{ensure_signed, ensure_root, pallet_prelude::*, offchain::SendTransactionTypes};
 use frame_election_provider_support::{ElectionProvider, VoteWeight, Supports, data_provider};
+use voter_bags::{VoterList, VoterType};
 pub use weights::WeightInfo;
 pub use pallet::*;
 
@@ -1646,6 +1644,7 @@ pub mod pallet {
 			let stash = &ledger.stash;
 			<Nominators<T>>::remove(stash);
 			<Validators<T>>::insert(stash, prefs);
+			VoterList::<T>::insert_as(stash, VoterType::Validator);
 			Ok(())
 		}
 
@@ -1699,6 +1698,7 @@ pub mod pallet {
 
 			<Validators<T>>::remove(stash);
 			<Nominators<T>>::insert(stash, &nominations);
+			VoterList::<T>::insert_as(stash, VoterType::Nominator);
 			Ok(())
 		}
 
@@ -1724,6 +1724,7 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
+			VoterList::<T>::remove(&ledger.stash);
 			Ok(())
 		}
 
@@ -2308,6 +2309,7 @@ impl<T: Config> Pallet<T> {
 	fn chill_stash(stash: &AccountIdOf<T>) {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
+		VoterList::<T>::remove(stash);
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -2627,6 +2629,8 @@ impl<T: Config> Pallet<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
+		VoterList::<T>::remove(stash);
+
 		frame_system::Pallet::<T>::dec_consumers(stash);
 
 		Ok(())
@@ -2725,7 +2729,7 @@ impl<T: Config> Pallet<T> {
 		// collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
-		voter_bags::VoterList::<T>::iter()
+		VoterList::<T>::iter()
 			.filter_map(|node| node.voting_data(&weight_of, &slashing_spans))
 			.take(wanted_voters)
 			.collect()
@@ -2736,7 +2740,8 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> frame_election_provider_support::ElectionDataProvider<AccountIdOf<T>, BlockNumberFor<T>>
+impl<T: Config>
+	frame_election_provider_support::ElectionDataProvider<AccountIdOf<T>, BlockNumberFor<T>>
 	for Pallet<T>
 {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
@@ -2747,7 +2752,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<AccountIdO
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(AccountIdOf<T>, VoteWeight, Vec<AccountIdOf<T>>)>, Weight)> {
-		let voter_count = voter_bags::VoterList::<T>::decode_len().unwrap_or_default();
+		let voter_count = VoterList::<T>::decode_len().unwrap_or_default();
 
 		let slashing_span_count = <SlashingSpans<T>>::iter().count();
 		let weight = T::WeightInfo::get_npos_voters(
@@ -2819,6 +2824,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<AccountIdO
 					claimed_rewards: vec![],
 				},
 			);
+			VoterList::<T>::insert_as(&v, VoterType::Validator);
 			<Validators<T>>::insert(
 				v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
@@ -2840,6 +2846,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<AccountIdO
 					claimed_rewards: vec![],
 				},
 			);
+			VoterList::<T>::insert_as(&v, VoterType::Nominator);
 			<Nominators<T>>::insert(
 				v,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },
