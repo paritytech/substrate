@@ -49,7 +49,7 @@ const N_BAGS: BagIdx = 200;
 /// It is important for the correctness of the iteration algorithm that the bags of highest value
 /// have the lowest threshold. Therefore, the appropriate `BagIdx` for a given value `T` is
 /// `N_BAGS - t`.
-fn notional_bag_for<T: Config>(weight: VoteWeight) -> BagIdx {
+fn notional_bag_for(weight: VoteWeight) -> BagIdx {
 	// the input to this threshold function is _not_ reversed; `threshold(0) == 0`
 	let threshold = |bag: BagIdx| -> u64 {
 		// The goal is to segment the full range of `u64` into `N_BAGS`, such that `threshold(0) != 0`,
@@ -161,7 +161,7 @@ impl<T: Config> VoterList<T> {
 
 		for voter in voters.into_iter() {
 			let weight = weight_of(&voter.id);
-			let bag = notional_bag_for::<T>(weight);
+			let bag = notional_bag_for(weight);
 			bags.entry(bag).or_insert_with(|| Bag::<T>::get_or_make(bag)).insert(voter);
 			count += 1;
 		}
@@ -231,7 +231,7 @@ impl<T: Config> VoterList<T> {
 			}
 
 			// put the voter into the appropriate new bag
-			node.bag_idx = notional_bag_for::<T>(weight_of(&node.voter.id));
+			node.bag_idx = notional_bag_for(weight_of(&node.voter.id));
 			let mut bag = Bag::<T>::get_or_make(node.bag_idx);
 			bag.insert_node(node);
 			bag.put();
@@ -450,7 +450,7 @@ impl<T: Config> Node<T> {
 
 	/// `true` when this voter is in the wrong bag.
 	pub fn is_misplaced(&self, weight_of: impl Fn(&T::AccountId) -> VoteWeight) -> bool {
-		notional_bag_for::<T>(weight_of(&self.voter.id)) != self.bag_idx
+		notional_bag_for(weight_of(&self.voter.id)) != self.bag_idx
 	}
 
 	/// Update the voter type associated with a particular node by id.
