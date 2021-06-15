@@ -2294,7 +2294,8 @@ pub mod pallet {
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
 		///
-		/// TODO: Maybe we can deprecate `chill` in the future.
+		// TODO: Maybe we can deprecate `chill` in the future.
+		// https://github.com/paritytech/substrate/issues/9111
 		#[pallet::weight(T::WeightInfo::chill_other())]
 		pub fn chill_other(
 			origin: OriginFor<T>,
