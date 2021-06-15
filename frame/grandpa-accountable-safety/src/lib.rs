@@ -139,7 +139,7 @@ impl<T: Config> Pallet<T> {
 		// The state keeps track of the block we're comparing against, and in which round the
 		// protocol is at the moment.
 		let state = StoredAccountableSafetySession {
-			block_not_included: (block_not_included.0, block_not_included.2),
+			block_not_included: (block_not_included.0, block_not_included.1),
 			offending_block: new_block.0.target_number,
 			current_round: new_block.1,
 			set_id: new_block.2,

@@ -241,10 +241,7 @@ fn accountable_safety_setup_and_submit_reply() {
 		);
 
 		// Make sure we don't flag any equivocations, or invalid replies
-		assert_eq!(
-			GrandpaAccountableSafety::equivocations(),
-			None,
-		);
+		assert_eq!(GrandpaAccountableSafety::equivocations(), None,);
 	});
 }
 
@@ -385,8 +382,8 @@ fn accountable_safety_proceed_to_previous_round() {
 		);
 
 		let new_block = (
-			new_commit(auth.clone(), H256::random(), 6, round + 1, set_id),
-			round + 1,
+			new_commit(auth.clone(), H256::random(), 7, round + 2, set_id),
+			round + 2,
 			set_id,
 		);
 
@@ -395,11 +392,13 @@ fn accountable_safety_proceed_to_previous_round() {
 			new_block
 		));
 
+		let precommits = new_precommits(auth.clone(), H256::random(), 6, round + 1, set_id);
+
 		// All authorities submit their replies
 		for pub_id in &pub_ids {
 			assert_ok!(GrandpaAccountableSafety::add_response(
 				pub_id,
-				QueryResponse::Precommits(block_not_included.0.precommits.clone()),
+				QueryResponse::Precommits(precommits.clone()),
 			));
 		}
 
@@ -407,7 +406,7 @@ fn accountable_safety_proceed_to_previous_round() {
 			assert_eq!(
 				GrandpaAccountableSafety::query_state_for_voter(pub_id),
 				Some(Query::Replied(QueryResponse::Precommits(
-					block_not_included.0.precommits.clone()
+					precommits.clone()
 				))),
 			);
 		}
@@ -416,12 +415,12 @@ fn accountable_safety_proceed_to_previous_round() {
 		// the previous round
 		assert_eq!(
 			GrandpaAccountableSafety::session().unwrap().current_round,
-			43
+			44
 		);
 		GrandpaAccountableSafety::update();
 		assert_eq!(
 			GrandpaAccountableSafety::session().unwrap().current_round,
-			42
+			43
 		);
 
 		// Again waiting for replies from the requested authorities
@@ -431,5 +430,131 @@ fn accountable_safety_proceed_to_previous_round() {
 				Some(Query::WaitingForReply),
 			);
 		}
+	});
+}
+
+#[test]
+fn accountable_safety_example_scenario() {
+	new_test_ext().execute_with(|| {
+		use Ed25519Keyring::{Alice, Bob, Charlie, Dave};
+
+		// The first partition
+		let auth0 = vec![Alice, Bob, Charlie];
+
+		// The second partition
+		let auth1 = vec![Alice, Bob, Dave];
+		let pub_ids1: Vec<AuthorityId> = auth1
+			.iter()
+			.map(|keyring| keyring.public().into())
+			.collect();
+
+		let round = 2;
+		let set_id = 1;
+		let block_hash = (0..9).map(|_| H256::random()).collect::<Vec<_>>();
+
+		let block_not_included = (
+			new_commit(auth0.clone(), block_hash[2], 2, round, set_id),
+			round.clone(),
+			set_id,
+		);
+
+		let new_block = (
+			new_commit(auth1.clone(), block_hash[8], 8, 4, set_id),
+			4,
+			set_id,
+		);
+
+		assert_ok!(GrandpaAccountableSafety::start_accountable_safety(
+			block_not_included.clone(),
+			new_block
+		));
+
+		// All authorities in auth1 submit their replies
+		let number: u64 = 1;
+		let round = 3;
+		let precommits = vec![
+			new_precommit(Alice, block_hash[number as usize], number, round, set_id),
+			new_precommit(Bob, block_hash[number as usize], number, round, set_id),
+			new_precommit(Dave, block_hash[number as usize], number, round, set_id),
+		];
+		for pub_id1 in &pub_ids1 {
+			assert_ok!(GrandpaAccountableSafety::add_response(
+				pub_id1,
+				QueryResponse::Precommits(precommits.clone()),
+			));
+		}
+
+		// With all requested replies submitted, we will now progress to the next state, which is
+		// the previous round
+		assert_eq!(
+			GrandpaAccountableSafety::session().unwrap().current_round,
+			4
+		);
+		GrandpaAccountableSafety::update();
+		// That we progress to round 3 indicates that all who were requested to answer, did indeed
+		// reply.
+		assert_eq!(
+			GrandpaAccountableSafety::session().unwrap().current_round,
+			3
+		);
+		assert_eq!(GrandpaAccountableSafety::equivocations(), None);
+
+		// All authorities in auth1 submit their replies
+		let number: u64 = 1;
+		let round = 2;
+		let precommits = vec![
+			new_precommit(Alice, block_hash[number as usize], number, round, set_id),
+			new_precommit(Bob, block_hash[number as usize], number, round, set_id),
+			new_precommit(Dave, block_hash[number as usize], number, round, set_id),
+		];
+		for pub_id1 in &pub_ids1 {
+			assert_ok!(GrandpaAccountableSafety::add_response(
+				pub_id1,
+				QueryResponse::Precommits(precommits.clone()),
+			));
+		}
+
+		assert_eq!(
+			GrandpaAccountableSafety::session().unwrap().current_round,
+			3
+		);
+		GrandpaAccountableSafety::update();
+		// Didn't progress any further, since we found the equivocations
+		assert_eq!(
+			GrandpaAccountableSafety::session().unwrap().current_round,
+			3
+		);
+
+		assert_eq!(
+			GrandpaAccountableSafety::equivocations(),
+			Some(StoredEquivocations {
+				equivocations: vec![
+					Equivocation::Precommit(vec![
+						new_precommit(Alice, block_hash[1], 1, 2, set_id),
+						new_precommit(Alice, block_hash[2], 2, 2, set_id),
+					]),
+					Equivocation::Precommit(vec![
+						new_precommit(Bob, block_hash[1], 1, 2, set_id),
+						new_precommit(Bob, block_hash[2], 2, 2, set_id),
+					]),
+					Equivocation::Precommit(vec![
+						new_precommit(Alice, block_hash[1], 1, 2, set_id),
+						new_precommit(Alice, block_hash[2], 2, 2, set_id),
+					]),
+					Equivocation::Precommit(vec![
+						new_precommit(Bob, block_hash[1], 1, 2, set_id),
+						new_precommit(Bob, block_hash[2], 2, 2, set_id),
+					]),
+					Equivocation::Precommit(vec![
+						new_precommit(Alice, block_hash[1], 1, 2, set_id),
+						new_precommit(Alice, block_hash[2], 2, 2, set_id),
+					]),
+					Equivocation::Precommit(vec![
+						new_precommit(Bob, block_hash[1], 1, 2, set_id),
+						new_precommit(Bob, block_hash[2], 2, 2, set_id),
+					]),
+				],
+			}),
+		);
 	});
 }
