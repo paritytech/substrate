@@ -597,12 +597,17 @@ benchmarks! {
 
 	update_staking_limits {
 		// This function always does the same thing... just write to 4 storage items.
-	}: _(RawOrigin::Root, 1234u32.into(), 5678u32.into(), Some(100), Some(200))
-	verify {
-		assert_eq!(MinNominatorBond::<T>::get(), 1234u32.into());
-		assert_eq!(MinValidatorBond::<T>::get(), 5678u32.into());
-		assert_eq!(MaxNominatorsCount::<T>::get(), Some(100u32));
-		assert_eq!(MaxValidatorsCount::<T>::get(), Some(200u32));
+	}: _(
+		RawOrigin::Root,
+		BalanceOf::<T>::max_value(),
+		BalanceOf::<T>::max_value(),
+		Some(u32::max_value()),
+		Some(u32::max_value())
+	) verify {
+		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
+		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
+		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::max_value()));
+		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::max_value()));
 	}
 
 	chill_other {
