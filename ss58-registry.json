@@ -511,7 +511,7 @@
 			"displayName": "OriginTrail Parachain",
 			"symbols": ["TRAC"],
 			"decimals": [18],
-			"standardAccount": "ethereum",
+			"standardAccount": "secp256k1",
 			"website": "https://origintrail.io"
 		},
 		{
