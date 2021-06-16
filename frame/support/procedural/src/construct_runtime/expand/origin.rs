@@ -58,6 +58,15 @@ pub fn expand_outer_origin(
 			pallet_conversions.extend(
 				expand_origin_pallet_conversions(scrate, runtime, pallet_decl, instance, generics),
 			);
+		} else {
+			let variant_name = &pallet_decl.name;
+			let deprecation_note = format!("`{}` does not have the `Origin` part included in \
+				`construct_runtime`, perhaps you have forgotten to include it?", variant_name);
+
+			caller_variants.extend(quote! {
+				#[deprecated = #deprecation_note]
+				#variant_name,
+			});
 		}
 	}
 
@@ -156,6 +165,7 @@ pub fn expand_outer_origin(
 
 		#[derive(Clone, PartialEq, Eq, #scrate::RuntimeDebug, #scrate::codec::Encode, #scrate::codec::Decode)]
 		#[allow(non_camel_case_types)]
+		#[allow(deprecated)]
 		pub enum OriginCaller {
 			#[codec(index = #system_index)]
 			system(#system_path::Origin<#runtime>),

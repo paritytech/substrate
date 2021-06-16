@@ -43,7 +43,7 @@ pub fn expand_outer_config(
 			build_storage_calls.extend(expand_config_build_storage_call(scrate, runtime, decl, &field_name));
 		} else {
 			let deprecation_note = format!("`{}` does not have the `Config` part imported in \
-				construct_runtime, perhaps you have forgotten to include it?", pallet_name);
+				`construct_runtime`, perhaps you have forgotten to include it?", pallet_name);
 
 			types.extend(quote! {
 				#[deprecated = #deprecation_note]
