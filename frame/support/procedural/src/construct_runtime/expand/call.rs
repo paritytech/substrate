@@ -30,21 +30,25 @@ pub fn expand_outer_dispatch(
 	let mut query_call_part_macros = Vec::new();
 	let mut pallet_names = Vec::new();
 
-	let pallets_with_call = pallet_decls
-		.iter()
-		.filter(|decl| decl.exists_part("Call"));
+	for pallet_decl in pallet_decls {
+		let name = &pallet_decl.name;
 
-	for pallet_declaration in pallets_with_call {
-		let name = &pallet_declaration.name;
-		let path = &pallet_declaration.path;
-		let index = pallet_declaration.index;
+		if pallet_decl.exists_part("Call") {
+			let path = &pallet_decl.path;
+			let index = pallet_decl.index;
 
-		variant_defs.extend(quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),));
-		variant_patterns.push(quote!(Call::#name(call)));
-		pallet_names.push(name);
-		query_call_part_macros.push(quote! {
-			#path::__substrate_call_check::is_call_part_defined!(#name);
-		});
+			variant_patterns.push(quote!(Call::#name(call)));
+			variant_defs.extend(quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),));
+			pallet_names.push(name);
+			query_call_part_macros.push(quote! {
+				#path::__substrate_call_check::is_call_part_defined!(#name);
+			});
+		} else {
+			let deprecation_note = format!("`{}` does not have the `Call` part imported in \
+				`construct_runtime`, perhaps you have forgotten to include it?", name);
+
+			variant_defs.extend(quote!(#[deprecated = #deprecation_note] #name,));
+		}
 	}
 
 	quote! {
@@ -56,6 +60,7 @@ pub fn expand_outer_dispatch(
 			#scrate::codec::Decode,
 			#scrate::RuntimeDebug,
 		)]
+		#[allow(deprecated)]
 		pub enum Call {
 			#variant_defs
 		}
@@ -63,6 +68,7 @@ pub fn expand_outer_dispatch(
 			fn get_dispatch_info(&self) -> #scrate::dispatch::DispatchInfo {
 				match self {
 					#( #variant_patterns => call.get_dispatch_info(), )*
+					_ => unreachable!(),
 				}
 			}
 		}
@@ -77,6 +83,7 @@ pub fn expand_outer_dispatch(
 							#scrate::dispatch::CallMetadata { function_name, pallet_name }
 						}
 					)*
+					_ => unreachable!(),
 				}
 			}
 
@@ -119,6 +126,7 @@ pub fn expand_outer_dispatch(
 						#variant_patterns =>
 							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin),
 					)*
+					_ => unreachable!(),
 				}
 			}
 		}

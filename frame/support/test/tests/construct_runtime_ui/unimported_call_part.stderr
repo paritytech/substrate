@@ -1,0 +1,44 @@
+error[E0433]: failed to resolve: use of undeclared crate or module `system`
+  --> $DIR/unimported_call_part.rs:40:11
+   |
+40 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
+   |                 ^^^^^^ use of undeclared crate or module `system`
+
+error[E0433]: failed to resolve: use of undeclared crate or module `system`
+  --> $DIR/unimported_call_part.rs:34:1
+   |
+34 | / construct_runtime! {
+35 | |     pub enum Runtime where
+36 | |         Block = Block,
+37 | |         NodeBlock = Block,
+...  |
+42 | |     }
+43 | | }
+   | |_^ not found in `system`
+   |
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing this enum
+   |
+2  | use frame_system::RawOrigin;
+   |
+
+error: use of deprecated unit variant `Call::Pallet`: `Pallet` does not have the `Call` part imported in `construct_runtime`, perhaps you have forgotten to include it?
+  --> $DIR/unimported_call_part.rs:46:10
+   |
+46 |     let _ = Call::Pallet(pallet::Call::<Runtime>::foo());
+   |             ^^^^^^^^^^^^
+   |
+note: the lint level is defined here
+  --> $DIR/unimported_call_part.rs:1:9
+   |
+1  | #![deny(deprecated)]
+   |         ^^^^^^^^^^
+
+error[E0277]: the trait bound `Runtime: frame_system::Config` is not satisfied
+  --> $DIR/unimported_call_part.rs:32:6
+   |
+12 |     pub trait Config: frame_system::Config {}
+   |                       -------------------- required by this bound in `pallet::Config`
+...
+32 | impl pallet::Config for Runtime {}
+   |      ^^^^^^^^^^^^^^ the trait `frame_system::Config` is not implemented for `Runtime`
