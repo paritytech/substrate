@@ -137,7 +137,7 @@ pub enum State {
 		#[structopt(short, long)]
 		snapshot_path: PathBuf,
 		/// The url to connect to for fetching data not easily retrievable from the snapshot.
-		/// NOTE: This is not necessary for `on-runtime-upgrade`
+		/// NOTE: This is not used for `on-runtime-upgrade`
 		// TODO This is a temporary hack; the url is used just to get the header/block. We should try
 		// and get that out of state, OR allow the user to feed in a header/block via file.
 		// https://github.com/paritytech/substrate/issues/9027
@@ -296,7 +296,6 @@ where
 		builder.build().await?
 	};
 
-	// register externality extensions in order to provide host interface for OCW to the runtime.
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
 	ext.register_extension(OffchainDbExt::new(offchain.clone()));
