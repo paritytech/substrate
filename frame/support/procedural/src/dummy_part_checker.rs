@@ -29,6 +29,10 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 		&format!("__is_call_part_defined_{}", count),
 		proc_macro2::Span::call_site(),
 	);
+	let origin_macro_ident = syn::Ident::new(
+		&format!("__is_origin_part_defined_{}", count),
+		proc_macro2::Span::call_site(),
+	);
 
 	quote::quote!(
 		#[doc(hidden)]
@@ -84,6 +88,17 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 			}
 			#[doc(hidden)]
 			pub use #call_macro_ident as is_call_part_defined;
+		}
+
+		#[doc(hidden)]
+		pub mod __substrate_origin_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #origin_macro_ident {
+				($pallet_name:ident) => {};
+			}
+			#[doc(hidden)]
+			pub use #origin_macro_ident as is_origin_part_defined;
 		}
 	).into()
 }

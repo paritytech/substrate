@@ -29,6 +29,7 @@ mod instances;
 mod genesis_build;
 mod genesis_config;
 mod type_value;
+mod origin;
 mod validate_unsigned;
 
 use crate::pallet::{Def, parse::helper::get_doc_literals};
@@ -63,6 +64,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let genesis_build = genesis_build::expand_genesis_build(&mut def);
 	let genesis_config = genesis_config::expand_genesis_config(&mut def);
 	let type_values = type_value::expand_type_values(&mut def);
+	let origins = origin::expand_origins(&mut def);
 	let validate_unsigned = validate_unsigned::expand_validate_unsigned(&mut def);
 
 	if get_doc_literals(&def.item.attrs).is_empty() {
@@ -91,6 +93,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		#genesis_build
 		#genesis_config
 		#type_values
+		#origins
 		#validate_unsigned
 	);
 
