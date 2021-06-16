@@ -24,10 +24,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
+
 use frame_support::traits::{ChangeMembers, InitializeMembers, Contains, SortedMembers, Get};
 
-pub use pallet::*;
+pub mod migrations;
 pub mod weights;
+
+pub use pallet::*;
 pub use weights::WeightInfo;
 
 #[frame_support::pallet]
