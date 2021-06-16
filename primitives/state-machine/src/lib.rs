@@ -1102,6 +1102,7 @@ mod tests {
 		overlay.set_storage(b"abd".to_vec(), Some(b"69".to_vec()));
 		overlay.set_storage(b"bbd".to_vec(), Some(b"42".to_vec()));
 
+		let overlay_limit = overlay.clone();
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(
@@ -1111,7 +1112,7 @@ mod tests {
 				changes_trie::disabled_state::<_, u64>(),
 				None,
 			);
-			ext.clear_prefix(b"ab");
+			ext.clear_prefix(b"ab", None);
 		}
 		overlay.commit_transaction().unwrap();
 
@@ -1120,6 +1121,33 @@ mod tests {
 				.collect::<HashMap<_, _>>(),
 			map![
 				b"abc".to_vec() => None.into(),
+				b"abb".to_vec() => None.into(),
+				b"aba".to_vec() => None.into(),
+				b"abd".to_vec() => None.into(),
+
+				b"bab".to_vec() => Some(b"228".to_vec()).into(),
+				b"bbd".to_vec() => Some(b"42".to_vec()).into()
+			],
+		);
+
+		let mut overlay = overlay_limit;
+		{
+			let mut cache = StorageTransactionCache::default();
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			assert_eq!((false, 1), ext.clear_prefix(b"ab", Some(1)));
+		}
+		overlay.commit_transaction().unwrap();
+
+		assert_eq!(
+			overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned()))
+				.collect::<HashMap<_, _>>(),
+			map![
 				b"abb".to_vec() => None.into(),
 				b"aba".to_vec() => None.into(),
 				b"abd".to_vec() => None.into(),

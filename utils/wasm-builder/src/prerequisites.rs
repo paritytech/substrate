@@ -129,6 +129,10 @@ fn check_wasm_toolchain_installed(
 	let mut run_cmd = cargo_command.command();
 	run_cmd.args(&["run", "--manifest-path", &manifest_path]);
 
+	// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock
+	build_cmd.env_remove("CARGO_TARGET_DIR");
+	run_cmd.env_remove("CARGO_TARGET_DIR");
+
 	build_cmd
 		.output()
 		.map_err(|_| err_msg.clone())

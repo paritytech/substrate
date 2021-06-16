@@ -150,7 +150,13 @@ impl WasmInstance for WasmtimeInstance {
 				globals_snapshot.apply(&**instance_wrapper);
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator)
+				let result = perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator);
+
+				// Signal to the OS that we are done with the linear memory and that it can be
+				// reclaimed.
+				instance_wrapper.decommit();
+
+				result
 			}
 			Strategy::RecreateInstance(instance_creator) => {
 				let instance_wrapper = instance_creator.instantiate()?;
@@ -171,6 +177,19 @@ impl WasmInstance for WasmtimeInstance {
 			Strategy::RecreateInstance(instance_creator) => {
 				instance_creator.instantiate()?.get_global_val(name)
 			}
+		}
+	}
+
+	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
+		match &self.strategy {
+			Strategy::RecreateInstance(_) => {
+				// We do not keep the wasm instance around, therefore there is no linear memory
+				// associated with it.
+				None
+			}
+			Strategy::FastInstanceReuse {
+				instance_wrapper, ..
+			} => Some(instance_wrapper.base_ptr()),
 		}
 	}
 }
