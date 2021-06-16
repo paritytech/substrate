@@ -54,14 +54,14 @@ use frame_support::{
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing},
 	weights::{GetDispatchInfo, Weight},
 };
-use frame_system as system;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-
+pub mod migrations;
 pub mod weights;
-pub use weights::WeightInfo;
+
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -528,7 +528,7 @@ pub mod pallet {
 				let index = Self::proposal_count();
 				<ProposalCount<T, I>>::mutate(|i| *i += 1);
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
-				let end = system::Pallet::<T>::block_number() + T::MotionDuration::get();
+				let end = frame_system::Pallet::<T>::block_number() + T::MotionDuration::get();
 				let votes = Votes { index, threshold, ayes: vec![who.clone()], nays: vec![], end };
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
@@ -702,7 +702,7 @@ pub mod pallet {
 			}
 
 			// Only allow actual closing of the proposal after the voting period has ended.
-			ensure!(system::Pallet::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
+			ensure!(frame_system::Pallet::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
 			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
 
