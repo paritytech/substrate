@@ -21,9 +21,6 @@ use frame_support::{
 };
 use sp_io::hashing::twox_128;
 
-/// The old prefix.
-pub const OLD_PREFIX: &[u8] = b"Instance1Membership";
-
 /// Migrate the entire storage of this pallet to a new prefix.
 ///
 /// This new prefix must be the same as the one set in construct_runtime. For safety, use
@@ -35,8 +32,8 @@ pub fn migrate<
 	T: frame_system::Config,
 	P: GetPalletVersion,
 	N: AsRef<str>
->(new_pallet_name: N) -> Weight {
-	if new_pallet_name.as_ref().as_bytes() == OLD_PREFIX {
+>(old_pallet_name: N, new_pallet_name: N) -> Weight {
+	if new_pallet_name.as_ref() == old_pallet_name.as_ref() {
 		log::info!(
 			target: "runtime::membership",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
@@ -54,7 +51,7 @@ pub fn migrate<
 		Some(storage_version) if storage_version <= PalletVersion::new(3, 0, 0) => {
 			log::info!(target: "runtime::membership", "new prefix: {}", new_pallet_name.as_ref());
 			frame_support::storage::migration::move_pallet(
-				OLD_PREFIX,
+				old_pallet_name.as_ref().as_bytes(),
 				new_pallet_name.as_ref().as_bytes(),
 			);
 			<T as frame_system::Config>::BlockWeights::get().max_block
@@ -78,13 +75,13 @@ pub fn pre_migration<
 	T: frame_system::Config,
 	P: GetPalletVersion + 'static,
 	N: AsRef<str>,
->(new: N) {
+>(old: N, new: N) {
 	let new = new.as_ref();
 	log::info!("pre-migration membership test with new = {}", new);
 
-	// the next key must exist, and start with the hash of `OLD_PREFIX`.
-	let next_key = sp_io::storage::next_key(&twox_128(OLD_PREFIX)).unwrap();
-	assert!(next_key.starts_with(&twox_128(OLD_PREFIX)));
+	// the next key must exist, and start with the hash of old prefix.
+	let next_key = sp_io::storage::next_key(&twox_128(old.as_ref().as_bytes())).unwrap();
+	assert!(next_key.starts_with(&twox_128(old.as_ref().as_bytes())));
 
 	// The pallet version is already stored using the pallet name
 	let storage_key = PalletVersion::storage_key::<T::PalletInfo, P>().unwrap();
@@ -117,14 +114,15 @@ pub fn pre_migration<
 /// [`frame_support::traits::OnRuntimeUpgrade::post_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn post_migration<P: GetPalletVersion>() {
+pub fn post_migration<P: GetPalletVersion, N: AsRef<str>>(old_pallet_name: N) {
 	log::info!("post-migration membership");
 
+	let old_pallet_name = old_pallet_name.as_ref().as_bytes();
 	// Assert that nothing remains at the old prefix
 	assert!(
-		sp_io::storage::next_key(&twox_128(OLD_PREFIX)).map_or(
+		sp_io::storage::next_key(&twox_128(old_pallet_name)).map_or(
 			true,
-			|next_key| !next_key.starts_with(&twox_128(OLD_PREFIX))
+			|next_key| !next_key.starts_with(&twox_128(old_pallet_name))
 		)
 	);
 	// ensure we've been updated to v4 by the automatic write of crate version -> storage version.
