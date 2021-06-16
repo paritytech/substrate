@@ -29,9 +29,29 @@ mod clone_no_bound;
 mod partial_eq_no_bound;
 mod default_no_bound;
 mod key_prefix;
+mod dummy_part_checker;
 
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
+use std::cell::RefCell;
+
+thread_local! {
+	/// A global counter, can be used to generate a relatively unique identifier.
+	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
+}
+
+/// Counter to generate a relatively unique identifier for macros querying for the existence of
+/// pallet parts. This is necessary because declarative macros gets hoisted to the crate root,
+/// which shares the namespace with other pallets containing the very same query macros.
+struct Counter(u64);
+
+impl Counter {
+	fn inc(&mut self) -> u64 {
+		let ret = self.0;
+		self.0 += 1;
+		ret
+	}
+}
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 ///
@@ -452,4 +472,10 @@ pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;
 #[proc_macro]
 pub fn impl_key_prefix_for_tuples(input: TokenStream) -> TokenStream {
 	key_prefix::impl_key_prefix_for_tuples(input).unwrap_or_else(syn::Error::into_compile_error).into()
+}
+
+/// Internal macro use by frame_support to generate dummy part checker for old pallet declaration
+#[proc_macro]
+pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
+	dummy_part_checker::generate_dummy_part_checker(input)
 }

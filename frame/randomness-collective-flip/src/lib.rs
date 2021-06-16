@@ -182,7 +182,7 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			CollectiveFlip: pallet_randomness_collective_flip::{Pallet, Call, Storage},
+			CollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		}
 	);
 
