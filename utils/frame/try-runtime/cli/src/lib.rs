@@ -105,7 +105,7 @@ pub struct SharedParams {
 	pub heap_pages: Option<u64>,
 
 	/// The block hash at which to read state. This is required for execute-block, offchain-worker,
-	/// or state live with any command.
+	/// or any command that used the live subcommand.
 	#[structopt(
 		short,
 		long,
