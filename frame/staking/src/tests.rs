@@ -4107,9 +4107,9 @@ mod election_data_provider {
 	#[test]
 	fn capped_stakers_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			let validator_count = CurrentValidatorsCount::<Test>::get();
+			let validator_count = CounterForValidators::<Test>::get();
 			assert_eq!(validator_count, 3);
-			let nominator_count = CurrentNominatorsCount::<Test>::get();
+			let nominator_count = CounterForNominators::<Test>::get();
 			assert_eq!(nominator_count, 1);
 
 			// Change the maximums
