@@ -238,6 +238,7 @@ impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
+
 impl Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
@@ -282,6 +283,8 @@ pub struct ExtBuilder {
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
 	initialize_first_session: bool,
+	min_nominator_bond: Balance,
+	min_validator_bond: Balance,
 }
 
 impl Default for ExtBuilder {
@@ -296,6 +299,8 @@ impl Default for ExtBuilder {
 			invulnerables: vec![],
 			has_stakers: true,
 			initialize_first_session: true,
+			min_nominator_bond: ExistentialDeposit::get(),
+			min_validator_bond: ExistentialDeposit::get(),
 		}
 	}
 }
@@ -357,7 +362,15 @@ impl ExtBuilder {
 		OFFSET.with(|v| *v.borrow_mut() = offset);
 		self
 	}
-	pub fn build(self) -> sp_io::TestExternalities {
+	pub fn min_nominator_bond(mut self, amount: Balance) -> Self {
+		self.min_nominator_bond = amount;
+		self
+	}
+	pub fn min_validator_bond(mut self, amount: Balance) -> Self {
+		self.min_validator_bond = amount;
+		self
+	}
+	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
@@ -430,6 +443,8 @@ impl ExtBuilder {
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
 			slash_reward_fraction: Perbill::from_percent(10),
+			min_nominator_bond: self.min_nominator_bond,
+			min_validator_bond: self.min_validator_bond,
 			..Default::default()
 		}
 		.assimilate_storage(&mut storage);
@@ -473,6 +488,14 @@ fn post_conditions() {
 	check_nominators();
 	check_exposures();
 	check_ledgers();
+	check_count();
+}
+
+fn check_count() {
+	let nominator_count = Nominators::<Test>::iter().count() as u32;
+	let validator_count = Validators::<Test>::iter().count() as u32;
+	assert_eq!(nominator_count, CurrentNominatorsCount::<Test>::get());
+	assert_eq!(validator_count, CurrentValidatorsCount::<Test>::get());
 }
 
 fn check_ledgers() {
