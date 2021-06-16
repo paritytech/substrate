@@ -22,18 +22,20 @@ use std::{
 	sync::Arc,
 	collections::{HashSet, HashMap, hash_map::Entry},
 };
+use crate::SubscriptionTaskExecutor;
+use super::{StateBackend, ChildStateBackend, error::Error, client_err};
+
 use codec::Decode;
 use futures::{
-	future::{ready, Either},
+	future::{self, ready, Either},
 	channel::oneshot::{channel, Sender},
-	FutureExt, TryFutureExt,
+	FutureExt, TryFutureExt, Stream, StreamExt, TryStreamExt,
 };
 use hash_db::Hasher;
+use jsonrpsee::ws_server::SubscriptionSink;
 use jsonrpc_pubsub::SubscriptionId;
 use log::warn;
 use parking_lot::Mutex;
-use rpc::futures::{future::Future, stream::Stream};
-
 use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sc_client_api::{
@@ -50,8 +52,6 @@ use sp_core::{
 use sp_version::RuntimeVersion;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HashFor}};
 
-use super::{StateBackend, ChildStateBackend, error::Error, client_err};
-
 /// Storage data map of storage keys => (optional) storage value.
 type StorageMap = HashMap<StorageKey, Option<StorageData>>;
 
@@ -59,9 +59,9 @@ type StorageMap = HashMap<StorageKey, Option<StorageData>>;
 #[derive(Clone)]
 pub struct LightState<Block: BlockT, F: Fetcher<Block>, Client> {
 	client: Arc<Client>,
-	// subscriptions: SubscriptionManager,
-	// version_subscriptions: SimpleSubscriptions<Block::Hash, RuntimeVersion>,
-	// storage_subscriptions: Arc<Mutex<StorageSubscriptions<Block>>>,
+	executor: Arc<SubscriptionTaskExecutor>,
+	version_subscriptions: SimpleSubscriptions<Block::Hash, RuntimeVersion>,
+	storage_subscriptions: Arc<Mutex<StorageSubscriptions<Block>>>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 }
@@ -139,12 +139,19 @@ where
 	/// Create new state API backend for light nodes.
 	pub fn new(
 		client: Arc<Client>,
-		// subscriptions: SubscriptionManager,
+		executor: Arc<SubscriptionTaskExecutor>,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
 	) -> Self {
 		Self {
 			client,
+			executor,
+			version_subscriptions: Arc::new(Mutex::new(HashMap::new())),
+			storage_subscriptions: Arc::new(Mutex::new(StorageSubscriptions {
+				active_requests: HashMap::new(),
+				keys_by_subscription: HashMap::new(),
+				subscriptions_by_key: HashMap::new(),
+			})),
 			remote_blockchain,
 			fetcher,
 		}
@@ -294,6 +301,47 @@ where
 		_storage_keys: Option<String>,
 	) -> Result<sp_rpc::tracing::TraceBlockResponse, Error> {
 		Err(client_err(ClientError::NotAvailableOnLightClient))
+	}
+
+	fn subscribe_runtime_version(
+		&self,
+		mut sink: SubscriptionSink,
+	) -> Result<(), Error> {
+		let executor = self.executor.clone();
+		let fetcher = self.fetcher.clone();
+		let remote_blockchain = self.remote_blockchain.clone();
+		let initial_block = self.block_or_best(None);
+
+		let stream = self.client.import_notification_stream().map(|notif| Ok::<_, ()>(notif.hash));
+
+		let fut = async move {
+			let mut old_version: Result<RuntimeVersion, ()> = display_error(runtime_version(&*remote_blockchain, fetcher.clone(), initial_block)).await;
+
+			// TODO(niklasad1): use shared requests here.
+			stream
+				.and_then(|block| display_error(runtime_version(&*remote_blockchain, fetcher.clone(), block)))
+				.filter(|version| {
+					let is_new_version = &old_version != version;
+					old_version = version.clone();
+					future::ready(is_new_version)
+				})
+				.for_each(|version| {
+					let _ = sink.send(&version);
+					future::ready(())
+				})
+				.await
+		}.boxed();
+
+		executor.execute_new(fut);
+		Ok(())
+	}
+
+	fn subscribe_storage(
+		&self,
+		sink: SubscriptionSink,
+		keys: Option<Vec<StorageKey>>,
+	) -> Result<(), Error> {
+		todo!();
 	}
 }
 
@@ -447,66 +495,6 @@ fn storage<Block: BlockT, F: Fetcher<Block>>(
 			))),
 			Err(error) => Either::Right(ready(Err(error))),
 		})
-}
-
-/// Returns subscription stream that issues request on every imported block and
-/// if value has changed from previous block, emits (stream) item.
-fn subscription_stream<
-	Block,
-	Requests,
-	FutureBlocksStream,
-	V, N,
-	InitialRequestFuture,
-	IssueRequest, IssueRequestFuture,
-	CompareValues,
->(
-	shared_requests: Requests,
-	future_blocks_stream: FutureBlocksStream,
-	initial_request: InitialRequestFuture,
-	issue_request: IssueRequest,
-	compare_values: CompareValues,
-) -> impl Stream<Item=N, Error=()> where
-	Block: BlockT,
-	Requests: 'static + SharedRequests<Block::Hash, V>,
-	FutureBlocksStream: Stream<Item=Block::Hash, Error=()>,
-	V: Send + 'static + Clone,
-	InitialRequestFuture: std::future::Future<Output = Result<(Block::Hash, V), ()>> + Send + 'static,
-	IssueRequest: 'static + Fn(Block::Hash) -> IssueRequestFuture,
-	IssueRequestFuture: std::future::Future<Output = Result<V, Error>> + Send + 'static,
-	CompareValues: Fn(Block::Hash, Option<&V>, &V) -> Option<N>,
-{
-	// we need to send initial value first, then we'll only be sending if value has changed
-	let previous_value = Arc::new(Mutex::new(None));
-
-	// prepare 'stream' of initial values
-	let initial_value_stream = ignore_error(initial_request)
-		.boxed()
-		.compat()
-		.into_stream();
-
-	// prepare stream of future values
-	//
-	// we do not want to stop stream if single request fails
-	// (the warning should have been already issued by the request issuer)
-	let future_values_stream = future_blocks_stream
-		.and_then(move |block| ignore_error(maybe_share_remote_request::<Block, _, _, _, _>(
-			shared_requests.clone(),
-			block,
-			&issue_request,
-		).map(move |r| r.map(|v| (block, v)))).boxed().compat());
-
-	// now let's return changed values for selected blocks
-	initial_value_stream
-		.chain(future_values_stream)
-		.filter_map(move |block_and_new_value| block_and_new_value.and_then(|(block, new_value)| {
-			let mut previous_value = previous_value.lock();
-			compare_values(block, previous_value.as_ref(), &new_value)
-				.map(|notification_value| {
-						*previous_value = Some(new_value);
-						notification_value
-				})
-		}))
-		.map_err(|_| ())
 }
 
 /// Request some data from remote node, probably reusing response from already

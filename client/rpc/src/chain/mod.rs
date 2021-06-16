@@ -29,7 +29,7 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use futures::{future, FutureExt, StreamExt};
+use futures::FutureExt;
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpsee::{RpcModule, ws_server::SubscriptionSink};
 use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
@@ -179,16 +179,16 @@ where
 			chain.finalized_head().map_err(rpc_err)
 		})?;
 
-		rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads", |_params, mut sink, ctx| {
+		rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads", |_params, sink, ctx| {
 			ctx.backend.subscribe_all_heads(sink).map_err(Into::into)
 		})?;
 
 		// TODO(niklasad1): aliases for method names.
-		rpc_module.register_subscription("chain_subscribeNewHead", "chain_unsubscribeNewHead", |_params, mut sink, ctx| {
+		rpc_module.register_subscription("chain_subscribeNewHead", "chain_unsubscribeNewHead", |_params, sink, ctx| {
 			ctx.backend.subscribe_new_heads(sink).map_err(Into::into)
 		})?;
 
-		rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads", |_params, mut sink, ctx| {
+		rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads", |_params, sink, ctx| {
 			ctx.backend.subscribe_finalized_heads(sink).map_err(Into::into)
 		})?;
 
