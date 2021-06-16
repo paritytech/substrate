@@ -261,19 +261,19 @@ pub fn testnet_genesis(
 	const STASH: Balance = ENDOWMENT / 1000;
 
 	GenesisConfig {
-		frame_system: SystemConfig {
+		system: SystemConfig {
 			code: wasm_binary_unwrap().to_vec(),
 			changes_trie_config: Default::default(),
 		},
-		pallet_balances: BalancesConfig {
+		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned()
 				.map(|x| (x, ENDOWMENT))
 				.collect()
 		},
-		pallet_indices: IndicesConfig {
+		indices: IndicesConfig {
 			indices: vec![],
 		},
-		pallet_session: SessionConfig {
+		session: SessionConfig {
 			keys: initial_authorities.iter().map(|x| {
 				(x.0.clone(), x.0.clone(), session_keys(
 					x.2.clone(),
@@ -283,7 +283,7 @@ pub fn testnet_genesis(
 				))
 			}).collect::<Vec<_>>(),
 		},
-		pallet_staking: StakingConfig {
+		staking: StakingConfig {
 			validator_count: initial_authorities.len() as u32,
 			minimum_validator_count: initial_authorities.len() as u32,
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
@@ -291,41 +291,41 @@ pub fn testnet_genesis(
 			stakers,
 			.. Default::default()
 		},
-		pallet_democracy: DemocracyConfig::default(),
-		pallet_elections_phragmen: ElectionsConfig {
+		democracy: DemocracyConfig::default(),
+		elections: ElectionsConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
 						.cloned()
 						.map(|member| (member, STASH))
 						.collect(),
 		},
-		pallet_collective_Instance1: CouncilConfig::default(),
-		pallet_collective_Instance2: TechnicalCommitteeConfig {
+		council: CouncilConfig::default(),
+		technical_committee: TechnicalCommitteeConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
 						.cloned()
 						.collect(),
 			phantom: Default::default(),
 		},
-		pallet_sudo: SudoConfig {
+		sudo: SudoConfig {
 			key: root_key,
 		},
-		pallet_babe: BabeConfig {
+		babe: BabeConfig {
 			authorities: vec![],
 			epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),
 		},
-		pallet_im_online: ImOnlineConfig {
+		im_online: ImOnlineConfig {
 			keys: vec![],
 		},
-		pallet_authority_discovery: AuthorityDiscoveryConfig {
+		authority_discovery: AuthorityDiscoveryConfig {
 			keys: vec![],
 		},
-		pallet_grandpa: GrandpaConfig {
+		grandpa: GrandpaConfig {
 			authorities: vec![],
 		},
-		pallet_membership_Instance1: Default::default(),
-		pallet_treasury: Default::default(),
-		pallet_society: SocietyConfig {
+		technical_membership: Default::default(),
+		treasury: Default::default(),
+		society: SocietyConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
 						.cloned()
@@ -333,9 +333,9 @@ pub fn testnet_genesis(
 			pot: 0,
 			max_members: 999,
 		},
-		pallet_vesting: Default::default(),
-		pallet_gilt: Default::default(),
-		pallet_transaction_storage: Default::default(),
+		vesting: Default::default(),
+		gilt: Default::default(),
+		transaction_storage: Default::default(),
 	}
 }
 

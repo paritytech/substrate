@@ -124,12 +124,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
 	}
 
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
+	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
-		child_info: &ChildInfo,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
 		f: F,
 	) {
-		self.essence.apply_to_child_keys_while(child_info, f)
+		self.essence.apply_to_keys_while(child_info, prefix, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
