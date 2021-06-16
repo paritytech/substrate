@@ -41,5 +41,5 @@ std = [
 ]
 try-runtime = ["frame-support/try-runtime"]
 # WARNING: CI only execute pallet test with this feature,
-# if the feature intended to be used outside, CI and this message needs to be updated.
+# if the feature intended to be used outside, CI and this message need to be updated.
 conditional-storage = []
