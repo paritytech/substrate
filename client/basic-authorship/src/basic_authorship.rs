@@ -253,6 +253,7 @@ impl<A, B, Block, C, PR> sp_consensus::Proposer<Block> for
 		spawn_handle.spawn_blocking("basic-authorship-proposer", Box::pin(async move {
 			// leave some time for evaluation and block finalization (33%)
 			let deadline = (self.now)() + max_duration - max_duration / 3;
+			info!("max_duration: {:?}, now: {:?}, deadline: {:?}", max_duration, (self.now)(), deadline);
 			let res = self.propose_with(
 				inherent_data,
 				inherent_digests,
