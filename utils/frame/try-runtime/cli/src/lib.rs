@@ -57,10 +57,6 @@ pub struct OnRuntimeUpgradeCmd {
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct OffchainWorkerCmd {
-	/// Hash of the block whose header to use to execute the offchain worker.
-	#[structopt(short, long, multiple = false, parse(try_from_str = parse::hash))]
-	pub header_at: String,
-
 	#[structopt(subcommand)]
 	pub state: State,
 
@@ -72,10 +68,6 @@ pub struct OffchainWorkerCmd {
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct ExecuteBlockCmd {
-	/// Hash of the block whose header to use to execute the offchain worker.
-	/// NOTE: `--header-at` is a required option for `snap`, but not `live`
-	#[structopt(short, long, multiple = false, parse(try_from_str = parse::hash))]
-	pub header_at: Option<String>,
 	#[structopt(subcommand)]
 	pub state: State,
 }
@@ -111,6 +103,19 @@ pub struct SharedParams {
 	/// sc_service::Configuration.default_heap_pages.
 	#[structopt(long)]
 	pub heap_pages: Option<u64>,
+
+	/// The block hash at which to read state. This is required for execute-block, offchain-worker,
+	/// or state live with any command.
+	#[structopt(
+		short,
+		long,
+		multiple = false,
+		parse(try_from_str = parse::hash),
+		required_ifs(
+			&[("command", "offchain-worker"), ("command", "execute-block"), ("subcommand", "live")]
+		)
+	)]
+	pub block_at: String,
 }
 
 /// Various commands to try out against runtime state at a specific block.
@@ -145,11 +150,6 @@ pub enum State {
 		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
 		#[structopt(short, long)]
 		snapshot_path: Option<PathBuf>,
-
-		/// The block hash at which to connect.
-		/// Will be latest finalized head if not provided.
-		#[structopt(short, long, multiple = false, parse(try_from_str = parse::hash))]
-		block_at: Option<String>,
 
 		/// The modules to scrape. If empty, entire chain state will be scraped.
 		#[structopt(short, long, require_delimiter = true)]
@@ -196,14 +196,12 @@ where
 			State::Live {
 				url,
 				snapshot_path,
-				block_at,
 				modules
 			} => Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
 				transport: url.to_owned().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
-				at: block_at.as_ref()
-					.map(|b| b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))).transpose()?,
+				at: Some(shared.block_at.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?),
 				..Default::default()
 			})),
 		};
@@ -269,15 +267,14 @@ where
 			State::Live {
 				url,
 				snapshot_path,
-				block_at,
 				modules
 			} => {
+				let at = shared.block_at.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?;
 				let online_config = OnlineConfig {
 					transport: url.to_owned().into(),
 					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 					modules: modules.to_owned().unwrap_or_default(),
-					at: block_at.as_ref()
-						.map(|b| b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))).transpose()?,
+					at: Some(at),
 					..Default::default()
 				};
 
@@ -307,7 +304,7 @@ where
 	ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
-	let header_hash: Block::Hash = command.header_at
+	let header_hash: Block::Hash = shared.block_at
 		.parse()
 		.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
 	let header = rpc_api::get_header::<Block, _>(url, header_hash).await?;
@@ -359,9 +356,7 @@ where
 
 	let (mode, block) = match command.state {
 		State::Snap{ snapshot_path, url } => {
-			// `--header-at` is a required option for `snap`
-			let header_hash: Block::Hash = command.header_at
-				.expect("`--header-at` is a required option for `execute-block snap`.")
+			let header_hash: Block::Hash = shared.block_at
 				.parse()
 				.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
 			let block: Block = rpc_api::get_block::<Block, _>(url.clone(), header_hash).await?;
@@ -372,9 +367,8 @@ where
 
 			(mode, block)
 		},
-		State::Live { url, snapshot_path, block_at, modules } => {
-			let block_hash: Block::Hash = block_at
-				.ok_or("execute-block requires `block_at` option")?
+		State::Live { url, snapshot_path, modules } => {
+			let block_hash: Block::Hash = shared.block_at
 				.parse()
 				.map_err(|e| format!("Could not parse hash: {:?}", e))?;
 
