@@ -245,7 +245,7 @@ where
 	/// Remove all value of the storage.
 	pub fn remove_all() {
 		CounterFor::<Prefix>::set(0u32);
-		<Self as Helper>::Map::remove_all()
+		<Self as Helper>::Map::remove_all(None);
 	}
 
 	/// Iter over all value of the storage.
