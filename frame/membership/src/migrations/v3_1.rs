@@ -103,7 +103,6 @@ pub fn pre_migration<
 			&sp_io::storage::next_key(&twox_128(new.as_bytes())).unwrap()
 		),
 	);
-	// ensure storage version is 3.
 	assert_eq!(
 		<P as GetPalletVersion>::storage_version(),
 		Some(PalletVersion::new(3, 0, 0)),
@@ -125,7 +124,6 @@ pub fn post_migration<P: GetPalletVersion, N: AsRef<str>>(old_pallet_name: N) {
 			|next_key| !next_key.starts_with(&twox_128(old_pallet_name))
 		)
 	);
-	// ensure we've been updated to v4 by the automatic write of crate version -> storage version.
 	assert_eq!(
 		<P as GetPalletVersion>::storage_version(),
 		Some(PalletVersion::new(3, 1, 0)),
