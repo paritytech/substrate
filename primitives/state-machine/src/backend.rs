@@ -93,11 +93,12 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		key: &[u8]
 	) -> Result<Option<StorageKey>, Self::Error>;
 
-	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
+	/// Retrieve all entries keys of storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
+	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
-		child_info: &ChildInfo,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
 		f: F,
 	);
 
