@@ -167,35 +167,10 @@ impl ChainInfo for NodeTemplateChainInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use test_runner::NodeConfig;
-	use log::LevelFilter;
 
 	#[test]
 	fn test_runner() {
-		let config = NodeConfig {
-			log_targets: vec![
-				("yamux", LevelFilter::Off),
-				("multistream_select", LevelFilter::Off),
-				("libp2p", LevelFilter::Off),
-				("jsonrpc_client_transports", LevelFilter::Off),
-				("sc_network", LevelFilter::Off),
-				("tokio_reactor", LevelFilter::Off),
-				("parity-db", LevelFilter::Off),
-				("sub-libp2p", LevelFilter::Off),
-				("sync", LevelFilter::Off),
-				("peerset", LevelFilter::Off),
-				("ws", LevelFilter::Off),
-				("sc_network", LevelFilter::Off),
-				("sc_service", LevelFilter::Off),
-				("sc_basic_authorship", LevelFilter::Off),
-				("telemetry-logger", LevelFilter::Off),
-				("sc_peerset", LevelFilter::Off),
-				("rpc", LevelFilter::Off),
-				("runtime", LevelFilter::Trace),
-				("babe", LevelFilter::Debug)
-			],
-		};
-		let mut node = Node::<NodeTemplateChainInfo>::new(config).unwrap();
+		let mut node = Node::<NodeTemplateChainInfo>::new().unwrap();
 		// seals blocks
 		node.seal_blocks(1);
 		// submit extrinsics

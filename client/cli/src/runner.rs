@@ -160,22 +160,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
 	/// ```
 	fn print_node_infos(&self) {
-		info!("{}", C::impl_name());
-		info!("✌️  version {}", C::impl_version());
-		info!(
-			"❤️  by {}, {}-{}",
-			C::author(),
-			C::copyright_start_year(),
-			Local::today().year(),
-		);
-		info!("📋 Chain specification: {}", self.config.chain_spec.name());
-		info!("🏷 Node name: {}", self.config.network.node_name);
-		info!("👤 Role: {}", self.config.display_role());
-		info!("💾 Database: {} at {}",
-			self.config.database,
-			self.config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
-		);
-		info!("⛓  Native runtime: {}", C::native_runtime_version(&self.config.chain_spec));
+		print_node_infos::<C>(self.config())
 	}
 
 	/// A helper function that runs a node with tokio and stops if the process receives the signal
@@ -229,3 +214,24 @@ impl<C: SubstrateCli> Runner<C> {
 		&mut self.config
 	}
 }
+
+/// Log information about the node itself.
+pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
+	info!("{}", C::impl_name());
+	info!("✌️  version {}", C::impl_version());
+	info!(
+		"❤️  by {}, {}-{}",
+		C::author(),
+		C::copyright_start_year(),
+		Local::today().year(),
+	);
+	info!("📋 Chain specification: {}", config.chain_spec.name());
+	info!("🏷 Node name: {}", config.network.node_name);
+	info!("👤 Role: {}", config.display_role());
+	info!("💾 Database: {} at {}",
+		  config.database,
+		  config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
+	);
+	info!("⛓  Native runtime: {}", C::native_runtime_version(&config.chain_spec));
+}
+

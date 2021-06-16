@@ -43,8 +43,8 @@ use sp_state_machine::Ext;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_transaction_pool::TransactionPool;
 
-use crate::{ChainInfo, utils::logger};
-use log::LevelFilter;
+use crate::ChainInfo;
+use manual_seal::rpc::{ManualSeal, ManualSealApi};
 
 /// This holds a reference to a running node on another thread,
 /// the node process is dropped when this struct is dropped
@@ -52,8 +52,6 @@ use log::LevelFilter;
 pub struct Node<T: ChainInfo> {
 	/// rpc handler for communicating with the node over rpc.
 	rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
-	/// Stream of log lines
-	log_stream: mpsc::UnboundedReceiver<String>,
 	/// node tokio runtime
 	_runtime: tokio::runtime::Runtime,
 	/// handle to the running node.
@@ -80,17 +78,11 @@ pub struct Node<T: ChainInfo> {
 	initial_block_number: NumberFor<T::Block>
 }
 
-/// Configuration options for the node.
-pub struct NodeConfig {
-	/// A set of log targets you'd like to enable/disbale
-	pub log_targets: Vec<(&'static str, LevelFilter)>,
-}
-
 type EventRecord<T> = frame_system::EventRecord<<T as frame_system::Config>::Event, <T as frame_system::Config>::Hash>;
 
 impl<T: ChainInfo> Node<T> {
 	/// Starts a node with the manual-seal authorship.
-	pub fn new(node_config: NodeConfig) -> Result<Self, sc_service::Error>
+	pub fn new() -> Result<Self, sc_service::Error>
 	where
 		<T::RuntimeApi as ConstructRuntimeApi<T::Block, TFullClient<T::Block, T::RuntimeApi, T::Executor>>>::RuntimeApi:
 			Core<T::Block>
@@ -101,7 +93,6 @@ impl<T: ChainInfo> Node<T> {
 				+ BlockBuilder<T::Block>
 				+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>,
 	{
-		let NodeConfig { log_targets, } = node_config;
 		let tokio_runtime = build_runtime().unwrap();
 		let runtime_handle = tokio_runtime.handle().clone();
 		let task_executor = move |fut, task_type| match task_type {
@@ -110,10 +101,6 @@ impl<T: ChainInfo> Node<T> {
 				.spawn_blocking(move || futures::executor::block_on(fut))
 				.map(drop),
 		};
-		// unbounded logs, should be fine, test is shortlived.
-		let (log_sink, log_stream) = mpsc::unbounded();
-
-		logger(log_targets, tokio_runtime.handle().clone(), log_sink);
 		let config = T::config(task_executor.into());
 
 		let (
@@ -169,6 +156,7 @@ impl<T: ChainInfo> Node<T> {
 
 		// Channel for the rpc handler to communicate with the authorship task.
 		let (command_sink, commands_stream) = mpsc::channel(10);
+		let rpc_sink = command_sink.clone();
 
 		let rpc_handlers = {
 			let params = SpawnTasksParams {
@@ -179,7 +167,13 @@ impl<T: ChainInfo> Node<T> {
 				keystore,
 				on_demand: None,
 				transaction_pool: transaction_pool.clone(),
-				rpc_extensions_builder: Box::new(move |_, _| jsonrpc_core::IoHandler::default()),
+				rpc_extensions_builder: Box::new(move |_, _| {
+					let mut io = jsonrpc_core::IoHandler::default();
+					io.extend_with(
+						ManualSealApi::to_delegate(ManualSeal::new(rpc_sink.clone()))
+					);
+					io
+				}),
 				remote_blockchain: None,
 				network,
 				system_rpc_tx,
@@ -216,7 +210,6 @@ impl<T: ChainInfo> Node<T> {
 			client,
 			pool: transaction_pool,
 			backend,
-			log_stream,
 			manual_seal_command_sink: command_sink,
 			initial_block_number: initial_number,
 		})
@@ -306,21 +299,6 @@ impl<T: ChainInfo> Node<T> {
 		self.with_state(|| frame_system::Pallet::<T::Runtime>::events())
 	}
 
-	/// Checks the node logs for a specific entry.
-	pub fn assert_log_line(&mut self, content: &str) {
-		futures::executor::block_on(async {
-			use futures::StreamExt;
-
-			while let Some(log_line) = self.log_stream.next().await {
-				if log_line.contains(content) {
-					return;
-				}
-			}
-
-			panic!("Could not find {} in logs content", content);
-		});
-	}
-
 	/// Instructs manual seal to seal new, possibly empty blocks.
 	pub fn seal_blocks(&mut self, num: usize) {
 		let (tokio, sink) = (&mut self._runtime, &mut self.manual_seal_command_sink);
@@ -360,6 +338,18 @@ impl<T: ChainInfo> Node<T> {
 		}
 	}
 
+	/// so you've decided to run the test runner as a binary, use this to shutdown gracefully.
+	pub async fn until_shutdown(&mut self) {
+		if let Some(mut task_manager) = self._task_manager.take() {
+			let task = task_manager.future().fuse();
+			let signal = tokio::signal::ctrl_c();
+			futures::pin_mut!(signal);
+			futures::future::select(task, signal).await;
+			// we don't really care whichever comes first.
+			task_manager.clean_shutdown().await
+		}
+	}
+
 	/// Performs a runtime upgrade given a wasm blob.
 	pub fn upgrade_runtime(&mut self, wasm: Vec<u8>)
 		where
@@ -373,10 +363,5 @@ impl<T: ChainInfo> Node<T> {
 impl<T: ChainInfo> Drop for Node<T> {
 	fn drop(&mut self) {
 		self.clean();
-
-		if let Some(mut task_manager) = self._task_manager.take() {
-			// if this isn't called the node will live forever
-			task_manager.terminate()
-		}
 	}
 }
