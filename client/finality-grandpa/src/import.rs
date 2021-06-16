@@ -104,9 +104,12 @@ where
 				pending_change.effective_number() <= chain_info.best_number
 			{
 				let effective_block_hash = if !pending_change.delay.is_zero() {
-					self.select_chain.finality_target(
-						pending_change.canon_hash,
-						Some(pending_change.effective_number()),
+					// FIXME: make it async
+					futures::executor::block_on(
+						self.select_chain.finality_target(
+							pending_change.canon_hash,
+							Some(pending_change.effective_number()),
+						)
 					)
 				} else {
 					Ok(Some(pending_change.canon_hash))
