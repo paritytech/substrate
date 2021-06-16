@@ -75,7 +75,7 @@ pub(crate) fn multi_phase_events() -> Vec<super::Event<Runtime>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::multi_phase(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let Event::MultiPhase(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>()
 }
 

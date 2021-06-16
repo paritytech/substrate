@@ -23,42 +23,41 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use finality_grandpa::{
+	round::State as RoundState, voter, voter_set::VoterSet, BlockNumberOps, Error as GrandpaError,
+};
 use futures::prelude::*;
 use futures_timer::Delay;
 use log::{debug, warn};
 use parity_scale_codec::{Decode, Encode};
 use parking_lot::RwLock;
+use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
 
-use sc_client_api::{backend::{Backend, apply_aux}, utils::is_descendent_of};
-use finality_grandpa::{
-	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
-};
-use sp_blockchain::HeaderMetadata;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero,
+use sc_client_api::{
+	backend::{apply_aux, Backend},
+	utils::is_descendent_of,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sp_blockchain::HeaderMetadata;
+use sp_consensus::SelectChain;
+use sp_finality_grandpa::{
+	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GrandpaApi, RoundNumber,
+	SetId, GRANDPA_ENGINE_ID,
+};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use crate::{
-	local_authority_id, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
+	authorities::{AuthoritySet, SharedAuthoritySet},
+	communication::Network as NetworkT,
+	justification::GrandpaJustification,
+	local_authority_id,
+	notification::GrandpaJustificationSender,
+	until_imported::UntilVoteTargetImported,
+	voting_rule::VotingRule,
+	ClientForGrandpa, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, VoterCommand,
 };
-
-use sp_consensus::SelectChain;
-
-use crate::authorities::{AuthoritySet, SharedAuthoritySet};
-use crate::communication::Network as NetworkT;
-use crate::notification::GrandpaJustificationSender;
-use crate::justification::GrandpaJustification;
-use crate::until_imported::UntilVoteTargetImported;
-use crate::voting_rule::VotingRule;
-use sp_finality_grandpa::{
-	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GRANDPA_ENGINE_ID,
-	GrandpaApi, RoundNumber, SetId,
-};
-use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -480,10 +479,10 @@ impl<BE, Block, C, N, SC, VR> Environment<BE, Block, C, N, SC, VR>
 where
 	Block: BlockT,
 	BE: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, BE>,
+	C: ClientForGrandpa<Block, BE>,
 	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block>,
-	SC: SelectChain<Block> + 'static,
+	SC: SelectChain<Block>,
 {
 	/// Report the given equivocation to the GRANDPA runtime module. This method
 	/// generates a session membership proof of the offender and then submits an
@@ -578,23 +577,25 @@ where
 	}
 }
 
-impl<BE, Block: BlockT, C, N, SC, VR>
-	finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<BE, Block, C, N, SC, VR>
+impl<BE, Block, C, N, SC, VR> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
+	for Environment<BE, Block, C, N, SC, VR>
 where
-	Block: 'static,
+	Block: BlockT,
 	BE: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, BE>,
-	N: NetworkT<Block> + 'static + Send,
-	SC: SelectChain<Block> + 'static,
+	C: ClientForGrandpa<Block, BE>,
+	N: NetworkT<Block>,
+	SC: SelectChain<Block>,
 	VR: VotingRule<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+	fn ancestry(
+		&self,
+		base: Block::Hash,
+		block: Block::Hash,
+	) -> Result<Vec<Block::Hash>, GrandpaError> {
 		ancestry(&self.client, base, block)
 	}
 }
-
 
 pub(crate) fn ancestry<Block: BlockT, Client>(
 	client: &Arc<Client>,
@@ -624,27 +625,31 @@ where
 
 	// skip one because our ancestry is meant to start from the parent of `block`,
 	// and `tree_route` includes it.
-	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
+	Ok(tree_route
+		.retracted()
+		.iter()
+		.skip(1)
+		.map(|e| e.hash)
+		.collect())
 }
 
-impl<B, Block: BlockT, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
+impl<B, Block, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
 	for Environment<B, Block, C, N, SC, VR>
 where
-	Block: 'static,
+	Block: BlockT,
 	B: Backend<Block>,
-	C: crate::ClientForGrandpa<Block, B> + 'static,
+	C: ClientForGrandpa<Block, B> + 'static,
 	C::Api: GrandpaApi<Block>,
-	N: NetworkT<Block> + 'static + Send + Sync,
-	SC: SelectChain<Block> + 'static,
+	N: NetworkT<Block>,
+	SC: SelectChain<Block>,
 	VR: VotingRule<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + Sync>>;
+	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type BestChain = Pin<
 		Box<
 			dyn Future<Output = Result<Option<(Block::Hash, NumberFor<Block>)>, Self::Error>>
-				+ Send
-				+ Sync
+				+ Send,
 		>,
 	>;
 
@@ -652,13 +657,29 @@ where
 	type Signature = AuthoritySignature;
 
 	// regular round message streams
-	type In = Pin<Box<dyn Stream<
-		Item = Result<::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>, Self::Error>
-	> + Send + Sync>>;
-	type Out = Pin<Box<dyn Sink<
-		::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
-		Error = Self::Error,
-	> + Send + Sync>>;
+	type In = Pin<
+		Box<
+			dyn Stream<
+					Item = Result<
+						::finality_grandpa::SignedMessage<
+							Block::Hash,
+							NumberFor<Block>,
+							Self::Signature,
+							Self::Id,
+						>,
+						Self::Error,
+					>,
+				> + Send,
+		>,
+	>;
+	type Out = Pin<
+		Box<
+			dyn Sink<
+					::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
+					Error = Self::Error,
+				> + Send,
+		>,
+	>;
 
 	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
 
@@ -1223,7 +1244,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 where
 	Block: BlockT,
 	BE: Backend<Block>,
-	Client: crate::ClientForGrandpa<Block, BE>,
+	Client: ClientForGrandpa<Block, BE>,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number

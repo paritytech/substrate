@@ -138,7 +138,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(50_000_000)]
-		pub(super) fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResult {
+		pub fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
@@ -169,7 +169,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(70_000_000)]
-		pub(super) fn clear_name(origin: OriginFor<T>) -> DispatchResult {
+		pub fn clear_name(origin: OriginFor<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			let deposit = <NameOf<T>>::take(&sender).ok_or(Error::<T>::Unnamed)?.1;
@@ -195,7 +195,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(70_000_000)]
-		pub(super) fn kill_name(
+		pub fn kill_name(
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source
 		) -> DispatchResult {
@@ -225,7 +225,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(70_000_000)]
-		pub(super) fn force_name(
+		pub fn force_name(
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source,
 			name: Vec<u8>
