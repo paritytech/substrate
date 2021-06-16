@@ -375,8 +375,8 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		key_prefix: &StorageKey
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
-	/// Given a `BlockId` and a key prefix and a chidl storage key,
-	/// return a `KeyIterator` iterates matching storage keys in that block.
+	/// Given a `BlockId` and a key `prefix` and a child storage key,
+	/// return a `KeyIterator` that iterates matching storage keys in that block.
 	fn child_storage_keys_iter<'a>(
 		&self,
 		id: &BlockId<Block>,
