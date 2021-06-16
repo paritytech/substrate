@@ -17,8 +17,8 @@ use frame_metadata::{
 };
 use max_encoded_len::MaxEncodedLen;
 
-/// A wrapper around a `StorageMap` and a `StorageValue<u32>` to keep track of how many items are in
-/// a map, without needing to iterate all the values.
+/// A wrapper around a `StorageMap` and a `StorageValue<Value=u32>` to keep track of how many items
+/// are in a map, without needing to iterate all the values.
 ///
 /// This storage item has additional storage read and write overhead when manipulating values
 /// compared to a regular storage map.
@@ -29,8 +29,6 @@ use max_encoded_len::MaxEncodedLen;
 ///
 /// Whenever the counter needs to be updated, an additional read and write occurs to update that
 /// counter.
-///
-/// The storage prefix for the storage value is the given prefix concatenated with `"Counter"`.
 pub struct CountedStorageMap<
 	Prefix, Hasher, Key, Value, QueryKind=OptionQuery, OnEmpty=GetDefault, MaxValues=GetDefault,
 >(
