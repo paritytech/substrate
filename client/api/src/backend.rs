@@ -293,7 +293,7 @@ impl <'a, State, Block> KeyIterator<'a, State, Block> {
 		}
 	}
 
-	/// create a KeyIterator instance for a child storage
+	/// Create a `KeyIterator` instance for a child storage.
 	pub fn new_child(
 		state: State,
 		child_info: ChildInfo,
