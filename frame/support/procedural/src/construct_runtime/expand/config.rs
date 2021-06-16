@@ -31,15 +31,24 @@ pub fn expand_outer_config(
 	let mut build_storage_calls = TokenStream::new();
 
 	for decl in pallet_decls {
+		let config = format_ident!("{}Config", decl.name);
+		let pallet_name = &decl.name;
+		let field_name = &Ident::new(&pallet_name.to_string().to_snake_case(), decl.name.span());
+
 		if let Some(pallet_entry) = decl.find_part("Config") {
-			let config = format_ident!("{}Config", decl.name);
-			let pallet_name = &decl.name.to_string().to_snake_case();
-			let field_name = &Ident::new(pallet_name, decl.name.span());
 			let part_is_generic = !pallet_entry.generics.params.is_empty();
 
 			types.extend(expand_config_types(runtime, decl, &config, part_is_generic));
 			fields.extend(quote!(pub #field_name: #config,));
 			build_storage_calls.extend(expand_config_build_storage_call(scrate, runtime, decl, &field_name));
+		} else {
+			let deprecation_note = format!("`{}` does not have the `Config` part imported in \
+				construct_runtime, perhaps you have forgotten to include it?", pallet_name);
+
+			types.extend(quote! {
+				#[deprecated = #deprecation_note]
+				pub struct #config;
+			});
 		}
 	}
 
