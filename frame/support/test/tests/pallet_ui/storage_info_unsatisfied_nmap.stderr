@@ -1,9 +1,5 @@
-error[E0277]: the trait bound `Bar: MaxEncodedLen` is not satisfied
-  --> $DIR/storage_info_unsatisfied_nmap.rs:10:12
+error: Temporarily disabled due to test flakiness
+  --> $DIR/storage_info_unsatisfied_nmap.rs:27:2
    |
-10 |     #[pallet::generate_storage_info]
-   |               ^^^^^^^^^^^^^^^^^^^^^ the trait `MaxEncodedLen` is not implemented for `Bar`
-   |
-   = note: required because of the requirements on the impl of `KeyGeneratorMaxEncodedLen` for `NMapKey<frame_support::Twox64Concat, Bar>`
-   = note: required because of the requirements on the impl of `StorageInfoTrait` for `frame_support::pallet_prelude::StorageNMap<_GeneratedPrefixForStorageFoo<T>, NMapKey<frame_support::Twox64Concat, Bar>, u32>`
-   = note: required by `storage_info`
+27 |     compile_error!("Temporarily disabled due to test flakiness");
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
