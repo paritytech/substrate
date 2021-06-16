@@ -99,10 +99,10 @@ pub struct RunCmd {
 	#[structopt(long = "unsafe-ws-external")]
 	pub unsafe_ws_external: bool,
 
-	/// Override the the maximum payload of RPC server (both http and ws) request and response, in
-	/// megabytes. Default is 15MiB if unset.
+	/// Set the the maximum RPC payload size for both requests and responses (both http and ws), in
+	/// megabytes. Default is 15MiB.
 	#[structopt(long = "rpc-max-payload")]
-	pub rpc_max_payload_override: Option<usize>,
+	pub rpc_max_payload: Option<usize>,
 
 	/// Listen to all Prometheus data source interfaces.
 	///
@@ -432,8 +432,8 @@ impl CliConfiguration for RunCmd {
 		Ok(self.rpc_methods.into())
 	}
 
-	fn rpc_max_payload_override(&self) -> Result<Option<usize>> {
-		Ok(self.rpc_max_payload_override)
+	fn rpc_max_payload(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_payload)
 	}
 
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
