@@ -145,17 +145,17 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
 	let pallet_to_index = decl_pallet_runtime_setup(&pallets, &scrate);
 
-	let dispatch = decl_outer_dispatch(&name, pallets.iter(), &scrate);
+	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate);
 	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
 	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
-	let inherent = decl_outer_inherent(
+	let inherent = expand::expand_outer_inherent(
 		&name,
 		&block,
 		&unchecked_extrinsic,
-		pallets.iter(),
+		&pallets,
 		&scrate,
 	);
-	let validate_unsigned = decl_validate_unsigned(&name, pallets.iter(), &scrate);
+	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 
 	let res = quote!(
@@ -198,73 +198,6 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	);
 
 	Ok(res)
-}
-
-fn decl_validate_unsigned<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations
-		.filter(|pallet_declaration| pallet_declaration.exists_part("ValidateUnsigned"))
-		.map(|pallet_declaration| &pallet_declaration.name);
-	quote!(
-		#scrate::impl_outer_validate_unsigned!(
-			impl ValidateUnsigned for #runtime {
-				#( #pallets_tokens )*
-			}
-		);
-	)
-}
-
-fn decl_outer_inherent<'a>(
-	runtime: &'a Ident,
-	block: &'a syn::TypePath,
-	unchecked_extrinsic: &'a syn::TypePath,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations.filter_map(|pallet_declaration| {
-		let maybe_config_part = pallet_declaration.find_part("Inherent");
-		maybe_config_part.map(|_| {
-			let name = &pallet_declaration.name;
-			quote!(#name,)
-		})
-	});
-	quote!(
-		#scrate::impl_outer_inherent!(
-			impl Inherents where
-				Block = #block,
-				UncheckedExtrinsic = #unchecked_extrinsic,
-				Runtime = #runtime,
-			{
-				#(#pallets_tokens)*
-			}
-		);
-	)
-}
-
-fn decl_outer_dispatch<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations
-		.filter(|pallet_declaration| pallet_declaration.exists_part("Call"))
-		.map(|pallet_declaration| {
-			let pallet = &pallet_declaration.path.inner.segments.last().unwrap();
-			let name = &pallet_declaration.name;
-			let index = pallet_declaration.index;
-			quote!(#[codec(index = #index)] #pallet::#name)
-		});
-
-	quote!(
-		#scrate::impl_outer_dispatch! {
-			pub enum Call for #runtime where origin: Origin {
-				#(#pallets_tokens,)*
-			}
-		}
-	)
 }
 
 fn decl_all_pallets<'a>(

@@ -304,10 +304,13 @@ pub mod pallet {
 		type Call = Call<T>;
 		fn validate_unsigned(
 			_source: TransactionSource,
-			_call: &Self::Call
+			call: &Self::Call
 		) -> TransactionValidity {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType5); // Test for where clause
+			if matches!(call, Call::foo_transactional(_)) {
+				return Ok(ValidTransaction::default());
+			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 		}
 	}
@@ -324,22 +327,40 @@ pub mod pallet {
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType6); // Test for where clause
-			unimplemented!();
+			Some(Call::foo_no_post_info())
 		}
 
-		fn is_inherent(_call: &Self::Call) -> bool {
-			unimplemented!();
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, Call::foo_no_post_info() | Call::foo(..))
+		}
+
+		fn check_inherent(call: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
+			match call {
+				Call::foo_no_post_info() => Ok(()),
+				Call::foo(0, 0) => Err(InherentError::Fatal),
+				Call::foo(..) => Ok(()),
+				_ => unreachable!("other calls are not inherents"),
+			}
+		}
+
+		fn is_inherent_required(d: &InherentData) -> Result<Option<Self::Error>, Self::Error> {
+			match d.get_data::<bool>(b"required") {
+				Ok(Some(true)) => Ok(Some(InherentError::Fatal)),
+				Ok(Some(false)) | Ok(None) => Ok(None),
+				Err(_) => unreachable!("should not happen in tests"),
+			}
 		}
 	}
 
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
 	#[cfg_attr(feature = "std", derive(codec::Decode))]
 	pub enum InherentError {
+		Fatal,
 	}
 
 	impl frame_support::inherent::IsFatalError for InherentError {
 		fn is_fatal_error(&self) -> bool {
-			unimplemented!();
+			matches!(self, InherentError::Fatal)
 		}
 	}
 
@@ -536,6 +557,155 @@ fn error_expand() {
 fn instance_expand() {
 	// Assert same type.
 	let _: pallet::__InherentHiddenInstance = ();
+}
+
+#[test]
+fn inherent_expand() {
+	use frame_support::{
+		inherent::{BlockT, InherentData},
+		traits::EnsureInherentsAreFirst,
+	};
+	use sp_core::Hasher;
+	use sp_runtime::{traits::{BlakeTwo256, Header}, Digest};
+
+	let inherents = InherentData::new().create_extrinsics();
+
+	let expected = vec![
+		UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+	];
+	assert_eq!(expected, inherents);
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 0)), signature: None },
+		],
+	);
+
+	assert!(InherentData::new().check_extrinsics(&block).ok());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(0, 0)), signature: None },
+		],
+	);
+
+	assert!(InherentData::new().check_extrinsics(&block).fatal_error());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
+		],
+	);
+
+	let mut inherent = InherentData::new();
+	inherent.put_data(*b"required", &true).unwrap();
+	assert!(inherent.check_extrinsics(&block).fatal_error());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: Some((1, (), ())) },
+		],
+	);
+
+	let mut inherent = InherentData::new();
+	inherent.put_data(*b"required", &true).unwrap();
+	assert!(inherent.check_extrinsics(&block).fatal_error());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
+		],
+	);
+
+	assert!(Runtime::ensure_inherents_are_first(&block).is_ok());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+		],
+	);
+
+	assert_eq!(Runtime::ensure_inherents_are_first(&block).err().unwrap(), 2);
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 0)), signature: Some((1, (), ())) },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+		],
+	);
+
+	assert_eq!(Runtime::ensure_inherents_are_first(&block).err().unwrap(), 2);
+}
+
+#[test]
+fn validate_unsigned_expand() {
+	use frame_support::pallet_prelude::{
+		InvalidTransaction, TransactionSource, TransactionValidityError, ValidTransaction, ValidateUnsigned,
+	};
+	let call = pallet::Call::<Runtime>::foo_no_post_info();
+
+	let validity = pallet::Pallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err();
+	assert_eq!(validity, TransactionValidityError::Invalid(InvalidTransaction::Call));
+
+	let call = pallet::Call::<Runtime>::foo_transactional(0);
+
+	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
+	assert_eq!(validity, ValidTransaction::default());
 }
 
 #[test]
