@@ -20,7 +20,7 @@
 
 use std::{
 	sync::Arc,
-	collections::{HashSet, HashMap, hash_map::Entry},
+	collections::{HashSet, HashMap},
 };
 use crate::SubscriptionTaskExecutor;
 use super::{StateBackend, ChildStateBackend, error::Error, client_err};
@@ -29,7 +29,7 @@ use codec::Decode;
 use futures::{
 	future::{self, ready, Either},
 	channel::oneshot::{channel, Sender},
-	FutureExt, TryFutureExt, Stream, StreamExt, TryStreamExt,
+	FutureExt, StreamExt, TryStreamExt,
 };
 use hash_db::Hasher;
 use jsonrpsee::ws_server::SubscriptionSink;
@@ -338,10 +338,111 @@ where
 
 	fn subscribe_storage(
 		&self,
-		sink: SubscriptionSink,
+		mut sink: SubscriptionSink,
 		keys: Option<Vec<StorageKey>>,
 	) -> Result<(), Error> {
-		todo!();
+		let keys = match keys {
+			Some(keys) if !keys.is_empty() => keys,
+			_ => {
+				return Err(Error::Client(
+					anyhow::anyhow!(
+						"state_subscribeStorage requires at least one key; subscription rejected"
+					).into()
+				));
+			}
+		};
+
+		let keys = keys.iter().cloned().collect::<HashSet<_>>();
+		let keys_to_check = keys.iter().map(|k| k.0.clone()).collect::<HashSet<_>>();
+
+		let executor = self.executor.clone();
+		let fetcher = self.fetcher.clone();
+		let remote_blockchain = self.remote_blockchain.clone();
+		let storage_subscriptions = self.storage_subscriptions.clone();
+		let initial_block = self.block_or_best(None);
+		let initial_keys = keys_to_check.iter().cloned().collect::<Vec<_>>();
+
+		let stream = self.client.import_notification_stream().map(|notif| Ok::<_, ()>(notif.hash));
+
+		let fut = async move {
+			let old_storage = display_error(storage(&*remote_blockchain, fetcher.clone(), initial_block, initial_keys)).await;
+
+			// TODO(niklasad1): insert keys in Mutex
+			// let mut storage_subscriptions = self.storage_subscriptions.lock();
+			// storage_subscriptions.keys_by_subscription.insert(subscription_id.clone(), keys.clone());
+			// for key in keys {
+			//     storage_subscriptions
+			//         .subscriptions_by_key
+			//         .entry(key)
+			//         .or_default()
+			//         .insert(subscription_id.clone());
+			// }
+
+			// TODO(niklasad1): use shared requests here.
+			stream
+				.and_then(move |block| {
+					let keys = storage_subscriptions
+						.lock()
+						.subscriptions_by_key
+						.keys()
+						.map(|k| k.0.clone())
+						.collect();
+					storage(&*remote_blockchain, fetcher.clone(), block, keys).then(move |s|
+						ready(match s {
+							Ok(s) => Ok((s, block)),
+							Err(_) => Err(()),
+					}))
+				})
+				.filter_map(|res| {
+					let res = match res {
+						Ok((storage, block)) => {
+							let new_value = storage
+								.iter()
+								.filter(|(k, _)| keys_to_check.contains(&k.0))
+								.map(|(k, v)| (k.clone(), v.clone()))
+								.collect::<HashMap<_, _>>();
+
+							let value_differs = old_storage
+								.as_ref()
+								.map(|old_value| *old_value != new_value)
+								.unwrap_or(true);
+
+							match value_differs {
+								true => Some(StorageChangeSet {
+									block,
+									changes: new_value.iter()
+										.map(|(k, v)| (k.clone(), v.clone()))
+										.collect(),
+								}),
+								false => None,
+							}
+						}
+						Err(_) => None,
+					};
+					ready(res)
+				})
+				.for_each(|change_set| {
+					let _ = sink.send(&change_set);
+					ready(())
+				})
+				.await
+
+			// TODO(niklasad1): remove subscriptions.
+			// let mut storage_subscriptions = self.storage_subscriptions.lock();
+			// storage_subscriptions.keys_by_subscription.insert(subscription_id.clone(), keys.clone());
+			// for key in keys {
+			//     storage_subscriptions
+			//         .subscriptions_by_key
+			//         .entry(key)
+			//         .or_default()
+			//         .insert(subscription_id.clone());
+			// }
+
+		}.boxed();
+		executor.execute_new(fut);
+
+
+		Ok(())
 	}
 }
 
