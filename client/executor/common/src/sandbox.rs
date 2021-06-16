@@ -823,6 +823,231 @@ impl<FR> Store<FR> {
 		instance_idx as u32
 	}
 
+	fn instantiate_wasmi<'a, FE, SCH, DTH>(
+		wasm: &[u8],
+		guest_env: GuestEnvironment,
+		state: u32
+	) -> std::result::Result<Rc<SandboxInstance<FR>>, InstantiationError>
+	where
+		FR: Clone + 'static,
+		FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
+		SCH: SandboxCapabilitiesHolder<SupervisorFuncRef = FR, SC = FE>,
+		DTH: DispatchThunkHolder<DispatchThunk = FR>,
+	{
+		let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+		let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
+			.map_err(|_| InstantiationError::Instantiation)?;
+
+		let sandbox_instance = DTH::with_dispatch_thunk(|dispatch_thunk| {
+				Rc::new(SandboxInstance {
+					// In general, it's not a very good idea to use `.not_started_instance()` for anything
+					// but for extracting memory and tables. But in this particular case, we are extracting
+					// for the purpose of running `start` function which should be ok.
+					backend_instance: BackendInstance::Wasmi(wasmi_instance.not_started_instance().clone()),
+					dispatch_thunk: dispatch_thunk.clone(),
+					guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
+				})
+			});
+
+			SCH::with_sandbox_capabilities( |supervisor_externals| {
+				with_guest_externals(
+					supervisor_externals,
+					&sandbox_instance,
+					state,
+					|guest_externals| {
+						wasmi_instance
+							.run_start(guest_externals)
+							.map_err(|_| InstantiationError::StartTrapped)
+
+						// Note: no need to run start on wasmtime instance, since it's done automatically
+					},
+				)
+			})?;
+
+		Ok(sandbox_instance)
+	}
+
+	#[cfg(feature = "wasmer-sandbox")]
+	fn instantiate_wasmer<'a, FE, SCH, DTH>(
+		context: &WasmerBackend,
+		wasm: &[u8],
+		guest_env: GuestEnvironment,
+		state: u32
+	) -> std::result::Result<Rc<SandboxInstance<FR>>, InstantiationError>
+	where
+		FR: Clone + 'static,
+		FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
+		SCH: SandboxCapabilitiesHolder<SupervisorFuncRef = FR, SC = FE>,
+		DTH: DispatchThunkHolder<DispatchThunk = FR>,
+	{
+		let module = wasmer::Module::new(&context.store, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+
+		type Exports = HashMap<String, wasmer::Exports>;
+		let mut exports_map = Exports::new();
+
+		for import in module.imports().into_iter() {
+			match import.ty() {
+				// Nothing to do here
+				wasmer::ExternType::Global(_) | wasmer::ExternType::Table(_) => (),
+
+				wasmer::ExternType::Memory(_) => {
+					let exports = exports_map
+						.entry(import.module().to_string())
+						.or_insert(wasmer::Exports::new());
+
+					let memory = guest_env.imports.memory_by_name(
+						import.module(),
+						import.name()
+					).ok_or(InstantiationError::ModuleDecoding)?;
+
+					exports.insert(import.name(), wasmer::Extern::Memory(memory.as_wasmer().unwrap()));
+				}
+
+				wasmer::ExternType::Function(func_ty) => {
+					let guest_func_index = guest_env.imports.func_by_name(import.module(), import.name());
+
+					let guest_func_index = if let Some(index) = guest_func_index {
+						index
+					} else {
+						// Missing import (should we abort here?)
+						continue;
+					};
+
+					let supervisor_func_index = guest_env.guest_to_supervisor_mapping
+						.func_by_guest_index(guest_func_index)
+						.ok_or(InstantiationError::ModuleDecoding)?;
+
+					let function = wasmer::Function::new(&context.store, func_ty, move |params| {
+						SCH::with_sandbox_capabilities(|supervisor_externals| {
+							use sp_wasm_interface::Value;
+
+							// Serialize arguments into a byte vector.
+							let invoke_args_data = params
+								.iter()
+								.map(|val| match val {
+									wasmer::Val::I32(val) => Value::I32(*val),
+									wasmer::Val::I64(val) => Value::I64(*val),
+									wasmer::Val::F32(val) => Value::F32(f32::to_bits(*val)),
+									wasmer::Val::F64(val) => Value::F64(f64::to_bits(*val)),
+									_ => unimplemented!()
+								})
+								.collect::<Vec<_>>()
+								.encode();
+
+							// Move serialized arguments inside the memory, invoke dispatch thunk and
+							// then free allocated memory.
+							let invoke_args_len = invoke_args_data.len() as WordSize;
+							let invoke_args_ptr = supervisor_externals
+								.allocate_memory(invoke_args_len)
+								.map_err(|_| wasmer::RuntimeError::new(
+									"Can't allocate memory in supervisor for the arguments")
+								)?;
+
+							let deallocate = |fe: &mut FE, ptr, fail_msg| {
+								fe
+									.deallocate_memory(ptr)
+									.map_err(|_| wasmer::RuntimeError::new(fail_msg))
+							};
+
+							if supervisor_externals
+								.write_memory(invoke_args_ptr, &invoke_args_data)
+								.is_err()
+							{
+								deallocate(
+									supervisor_externals,
+									invoke_args_ptr,
+									"Failed dealloction after failed write of invoke arguments"
+								)?;
+
+								return Err(wasmer::RuntimeError::new("Can't write invoke args into memory"));
+							}
+
+							// Perform the actuall call
+							let serialized_result = DTH::with_dispatch_thunk(|dispatch_thunk| {
+								supervisor_externals.invoke(
+									&dispatch_thunk,
+									invoke_args_ptr,
+									invoke_args_len,
+									state,
+									supervisor_func_index,
+								)
+							}).map_err(|e| wasmer::RuntimeError::new(e.to_string()))?;
+
+							// dispatch_thunk returns pointer to serialized arguments.
+							// Unpack pointer and len of the serialized result data.
+							let (serialized_result_val_ptr, serialized_result_val_len) = {
+								// Cast to u64 to use zero-extension.
+								let v = serialized_result as u64;
+								let ptr = (v as u64 >> 32) as u32;
+								let len = (v & 0xFFFFFFFF) as u32;
+								(Pointer::new(ptr), len)
+							};
+
+							let serialized_result_val = supervisor_externals
+								.read_memory(serialized_result_val_ptr, serialized_result_val_len)
+								.map_err(|_| wasmer::RuntimeError::new(
+									"Can't read the serialized result from dispatch thunk")
+								);
+
+							let deserialized_result = deallocate(
+								supervisor_externals,
+								serialized_result_val_ptr,
+								"Can't deallocate memory for dispatch thunk's result"
+							)
+								.and_then(|_| serialized_result_val)
+								.and_then(|serialized_result_val| {
+									deserialize_result(&serialized_result_val)
+										.map_err(|e| wasmer::RuntimeError::new(e.to_string()))
+								})?;
+
+							if let Some(value) = deserialized_result {
+								Ok(vec![
+									match value {
+										RuntimeValue::I32(val) => wasmer::Val::I32(val),
+										RuntimeValue::I64(val) => wasmer::Val::I64(val),
+										RuntimeValue::F32(val) => wasmer::Val::F32(val.into()),
+										RuntimeValue::F64(val) => wasmer::Val::F64(val.into()),
+									}
+								])
+							} else {
+								Ok(vec![])
+							}
+						})
+					});
+
+					let exports = exports_map
+						.entry(import.module().to_string())
+						.or_insert(wasmer::Exports::new());
+
+					exports.insert(import.name(), wasmer::Extern::Function(function));
+				}
+			}
+		}
+
+		let mut import_object = wasmer::ImportObject::new();
+		for (module_name, exports) in exports_map.into_iter() {
+			import_object.register(module_name, exports);
+		}
+
+		let instance = wasmer::Instance::new(&module, &import_object)
+			.map_err(|error| {
+				match error {
+					wasmer::InstantiationError::Link(_) => InstantiationError::Instantiation,
+					wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
+					wasmer::InstantiationError::HostEnvInitialization(_) => {
+						InstantiationError::EnvironmentDefinitionCorrupted
+					}
+				}
+			})?;
+
+		Ok(Rc::new(SandboxInstance {
+			backend_instance: BackendInstance::Wasmer(instance),
+			dispatch_thunk: DTH::with_dispatch_thunk(|dispatch_thunk| dispatch_thunk.clone()),
+			guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
+		}))
+	}
+
+
 	/// Instantiate a guest module and return it's index in the store.
 	///
 	/// The guest module's code is specified in `wasm`. Environment that will be available to
@@ -848,213 +1073,16 @@ impl<FR> Store<FR> {
 		let backend_context = &self.backend_context;
 
 		let sandbox_instance = match backend_context {
-			BackendContext::Wasmi => {
-				let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-				let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
-					.map_err(|_| InstantiationError::Instantiation)?;
-
-				let sandbox_instance = DTH::with_dispatch_thunk(|dispatch_thunk| {
-					Rc::new(SandboxInstance {
-						// In general, it's not a very good idea to use `.not_started_instance()` for anything
-						// but for extracting memory and tables. But in this particular case, we are extracting
-						// for the purpose of running `start` function which should be ok.
-						backend_instance: BackendInstance::Wasmi(wasmi_instance.not_started_instance().clone()),
-						dispatch_thunk: dispatch_thunk.clone(),
-						guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
-					})
-				});
-
-				SCH::with_sandbox_capabilities( |supervisor_externals| {
-					with_guest_externals(
-						supervisor_externals,
-						&sandbox_instance,
-						state,
-						|guest_externals| {
-							wasmi_instance
-								.run_start(guest_externals)
-								.map_err(|_| InstantiationError::StartTrapped)
-
-							// Note: no need to run start on wasmtime instance, since it's done automatically
-						},
-					)
-				})?;
-
-				sandbox_instance
-			}
+			BackendContext::Wasmi => Self::instantiate_wasmi::<FE, SCH, DTH>(wasm, guest_env, state)?,
 
 			#[cfg(feature = "wasmer-sandbox")]
 			BackendContext::Wasmer(context) => {
-				let module = wasmer::Module::new(&context.store, wasm).map_err(|_| {
-					InstantiationError::ModuleDecoding
-				})?;
-
-				type Exports = HashMap<String, wasmer::Exports>;
-				let mut exports_map = Exports::new();
-
-				// Populate exports map with module imports
-				for import in module
-					.imports()
-					.into_iter()
-				{
-					match import.ty() {
-						// Nothing to do here
-						wasmer::ExternType::Global(_) | wasmer::ExternType::Table(_) => (),
-
-						wasmer::ExternType::Memory(_) => {
-							let exports = exports_map
-								.entry(import.module().to_string())
-								.or_insert(wasmer::Exports::new());
-
-							let memory = guest_env.imports.memory_by_name(
-								import.module(),
-								import.name()
-							).ok_or(InstantiationError::ModuleDecoding)?;
-
-							exports.insert(import.name(), wasmer::Extern::Memory(memory.as_wasmer().unwrap()));
-						}
-
-						wasmer::ExternType::Function(func_ty) => {
-							let guest_func_index = guest_env.imports.func_by_name(import.module(), import.name());
-							let guest_func_index = if let Some(index) = guest_func_index {
-								index
-							} else {
-								// Missing import (should we abort here?)
-								continue;
-							};
-
-							let supervisor_func_index = guest_env.guest_to_supervisor_mapping
-								.func_by_guest_index(guest_func_index)
-								.ok_or(InstantiationError::ModuleDecoding)?;
-
-							let function = wasmer::Function::new(&context.store, func_ty, move |params| {
-								SCH::with_sandbox_capabilities(|supervisor_externals| {
-									use sp_wasm_interface::Value;
-
-									// Serialize arguments into a byte vector.
-									let invoke_args_data = params
-										.iter()
-										.map(|val| match val {
-											wasmer::Val::I32(val) => Value::I32(*val),
-											wasmer::Val::I64(val) => Value::I64(*val),
-											wasmer::Val::F32(val) => Value::F32(f32::to_bits(*val)),
-											wasmer::Val::F64(val) => Value::F64(f64::to_bits(*val)),
-											_ => unimplemented!()
-										})
-										.collect::<Vec<_>>()
-										.encode();
-
-									// Move serialized arguments inside the memory, invoke dispatch thunk and
-									// then free allocated memory.
-									let invoke_args_len = invoke_args_data.len() as WordSize;
-									let invoke_args_ptr = supervisor_externals
-										.allocate_memory(invoke_args_len)
-										.map_err(|_| wasmer::RuntimeError::new(
-											"Can't allocate memory in supervisor for the arguments")
-										)?;
-
-									let deallocate = |fe: &mut FE, ptr, fail_msg| {
-										fe
-											.deallocate_memory(ptr)
-											.map_err(|_| wasmer::RuntimeError::new(fail_msg))
-									};
-
-									if supervisor_externals
-										.write_memory(invoke_args_ptr, &invoke_args_data)
-										.is_err()
-									{
-										deallocate(
-											supervisor_externals,
-											invoke_args_ptr,
-											"Failed dealloction after failed write of invoke arguments"
-										)?;
-
-										return Err(wasmer::RuntimeError::new("Can't write invoke args into memory"));
-									}
-
-									let serialized_result = DTH::with_dispatch_thunk(|dispatch_thunk| {
-										supervisor_externals.invoke(
-											&dispatch_thunk,
-											invoke_args_ptr,
-											invoke_args_len,
-											state,
-											supervisor_func_index,
-										)
-									}).map_err(|e| wasmer::RuntimeError::new(e.to_string()))?;
-
-									// dispatch_thunk returns pointer to serialized arguments.
-									// Unpack pointer and len of the serialized result data.
-									let (serialized_result_val_ptr, serialized_result_val_len) = {
-										// Cast to u64 to use zero-extension.
-										let v = serialized_result as u64;
-										let ptr = (v as u64 >> 32) as u32;
-										let len = (v & 0xFFFFFFFF) as u32;
-										(Pointer::new(ptr), len)
-									};
-
-									let serialized_result_val = supervisor_externals
-										.read_memory(serialized_result_val_ptr, serialized_result_val_len)
-										.map_err(|_| wasmer::RuntimeError::new(
-											"Can't read the serialized result from dispatch thunk")
-										);
-
-									let deserialized_result = deallocate(
-										supervisor_externals,
-										serialized_result_val_ptr,
-										"Can't deallocate memory for dispatch thunk's result"
-									)
-										.and_then(|_| serialized_result_val)
-										.and_then(|serialized_result_val| {
-											deserialize_result(&serialized_result_val)
-												.map_err(|e| wasmer::RuntimeError::new(e.to_string()))
-										})?;
-
-									if let Some(value) = deserialized_result {
-										Ok(vec![
-											match value {
-												RuntimeValue::I32(val) => wasmer::Val::I32(val),
-												RuntimeValue::I64(val) => wasmer::Val::I64(val),
-												RuntimeValue::F32(val) => wasmer::Val::F32(val.into()),
-												RuntimeValue::F64(val) => wasmer::Val::F64(val.into()),
-											}
-										])
-									} else {
-										Ok(vec![])
-									}
-								})
-							});
-
-							let exports = exports_map
-								.entry(import.module().to_string())
-								.or_insert(wasmer::Exports::new());
-
-							exports.insert(import.name(), wasmer::Extern::Function(function));
-						}
-					}
-				}
-
-				let mut import_object = wasmer::ImportObject::new();
-
-				for (module_name, exports) in exports_map.into_iter() {
-					import_object.register(module_name, exports);
-				}
-
-				let instance = wasmer::Instance::new(&module, &import_object)
-					.map_err(|error| {
-
-						match error {
-							wasmer::InstantiationError::Link(_) => InstantiationError::Instantiation,
-							wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
-							wasmer::InstantiationError::HostEnvInitialization(_) => {
-								InstantiationError::EnvironmentDefinitionCorrupted
-							}
-						}
-					})?;
-
-				Rc::new(SandboxInstance {
-					backend_instance: BackendInstance::Wasmer(instance),
-					dispatch_thunk: DTH::with_dispatch_thunk(|dispatch_thunk| dispatch_thunk.clone()),
-					guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
-				})
+				Self::instantiate_wasmer::<FE, SCH, DTH>(
+					context,
+					wasm,
+					guest_env,
+					state
+				)?
 			}
 		};
 
