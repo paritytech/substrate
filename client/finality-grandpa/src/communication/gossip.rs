@@ -2474,7 +2474,7 @@ mod tests {
 		// `sqrt(peers)` we're connected to, but we guarantee that at least 4 of
 		// those peers are authorities (plus the `LUCKY_PEERS` from the previous
 		// stage)
-		assert!(trial(test(PROPAGATION_SOME, &authorities)) >= LUCKY_PEERS);
+		assert!(trial(test(PROPAGATION_SOME * 1.1, &authorities)) >= LUCKY_PEERS);
 		assert_eq!(
 			trial(test(2.0, &all_peers)),
 			LUCKY_PEERS + (all_peers.len() as f64).sqrt() as usize,
@@ -2482,7 +2482,7 @@ mod tests {
 
 		// after 3 rounds durations we should gossip to all peers we are
 		// connected to
-		assert_eq!(trial(test(PROPAGATION_ALL, &all_peers)), all_peers.len(),);
+		assert_eq!(trial(test(PROPAGATION_ALL * 1.1, &all_peers)), all_peers.len());
 	}
 
 	#[test]
