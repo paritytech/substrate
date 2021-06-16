@@ -391,7 +391,7 @@ pub mod pallet {
 			PresentationDuration::<T>::put(self.presentation_duration);
 			TermDuration::<T>::put(self.term_duration);
 			DesiredSeats::<T>::put(self.desired_seats);
-			Members::<T>::put(self.members.clone());
+			Members::<T>::put(&self.members);
 		}
 	}
 
