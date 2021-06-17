@@ -134,8 +134,10 @@ mod inner {
 		io: RpcHandler<M>,
 		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<ws::Server> {
+		let rpc_max_payload = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
+			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
-			.max_payload(maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE)).unwrap_or(RPC_MAX_PAYLOAD_DEFAULT))
+			.max_payload(rpc_max_payload)
 			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 			.allowed_origins(map_cors(cors))
 			.allowed_hosts(hosts_filtering(cors.is_some()))
