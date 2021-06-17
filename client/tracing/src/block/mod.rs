@@ -195,7 +195,6 @@ impl<Block, Client> BlockExecutor<Block, Client>
 	) -> Self {
 		let rpc_max_payload = rpc_max_payload.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
-
 		Self { client, block, targets, storage_keys, rpc_max_payload }
 	}
 
