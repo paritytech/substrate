@@ -90,7 +90,6 @@ sp_api::decl_runtime_apis! {
 		fn slot_duration() -> SlotDuration;
 
 		// Return the current set of authorities.
-		#[skip_initialize_block]
 		fn authorities() -> Vec<AuthorityId>;
 	}
 }

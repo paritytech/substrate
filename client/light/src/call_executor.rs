@@ -198,7 +198,7 @@ pub fn prove_execution<Block, S, E>(
 
 /// Check remote contextual execution proof using given backend.
 ///
-/// Proof should include both environment preparation proof and method execution proof.
+/// Proof should include the method execution proof.
 pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -211,33 +211,10 @@ pub fn check_execution_proof<Header, E, H>(
 		H: Hasher,
 		H::Out: Ord + codec::Codec + 'static,
 {
-	check_execution_proof_with_make_header::<Header, E, H>(
-		executor,
-		spawn_handle,
-		request,
-		remote_proof,
-	)
-}
-
-/// Check remote contextual execution proof using given backend and header factory.
-///
-/// Proof should include both environment preparation proof and method execution proof.
-pub fn check_execution_proof_with_make_header<Header, E, H>(
-	executor: &E,
-	spawn_handle: Box<dyn SpawnNamed>,
-	request: &RemoteCallRequest<Header>,
-	remote_proof: StorageProof,
-) -> ClientResult<Vec<u8>>
-	where
-		E: CodeExecutor + Clone + 'static,
-		H: Hasher,
-		Header: HeaderT,
-		H::Out: Ord + codec::Codec + 'static,
-{
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);
 
-	// prepare execution environment + check preparation proof
+	// prepare execution environment
 	let mut changes = OverlayedChanges::default();
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
 

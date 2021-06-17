@@ -20,7 +20,6 @@ use sc_light::{
 	call_executor::{
 		GenesisCallExecutor,
 		check_execution_proof,
-		check_execution_proof_with_make_header,
 	},
 	fetcher::LightDataChecker,
 	blockchain::{BlockchainCache, Blockchain},
@@ -347,7 +346,7 @@ fn execution_proof_is_generated_and_checked() {
 		).unwrap();
 
 		// check remote execution proof locally
-		let execution_result = check_execution_proof_with_make_header::<_, _, BlakeTwo256>(
+		let execution_result = check_execution_proof::<_, _, BlakeTwo256>(
 			&local_executor(),
 			Box::new(TaskExecutor::new()),
 			&RemoteCallRequest {
