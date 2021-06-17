@@ -46,7 +46,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Authority identifier type
-		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
+		type BeefyId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
 	}
 
 	#[pallet::pallet]
@@ -61,7 +61,7 @@ pub mod pallet {
 	/// The current authorities set
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::BeefyId>, ValueQuery>;
 
 	/// The current validator set id
 	#[pallet::storage]
@@ -71,11 +71,11 @@ pub mod pallet {
 	/// Authorities set scheduled to be used with the next session
 	#[pallet::storage]
 	#[pallet::getter(fn next_authorities)]
-	pub(super) type NextAuthorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+	pub(super) type NextAuthorities<T: Config> = StorageValue<_, Vec<T::BeefyId>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub authorities: Vec<T::AuthorityId>,
+		pub authorities: Vec<T::BeefyId>,
 	}
 
 	#[cfg(feature = "std")]
@@ -97,14 +97,14 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Return the current active BEEFY validator set.
-	pub fn validator_set() -> ValidatorSet<T::AuthorityId> {
-		ValidatorSet::<T::AuthorityId> {
+	pub fn validator_set() -> ValidatorSet<T::BeefyId> {
+		ValidatorSet::<T::BeefyId> {
 			validators: Self::authorities(),
 			id: Self::validator_set_id(),
 		}
 	}
 
-	fn change_authorities(new: Vec<T::AuthorityId>, queued: Vec<T::AuthorityId>) {
+	fn change_authorities(new: Vec<T::BeefyId>, queued: Vec<T::BeefyId>) {
 		// As in GRANDPA, we trigger a validator set change only if the the validator
 		// set has actually changed.
 		if new != Self::authorities() {
@@ -127,7 +127,7 @@ impl<T: Config> Pallet<T> {
 		<NextAuthorities<T>>::put(&queued);
 	}
 
-	fn initialize_authorities(authorities: &[T::AuthorityId]) {
+	fn initialize_authorities(authorities: &[T::BeefyId]) {
 		if authorities.is_empty() {
 			return;
 		}
@@ -145,15 +145,15 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
-	type Public = T::AuthorityId;
+	type Public = T::BeefyId;
 }
 
 impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
-	type Key = T::AuthorityId;
+	type Key = T::BeefyId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 	where
-		I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
+		I: Iterator<Item = (&'a T::AccountId, T::BeefyId)>,
 	{
 		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 		Self::initialize_authorities(&authorities);
@@ -161,7 +161,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
 	where
-		I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
+		I: Iterator<Item = (&'a T::AccountId, T::BeefyId)>,
 	{
 		if changed {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
@@ -174,15 +174,15 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	fn on_disabled(i: usize) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			BEEFY_ENGINE_ID,
-			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
+			ConsensusLog::<T::BeefyId>::OnDisabled(i as AuthorityIndex).encode(),
 		);
 
 		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 }
 
-impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
-	fn is_member(authority_id: &T::AuthorityId) -> bool {
+impl<T: Config> IsMember<T::BeefyId> for Pallet<T> {
+	fn is_member(authority_id: &T::BeefyId) -> bool {
 		Self::authorities().iter().any(|id| id == authority_id)
 	}
 }

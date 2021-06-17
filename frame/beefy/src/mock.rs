@@ -86,7 +86,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_beefy::Config for Test {
-	type AuthorityId = BeefyId;
+	type BeefyId = BeefyId;
 }
 
 parameter_types! {
