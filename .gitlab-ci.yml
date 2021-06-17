@@ -720,6 +720,5 @@ trigger-simnet:
         echo "Value for FEATURES not specified, all tests will run" ;
         SUBSTRATE_FEATURES="" ;
       fi
-
     - .maintain/gitlab/trigger_pipeline.sh --simnet-version=${SIMNET_REF} 
                                            "${SUBSTRATE_FEATURES}"

@@ -91,7 +91,7 @@ function main {
 
 function parse_args {
   # shellcheck disable=SC2214
-  while getopts c:u:r:i:n:g:f:t:r:a:s:h-: OPT; do
+  while getopts f:r:a:c:t:u:r:i:n:g:s:h-: OPT; do
     # support long options: https://stackoverflow.com/a/28466267/519360
     if [ "${OPT}" = "-" ]; then   # long option: reformulate OPT and OPTARG
       OPT="${OPTARG%%=*}"         # extract long option name
