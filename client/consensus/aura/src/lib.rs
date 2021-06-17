@@ -747,6 +747,7 @@ mod tests {
 				keystore,
 				can_author_with: sp_consensus::AlwaysCanAuthor,
 				block_proposal_slot_portion: SlotProportion::new(0.5),
+				max_block_proposal_slot_portion: None,
 				telemetry: None,
 			}).expect("Starts aura"));
 		}
@@ -811,6 +812,7 @@ mod tests {
 			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
+			max_block_proposal_slot_portion: None,
 		};
 
 		let head = Header::new(
@@ -861,6 +863,7 @@ mod tests {
 			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
+			max_block_proposal_slot_portion: None,
 		};
 
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
