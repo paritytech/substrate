@@ -545,12 +545,16 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		targets: Option<String>,
 		storage_keys: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
+		let block_executor = sc_tracing::block::BlockExecutor::new(
+			self.client.clone(),
+			block,
+			targets,
+			storage_keys,
+			self.rpc_max_payload,
+		);
 		Box::new(result(
-			sc_tracing::block::BlockExecutor::new(
-				self.client.clone(), block, targets, storage_keys, self.rpc_max_payload
-			)
-			.trace_block()
-			.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
+			block_executor.trace_block()
+				.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
 		))
 	}
 }
