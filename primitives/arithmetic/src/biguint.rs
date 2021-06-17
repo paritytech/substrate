@@ -19,6 +19,7 @@
 
 use num_traits::{Zero, One};
 use sp_std::{cmp::Ordering, ops, prelude::*, vec, cell::RefCell, convert::TryFrom};
+use codec::{Encode, Decode};
 
 // A sensible value for this would be half of the dword size of the host machine. Since the
 // runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
@@ -32,6 +33,10 @@ pub type Double = u64;
 const SHIFT: usize = 32;
 /// short form of _Base_. Analogous to the value 10 in base-10 decimal numbers.
 const B: Double = Single::max_value() as Double + 1;
+
+static_assertions::const_assert!(
+	sp_std::mem::size_of::<Double>() - sp_std::mem::size_of::<Single>() == SHIFT / 8
+);
 
 /// Splits a [`Double`] limb number into a tuple of two [`Single`] limb numbers.
 pub fn split(a: Double) -> (Single, Single) {
@@ -74,7 +79,7 @@ fn div_single(a: Double, b: Single) -> (Double, Single) {
 }
 
 /// Simple wrapper around an infinitely large integer, represented as limbs of [`Single`].
-#[derive(Clone, Default)]
+#[derive(Encode, Decode, Clone, Default)]
 pub struct BigUint {
 	/// digits (limbs) of this number (sorted as msb -> lsb).
 	pub(crate) digits: Vec<Single>,
@@ -187,6 +192,7 @@ impl BigUint {
 			let u = Double::from(self.checked_get(j).unwrap_or(0));
 			let v = Double::from(other.checked_get(j).unwrap_or(0));
 			let s = u + v + k;
+			// proof: any number % B will fit into `Single`.
 			w.set(j, (s % B) as Single);
 			k = s / B;
 		}
@@ -209,28 +215,24 @@ impl BigUint {
 			let s = {
 				let u = Double::from(self.checked_get(j).unwrap_or(0));
 				let v = Double::from(other.checked_get(j).unwrap_or(0));
-				let mut needs_borrow = false;
-				let mut t = 0;
 
-				if let Some(v1) = u.checked_sub(v) {
-					if let Some(v2) = v1.checked_sub(k) {
-						t = v2;
-						k = 0;
-					} else {
-						needs_borrow = true;
-					}
+				if let Some(v2) = u.checked_sub(v).and_then(|v1| v1.checked_sub(k)) {
+					// no borrow is needed. u - v - k can be computed as-is
+					let t = v2;
+					k = 0;
+
+					t
 				} else {
-					needs_borrow = true;
-				}
-				if needs_borrow {
-					t = u + B - v - k;
+					// borrow is needed. Add a `B` to u, before subtracting.
+					// PROOF: addition: `u + B < 2*B`, thus can fit in double.
+					// PROOF: subtraction: if `u - v - k < 0`, then `u + B - v - k < B`.
+					// NOTE: the order of operations is critical to ensure underflow won't happen.
+					let t = u + B - v - k;
 					k = 1;
+
+					t
 				}
-				t
 			};
-			// PROOF: t either comes from `v2`, or from `u + B - v - k`. The former is
-			// trivial. The latter will not overflow this branch will only happen if the sum of
-			// `u - v - k` part has been negative, hence `u + B - v - k < B`.
 			w.set(j, s as Single);
 		}
 
@@ -264,10 +266,9 @@ impl BigUint {
 			let mut k = 0;
 			for i in 0..m {
 				// PROOF: (B−1) × (B−1) + (B−1) + (B−1) = B^2 −1 < B^2. addition is safe.
-				let t =
-					mul_single(self.get(j), other.get(i))
-						+ Double::from(w.get(i + j))
-						+ Double::from(k);
+				let t = mul_single(self.get(j), other.get(i))
+					+ Double::from(w.get(i + j))
+					+ Double::from(k);
 				w.set(i + j, (t % B) as Single);
 				// PROOF: (B^2 - 1) / B < B. conversion is safe.
 				k = (t / B) as Single;
@@ -581,12 +582,6 @@ pub mod tests {
 	}
 
 	#[test]
-	fn shift_check() {
-		let shift = sp_std::mem::size_of::<Double>() - sp_std::mem::size_of::<Single>();
-		assert_eq!(shift * 8, SHIFT);
-	}
-
-	#[test]
 	fn split_works() {
 		let a = SHIFT / 2;
 		let b = SHIFT * 3 / 2;
@@ -732,12 +727,14 @@ pub mod tests {
 		let c = BigUint { digits: vec![1, 1, 2] };
 		let d = BigUint { digits: vec![0, 2] };
 		let e = BigUint { digits: vec![0, 1, 1, 2] };
+		let f = BigUint { digits: vec![7, 8] };
 
 		assert!(a.clone().div(&b, true).is_none());
 		assert!(c.clone().div(&a, true).is_none());
 		assert!(c.clone().div(&d, true).is_none());
 		assert!(e.clone().div(&a, true).is_none());
 
+		assert!(f.clone().div(&b, true).is_none());
 		assert!(c.clone().div(&b, true).is_some());
 	}
 

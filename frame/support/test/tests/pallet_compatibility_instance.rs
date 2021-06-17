@@ -113,7 +113,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[pallet::weight(<T::Balance as Into<Weight>>::into(new_value.clone()))]
-		fn set_dummy(
+		pub fn set_dummy(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance
 		) -> DispatchResultWithPostInfo {
@@ -281,7 +281,7 @@ mod test {
 	fn metadata() {
 		let metadata = Runtime::metadata();
 		let modules = match metadata.1 {
-			frame_metadata::RuntimeMetadata::V12(frame_metadata::RuntimeMetadataV12 {
+			frame_metadata::RuntimeMetadata::V13(frame_metadata::RuntimeMetadataV13 {
 				modules: frame_metadata::DecodeDifferent::Encode(m),
 				..
 			}) => m,

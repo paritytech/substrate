@@ -38,16 +38,23 @@ mod wasm_runtime;
 mod integration_tests;
 
 pub use wasmi;
+<<<<<<< HEAD
 pub use sp_tasks::{with_externalities_safe, pool_spawn::RuntimeInstanceSpawn};
 pub use native_executor::{NativeExecutor, WasmExecutor,
 	NativeExecutionDispatch};
+=======
+pub use native_executor::{
+	with_externalities_safe, NativeExecutor, WasmExecutor, NativeExecutionDispatch,
+};
+>>>>>>> master
 pub use sp_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
-pub use sp_core::traits::{Externalities, CallInWasm};
+pub use sp_core::traits::{Externalities};
 #[doc(hidden)]
 pub use sp_wasm_interface;
 pub use wasm_runtime::WasmExecutionMethod;
+pub use wasm_runtime::read_embedded_version;
 
 pub use sc_executor_common::{error, sandbox};
 
@@ -70,7 +77,7 @@ mod tests {
 	use sc_runtime_test::wasm_binary_unwrap;
 	use sp_io::TestExternalities;
 	use sp_wasm_interface::HostFunctions;
-	use sp_core::traits::CallInWasm;
+	use sc_executor_common::runtime_blob::RuntimeBlob;
 
 	#[test]
 	fn call_in_interpreted_wasm_works() {
@@ -84,14 +91,15 @@ mod tests {
 			8,
 			None,
 		);
-		let res = executor.call_in_wasm(
-			&wasm_binary_unwrap()[..],
-			None,
-			"test_empty_return",
-			&[],
-			&mut ext,
-			sp_core::traits::MissingHostFunctions::Allow,
-		).unwrap();
+		let res = executor
+			.uncached_call(
+				RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+				&mut ext,
+				true,
+				"test_empty_return",
+				&[],
+			)
+			.unwrap();
 		assert_eq!(res, vec![0u8; 0]);
 	}
 }

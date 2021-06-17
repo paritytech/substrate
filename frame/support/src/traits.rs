@@ -23,13 +23,17 @@ pub mod tokens;
 pub use tokens::fungible;
 pub use tokens::fungibles;
 pub use tokens::currency::{
-	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, VestingSchedule,
+	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, NamedReservableCurrency,
+	VestingSchedule,
 };
 pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
 pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};
 
 mod members;
-pub use members::{Contains, ContainsLengthBound, InitializeMembers, ChangeMembers};
+pub use members::{
+	Contains, ContainsLengthBound, SortedMembers, InitializeMembers, ChangeMembers, All, IsInVec,
+	AsContains,
+};
 
 mod validation;
 pub use validation::{
@@ -46,7 +50,8 @@ pub use filter::{
 mod misc;
 pub use misc::{
 	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
-	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker,
+	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing, ExtrinsicCall,
+	EnsureInherentsAreFirst, ConstU32,
 };
 
 mod stored_map;
@@ -57,7 +62,7 @@ pub use randomness::Randomness;
 mod metadata;
 pub use metadata::{
 	CallMetadata, GetCallMetadata, GetCallName, PalletInfo, PalletVersion, GetPalletVersion,
-	PALLET_VERSION_STORAGE_KEY_POSTFIX,
+	PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletInfoAccess,
 };
 
 mod hooks;
@@ -69,10 +74,13 @@ pub use hooks::GenesisBuild;
 
 pub mod schedule;
 mod storage;
-pub use storage::{Instance, StorageInstance};
+pub use storage::{Instance, StorageInstance, StorageInfo, StorageInfoTrait};
 
 mod dispatch;
 pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 
 mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+
+// for backwards-compatibility with existing imports
+pub use max_encoded_len::MaxEncodedLen;

@@ -90,6 +90,7 @@ impl pallet_transaction_payment::Config for Test {
 }
 parameter_types! {
 	pub const MaxLocks: u32 = 50;
+	pub const MaxReserves: u32 = 2;
 }
 impl Config for Test {
 	type Balance = u64;
@@ -103,6 +104,8 @@ impl Config for Test {
 		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
 
@@ -169,24 +172,26 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::frame_system(system::Event::NewAccount(1)),
-					Event::pallet_balances(crate::Event::Endowed(1, 100)),
-					Event::pallet_balances(crate::Event::BalanceSet(1, 100, 0)),
+					Event::System(system::Event::NewAccount(1)),
+					Event::Balances(crate::Event::Endowed(1, 100)),
+					Event::Balances(crate::Event::BalanceSet(1, 100, 0)),
 				]
 			);
 
-			let _ = Balances::slash(&1, 98);
+			let res = Balances::slash(&1, 98);
+			assert_eq!(res, (NegativeImbalance::new(98), 0));
 
 			// no events
 			assert_eq!(events(), []);
 
-			let _ = Balances::slash(&1, 1);
+			let res = Balances::slash(&1, 1);
+			assert_eq!(res, (NegativeImbalance::new(1), 0));
 
 			assert_eq!(
 				events(),
 				[
-					Event::frame_system(system::Event::KilledAccount(1)),
-					Event::pallet_balances(crate::Event::DustLost(1, 1)),
+					Event::System(system::Event::KilledAccount(1)),
+					Event::Balances(crate::Event::DustLost(1, 1)),
 				]
 			);
 		});

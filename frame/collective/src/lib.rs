@@ -24,9 +24,9 @@
 //! calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
 //!
 //! A "prime" member may be set to help determine the default vote behavior based on chain
-//! config. If `PreimDefaultVote` is used, the prime vote acts as the default vote in case of any
+//! config. If `PrimeDefaultVote` is used, the prime vote acts as the default vote in case of any
 //! abstentions after the voting period. If `MoreThanMajorityThenPrimeDefaultVote` is used, then
-//! abstentations will first follow the majority of the collective voting, and then the prime
+//! abstentions will first follow the majority of the collective voting, and then the prime
 //! member.
 //!
 //! Voting happens through motions comprising a proposal (i.e. a curried dispatchable) plus a
@@ -48,14 +48,13 @@ use sp_io::storage;
 use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
+	decl_error, decl_event, decl_module, decl_storage, ensure, BoundedVec,
 	codec::{Decode, Encode},
-	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
 	},
-	ensure,
-	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
+	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing},
 	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -106,7 +105,7 @@ impl DefaultVote for PrimeDefaultVote {
 }
 
 /// First see if yes vote are over majority of the whole collective. If so, set the default vote
-/// as yes. Otherwise, use the prime meber's vote as the default vote.
+/// as yes. Otherwise, use the prime member's vote as the default vote.
 pub struct MoreThanMajorityThenPrimeDefaultVote;
 
 impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
@@ -165,6 +164,15 @@ pub enum RawOrigin<AccountId, I> {
 	_Phantom(sp_std::marker::PhantomData<I>),
 }
 
+impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
+	fn get_backing(&self) -> Option<Backing> {
+		match self {
+			RawOrigin::Members(n, d) => Some(Backing { approvals: *n, eligible: *d }),
+			_ => None,
+		}
+	}
+}
+
 /// Origin for the collective module.
 pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as frame_system::Config>::AccountId, I>;
 
@@ -186,7 +194,7 @@ pub struct Votes<AccountId, BlockNumber> {
 decl_storage! {
 	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Collective {
 		/// The hashes of the active proposals.
-		pub Proposals get(fn proposals): Vec<T::Hash>;
+		pub Proposals get(fn proposals): BoundedVec<T::Hash, T::MaxProposals>;
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(fn proposal_of):
 			map hasher(identity) T::Hash => Option<<T as Config<I>>::Proposal>;
@@ -462,11 +470,7 @@ decl_module! {
 			} else {
 				let active_proposals =
 					<Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
-						proposals.push(proposal_hash);
-						ensure!(
-							proposals.len() <= T::MaxProposals::get() as usize,
-							Error::<T, I>::TooManyProposals
-						);
+						proposals.try_push(proposal_hash).map_err(|_| Error::<T, I>::TooManyProposals)?;
 						Ok(proposals.len())
 					})?;
 				let index = Self::proposal_count();
@@ -1055,15 +1059,15 @@ mod tests {
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut ext: sp_io::TestExternalities = GenesisConfig {
-			collective_Instance1: collective::GenesisConfig {
+			collective: collective::GenesisConfig {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
 			},
-			collective_Instance2: collective::GenesisConfig {
+			collective_majority: collective::GenesisConfig {
 				members: vec![1, 2, 3, 4, 5],
 				phantom: Default::default(),
 			},
-			collective: Default::default(),
+			default_collective: Default::default(),
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
@@ -1077,7 +1081,7 @@ mod tests {
 	fn motions_basic_environment_works() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
-			assert_eq!(Collective::proposals(), Vec::<H256>::new());
+			assert_eq!(*Collective::proposals(), Vec::<H256>::new());
 		});
 	}
 
@@ -1103,10 +1107,10 @@ mod tests {
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
-				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 2, 1))),
-				record(Event::collective_Instance1(RawEvent::Disapproved(hash.clone())))
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 3))),
+				record(Event::Collective(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::Collective(RawEvent::Closed(hash.clone(), 2, 1))),
+				record(Event::Collective(RawEvent::Disapproved(hash.clone())))
 			]);
 		});
 	}
@@ -1165,10 +1169,10 @@ mod tests {
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
-				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 2, 1))),
-				record(Event::collective_Instance1(RawEvent::Disapproved(hash.clone())))
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 3))),
+				record(Event::Collective(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::Collective(RawEvent::Closed(hash.clone(), 2, 1))),
+				record(Event::Collective(RawEvent::Disapproved(hash.clone())))
 			]);
 		});
 	}
@@ -1190,11 +1194,11 @@ mod tests {
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
-				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 3, 0))),
-				record(Event::collective_Instance1(RawEvent::Approved(hash.clone()))),
-				record(Event::collective_Instance1(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 3))),
+				record(Event::Collective(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::Collective(RawEvent::Closed(hash.clone(), 3, 0))),
+				record(Event::Collective(RawEvent::Approved(hash.clone()))),
+				record(Event::Collective(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
 			]);
 		});
 	}
@@ -1217,12 +1221,12 @@ mod tests {
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance2(RawEvent::Proposed(1, 0, hash.clone(), 5))),
-				record(Event::collective_Instance2(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance2(RawEvent::Voted(3, hash.clone(), true, 3, 0))),
-				record(Event::collective_Instance2(RawEvent::Closed(hash.clone(), 5, 0))),
-				record(Event::collective_Instance2(RawEvent::Approved(hash.clone()))),
-				record(Event::collective_Instance2(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
+				record(Event::CollectiveMajority(RawEvent::Proposed(1, 0, hash.clone(), 5))),
+				record(Event::CollectiveMajority(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::CollectiveMajority(RawEvent::Voted(3, hash.clone(), true, 3, 0))),
+				record(Event::CollectiveMajority(RawEvent::Closed(hash.clone(), 5, 0))),
+				record(Event::CollectiveMajority(RawEvent::Approved(hash.clone()))),
+				record(Event::CollectiveMajority(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
 			]);
 		});
 	}
@@ -1307,7 +1311,7 @@ mod tests {
 			let hash = proposal.blake2_256().into();
 			let end = 4;
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
-			assert_eq!(Collective::proposals(), vec![hash]);
+			assert_eq!(*Collective::proposals(), vec![hash]);
 			assert_eq!(Collective::proposal_of(&hash), Some(proposal));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1317,7 +1321,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Proposed(
+					event: Event::Collective(RawEvent::Proposed(
 						1,
 						0,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -1445,7 +1449,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Proposed(
+					event: Event::Collective(RawEvent::Proposed(
 						1,
 						0,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -1455,7 +1459,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Voted(
+					event: Event::Collective(RawEvent::Voted(
 						1,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 						false,
@@ -1568,9 +1572,9 @@ mod tests {
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
 			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len));
-			assert_eq!(Collective::proposals(), vec![]);
+			assert_eq!(*Collective::proposals(), vec![]);
 			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
-			assert_eq!(Collective::proposals(), vec![hash]);
+			assert_eq!(*Collective::proposals(), vec![hash]);
 		});
 	}
 
@@ -1588,7 +1592,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(
+					event: Event::Collective(
 						RawEvent::Proposed(
 							1,
 							0,
@@ -1599,7 +1603,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Voted(
+					event: Event::Collective(RawEvent::Voted(
 						2,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 						false,
@@ -1610,14 +1614,14 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Closed(
+					event: Event::Collective(RawEvent::Closed(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(), 1, 1,
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Disapproved(
+					event: Event::Collective(RawEvent::Disapproved(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 					)),
 					topics: vec![],
@@ -1640,7 +1644,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Proposed(
+					event: Event::Collective(RawEvent::Proposed(
 						1,
 						0,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -1650,7 +1654,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Voted(
+					event: Event::Collective(RawEvent::Voted(
 						2,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 						true,
@@ -1661,21 +1665,21 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Closed(
+					event: Event::Collective(RawEvent::Closed(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(), 2, 0,
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Approved(
+					event: Event::Collective(RawEvent::Approved(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Executed(
+					event: Event::Collective(RawEvent::Executed(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 						Err(DispatchError::BadOrigin),
 					)),
@@ -1727,9 +1731,9 @@ mod tests {
 			assert_ok!(Collective::disapprove_proposal(Origin::root(), hash.clone()));
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 2))),
-				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance1(RawEvent::Disapproved(hash.clone()))),
+				record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 2))),
+				record(Event::Collective(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::Collective(RawEvent::Disapproved(hash.clone()))),
 			]);
 		})
 	}

@@ -83,6 +83,8 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
 parameter_types! {
@@ -107,7 +109,7 @@ type EnsureTwoOrRoot = EnsureOneOf<
 	EnsureRoot<u64>,
 	EnsureSignedBy<Two, u64>
 >;
-impl Config for Test {
+impl pallet_identity::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type Slashed = ();

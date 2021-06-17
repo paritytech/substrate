@@ -22,11 +22,15 @@
 use crate as tips;
 use super::*;
 use std::cell::RefCell;
-use frame_support::{assert_noop, assert_ok, parameter_types, weights::Weight, traits::Contains};
+use frame_support::{
+	assert_noop, assert_ok, parameter_types,
+	weights::Weight, traits::SortedMembers,
+	PalletId
+};
 use sp_runtime::Permill;
 use sp_core::H256;
 use sp_runtime::{
-	Perbill, ModuleId,
+	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
@@ -83,6 +87,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -94,7 +100,7 @@ thread_local! {
 	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
 }
 pub struct TenToFourteen;
-impl Contains<u128> for TenToFourteen {
+impl SortedMembers<u128> for TenToFourteen {
 	fn sorted_members() -> Vec<u128> {
 		TEN_TO_FOURTEEN.with(|v| {
 			v.borrow().clone()
@@ -121,11 +127,12 @@ parameter_types! {
 	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const DataDepositPerByte: u64 = 1;
-	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const MaximumReasonLength: u32 = 16384;
+	pub const MaxApprovals: u32 = 100;
 }
 impl pallet_treasury::Config for Test {
-	type ModuleId = TreasuryModuleId;
+	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
@@ -138,6 +145,7 @@ impl pallet_treasury::Config for Test {
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
+	type MaxApprovals = MaxApprovals;
 }
 parameter_types! {
 	pub const TipCountdown: u64 = 1;
@@ -168,7 +176,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 fn last_event() -> RawEvent<u64, u128, H256> {
 	System::events().into_iter().map(|r| r.event)
 		.filter_map(|e| {
-			if let Event::tips(inner) = e { Some(inner) } else { None }
+			if let Event::TipsModTestInst(inner) = e { Some(inner) } else { None }
 		})
 		.last()
 		.unwrap()

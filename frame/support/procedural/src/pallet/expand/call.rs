@@ -17,35 +17,46 @@
 
 use crate::pallet::Def;
 use frame_support_procedural_tools::clean_type_string;
+use crate::COUNTER;
 use syn::spanned::Spanned;
 
 /// * Generate enum call and implement various trait on it.
 /// * Implement Callable and call_function on `Pallet`
 pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
+	let (span, where_clause, methods, docs) = match def.call.as_ref() {
+		Some(call) => {
+			let span = call.attr_span;
+			let where_clause = call.where_clause.clone();
+			let methods = call.methods.clone();
+			let docs = call.docs.clone();
+
+			(span, where_clause, methods, docs)
+		}
+		None => (def.item.span(), None, Vec::new(), Vec::new()),
+	};
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_generics(def.call.attr_span);
-	let type_decl_bounded_gen = &def.type_decl_bounded_generics(def.call.attr_span);
-	let type_use_gen = &def.type_use_generics(def.call.attr_span);
-	let call_ident = syn::Ident::new("Call", def.call.attr_span);
+	let type_impl_gen = &def.type_impl_generics(span);
+	let type_decl_bounded_gen = &def.type_decl_bounded_generics(span);
+	let type_use_gen = &def.type_use_generics(span);
+	let call_ident = syn::Ident::new("Call", span);
 	let pallet_ident = &def.pallet_struct.pallet;
-	let where_clause = &def.call.where_clause;
 
-	let fn_name = def.call.methods.iter().map(|method| &method.name).collect::<Vec<_>>();
+	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
 
-	let fn_weight = def.call.methods.iter().map(|method| &method.weight);
+	let fn_weight = methods.iter().map(|method| &method.weight);
 
-	let fn_doc = def.call.methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
+	let fn_doc = methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
 
-	let args_name = def.call.methods.iter()
+	let args_name = methods.iter()
 		.map(|method| method.args.iter().map(|(_, name, _)| name.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 
-	let args_type = def.call.methods.iter()
+	let args_type = methods.iter()
 		.map(|method| method.args.iter().map(|(_, _, type_)| type_.clone()).collect::<Vec<_>>())
 		.collect::<Vec<_>>();
 
-	let args_compact_attr = def.call.methods.iter().map(|method| {
+	let args_compact_attr = methods.iter().map(|method| {
 		method.args.iter()
 			.map(|(is_compact, _, type_)| {
 				if *is_compact {
@@ -57,7 +68,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
-	let args_metadata_type = def.call.methods.iter().map(|method| {
+	let args_metadata_type = methods.iter().map(|method| {
 		method.args.iter()
 			.map(|(is_compact, _, type_)| {
 				let final_type = if *is_compact {
@@ -73,13 +84,43 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let default_docs = [syn::parse_quote!(
 		r"Contains one variant per dispatchable that can be called by an extrinsic."
 	)];
-	let docs = if def.call.docs.is_empty() {
+	let docs = if docs.is_empty() {
 		&default_docs[..]
 	} else {
-		&def.call.docs[..]
+		&docs[..]
 	};
 
-	quote::quote_spanned!(def.call.attr_span =>
+	let maybe_compile_error = if def.call.is_none() {
+		quote::quote!{
+			compile_error!(concat!(
+				"`",
+				stringify!($pallet_name),
+				"` does not have #[pallet::call] defined, perhaps you should remove `Call` from \
+				construct_runtime?",
+			));
+		}
+	} else {
+		proc_macro2::TokenStream::new()
+	};
+
+	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
+	let macro_ident = syn::Ident::new(&format!("__is_call_part_defined_{}", count), span);
+
+	quote::quote_spanned!(span =>
+		#[doc(hidden)]
+		pub mod __substrate_call_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #macro_ident {
+				($pallet_name:ident) => {
+					#maybe_compile_error
+				};
+			}
+
+			#[doc(hidden)]
+			pub use #macro_ident as is_call_part_defined;
+		}
+
 		#( #[doc = #docs] )*
 		#[derive(
 			#frame_support::RuntimeDebugNoBound,
@@ -89,6 +130,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::codec::Encode,
 			#frame_support::codec::Decode,
 		)]
+		#[codec(encode_bound())]
+		#[codec(decode_bound())]
 		#[allow(non_camel_case_types)]
 		pub enum #call_ident<#type_decl_bounded_gen> #where_clause {
 			#[doc(hidden)]

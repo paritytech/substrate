@@ -32,6 +32,7 @@ use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
 use sp_core::{
 	NativeOrEncoded,
+<<<<<<< HEAD
 	traits::{
 		CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions,
 	},
@@ -41,9 +42,21 @@ use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
 use sp_tasks::common::with_externalities_safe;
 use sp_tasks::pool_spawn::RuntimeInstanceSpawn;
+=======
+	traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawnExt, RuntimeSpawn},
+};
+use log::trace;
+use sp_wasm_interface::{HostFunctions, Function};
+use sc_executor_common::{
+	wasm_runtime::{WasmInstance, WasmModule, InvokeMethod},
+	runtime_blob::RuntimeBlob,
+};
+use sp_externalities::ExternalitiesExt as _;
+use sp_tasks::new_async_externalities;
+>>>>>>> master
 
 /// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES: u64 = 1024;
+const DEFAULT_HEAP_PAGES: u64 = 2048;
 
 /// Delegate for dispatching a CodeExecutor call.
 ///
@@ -161,64 +174,81 @@ impl WasmExecutor {
 			Err(e) => Err(e),
 		}
 	}
+
+	/// Perform a call into the given runtime.
+	///
+	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be isntantiated with the
+	/// parameters this `WasmExecutor` was initialized with.
+	///
+	/// In case of problems with during creation of the runtime or instantation, a `Err` is returned.
+	/// that describes the message.
+	#[doc(hidden)] // We use this function for tests across multiple crates.
+	pub fn uncached_call(
+		&self,
+		runtime_blob: RuntimeBlob,
+		ext: &mut dyn Externalities,
+		allow_missing_host_functions: bool,
+		export_name: &str,
+		call_data: &[u8],
+	) -> std::result::Result<Vec<u8>, String> {
+		let module = crate::wasm_runtime::create_wasm_runtime_with_code(
+			self.method,
+			self.default_heap_pages,
+			runtime_blob,
+			self.host_functions.to_vec(),
+			allow_missing_host_functions,
+			self.cache_path.as_deref(),
+		)
+		.map_err(|e| format!("Failed to create module: {:?}", e))?;
+
+		let instance = module
+			.new_instance()
+			.map_err(|e| format!("Failed to create instance: {:?}", e))?;
+
+		let instance = AssertUnwindSafe(instance);
+		let mut ext = AssertUnwindSafe(ext);
+		let module = AssertUnwindSafe(module);
+
+		with_externalities_safe(&mut **ext, move || {
+			preregister_builtin_ext(module.clone());
+			instance.call_export(export_name, call_data)
+		})
+		.and_then(|r| r)
+		.map_err(|e| e.to_string())
+	}
 }
 
-impl sp_core::traits::CallInWasm for WasmExecutor {
-	fn call_in_wasm(
+impl sp_core::traits::ReadRuntimeVersion for WasmExecutor {
+	fn read_runtime_version(
 		&self,
 		wasm_code: &[u8],
-		code_hash: Option<Vec<u8>>,
-		method: &str,
-		call_data: &[u8],
 		ext: &mut dyn Externalities,
-		missing_host_functions: MissingHostFunctions,
 	) -> std::result::Result<Vec<u8>, String> {
-		let allow_missing_host_functions = missing_host_functions.allowed();
+		let runtime_blob = RuntimeBlob::uncompress_if_needed(&wasm_code)
+			.map_err(|e| format!("Failed to create runtime blob: {:?}", e))?;
 
-		if let Some(hash) = code_hash {
-			let code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_code.into()),
-				hash,
-				heap_pages: None,
-			};
-
-			self.with_instance(&code, ext, allow_missing_host_functions, |module, instance, _, mut ext| {
-				with_externalities_safe(
-					&mut **ext,
-					move || {
-						RuntimeInstanceSpawn::register_on_externalities(module.clone());
-						instance.call_export(method, call_data)
-					}
-				)
-			}).map_err(|e| e.to_string())
-		} else {
-			let module = crate::wasm_runtime::create_wasm_runtime_with_code(
-				self.method,
-				self.default_heap_pages,
-				&wasm_code,
-				self.host_functions.to_vec(),
-				allow_missing_host_functions,
-				self.cache_path.as_deref(),
-			)
-				.map_err(|e| format!("Failed to create module: {:?}", e))?;
-
-			let instance = module.new_instance()
-				.map_err(|e| format!("Failed to create instance: {:?}", e))?;
-
-			let instance = AssertUnwindSafe(instance);
-			let mut ext = AssertUnwindSafe(ext);
-			let module = AssertUnwindSafe(module);
-
-			with_externalities_safe(
-				&mut **ext,
-				move || {
-					RuntimeInstanceSpawn::register_on_externalities(module.clone());
-					instance.call_export(method, call_data)
-				}
-			)
-			.and_then(|r| r)
-			.map_err(|e| e.to_string())
+		if let Some(version) = crate::wasm_runtime::read_embedded_version(&runtime_blob)
+			.map_err(|e| format!("Failed to read the static section: {:?}", e))
+			.map(|v| v.map(|v| v.encode()))?
+		{
+			return Ok(version);
 		}
+
+		// If the blob didn't have embedded runtime version section, we fallback to the legacy
+		// way of fetching the verison: i.e. instantiating the given instance and calling
+		// `Core_version` on it.
+
+		self.uncached_call(
+			runtime_blob,
+			ext,
+			// If a runtime upgrade introduces new host functions that are not provided by
+			// the node, we should not fail at instantiation. Otherwise nodes that are
+			// updated could run this successfully and it could lead to a storage root
+			// mismatch when importing this block.
+			true,
+			"Core_version",
+			&[],
+		)
 	}
 }
 
@@ -297,6 +327,142 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
+<<<<<<< HEAD
+=======
+/// Helper inner struct to implement `RuntimeSpawn` extension.
+pub struct RuntimeInstanceSpawn {
+	module: Arc<dyn WasmModule>,
+	tasks: parking_lot::Mutex<HashMap<u64, mpsc::Receiver<Vec<u8>>>>,
+	counter: AtomicU64,
+	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
+}
+
+impl RuntimeSpawn for RuntimeInstanceSpawn {
+	fn spawn_call(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
+		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
+
+		let (sender, receiver) = mpsc::channel();
+		self.tasks.lock().insert(new_handle, receiver);
+
+		let module = self.module.clone();
+		let scheduler = self.scheduler.clone();
+		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
+			let module = AssertUnwindSafe(module);
+
+			let async_ext = match new_async_externalities(scheduler.clone()) {
+				Ok(val) => val,
+				Err(e) => {
+					log::error!(
+						target: "executor",
+						"Failed to setup externalities for async context: {}",
+						e,
+					);
+
+					// This will drop sender and receiver end will panic
+					return;
+				}
+			};
+
+			let mut async_ext = match async_ext.with_runtime_spawn(
+				Box::new(RuntimeInstanceSpawn::new(module.clone(), scheduler))
+			) {
+				Ok(val) => val,
+				Err(e) => {
+					log::error!(
+						target: "executor",
+						"Failed to setup runtime extension for async externalities: {}",
+						e,
+					);
+
+					// This will drop sender and receiver end will panic
+					return;
+				}
+			};
+
+			let result = with_externalities_safe(
+				&mut async_ext,
+				move || {
+
+					// FIXME: Should be refactored to shared "instance factory".
+					// Instantiating wasm here every time is suboptimal at the moment, shared
+					// pool of instances should be used.
+					//
+					// https://github.com/paritytech/substrate/issues/7354
+					let instance = module.new_instance()
+						.expect("Failed to create new instance from module");
+
+					instance.call(
+						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
+						&data[..],
+					).expect("Failed to invoke instance.")
+				}
+			);
+
+			match result {
+				Ok(output) => {
+					let _ = sender.send(output);
+				},
+				Err(error) => {
+					// If execution is panicked, the `join` in the original runtime code will panic as well,
+					// since the sender is dropped without sending anything.
+					log::error!("Call error in spawned task: {:?}", error);
+				},
+			}
+		}));
+
+
+		new_handle
+	}
+
+	fn join(&self, handle: u64) -> Vec<u8> {
+		let receiver = self.tasks.lock().remove(&handle).expect("No task for the handle");
+		let output = receiver.recv().expect("Spawned task panicked for the handle");
+		output
+	}
+}
+
+impl RuntimeInstanceSpawn {
+	pub fn new(
+		module: Arc<dyn WasmModule>,
+		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
+	) -> Self {
+		Self {
+			module,
+			scheduler,
+			counter: 0.into(),
+			tasks: HashMap::new().into(),
+		}
+	}
+
+	fn with_externalities_and_module(
+		module: Arc<dyn WasmModule>,
+		mut ext: &mut dyn Externalities,
+	) -> Option<Self> {
+		ext.extension::<sp_core::traits::TaskExecutorExt>()
+			.map(move |task_ext| Self::new(module, task_ext.clone()))
+	}
+}
+
+/// Pre-registers the built-in extensions to the currently effective externalities.
+///
+/// Meant to be called each time before calling into the runtime.
+fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
+	sp_externalities::with_externalities(move |mut ext| {
+		if let Some(runtime_spawn) =
+			RuntimeInstanceSpawn::with_externalities_and_module(module, ext)
+		{
+			if let Err(e) = ext.register_extension(RuntimeSpawnExt(Box::new(runtime_spawn))) {
+				trace!(
+					target: "executor",
+					"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
+					e,
+				)
+			}
+		}
+	});
+}
+
+>>>>>>> master
 impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	type Error = Error;
 
@@ -342,7 +508,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						with_externalities_safe(
 							&mut **ext,
 							move || {
-								RuntimeInstanceSpawn::register_on_externalities(module.clone());
+								preregister_builtin_ext(module.clone());
 								instance.call_export(method, data).map(NativeOrEncoded::Encoded)
 							}
 						)
@@ -393,17 +559,13 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<D> {
-	fn call_in_wasm(
+impl<D: NativeExecutionDispatch> sp_core::traits::ReadRuntimeVersion for NativeExecutor<D> {
+	fn read_runtime_version(
 		&self,
-		wasm_blob: &[u8],
-		code_hash: Option<Vec<u8>>,
-		method: &str,
-		call_data: &[u8],
+		wasm_code: &[u8],
 		ext: &mut dyn Externalities,
-		missing_host_functions: MissingHostFunctions,
 	) -> std::result::Result<Vec<u8>, String> {
-		self.wasm.call_in_wasm(wasm_blob, code_hash, method, call_data, ext, missing_host_functions)
+		self.wasm.read_runtime_version(wasm_code, ext)
 	}
 }
 

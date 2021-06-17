@@ -121,7 +121,7 @@ impl<T: ChainInfo> Node<T> {
 			backend,
 			keystore,
 			mut task_manager,
-			inherent_data_providers,
+			create_inherent_data_providers,
 			consensus_data_provider,
 			select_chain,
 			block_import,
@@ -134,11 +134,11 @@ impl<T: ChainInfo> Node<T> {
 			config.transaction_pool.clone(),
 			true.into(),
 			config.prometheus_registry(),
-			task_manager.spawn_handle(),
+			task_manager.spawn_essential_handle(),
 			client.clone(),
 		);
 
-		let (network, network_status_sinks, system_rpc_tx, network_starter) = {
+		let (network, system_rpc_tx, network_starter) = {
 			let params = BuildNetworkParams {
 				config: &config,
 				client: client.clone(),
@@ -182,7 +182,6 @@ impl<T: ChainInfo> Node<T> {
 				rpc_extensions_builder: Box::new(move |_, _| jsonrpc_core::IoHandler::default()),
 				remote_blockchain: None,
 				network,
-				network_status_sinks,
 				system_rpc_tx,
 				telemetry: None
 			};
@@ -198,7 +197,7 @@ impl<T: ChainInfo> Node<T> {
 			commands_stream,
 			select_chain,
 			consensus_data_provider,
-			inherent_data_providers,
+			create_inherent_data_providers,
 		});
 
 		// spawn the authorship task as an essential task.

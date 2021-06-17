@@ -46,7 +46,7 @@ mod rep {
 	use super::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
-	pub const SAME_REQUEST: Rep = Rep::new(i32::min_value(), "Same block request multiple times");
+	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
 }
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
@@ -65,11 +65,7 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 // Visibility `pub(crate)` to allow `crate::light_client_requests::sender` to generate block request
 // protocol name and send block requests.
 pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
-	let mut s = String::new();
-	s.push_str("/");
-	s.push_str(protocol_id.as_ref());
-	s.push_str("/sync/2");
-	s
+	format!("/{}/sync/2", protocol_id.as_ref())
 }
 
 /// The key of [`BlockRequestHandler::seen_requests`].
@@ -80,6 +76,7 @@ struct SeenRequestsKey<B: BlockT> {
 	max_blocks: usize,
 	direction: Direction,
 	attributes: BlockAttributes,
+	support_multiple_justifications: bool,
 }
 
 impl<B: BlockT> Hash for SeenRequestsKey<B> {
@@ -180,15 +177,18 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 		let attributes = BlockAttributes::from_be_u32(request.fields)?;
 
+		let support_multiple_justifications = request.support_multiple_justifications;
+
 		let key = SeenRequestsKey {
 			peer: *peer,
 			max_blocks,
 			direction,
 			from: from_block_id.clone(),
 			attributes,
+			support_multiple_justifications,
 		};
 
-		let mut reputation_changes = Vec::new();
+		let mut reputation_change = None;
 
 		match self.seen_requests.get_mut(&key) {
 			Some(SeenRequestsValue::First) => {},
@@ -196,7 +196,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				*requests = requests.saturating_add(1);
 
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
-					reputation_changes.push(rep::SAME_REQUEST);
+					reputation_change = Some(rep::SAME_REQUEST);
 				}
 			},
 			None => {
@@ -215,15 +215,16 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			attributes,
 		);
 
-		let result = if reputation_changes.is_empty() {
+		let result = if reputation_change.is_none() {
 			let block_response = self.get_block_response(
 				attributes,
 				from_block_id,
 				direction,
 				max_blocks,
+				support_multiple_justifications,
 			)?;
 
-			// If any of the blocks contains nay data, we can consider it as successful request.
+			// If any of the blocks contains any data, we can consider it as successful request.
 			if block_response
 				.blocks
 				.iter()
@@ -248,7 +249,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 		pending_response.send(OutgoingResponse {
 			result,
-			reputation_changes,
+			reputation_changes: reputation_change.into_iter().collect(),
 			sent_feedback: None,
 		}).map_err(|_| HandleRequestError::SendResponse)
 	}
@@ -259,6 +260,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 		mut block_id: BlockId<B>,
 		direction: Direction,
 		max_blocks: usize,
+		support_multiple_justifications: bool,
 	) -> Result<BlockResponse, HandleRequestError> {
 		let get_header = attributes.contains(BlockAttributes::HEADER);
 		let get_body = attributes.contains(BlockAttributes::BODY);
@@ -277,22 +279,33 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				None
 			};
 
-			// TODO: In a follow up PR tracked by https://github.com/paritytech/substrate/issues/8172
-			// we want to send/receive all justifications.
-			// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
-			// the first one. When sending we could have just taken the first one, since we don't
-			// expect there to be any other kind currently, but when receiving we need to add the
-			// engine ID tag.
-			// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and will be
-			// removed when resolving the above issue.
-			let justification = justifications.and_then(|just| just.into_justification(*b"FRNK"));
+			let (justifications, justification, is_empty_justification) =
+				if support_multiple_justifications {
+					let justifications = match justifications {
+						Some(v) => v.encode(),
+						None => Vec::new(),
+					};
+					(justifications, Vec::new(), false)
+				} else {
+					// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
+					// the first one. When sending we could have just taken the first one, since we don't
+					// expect there to be any other kind currently, but when receiving we need to add the
+					// engine ID tag.
+					// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and will be
+					// removed once we remove the backwards compatibility.
+					// See: https://github.com/paritytech/substrate/issues/8172
+					let justification =
+						justifications.and_then(|just| just.into_justification(*b"FRNK"));
 
-			let is_empty_justification = justification
-				.as_ref()
-				.map(|j| j.is_empty())
-				.unwrap_or(false);
+					let is_empty_justification = justification
+						.as_ref()
+						.map(|j| j.is_empty())
+						.unwrap_or(false);
 
-			let justification = justification.unwrap_or_default();
+					let justification = justification.unwrap_or_default();
+
+					(Vec::new(), justification, is_empty_justification)
+				};
 
 			let body = if get_body {
 				match self.client.block_body(&BlockId::Hash(hash))? {
@@ -320,6 +333,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				message_queue: Vec::new(),
 				justification,
 				is_empty_justification,
+				justifications,
 			};
 
 			total_size += block_data.body.len();

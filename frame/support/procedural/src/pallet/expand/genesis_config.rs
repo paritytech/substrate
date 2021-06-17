@@ -16,18 +16,52 @@
 // limitations under the License.
 
 use crate::pallet::{Def, parse::helper::get_doc_literals};
+use crate::COUNTER;
+use syn::{Ident, spanned::Spanned};
 
 /// * add various derive trait on GenesisConfig struct.
 pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
-	let genesis_config = if let Some(genesis_config) = &def.genesis_config {
-		genesis_config
+	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
+
+	let (genesis_config, macro_ident) = if let Some(genesis_config) = &def.genesis_config {
+		let ident = Ident::new(
+			&format!("__is_genesis_config_defined_{}", count),
+			genesis_config.genesis_config.span(),
+		);
+		(genesis_config, ident)
 	} else {
-		return Default::default()
+		let macro_ident = Ident::new(
+			&format!("__is_genesis_config_defined_{}", count),
+			def.item.span(),
+		);
+
+		return quote::quote! {
+			#[doc(hidden)]
+			pub mod __substrate_genesis_config_check {
+				#[macro_export]
+				#[doc(hidden)]
+				macro_rules! #macro_ident {
+					($pallet_name:ident) => {
+						compile_error!(concat!(
+							"`",
+							stringify!($pallet_name),
+							"` does not have #[pallet::genesis_config] defined, perhaps you should \
+							remove `Config` from construct_runtime?",
+						));
+					}
+				}
+	
+				#[doc(hidden)]
+				pub use #macro_ident as is_genesis_config_defined;
+			}
+		};
 	};
 	let frame_support = &def.frame_support;
 
 	let genesis_config_item = &mut def.item.content.as_mut()
 		.expect("Checked by def parser").1[genesis_config.index];
+
+	let serde_crate = format!("{}::serde", frame_support);
 
 	match genesis_config_item {
 		syn::Item::Enum(syn::ItemEnum { attrs, ..}) |
@@ -50,9 +84,22 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 			attrs.push(syn::parse_quote!( #[serde(deny_unknown_fields)] ));
 			attrs.push(syn::parse_quote!( #[serde(bound(serialize = ""))] ));
 			attrs.push(syn::parse_quote!( #[serde(bound(deserialize = ""))] ));
+			attrs.push(syn::parse_quote!( #[serde(crate = #serde_crate)] ));
 		},
 		_ => unreachable!("Checked by genesis_config parser"),
 	}
 
-	Default::default()
+	quote::quote! {
+		#[doc(hidden)]
+		pub mod __substrate_genesis_config_check {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #macro_ident {
+				($pallet_name:ident) => {};
+			}
+	
+			#[doc(hidden)]
+			pub use #macro_ident as is_genesis_config_defined;
+		}
+	}
 }

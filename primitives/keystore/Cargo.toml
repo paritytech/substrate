@@ -35,5 +35,4 @@ default = ["std"]
 std = [
 	"serde",
 	"schnorrkel/std",
-	"schnorrkel/serde",
 ]

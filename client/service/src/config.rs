@@ -23,9 +23,13 @@ pub use sc_client_db::{
 	KeepBlocks, TransactionStorageMode
 };
 pub use sc_network::Multiaddr;
-pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
+pub use sc_network::config::{
+	ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig,
+	SetConfig, NonDefaultSetConfig, TransportConfig,
+	RequestResponseConfig, IncomingRequest, OutgoingResponse,
+};
 pub use sc_executor::WasmExecutionMethod;
-use sc_client_api::execution_extensions::ExecutionStrategies;
+pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 
 use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
@@ -85,6 +89,8 @@ pub struct Configuration {
 	pub rpc_ipc: Option<String>,
 	/// Maximum number of connections for WebSockets RPC server. `None` if default.
 	pub rpc_ws_max_connections: Option<usize>,
+	/// Size of the RPC HTTP server thread pool. `None` if default.
+	pub rpc_http_threads: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
 	/// RPC methods to expose (by default only a safe subset or all of them).

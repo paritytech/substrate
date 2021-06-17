@@ -21,9 +21,8 @@ use crate::*;
 use crate as staking;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize, OneSessionHandler},
+	traits::{Currency, FindAuthor, Get, OnInitialize, OneSessionHandler},
 	weights::constants::RocksDbWeight,
-	IterableStorageMap, StorageDoubleMap, StorageMap, StorageValue,
 };
 use sp_core::H256;
 use sp_io;
@@ -96,6 +95,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: staking::{Pallet, Call, Config<T>, Storage, Event<T>},
@@ -154,6 +154,8 @@ impl frame_system::Config for Test {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
@@ -191,7 +193,7 @@ impl pallet_authorship::Config for Test {
 	type FindAuthor = Author11;
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
-	type EventHandler = Module<Test>;
+	type EventHandler = Pallet<Test>;
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
@@ -240,6 +242,7 @@ impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
+
 impl Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
@@ -258,6 +261,7 @@ impl Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 }
 
@@ -283,6 +287,8 @@ pub struct ExtBuilder {
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
 	initialize_first_session: bool,
+	min_nominator_bond: Balance,
+	min_validator_bond: Balance,
 }
 
 impl Default for ExtBuilder {
@@ -297,6 +303,8 @@ impl Default for ExtBuilder {
 			invulnerables: vec![],
 			has_stakers: true,
 			initialize_first_session: true,
+			min_nominator_bond: ExistentialDeposit::get(),
+			min_validator_bond: ExistentialDeposit::get(),
 		}
 	}
 }
@@ -358,7 +366,15 @@ impl ExtBuilder {
 		OFFSET.with(|v| *v.borrow_mut() = offset);
 		self
 	}
-	pub fn build(self) -> sp_io::TestExternalities {
+	pub fn min_nominator_bond(mut self, amount: Balance) -> Self {
+		self.min_nominator_bond = amount;
+		self
+	}
+	pub fn min_validator_bond(mut self, amount: Balance) -> Self {
+		self.min_validator_bond = amount;
+		self
+	}
+	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
@@ -431,6 +447,8 @@ impl ExtBuilder {
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
 			slash_reward_fraction: Perbill::from_percent(10),
+			min_nominator_bond: self.min_nominator_bond,
+			min_validator_bond: self.min_validator_bond,
 			..Default::default()
 		}
 		.assimilate_storage(&mut storage);
@@ -456,7 +474,7 @@ impl ExtBuilder {
 			ext.execute_with(|| {
 				System::set_block_number(1);
 				Session::on_initialize(1);
-				Staking::on_initialize(1);
+				<Staking as Hooks<u64>>::on_initialize(1);
 				Timestamp::set_timestamp(INIT_TIMESTAMP);
 			});
 		}
@@ -474,6 +492,14 @@ fn post_conditions() {
 	check_nominators();
 	check_exposures();
 	check_ledgers();
+	check_count();
+}
+
+fn check_count() {
+	let nominator_count = Nominators::<Test>::iter().count() as u32;
+	let validator_count = Validators::<Test>::iter().count() as u32;
+	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
+	assert_eq!(validator_count, CounterForValidators::<Test>::get());
 }
 
 fn check_ledgers() {
@@ -607,7 +633,7 @@ pub(crate) fn run_to_block(n: BlockNumber) {
 	for b in (System::block_number() + 1)..=n {
 		System::set_block_number(b);
 		Session::on_initialize(b);
-		Staking::on_initialize(b);
+		<Staking as Hooks<u64>>::on_initialize(b);
 		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
 		if b != n {
 			Staking::on_finalize(System::block_number());
@@ -693,7 +719,7 @@ pub(crate) fn reward_all_elected() {
 		.into_iter()
 		.map(|v| (v, 1));
 
-	<Module<Test>>::reward_by_ids(rewards)
+	<Pallet<Test>>::reward_by_ids(rewards)
 }
 
 pub(crate) fn validator_controllers() -> Vec<AccountId> {
@@ -711,10 +737,10 @@ pub(crate) fn on_offence_in_era(
 	slash_fraction: &[Perbill],
 	era: EraIndex,
 ) {
-	let bonded_eras = crate::BondedEras::get();
+	let bonded_eras = crate::BondedEras::<Test>::get();
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
-			let _ = Staking::on_offence(offenders, slash_fraction, start_session).unwrap();
+			let _ = Staking::on_offence(offenders, slash_fraction, start_session);
 			return;
 		} else if bonded_era > era {
 			break;
@@ -727,7 +753,7 @@ pub(crate) fn on_offence_in_era(
 				offenders,
 				slash_fraction,
 				Staking::eras_start_session_index(era).unwrap()
-			).unwrap();
+			);
 	} else {
 		panic!("cannot slash in era {}", era);
 	}
@@ -791,7 +817,7 @@ macro_rules! assert_session_era {
 
 pub(crate) fn staking_events() -> Vec<staking::Event<Test>> {
 	System::events().into_iter().map(|r| r.event).filter_map(|e| {
-		if let Event::staking(inner) = e {
+		if let Event::Staking(inner) = e {
 			Some(inner)
 		} else {
 			None

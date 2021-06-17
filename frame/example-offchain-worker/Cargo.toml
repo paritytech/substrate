@@ -16,7 +16,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
-serde = { version = "1.0.101", optional = true }
 sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
 sp-keystore = { version = "0.9.0", path = "../../primitives/keystore", optional = true }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
@@ -31,7 +30,6 @@ std = [
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
-	"serde",
 	"lite-json/std",
 	"sp-core/std",
 	"sp-io/std",

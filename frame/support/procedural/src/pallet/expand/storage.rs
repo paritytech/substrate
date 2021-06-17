@@ -15,60 +15,152 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
-use crate::pallet::parse::storage::{Metadata, QueryKind};
+use crate::pallet::{Def, parse::storage::StorageDef};
+use crate::pallet::parse::storage::{Metadata, QueryKind, StorageGenerics};
 use frame_support_procedural_tools::clean_type_string;
+use std::collections::HashSet;
 
 /// Generate the prefix_ident related the the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
-fn prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
+fn prefix_ident(storage: &StorageDef) -> syn::Ident {
+	let storage_ident = &storage.ident;
 	syn::Ident::new(&format!("_GeneratedPrefixForStorage{}", storage_ident), storage_ident.span())
 }
 
-/// * generate StoragePrefix structs (e.g. for a storage `MyStorage` a struct with the name
-///   `_GeneratedPrefixForStorage$NameOfStorage` is generated) and implements StorageInstance trait.
-/// * replace the first generic `_` by the generated prefix structure
-/// * generate metadatas
-pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
-	let frame_support = &def.frame_support;
-	let frame_system = &def.frame_system;
-	let pallet_ident = &def.pallet_struct.pallet;
+/// Check for duplicated storage prefixes. This step is necessary since users can specify an
+/// alternative storage prefix using the #[pallet::storage_prefix] syntax, and we need to ensure
+/// that the prefix specified by the user is not a duplicate of an existing one.
+fn check_prefix_duplicates(
+	storage_def: &StorageDef,
+	set: &mut HashSet<String>,
+) -> syn::Result<()> {
+	let prefix = storage_def.prefix();
 
-	// Replace first arg `_` by the generated prefix structure.
-	// Add `#[allow(type_alias_bounds)]`
+	if !set.insert(prefix.clone()) {
+		let err = syn::Error::new(
+			storage_def.prefix_span(),
+			format!("Duplicate storage prefixes found for `{}`", prefix),
+		);
+		return Err(err);
+	}
+
+	Ok(())
+}
+
+/// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
+/// * if generics are named: reorder the generic, remove their name, and add the missing ones.
+/// * Add `#[allow(type_alias_bounds)]`
+pub fn process_generics(def: &mut Def) -> syn::Result<()> {
+	let frame_support = &def.frame_support;
+	let mut prefix_set = HashSet::new();
+
 	for storage_def in def.storages.iter_mut() {
+		check_prefix_duplicates(storage_def, &mut prefix_set)?;
+
 		let item = &mut def.item.content.as_mut().expect("Checked by def").1[storage_def.index];
 
-		let typ_item = if let syn::Item::Type(t) = item {
-			t
-		} else {
-			unreachable!("Checked by def");
+		let typ_item = match item {
+			syn::Item::Type(t) => t,
+			_ => unreachable!("Checked by def"),
 		};
 
 		typ_item.attrs.push(syn::parse_quote!(#[allow(type_alias_bounds)]));
 
-		let typ_path = if let syn::Type::Path(p) = &mut *typ_item.ty {
-			p
-		} else {
-			unreachable!("Checked by def");
+		let typ_path = match &mut *typ_item.ty {
+			syn::Type::Path(p) => p,
+			_ => unreachable!("Checked by def"),
 		};
 
-		let args = if let syn::PathArguments::AngleBracketed(args) =
-			&mut typ_path.path.segments[0].arguments
-		{
-			args
-		} else {
-			unreachable!("Checked by def");
+		let args = match &mut typ_path.path.segments[0].arguments {
+			syn::PathArguments::AngleBracketed(args) => args,
+			_ => unreachable!("Checked by def"),
 		};
 
+		let prefix_ident = prefix_ident(&storage_def);
 		let type_use_gen = if def.config.has_instance {
 			quote::quote_spanned!(storage_def.attr_span => T, I)
 		} else {
 			quote::quote_spanned!(storage_def.attr_span => T)
 		};
-		let prefix_ident = prefix_ident(&storage_def.ident);
-		args.args[0] = syn::parse_quote!( #prefix_ident<#type_use_gen> );
+
+		let default_query_kind: syn::Type =
+			syn::parse_quote!(#frame_support::storage::types::OptionQuery);
+		let default_on_empty: syn::Type =
+			syn::parse_quote!(#frame_support::traits::GetDefault);
+		let default_max_values: syn::Type =
+			syn::parse_quote!(#frame_support::traits::GetDefault);
+
+		if let Some(named_generics) = storage_def.named_generics.clone() {
+			args.args.clear();
+			args.args.push(syn::parse_quote!( #prefix_ident<#type_use_gen> ));
+			match named_generics {
+				StorageGenerics::Value { value, query_kind, on_empty } => {
+					args.args.push(syn::GenericArgument::Type(value));
+					let query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
+					args.args.push(syn::GenericArgument::Type(query_kind));
+					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
+					args.args.push(syn::GenericArgument::Type(on_empty));
+				}
+				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values } => {
+					args.args.push(syn::GenericArgument::Type(hasher));
+					args.args.push(syn::GenericArgument::Type(key));
+					args.args.push(syn::GenericArgument::Type(value));
+					let query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
+					args.args.push(syn::GenericArgument::Type(query_kind));
+					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
+					args.args.push(syn::GenericArgument::Type(on_empty));
+					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					args.args.push(syn::GenericArgument::Type(max_values));
+				}
+				StorageGenerics::DoubleMap {
+					hasher1, key1, hasher2, key2, value, query_kind, on_empty, max_values,
+				} => {
+					args.args.push(syn::GenericArgument::Type(hasher1));
+					args.args.push(syn::GenericArgument::Type(key1));
+					args.args.push(syn::GenericArgument::Type(hasher2));
+					args.args.push(syn::GenericArgument::Type(key2));
+					args.args.push(syn::GenericArgument::Type(value));
+					let query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
+					args.args.push(syn::GenericArgument::Type(query_kind));
+					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
+					args.args.push(syn::GenericArgument::Type(on_empty));
+					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					args.args.push(syn::GenericArgument::Type(max_values));
+				}
+				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values, } => {
+					args.args.push(syn::GenericArgument::Type(keygen));
+					args.args.push(syn::GenericArgument::Type(value));
+					let query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
+					args.args.push(syn::GenericArgument::Type(query_kind));
+					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
+					args.args.push(syn::GenericArgument::Type(on_empty));
+					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
+					args.args.push(syn::GenericArgument::Type(max_values));
+				}
+			}
+		} else {
+			args.args[0] = syn::parse_quote!( #prefix_ident<#type_use_gen> );
+		}
 	}
+
+	Ok(())
+}
+
+/// * generate StoragePrefix structs (e.g. for a storage `MyStorage` a struct with the name
+///   `_GeneratedPrefixForStorage$NameOfStorage` is generated) and implements StorageInstance trait.
+/// * if generics are unnamed: replace the first generic `_` by the generated prefix structure
+/// * if generics are named: reorder the generic, remove their name, and add the missing ones.
+/// * Add `#[allow(type_alias_bounds)]` on storages type alias
+/// * generate metadatas
+pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
+	if let Err(e) = process_generics(def) {
+		return e.into_compile_error().into();
+	}
+
+	let frame_support = &def.frame_support;
+	let frame_system = &def.frame_system;
+	let pallet_ident = &def.pallet_struct.pallet;
+
 
 	let entries = def.storages.iter()
 		.map(|storage| {
@@ -89,6 +181,9 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				),
 				Metadata::DoubleMap { .. } => quote::quote_spanned!(storage.attr_span =>
 					#frame_support::storage::types::StorageDoubleMapMetadata
+				),
+				Metadata::NMap { .. } => quote::quote_spanned!(storage.attr_span =>
+					#frame_support::storage::types::StorageNMapMetadata
 				),
 			};
 
@@ -123,6 +218,24 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							key2_hasher: <#full_ident as #metadata_trait>::HASHER2,
 							key1: #frame_support::metadata::DecodeDifferent::Encode(#key1),
 							key2: #frame_support::metadata::DecodeDifferent::Encode(#key2),
+							value: #frame_support::metadata::DecodeDifferent::Encode(#value),
+						}
+					)
+				},
+				Metadata::NMap { keys, value, .. } => {
+					let keys = keys
+						.iter()
+						.map(|key| clean_type_string(&quote::quote!(#key).to_string()))
+						.collect::<Vec<_>>();
+					let value = clean_type_string(&quote::quote!(#value).to_string());
+					quote::quote_spanned!(storage.attr_span =>
+						#frame_support::metadata::StorageEntryType::NMap {
+							keys: #frame_support::metadata::DecodeDifferent::Encode(&[
+								#( #keys, )*
+							]),
+							hashers: #frame_support::metadata::DecodeDifferent::Encode(
+								<#full_ident as #metadata_trait>::HASHERS,
+							),
 							value: #frame_support::metadata::DecodeDifferent::Encode(#value),
 						}
 					)
@@ -227,6 +340,32 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						}
 					)
 				},
+				Metadata::NMap { keygen, value, .. } => {
+					let query = match storage.query_kind.as_ref().expect("Checked by def") {
+						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
+							Option<#value>
+						),
+						QueryKind::ValueQuery => quote::quote!(#value),
+					};
+					quote::quote_spanned!(storage.attr_span =>
+						#(#cfg_attrs)*
+						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
+							#( #docs )*
+							pub fn #getter<KArg>(key: KArg) -> #query
+							where
+								KArg: #frame_support::storage::types::EncodeLikeTuple<
+									<#keygen as #frame_support::storage::types::KeyGenerator>::KArg
+								>
+									+ #frame_support::storage::types::TupleToEncodedIter,
+							{
+								<
+									#full_ident as
+									#frame_support::storage::StorageNMap<#keygen, #value>
+								>::get(key)
+							}
+						}
+					)
+				}
 			}
 		} else {
 			Default::default()
@@ -235,9 +374,9 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let prefix_structs = def.storages.iter().map(|storage_def| {
 		let type_impl_gen = &def.type_impl_generics(storage_def.attr_span);
 		let type_use_gen = &def.type_use_generics(storage_def.attr_span);
-		let prefix_struct_ident = prefix_ident(&storage_def.ident);
+		let prefix_struct_ident = prefix_ident(&storage_def);
 		let prefix_struct_vis = &storage_def.vis;
-		let prefix_struct_const = storage_def.ident.to_string();
+		let prefix_struct_const = storage_def.prefix();
 		let config_where_clause = &def.config.where_clause;
 
 		let cfg_attrs = &storage_def.cfg_attrs;

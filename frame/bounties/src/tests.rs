@@ -24,12 +24,13 @@ use super::*;
 use std::cell::RefCell;
 
 use frame_support::{
-	assert_noop, assert_ok, parameter_types, weights::Weight, traits::OnInitialize
+	assert_noop, assert_ok, parameter_types, weights::Weight, traits::OnInitialize,
+	PalletId
 };
 
 use sp_core::H256;
 use sp_runtime::{
-	Perbill, ModuleId,
+	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
@@ -87,6 +88,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -103,11 +106,12 @@ parameter_types! {
 	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const DataDepositPerByte: u64 = 1;
-	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub const MaxApprovals: u32 = 100;
 }
 // impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
-	type ModuleId = TreasuryModuleId;
+	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
@@ -120,6 +124,7 @@ impl pallet_treasury::Config for Test {
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = Bounties;
+	type MaxApprovals = MaxApprovals;
 }
 parameter_types! {
 	pub const BountyDepositBase: u64 = 80;
@@ -156,7 +161,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 fn last_event() -> RawEvent<u64, u128> {
 	System::events().into_iter().map(|r| r.event)
 		.filter_map(|e| {
-			if let Event::pallet_bounties(inner) = e { Some(inner) } else { None }
+			if let Event::Bounties(inner) = e { Some(inner) } else { None }
 		})
 		.last()
 		.unwrap()
@@ -312,7 +317,7 @@ fn pot_underflow_should_not_diminish() {
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
-		let _ = Balances::deposit_into_existing(&Treasury::account_id(), 100).unwrap();
+		assert_ok!(Balances::deposit_into_existing(&Treasury::account_id(), 100));
 		<Treasury as OnInitialize<u64>>::on_initialize(4);
 		assert_eq!(Balances::free_balance(3), 150); // Fund has been spent
 		assert_eq!(Treasury::pot(), 25); // Pot has finally changed
@@ -689,7 +694,8 @@ fn claim_handles_high_fee() {
 		<Treasury as OnInitialize<u64>>::on_initialize(5);
 
 		// make fee > balance
-		let _ = Balances::slash(&Bounties::bounty_account_id(0), 10);
+		let res = Balances::slash(&Bounties::bounty_account_id(0), 10);
+		assert_eq!(res.0.peek(), 10);
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 

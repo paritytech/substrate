@@ -254,13 +254,13 @@ mod tests;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_runtime::{Percent, ModuleId, RuntimeDebug,
+use sp_runtime::{Percent, RuntimeDebug,
 	traits::{
 		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
 		TrailingZeroInput, CheckedSub
 	}
 };
-use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
+use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult, PalletId};
 use frame_support::weights::Weight;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
@@ -277,7 +277,7 @@ pub trait Config<I = DefaultInstance>: system::Config {
 	type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 
 	/// The societies's module id
-	type ModuleId: Get<ModuleId>;
+	type PalletId: Get<PalletId>;
 
 	/// The currency type used for bidding.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -498,7 +498,7 @@ decl_module! {
 		const ChallengePeriod: T::BlockNumber = T::ChallengePeriod::get();
 
 		/// The societies's module id
-		const ModuleId: ModuleId = T::ModuleId::get();
+		const PalletId: PalletId = T::PalletId::get();
 
 		/// Maximum candidate intake per round.
 		const MaxCandidateIntake: u32 = T::MaxCandidateIntake::get();
@@ -871,7 +871,7 @@ decl_module! {
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
 			Candidates::<T, I>::kill();
-			SuspendedCandidates::<T, I>::remove_all();
+			SuspendedCandidates::<T, I>::remove_all(None);
 			Self::deposit_event(RawEvent::Unfounded(founder));
 		}
 
@@ -997,7 +997,8 @@ decl_module! {
 						match kind {
 							BidKind::Deposit(deposit) => {
 								// Slash deposit and move it to the society account
-								let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit, BalanceStatus::Free);
+								let res = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit, BalanceStatus::Free);
+								debug_assert!(res.is_ok());
 							}
 							BidKind::Vouch(voucher, _) => {
 								// Ban the voucher from vouching again
@@ -1401,7 +1402,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			}).collect::<Vec<_>>();
 
 			// Clean up all votes.
-			<Votes<T, I>>::remove_all();
+			<Votes<T, I>>::remove_all(None);
 
 			// Reward one of the voters who voted the right way.
 			if !total_slash.is_zero() {
@@ -1569,7 +1570,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				}
 
 				// Clean up all votes.
-				<DefenderVotes<T, I>>::remove_all();
+				<DefenderVotes<T, I>>::remove_all(None);
 			}
 
 			// Avoid challenging if there's only two members since we never challenge the Head or
@@ -1600,7 +1601,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::ModuleId::get().into_account()
+		T::PalletId::get().into_account()
 	}
 
 	/// The account ID of the payouts pot. This is where payouts are made from.
@@ -1608,7 +1609,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn payouts() -> T::AccountId {
-		T::ModuleId::get().into_sub_account(b"payouts")
+		T::PalletId::get().into_sub_account(b"payouts")
 	}
 
 	/// Return the duration of the lock, in blocks, with the given number of members.

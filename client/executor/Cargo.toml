@@ -23,8 +23,8 @@ sp-trie = { version = "3.0.0", path = "../../primitives/trie" }
 sp-serializer = { version = "3.0.0", path = "../../primitives/serializer" }
 sp-version = { version = "3.0.0", path = "../../primitives/version" }
 sp-panic-handler = { version = "3.0.0", path = "../../primitives/panic-handler" }
-wasmi = "0.6.2"
-parity-wasm = "0.41.0"
+wasmi = "0.9.0"
+parity-wasm = "0.42.0"
 lazy_static = "1.4.0"
 sp-api = { version = "3.0.0", path = "../../primitives/api" }
 sp-wasm-interface = { version = "3.0.0", path = "../../primitives/wasm-interface" }
@@ -48,8 +48,9 @@ sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sc-tracing = { version = "3.0.0", path = "../tracing" }
 tracing = "0.1.25"
-tracing-subscriber = "0.2.15"
+tracing-subscriber = "0.2.18"
 paste = "1.0"
+regex = "1"
 
 [features]
 default = [ "std" ]

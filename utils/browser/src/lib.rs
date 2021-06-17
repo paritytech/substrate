@@ -101,6 +101,7 @@ where
 		rpc_ipc: Default::default(),
 		rpc_ws: Default::default(),
 		rpc_ws_max_connections: Default::default(),
+		rpc_http_threads: Default::default(),
 		rpc_methods: Default::default(),
 		state_cache_child_ratio: Default::default(),
 		state_cache_size: Default::default(),

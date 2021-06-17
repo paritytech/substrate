@@ -35,7 +35,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use structopt::StructOpt;
 
 /// The `run` command used to run a node.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
 	/// Enable validator mode.
 	///
@@ -121,6 +121,10 @@ pub struct RunCmd {
 	/// Maximum number of WS RPC server connections.
 	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
+
+	/// Size of the RPC HTTP server thread pool.
+	#[structopt(long = "rpc-http-threads", value_name = "COUNT")]
+	pub rpc_http_threads: Option<usize>,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
 	///
@@ -381,8 +385,13 @@ impl CliConfiguration for RunCmd {
 		Ok(self.ws_max_connections)
 	}
 
+<<<<<<< HEAD
 	fn worker_limit(&self) -> Result<Option<usize>> {
 		Ok(self.worker_limit)
+=======
+	fn rpc_http_threads(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_http_threads)
+>>>>>>> master
 	}
 
 	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
