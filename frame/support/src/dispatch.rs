@@ -2153,6 +2153,8 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			$( $constants )*
 		}
+
+		$crate::__generate_dummy_part_checker!();
 	}
 }
 
