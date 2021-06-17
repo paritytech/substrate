@@ -95,7 +95,7 @@ mod inner {
 				http::RestApi::Unsecure
 			})
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
-			.max_request_body_size(maybe_max_payload_mb.map(|mb| mb * MEGABYTE).unwrap_or(DEFAULT_MAX_PAYLOAD))
+			.max_request_body_size(maybe_max_payload_mb.map(|mb| mb * MEGABYTE).unwrap_or(RPC_MAX_PAYLOAD_DEFAULT))
 			.start_http(addr)
 	}
 
@@ -129,7 +129,7 @@ mod inner {
 		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<ws::Server> {
 		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
-			.max_payload(maybe_max_payload_mb.map(|mb| mb * MEGABYTE).unwrap_or(DEFAULT_MAX_PAYLOAD))
+			.max_payload(maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE)).unwrap_or(RPC_MAX_PAYLOAD_DEFAULT))
 			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 			.allowed_origins(map_cors(cors))
 			.allowed_hosts(hosts_filtering(cors.is_some()))

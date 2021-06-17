@@ -386,7 +386,7 @@ fn start_rpc_servers<
 					deny_unsafe(&address, &config.rpc_methods),
 					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http")
 				),
-				config.rpc_max_payload_override
+				config.rpc_max_payload
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -399,7 +399,7 @@ fn start_rpc_servers<
 					deny_unsafe(&address, &config.rpc_methods),
 					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws")
 				),
-				config.rpc_max_payload_override
+				config.rpc_max_payload
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))

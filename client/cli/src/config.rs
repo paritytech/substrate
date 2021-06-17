@@ -366,7 +366,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	}
 
 	/// Get maximum RPC payload.
-	fn rpc_max_payload_override(&self) -> Result<Option<usize>> {
+	fn rpc_max_payload(&self) -> Result<Option<usize>> {
 		Ok(None)
 	}
 
@@ -532,7 +532,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
-			rpc_max_payload_override: self.rpc_max_payload_override()?,
+			rpc_max_payload: self.rpc_max_payload()?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
 			telemetry_endpoints,
 			telemetry_external_transport: self.telemetry_external_transport()?,
