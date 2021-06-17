@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{convert::TryFrom, fmt::Debug, sync::Arc};
+use std::sync::Arc;
 
-use codec::Codec;
 use log::debug;
 use prometheus::Registry;
 
@@ -24,7 +23,6 @@ use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::AppPublic;
 use sp_blockchain::HeaderBackend;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
@@ -33,6 +31,7 @@ use beefy_primitives::BeefyApi;
 
 mod error;
 mod gossip;
+mod keystore;
 mod metrics;
 mod round;
 mod worker;
@@ -53,36 +52,32 @@ pub fn beefy_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as
 /// of today, Rust does not allow a type alias to be used as a trait bound. Tracking
 /// issue is <https://github.com/rust-lang/rust/issues/41517>.
-pub trait Client<B, BE, P>:
+pub trait Client<B, BE>:
 	BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + ProvideRuntimeApi<B> + Send + Sync
 where
 	B: Block,
 	BE: Backend<B>,
-	P: sp_core::Pair,
-	P::Public: AppPublic + Codec,
-	P::Signature: Clone + Codec + Debug + PartialEq + TryFrom<Vec<u8>>,
 {
 	// empty
 }
 
-impl<B, BE, P, T> Client<B, BE, P> for T
+impl<B, BE, T> Client<B, BE> for T
 where
 	B: Block,
 	BE: Backend<B>,
-	P: sp_core::Pair,
-	P::Public: AppPublic + Codec,
-	P::Signature: Clone + Codec + Debug + PartialEq + TryFrom<Vec<u8>>,
 	T: BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + ProvideRuntimeApi<B> + Send + Sync,
 {
 	// empty
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B, P, BE, C, N>
+pub struct BeefyParams<B, BE, C, N>
 where
 	B: Block,
-	P: sp_core::Pair,
-	P::Signature: Clone + Codec + Debug + PartialEq + TryFrom<Vec<u8>>,
+	BE: Backend<B>,
+	C: Client<B, BE>,
+	C::Api: BeefyApi<B>,
+	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
@@ -93,7 +88,7 @@ where
 	/// Gossip network
 	pub network: N,
 	/// BEEFY signed commitment sender
-	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
+	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
 	/// Minimal delta between blocks, BEEFY should vote for
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
@@ -103,15 +98,12 @@ where
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, P, BE, C, N>(beefy_params: BeefyParams<B, P, BE, C, N>)
+pub async fn start_beefy_gadget<B, BE, C, N>(beefy_params: BeefyParams<B, BE, C, N>)
 where
 	B: Block,
-	P: sp_core::Pair,
-	P::Public: AppPublic + Codec,
-	P::Signature: Clone + Codec + Debug + PartialEq + TryFrom<Vec<u8>>,
 	BE: Backend<B>,
-	C: Client<B, BE, P>,
-	C::Api: BeefyApi<B, P::Public>,
+	C: Client<B, BE>,
+	C::Api: BeefyApi<B>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	let BeefyParams {
@@ -144,7 +136,7 @@ where
 	let worker_params = worker::WorkerParams {
 		client,
 		backend,
-		key_store,
+		key_store: key_store.into(),
 		signed_commitment_sender,
 		gossip_engine,
 		gossip_validator,
@@ -152,7 +144,7 @@ where
 		metrics,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _>::new(worker_params);
 
 	worker.run().await
 }

@@ -14,47 +14,49 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use parking_lot::Mutex;
 use std::sync::Arc;
 
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block, NumberFor};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
-/// Stream of signed commitments returned when subscribing.
-pub type SignedCommitment<Block, Signature> =
-	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::MmrRootHash, Signature>;
+use parking_lot::Mutex;
 
 /// Stream of signed commitments returned when subscribing.
-type SignedCommitmentStream<Block, Signature> = TracingUnboundedReceiver<SignedCommitment<Block, Signature>>;
+pub type SignedCommitment<Block> = beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::MmrRootHash>;
+
+/// Stream of signed commitments returned when subscribing.
+type SignedCommitmentStream<Block> = TracingUnboundedReceiver<SignedCommitment<Block>>;
 
 /// Sending endpoint for notifying about signed commitments.
-type SignedCommitmentSender<Block, Signature> = TracingUnboundedSender<SignedCommitment<Block, Signature>>;
+type SignedCommitmentSender<Block> = TracingUnboundedSender<SignedCommitment<Block>>;
 
 /// Collection of channel sending endpoints shared with the receiver side so they can register
 /// themselves.
-type SharedSignedCommitmentSenders<Block, Signature> = Arc<Mutex<Vec<SignedCommitmentSender<Block, Signature>>>>;
+type SharedSignedCommitmentSenders<Block> = Arc<Mutex<Vec<SignedCommitmentSender<Block>>>>;
 
 /// The sending half of the signed commitment channel(s).
 ///
 /// Used to send notifications about signed commitments generated at the end of a BEEFY round.
 #[derive(Clone)]
-pub struct BeefySignedCommitmentSender<Block: BlockT, Signature> {
-	subscribers: SharedSignedCommitmentSenders<Block, Signature>,
+pub struct BeefySignedCommitmentSender<B>
+where
+	B: Block,
+{
+	subscribers: SharedSignedCommitmentSenders<B>,
 }
 
-impl<Block, Signature> BeefySignedCommitmentSender<Block, Signature>
+impl<B> BeefySignedCommitmentSender<B>
 where
-	Block: BlockT,
-	Signature: Clone,
+	B: Block,
 {
 	/// The `subscribers` should be shared with a corresponding `SignedCommitmentSender`.
-	fn new(subscribers: SharedSignedCommitmentSenders<Block, Signature>) -> Self {
+	fn new(subscribers: SharedSignedCommitmentSenders<B>) -> Self {
 		Self { subscribers }
 	}
 
 	/// Send out a notification to all subscribers that a new signed commitment is available for a
 	/// block.
-	pub fn notify(&self, signed_commitment: SignedCommitment<Block, Signature>) {
+	pub fn notify(&self, signed_commitment: SignedCommitment<B>) {
 		let mut subscribers = self.subscribers.lock();
 
 		// do an initial prune on closed subscriptions
@@ -72,17 +74,19 @@ where
 /// The `BeefySignedCommitmentStream` entity stores the `SharedSignedCommitmentSenders` so it can be
 /// used to add more subscriptions.
 #[derive(Clone)]
-pub struct BeefySignedCommitmentStream<Block: BlockT, Signature> {
-	subscribers: SharedSignedCommitmentSenders<Block, Signature>,
+pub struct BeefySignedCommitmentStream<B>
+where
+	B: Block,
+{
+	subscribers: SharedSignedCommitmentSenders<B>,
 }
 
-impl<Block, Signature> BeefySignedCommitmentStream<Block, Signature>
+impl<B> BeefySignedCommitmentStream<B>
 where
-	Block: BlockT,
-	Signature: Clone,
+	B: Block,
 {
 	/// Creates a new pair of receiver and sender of signed commitment notifications.
-	pub fn channel() -> (BeefySignedCommitmentSender<Block, Signature>, Self) {
+	pub fn channel() -> (BeefySignedCommitmentSender<B>, Self) {
 		let subscribers = Arc::new(Mutex::new(vec![]));
 		let receiver = BeefySignedCommitmentStream::new(subscribers.clone());
 		let sender = BeefySignedCommitmentSender::new(subscribers);
@@ -92,13 +96,13 @@ where
 	/// Create a new receiver of signed commitment notifications.
 	///
 	/// The `subscribers` should be shared with a corresponding `BeefySignedCommitmentSender`.
-	fn new(subscribers: SharedSignedCommitmentSenders<Block, Signature>) -> Self {
+	fn new(subscribers: SharedSignedCommitmentSenders<B>) -> Self {
 		Self { subscribers }
 	}
 
 	/// Subscribe to a channel through which signed commitments are sent at the end of each BEEFY
 	/// voting round.
-	pub fn subscribe(&self) -> SignedCommitmentStream<Block, Signature> {
+	pub fn subscribe(&self) -> SignedCommitmentStream<B> {
 		let (sender, receiver) = tracing_unbounded("mpsc_signed_commitments_notification_stream");
 		self.subscribers.lock().push(sender);
 		receiver

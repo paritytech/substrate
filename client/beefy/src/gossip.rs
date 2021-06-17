@@ -15,8 +15,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 /// The maximum number of live gossip rounds allowed, i.e. we will expire messages older than this.
-use std::{fmt::Debug, marker::PhantomData};
-
 use codec::{Decode, Encode};
 use log::debug;
 use parking_lot::RwLock;
@@ -27,10 +25,14 @@ use sc_network_gossip::{
 	ValidatorContext as GossipValidatorContext,
 };
 
-use sp_core::Pair;
 use sp_runtime::traits::{Block, Hash, Header, NumberFor};
 
-use beefy_primitives::{MmrRootHash, VoteMessage};
+use beefy_primitives::{
+	crypto::{Public, Signature},
+	MmrRootHash, VoteMessage,
+};
+
+use crate::keystore::BeefyKeystore;
 
 // Limit BEEFY gossip by keeping only a bound number of voting rounds alive.
 const MAX_LIVE_GOSSIP_ROUNDS: usize = 5;
@@ -51,24 +53,22 @@ where
 /// rejected/expired.
 ///
 ///All messaging is handled in a single BEEFY global topic.
-pub(crate) struct BeefyGossipValidator<B, P>
+pub(crate) struct BeefyGossipValidator<B>
 where
 	B: Block,
 {
 	topic: B::Hash,
 	live_rounds: RwLock<Vec<NumberFor<B>>>,
-	_pair: PhantomData<P>,
 }
 
-impl<B, P> BeefyGossipValidator<B, P>
+impl<B> BeefyGossipValidator<B>
 where
 	B: Block,
 {
-	pub fn new() -> BeefyGossipValidator<B, P> {
+	pub fn new() -> BeefyGossipValidator<B> {
 		BeefyGossipValidator {
 			topic: topic::<B>(),
 			live_rounds: RwLock::new(Vec::new()),
-			_pair: PhantomData,
 		}
 	}
 
@@ -91,12 +91,9 @@ where
 	}
 }
 
-impl<B, P> GossipValidator<B> for BeefyGossipValidator<B, P>
+impl<B> GossipValidator<B> for BeefyGossipValidator<B>
 where
 	B: Block,
-	P: Pair,
-	P::Public: Debug + Decode,
-	P::Signature: Debug + Decode,
 {
 	fn validate(
 		&self,
@@ -104,8 +101,8 @@ where
 		sender: &sc_network::PeerId,
 		mut data: &[u8],
 	) -> GossipValidationResult<B::Hash> {
-		if let Ok(msg) = VoteMessage::<MmrRootHash, NumberFor<B>, P::Public, P::Signature>::decode(&mut data) {
-			if P::verify(&msg.signature, &msg.commitment.encode(), &msg.id) {
+		if let Ok(msg) = VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(&mut data) {
+			if BeefyKeystore::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
 				return GossipValidationResult::ProcessAndKeep(self.topic);
 			} else {
 				// TODO: report peer
@@ -119,12 +116,12 @@ where
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
 		let live_rounds = self.live_rounds.read();
 		Box::new(move |_topic, mut data| {
-			let message = match VoteMessage::<MmrRootHash, NumberFor<B>, P::Public, P::Signature>::decode(&mut data) {
+			let message = match VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(&mut data) {
 				Ok(vote) => vote,
 				Err(_) => return true,
 			};
 
-			!BeefyGossipValidator::<B, P>::is_live(&live_rounds, message.commitment.block_number)
+			!BeefyGossipValidator::<B>::is_live(&live_rounds, message.commitment.block_number)
 		})
 	}
 
@@ -132,12 +129,12 @@ where
 	fn message_allowed<'a>(&'a self) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
 		let live_rounds = self.live_rounds.read();
 		Box::new(move |_who, _intent, _topic, mut data| {
-			let message = match VoteMessage::<MmrRootHash, NumberFor<B>, P::Public, P::Signature>::decode(&mut data) {
+			let message = match VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(&mut data) {
 				Ok(vote) => vote,
 				Err(_) => return true,
 			};
 
-			BeefyGossipValidator::<B, P>::is_live(&live_rounds, message.commitment.block_number)
+			BeefyGossipValidator::<B>::is_live(&live_rounds, message.commitment.block_number)
 		})
 	}
 }

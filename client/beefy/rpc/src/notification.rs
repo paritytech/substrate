@@ -26,12 +26,9 @@ use sp_runtime::traits::Block as BlockT;
 pub struct SignedCommitment(sp_core::Bytes);
 
 impl SignedCommitment {
-	pub fn new<Block, Signature>(
-		signed_commitment: beefy_gadget::notification::SignedCommitment<Block, Signature>,
-	) -> Self
+	pub fn new<Block>(signed_commitment: beefy_gadget::notification::SignedCommitment<Block>) -> Self
 	where
 		Block: BlockT,
-		Signature: Encode,
 	{
 		SignedCommitment(signed_commitment.encode().into())
 	}

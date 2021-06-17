@@ -16,24 +16,23 @@
 
 use std::collections::BTreeMap;
 
-use beefy_primitives::{ValidatorSet, ValidatorSetId};
+use beefy_primitives::{
+	crypto::{Public, Signature},
+	ValidatorSet, ValidatorSetId,
+};
 
-struct RoundTracker<Id, Signature> {
-	votes: Vec<(Id, Signature)>,
+struct RoundTracker {
+	votes: Vec<(Public, Signature)>,
 }
 
-impl<Id, Signature> Default for RoundTracker<Id, Signature> {
+impl Default for RoundTracker {
 	fn default() -> Self {
 		RoundTracker { votes: Vec::new() }
 	}
 }
 
-impl<Id, Signature> RoundTracker<Id, Signature>
-where
-	Id: PartialEq,
-	Signature: PartialEq,
-{
-	fn add_vote(&mut self, vote: (Id, Signature)) -> bool {
+impl RoundTracker {
+	fn add_vote(&mut self, vote: (Public, Signature)) -> bool {
 		// this needs to handle equivocations in the future
 		if self.votes.contains(&vote) {
 			return false;
@@ -53,17 +52,17 @@ fn threshold(authorities: usize) -> usize {
 	authorities - faulty
 }
 
-pub(crate) struct Rounds<Hash, Number, Id, Signature> {
-	rounds: BTreeMap<(Hash, Number), RoundTracker<Id, Signature>>,
-	validator_set: ValidatorSet<Id>,
+pub(crate) struct Rounds<Hash, Number> {
+	rounds: BTreeMap<(Hash, Number), RoundTracker>,
+	validator_set: ValidatorSet<Public>,
 }
 
-impl<Hash, Number, Id, Signature> Rounds<Hash, Number, Id, Signature>
+impl<Hash, Number> Rounds<Hash, Number>
 where
 	Hash: Ord,
 	Number: Ord,
 {
-	pub(crate) fn new(validator_set: ValidatorSet<Id>) -> Self {
+	pub(crate) fn new(validator_set: ValidatorSet<Public>) -> Self {
 		Rounds {
 			rounds: BTreeMap::new(),
 			validator_set,
@@ -71,22 +70,20 @@ where
 	}
 }
 
-impl<Hash, Number, Id, Signature> Rounds<Hash, Number, Id, Signature>
+impl<Hash, Number> Rounds<Hash, Number>
 where
 	Hash: Ord,
 	Number: Ord,
-	Id: PartialEq + Clone,
-	Signature: Clone + PartialEq,
 {
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
 		self.validator_set.id
 	}
 
-	pub(crate) fn validators(&self) -> Vec<Id> {
+	pub(crate) fn validators(&self) -> Vec<Public> {
 		self.validator_set.validators.clone()
 	}
 
-	pub(crate) fn add_vote(&mut self, round: (Hash, Number), vote: (Id, Signature)) -> bool {
+	pub(crate) fn add_vote(&mut self, round: (Hash, Number), vote: (Public, Signature)) -> bool {
 		self.rounds.entry(round).or_default().add_vote(vote)
 	}
 

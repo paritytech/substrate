@@ -17,6 +17,8 @@ sp-std = { git = "https://github.com/paritytech/substrate", default-features = f
 [dev-dependencies]
 hex-literal = "0.3"
 
+sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "master" }
+
 [features]
 default = ["std"]
 std = [
