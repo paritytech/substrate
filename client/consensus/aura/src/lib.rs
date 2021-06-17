@@ -462,15 +462,15 @@ where
 			.checked_duration_since(std::time::Instant::now())
 			.unwrap_or_default();
 
-		let slot_remaining = std::cmp::min(slot_remaining, max_proposing);
+		let proposing_duration = std::cmp::min(slot_remaining, max_proposing);
 
 		// If parent is genesis block, we don't require any lenience factor.
 		if slot_info.chain_head.number().is_zero() {
-			return slot_remaining
+			return proposing_duration;
 		}
 
 		let parent_slot = match find_pre_digest::<B, P::Signature>(&slot_info.chain_head) {
-			Err(_) => return slot_remaining,
+			Err(_) => return proposing_duration,
 			Ok(d) => d,
 		};
 
@@ -479,14 +479,14 @@ where
 		{
 			debug!(
 				target: "aura",
-				"No block for {} slots. Applying linear lenience of {}s",
+				"No block for {} slots. Applying exponential lenience of {}s",
 				slot_info.slot.saturating_sub(parent_slot + 1),
 				slot_lenience.as_secs(),
 			);
 
-			slot_remaining + slot_lenience
+			proposing_duration + (slot_lenience.mul_f32(self.block_proposal_slot_portion.get()))
 		} else {
-			slot_remaining
+			proposing_duration
 		}
 	}
 }
