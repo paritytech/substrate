@@ -27,7 +27,7 @@ use crate::SubscriptionTaskExecutor;
 use super::{StateBackend, ChildStateBackend, error::{Error, Result}, client_err};
 
 use futures::{future, StreamExt, FutureExt};
-use jsonrpsee::{ws_server::SubscriptionSink, types::Error as JsonRpseeError};
+use jsonrpsee::ws_server::SubscriptionSink;
 use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata,

@@ -25,6 +25,7 @@ use std::{
 use crate::SubscriptionTaskExecutor;
 use super::{StateBackend, ChildStateBackend, error::Error, client_err};
 
+use anyhow::anyhow;
 use codec::Decode;
 use futures::{
 	future::{self, ready, Either},
@@ -309,6 +310,7 @@ where
 		let executor = self.executor.clone();
 		let fetcher = self.fetcher.clone();
 		let remote_blockchain = self.remote_blockchain.clone();
+		let version_subscriptions = self.version_subscriptions.clone();
 		let initial_block = self.block_or_best(None);
 
 		let stream = self.client.import_notification_stream().map(|notif| Ok::<_, ()>(notif.hash));
@@ -316,18 +318,28 @@ where
 		let fut = async move {
 			let mut old_version: Result<RuntimeVersion, ()> = display_error(runtime_version(&*remote_blockchain, fetcher.clone(), initial_block)).await;
 
-			// TODO(niklasad1): use shared requests here.
 			stream
-				.and_then(|block| display_error(runtime_version(&*remote_blockchain, fetcher.clone(), block)))
+				.and_then(|block| {
+					maybe_share_remote_request::<Block, _, _, _>(
+						version_subscriptions.clone(),
+						block,
+						display_error(runtime_version(&*remote_blockchain, fetcher.clone(), block)),
+					)
+				})
 				.filter(|version| {
 					let is_new_version = &old_version != version;
 					old_version = version.clone();
 					future::ready(is_new_version)
 				})
-				.for_each(|version| {
-					let _ = sink.send(&version);
-					future::ready(())
+				.take_while(|version| {
+					future::ready(
+						sink.send(&version).map_or_else(|e| {
+							log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
+							false
+						}, |_| true)
+					)
 				})
+				.for_each(|_| future::ready(()))
 				.await
 		}.boxed();
 
@@ -340,19 +352,16 @@ where
 		mut sink: SubscriptionSink,
 		keys: Option<Vec<StorageKey>>,
 	) -> Result<(), Error> {
+		const ERR: &str = "state_subscribeStorage requires at least one key; subscription rejected";
+
 		let keys = match keys {
 			Some(keys) if !keys.is_empty() => keys,
-			_ => {
-				return Err(Error::Client(
-					anyhow::anyhow!(
-						"state_subscribeStorage requires at least one key; subscription rejected"
-					).into()
-				));
-			}
+			_ => return Err(Error::Client(anyhow!(ERR).into())),
 		};
 
-		let keys = keys.iter().cloned().collect::<HashSet<_>>();
-		let keys_to_check = keys.iter().map(|k| k.0.clone()).collect::<HashSet<_>>();
+		let keys: HashSet<StorageKey> = keys.into_iter().collect();
+		// TODO(niklasad1): this seem needless essentially the inner bytes of the storage key.
+		let keys_to_check: HashSet<Vec<u8>> = keys.iter().map(|k| k.0.clone()).collect();
 
 		let executor = self.executor.clone();
 		let fetcher = self.fetcher.clone();
@@ -364,7 +373,7 @@ where
 		let stream = self.client.import_notification_stream().map(|notif| Ok::<_, ()>(notif.hash));
 
 		let fut = async move {
-			let old_storage = display_error(storage(&*remote_blockchain, fetcher.clone(), initial_block, initial_keys)).await;
+			let mut old_storage = display_error(storage(&*remote_blockchain, fetcher.clone(), initial_block, initial_keys)).await;
 
 			let id: u64 = rand::random();
 
@@ -379,7 +388,6 @@ where
 
 			let subs = storage_subscriptions.clone();
 
-			// TODO(niklasad1): use shared requests here.
 			stream
 				.and_then(move |block| {
 					let keys = subs
@@ -388,7 +396,10 @@ where
 						.keys()
 						.map(|k| k.0.clone())
 						.collect();
-					storage(&*remote_blockchain, fetcher.clone(), block, keys).then(move |s|
+
+					 // TODO(niklasad1): use shared requests here but require some major
+					 // refactoring because the actual block where fed into a closure.
+					 storage(&*remote_blockchain, fetcher.clone(), block, keys).then(move |s|
 						ready(match s {
 							Ok(s) => Ok((s, block)),
 							Err(_) => Err(()),
@@ -408,26 +419,33 @@ where
 								.map(|old_value| *old_value != new_value)
 								.unwrap_or(true);
 
-							// old_storage = new_value;
-
 							match value_differs {
-								true => Some(StorageChangeSet {
-									block,
-									changes: new_value.iter()
-										.map(|(k, v)| (k.clone(), v.clone()))
-										.collect(),
-								}),
+								true => {
+									let res = Some(StorageChangeSet {
+										block,
+										changes: new_value.iter()
+											.map(|(k, v)| (k.clone(), v.clone()))
+											.collect(),
+									});
+									old_storage = Ok(new_value);
+									res
+								}
 								false => None,
 							}
 						}
-						Err(_) => None,
+						_ => None,
 					};
 					ready(res)
 				})
-				.for_each(|change_set| {
-					let _ = sink.send(&change_set);
-					ready(())
+				.take_while(|change_set| {
+					future::ready(
+						sink.send(&change_set).map_or_else(|e| {
+							log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
+							false
+						}, |_| true)
+					)
 				})
+				.for_each(|_| future::ready(()))
 				.await;
 
 			// unsubscribe
@@ -449,7 +467,6 @@ where
 			}
 		}.boxed();
 		executor.execute_new(fut);
-
 
 		Ok(())
 	}
@@ -609,15 +626,15 @@ fn storage<Block: BlockT, F: Fetcher<Block>>(
 
 /// Request some data from remote node, probably reusing response from already
 /// (in-progress) existing request.
-fn maybe_share_remote_request<Block: BlockT, Requests, V, IssueRequest, IssueRequestFuture>(
+fn maybe_share_remote_request<Block: BlockT, Requests, V, RequestFuture>(
 	shared_requests: Requests,
 	block: Block::Hash,
-	issue_request: &IssueRequest,
-) -> impl std::future::Future<Output = Result<V, ()>> where
+	fut: RequestFuture
+) -> impl std::future::Future<Output = Result<V, ()>>
+where
 	V: Clone,
 	Requests: SharedRequests<Block::Hash, V>,
-	IssueRequest: Fn(Block::Hash) -> IssueRequestFuture,
-	IssueRequestFuture: std::future::Future<Output = Result<V, Error>>,
+	RequestFuture: std::future::Future<Output = Result<V, ()>>,
 {
 	let (sender, receiver) = channel();
 	let need_issue_request = shared_requests.listen_request(block, sender);
@@ -629,25 +646,22 @@ fn maybe_share_remote_request<Block: BlockT, Requests, V, IssueRequest, IssueReq
 
 	// that is the first request - issue remote request + notify all listeners on
 	// completion
-	Either::Left(
-		display_error(issue_request(block))
-			.then(move |remote_result| {
-				let listeners = shared_requests.on_response_received(block);
-				// skip first element, because this future is the first element
-				for receiver in listeners.into_iter().skip(1) {
-						if let Err(_) = receiver.send(remote_result.clone()) {
-								// we don't care if receiver has been dropped already
-						}
-				}
-				ready(remote_result)
-			})
-	)
+	Either::Left(fut.then(move |remote_result| {
+		let listeners = shared_requests.on_response_received(block);
+		// skip first element, because this future is the first element
+		for receiver in listeners.into_iter().skip(1) {
+			// we don't care if receiver has been dropped already
+			let _ = receiver.send(remote_result.clone());
+		}
+		ready(remote_result)
+	}))
 }
 
 /// Convert successful future result into Ok(result) and error into Err(()),
 /// displaying warning.
-fn display_error<F, T>(future: F) -> impl std::future::Future<Output=Result<T, ()>> where
-		F: std::future::Future<Output=Result<T, Error>>
+fn display_error<F, T>(future: F) -> impl std::future::Future<Output = Result <T, ()>>
+where
+	F: std::future::Future<Output=Result<T, Error>>
 {
 	future.then(|result| ready(result.or_else(|err| {
 		warn!("Remote request for subscription data has failed with: {:?}", err);
