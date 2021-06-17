@@ -116,6 +116,14 @@ pub struct SharedParams {
 	/// the specified chain spec.
 	#[structopt(long)]
 	pub overwrite_code: bool,
+
+	/// The url to connect to.
+	// TODO having this a shared parm is a temporary hack; the url is used just
+	// to get the header/block. We should try and get that out of state, OR allow
+	// the user to feed in a header/block via file.
+	// https://github.com/paritytech/substrate/issues/9027
+	#[structopt(short, long, default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
+	url: String,
 }
 
 /// Various commands to try out against runtime state at a specific block.
@@ -136,13 +144,6 @@ pub enum State {
 	Snap {
 		#[structopt(short, long)]
 		snapshot_path: PathBuf,
-		/// The url to connect to for fetching data not easily retrievable from the snapshot.
-		/// NOTE: This is not used for `on-runtime-upgrade`
-		// TODO This is a temporary hack; the url is used just to get the header/block. We should try
-		// and get that out of state, OR allow the user to feed in a header/block via file.
-		// https://github.com/paritytech/substrate/issues/9027
-		#[structopt(short, long, default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
-		url: String,
 	},
 
 	/// Use a live chain as the source of runtime state.
@@ -154,11 +155,7 @@ pub enum State {
 		/// The modules to scrape. If empty, entire chain state will be scraped.
 		#[structopt(short, long, require_delimiter = true)]
 		modules: Option<Vec<String>>,
-
-		/// The url to connect to.
-		#[structopt(short, long, default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
-		url: String,
-	},
+	}
 }
 
 async fn on_runtime_upgrade<Block, ExecDispatch>(
@@ -188,17 +185,16 @@ where
 
 	let ext = {
 		let builder = match command.state {
-			State::Snap { snapshot_path, .. } => {
+			State::Snap { snapshot_path } => {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				}))
 			},
 			State::Live {
-				url,
 				snapshot_path,
 				modules
 			} => Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
-				transport: url.to_owned().into(),
+				transport: shared.url.to_owned().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
 				at: Some(shared.block_at.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?),
@@ -226,10 +222,10 @@ where
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade' due to {:?}", e))?;
+	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {:?}", e))?;
 
 	let (weight, total_weight) = <(u64, u64) as Decode>::decode(&mut &*encoded_result)
-		.map_err(|e| format!("failed to decode output due to {:?}", e))?;
+		.map_err(|e| format!("failed to decode output: {:?}", e))?;
 	log::info!(
 		"TryRuntime_on_runtime_upgrade executed without errors. Consumed weight = {}, total weight = {} ({})",
 		weight,
@@ -266,29 +262,28 @@ where
 		max_runtime_instances,
 	);
 
-	let (mode, url) = match command.state {
+	let mode = match command.state {
 			State::Live {
-				url,
 				snapshot_path,
 				modules
 			} => {
 				let at = shared.block_at.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?;
 				let online_config = OnlineConfig {
-					transport: url.to_owned().into(),
+					transport: shared.url.to_owned().into(),
 					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 					modules: modules.to_owned().unwrap_or_default(),
 					at: Some(at),
 					..Default::default()
 				};
 
-				(Mode::Online(online_config), url)
+				Mode::Online(online_config)
 			},
-			State::Snap { snapshot_path, url } => {
+			State::Snap { snapshot_path } => {
 				let mode = Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				});
 
-				(mode, url)
+				mode
 			}
 	};
 	let builder = Builder::<Block>::new()
@@ -314,7 +309,7 @@ where
 	let header_hash: Block::Hash = shared.block_at
 		.parse()
 		.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
-	let header = rpc_api::get_header::<Block, _>(url, header_hash).await?;
+	let header = rpc_api::get_header::<Block, _>(shared.url, header_hash).await?;
 
 	let _ = StateMachine::<_, _, NumberFor<Block>, _>::new(
 		&ext.backend,
@@ -329,7 +324,7 @@ where
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'OffchainWorkerApi_offchain_worker' due to {:?}", e))?;
+	.map_err(|e| format!("failed to execute 'OffchainWorkerApi_offchain_worker':  {:?}", e))?;
 
 	log::info!("OffchainWorkerApi_offchain_worker executed without errors.");
 
@@ -361,36 +356,31 @@ where
 		max_runtime_instances,
 	);
 
-	let (mode, block) = match command.state {
-		State::Snap { snapshot_path, url } => {
-			let header_hash: Block::Hash = shared.block_at
-				.parse()
-				.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
-			let block: Block = rpc_api::get_block::<Block, _>(url.clone(), header_hash).await?;
+	let block_hash: Block::Hash = shared.block_at
+		.parse()
+		.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
+	let block: Block = rpc_api::get_block::<Block, _>(shared.url.clone(), block_hash).await?;
 
+	let mode = match command.state {
+		State::Snap { snapshot_path } => {
 			let mode = Mode::Offline(OfflineConfig {
 				state_snapshot: SnapshotConfig::new(snapshot_path),
 			});
 
-			(mode, block)
+			mode
 		},
-		State::Live { url, snapshot_path, modules } => {
-			let block_hash: Block::Hash = shared.block_at
-				.parse()
-				.map_err(|e| format!("Could not parse hash: {:?}", e))?;
-
-			let block: Block = rpc_api::get_block::<Block, _>(url.clone(), block_hash).await?;
+		State::Live { snapshot_path, modules } => {
 			let parent_hash = block.header().parent_hash();
 
 			let mode = Mode::Online(OnlineConfig {
-				transport: url.to_owned().into(),
+				transport: shared.url.to_owned().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
 				at: Some(parent_hash.to_owned()),
 				..Default::default()
 			});
 
-			(mode, block)
+			mode
 		}
 	};
 
@@ -438,7 +428,7 @@ where
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'Core_execute_block' due to {:?}", e))?;
+	.map_err(|e| format!("failed to execute 'Core_execute_block': {:?}", e))?;
 	debug_assert!(_encoded_result == vec![1]);
 
 	log::info!("Core_execute_block executed without errors.");
