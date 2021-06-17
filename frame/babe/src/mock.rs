@@ -28,7 +28,7 @@ use sp_runtime::{
 use frame_system::InitKind;
 use frame_support::{
 	parameter_types,
-	traits::{KeyOwnerProofSystem, OnInitialize},
+	traits::{KeyOwnerProofSystem, OnInitialize, GenesisBuild},
 };
 use sp_io;
 use sp_core::{H256, U256, crypto::{IsWrappedBy, KeyTypeId, Pair}};
@@ -54,7 +54,7 @@ frame_support::construct_runtime!(
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Historical: pallet_session_historical::{Pallet},
-		Offences: pallet_offences::{Pallet, Call, Storage, Event},
+		Offences: pallet_offences::{Pallet, Storage, Event},
 		Babe: pallet_babe::{Pallet, Call, Storage, Config, ValidateUnsigned},
 		Staking: pallet_staking::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
@@ -155,6 +155,8 @@ parameter_types! {
 
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u128;
 	type DustRemoval = ();
 	type Event = Event;
@@ -211,6 +213,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 }
 

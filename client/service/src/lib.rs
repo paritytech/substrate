@@ -381,6 +381,7 @@ fn start_rpc_servers<
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(
 				address,
+				config.rpc_http_threads,
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),

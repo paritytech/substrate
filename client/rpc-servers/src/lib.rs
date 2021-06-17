@@ -35,6 +35,9 @@ pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 
+/// Default thread pool size for RPC HTTP servers.
+const HTTP_THREADS: usize = 4;
+
 /// The RPC IoHandler containing all requested APIs.
 pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
 
@@ -81,12 +84,13 @@ mod inner {
 	/// **Note**: Only available if `not(target_os = "unknown")`.
 	pub fn start_http<M: pubsub::PubSubMetadata + Default>(
 		addr: &std::net::SocketAddr,
+		thread_pool_size: Option<usize>,
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
 		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<http::Server> {
 		http::ServerBuilder::new(io)
-			.threads(4)
+			.threads(thread_pool_size.unwrap_or(HTTP_THREADS))
 			.health_api(("/health", "system_health"))
 			.allowed_hosts(hosts_filtering(cors.is_some()))
 			.rest_api(if cors.is_some() {

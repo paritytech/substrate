@@ -166,11 +166,11 @@ where
 	}
 
 	/// Remove all values under the first key.
-	pub fn remove_prefix<KP>(partial_key: KP)
+	pub fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		Key: HasKeyPrefix<KP>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::remove_prefix(partial_key)
+		<Self as crate::storage::StorageNMap<Key, Value>>::remove_prefix(partial_key, limit)
 	}
 
 	/// Iterate over values that share the first key.
@@ -266,8 +266,8 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all() {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -546,7 +546,7 @@ mod test {
 
 			A::insert((3,), 10);
 			A::insert((4,), 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key((3,)), false);
 			assert_eq!(A::contains_key((4,)), false);
 
@@ -582,7 +582,7 @@ mod test {
 			);
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3,)), None);
 			WithLen::append((0,), 10);
 			assert_eq!(WithLen::decode_len((0,)), Some(1));
@@ -720,7 +720,7 @@ mod test {
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key((3, 30)), false);
 			assert_eq!(A::contains_key((4, 40)), false);
 
@@ -768,7 +768,7 @@ mod test {
 			);
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3, 30)), None);
 			WithLen::append((0, 100), 10);
 			assert_eq!(WithLen::decode_len((0, 100)), Some(1));
@@ -953,7 +953,7 @@ mod test {
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key((3, 30, 300)), false);
 			assert_eq!(A::contains_key((4, 40, 400)), false);
 
@@ -1003,7 +1003,7 @@ mod test {
 			);
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3, 30, 300)), None);
 			WithLen::append((0, 100, 1000), 10);
 			assert_eq!(WithLen::decode_len((0, 100, 1000)), Some(1));
