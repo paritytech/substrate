@@ -600,7 +600,7 @@ mod tests {
 				}
 
 				#[weight = 0]
-				fn calculate_storage_root(origin) {
+				fn calculate_storage_root(_origin) {
 					let root = sp_io::storage::root();
 					sp_io::storage::set("storage_root".as_bytes(), &root);
 				}

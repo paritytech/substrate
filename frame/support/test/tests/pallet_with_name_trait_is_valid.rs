@@ -46,7 +46,7 @@ frame_support::decl_module! {
 		const Foo: u32 = u32::max_value();
 
 		#[weight = 0]
-		fn accumulate_dummy(origin, increase_by: T::Balance) {
+		fn accumulate_dummy(_origin, _increase_by: T::Balance) {
 			unimplemented!();
 		}
 
