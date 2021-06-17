@@ -96,11 +96,11 @@ impl<B: BlockT> InformantDisplay<B> {
 		let (level, status, target) = match (
 			net_status.sync_state,
 			net_status.best_seen_block,
-			net_status.state_sync)
-		{
+			net_status.state_sync
+		) {
 			(_, _, Some((percentage, size))) => (
 				"⚙️ ",
-				format!("Downloading state"),
+				"Downloading state".into(),
 				format!(", {}%, ({:.2}) Mib", percentage, (size as f32) / (1024f32 * 1024f32)),
 			),
 			(SyncState::Idle, _, _) => ("💤", "Idle".into(), "".into()),

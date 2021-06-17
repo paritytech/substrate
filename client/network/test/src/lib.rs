@@ -180,7 +180,7 @@ impl PeersClient {
 		}
 	}
 
-	pub fn have_state_at(&self, block: &BlockId<Block>) -> bool {
+	pub fn has_state_at(&self, block: &BlockId<Block>) -> bool {
 		let header = match self.header(block).unwrap() {
 			Some(header) => header,
 			None => return false,

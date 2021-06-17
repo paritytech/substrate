@@ -98,7 +98,8 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Warning, this fails at first error when usual iteration skips errors.
 	/// If `allow_missing` is true, iteration stops when it reaches a missing trie node.
 	/// Otherwise an error is produced.
-	/// Return `true` if trie end is reached.
+	///
+	/// Returns `true` if trie end is reached.
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
 		&self,
 		child_info: Option<&ChildInfo>,

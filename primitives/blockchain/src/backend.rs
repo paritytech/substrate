@@ -270,7 +270,7 @@ pub struct Info<Block: BlockT> {
 	/// Last finalized block number.
 	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	/// Last finalized state.
-	pub finalized_state: Option<(Block::Hash,  <<Block as BlockT>::Header as HeaderT>::Number)>,
+	pub finalized_state: Option<(Block::Hash, <<Block as BlockT>::Header as HeaderT>::Number)>,
 	/// Number of concurrent leave forks.
 	pub number_leaves: usize
 }

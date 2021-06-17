@@ -928,6 +928,9 @@ mod execution {
 	}
 
 	/// Check storage range proof on pre-created proving backend.
+	///
+	/// Returns a vector with the read `key => value` pairs and a `bool` that is set to `true` when
+	/// all `key => value` pairs could be read and no more are left.
 	pub fn read_range_proof_check_on_proving_backend<H>(
 		proving_backend: &TrieBackend<MemoryDB<H>, H>,
 		child_info: Option<&ChildInfo>,
@@ -941,11 +944,8 @@ mod execution {
 	{
 		let mut values = Vec::new();
 		let result = proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |key, value| {
-			if count.as_ref().map_or(false, |c| values.len() as u32 == *c) {
-				return false;
-			}
 			values.push((key.to_vec(), value.to_vec()));
-			true
+			count.as_ref().map_or(true, |c| values.len() as u32 >= *c)
 		}, true);
 		match result {
 			Ok(completed) => Ok((values, completed)),

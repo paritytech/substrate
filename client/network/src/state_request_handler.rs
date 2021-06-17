@@ -170,7 +170,7 @@ impl<B: BlockT> StateRequestHandler<B> {
 			target: LOG_TARGET,
 			"Handling state request from {}: Block {:?}, Starting at {:?}, no_proof={}",
 			peer,
-			sp_core::hexdisplay::HexDisplay::from(&request.block),
+			request.block,
 			sp_core::hexdisplay::HexDisplay::from(&request.start),
 			request.no_proof,
 		);
@@ -239,9 +239,8 @@ enum HandleRequestError {
 	#[display(fmt = "Failed to encode response: {}.", _0)]
 	EncodeProto(prost::EncodeError),
 	#[display(fmt = "Failed to decode block hash: {}.", _0)]
-	DecodeScale(codec::Error),
+	InvalidHash(codec::Error),
 	Client(sp_blockchain::Error),
 	#[display(fmt = "Failed to send response.")]
 	SendResponse,
 }
-

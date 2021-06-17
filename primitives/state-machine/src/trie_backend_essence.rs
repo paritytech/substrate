@@ -191,6 +191,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Retrieve all entries keys of storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
+	///
+	/// Returns `true` when all keys were iterated.
 	pub fn apply_to_key_values_while(
 		&self,
 		child_info: Option<&ChildInfo>,
