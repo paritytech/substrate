@@ -22,6 +22,7 @@ use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sc_client_api::StorageProof;
 use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
 use crate::chain::{Client, ImportedState};
+use super::StateDownloadProgress;
 
 /// State sync support.
 
@@ -174,10 +175,13 @@ impl<B: BlockT> StateSync<B> {
 		self.target_block.clone()
 	}
 
-	/// Returns state sync estimated progress (percentage, bytes)
-	pub fn progress(&self) -> (u32, u64) {
+	/// Returns state sync estimated progress.
+	pub fn progress(&self) -> StateDownloadProgress {
 		let percent_done = (*self.last_key.get(0).unwrap_or(&0u8) as u32) * 100 / 256;
-		(percent_done, self.imported_bytes)
+		StateDownloadProgress {
+			percentage: percent_done,
+			size: self.imported_bytes,
+		}
 	}
 }
 

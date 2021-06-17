@@ -160,6 +160,7 @@ impl<B: BlockT> std::fmt::Debug for ImportedState<B> {
 	}
 }
 
+/// Defines how a new state is computed for a given imported block.
 pub enum StateAction<Block: BlockT, Transaction> {
 	/// Apply precomputed changes coming from block execution or state sync.
 	ApplyChanges(StorageChanges<Block, Transaction>),
@@ -267,7 +268,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 
 	/// Auxiliary function for "converting" the transaction type.
 	///
-	/// Actually this just sets Changes `storage_changes` to `None` and makes rustc think that `Self` now
+	/// Actually this just sets `StorageChanges::Changes` to `None` and makes rustc think that `Self` now
 	/// uses a different transaction type.
 	pub fn clear_storage_changes_and_mutate<Transaction2>(self) -> BlockImportParams<Block, Transaction2> {
 		// Preserve imported state.

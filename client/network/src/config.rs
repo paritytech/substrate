@@ -387,7 +387,7 @@ impl From<multiaddr::Error> for ParseErr {
 pub enum SyncMode {
 	/// Full block download and verification.
 	Full,
-	/// Download headers and the latest state.
+	/// Download blocks and the latest state.
 	Fast {
 		/// Skip state proof download and verification.
 		skip_proofs: bool

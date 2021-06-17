@@ -237,8 +237,11 @@ arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Clone, Copy)]
 	pub enum SyncMode {
+		// Full sync. Donwnload end verify all blocks.
 		Full,
+		// Download blocks without executing them. Download latest state with proofs.
 		Fast,
+		// Download blocks without executing them. Download latest state without proofs.
 		FastUnsafe,
 	}
 }

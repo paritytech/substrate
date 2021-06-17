@@ -56,7 +56,7 @@ impl<Block: BlockT> BlockId<Block> {
 	}
 
 	/// Check if this block ID refers to the pre-genesis state.
-	pub fn is_empty(&self) -> bool {
+	pub fn is_pre_genesis(&self) -> bool {
 		match self {
 			BlockId::Hash(hash) => hash == &Default::default(),
 			BlockId::Number(_) => false,
@@ -64,7 +64,7 @@ impl<Block: BlockT> BlockId<Block> {
 	}
 
 	/// Create a block ID for a pre-genesis state.
-	pub fn empty() -> Self {
+	pub fn pre_genesis() -> Self {
 		BlockId::Hash(Default::default())
 	}
 }

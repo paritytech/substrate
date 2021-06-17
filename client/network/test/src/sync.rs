@@ -1101,7 +1101,7 @@ fn syncs_state() {
 		net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.
 		net.block_until_sync();
-		assert!(!net.peer(1).client().have_state_at(&BlockId::Number(64)));
+		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
 
 		let just = (*b"FRNK", Vec::new());
 		net.peer(1).client().finalize_block(BlockId::Number(60), Some(just), true).unwrap();
@@ -1114,11 +1114,11 @@ fn syncs_state() {
 				Poll::Pending
 			}
 		}));
-		assert!(!net.peer(1).client().have_state_at(&BlockId::Number(64)));
+		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
 		// Wait for the rest of the states to be imported.
 		block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
-			if net.peer(1).client().have_state_at(&BlockId::Number(64)) {
+			if net.peer(1).client().has_state_at(&BlockId::Number(64)) {
 				Poll::Ready(())
 			} else {
 				Poll::Pending

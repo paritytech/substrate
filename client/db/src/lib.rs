@@ -781,7 +781,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 		storage: Storage,
 	) -> ClientResult<Block::Hash> {
 		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
-			return Err(sp_blockchain::Error::GenesisInvalid.into());
+			return Err(sp_blockchain::Error::InvalidState.into());
 		}
 
 		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)|(
@@ -789,19 +789,22 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 				child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
 		));
 
-		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
+		let mut changes_trie_config = None;
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| {
 				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
-					changes_trie_config = Some(
-						Decode::decode(&mut &v[..])
-						.expect("changes trie configuration is encoded properly at genesis")
-					);
+					changes_trie_config = Some(Decode::decode(&mut &v[..]));
 				}
 				(&k[..], Some(&v[..]))
 			}),
 			child_delta
 		);
+
+		let changes_trie_config = match changes_trie_config {
+			Some(Ok(c)) => Some(c),
+			Some(Err(_)) => return Err(sp_blockchain::Error::InvalidState.into()),
+			None => None,
+		};
 
 		self.db_updates = transaction;
 		self.changes_trie_config_update = Some(changes_trie_config);
@@ -1931,7 +1934,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		operation: &mut Self::BlockImportOperation,
 		block: BlockId<Block>,
 	) -> ClientResult<()> {
-		if block.is_empty() {
+		if block.is_pre_genesis() {
 			operation.old_state = self.empty_state()?;
 		} else {
 			operation.old_state = self.state_at(block)?;

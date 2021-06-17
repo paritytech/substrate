@@ -1299,7 +1299,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		// epoch changes will error when trying to re-import an epoch change
 		match self.client.status(BlockId::Hash(hash)) {
 			Ok(sp_blockchain::BlockStatus::InChain) => {
-				// When re-importing existing block strip away finality information.
+				// When re-importing existing block strip away intermediates.
 				let _ = block.take_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY)?;
 				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
 				return self.inner.import_block(block, new_cache).await.map_err(Into::into)

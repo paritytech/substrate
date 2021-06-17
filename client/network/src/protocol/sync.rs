@@ -308,6 +308,15 @@ pub enum SyncState {
 	Downloading
 }
 
+/// Reported state download progress.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct StateDownloadProgress {
+	/// Estimated download percentage.
+	pub percentage: u32,
+	/// Total state size in bytes downloaded so far.
+	pub size: u64,
+}
+
 /// Syncing status and statistics.
 #[derive(Clone)]
 pub struct Status<B: BlockT> {
@@ -319,8 +328,8 @@ pub struct Status<B: BlockT> {
 	pub num_peers: u32,
 	/// Number of blocks queued for import
 	pub queued_blocks: u32,
-	/// State sync in progress (percentage, bytes)
-	pub state_sync: Option<(u32, u64)>,
+	/// State sync status in progress, if any.
+	pub state_sync: Option<StateDownloadProgress>,
 }
 
 /// A peer did not behave as expected and should be reported.
@@ -1282,7 +1291,7 @@ impl<B: BlockT> ChainSync<B> {
 						info!(
 							target: "sync",
 							"State sync is complete ({} MiB), restarting block sync.",
-							self.state_sync.as_ref().map_or(0, |s| s.progress().1 / (1024 * 1024)),
+							self.state_sync.as_ref().map_or(0, |s| s.progress().size / (1024 * 1024)),
 						);
 						self.state_sync = None;
 						self.mode = SyncMode::Full;

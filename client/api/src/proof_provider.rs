@@ -71,7 +71,7 @@ pub trait ProofProvider<Block: BlockT> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 
-	/// Given a `BlockId` iterate over all storage values starting at `start_key`,
+	/// Given a `BlockId` iterate over all storage values starting at `start_key` exclusively,
 	/// building proofs until size limit is reached. Returns combined proof and the number of collected keys.
 	fn read_proof_collection(
 		&self,

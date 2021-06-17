@@ -825,12 +825,12 @@ impl<Block: BlockT> backend::RemoteBackend<Block> for Backend<Block> where Block
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 	if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-		return Err(sp_blockchain::Error::GenesisInvalid.into());
+		return Err(sp_blockchain::Error::InvalidState.into());
 	}
 
 	if storage.children_default.keys()
 		.any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
-			return Err(sp_blockchain::Error::GenesisInvalid.into());
+			return Err(sp_blockchain::Error::InvalidState.into());
 	}
 
 	Ok(())
