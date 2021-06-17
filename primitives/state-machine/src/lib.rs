@@ -945,7 +945,7 @@ mod execution {
 		let mut values = Vec::new();
 		let result = proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |key, value| {
 			values.push((key.to_vec(), value.to_vec()));
-			count.as_ref().map_or(true, |c| values.len() as u32 >= *c)
+			count.as_ref().map_or(true, |c| (values.len() as u32) < *c)
 		}, true);
 		match result {
 			Ok(completed) => Ok((values, completed)),
