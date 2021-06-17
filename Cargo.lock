@@ -2933,9 +2933,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-http-client"
-version = "0.2.0-alpha"
+version = "0.2.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "124797a4ea7430d0675db78e065e53316e3f1a3cbf0ee4d6dbdd42db7b08e193"
+checksum = "7f1d8440e2617bdebdf45114e90f65aed3f14bf73e23d874dde8e4b764676fe9"
 dependencies = [
  "async-trait",
  "futures 0.3.13",
@@ -2979,9 +2979,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-utils"
-version = "0.2.0-alpha"
+version = "0.2.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0e45394ec3175a767c3c5bac584560e6ad9b56ebd73216c85ec8bab49619244"
+checksum = "e51670a3b56e5fb0d325920ce317c76184b8afabfd7bc5009831229cfef0732b"
 dependencies = [
  "futures 0.3.13",
  "globset",
