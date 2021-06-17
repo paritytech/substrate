@@ -1140,7 +1140,6 @@ impl<Block: BlockT> Backend<Block> {
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
-		// TODO: this code may be removed after a couple of releases.
 		let info = backend.blockchain.info();
 		if info.finalized_state.is_none()
 			&& info.finalized_hash != Default::default()
@@ -1393,9 +1392,6 @@ impl<Block: BlockT> Backend<Block> {
 
 			if number.is_zero() {
 				transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key.clone());
-				if operation.commit_state {
-					transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key);
-				}
 				transaction.set(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 
 				// for tests, because config is set from within the reset_storage
@@ -1403,7 +1399,9 @@ impl<Block: BlockT> Backend<Block> {
 					operation.changes_trie_config_update = Some(None);
 				}
 
-				if !operation.commit_state {
+				if operation.commit_state {
+					transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key);
+				} else {
 					// When we don't want to commit the genesis state, we still preserve it in memory
 					// to bootstrap consensus. It is queried for an initial list of authorities, etc.
 					*self.genesis_state.write() = Some(Arc::new(DbGenesisStorage::new(
@@ -1488,8 +1486,7 @@ impl<Block: BlockT> Backend<Block> {
 				let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
 				finalized
 			} else {
-				let finalized = number.is_zero() || pending_block.leaf_state.is_final();
-				finalized
+				number.is_zero() || pending_block.leaf_state.is_final()
 			};
 
 			let header = &pending_block.header;
