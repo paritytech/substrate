@@ -810,4 +810,34 @@ mod tests {
 			assert_eq!(balances(&123), (0, 0));
 		})
 	}
+
+	// given a full queue, and a solution which _should_ be allowed in, but the proposer of this
+	// new solution has insufficient deposit, we should not modify storage at all
+	#[test]
+	fn insufficient_deposit_with_full_queue_works_properly() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			for s in 0..SignedMaxSubmissions::get() {
+				// score is always getting better
+				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			}
+
+			// this solution has a higher score than any in the queue
+			let solution = RawSolution {
+				score: [(5 + SignedMaxSubmissions::get()).into(), 0, 0],
+				..Default::default()
+			};
+
+			assert_eq!(balances(&123), (0, 0));
+			assert_noop!(
+				submit_with_witness(Origin::signed(123), solution),
+				Error::<Runtime>::SignedCannotPayDeposit,
+			);
+
+			assert_eq!(balances(&123), (0, 0));
+		})
+	}
 }
