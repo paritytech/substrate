@@ -108,23 +108,6 @@ pub mod pallet {
 		}
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
-		/// Direct implementation of `GenesisBuild::build_storage`.
-		///
-		/// Kept in order not to break dependency.
-		pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
-			<Self as GenesisBuild<T, I>>::build_storage(self)
-		}
-
-		/// Direct implementation of `GenesisBuild::assimilate_storage`.
-		///
-		/// Kept in order not to break dependency.
-		pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
-		}
-	}
-
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
@@ -173,7 +156,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::AddOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn add_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
+		pub fn add_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
 
 			let mut members = <Members<T, I>>::get();
@@ -186,14 +169,14 @@ pub mod pallet {
 			T::MembershipChanged::change_members_sorted(&[who], &[], &members[..]);
 
 			Self::deposit_event(Event::MemberAdded);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove a member `who` from the set.
 		///
 		/// May only be called from `T::RemoveOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn remove_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
+		pub fn remove_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 
 			let mut members = <Members<T, I>>::get();
@@ -207,7 +190,7 @@ pub mod pallet {
 			Self::rejig_prime(&members);
 
 			Self::deposit_event(Event::MemberRemoved);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Swap out one member `remove` for another `add`.
@@ -220,10 +203,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			remove: T::AccountId,
 			add: T::AccountId
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::SwapOrigin::ensure_origin(origin)?;
 
-			if remove == add { return Ok(().into()) }
+			if remove == add { return Ok(()) }
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&remove).ok().ok_or(Error::<T, I>::NotMember)?;
@@ -242,7 +225,7 @@ pub mod pallet {
 			Self::rejig_prime(&members);
 
 			Self::deposit_event(Event::MembersSwapped);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Change the membership to a new set, disregarding the existing membership. Be nice and
@@ -250,7 +233,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::ResetOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn reset_members(origin: OriginFor<T>, members: Vec<T::AccountId>) -> DispatchResultWithPostInfo {
+		pub fn reset_members(origin: OriginFor<T>, members: Vec<T::AccountId>) -> DispatchResult {
 			T::ResetOrigin::ensure_origin(origin)?;
 
 			let mut members = members;
@@ -263,7 +246,7 @@ pub mod pallet {
 			});
 
 			Self::deposit_event(Event::MembersReset);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Swap out the sending member for some other key `new`.
@@ -272,7 +255,7 @@ pub mod pallet {
 		///
 		/// Prime membership is passed from the origin account to `new`, if extant.
 		#[pallet::weight(50_000_000)]
-		pub fn change_key(origin: OriginFor<T>, new: T::AccountId) -> DispatchResultWithPostInfo {
+		pub fn change_key(origin: OriginFor<T>, new: T::AccountId) -> DispatchResult {
 			let remove = ensure_signed(origin)?;
 
 			if remove != new {
@@ -298,30 +281,30 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::KeyChanged);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set the prime member. Must be a current member.
 		///
 		/// May only be called from `T::PrimeOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn set_prime(origin: OriginFor<T>, who: T::AccountId) -> DispatchResultWithPostInfo {
+		pub fn set_prime(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
 			Self::members().binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
 			Prime::<T, I>::put(&who);
 			T::MembershipChanged::set_prime(Some(who));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove the prime member if it exists.
 		///
 		/// May only be called from `T::PrimeOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn clear_prime(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn clear_prime(origin: OriginFor<T>) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
 			Prime::<T, I>::kill();
 			T::MembershipChanged::set_prime(None);
-			Ok(().into())
+			Ok(())
 		}
 	}
 }
@@ -515,7 +498,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 
-	use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
+	use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types, traits::GenesisBuild};
 	use frame_system::EnsureSignedBy;
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
