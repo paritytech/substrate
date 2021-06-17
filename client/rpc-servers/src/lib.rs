@@ -89,6 +89,8 @@ mod inner {
 		io: RpcHandler<M>,
 		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<http::Server> {
+		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
+			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 		http::ServerBuilder::new(io)
 			.threads(thread_pool_size.unwrap_or(HTTP_THREADS))
 			.health_api(("/health", "system_health"))
@@ -99,7 +101,7 @@ mod inner {
 				http::RestApi::Unsecure
 			})
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
-			.max_request_body_size(maybe_max_payload_mb.map(|mb| mb * MEGABYTE).unwrap_or(RPC_MAX_PAYLOAD_DEFAULT))
+			.max_request_body_size(max_request_body_size)
 			.start_http(addr)
 	}
 
