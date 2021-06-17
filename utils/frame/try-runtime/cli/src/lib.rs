@@ -112,6 +112,10 @@ pub struct SharedParams {
 		)
 	)]
 	pub block_at: String,
+	/// Whether or not to overwrite the code from state with the code from
+	/// the specified chain spec.
+	#[structopt(long)]
+	pub overwrite_code: bool,
 }
 
 /// Various commands to try out against runtime state at a specific block.
@@ -290,7 +294,7 @@ where
 	let builder = Builder::<Block>::new()
 		.mode(mode)
 		.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
-	let mut ext = if command.overwrite_code {
+	let mut ext = if shared.overwrite_code {
 		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder.inject_key_value(&[(code_key, code)]).build().await?
 	} else {
@@ -394,7 +398,7 @@ where
 		let builder = Builder::<Block>::new()
 			.mode(mode)
 			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
-		let mut ext = if command.overwrite_code {
+		let mut ext = if shared.overwrite_code {
 			let (code_key, code) = extract_code(config.chain_spec)?;
 			builder.inject_key_value(&[(code_key, code)]).build().await?
 		} else {
