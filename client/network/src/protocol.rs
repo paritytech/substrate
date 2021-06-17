@@ -229,6 +229,7 @@ impl ProtocolConfig {
 			match self.sync_mode {
 				config::SyncMode::Full => sync::SyncMode::Full,
 				config::SyncMode::Fast { skip_proofs } => sync::SyncMode::LightState { skip_proofs },
+				config::SyncMode::Warp => sync::SyncMode::Warp
 			}
 		}
 	}
@@ -669,6 +670,7 @@ impl<B: BlockT> Protocol<B> {
 				Ok(sync::OnBlockData::Request(peer, req)) => {
 					self.prepare_block_request(peer, req)
 				}
+				Ok(sync::OnBlockData::Ignore) => CustomMessageOutcome::None,
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -986,7 +988,8 @@ impl<B: BlockT> Protocol<B> {
 			},
 			Ok(sync::OnBlockData::Request(peer, req)) => {
 				self.prepare_block_request(peer, req)
-			}
+			},
+			Ok(sync::OnBlockData::Ignore) => CustomMessageOutcome::None,
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);

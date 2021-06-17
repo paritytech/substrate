@@ -32,6 +32,7 @@
 use codec::Encode;
 use blocks::BlockCollection;
 use state::StateSync;
+use warp::WarpSync;
 use sp_blockchain::{Error as ClientError, HeaderMetadata};
 use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
@@ -62,6 +63,7 @@ use futures::{task::Poll, Future, stream::FuturesUnordered, FutureExt, StreamExt
 mod blocks;
 mod extra_requests;
 mod state;
+mod warp;
 
 /// Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -214,6 +216,8 @@ pub struct ChainSync<B: BlockT> {
 	block_announce_validation_per_peer_stats: HashMap<PeerId, usize>,
 	/// State sync in progress, if any.
 	state_sync: Option<StateSync<B>>,
+	/// Warp sync in progress, if any.
+	warp_sync: Option<WarpSync<B>>,
 	/// Enable importing existing blocks. This is used used after the state download to
 	/// catch up to the latest state while re-importing blocks.
 	import_existing: bool,
@@ -330,6 +334,8 @@ pub struct Status<B: BlockT> {
 	pub queued_blocks: u32,
 	/// State sync status in progress, if any.
 	pub state_sync: Option<StateDownloadProgress>,
+	/// Warp sync in progress, if any.
+	pub warp_sync: Option<StateDownloadProgress>,
 }
 
 /// A peer did not behave as expected and should be reported.
@@ -350,7 +356,9 @@ pub enum OnBlockData<B: BlockT> {
 	/// The block should be imported.
 	Import(BlockOrigin, Vec<IncomingBlock<B>>),
 	/// A new block request needs to be made to the given peer.
-	Request(PeerId, BlockRequest<B>)
+	Request(PeerId, BlockRequest<B>),
+	/// Block is processed internally and no furter action is requried.
+	Ignore,
 }
 
 impl<B: BlockT> OnBlockData<B> {
@@ -471,6 +479,8 @@ pub enum SyncMode {
 	LightState {
 		skip_proofs: bool
 	},
+	// GRANDPA warp sync mode.
+	Warp,
 }
 
 /// Result of [`ChainSync::has_slot_for_block_announce_validation`].
@@ -508,6 +518,7 @@ impl<B: BlockT> ChainSync<B> {
 			block_announce_validation: Default::default(),
 			block_announce_validation_per_peer_stats: Default::default(),
 			state_sync: None,
+			warp_sync: None,
 			import_existing: false,
 		};
 		sync.reset_sync_start_point()?;
@@ -518,7 +529,7 @@ impl<B: BlockT> ChainSync<B> {
 		match self.mode {
 			SyncMode::Full => BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
 			SyncMode::Light => BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
-			SyncMode::LightState { .. } =>
+			SyncMode::LightState { .. } | SyncMode::Warp =>
 				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
 		}
 	}
@@ -528,6 +539,7 @@ impl<B: BlockT> ChainSync<B> {
 			SyncMode::Full => false,
 			SyncMode::Light => true,
 			SyncMode::LightState { .. } => true,
+			SyncMode::Warp  => true,
 		}
 	}
 
@@ -560,6 +572,7 @@ impl<B: BlockT> ChainSync<B> {
 			num_peers: self.peers.len() as u32,
 			queued_blocks: self.queue_blocks.len() as u32,
 			state_sync: self.state_sync.as_ref().map(|s| s.progress()),
+			warp_sync: self.warp_sync.as_ref().map(|s| s.progress()),
 		}
 	}
 
@@ -615,6 +628,20 @@ impl<B: BlockT> ChainSync<B> {
 					return Ok(None)
 				}
 
+				if let SyncMode::Warp = &self.mode {
+					// TODO: wait for 3 peers
+					if self.warp_sync.is_none() {
+						let number = best_number;
+						let hash = best_hash;
+						log::debug!(
+							target: "sync",
+							"Starting warp state sync for #{} ({})",
+							number,
+							hash,
+						);
+						self.warp_sync = Some(WarpSync::new(self.client.clone(), hash, number));
+					}
+				}
 				// If we are at genesis, just start downloading.
 				let (state, req) = if self.best_queued_number.is_zero() {
 					debug!(
@@ -776,12 +803,40 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Get an iterator over all block requests of all peers.
 	pub fn block_requests(&mut self) -> impl Iterator<Item = (&PeerId, BlockRequest<B>)> + '_ {
+		if let Some(warp_sync) = &self.warp_sync {
+			if let Some(request) = warp_sync.next_block_request() {
+				// Find a peer that can handle the request.
+				let peer = self.peers.iter().find_map(move |(id, peer)| {
+					if !peer.state.is_available() {
+						return None
+					}
+
+					if peer.best_number >= warp_sync.target_block_number() {
+						Some((id, peer.best_number))
+					} else {
+						None
+					}
+				});
+				if let Some((peer, best_num)) = peer {
+					trace!(
+						target: "sync",
+						"New warp block request for {}, (best:{}, target:{}) {:?}",
+						peer,
+						best_num,
+						warp_sync.target_block_number(),
+						request,
+					);
+					return Either::Left(Either::Right(std::iter::once((peer, request))));
+				}
+			}
+			return Either::Left(Either::Left(std::iter::empty()))
+		}
 		if self.pending_requests.is_empty() || self.state_sync.is_some() {
-			return Either::Left(std::iter::empty())
+			return Either::Left(Either::Left(std::iter::empty()))
 		}
 		if self.queue_blocks.len() > MAX_IMPORTING_BLOCKS {
 			trace!(target: "sync", "Too many blocks in the queue.");
-			return Either::Left(std::iter::empty())
+			return Either::Left(Either::Left(std::iter::empty()))
 		}
 		let major_sync = self.status().state == SyncState::Downloading;
 		let attrs = self.required_block_attributes();
@@ -864,12 +919,12 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Get a state request, if any
 	pub fn state_request(&mut self) -> Option<(PeerId, StateRequest)> {
+		if self.peers.iter().any(|(_, peer)| peer.state == PeerSyncState::DownloadingState) {
+			// Only one pending state request is allowed.
+			return None;
+		}
 		if let Some(sync) = &self.state_sync {
 			if sync.is_complete() {
-				return None;
-			}
-			if self.peers.iter().any(|(_, peer)| peer.state == PeerSyncState::DownloadingState) {
-				// Only one pending state request is allowed.
 				return None;
 			}
 			for (id, peer) in self.peers.iter_mut() {
@@ -878,6 +933,17 @@ impl<B: BlockT> ChainSync<B> {
 					peer.state = PeerSyncState::DownloadingState;
 					let request = sync.next_request();
 					return Some((id.clone(), request))
+				}
+			}
+		}
+		if let Some(sync) = &self.warp_sync {
+			if let Some(request) = sync.next_state_request() {
+				for (id, peer) in self.peers.iter_mut() {
+					if peer.state.is_available() && peer.best_number >= sync.target_block_number() {
+						trace!(target: "sync", "New StateRequest for {}", id);
+						peer.state = PeerSyncState::DownloadingState;
+						return Some((id.clone(), request))
+					}
 				}
 			}
 		}
@@ -897,6 +963,17 @@ impl<B: BlockT> ChainSync<B> {
 		request: Option<BlockRequest<B>>,
 		response: BlockResponse<B>
 	) -> Result<OnBlockData<B>, BadPeer> {
+		if let Some(sync) = &mut self.warp_sync {
+			let result = sync.import_block(response);
+			return match result {
+				warp::ImportResult::Continue(_) => {
+					trace!(target: "sync", "Successfully imported warp header from {}", who);
+					Ok(OnBlockData::Ignore)
+				},
+				warp::ImportResult::BadResponse => Err(BadPeer(who.clone(), rep::NO_BLOCK)),
+				warp::ImportResult::Import(..) => Ok(OnBlockData::Ignore),
+			}
+		}
 		self.downloaded_blocks += response.blocks.len();
 		let new_blocks: Vec<IncomingBlock<B>> =
 			if let Some(peer) = self.peers.get_mut(who) {
@@ -1098,6 +1175,15 @@ impl<B: BlockT> ChainSync<B> {
 				response.proof.len(),
 			);
 			sync.import(response)
+		} else if let Some(sync) = &mut self.warp_sync {
+			debug!(
+				target: "sync",
+				"Importing state data from {} with {} keys, {} proof nodes.",
+				who,
+				response.entries.len(),
+				response.proof.len(),
+			);
+			sync.import_state(response)
 		} else {
 			debug!(target: "sync", "Ignored obsolete state response from {}", who);
 			return Err(BadPeer(who.clone(), rep::NOT_REQUESTED));
@@ -1297,6 +1383,17 @@ impl<B: BlockT> ChainSync<B> {
 						self.mode = SyncMode::Full;
 						output.extend(self.restart());
 					}
+					let warp_sync_complete = self.state_sync.as_ref().map_or(false, |s| s.target() == hash);
+					if warp_sync_complete {
+						info!(
+							target: "sync",
+							"Warp sync is complete ({} MiB), restarting block sync.",
+							self.warp_sync.as_ref().map_or(0, |s| s.progress().size / (1024 * 1024)),
+						);
+						self.warp_sync = None;
+						self.mode = SyncMode::Full;
+						output.extend(self.restart());
+					}
 				},
 				Err(BlockImportError::IncompleteHeader(who)) => {
 					if let Some(peer) = who {
@@ -1342,6 +1439,7 @@ impl<B: BlockT> ChainSync<B> {
 				e @ Err(BlockImportError::Other(_)) => {
 					warn!(target: "sync", "💔 Error importing block {:?}: {:?}", hash, e);
 					self.state_sync = None;
+					self.warp_sync = None;
 					output.extend(self.restart());
 				},
 				Err(BlockImportError::Cancelled) => {}

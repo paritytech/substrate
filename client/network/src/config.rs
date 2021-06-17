@@ -392,6 +392,8 @@ pub enum SyncMode {
 		/// Skip state proof download and verification.
 		skip_proofs: bool
 	},
+	/// GRANDPA Warp sync - verify authority set transitions and the latest state.
+	Warp,
 }
 
 impl Default for SyncMode {
