@@ -106,6 +106,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ambassador"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61874b33258f18ca7923047c12887078ccfe95c2811b03c1a09e309c19b7e50b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1449,27 +1460,6 @@ name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
-
-[[package]]
-name = "dyn-clonable"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e9232f0e607a262ceb9bd5141a3dfb3e4db6994b31989bbfd845878cba59fd4"
-dependencies = [
- "dyn-clonable-impl",
- "dyn-clone",
-]
-
-[[package]]
-name = "dyn-clonable-impl"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "558e40ea573c374cf53507fd240b7ee2f5477df7cfebdb97323ec61c719399c5"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "dyn-clone"
@@ -7499,15 +7489,12 @@ dependencies = [
 name = "sc-executor-common"
 version = "0.9.0"
 dependencies = [
- "derive_more",
  "parity-scale-codec",
  "pwasm-utils",
- "sp-allocator",
  "sp-core",
  "sp-maybe-compressed-blob",
- "sp-serializer",
+ "sp-tasks",
  "sp-wasm-interface",
- "thiserror",
  "wasmi",
 ]
 
@@ -8936,7 +8923,7 @@ dependencies = [
  "blake2-rfc",
  "byteorder",
  "criterion",
- "dyn-clonable",
+ "dyn-clone",
  "ed25519-dalek",
  "futures 0.3.15",
  "hash-db",
@@ -8999,6 +8986,7 @@ dependencies = [
 name = "sp-externalities"
 version = "0.9.0"
 dependencies = [
+ "ambassador",
  "environmental",
  "parity-scale-codec",
  "sp-std",
@@ -9085,6 +9073,7 @@ dependencies = [
  "serde",
  "sp-core",
  "sp-externalities",
+ "sp-std",
 ]
 
 [[package]]
@@ -9352,13 +9341,22 @@ dependencies = [
 name = "sp-tasks"
 version = "3.0.0"
 dependencies = [
+ "ambassador",
+ "derive_more",
  "log",
  "parity-scale-codec",
+ "parking_lot 0.11.1",
+ "sp-allocator",
  "sp-core",
  "sp-externalities",
  "sp-io",
+ "sp-panic-handler",
  "sp-runtime-interface",
+ "sp-serializer",
  "sp-std",
+ "sp-wasm-interface",
+ "thiserror",
+ "wasmi",
 ]
 
 [[package]]
@@ -9778,6 +9776,7 @@ dependencies = [
  "sp-session",
  "sp-state-machine",
  "sp-std",
+ "sp-tasks",
  "sp-transaction-pool",
  "sp-trie",
  "sp-version",

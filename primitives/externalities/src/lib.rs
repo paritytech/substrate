@@ -294,7 +294,6 @@ pub trait Externalities: ExtensionStore {
 	/// Adds new storage keys to the DB tracking whitelist.
 	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>);
 
-<<<<<<< HEAD
 	/// Get externalities to use from within a child worker.
 	fn get_worker_externalities(
 		&mut self,
@@ -313,6 +312,16 @@ pub trait Externalities: ExtensionStore {
 	/// Worker result have been dissmiss, inner externality state and constraint
 	/// needs to be lifted.
 	fn dismiss_worker(&mut self, id: TaskId);
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Returns estimated proof size for the state queries so far.
+	/// Proof is reset on commit and wipe.
+	fn proof_size(&self) -> Option<u32> {
+		None
+	}
 }
 
 /// Substrate externalities that can be use within a worker context.
@@ -340,17 +349,6 @@ pub enum WorkerResult {
 	/// This propagate panic in caller, and also
 	/// indicate the process should be stop.
 	HardPanic,
-=======
-	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	/// Benchmarking related functionality and shouldn't be used anywhere else!
-	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	///
-	/// Returns estimated proof size for the state queries so far.
-	/// Proof is reset on commit and wipe.
-	fn proof_size(&self) -> Option<u32> {
-		None
-	}
->>>>>>> master
 }
 
 /// A unique identifier type for a child worker.

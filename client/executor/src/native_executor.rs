@@ -32,28 +32,18 @@ use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
 use sp_core::{
 	NativeOrEncoded,
-<<<<<<< HEAD
 	traits::{
-		CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions,
+		CodeExecutor, Externalities, RuntimeCode,
 	},
 };
 use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
-use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
 use sp_tasks::common::with_externalities_safe;
 use sp_tasks::pool_spawn::RuntimeInstanceSpawn;
-=======
-	traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawnExt, RuntimeSpawn},
-};
-use log::trace;
-use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::{
-	wasm_runtime::{WasmInstance, WasmModule, InvokeMethod},
+	wasm_runtime::{WasmInstance, WasmModule},
 	runtime_blob::RuntimeBlob,
 };
-use sp_externalities::ExternalitiesExt as _;
-use sp_tasks::new_async_externalities;
->>>>>>> master
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 2048;
@@ -210,7 +200,7 @@ impl WasmExecutor {
 		let module = AssertUnwindSafe(module);
 
 		with_externalities_safe(&mut **ext, move || {
-			preregister_builtin_ext(module.clone());
+			RuntimeInstanceSpawn::preregister_builtin_ext(module.clone());
 			instance.call_export(export_name, call_data)
 		})
 		.and_then(|r| r)
@@ -327,142 +317,6 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
-<<<<<<< HEAD
-=======
-/// Helper inner struct to implement `RuntimeSpawn` extension.
-pub struct RuntimeInstanceSpawn {
-	module: Arc<dyn WasmModule>,
-	tasks: parking_lot::Mutex<HashMap<u64, mpsc::Receiver<Vec<u8>>>>,
-	counter: AtomicU64,
-	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
-}
-
-impl RuntimeSpawn for RuntimeInstanceSpawn {
-	fn spawn_call(&self, dispatcher_ref: u32, func: u32, data: Vec<u8>) -> u64 {
-		let new_handle = self.counter.fetch_add(1, Ordering::Relaxed);
-
-		let (sender, receiver) = mpsc::channel();
-		self.tasks.lock().insert(new_handle, receiver);
-
-		let module = self.module.clone();
-		let scheduler = self.scheduler.clone();
-		self.scheduler.spawn("executor-extra-runtime-instance", Box::pin(async move {
-			let module = AssertUnwindSafe(module);
-
-			let async_ext = match new_async_externalities(scheduler.clone()) {
-				Ok(val) => val,
-				Err(e) => {
-					log::error!(
-						target: "executor",
-						"Failed to setup externalities for async context: {}",
-						e,
-					);
-
-					// This will drop sender and receiver end will panic
-					return;
-				}
-			};
-
-			let mut async_ext = match async_ext.with_runtime_spawn(
-				Box::new(RuntimeInstanceSpawn::new(module.clone(), scheduler))
-			) {
-				Ok(val) => val,
-				Err(e) => {
-					log::error!(
-						target: "executor",
-						"Failed to setup runtime extension for async externalities: {}",
-						e,
-					);
-
-					// This will drop sender and receiver end will panic
-					return;
-				}
-			};
-
-			let result = with_externalities_safe(
-				&mut async_ext,
-				move || {
-
-					// FIXME: Should be refactored to shared "instance factory".
-					// Instantiating wasm here every time is suboptimal at the moment, shared
-					// pool of instances should be used.
-					//
-					// https://github.com/paritytech/substrate/issues/7354
-					let instance = module.new_instance()
-						.expect("Failed to create new instance from module");
-
-					instance.call(
-						InvokeMethod::TableWithWrapper { dispatcher_ref, func },
-						&data[..],
-					).expect("Failed to invoke instance.")
-				}
-			);
-
-			match result {
-				Ok(output) => {
-					let _ = sender.send(output);
-				},
-				Err(error) => {
-					// If execution is panicked, the `join` in the original runtime code will panic as well,
-					// since the sender is dropped without sending anything.
-					log::error!("Call error in spawned task: {:?}", error);
-				},
-			}
-		}));
-
-
-		new_handle
-	}
-
-	fn join(&self, handle: u64) -> Vec<u8> {
-		let receiver = self.tasks.lock().remove(&handle).expect("No task for the handle");
-		let output = receiver.recv().expect("Spawned task panicked for the handle");
-		output
-	}
-}
-
-impl RuntimeInstanceSpawn {
-	pub fn new(
-		module: Arc<dyn WasmModule>,
-		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
-	) -> Self {
-		Self {
-			module,
-			scheduler,
-			counter: 0.into(),
-			tasks: HashMap::new().into(),
-		}
-	}
-
-	fn with_externalities_and_module(
-		module: Arc<dyn WasmModule>,
-		mut ext: &mut dyn Externalities,
-	) -> Option<Self> {
-		ext.extension::<sp_core::traits::TaskExecutorExt>()
-			.map(move |task_ext| Self::new(module, task_ext.clone()))
-	}
-}
-
-/// Pre-registers the built-in extensions to the currently effective externalities.
-///
-/// Meant to be called each time before calling into the runtime.
-fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
-	sp_externalities::with_externalities(move |mut ext| {
-		if let Some(runtime_spawn) =
-			RuntimeInstanceSpawn::with_externalities_and_module(module, ext)
-		{
-			if let Err(e) = ext.register_extension(RuntimeSpawnExt(Box::new(runtime_spawn))) {
-				trace!(
-					target: "executor",
-					"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
-					e,
-				)
-			}
-		}
-	});
-}
-
->>>>>>> master
 impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	type Error = Error;
 
@@ -508,7 +362,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						with_externalities_safe(
 							&mut **ext,
 							move || {
-								preregister_builtin_ext(module.clone());
+								RuntimeInstanceSpawn::preregister_builtin_ext(module.clone());
 								instance.call_export(method, data).map(NativeOrEncoded::Encoded)
 							}
 						)

@@ -58,34 +58,6 @@ pub struct EntryPoint {
 impl EntryPoint {
 	/// Call this entry point.
 	pub fn call(&self, data_ptr: Pointer<u8>, data_len: WordSize) -> Result<u64> {
-<<<<<<< HEAD
-		let data_ptr = u32::from(data_ptr) as i32;
-		let data_len = u32::from(data_len) as i32;
-
-		(match self.call_type {
-			EntryPointType::Direct => {
-				self.func.call(&[
-					wasmtime::Val::I32(data_ptr),
-					wasmtime::Val::I32(data_len),
-				])
-			},
-			EntryPointType::Wrapped(func) => {
-				self.func.call(&[
-					wasmtime::Val::I32(func as _),
-					wasmtime::Val::I32(data_ptr),
-					wasmtime::Val::I32(data_len),
-				])
-			},
-		})
-			.map(|results|
-				// the signature is checked to have i64 return type
-				results[0].unwrap_i64() as u64
-			)
-			.map_err(|err| Error::RuntimePanicked(format!(
-				"Wasm execution trapped: {}",
-				err
-			)))
-=======
 		let data_ptr = u32::from(data_ptr);
 		let data_len = u32::from(data_len);
 
@@ -106,7 +78,6 @@ impl EntryPoint {
 					.map_err(handle_trap)
 			}
 		}
->>>>>>> master
 	}
 
 	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {

@@ -14,24 +14,13 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-<<<<<<< HEAD
-parity-wasm = "0.41.0"
-pwasm-utils = "0.14.0"
-=======
-derive_more = "0.99.2"
 pwasm-utils = "0.18.0"
->>>>>>> master
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 wasmi = "0.9.0"
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
-<<<<<<< HEAD
 sp-tasks = { version = "3.0.0", path = "../../../primitives/tasks" }
-=======
 sp-maybe-compressed-blob = { version = "3.0.0", path = "../../../primitives/maybe-compressed-blob" }
-sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
-thiserror = "1.0.21"
->>>>>>> master
 
 [features]
 default = []

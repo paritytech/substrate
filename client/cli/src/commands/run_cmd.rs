@@ -385,13 +385,12 @@ impl CliConfiguration for RunCmd {
 		Ok(self.ws_max_connections)
 	}
 
-<<<<<<< HEAD
 	fn worker_limit(&self) -> Result<Option<usize>> {
 		Ok(self.worker_limit)
-=======
+	}
+
 	fn rpc_http_threads(&self) -> Result<Option<usize>> {
 		Ok(self.rpc_http_threads)
->>>>>>> master
 	}
 
 	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {

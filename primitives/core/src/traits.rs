@@ -33,12 +33,8 @@ pub use sp_externalities::{Externalities, ExternalitiesExt, AsyncExternalities,
 	WorkerResult, TaskId};
 
 /// Code execution engine.
-<<<<<<< HEAD
 #[cfg(feature = "std")]
-pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
-=======
 pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'static {
->>>>>>> master
 	/// Externalities error type.
 	type Error: Display + Debug + Send + Sync + 'static;
 
@@ -137,34 +133,10 @@ impl std::fmt::Display for CodeNotFound {
 	}
 }
 
-<<<<<<< HEAD
-/// `Allow` or `Disallow` missing host functions when instantiating a WASM blob.
-#[derive(Clone, Copy, Debug)]
-pub enum MissingHostFunctions {
-	/// Any missing host function will be replaced by a stub that returns an error when
-	/// being called.
-	Allow,
-	/// Any missing host function will result in an error while instantiating the WASM blob,
-	Disallow,
-}
-
-impl MissingHostFunctions {
-	/// Are missing host functions allowed?
-	pub fn allowed(self) -> bool {
-		matches!(self, Self::Allow)
-	}
-}
-
-/// Something that can call a method in a WASM blob.
-#[cfg(feature = "std")]
-pub trait CallInWasm: Send + Sync {
-	/// Call the given `method` in the given `wasm_blob` using `call_data` (SCALE encoded arguments)
-	/// to decode the arguments for the method.
-=======
 /// A trait that allows reading version information from the binary.
+#[cfg(feature = "std")]
 pub trait ReadRuntimeVersion: Send + Sync {
 	/// Reads the runtime version information from the given wasm code.
->>>>>>> master
 	///
 	/// The version information may be embedded into the wasm binary itself. If it is not present,
 	/// then this function may fallback to the legacy way of reading the version.
@@ -196,16 +168,10 @@ sp_externalities::decl_extension! {
 	pub struct ReadRuntimeVersionExt(Box<dyn ReadRuntimeVersion>);
 }
 
-<<<<<<< HEAD
 #[cfg(feature = "std")]
-impl CallInWasmExt {
-	/// Creates a new instance of `Self`.
-	pub fn new<T: CallInWasm + 'static>(inner: T) -> Self {
-=======
 impl ReadRuntimeVersionExt {
 	/// Creates a new instance of the extension given a version determinator instance.
 	pub fn new<T: ReadRuntimeVersion + 'static>(inner: T) -> Self {
->>>>>>> master
 		Self(Box::new(inner))
 	}
 }

@@ -749,7 +749,10 @@ where
 		self.backend.set_whitelist(new)
 	}
 
-<<<<<<< HEAD
+	fn proof_size(&self) -> Option<u32> {
+		self.backend.proof_size()
+	}
+
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: TaskId,
@@ -773,9 +776,6 @@ where
 	}
 
 	fn dismiss_worker(&mut self, _id: TaskId) {
-=======
-	fn proof_size(&self) -> Option<u32> {
-		self.backend.proof_size()
 	}
 }
 
@@ -827,7 +827,6 @@ where
 			});
 			(true, num_deleted)
 		}
->>>>>>> master
 	}
 }
 

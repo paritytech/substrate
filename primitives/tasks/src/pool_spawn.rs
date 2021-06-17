@@ -475,7 +475,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 impl RuntimeInstanceSpawn {
 	/// Instantiate a new `RuntimeInstanceSpawn`.
 	///
-	/// Usualy one should rather be using `register_on_externalities`.
+	/// Usualy one should rather be using `preregister_builtin_ext`.
 	pub fn new(
 		module: Option<Arc<dyn WasmModule>>,
 		scheduler: Box<dyn sp_core::traits::SpawnNamed>,
@@ -499,7 +499,7 @@ impl RuntimeInstanceSpawn {
 	/// Allows to register an `RunstimeSpawn` without a
 	/// wasm module.
 	///
-	/// In most case `register_on_externalities` should be use,
+	/// In most case `preregister_builtin_ext` should be use,
 	/// this function is mostly for testing purpose (when
 	/// it is guaranteed to run in native mode).
 	pub fn with_externalities_and_module(
@@ -512,26 +512,22 @@ impl RuntimeInstanceSpawn {
 			.map(move |task_ext| Self::new(module, task_ext.clone(), 0))
 	}
 
-	/// Register new `RuntimeSpawnExt` on current externalities.
+	/// Pre-registers the built-in extensions to the currently effective externalities.
 	///
-	/// This extensions will spawn instances from provided `module`.
-	pub fn register_on_externalities(module: Arc<dyn WasmModule>) {
-		sp_externalities::with_externalities(
-			move |mut ext| {
-				if let Some(runtime_spawn) =
-					Self::with_externalities_and_module(Some(module.clone()), ext)
-				{
-					if let Err(e) = ext.register_extension(
-						RuntimeSpawnExt(Box::new(runtime_spawn))
-					) {
-						trace!(
-							target: "executor",
-							"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
-							e,
-						)
-					}
+	/// Meant to be called each time before calling into the runtime.
+	pub fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
+		sp_externalities::with_externalities(move |mut ext| {
+			if let Some(runtime_spawn) =
+				RuntimeInstanceSpawn::with_externalities_and_module(Some(module), ext)
+			{
+				if let Err(e) = ext.register_extension(RuntimeSpawnExt(Box::new(runtime_spawn))) {
+					trace!(
+						target: "executor",
+						"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
+						e,
+					)
 				}
 			}
-		);
+		});
 	}
 }

@@ -433,32 +433,6 @@ fn create_versioned_wasm_runtime(
 		cache_path,
 	)?;
 
-<<<<<<< HEAD
-	// Call to determine runtime version.
-	let version_result = {
-		// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
-		let mut ext = AssertUnwindSafe(ext);
-
-		// The following unwind safety assertion is OK because if the method call panics, the
-		// runtime will be dropped.
-		let runtime = AssertUnwindSafe(runtime.as_ref());
-		sp_tasks::with_externalities_safe(
-			&mut **ext,
-			move || runtime.new_instance()?.call("Core_version".into(), &[])
-		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
-	};
-	let version = match version_result {
-		Ok(version) => Some(decode_version(&version)?),
-		Err(_) => None,
-	};
-	#[cfg(not(target_os = "unknown"))]
-	log::debug!(
-		target: "wasm-runtime",
-		"Prepared new runtime version {:?} in {} ms.",
-		version,
-		time.elapsed().as_millis(),
-	);
-=======
 	// If the runtime blob doesn't embed the runtime version then use the legacy version query
 	// mechanism: call the runtime.
 	if version.is_none() {
@@ -470,7 +444,7 @@ fn create_versioned_wasm_runtime(
 			// The following unwind safety assertion is OK because if the method call panics, the
 			// runtime will be dropped.
 			let runtime = AssertUnwindSafe(runtime.as_ref());
-			crate::native_executor::with_externalities_safe(
+			sp_tasks::with_externalities_safe(
 				&mut **ext,
 				move || runtime.new_instance()?.call("Core_version".into(), &[])
 			).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
@@ -480,7 +454,6 @@ fn create_versioned_wasm_runtime(
 			version = Some(decode_version(&version_buf)?)
 		}
 	}
->>>>>>> master
 
 	let mut instances = Vec::with_capacity(max_instances);
 	instances.resize_with(max_instances, || Mutex::new(None));

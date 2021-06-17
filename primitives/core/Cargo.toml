@@ -113,11 +113,7 @@ std = [
 	"futures/std",
 	"futures/thread-pool",
 	"libsecp256k1/std",
-<<<<<<< HEAD
-=======
-	"dyn-clonable",
 	"max-encoded-len/std",
->>>>>>> master
 ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers

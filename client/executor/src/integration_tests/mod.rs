@@ -786,7 +786,6 @@ macro_rules! dont_panic {
 			let mut ext = TestExternalities::default();
 			let mut ext = ext.ext();
 
-<<<<<<< HEAD
 			call_in_wasm(
 				$method_name,
 				&[],
@@ -795,9 +794,6 @@ macro_rules! dont_panic {
 			).unwrap();
 		}
 	};
-=======
-	assert!(format!("{}", error_result).contains("Spawned task"));
->>>>>>> master
 }
 
 dont_panic!(inline_runtime_call_should_work, "test_inline");
