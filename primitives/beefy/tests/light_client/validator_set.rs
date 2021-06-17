@@ -29,7 +29,7 @@ pub enum Signature {
 	Invalid,
 }
 
-impl Signature {
+impl beefy_primitives::crypto::Signature {
 	pub fn is_valid_for(&self, public: &Public) -> bool {
 		matches!(self, Self::ValidFor(ref p) if p == public)
 	}

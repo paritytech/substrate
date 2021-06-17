@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+/*
 use beefy_primitives::{self as bp, ValidatorSetId};
+use beefy_primitives::crypto::{Public, Signature};
 
 pub mod merkle_tree;
-pub mod validator_set;
 
 /// A marker struct for validator set merkle tree.
 #[derive(Debug)]
@@ -44,7 +45,7 @@ impl Payload {
 
 pub type BlockNumber = u64;
 pub type Commitment = bp::Commitment<BlockNumber, Payload>;
-pub type SignedCommitment = bp::SignedCommitment<BlockNumber, Payload, validator_set::Signature>;
+pub type SignedCommitment = bp::SignedCommitment<BlockNumber, Payload>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -87,7 +88,7 @@ pub enum Error {
 	InvalidMmrProof,
 }
 
-type ValidatorSet = (ValidatorSetId, Vec<validator_set::Public>);
+type ValidatorSet = (ValidatorSetId, Vec<Public>);
 
 pub struct LightClient {
 	validator_set: ValidatorSet,
@@ -117,7 +118,7 @@ impl LightClient {
 	pub fn import_set_transition(
 		&mut self,
 		signed: SignedCommitment,
-		validator_set_proof: merkle_tree::Proof<ValidatorSetTree, Vec<validator_set::Public>>,
+		validator_set_proof: merkle_tree::Proof<ValidatorSetTree, Vec<Public>>,
 	) -> Result<(), Error> {
 		// Make sure it is a set transition block (see [import]).
 		if signed.commitment.validator_set_id != self.validator_set.0 + 1 {
@@ -242,8 +243,9 @@ impl LightClient {
 
 pub fn new() -> LightClient {
 	LightClient {
-		validator_set: (0, vec![validator_set::Public(0)]),
+		validator_set: (0, vec![Public(0)]),
 		next_validator_set: None,
 		last_commitment: None,
 	}
 }
+*/

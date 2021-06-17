@@ -24,7 +24,10 @@
 
 use sp_std::prelude::*;
 
-use crate::commitment::{Commitment, SignedCommitment};
+use crate::{
+	commitment::{Commitment, SignedCommitment},
+	crypto::Signature,
+};
 
 /// A light form of [SignedCommitment].
 ///
@@ -56,12 +59,12 @@ impl<TBlockNumber, TPayload, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, 
 	/// and a merkle root of all signatures.
 	///
 	/// Returns the full list of signatures along with the witness.
-	pub fn from_signed<TSignature, TMerkelize>(
-		signed: SignedCommitment<TBlockNumber, TPayload, TSignature>,
+	pub fn from_signed<TMerkelize>(
+		signed: SignedCommitment<TBlockNumber, TPayload>,
 		merkelize: TMerkelize,
-	) -> (Self, Vec<Option<TSignature>>)
+	) -> (Self, Vec<Option<Signature>>)
 	where
-		TMerkelize: FnOnce(&[Option<TSignature>]) -> TMerkleRoot,
+		TMerkelize: FnOnce(&[Option<Signature>]) -> TMerkleRoot,
 	{
 		let SignedCommitment { commitment, signatures } = signed;
 		let signed_by = signatures.iter().map(|s| s.is_some()).collect();
@@ -80,12 +83,38 @@ impl<TBlockNumber, TPayload, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, 
 
 #[cfg(test)]
 mod tests {
+
+	use sp_core::{keccak_256, Pair};
+	use sp_keystore::{testing::KeyStore, SyncCryptoStore, SyncCryptoStorePtr};
+
 	use super::*;
 	use codec::Decode;
 
+	use crate::{crypto, KEY_TYPE};
+
 	type TestCommitment = Commitment<u128, String>;
-	type TestSignedCommitment = SignedCommitment<u128, String, Vec<u8>>;
-	type TestSignedCommitmentWitness = SignedCommitmentWitness<u128, String, Vec<Option<Vec<u8>>>>;
+	type TestSignedCommitment = SignedCommitment<u128, String>;
+	type TestSignedCommitmentWitness = SignedCommitmentWitness<u128, String, Vec<Option<Signature>>>;
+
+	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
+	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
+		let store: SyncCryptoStorePtr = KeyStore::new().into();
+
+		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
+		let _ = SyncCryptoStore::insert_unknown(&*store, KEY_TYPE, "//Alice", alice.public().as_ref()).unwrap();
+
+		let msg = keccak_256(b"This is the first message");
+		let sig1 = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
+			.unwrap()
+			.unwrap();
+
+		let msg = keccak_256(b"This is the second message");
+		let sig2 = SyncCryptoStore::ecdsa_sign_prehashed(&*store, KEY_TYPE, &alice.public(), &msg)
+			.unwrap()
+			.unwrap();
+
+		(sig1.into(), sig2.into())
+	}
 
 	fn signed_commitment() -> TestSignedCommitment {
 		let commitment: TestCommitment = Commitment {
@@ -94,9 +123,11 @@ mod tests {
 			validator_set_id: 0,
 		};
 
+		let sigs = mock_signatures();
+
 		SignedCommitment {
 			commitment,
-			signatures: vec![None, None, Some(vec![1, 2, 3, 4]), Some(vec![5, 6, 7, 8])],
+			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
 		}
 	}
 
@@ -126,9 +157,7 @@ mod tests {
 		assert_eq!(decoded, Ok(witness));
 		assert_eq!(
 			encoded,
-			hex_literal::hex!(
-				"3048656c6c6f20576f726c64210500000000000000000000000000000000000000000000001000000101100000011001020304011005060708"
-			)
+			hex_literal::hex!("3048656c6c6f20576f726c6421050000000000000000000000000000000000000000000000100000010110000001558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c746cc321f2319a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba01012d6e1f8105c337a86cdd9aaacdc496577f3db8c55ef9e6fd48f2c5c05a2274707491635d8ba3df64f324575b7b2a34487bca2324b6a0046395a71681be3d0c2a00")
 		);
 	}
 }

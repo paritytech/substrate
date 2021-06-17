@@ -1,4 +1,4 @@
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -44,23 +44,27 @@ use sp_std::prelude::*;
 /// Key type for BEEFY module.
 pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::KeyTypeId(*b"beef");
 
-/// BEEFY application-specific crypto types using ECDSA.
-pub mod ecdsa {
-	mod app_ecdsa {
-		use sp_application_crypto::{app_crypto, ecdsa};
-		app_crypto!(ecdsa, crate::KEY_TYPE);
-	}
-
-	sp_application_crypto::with_pair! {
-		/// A BEEFY authority keypair using ECDSA as its crypto.
-		pub type AuthorityPair = app_ecdsa::Pair;
-	}
+/// BEEFY cryptographic types
+///
+/// This module basically introduces three crypto types:
+/// - `crypto::Pair`
+/// - `crypto::Public`
+/// - `crypto::Signature`
+///
+/// Your code should use the above types as concrete types for all crypto related
+/// functionality.
+///
+/// The current underlying crypto scheme used is ECDSA. This can be changed,
+/// without affecting code restricted against the above listed crypto types.
+pub mod crypto {
+	use sp_application_crypto::{app_crypto, ecdsa};
+	app_crypto!(ecdsa, crate::KEY_TYPE);
 
 	/// Identity of a BEEFY authority using ECDSA as its crypto.
-	pub type AuthorityId = app_ecdsa::Public;
+	pub type AuthorityId = Public;
 
 	/// Signature for a BEEFY authority using ECDSA as its crypto.
-	pub type AuthoritySignature = app_ecdsa::Signature;
+	pub type AuthoritySignature = Signature;
 }
 
 /// The `ConsensusEngineId` of BEEFY.
@@ -127,8 +131,9 @@ pub struct VoteMessage<Hash, Number, Id, Signature> {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
-	pub trait BeefyApi<AuthorityId: Codec> {
+	pub trait BeefyApi
+	{
 		/// Return the current active BEEFY validator set
-		fn validator_set() -> ValidatorSet<AuthorityId>;
+		fn validator_set() -> ValidatorSet<crypto::AuthorityId>;
 	}
 }
