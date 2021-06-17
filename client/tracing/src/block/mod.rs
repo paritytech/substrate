@@ -23,7 +23,7 @@ use tracing::{Dispatch, dispatcher, Subscriber, Level, span::{Attributes, Record
 use tracing_subscriber::CurrentSpan;
 
 use sc_client_api::BlockBackend;
-use sc_rpc_server::DEFAULT_MAX_PAYLOAD;
+use sc_rpc_server::MAX_PAYLOAD_DEFAULT;
 use sp_api::{Core, Metadata, ProvideRuntimeApi, Encode};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -269,7 +269,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
 		let approx_payload_size = BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN;
-		let response = if approx_payload_size > DEFAULT_MAX_PAYLOAD {
+		let response = if approx_payload_size > MAX_PAYLOAD_DEFAULT {
 				TraceBlockResponse::TraceError(TraceError {
 					error:
 						"Payload likely exceeds max payload size of RPC server.".to_string()
