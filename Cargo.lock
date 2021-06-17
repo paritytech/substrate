@@ -10006,6 +10006,7 @@ dependencies = [
  "sc-network",
  "sc-service",
  "sp-api",
+ "sp-consensus",
  "sp-consensus-babe",
  "sp-inherents",
  "sp-keyring",

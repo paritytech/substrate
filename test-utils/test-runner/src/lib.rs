@@ -243,6 +243,7 @@ mod host_functions;
 pub use host_functions::*;
 pub use node::*;
 pub use utils::*;
+use sp_consensus::import_queue::BasicQueue;
 
 /// Wrapper trait for concrete type required by this testing framework.
 pub trait ChainInfo: Sized {
@@ -316,6 +317,13 @@ pub trait ChainInfo: Sized {
 			>,
 			Self::SelectChain,
 			Self::BlockImport,
+			BasicQueue<
+				Self::Block,
+				TransactionFor<
+					TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+					Self::Block,
+				>,
+			>
 		),
 		sc_service::Error,
 	>;

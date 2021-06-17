@@ -112,10 +112,8 @@ impl<T: ChainInfo> Node<T> {
 			consensus_data_provider,
 			select_chain,
 			block_import,
+			import_queue
 		) = T::create_client_parts(&config)?;
-
-		let import_queue =
-			manual_seal::import_queue(Box::new(block_import.clone()), &task_manager.spawn_essential_handle(), None);
 
 		let transaction_pool = BasicPool::new_full(
 			config.transaction_pool.clone(),
@@ -339,15 +337,20 @@ impl<T: ChainInfo> Node<T> {
 	}
 
 	/// so you've decided to run the test runner as a binary, use this to shutdown gracefully.
-	pub async fn until_shutdown(&mut self) {
-		if let Some(mut task_manager) = self._task_manager.take() {
-			let task = task_manager.future().fuse();
-			let signal = tokio::signal::ctrl_c();
-			futures::pin_mut!(signal);
-			futures::future::select(task, signal).await;
-			// we don't really care whichever comes first.
-			task_manager.clean_shutdown().await
-		}
+	pub fn until_shutdown(&mut self) {
+		let manager = self._task_manager.take();
+		let future = async {
+			if let Some(mut task_manager) = manager {
+				let task = task_manager.future().fuse();
+				let signal = tokio::signal::ctrl_c();
+				futures::pin_mut!(signal);
+				futures::future::select(task, signal).await;
+				// we don't really care whichever comes first.
+				task_manager.clean_shutdown().await
+			}
+		};
+
+		self._runtime.block_on(future)
 	}
 
 	/// Performs a runtime upgrade given a wasm blob.

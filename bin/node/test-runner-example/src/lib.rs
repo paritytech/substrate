@@ -28,10 +28,12 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_keyring::sr25519::Keyring::Alice;
 use sp_consensus_babe::AuthorityId;
 use sc_consensus_manual_seal::{
-	ConsensusDataProvider, consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
+	ConsensusDataProvider, consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider}, import_queue,
 };
 use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
 use node_cli::chain_spec::development_config;
+use sp_api::TransactionFor;
+use sp_consensus::import_queue::BasicQueue;
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -105,6 +107,13 @@ impl ChainInfo for NodeTemplateChainInfo {
 			>,
 			Self::SelectChain,
 			Self::BlockImport,
+			BasicQueue<
+				Self::Block,
+				TransactionFor<
+					TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
+					Self::Block,
+				>,
+			>
 		),
 		sc_service::Error,
 	> {
@@ -137,6 +146,9 @@ impl ChainInfo for NodeTemplateChainInfo {
 		)
 			.expect("failed to create ConsensusDataProvider");
 
+		let import_queue =
+			import_queue(Box::new(block_import.clone()), &task_manager.spawn_essential_handle(), None);
+
 		Ok((
 			client.clone(),
 			backend,
@@ -153,6 +165,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 			Some(Box::new(consensus_data_provider)),
 			select_chain,
 			block_import,
+			import_queue,
 		))
 	}
 
