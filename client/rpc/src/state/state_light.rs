@@ -20,7 +20,7 @@
 
 use std::{
 	sync::Arc,
-	collections::{HashSet, HashMap},
+	collections::{HashSet, HashMap, hash_map::Entry},
 };
 use crate::SubscriptionTaskExecutor;
 use super::{StateBackend, ChildStateBackend, error::Error, client_err};
@@ -33,7 +33,6 @@ use futures::{
 };
 use hash_db::Hasher;
 use jsonrpsee::ws_server::SubscriptionSink;
-use jsonrpc_pubsub::SubscriptionId;
 use log::warn;
 use parking_lot::Mutex;
 use sc_rpc_api::state::ReadProof;
@@ -86,9 +85,9 @@ struct StorageSubscriptions<Block: BlockT> {
 	/// Active storage requests.
 	active_requests: HashMap<Block::Hash, Vec<Sender<Result<StorageMap, ()>>>>,
 	/// Map of subscription => keys that this subscription watch for.
-	keys_by_subscription: HashMap<SubscriptionId, HashSet<StorageKey>>,
+	keys_by_subscription: HashMap<u64, HashSet<StorageKey>>,
 	/// Map of key => set of subscriptions that watch this key.
-	subscriptions_by_key: HashMap<StorageKey, HashSet<SubscriptionId>>,
+	subscriptions_by_key: HashMap<StorageKey, HashSet<u64>>,
 }
 
 impl<Block: BlockT> SharedRequests<Block::Hash, StorageMap> for Arc<Mutex<StorageSubscriptions<Block>>> {
@@ -367,21 +366,23 @@ where
 		let fut = async move {
 			let old_storage = display_error(storage(&*remote_blockchain, fetcher.clone(), initial_block, initial_keys)).await;
 
-			// TODO(niklasad1): insert keys in Mutex
-			// let mut storage_subscriptions = self.storage_subscriptions.lock();
-			// storage_subscriptions.keys_by_subscription.insert(subscription_id.clone(), keys.clone());
-			// for key in keys {
-			//     storage_subscriptions
-			//         .subscriptions_by_key
-			//         .entry(key)
-			//         .or_default()
-			//         .insert(subscription_id.clone());
-			// }
+			let id: u64 = rand::random();
+
+			// register subscriptions.
+			{
+				let mut subs = storage_subscriptions.lock();
+				subs.keys_by_subscription.insert(id, keys.clone());
+				for key in keys {
+					subs.subscriptions_by_key.entry(key).or_default().insert(id);
+				}
+			}
+
+			let subs = storage_subscriptions.clone();
 
 			// TODO(niklasad1): use shared requests here.
 			stream
 				.and_then(move |block| {
-					let keys = storage_subscriptions
+					let keys = subs
 						.lock()
 						.subscriptions_by_key
 						.keys()
@@ -407,6 +408,8 @@ where
 								.map(|old_value| *old_value != new_value)
 								.unwrap_or(true);
 
+							// old_storage = new_value;
+
 							match value_differs {
 								true => Some(StorageChangeSet {
 									block,
@@ -425,19 +428,25 @@ where
 					let _ = sink.send(&change_set);
 					ready(())
 				})
-				.await
+				.await;
 
-			// TODO(niklasad1): remove subscriptions.
-			// let mut storage_subscriptions = self.storage_subscriptions.lock();
-			// storage_subscriptions.keys_by_subscription.insert(subscription_id.clone(), keys.clone());
-			// for key in keys {
-			//     storage_subscriptions
-			//         .subscriptions_by_key
-			//         .entry(key)
-			//         .or_default()
-			//         .insert(subscription_id.clone());
-			// }
-
+			// unsubscribe
+			{
+				let mut storage_subscriptions = storage_subscriptions.lock();
+				let keys = storage_subscriptions.keys_by_subscription.remove(&id);
+				for key in keys.into_iter().flat_map(|keys| keys.into_iter()) {
+					match storage_subscriptions.subscriptions_by_key.entry(key) {
+						Entry::Vacant(_) => unreachable!("every key from keys_by_subscription has\
+							corresponding entry in subscriptions_by_key; qed"),
+						Entry::Occupied(mut entry) => {
+							entry.get_mut().remove(&id);
+							if entry.get().is_empty() {
+								entry.remove();
+							}
+						}
+					}
+				}
+			}
 		}.boxed();
 		executor.execute_new(fut);
 
@@ -644,17 +653,6 @@ fn display_error<F, T>(future: F) -> impl std::future::Future<Output=Result<T, (
 		warn!("Remote request for subscription data has failed with: {:?}", err);
 		Err(())
 	})))
-}
-
-/// Convert successful future result into Ok(Some(result)) and error into Ok(None),
-/// displaying warning.
-fn ignore_error<F, T>(future: F) -> impl std::future::Future<Output=Result<Option<T>, ()>> where
-	F: std::future::Future<Output=Result<T, ()>>
-{
-	future.then(|result| ready(match result {
-		Ok(result) => Ok(Some(result)),
-		Err(()) => Ok(None),
-	}))
 }
 
 #[cfg(test)]
