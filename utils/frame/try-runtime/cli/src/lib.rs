@@ -438,7 +438,7 @@ where
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'Core_execute_block' due to {:?}", e))?;
+	.map_err(|e| format!("failed to execute 'Core_execute_block': {:?}", e))?;
 	debug_assert!(_encoded_result == vec![1]);
 
 	log::info!("Core_execute_block executed without errors.");
