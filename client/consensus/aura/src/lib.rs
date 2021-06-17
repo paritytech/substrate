@@ -472,7 +472,7 @@ where
 			parent_slot,
 			slot_info,
 			&self.block_proposal_slot_portion,
-			&self.max_block_proposal_slot_portion,
+			self.max_block_proposal_slot_portion.as_ref(),
 			sc_consensus_slots::SlotLenienceType::Exponential,
 			self.logging_target(),
 		)

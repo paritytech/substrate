@@ -692,7 +692,7 @@ pub fn proposing_remaining_duration<Block: BlockT>(
 	parent_slot: Option<Slot>,
 	slot_info: &SlotInfo<Block>,
 	block_proposal_slot_portion: &SlotProportion,
-	max_block_proposal_slot_portion: &Option<SlotProportion>,
+	max_block_proposal_slot_portion: Option<&SlotProportion>,
 	slot_lenience_type: SlotLenienceType,
 	log_target: &str,
 ) -> Duration {
@@ -741,7 +741,7 @@ pub fn proposing_remaining_duration<Block: BlockT>(
 		if let Some(ref max_block_proposal_slot_portion) = max_block_proposal_slot_portion {
 			std::cmp::min(
 				lenient_proposing_duration,
-				proposing_duration.mul_f32(max_block_proposal_slot_portion.get()),
+				slot_info.duration.mul_f32(max_block_proposal_slot_portion.get()),
 			)
 		} else {
 			lenient_proposing_duration
@@ -924,7 +924,7 @@ mod test {
 			duration: SLOT_DURATION,
 			timestamp: Default::default(),
 			inherent_data: Default::default(),
-			ends_at: Instant::now(),
+			ends_at: Instant::now() + SLOT_DURATION,
 			chain_head: Header::new(
 				1,
 				Default::default(),
@@ -979,6 +979,36 @@ mod test {
 		assert_eq!(
 			super::slot_lenience_exponential(1u64.into(), &slot(19)),
 			Some(SLOT_DURATION * 2u32.pow(7)),
+		);
+	}
+
+	#[test]
+	fn proposing_remaining_duration_should_apply_lenience_based_on_proposal_slot_proportion() {
+		assert_eq!(
+			proposing_remaining_duration(
+				Some(0.into()),
+				&slot(2),
+				&SlotProportion(0.25),
+				None,
+				SlotLenienceType::Linear,
+				"test",
+			),
+			SLOT_DURATION.mul_f32(0.25 * 2.0),
+		);
+	}
+
+	#[test]
+	fn proposing_remaining_duration_should_never_exceed_max_proposal_slot_proportion() {
+		assert_eq!(
+			proposing_remaining_duration(
+				Some(0.into()),
+				&slot(100),
+				&SlotProportion(0.25),
+				Some(SlotProportion(0.9)).as_ref(),
+				SlotLenienceType::Exponential,
+				"test",
+			),
+			SLOT_DURATION.mul_f32(0.9),
 		);
 	}
 
