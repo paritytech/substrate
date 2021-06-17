@@ -1678,6 +1678,21 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
+version = "0.14.0"
+source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info#2e8d2ab5bbf20b0ed97085a1aedf83cdd313e21d"
+dependencies = [
+ "either",
+ "futures 0.3.15",
+ "futures-timer 3.0.2",
+ "log",
+ "num-traits",
+ "parity-scale-codec",
+ "parking_lot 0.11.1",
+ "scale-info",
+]
+
+[[package]]
+name = "finality-grandpa"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74a1bfdcc776e63e49f741c7ce6116fa1b887e8ac2e3ccb14dd4aa113e54feb9"
@@ -5134,7 +5149,7 @@ dependencies = [
 name = "pallet-grandpa"
 version = "3.1.0"
 dependencies = [
- "finality-grandpa",
+ "finality-grandpa 0.14.1",
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-support",
@@ -7631,7 +7646,7 @@ dependencies = [
  "async-trait",
  "derive_more",
  "dyn-clone",
- "finality-grandpa",
+ "finality-grandpa 0.14.1",
  "fork-tree",
  "futures 0.3.15",
  "futures-timer 3.0.2",
@@ -7677,7 +7692,7 @@ name = "sc-finality-grandpa-rpc"
 version = "0.9.0"
 dependencies = [
  "derive_more",
- "finality-grandpa",
+ "finality-grandpa 0.14.1",
  "futures 0.3.15",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -7707,7 +7722,7 @@ name = "sc-finality-grandpa-warp-sync"
 version = "0.9.0"
 dependencies = [
  "derive_more",
- "finality-grandpa",
+ "finality-grandpa 0.14.1",
  "futures 0.3.15",
  "log",
  "num-traits",
@@ -9118,7 +9133,7 @@ dependencies = [
 name = "sp-finality-grandpa"
 version = "3.0.0"
 dependencies = [
- "finality-grandpa",
+ "finality-grandpa 0.14.0",
  "log",
  "parity-scale-codec",
  "scale-info",
@@ -11612,8 +11627,3 @@ dependencies = [
  "cc",
  "libc",
 ]
-
-[[patch.unused]]
-name = "finality-grandpa"
-version = "0.14.0"
-source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info#2e8d2ab5bbf20b0ed97085a1aedf83cdd313e21d"
