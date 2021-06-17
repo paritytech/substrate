@@ -136,7 +136,7 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Get the submission at a particular index.
-	fn map_get(&self, idx: u32) -> Option<SignedSubmissionOf<T>> {
+	fn get_submission(&self, idx: u32) -> Option<SignedSubmissionOf<T>> {
 		self.insertion_overlay
 			.get(&idx)
 			.cloned()
@@ -144,7 +144,7 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Take the submission at a particular index.
-	fn map_take(&mut self, idx: u32) -> Option<SignedSubmissionOf<T>> {
+	fn take_submission(&mut self, idx: u32) -> Option<SignedSubmissionOf<T>> {
 		self.insertion_overlay.remove(&idx).or_else(|| {
 			if self.deletion_overlay.contains(&idx) {
 				None
@@ -158,7 +158,7 @@ impl<T: Config> SignedSubmissions<T> {
 	/// Iterate through the set of signed submissions in order of increasing score.
 	pub fn iter(&self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
 		self.indices.iter().map(move |(_score, idx)| {
-			self.map_get(*idx).expect("SignedSubmissions must remain internally consistent")
+			self.get_submission(*idx).expect("SignedSubmissions must remain internally consistent")
 		})
 	}
 
@@ -231,7 +231,7 @@ impl<T: Config> SignedSubmissions<T> {
 
 				// ensure that SignedSubmissionsMap never grows past capacity by taking out the
 				// weakest member here.
-				self.map_take(weakest_idx)
+				self.take_submission(weakest_idx)
 			}
 		};
 
@@ -246,7 +246,7 @@ impl<T: Config> SignedSubmissions<T> {
 		let (highest_score, idx) = self.indices.iter().rev().next()?;
 		let (highest_score, idx) = (*highest_score, *idx);
 		self.indices.remove(&highest_score);
-		self.map_take(idx)
+		self.take_submission(idx)
 	}
 }
 
