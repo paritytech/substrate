@@ -666,6 +666,91 @@ impl SlotProportion {
 	}
 }
 
+/// The strategy used to calculate the slot lenience used to increase the block proposal time when
+/// slots have been skipped with no blocks authored.
+pub enum SlotLenienceType {
+	/// Increase the lenience linearly with the number of skipped slots.
+	Linear,
+	/// Increase the lenience exponentially with the number of skipped slots.
+	Exponential,
+}
+
+impl SlotLenienceType {
+	fn as_str(&self) -> &'static str {
+		match self {
+			SlotLenienceType::Linear => "linear",
+			SlotLenienceType::Exponential => "exponential",
+		}
+	}
+}
+
+/// Calculate the remaining duration for block proposal taking into account whether any slots have
+/// been skipped and applying the given lenience strategy. If `max_block_proposal_slot_portion` is
+/// not none this method guarantees that the returned duration must be lower or equal to
+/// `slot_info.duration * max_block_proposal_slot_portion`.
+pub fn proposing_remaining_duration<Block: BlockT>(
+	parent_slot: Option<Slot>,
+	slot_info: &SlotInfo<Block>,
+	block_proposal_slot_portion: &SlotProportion,
+	max_block_proposal_slot_portion: &Option<SlotProportion>,
+	slot_lenience_type: SlotLenienceType,
+	log_target: &str,
+) -> Duration {
+	use sp_runtime::traits::Zero;
+
+	let proposing_duration = slot_info
+		.duration
+		.mul_f32(block_proposal_slot_portion.get());
+
+	let slot_remaining = slot_info
+		.ends_at
+		.checked_duration_since(std::time::Instant::now())
+		.unwrap_or_default();
+
+	let proposing_duration = std::cmp::min(slot_remaining, proposing_duration);
+
+	// If parent is genesis block, we don't require any lenience factor.
+	if slot_info.chain_head.number().is_zero() {
+		return proposing_duration;
+	}
+
+	let parent_slot = match parent_slot {
+		Some(parent_slot) => parent_slot,
+		None => return proposing_duration,
+	};
+
+	let slot_lenience = match slot_lenience_type {
+		SlotLenienceType::Exponential => slot_lenience_exponential(parent_slot, slot_info),
+		SlotLenienceType::Linear => slot_lenience_linear(parent_slot, slot_info),
+	};
+
+	if let Some(slot_lenience) = slot_lenience {
+		debug!(
+			target: log_target,
+			"No block for {} slots. Applying {} lenience of {}s",
+			slot_info.slot.saturating_sub(parent_slot + 1),
+			slot_lenience_type.as_str(),
+			slot_lenience.as_secs(),
+		);
+
+		let lenient_proposing_duration =
+			proposing_duration + (slot_lenience.mul_f32(block_proposal_slot_portion.get()));
+
+		// if we defined a maximum portion of the slot for proposal then we must make sure the
+		// lenience doesn't go over it
+		if let Some(ref max_block_proposal_slot_portion) = max_block_proposal_slot_portion {
+			std::cmp::min(
+				lenient_proposing_duration,
+				proposing_duration.mul_f32(max_block_proposal_slot_portion.get()),
+			)
+		} else {
+			lenient_proposing_duration
+		}
+	} else {
+		proposing_duration
+	}
+}
+
 /// Calculate a slot duration lenience based on the number of missed slots from current
 /// to parent. If the number of skipped slots is greated than 0 this method will apply
 /// an exponential backoff of at most `2^7 * slot_duration`, if no slots were skipped
@@ -703,7 +788,7 @@ pub fn slot_lenience_exponential<Block: BlockT>(
 /// a linear backoff of at most `20 * slot_duration`, if no slots were skipped
 /// this method will return `None.`
 pub fn slot_lenience_linear<Block: BlockT>(
-	parent_slot: u64,
+	parent_slot: Slot,
 	slot_info: &SlotInfo<Block>,
 ) -> Option<Duration> {
 	// never give more than 20 times more lenience.
