@@ -364,35 +364,6 @@ impl<T: Config> Pallet<T> {
 		T::SlashHandler::on_unbalanced(negative_imbalance);
 	}
 
-	/// Insert a solution into the queue while maintaining an ordering by solution quality.
-	///
-	/// If insertion was successful, the required deposit amount is returned.
-	///
-	/// Additionally returns a bool indicating whether an existing solution was ejected.
-	///
-	/// Note: in the event that the queue is full, this function will drop the weakest element as
-	/// long as the new solution sufficiently improves on the weakest solution.
-	pub fn insert_submission(
-		who: &T::AccountId,
-		queue: &mut SignedSubmissions<T>,
-		solution: RawSolution<CompactOf<T>>,
-		size: SolutionOrSnapshotSize,
-	) -> (Option<BalanceOf<T>>, bool) {
-		let reward = T::SignedRewardBase::get();
-		let deposit = Self::deposit_for(&solution, size);
-		let submission = SignedSubmission { who: who.clone(), deposit, reward, solution };
-
-		// if we had to remove the weakest solution, unreserve its deposit
-		let (inserted, maybe_weakest) = queue.insert(submission);
-		let ejected_weakest = maybe_weakest.is_some();
-		if let Some(weakest) = maybe_weakest {
-			let _remainder = T::Currency::unreserve(&weakest.who, weakest.deposit);
-			debug_assert!(_remainder.is_zero());
-		}
-
-		(inserted.then(move || deposit), ejected_weakest)
-	}
-
 	/// The feasibility weight of the given raw solution.
 	pub fn feasibility_weight_of(
 		solution: &RawSolution<CompactOf<T>>,

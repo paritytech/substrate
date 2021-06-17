@@ -883,21 +883,34 @@ pub mod pallet {
 				Error::<T>::SignedTooMuchWeight,
 			);
 
-			// ensure solution claims is better.
-			let mut signed_submissions = Self::signed_submissions();
+			// create the submission
+			let reward = T::SignedRewardBase::get();
+			let deposit = Self::deposit_for(&solution, size);
+			let submission = SignedSubmission { who: who.clone(), deposit, reward, solution };
 
-			let (maybe_deposit, ejected_a_solution) =
-				Self::insert_submission(&who, &mut signed_submissions, solution, size);
-			// it's an error if we neither inserted nor removed any submissions
+			// insert the submission if the queue has space or it's better than the weakest
+			// eject the weakest if the queue was full
+			let mut signed_submissions = Self::signed_submissions();
+			let (inserted, maybe_weakest) = signed_submissions.insert(submission);
+			let ejected_a_solution = maybe_weakest.is_some();
+
+			// it's an error if we neither inserted nor removed any submissions: this indicates
+			// the queue was full but our solution had insufficient score to eject any solution
 			ensure!(
-				(None, false) != (maybe_deposit, ejected_a_solution),
+				(false, false) != (inserted, ejected_a_solution),
 				Error::<T>::SignedQueueFull,
 			);
 
-			if let Some(deposit_amount) = maybe_deposit {
+			if inserted {
 				// collect deposit. Thereafter, the function cannot fail.
-				T::Currency::reserve(&who, deposit_amount)
+				T::Currency::reserve(&who, deposit)
 					.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+			}
+
+			// if we had to remove the weakest solution, unreserve its deposit
+			if let Some(weakest) = maybe_weakest {
+				let _remainder = T::Currency::unreserve(&weakest.who, weakest.deposit);
+				debug_assert!(_remainder.is_zero());
 			}
 
 			signed_submissions.put();
