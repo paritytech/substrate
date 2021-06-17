@@ -20,7 +20,6 @@ use std::{collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}, time
 
 use parking_lot::Mutex;
 use tracing::{Dispatch, dispatcher, Subscriber, Level, span::{Attributes, Record, Id}};
-use tracing_subscriber::CurrentSpan;
 
 use sc_client_api::BlockBackend;
 use sc_rpc_server::MAX_PAYLOAD;
@@ -75,7 +74,6 @@ pub enum Error {
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
 	next_id: AtomicU64,
-	current_span: CurrentSpan,
 	spans: Mutex<HashMap<Id, SpanDatum>>,
 	events: Mutex<Vec<TraceEvent>>,
 }
@@ -93,7 +91,6 @@ impl BlockSubscriber {
 		BlockSubscriber {
 			targets,
 			next_id,
-			current_span: CurrentSpan::default(),
 			spans: Mutex::new(HashMap::new()),
 			events: Mutex::new(Vec::new()),
 		}
@@ -117,8 +114,7 @@ impl Subscriber for BlockSubscriber {
 		let id = Id::from_u64(self.next_id.fetch_add(1, Ordering::Relaxed));
 		let mut values = Values::default();
 		attrs.record(&mut values);
-		let parent_id = attrs.parent().cloned()
-			.or_else(|| self.current_span.id());
+		let parent_id = attrs.parent().cloned();
 		let span = SpanDatum {
 			id: id.clone(),
 			parent_id,
@@ -150,8 +146,7 @@ impl Subscriber for BlockSubscriber {
 	fn event(&self, event: &tracing::Event<'_>) {
 		let mut values = crate::Values::default();
 		event.record(&mut values);
-		let parent_id = event.parent().cloned()
-			.or_else(|| self.current_span.id());
+		let parent_id = event.parent().cloned();
 		let trace_event = TraceEvent {
 			name: event.metadata().name().to_owned(),
 			target: event.metadata().target().to_owned(),
@@ -162,14 +157,10 @@ impl Subscriber for BlockSubscriber {
 		self.events.lock().push(trace_event);
 	}
 
-	fn enter(&self, id: &Id) {
-		self.current_span.enter(id.clone());
+	fn enter(&self, _id: &Id) {
 	}
 
-	fn exit(&self, span: &Id) {
-		if self.spans.lock().contains_key(span) {
-			self.current_span.exit();
-		}
+	fn exit(&self, _span: &Id) {
 	}
 }
 
