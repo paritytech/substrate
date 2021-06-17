@@ -68,7 +68,7 @@ pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
 	_phantom: PhantomData<(BE, Block)>,
-	rpc_max_payload: Option<usize>
+	rpc_max_payload: Option<usize>,
 }
 
 impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
@@ -82,7 +82,7 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 	pub fn new(
 		client: Arc<Client>,
 		subscriptions: SubscriptionManager,
-		rpc_max_payload: Option<usize>
+		rpc_max_payload: Option<usize>,
 	) -> Self {
 		Self { client, subscriptions, _phantom: PhantomData, rpc_max_payload }
 	}
