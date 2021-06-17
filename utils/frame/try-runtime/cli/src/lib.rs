@@ -29,9 +29,10 @@ use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 use sp_core::{
 	offchain::{
 		OffchainWorkerExt, OffchainDbExt, TransactionPoolExt,
-		testing::{TestOffchainExt, TestTransactionPoolExt}
+		testing::{TestOffchainExt, TestTransactionPoolExt},
 	},
 	storage::{StorageData, StorageKey, well_known_keys},
+	hashing::twox_128,
 };
 use sp_keystore::{KeystoreExt, testing::KeyStore};
 use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig, rpc_api};
@@ -59,11 +60,6 @@ pub struct OnRuntimeUpgradeCmd {
 pub struct OffchainWorkerCmd {
 	#[structopt(subcommand)]
 	pub state: State,
-
-	/// Whether or not to overwrite the code from state with the code from
-	/// the specified chain spec.
-	#[structopt(long)]
-	pub overwrite_code: bool,
 }
 
 #[derive(Debug, Clone, structopt::StructOpt)]
@@ -207,7 +203,10 @@ where
 		};
 
 		let (code_key, code) = extract_code(config.chain_spec)?;
-		builder.inject(&[(code_key, code)]).build().await?
+		builder
+			.inject_key_value(&[(code_key, code)])
+			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat())
+			.build().await?
 	};
 
 	let encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
@@ -241,7 +240,7 @@ async fn offchain_worker<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: OffchainWorkerCmd,
 	config: Configuration,
-)-> sc_cli::Result<()>
+) -> sc_cli::Result<()>
 where
 	Block: BlockT,
 	Block::Hash: FromStr,
@@ -288,12 +287,17 @@ where
 				(mode, url)
 			}
 	};
-	let builder = Builder::<Block>::new().mode(mode);
+	let builder = Builder::<Block>::new()
+		.mode(mode)
+		.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
 	let mut ext = if command.overwrite_code {
 		let (code_key, code) = extract_code(config.chain_spec)?;
-		builder.inject(&[(code_key, code)]).build().await?
+		builder.inject_key_value(&[(code_key, code)]).build().await?
 	} else {
-		builder.build().await?
+		builder
+			.inject_hashed_key(well_known_keys::CODE)
+			.build()
+			.await?
 	};
 
 	let (offchain, _offchain_state) = TestOffchainExt::new();
@@ -354,7 +358,7 @@ where
 	);
 
 	let (mode, block) = match command.state {
-		State::Snap{ snapshot_path, url } => {
+		State::Snap { snapshot_path, url } => {
 			let header_hash: Block::Hash = shared.block_at
 				.parse()
 				.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
@@ -387,11 +391,21 @@ where
 	};
 
 	let ext = {
-		let builder = Builder::<Block>::new().mode(mode);
-		// We do not allow overwriting code because we need exact state for storage root match.
-		let mut ext = builder.build().await?;
+		let builder = Builder::<Block>::new()
+			.mode(mode)
+			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
+		let mut ext = if command.overwrite_code {
+			let (code_key, code) = extract_code(config.chain_spec)?;
+			builder.inject_key_value(&[(code_key, code)]).build().await?
+		} else {
+			builder
+				.inject_hashed_key(well_known_keys::CODE)
+				.build()
+				.await?
+		};
 
-		// register externality extensions in order to provide host interface for OCW to the runtime.
+		// register externality extensions in order to provide host interface for OCW to the
+		// runtime.
 		let (offchain, _offchain_state) = TestOffchainExt::new();
 		let (pool, _pool_state) = TestTransactionPoolExt::new();
 		ext.register_extension(OffchainDbExt::new(offchain.clone()));
@@ -466,7 +480,7 @@ impl CliConfiguration for TryRuntimeCmd {
 	}
 }
 
-/// Extract `:code` from the given chain spec and return as `StorageData` along with the 
+/// Extract `:code` from the given chain spec and return as `StorageData` along with the
 /// corresponding `StorageKey`.
 fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
 	let genesis_storage = spec.build_storage()?;
