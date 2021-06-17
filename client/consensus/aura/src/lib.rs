@@ -45,7 +45,7 @@ use sp_consensus::{
 	BlockOrigin, Error as ConsensusError, SelectChain,
 };
 use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
-use sp_blockchain::{Result as CResult, well_known_cache_keys, ProvideCache, HeaderBackend};
+use sp_blockchain::{Result as CResult, ProvideCache, HeaderBackend};
 use sp_core::crypto::Public;
 use sp_application_crypto::{AppKey, AppPublic};
 use sp_runtime::{generic::BlockId, traits::NumberFor};
@@ -546,14 +546,9 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
 {
-	client
-		.cache()
-		.and_then(|cache| cache
-			.get_at(&well_known_cache_keys::AUTHORITIES, at)
-			.unwrap_or(None)
-			.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok())
-		)
-		.or_else(|| AuraApi::authorities(&*client.runtime_api(), at).ok())
+	client.runtime_api()
+		.authorities(at)
+		.ok()
 		.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet.into())
 }
 
