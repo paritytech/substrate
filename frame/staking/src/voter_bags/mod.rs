@@ -21,6 +21,9 @@
 //! - It's efficient to iterate over the top* N voters by stake, where the precise ordering of
 //!   voters doesn't particularly matter.
 
+mod thresholds;
+
+use thresholds::THRESHOLDS;
 use crate::{
 	AccountIdOf, Config, Nominations, Nominators, Pallet, VoteWeight, VoterBagFor, VotingDataOf,
 	slashing::SlashingSpans,
@@ -34,67 +37,22 @@ use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 pub type BagIdx = u8;
 
 /// How many bags there are
-const N_BAGS: BagIdx = 200;
+pub const N_BAGS: BagIdx = 200;
 
 /// Given a certain vote weight, which bag should this voter contain?
 ///
-/// Bags are separated by fixed thresholds. The formula for a threshold is, for `t` in `0..=N_BAGS`:
+/// Bags are separated by fixed thresholds. To the extent possible, each threshold is a constant
+/// small multiple of the one before it. That ratio is [`thresholds::CONSTANT_RATIO`]. The exception
+/// are the smallest bags, which are each at least 1 greater than the previous, and the largest bag,
+/// which is defined as `u64::MAX`.
 ///
-///   10 ^ ((t / 10) - 10)
-///
-/// Given `N_BAGS == 200`, this means that the lowest threshold is `10^-10`, and the highest is
-/// `10^10`. A given vote weight always fits into the bag `t` such that `threshold(t-1) <= weight <
-/// threshold(t)`. We can determine an appropriate value for `t` by binary search.
-///
-/// It is important for the correctness of the iteration algorithm that the bags of highest value
-/// have the lowest threshold. Therefore, the appropriate `BagIdx` for a given value `T` is
-/// `N_BAGS - t`.
+/// Bags are arranged such that `bags[0]` is the largest bag, and `bags[N_BAGS-1]` is the smallest.
 fn notional_bag_for(weight: VoteWeight) -> BagIdx {
-	// the input to this threshold function is _not_ reversed; `threshold(0) == 0`
-	let threshold = |bag: BagIdx| -> u64 {
-		// The goal is to segment the full range of `u64` into `N_BAGS`, such that `threshold(0) != 0`,
-		// `threshold(N_BAGS) == u64::MAX`, and for all `t` in `0..N_BAGS`,
-		// `threshold(t + 1) as f64 / threshold(t) as f64 == CONSTANT_RATIO`. For `N_BAGS == 200`,
-		// `CONSTANT_RATIO ~= 1.25`.
-		//
-		// The natural, simple implementation here is
-		//
-		// ```rust
-		// // float exp and ln are not constant functions, unfortunately
-		// let CONSTANT_RATIO = ((u64::MAX as f64).ln() / (N_BAGS as f64)).exp();
-		// CONSTANT_RATIO.powi(bag.into()).into()
-		// ```
-		//
-		// Unfortunately, that doesn't quite work, for two reasons:
-		//
-		// - floats are nondeterministic and not allowed on the blockchain
-		// - f64 has insufficient capacity to completely and accurately compute f64
-		//
-		// Perhaps the answer is going to end up being to bring in a fixed-point bignum implementation.
-		// See: https://docs.rs/fixed/1.9.0/fixed/struct.FixedU128.html
-		todo!()
-	};
-
-	// `want_bag` is the highest bag for which `threshold(want_bag) >= weight`
-	let want_bag = {
-		// TODO: use a binary search instead
-		let mut t = N_BAGS;
-		while t > 0 {
-			if threshold(t) >= weight {
-				break;
-			}
-			t -= 1;
-		}
-		t
-	};
-
-	debug_assert!(
-		(0..=N_BAGS).contains(&want_bag),
-		"must have computed a valid want_bag"
-	);
-
-	// reverse the index so that iteration works properly
-	N_BAGS - want_bag
+	let raw_bag = match THRESHOLDS.binary_search(&weight) {
+		Ok(bag) => bag,
+		Err(bag) => bag,
+	} as BagIdx;
+	N_BAGS - raw_bag
 }
 
 /// Find the actual bag containing the current voter.

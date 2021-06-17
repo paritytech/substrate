@@ -70,3 +70,8 @@ runtime-benchmarks = [
 	"rand_chacha",
 ]
 try-runtime = ["frame-support/try-runtime"]
+make-bags = []
+
+[[bin]]
+name = "make_bags"
+required-features = ["make-bags", "std"]
