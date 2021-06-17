@@ -40,39 +40,48 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 
 /// Definition of the cost schedule and other parameterizations for the wasm vm.
 ///
-/// Its fields are private to the crate in order to allow addition of new contract
-/// callable functions without bumping to a new major version. The supplied [`Config::Schedule`]
-/// should rely on public functions of this type.
+/// Its [`Default`] implementation is the designated way to initialize this type. It uses
+/// the benchmarked information supplied by [`Config::WeightInfo`]. All of its fields are
+/// public and can therefore be modified. For example in order to change some of the limits
+/// and set a custom instruction weight version the following code could be used:
+/// ```rust
+/// use pallet_contracts::{Schedule, Limits, InstructionWeights, Config};
+///
+/// fn create_schedule<T: Config>() -> Schedule<T> {
+///     Schedule {
+///         limits: Limits {
+///		        globals: 3,
+///		        parameters: 3,
+///		        memory_pages: 16,
+///		        table_size: 3,
+///		        br_table_size: 3,
+///		        .. Default::default()
+///	        },
+///         instruction_weights: InstructionWeights {
+///	            version: 5,
+///             .. Default::default()
+///         },
+///	        .. Default::default()
+///     }
+/// }
+/// ```
+///
+/// # Note
+///
+/// Please make sure to bump the [`InstructionWeights::version`] whenever substantial
+/// changes are made to its values.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, DefaultNoBound)]
 pub struct Schedule<T: Config> {
 	/// Describes the upper limits on various metrics.
-	pub(crate) limits: Limits,
+	pub limits: Limits,
 
 	/// The weights for individual wasm instructions.
-	pub(crate) instruction_weights: InstructionWeights<T>,
+	pub instruction_weights: InstructionWeights<T>,
 
 	/// The weights for each imported function a contract is allowed to call.
-	pub(crate) host_fn_weights: HostFnWeights<T>,
-}
-
-impl<T: Config> Schedule<T> {
-	/// Set the version of the instruction weights.
-	///
-	/// # Note
-	///
-	/// Should be incremented whenever any instruction weight is changed. The
-	/// reason is that changes to instruction weights require a re-instrumentation
-	/// in order to apply the changes to an already deployed code. The re-instrumentation
-	/// is triggered by comparing the version of the current schedule with the the code was
-	/// instrumented with. Changes usually happen when pallet_contracts is re-benchmarked.
-	///
-	/// Changes to other parts of the schedule should not increment the version in
-	/// order to avoid unnecessary re-instrumentations.
-	pub fn set_instruction_weights_version(&mut self, version: u32) {
-		self.instruction_weights.version = version;
-	}
+	pub host_fn_weights: HostFnWeights<T>,
 }
 
 /// Describes the upper limits on various metrics.
@@ -169,8 +178,17 @@ impl Limits {
 pub struct InstructionWeights<T: Config> {
 	/// Version of the instruction weights.
 	///
-	/// See [`Schedule::set_instruction_weights_version`].
-	pub(crate) version: u32,
+	/// # Note
+	///
+	/// Should be incremented whenever any instruction weight is changed. The
+	/// reason is that changes to instruction weights require a re-instrumentation
+	/// in order to apply the changes to an already deployed code. The re-instrumentation
+	/// is triggered by comparing the version of the current schedule with the version the code was
+	/// instrumented with. Changes usually happen when pallet_contracts is re-benchmarked.
+	///
+	/// Changes to other parts of the schedule should not increment the version in
+	/// order to avoid unnecessary re-instrumentations.
+	pub version: u32,
 	pub i64const: u32,
 	pub i64load: u32,
 	pub i64store: u32,

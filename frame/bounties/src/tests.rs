@@ -88,6 +88,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -159,7 +161,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 fn last_event() -> RawEvent<u64, u128> {
 	System::events().into_iter().map(|r| r.event)
 		.filter_map(|e| {
-			if let Event::pallet_bounties(inner) = e { Some(inner) } else { None }
+			if let Event::Bounties(inner) = e { Some(inner) } else { None }
 		})
 		.last()
 		.unwrap()
