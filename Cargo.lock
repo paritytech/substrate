@@ -1695,7 +1695,7 @@ dependencies = [
 [[package]]
 name = "fixed-hash"
 version = "0.7.0"
-source = "git+https://github.com/paritytech/parity-common#0ac86ef7159e9fc7695de280f7095c97e5e5ca81"
+source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
 dependencies = [
  "byteorder",
  "rand 0.8.3",
@@ -2709,7 +2709,7 @@ dependencies = [
 [[package]]
 name = "impl-codec"
 version = "0.5.0"
-source = "git+https://github.com/paritytech/parity-common#0ac86ef7159e9fc7695de280f7095c97e5e5ca81"
+source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -2726,7 +2726,7 @@ dependencies = [
 [[package]]
 name = "impl-serde"
 version = "0.3.1"
-source = "git+https://github.com/paritytech/parity-common#0ac86ef7159e9fc7695de280f7095c97e5e5ca81"
+source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
 dependencies = [
  "serde",
 ]
@@ -5879,7 +5879,7 @@ dependencies = [
 [[package]]
 name = "parity-util-mem"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/parity-common#0ac86ef7159e9fc7695de280f7095c97e5e5ca81"
+source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
 dependencies = [
  "cfg-if 1.0.0",
  "hashbrown",
@@ -5905,7 +5905,7 @@ dependencies = [
 [[package]]
 name = "parity-util-mem-derive"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common#0ac86ef7159e9fc7695de280f7095c97e5e5ca81"
+source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -6338,7 +6338,7 @@ dependencies = [
 [[package]]
 name = "primitive-types"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/parity-common#0ac86ef7159e9fc7695de280f7095c97e5e5ca81"
+source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
 dependencies = [
  "fixed-hash",
  "impl-codec",
@@ -10823,7 +10823,7 @@ dependencies = [
 [[package]]
 name = "uint"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/parity-common#0ac86ef7159e9fc7695de280f7095c97e5e5ca81"
+source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
 dependencies = [
  "byteorder",
  "crunchy",
