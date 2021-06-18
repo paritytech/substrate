@@ -19,6 +19,7 @@
 
 use super::{*, Event};
 use mock::*;
+use sp_npos_elections::supports_eq_unordered;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
@@ -1905,13 +1906,13 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 
 			// winners should be 21 and 11.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
-			assert_eq!(
-				supports,
-				vec![
+			assert!(supports_eq_unordered(
+				&supports,
+				&vec![
 					(11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
 					(21, Support { total: 2500, voters: vec![(21, 1000), (3, 1000), (1, 500)] })
 				],
-			);
+			));
 		});
 }
 

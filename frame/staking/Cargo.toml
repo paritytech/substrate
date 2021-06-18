@@ -37,6 +37,7 @@ rand_chacha = { version = "0.2", default-features = false, optional = true }
 sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-npos-elections = { version = "3.0.0", path = "../../primitives/npos-elections", features = ["mocks"] }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 pallet-timestamp = { version = "3.0.0", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "3.0.0",  path = "../staking/reward-curve" }
