@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, MallocSizeOfWasm,
+	error::Error, MallocSizeOfWasm, RpcHandlers,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
@@ -559,7 +559,7 @@ pub fn build_offchain_workers<TBl, TCl>(
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-) -> Result<(), Error>
+) -> Result<RpcHandlers, Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
@@ -585,7 +585,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		backend,
 		keystore,
 		transaction_pool,
-		rpc_extensions_builder,
+		rpc_extensions_builder: _,
 		remote_blockchain,
 		network,
 		system_rpc_tx,
@@ -673,7 +673,10 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 	// TODO: use handle here and let the service spawn the server.
-	let _rpc = start_rpc_servers(&config, gen_rpc_module, rpc_metrics.clone())?;
+	let rpc = start_rpc_servers(&config, gen_rpc_module, rpc_metrics.clone())?;
+
+	// NOTE(niklasad1): dummy type for now.
+	let rpc_handlers = RpcHandlers;
 	// This is used internally, so don't restrict access to unsafe RPC
 	// let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
 	//     sc_rpc::DenyUnsafe::No,
@@ -688,9 +691,10 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.informant_output_format,
 	));
 
-	// task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
+	// NOTE(niklasad1): we spawn jsonrpsee in seperate thread now.
+	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
 
-	Ok(())
+	Ok(rpc_handlers)
 }
 
 async fn transaction_notifications<TBl, TExPool>(
