@@ -1,6 +1,6 @@
 [package]
 name = "sp-consensus"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -18,17 +18,17 @@ targets = ["x86_64-unknown-linux-gnu"]
 thiserror = "1.0.21"
 libp2p = { version = "0.37.1", default-features = false }
 log = "0.4.8"
-sp-core = { path= "../../core", version = "3.0.0"}
-sp-inherents = { version = "3.0.0", path = "../../inherents" }
-sp-state-machine = { version = "0.9.0", path = "../../state-machine" }
+sp-core = { path= "../../core", version = "4.0.0-dev"}
+sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
+sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
 futures = { version = "0.3.1", features = ["thread-pool"] }
 futures-timer = "3.0.1"
-sp-std = { version = "3.0.0", path = "../../std" }
-sp-version = { version = "3.0.0", path = "../../version" }
-sp-runtime = { version = "3.0.0", path = "../../runtime" }
-sp-utils = { version = "3.0.0", path = "../../utils" }
-sp-trie = { version = "3.0.0", path = "../../trie" }
-sp-api = { version = "3.0.0", path = "../../api" }
+sp-std = { version = "4.0.0-dev", path = "../../std" }
+sp-version = { version = "4.0.0-dev", path = "../../version" }
+sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
+sp-utils = { version = "4.0.0-dev", path = "../../utils" }
+sp-trie = { version = "4.0.0-dev", path = "../../trie" }
+sp-api = { version = "4.0.0-dev", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 parking_lot = "0.11.1"
 serde = { version = "1.0", features = ["derive"] }

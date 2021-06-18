@@ -1,6 +1,6 @@
 [package]
 name = "sp-rpc"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.101", features = ["derive"] }
-sp-core = { version = "3.0.0", path = "../core" }
+sp-core = { version = "4.0.0-dev", path = "../core" }
 tracing-core = "0.1.17"
 rustc-hash = "1.1.0"
 

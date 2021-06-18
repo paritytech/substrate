@@ -17,13 +17,13 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-derive = "15.1.0"
-pallet-mmr-primitives = { version = "3.0.0", path = "../primitives" }
+pallet-mmr-primitives = { version = "4.0.0-dev", path = "../primitives" }
 serde = { version = "1.0.101", features = ["derive"] }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-rpc = { version = "3.0.0", path = "../../../primitives/rpc" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-rpc = { version = "4.0.0-dev", path = "../../../primitives/rpc" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 serde_json = "1.0.41"

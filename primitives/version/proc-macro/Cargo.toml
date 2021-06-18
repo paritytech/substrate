@@ -1,6 +1,6 @@
 [package]
 name = "sp-version-proc-macro"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -23,4 +23,4 @@ proc-macro-crate = "1.0.0"
 codec = { package = "parity-scale-codec", version = "2.0.0", features = [ "derive" ] }
 
 [dev-dependencies]
-sp-version = { version = "3.0.0", path = ".." }
+sp-version = { version = "4.0.0-dev", path = ".." }

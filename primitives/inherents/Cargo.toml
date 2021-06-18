@@ -1,6 +1,6 @@
 [package]
 name = "sp-inherents"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -15,9 +15,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-sp-std = { version = "3.0.0", default-features = false, path = "../std" }
-sp-core = { version = "3.0.0", default-features = false, path = "../core" }
-sp-runtime = { version = "3.0.0", path = "../runtime", optional = true }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
+sp-runtime = { version = "4.0.0-dev", path = "../runtime", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.21", optional = true }
 impl-trait-for-tuples = "0.2.0"

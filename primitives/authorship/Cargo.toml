@@ -1,6 +1,6 @@
 [package]
 name = "sp-authorship"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Authorship primitives"
 edition = "2018"
@@ -13,9 +13,9 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-inherents = { version = "3.0.0", default-features = false, path = "../inherents" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
-sp-std = { version = "3.0.0", default-features = false, path = "../std" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 async-trait = { version = "0.1.48", optional = true }
 
