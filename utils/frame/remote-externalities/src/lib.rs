@@ -19,87 +19,6 @@
 //!
 //! An equivalent of `sp_io::TestExternalities` that can load its state from a remote substrate
 //! based chain, or a local state snapshot file.
-//!
-//! #### Runtime to Test Against
-//!
-//! While not absolutely necessary, you most likely need a `Runtime` equivalent in your test setup
-//! through which you can infer storage types. There are two options here:
-//!
-//! 1. Build a mock runtime, similar how to you would build one in a pallet test (see example
-//!    below). The very important point here is that this mock needs to hold real values for types
-//!    that matter for you, based on the chain of interest. Some typical ones are:
-//!
-//! - `sp_runtime::AccountId32` as `AccountId`.
-//! - `u32` as `BlockNumber`.
-//! - `u128` as Balance.
-//!
-//! Once you have your `Runtime`, you can use it for storage type resolution and do things like
-//! `<my_pallet::Pallet<Runtime>>::storage_getter()` or `<my_pallet::StorageItem<Runtime>>::get()`.
-//!
-//! 2. Or, you can use a real runtime.
-//!
-//! ### Example
-//!
-//! With a test runtime
-//!
-//! ```ignore
-//! use remote_externalities::Builder;
-//!
-//! #[derive(Clone, Eq, PartialEq, Debug, Default)]
-//! pub struct TestRuntime;
-//!
-//! use frame_system as system;
-//! impl_outer_origin! {
-//!     pub enum Origin for TestRuntime {}
-//! }
-//!
-//! impl frame_system::Config for TestRuntime {
-//!     ..
-//!     // we only care about these two for now. The rest can be mock. The block number type of
-//!     // kusama is u32.
-//!     type BlockNumber = u32;
-//!     type Header = Header;
-//!     ..
-//! }
-//!
-//! #[test]
-//! fn test_runtime_works() {
-//!     let hash: Hash =
-//!         hex!["f9a4ce984129569f63edc01b1c13374779f9384f1befd39931ffdcc83acf63a7"].into();
-//!     let parent: Hash =
-//!         hex!["540922e96a8fcaf945ed23c6f09c3e189bd88504ec945cc2171deaebeaf2f37e"].into();
-//!     Builder::new()
-//!         .at(hash)
-//!         .module("System")
-//!         .build()
-//!         .execute_with(|| {
-//!             assert_eq!(
-//!                 // note: the hash corresponds to 3098546. We can check only the parent.
-//!                 // https://polkascan.io/kusama/block/3098546
-//!                 <frame_system::Pallet<Runtime>>::block_hash(3098545u32),
-//!                 parent,
-//!             )
-//!         });
-//! }
-//! ```
-//!
-//! Or with the real kusama runtime.
-//!
-//! ```ignore
-//! use remote_externalities::Builder;
-//! use kusama_runtime::Runtime;
-//!
-//! #[test]
-//! fn test_runtime_works() {
-//!     let hash: Hash =
-//!         hex!["f9a4ce984129569f63edc01b1c13374779f9384f1befd39931ffdcc83acf63a7"].into();
-//!     Builder::new()
-//!         .at(hash)
-//!         .module("Staking")
-//!         .build()
-//!         .execute_with(|| assert_eq!(<pallet_staking::Module<Runtime>>::validator_count(), 400));
-//! }
-//! ```
 
 use std::{
 	fs,
@@ -114,17 +33,20 @@ use sp_core::{
 };
 use codec::{Encode, Decode};
 use sp_runtime::traits::Block as BlockT;
-use jsonrpsee_ws_client::{WsClientBuilder, WsClient};
+use jsonrpsee_ws_client::{
+	WsClientBuilder, WsClient, v2::params::JsonRpcParams,
+};
+
+pub mod rpc_api;
 
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
+const BATCH_SIZE: usize = 512;
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi<B: BlockT> {
-		#[rpc(method = "state_getStorage", positional_params)]
-		fn get_storage(prefix: StorageKey, hash: Option<B::Hash>) -> StorageData;
 		#[rpc(method = "state_getKeysPaged", positional_params)]
 		fn get_keys_paged(
 			prefix: Option<StorageKey>,
@@ -152,7 +74,7 @@ impl<B: BlockT> Default for Mode<B> {
 	}
 }
 
-/// configuration of the online execution.
+/// Configuration of the offline execution.
 ///
 /// A state snapshot config must be present.
 #[derive(Clone)]
@@ -161,7 +83,7 @@ pub struct OfflineConfig {
 	pub state_snapshot: SnapshotConfig,
 }
 
-/// Description of the transport protocol.
+/// Description of the transport protocol (for online execution).
 #[derive(Debug)]
 pub struct Transport {
 	uri: String,
@@ -195,10 +117,17 @@ pub struct OnlineConfig<B: BlockT> {
 	pub transport: Transport,
 }
 
+impl<B: BlockT> OnlineConfig<B> {
+	/// Return rpc (ws) client.
+	fn rpc_client(&self) -> &WsClient {
+		self.transport.client.as_ref().expect("ws client must have been initialized by now; qed.")
+	}
+}
+
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport { uri: DEFAULT_TARGET.to_string(), client: None },
+			transport: Transport { uri: DEFAULT_TARGET.to_owned(), client: None },
 			at: None,
 			state_snapshot: None,
 			modules: vec![],
@@ -206,12 +135,6 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 	}
 }
 
-impl<B: BlockT> OnlineConfig<B> {
-	/// Return rpc (ws) client.
-	fn rpc_client(&self) -> &WsClient {
-		self.transport.client.as_ref().expect("ws client must have been initialized by now; qed.")
-	}
-}
 
 /// Configuration of the state snapshot.
 #[derive(Clone)]
@@ -234,8 +157,10 @@ impl Default for SnapshotConfig {
 
 /// Builder for remote-externalities.
 pub struct Builder<B: BlockT> {
-	/// Pallets to inject their prefix into the externalities.
+	/// Custom key-pairs to be injected into the externalities.
 	inject: Vec<KeyPair>,
+	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must be given.
+	hashed_prefixes: Vec<Vec<u8>>,
 	/// connectivity mode, online or offline.
 	mode: Mode<B>,
 }
@@ -244,7 +169,7 @@ pub struct Builder<B: BlockT> {
 // that.
 impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
-		Self { inject: Default::default(), mode: Default::default() }
+		Self { inject: Default::default(), mode: Default::default(), hashed_prefixes: Default::default() }
 	}
 }
 
@@ -267,6 +192,7 @@ impl<B: BlockT> Builder<B> {
 
 // RPC methods
 impl<B: BlockT> Builder<B> {
+	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
 		RpcApi::<B>::finalized_head(self.as_online().rpc_client()).await.map_err(|e| {
@@ -279,7 +205,7 @@ impl<B: BlockT> Builder<B> {
 	async fn get_keys_paged(
 		&self,
 		prefix: StorageKey,
-		hash: B::Hash,
+		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
 		const PAGE: u32 = 512;
 		let mut last_key: Option<StorageKey> = None;
@@ -290,7 +216,7 @@ impl<B: BlockT> Builder<B> {
 				Some(prefix.clone()),
 				PAGE,
 				last_key.clone(),
-				Some(hash),
+				Some(at),
 			)
 			.await
 			.map_err(|e| {
@@ -328,29 +254,54 @@ impl<B: BlockT> Builder<B> {
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
+		use jsonrpsee_ws_client::traits::Client;
+		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
 		info!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
 
 		let mut key_values: Vec<KeyPair> = vec![];
-		for key in keys {
-			let value =
-				RpcApi::<B>::get_storage(self.as_online().rpc_client(), key.clone(), Some(at))
-					.await
-					.map_err(|e| {
-						error!(target: LOG_TARGET, "Error = {:?}", e);
-						"rpc get_storage failed"
-					})?;
-			key_values.push((key, value));
-			if key_values.len() % 1000 == 0 {
-				let ratio: f64 = key_values.len() as f64 / keys_count as f64;
-				debug!(
-					target: LOG_TARGET,
-					"progress = {:.2} [{} / {}]",
-					ratio,
-					key_values.len(),
-					keys_count,
-				);
+		let client = self.as_online().rpc_client();
+		for chunk_keys in keys.chunks(BATCH_SIZE) {
+			let batch = chunk_keys
+				.iter()
+				.cloned()
+				.map(|key| {
+					(
+						"state_getStorage",
+						JsonRpcParams::Array(
+							vec![
+								to_value(key).expect("json serialization will work; qed."),
+								to_value(at).expect("json serialization will work; qed."),
+							]
+						),
+					)
+				})
+				.collect::<Vec<_>>();
+			let values = client.batch_request::<Option<StorageData>>(batch)
+				.await
+				.map_err(|e| {
+					log::error!(target: LOG_TARGET, "failed to execute batch {:?} due to {:?}", chunk_keys, e);
+					"batch failed."
+				})?;
+			assert_eq!(chunk_keys.len(), values.len());
+			for (idx, key) in chunk_keys.into_iter().enumerate() {
+				let maybe_value = values[idx].clone();
+				let value = maybe_value.unwrap_or_else(|| {
+					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
+					StorageData(vec![])
+				});
+				key_values.push((key.clone(), value));
+				if key_values.len() % (10 * BATCH_SIZE) == 0 {
+					let ratio: f64 = key_values.len() as f64 / keys_count as f64;
+					debug!(
+						target: LOG_TARGET,
+						"progress = {:.2} [{} / {}]",
+						ratio,
+						key_values.len(),
+						keys_count,
+					);
+				}
 			}
 		}
 
@@ -369,7 +320,7 @@ impl<B: BlockT> Builder<B> {
 
 	/// initialize `Self` from state snapshot. Panics if the file does not exist.
 	fn load_state_snapshot(&self, path: &Path) -> Result<Vec<KeyPair>, &'static str> {
-		info!(target: LOG_TARGET, "scraping keypairs from state snapshot {:?}", path,);
+		info!(target: LOG_TARGET, "scraping key-pairs from state snapshot {:?}", path,);
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
@@ -382,9 +333,9 @@ impl<B: BlockT> Builder<B> {
 			.at
 			.expect("online config must be initialized by this point; qed.")
 			.clone();
-		info!(target: LOG_TARGET, "scraping keypairs from remote @ {:?}", at);
+		info!(target: LOG_TARGET, "scraping key-pairs from remote @ {:?}", at);
 
-		let keys_and_values = if config.modules.len() > 0 {
+		let mut keys_and_values = if config.modules.len() > 0 {
 			let mut filtered_kv = vec![];
 			for f in config.modules.iter() {
 				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
@@ -403,6 +354,12 @@ impl<B: BlockT> Builder<B> {
 			info!(target: LOG_TARGET, "downloading data for all modules.");
 			self.rpc_get_pairs_paged(StorageKey(vec![]), at).await?
 		};
+
+		for prefix in &self.hashed_prefixes {
+			info!(target: LOG_TARGET, "adding data for hashed prefix: {:?}", HexDisplay::from(prefix));
+			let additional_key_values = self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at).await?;
+			keys_and_values.extend(additional_key_values);
+		}
 
 		Ok(keys_and_values)
 	}
@@ -466,6 +423,12 @@ impl<B: BlockT> Builder<B> {
 		self
 	}
 
+	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed. 
+	pub fn inject_hashed_prefix(mut self, hashed: &[u8]) -> Self {
+		self.hashed_prefixes.push(hashed.to_vec());
+		self
+	}
+
 	/// Configure a state snapshot to be used.
 	pub fn mode(mut self, mode: Mode<B>) -> Self {
 		self.mode = mode;
@@ -480,8 +443,10 @@ impl<B: BlockT> Builder<B> {
 		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
 		for (k, v) in kv {
 			let (k, v) = (k.0, v.0);
+			// Insert the key,value pair into the test trie backend
 			ext.insert(k, v);
 		}
+
 		Ok(ext)
 	}
 }
@@ -529,13 +494,62 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				modules: vec!["Proxy".to_owned()],
+				modules: vec!["System".to_owned()],
 				..Default::default()
 			}))
 			.build()
 			.await
 			.expect("Can't reach the remote node. Is it running?")
 			.execute_with(|| {});
+	}
+
+	#[tokio::test]
+	async fn can_build_few_pallet() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				modules: vec!["Proxy".to_owned(), "Multisig".to_owned(), "PhragmenElection".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect("Can't reach the remote node. Is it running?")
+			.execute_with(|| {});
+	}
+
+	#[tokio::test]
+	async fn sanity_check_decoding() {
+		use pallet_elections_phragmen::SeatHolder;
+		use sp_core::crypto::Ss58Codec;
+		type AccountId = sp_runtime::AccountId32;
+		type Balance = u128;
+		frame_support::generate_storage_alias!(
+			PhragmenElection,
+			Members =>
+			Value<Vec<SeatHolder<AccountId, Balance>>>
+		);
+
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				modules: vec!["PhragmenElection".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect("Can't reach the remote node. Is it running?")
+			.execute_with(|| {
+				// Gav's polkadot account. 99% this will be in the council.
+				let gav_polkadot =
+					AccountId::from_ss58check("13RDY9nrJpyTDBSUdBw12dGwhk19sGwsrVZ2bxkzYHBSagP2")
+						.unwrap();
+				let members = Members::get().unwrap();
+				assert!(members
+					.iter()
+					.map(|s| s.who.clone())
+					.find(|a| a == &gav_polkadot)
+					.is_some());
+			});
 	}
 
 	#[tokio::test]
