@@ -815,7 +815,12 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 			.into_rpc_module()
 			.expect(PROOF);
 
-		let (state, child_state) = sc_rpc::state::new_full(client.clone(), task_executor.clone(), deny_unsafe);
+		let (state, child_state) = sc_rpc::state::new_full(
+			client.clone(),
+			task_executor.clone(),
+			deny_unsafe,
+			config.rpc_max_payload
+		);
 		let state = state.into_rpc_module().expect(PROOF);
 		let child_state = child_state.into_rpc_module().expect(PROOF);
 

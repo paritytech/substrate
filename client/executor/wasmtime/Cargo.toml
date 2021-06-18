@@ -13,6 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+libc = "0.2.90"
+cfg-if = "1.0"
 log = "0.4.8"
 scoped-tls = "1.0"
 parity-wasm = "0.42.0"

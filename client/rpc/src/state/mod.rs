@@ -172,6 +172,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	executor: Arc<SubscriptionTaskExecutor>,
 	deny_unsafe: DenyUnsafe,
+	rpc_max_payload: Option<usize>,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
@@ -183,13 +184,12 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		Client::Api: Metadata<Block>,
 {
 	let child_backend = Box::new(
-		self::state_full::FullState::new(client.clone(), executor.clone())
+		self::state_full::FullState::new(client.clone(), executor.clone(), rpc_max_payload)
 	);
-	let backend = Arc::new(self::state_full::FullState::new(client.clone(), executor));
-	(
-		State { backend, deny_unsafe },
-		ChildState { backend: child_backend }
-	)
+	let backend = Box::new(
+		self::state_full::FullState::new(client.clone(), executor, rpc_max_payload)
+	);
+	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// Create new state API that works on light node.
@@ -216,7 +216,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 			fetcher.clone(),
 	));
 
-	let backend = Arc::new(self::state_light::LightState::new(
+	let backend = Box::new(self::state_light::LightState::new(
 			client.clone(),
 			executor.clone(),
 			remote_blockchain,
@@ -230,7 +230,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 
 /// State API with subscriptions support.
 pub struct State<Block, Client> {
-	backend: Arc<dyn StateBackend<Block, Client>>,
+	backend: Box<dyn StateBackend<Block, Client>>,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }

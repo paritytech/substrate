@@ -460,36 +460,10 @@ where
 		let _guard = guard();
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
-		let mut num_deleted: u32 = 0;
-
-		if let Some(limit) = limit {
-			let mut all_deleted = true;
-			self.backend.apply_to_child_keys_while(child_info, |key| {
-				if num_deleted == limit {
-					all_deleted = false;
-					return false;
-				}
-				if let Some(num) = num_deleted.checked_add(1) {
-					num_deleted = num;
-				} else {
-					all_deleted = false;
-					return false;
-				}
-				self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				true
-			});
-			(all_deleted, num_deleted)
-		} else {
-			self.backend.apply_to_child_keys_while(child_info, |key| {
-				num_deleted = num_deleted.saturating_add(1);
-				self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				true
-			});
-			(true, num_deleted)
-		}
+		self.limit_remove_from_backend(Some(child_info), None, limit)
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8]) {
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32) {
 		trace!(target: "state", "{:04x}: ClearPrefix {}",
 			self.id,
 			HexDisplay::from(&prefix),
@@ -498,21 +472,20 @@ where
 
 		if sp_core::storage::well_known_keys::starts_with_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part or contains of child storage key");
-			return;
+			return (false, 0);
 		}
 
 		self.mark_dirty();
 		self.overlay.clear_prefix(prefix);
-		self.backend.for_keys_with_prefix(prefix, |key| {
-			self.overlay.set_storage(key.to_vec(), None);
-		});
+		self.limit_remove_from_backend(None, Some(prefix), limit)
 	}
 
 	fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-	) {
+		limit: Option<u32>,
+	) -> (bool, u32) {
 		trace!(target: "state", "{:04x}: ClearChildPrefix({}) {}",
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
@@ -522,9 +495,7 @@ where
 
 		self.mark_dirty();
 		self.overlay.clear_child_prefix(child_info, prefix);
-		self.backend.for_child_keys_with_prefix(child_info, prefix, |key| {
-			self.overlay.set_child_storage(child_info, key.to_vec(), None);
-		});
+		self.limit_remove_from_backend(Some(child_info), Some(prefix), limit)
 	}
 
 	fn storage_append(
@@ -777,6 +748,57 @@ where
 
 	fn proof_size(&self) -> Option<u32> {
 		self.backend.proof_size()
+	}
+}
+
+impl<'a, H, N, B> Ext<'a, H, N, B>
+where
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>,
+	N: crate::changes_trie::BlockNumber,
+{
+	fn limit_remove_from_backend(
+		&mut self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		limit: Option<u32>,
+	) -> (bool, u32) {
+		let mut num_deleted: u32 = 0;
+
+		if let Some(limit) = limit {
+			let mut all_deleted = true;
+			self.backend.apply_to_keys_while(child_info, prefix, |key| {
+				if num_deleted == limit {
+					all_deleted = false;
+					return false;
+				}
+				if let Some(num) = num_deleted.checked_add(1) {
+					num_deleted = num;
+				} else {
+					all_deleted = false;
+					return false;
+				}
+				if let Some(child_info) = child_info {
+					self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				} else {
+					self.overlay.set_storage(key.to_vec(), None);
+				}
+				true
+			});
+			(all_deleted, num_deleted)
+		} else {
+			self.backend.apply_to_keys_while(child_info, prefix, |key| {
+				num_deleted = num_deleted.saturating_add(1);
+				if let Some(child_info) = child_info {
+					self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				} else {
+					self.overlay.set_storage(key.to_vec(), None);
+				}
+				true
+			});
+			(true, num_deleted)
+		}
 	}
 }
 
@@ -1155,14 +1177,14 @@ mod tests {
 		not_under_prefix.extend(b"path");
 		ext.set_storage(not_under_prefix.clone(), vec![10]);
 
-		ext.clear_prefix(&[]);
-		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		ext.clear_prefix(&[], None);
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4], None);
 		let mut under_prefix = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
 		under_prefix.extend(b"path");
-		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4], None);
 		assert_eq!(ext.child_storage(child_info, &[30]), Some(vec![40]));
 		assert_eq!(ext.storage(not_under_prefix.as_slice()), Some(vec![10]));
-		ext.clear_prefix(&not_under_prefix[..5]);
+		ext.clear_prefix(&not_under_prefix[..5], None);
 		assert_eq!(ext.storage(not_under_prefix.as_slice()), None);
 	}
 

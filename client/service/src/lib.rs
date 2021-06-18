@@ -343,7 +343,6 @@ fn start_rpc_servers<
 
 	std::thread::spawn(move || {
 		use jsonrpsee::ws_server::WsServerBuilder;
-
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		rt.block_on(async {
