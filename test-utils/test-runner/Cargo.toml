@@ -26,7 +26,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
+sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }

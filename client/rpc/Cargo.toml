@@ -35,7 +35,7 @@ sp-chain-spec = { version = "3.0.0", path = "../../primitives/chain-spec" }
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
+sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 hash-db = { version = "0.15.2", default-features = false }
