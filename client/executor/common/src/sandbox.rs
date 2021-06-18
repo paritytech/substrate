@@ -86,7 +86,6 @@ struct Imports {
 	memories_map: HashMap<(Vec<u8>, Vec<u8>), Memory>,
 }
 
-#[cfg(feature = "wasmer-sandbox")]
 impl Imports {
 	fn func_by_name(&self, module_name: &str, func_name: &str) -> Option<GuestFuncIndex> {
 		self.func_map.get(&(module_name.as_bytes().to_owned(), func_name.as_bytes().to_owned())).cloned()
@@ -104,16 +103,14 @@ impl ImportResolver for Imports {
 		field_name: &str,
 		signature: &::wasmi::Signature,
 	) -> std::result::Result<wasmi::FuncRef, wasmi::Error> {
-		let key = (
-			module_name.as_bytes().to_owned(),
-			field_name.as_bytes().to_owned(),
-		);
-		let idx = *self.func_map.get(&key).ok_or_else(|| {
-			wasmi::Error::Instantiation(format!(
-				"Export {}:{} not found",
-				module_name, field_name
-			))
-		})?;
+		let idx = self.func_by_name(module_name, field_name)
+			.ok_or_else(|| {
+				wasmi::Error::Instantiation(format!(
+					"Export {}:{} not found",
+					module_name, field_name
+				))
+			})?;
+
 		Ok(wasmi::FuncInstance::alloc_host(signature.clone(), idx.0))
 	}
 
@@ -123,20 +120,23 @@ impl ImportResolver for Imports {
 		field_name: &str,
 		_memory_type: &::wasmi::MemoryDescriptor,
 	) -> std::result::Result<MemoryRef, wasmi::Error> {
-		let key = (
-			module_name.as_bytes().to_vec(),
-			field_name.as_bytes().to_vec(),
-		);
-		let mem = self.memories_map
-			.get(&key)
-			.and_then(|m| m.as_wasmi())
+		let mem = self.memory_by_name(module_name, field_name)
 			.ok_or_else(|| {
 				wasmi::Error::Instantiation(format!(
 					"Export {}:{} not found",
 					module_name, field_name
 				))
+			})?;
+
+		let mem = mem.as_wasmi()
+			.ok_or_else(|| {
+				wasmi::Error::Instantiation(format!(
+					"Unsupported non-wasmi export {}:{}",
+					module_name, field_name
+				))
 			})?
 			.clone();
+
 		Ok(mem)
 	}
 
@@ -390,7 +390,7 @@ impl<FR> SandboxInstance<FR> {
 		SCH: SandboxCapabilitiesHolder<SupervisorFuncRef = FR, SC = FE>,
 		DTH: DispatchThunkHolder<DispatchThunk = FR>,
 	{
-		SCH::with_sandbox_capabilities( |supervisor_externals| {
+		SCH::with_sandbox_capabilities(|supervisor_externals| {
 			with_guest_externals(
 				supervisor_externals,
 				self,
@@ -883,7 +883,7 @@ impl<FR> Store<FR> {
 				})
 			});
 
-			SCH::with_sandbox_capabilities( |supervisor_externals| {
+			SCH::with_sandbox_capabilities(|supervisor_externals| {
 				with_guest_externals(
 					supervisor_externals,
 					&sandbox_instance,
