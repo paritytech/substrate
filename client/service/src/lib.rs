@@ -336,19 +336,18 @@ fn start_rpc_servers<
 	_rpc_metrics: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
-	let rpsee_addr = config.rpc_ws.map(|mut addr| {
-		addr.set_port(addr.port());
-		addr
-	}).unwrap_or_else(|| "127.0.0.1:9945".parse().unwrap());
+	let m = module.clone();
+	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().unwrap());
+	let http_addr = config.rpc_http.unwrap_or_else(|| "127.0.0.1:9933".parse().unwrap());
 
 	std::thread::spawn(move || {
 		use jsonrpsee::ws_server::WsServerBuilder;
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
-		rt.block_on(async {
-			let mut server = WsServerBuilder::default().build(rpsee_addr).await.unwrap();
+		rt.block_on(async move {
+			let mut server = WsServerBuilder::default().build(ws_addr).await.unwrap();
 
-			server.register_module(module).unwrap();
+			server.register_module(m).unwrap();
 			let mut methods_api = RpcModule::new(());
 			let mut methods = server.method_names();
 			methods.sort();
@@ -361,9 +360,31 @@ fn start_rpc_servers<
 			}).unwrap();
 
 			server.register_module(methods_api).unwrap();
-
 			server.start().await;
-		});
+		})
+	});
+
+	std::thread::spawn(move || {
+		use jsonrpsee::http_server::HttpServerBuilder;
+
+		let rt = tokio::runtime::Runtime::new().unwrap();
+
+		rt.block_on(async move {
+			let mut server = HttpServerBuilder::default().build(http_addr).unwrap();
+			server.register_module(module.clone()).unwrap();
+			let mut methods_api = RpcModule::new(());
+			let mut methods = server.method_names();
+			methods.sort();
+
+			methods_api.register_method("rpc_methods", move |_, _| {
+				Ok(serde_json::json!({
+					"version": 1,
+					"methods": methods,
+				}))
+			}).unwrap();
+
+			let _ = server.start().await;
+		})
 	});
 
 	Ok(Box::new(()))

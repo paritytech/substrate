@@ -2992,7 +2992,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#9a02c10a311c36185b13d2d8d71d37ee44c16c0b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6c69a8c06e11fbb04825c722d8f090d4631ba705"
 dependencies = [
  "jsonrpsee-http-server",
  "jsonrpsee-proc-macros",
@@ -3004,7 +3004,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#9a02c10a311c36185b13d2d8d71d37ee44c16c0b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6c69a8c06e11fbb04825c722d8f090d4631ba705"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3025,7 +3025,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#9a02c10a311c36185b13d2d8d71d37ee44c16c0b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6c69a8c06e11fbb04825c722d8f090d4631ba705"
 dependencies = [
  "Inflector",
  "proc-macro-crate 1.0.0",
@@ -3037,7 +3037,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#9a02c10a311c36185b13d2d8d71d37ee44c16c0b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6c69a8c06e11fbb04825c722d8f090d4631ba705"
 dependencies = [
  "async-trait",
  "beef",
@@ -3054,7 +3054,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#9a02c10a311c36185b13d2d8d71d37ee44c16c0b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6c69a8c06e11fbb04825c722d8f090d4631ba705"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3072,7 +3072,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#9a02c10a311c36185b13d2d8d71d37ee44c16c0b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6c69a8c06e11fbb04825c722d8f090d4631ba705"
 dependencies = [
  "async-trait",
  "fnv",
@@ -3095,7 +3095,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#9a02c10a311c36185b13d2d8d71d37ee44c16c0b"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#6c69a8c06e11fbb04825c722d8f090d4631ba705"
 dependencies = [
  "futures-channel",
  "futures-util",
