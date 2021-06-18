@@ -65,70 +65,73 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
-pub use sp_consensus_babe::{
-	BabeApi, ConsensusLog, BABE_ENGINE_ID, BabeEpochConfiguration, BabeGenesisConfiguration,
-	AuthorityId, AuthorityPair, AuthoritySignature, BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
-	digests::{
-		CompatibleDigestItem, NextEpochDescriptor, NextConfigDescriptor, PreDigest,
-		PrimaryPreDigest, SecondaryPlainPreDigest,
-	},
-};
-pub use sp_consensus::SyncOracle;
-pub use sc_consensus_slots::SlotProportion;
-use std::{
-	collections::HashMap, sync::Arc, u64, pin::Pin, borrow::Cow, convert::TryInto,
-	time::Duration,
-};
-use sp_consensus::{ImportResult, CanAuthorWith, import_queue::BoxJustificationImport};
-use sp_core::crypto::Public;
-use sp_application_crypto::AppKey;
-use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId}, Justifications,
-	traits::{Block as BlockT, Header, DigestItemFor, Zero},
-};
-use sp_api::{ProvideRuntimeApi, NumberFor};
-use parking_lot::Mutex;
-use sp_inherents::{CreateInherentDataProviders, InherentDataProvider, InherentData};
-use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
-use sp_consensus::{
-	BlockImport, Environment, Proposer, BlockCheckParams,
-	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	SelectChain, SlotData, import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId},
-};
-use sp_consensus_babe::inherents::BabeInherentData;
-use sc_client_api::{
-	backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider
-};
-use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use futures::channel::mpsc::{channel, Sender, Receiver};
-use futures::channel::oneshot;
-use retain_mut::RetainMut;
 
+use std::{
+	borrow::Cow, collections::HashMap, convert::TryInto, pin::Pin, sync::Arc, time::Duration, u64,
+};
+
+use codec::{Decode, Encode};
+use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures::channel::oneshot;
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
+use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
-use sc_consensus_slots::{
-	SlotInfo, StorageChanges, CheckedHeader, check_equivocation,
-	BackoffAuthoringBlocksStrategy, InherentDataProviderExt,
-};
-use sc_consensus_epochs::{
-	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
-};
-use sp_blockchain::{
-	Result as ClientResult, Error as ClientError,
-	HeaderBackend, ProvideCache, HeaderMetadata
-};
+use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
-use codec::{Encode, Decode};
+
+use sc_client_api::{backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider};
+use sc_consensus_epochs::{
+	descendent_query, Epoch as EpochT, EpochChangesFor, SharedEpochChanges, ViableEpochDescriptor,
+};
+use sc_consensus_slots::{
+	check_equivocation, BackoffAuthoringBlocksStrategy, CheckedHeader, InherentDataProviderExt,
+	SlotInfo, StorageChanges,
+};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::ApiExt;
+use sp_api::{NumberFor, ProvideRuntimeApi};
+use sp_application_crypto::AppKey;
+use sp_block_builder::BlockBuilder as BlockBuilderApi;
+use sp_blockchain::{
+	Error as ClientError, HeaderBackend, HeaderMetadata, ProvideCache, Result as ClientResult,
+};
+use sp_consensus::{import_queue::BoxJustificationImport, CanAuthorWith, ImportResult};
+use sp_consensus::{
+	import_queue::{BasicQueue, CacheKeyId, DefaultImportQueue, Verifier},
+	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, Environment,
+	Error as ConsensusError, ForkChoiceStrategy, Proposer, SelectChain, SlotData,
+};
+use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
+use sp_core::crypto::Public;
+use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_runtime::{
+	generic::{BlockId, OpaqueDigestItemId},
+	traits::{Block as BlockT, DigestItemFor, Header, Zero},
+	Justifications,
+};
 
-mod verification;
+pub use sc_consensus_slots::SlotProportion;
+pub use sp_consensus::SyncOracle;
+pub use sp_consensus_babe::{
+	digests::{
+		CompatibleDigestItem, NextConfigDescriptor, NextEpochDescriptor, PreDigest,
+		PrimaryPreDigest, SecondaryPlainPreDigest,
+	},
+	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight,
+	BabeEpochConfiguration, BabeGenesisConfiguration, ConsensusLog, BABE_ENGINE_ID,
+	VRF_OUTPUT_LENGTH,
+};
+
+pub use aux_schema::load_block_weight as block_weight;
+
 mod migration;
+mod verification;
 
-pub mod aux_schema;
 pub mod authorship;
+pub mod aux_schema;
 #[cfg(test)]
 mod tests;
 
