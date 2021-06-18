@@ -190,7 +190,7 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 	}
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		Ok(<MemoryDB::<H> as hash_db::HashDBRef<H, _, _, _>>::get(&self.data.read().mdb, key, prefix))
+		Ok(<MemoryDB::<H> as hash_db::HashDBRef<H, _>>::get(&self.data.read().mdb, key, prefix))
 	}
 }
 
@@ -207,18 +207,9 @@ impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 {
 	type Overlay = MemoryDB<H>;
 
-	fn get(
-		&self,
-		key: &H::Out,
-		prefix: Prefix,
-		_global: Option<u32>,
-	) -> Result<Option<(DBValue, sp_trie::TrieMeta)>, String> {
-		match self.storage.get(key, prefix) {
-			// change trie do not use meta.
-			Ok(Some(v)) => Ok(Some((v, Default::default()))),
-			Ok(None) => Ok(None),
-			Err(e) => Err(e),
-		}
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		self.storage.get(key, prefix)
 	}
+
 	fn access_from(&self, _key: &H::Out) { }
 }

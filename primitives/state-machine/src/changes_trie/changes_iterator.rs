@@ -24,7 +24,7 @@ use codec::{Decode, Encode, Codec};
 use hash_db::Hasher;
 use num_traits::Zero;
 use sp_core::storage::PrefixedStorageKey;
-use sp_trie::{Recorder, TrieMeta};
+use sp_trie::Recorder;
 use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
 use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
 use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
@@ -337,7 +337,7 @@ struct ProvingDrilldownIterator<'a, H, Number>
 		H::Out: 'a,
 {
 	essence: DrilldownIteratorEssence<'a, H, Number>,
-	proof_recorder: RefCell<Recorder<H::Out, TrieMeta>>,
+	proof_recorder: RefCell<Recorder<H::Out>>,
 }
 
 impl<'a, H, Number> ProvingDrilldownIterator<'a, H, Number>

@@ -88,16 +88,16 @@ impl<'a> Input for ByteSliceInput<'a> {
 pub struct NodeCodec<H>(PhantomData<H>);
 
 impl<H: Hasher> NodeCodec<H> {
-	fn decode_plan_inner_hashed<M: Meta<StateMeta = bool>>(
+	fn decode_plan_inner_hashed(
 		data: &[u8],
-		meta: &mut M,
+		meta: &mut Meta,
 	) -> Result<NodePlan, Error> {
 		let mut input = ByteSliceInput::new(data);
 
-		let contains_hash = meta.contains_hash_of_value();
 		let header = NodeHeader::decode(&mut input)?;
+		let contains_hash = header.contains_hash_of_value();
 		let alt_hashing = header.alt_hashing();
-		meta.set_state_meta(alt_hashing);
+		meta.apply_inner_hashing = alt_hashing;
 
 		let branch_has_value = if let NodeHeader::Branch(has_value, _) = &header {
 			*has_value
@@ -108,7 +108,7 @@ impl<H: Hasher> NodeCodec<H> {
 
 		match header {
 			NodeHeader::Null => Ok(NodePlan::Empty),
-			NodeHeader::AltHashBranch(nibble_count)
+			NodeHeader::AltHashBranch(nibble_count, _)
 			| NodeHeader::Branch(_, nibble_count) => {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
@@ -153,7 +153,7 @@ impl<H: Hasher> NodeCodec<H> {
 					children,
 				})
 			},
-			NodeHeader::AltHashLeaf(nibble_count)
+			NodeHeader::AltHashLeaf(nibble_count, _)
 			| NodeHeader::Leaf(nibble_count) => {
 				let padding = nibble_count % nibble_ops::NIBBLE_PER_BYTE != 0;
 				// check that the padding is valid (if any)
@@ -181,19 +181,19 @@ impl<H: Hasher> NodeCodec<H> {
 	}
 }
 
-impl<H, M> NodeCodecT<M> for NodeCodec<H>
+impl<H> NodeCodecT for NodeCodec<H>
 	where
 		H: Hasher,
-		M: Meta<StateMeta = bool, GlobalMeta = Option<u32>>,
 {
+	const OFFSET_CONTAINS_HASH: usize = 1;
 	type Error = Error;
 	type HashOut = H::Out;
 
 	fn hashed_null_node() -> <H as Hasher>::Out {
-		H::hash(<Self as NodeCodecT<M>>::empty_node_no_meta())
+		H::hash(<Self as NodeCodecT>::empty_node())
 	}
 
-	fn decode_plan(data: &[u8], meta: &mut M) -> Result<NodePlan, Self::Error> {
+	fn decode_plan(data: &[u8], meta: &mut Meta) -> Result<NodePlan, Self::Error> {
 		Self::decode_plan_inner_hashed(data, meta).map(|plan| {
 			meta.decoded_callback(&plan);
 			plan
@@ -205,27 +205,28 @@ impl<H, M> NodeCodecT<M> for NodeCodec<H>
 	}
 
 	fn is_empty_node(data: &[u8]) -> bool {
-		data == <Self as NodeCodecT<M>>::empty_node_no_meta()
+		data == <Self as NodeCodecT>::empty_node()
 	}
 
-	fn empty_node(_meta: &mut M) -> Vec<u8> {
-		sp_std::vec![trie_constants::EMPTY_TRIE]
-	}
-
-	fn empty_node_no_meta() -> &'static [u8] {
+	fn empty_node() -> &'static [u8] {
 		&[trie_constants::EMPTY_TRIE]
 	}
 
-	fn leaf_node(partial: Partial, value: Value, meta: &mut M) -> Vec<u8> {
+	fn leaf_node(partial: Partial, value: Value, meta: &mut Meta) -> Vec<u8> {
+		let contains_hash = matches!(&value, Value::HashedValue(..));
 		// Note that we use AltHash type only if inner hashing will occur,
 		// this way we allow changing hash threshold.
 		// With fix inner hashing alt hash can be use with all node, but
 		// that is not better (encoding can use an additional nibble byte
 		// sometime).
-		let mut output = if meta.read_global_meta().as_ref().map(|threshold|
+		let mut output = if meta.try_inner_hashing.as_ref().map(|threshold|
 			value_do_hash(&value, threshold)
-		).unwrap_or(meta.read_state_meta()) {
-			partial_encode(partial, NodeKind::AltHashLeaf)
+		).unwrap_or(meta.apply_inner_hashing) {
+			if contains_hash {
+				partial_encode(partial, NodeKind::AltHashLeafHash)
+			} else {
+				partial_encode(partial, NodeKind::AltHashLeaf)
+			}
 		} else {
 			partial_encode(partial, NodeKind::Leaf)
 		};
@@ -254,7 +255,7 @@ impl<H, M> NodeCodecT<M> for NodeCodec<H>
 		_partial: impl Iterator<Item = u8>,
 		_nbnibble: usize,
 		_child: ChildReference<<H as Hasher>::Out>,
-		_meta: &mut M,
+		_meta: &mut Meta,
 	) -> Vec<u8> {
 		unreachable!()
 	}
@@ -262,7 +263,7 @@ impl<H, M> NodeCodecT<M> for NodeCodec<H>
 	fn branch_node(
 		_children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
 		_maybe_value: Value,
-		_meta: &mut M,
+		_meta: &mut Meta,
 	) -> Vec<u8> {
 		unreachable!()
 	}
@@ -272,11 +273,13 @@ impl<H, M> NodeCodecT<M> for NodeCodec<H>
 		number_nibble: usize,
 		children: impl Iterator<Item = impl Borrow<Option<ChildReference<<H as Hasher>::Out>>>>,
 		value: Value,
-		meta: &mut M,
+		meta: &mut Meta,
 	) -> Vec<u8> {
-		let mut output = match (&value,  meta.read_global_meta().as_ref().map(|threshold|
+
+		let contains_hash = matches!(&value, Value::HashedValue(..));
+		let mut output = match (&value,  meta.try_inner_hashing.as_ref().map(|threshold|
 			value_do_hash(&value, threshold)
-		).unwrap_or(meta.read_state_meta())) {
+		).unwrap_or(meta.apply_inner_hashing)) {
 			(&Value::NoValue, _) => {
 				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchNoValue)
 			},
@@ -284,7 +287,11 @@ impl<H, M> NodeCodecT<M> for NodeCodec<H>
 				partial_from_iterator_encode(partial, number_nibble, NodeKind::BranchWithValue)
 			},
 			(_, true) => {
-				partial_from_iterator_encode(partial, number_nibble, NodeKind::AltHashBranchWithValue)
+				if contains_hash {
+					partial_from_iterator_encode(partial, number_nibble, NodeKind::AltHashBranchWithValueHash)
+				} else {
+					partial_from_iterator_encode(partial, number_nibble, NodeKind::AltHashBranchWithValue)
+				}
 			},
 		};
 
@@ -354,8 +361,11 @@ fn partial_from_iterator_encode<I: Iterator<Item = u8>>(
 		NodeKind::Leaf => NodeHeader::Leaf(nibble_count).encode_to(&mut output),
 		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
-		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count).encode_to(&mut output),
-		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count)
+		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count, false).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count, false)
+			.encode_to(&mut output),
+		NodeKind::AltHashLeafHash => NodeHeader::AltHashLeaf(nibble_count, true).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValueHash => NodeHeader::AltHashBranch(nibble_count, true)
 			.encode_to(&mut output),
 	};
 	output.extend(partial);
@@ -375,8 +385,11 @@ fn partial_encode(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 		NodeKind::Leaf => NodeHeader::Leaf(nibble_count).encode_to(&mut output),
 		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
-		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count).encode_to(&mut output),
-		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count)
+		NodeKind::AltHashLeaf => NodeHeader::AltHashLeaf(nibble_count, false).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValue => NodeHeader::AltHashBranch(nibble_count, false)
+			.encode_to(&mut output),
+		NodeKind::AltHashLeafHash => NodeHeader::AltHashLeaf(nibble_count, true).encode_to(&mut output),
+		NodeKind::AltHashBranchWithValueHash => NodeHeader::AltHashBranch(nibble_count, true)
 			.encode_to(&mut output),
 	};
 	if number_nibble_encoded > 0 {

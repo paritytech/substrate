@@ -18,9 +18,8 @@
 use sp_std::vec::Vec;
 use codec::{Encode, Decode};
 use hash_db::{Hasher, HashDB};
-use hash_db::MetaHasher;
 use trie_db::NodeCodec;
-use crate::{trie_types::Layout, TrieLayout};
+use crate::{Layout, TrieLayout};
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -181,15 +180,14 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 		// Using compact proof will work directly here (read trie structure and
 		// work directly.
 		for item in proof.trie_nodes.iter() {
-			// Note using `default()` to build proof is fine, do_value being in header
-			// and no switch needed.
-			let layout_meta = Default::default();
-			let (encoded_node, mut meta) = <
-				<Layout::<H> as TrieLayout>::MetaHasher as MetaHasher<H, _>
-			>::extract_value(item.as_slice(), layout_meta);
-			// read state meta (required for value layout and AltHash node.
-			let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(encoded_node, &mut meta);
-			db.insert_with_meta(crate::EMPTY_PREFIX, encoded_node, meta);
+			let mut meta = Default::default();
+			// read state meta (required for value layout).
+			let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(item.as_slice(), &mut meta);
+			db.alt_insert(
+				crate::EMPTY_PREFIX,
+				item,
+				meta.resolve_alt_hashing::<<Layout::<H> as TrieLayout>::Codec>(),
+			);
 		}
 		db
 	}

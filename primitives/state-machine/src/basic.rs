@@ -22,8 +22,7 @@ use std::{
 };
 use crate::{Backend, StorageKey, StorageValue};
 use hash_db::Hasher;
-use sp_trie::{TrieConfiguration, empty_child_trie_root};
-use sp_trie::trie_types::Layout;
+use sp_trie::{TrieConfiguration, empty_child_trie_root, Layout};
 use sp_core::{
 	storage::{
 		well_known_keys::is_child_storage_key, Storage,

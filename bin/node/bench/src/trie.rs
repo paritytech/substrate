@@ -24,7 +24,7 @@ use lazy_static::lazy_static;
 use rand::Rng;
 use hash_db::Prefix;
 use sp_state_machine::Backend as _;
-use sp_trie::{trie_types::TrieDBMut, TrieMut as _, TrieMeta, MetaHasher, StateHasher};
+use sp_trie::{trie_types::TrieDBMut, TrieMut as _, Meta, MetaHasher, StateHasher};
 
 use node_primitives::Hash;
 
@@ -175,7 +175,7 @@ impl sp_state_machine::Storage<sp_core::Blake2Hasher> for Storage {
 		key: &Hash,
 		prefix: Prefix,
 		global: Option<u32>,
-	) -> Result<Option<(Vec<u8>, TrieMeta)>, String> {
+	) -> Result<Option<(Vec<u8>, Meta)>, String> {
 		let key = sp_trie::prefixed_key::<sp_core::Blake2Hasher>(key, prefix);
 		self.0.get(0, &key).map_err(|e| format!("Database backend error: {:?}", e))
 			.map(|result| result

@@ -24,9 +24,9 @@ use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
-	record_all_keys, StorageProof, TrieMeta,
+	record_all_keys, StorageProof, Meta, Layout, Recorder,
 };
-pub use sp_trie::{Recorder, trie_types::{Layout, TrieError}};
+pub use sp_trie::trie_types::TrieError;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend, DBValue};
@@ -35,7 +35,7 @@ use sp_core::storage::ChildInfo;
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	pub(crate) backend: &'a TrieBackendEssence<S, H>,
-	pub(crate) proof_recorder: &'a mut Recorder<H::Out, TrieMeta>,
+	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
 }
 
 impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
@@ -112,7 +112,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 #[derive(Default)]
 struct ProofRecorderInner<Hash> {
 	/// All the records that we have stored so far.
-	records: HashMap<Hash, Option<(DBValue, TrieMeta)>>,
+	records: HashMap<Hash, Option<(DBValue, Meta, bool)>>,
 	/// The encoded size of all recorded values.
 	encoded_size: usize,
 }
@@ -125,17 +125,17 @@ pub struct ProofRecorder<Hash> {
 
 impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	/// Record the given `key` => `val` combination.
-	pub fn record<H: Hasher>(&self, key: Hash, mut val: Option<(DBValue, TrieMeta)>) {
+	pub fn record<H: Hasher>(&self, key: Hash, val: Option<DBValue>) {
 		let mut inner = self.inner.write();
 
 		let ProofRecorderInner { encoded_size, records } = &mut *inner;
 		records.entry(key).or_insert_with(|| {
-			if let Some(val) = val.as_mut() {
-				val.1.set_accessed_value(false);
-				sp_trie::resolve_encoded_meta::<H>(val);
-				*encoded_size += sp_trie::estimate_entry_size(val, H::LENGTH);
-			}
-			val
+			val.map(|val| {
+				let mut val = (val, Meta::default(), false);
+				sp_trie::resolve_encoded_meta::<H>(&mut val);
+				*encoded_size += sp_trie::estimate_entry_size(&val, H::LENGTH);
+				val
+			})
 		});
 	}
 
@@ -146,9 +146,9 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 		records.entry(key.clone())
 			.and_modify(|entry| {
 				if let Some(entry) = entry.as_mut() {
-					if !entry.1.accessed_value() {
+					if !entry.2 {
 						let old_size = sp_trie::estimate_entry_size(entry, hash_len);
-						entry.1.set_accessed_value(true);
+						entry.2 = true;
 						let new_size = sp_trie::estimate_entry_size(entry, hash_len);
 						*encoded_size += new_size;
 						*encoded_size -= old_size;
@@ -158,8 +158,9 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 	}
 
 	/// Returns the value at the given `key`.
-	pub fn get(&self, key: &Hash) -> Option<Option<(DBValue, TrieMeta)>> {
-		self.inner.read().records.get(key).cloned()
+	pub fn get(&self, key: &Hash) -> Option<Option<DBValue>> {
+		self.inner.read().records.get(key).as_ref()
+			.map(|v| v.as_ref().map(|v| v.0.clone()))
 	}
 
 	/// Returns the estimated encoded size of the proof.
@@ -174,14 +175,18 @@ impl<Hash: std::hash::Hash + Eq + Clone> ProofRecorder<Hash> {
 
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof<H: Hasher>(&self) -> StorageProof {
-		let inner = self.inner.read();
-		let trie_nodes = inner
+		let trie_nodes = self.inner.read()
 			.records
 			.iter()
 			.filter_map(|(_k, v)| v.as_ref().map(|v| {
-				<
-					<Layout::<H> as sp_trie::TrieLayout>::MetaHasher as hash_db::MetaHasher<H, _>
-				>::stored_value(v.0.as_slice(), v.1.clone())
+				let mut meta = v.1.clone();
+				if let Some(hashed) = sp_trie::to_hashed_variant::<H>(
+					v.0.as_slice(), &mut meta, v.2,
+				) {
+					hashed
+				} else {
+					v.0.clone()
+				}
 			}))
 			.collect();
 
@@ -246,13 +251,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 		&self,
 		key: &H::Out,
 		prefix: Prefix,
-		global: Option<u32>,
-	) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.get(key) {
 			return Ok(v);
 		}
 
-		let backend_value = self.backend.get(key, prefix, global)?;
+		let backend_value = self.backend.get(key, prefix)?;
 		self.proof_recorder.record::<H>(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}

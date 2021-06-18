@@ -285,10 +285,9 @@ impl Consolidate for Vec<(
 	}
 }
 
-impl<H, KF, MH> Consolidate for sp_trie::GenericMemoryDB<H, KF, MH>
+impl<H, KF> Consolidate for sp_trie::GenericMemoryDB<H, KF>
 	where
 		H: Hasher,
-		MH: sp_trie::MetaHasher<H, sp_trie::DBValue>,
 		KF: sp_trie::KeyFunction<H>,
 {
 	fn consolidate(&mut self, other: Self) {

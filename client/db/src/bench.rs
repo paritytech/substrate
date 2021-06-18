@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
-use sp_trie::{MemoryDB, prefixed_key, StateHasher, TrieMeta, MetaHasher};
+use sp_trie::{MemoryDB, prefixed_key, StateHasher, Meta, MetaHasher};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay
@@ -54,7 +54,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 		key: &Block::Hash,
 		prefix: Prefix,
 		global: Option<u32>,
-	) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	) -> Result<Option<(DBValue, Meta)>, String> {
 		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 		if let Some(recorder) = &self.proof_recorder {
 			if let Some(v) = recorder.get(&key) {

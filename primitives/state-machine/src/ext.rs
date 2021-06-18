@@ -26,7 +26,7 @@ use sp_core::{
 	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay,
 };
-use sp_trie::{trie_types::Layout, empty_child_trie_root};
+use sp_trie::{Layout, empty_child_trie_root};
 use sp_externalities::{
 	Externalities, Extensions, Extension, ExtensionStore,
 };

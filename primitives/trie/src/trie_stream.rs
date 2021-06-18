@@ -17,12 +17,12 @@
 
 //! `TrieStream` implementation for Substrate's trie format.
 
-use hash_db::{MetaHasher, Hasher};
+use hash_db::Hasher;
 use trie_root;
 use codec::{Encode, Compact};
 use sp_std::vec::Vec;
 use sp_std::ops::Range;
-use crate::{trie_constants, TrieMeta, StateHasher};
+use crate::{trie_constants};
 use crate::node_header::{NodeKind, size_and_prefix_iterator};
 use crate::node_codec::Bitmap;
 
@@ -70,6 +70,8 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3),
 		NodeKind::AltHashBranchWithValue =>
 			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4),
+		NodeKind::AltHashBranchWithValueHash
+		| NodeKind::AltHashLeafHash => unreachable!("only added value that do not contain hash"),
 	};
 	iter_start
 		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })
@@ -78,8 +80,6 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 
 
 impl trie_root::TrieStream for TrieStream {
-	type GlobalMeta = Option<u32>;
-
 	fn new(meta: Option<u32>) -> Self {
 		Self {
 			buffer: Vec::new(),
@@ -155,16 +155,10 @@ impl trie_root::TrieStream for TrieStream {
 			0..=31 => data.encode_to(&mut self.buffer),
 			_ => {
 				if apply_inner_hashing {
-					let meta = TrieMeta {
-						range: range,
-						unused_value: false,
-						contain_hash: false,
-						// Using `inner_value_hashing` instead to check this.
-						// And unused in hasher.
-						try_inner_hashing: None,
-						apply_inner_hashing: true,
-					};
-					<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta).as_ref()
+					hash_db::AltHashing {
+						encoded_offset: 0,
+						value_range: range.map(|r| (r.start, r.end)),
+					}.alt_hash::<H>(&data).as_ref()
 						.encode_to(&mut self.buffer);
 				} else {
 					H::hash(&data).as_ref().encode_to(&mut self.buffer);
@@ -177,16 +171,11 @@ impl trie_root::TrieStream for TrieStream {
 		let apply_inner_hashing = self.apply_inner_hashing;
 		let range = self.current_value_range;
 		let data = self.buffer;
-		let meta = TrieMeta {
-			range: range,
-			unused_value: false,
-			contain_hash: false,
-			try_inner_hashing: None,
-			apply_inner_hashing: true,
-		};
-
 		if apply_inner_hashing {
-			<StateHasher as MetaHasher<H, Vec<u8>>>::hash(&data, &meta)
+			hash_db::AltHashing {
+				encoded_offset: 0,
+				value_range: range.map(|r| (r.start, r.end)),
+			}.alt_hash::<H>(&data)
 		} else {
 			H::hash(&data)
 		}

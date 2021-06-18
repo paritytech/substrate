@@ -22,7 +22,7 @@
 
 use crate::{
 	EMPTY_PREFIX, HashDBT, TrieHash, TrieError, TrieConfiguration,
-	CompactProof, StorageProof, GlobalMeta, TrieMeta,
+	CompactProof, StorageProof,
 };
 use sp_std::boxed::Box;
 use sp_std::vec::Vec;
@@ -109,8 +109,7 @@ pub fn decode_compact<'a, L, DB, I>(
 ) -> Result<TrieHash<L>, Error<L>>
 	where
 		L: TrieConfiguration,
-		DB: HashDBT<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>
-			+ hash_db::HashDBRef<L::Hash, trie_db::DBValue, L::Meta, GlobalMeta<L>>,
+		DB: HashDBT<L::Hash, trie_db::DBValue> + hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 		I: IntoIterator<Item = &'a [u8]>,
 {
 	let mut nodes_iter = encoded.into_iter();
@@ -163,7 +162,7 @@ pub fn decode_compact<'a, L, DB, I>(
 		}
 	}
 
-	if !HashDBT::<L::Hash, _, _, _>::contains(db, &top_root, EMPTY_PREFIX) {
+	if !HashDBT::<L::Hash, _>::contains(db, &top_root, EMPTY_PREFIX) {
 		return Err(Error::IncompleteProof);
 	}
 
@@ -211,7 +210,7 @@ pub fn encode_compact<L>(
 	root: TrieHash<L>,
 ) -> Result<CompactProof, Error<L>>
 	where
-		L: TrieConfiguration<Meta = TrieMeta>,
+		L: TrieConfiguration,
 {
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
@@ -251,7 +250,7 @@ pub fn encode_compact<L>(
 	};
 
 	for child_root in child_tries {
-		if !HashDBT::<L::Hash, _, _, _>::contains(&partial_db, &child_root, EMPTY_PREFIX) {
+		if !HashDBT::<L::Hash, _>::contains(&partial_db, &child_root, EMPTY_PREFIX) {
 			// child proof are allowed to be missing (unused root can be included
 			// due to trie structure modification).
 			continue;

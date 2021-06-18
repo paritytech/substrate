@@ -95,7 +95,7 @@ fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 
 	// enumerate all changes trie' keys, recording all nodes that have been 'touched'
 	// (effectively - all changes trie nodes)
-	let mut proof_recorder: Recorder<H::Out, sp_trie::TrieMeta> = Default::default();
+	let mut proof_recorder: Recorder<H::Out> = Default::default();
 	{
 		let mut trie = ProvingBackendRecorder::<_, H> {
 			backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),

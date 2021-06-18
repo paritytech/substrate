@@ -66,7 +66,7 @@ use sp_blockchain::{
 use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key, StateHasher,
-	TrieMeta, MetaHasher};
+	Meta, MetaHasher};
 use sp_database::Transaction;
 use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::OffchainOverlayedChange;
@@ -894,7 +894,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 		key: &Block::Hash,
 		prefix: Prefix,
 		global: Option<u32>,
-	) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	) -> Result<Option<(DBValue, Meta)>, String> {
 		if self.prefix_keys {
 			let key = prefixed_key::<HashFor<Block>>(key, prefix);
 			self.state_db.get(&key, self)
@@ -936,7 +936,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStora
 		_key: &Block::Hash,
 		_prefix: Prefix,
 		_global: Option<u32>,
-	) -> Result<Option<(DBValue, TrieMeta)>, String> {
+	) -> Result<Option<(DBValue, Meta)>, String> {
 		Ok(None)
 	}
 	fn access_from(&self, _key: &Block::Hash) {
