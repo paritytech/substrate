@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", default-features = false, features = ["tokio02"] }
+jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
 jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
 
 hex = "0.4.0"
@@ -28,7 +28,7 @@ sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
+tokio = { version = "1", features = ["macros", "rt"] }
 pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "4.0.0" }
 frame-support = { path = "../../../frame/support", version = "3.0.0" }
 
