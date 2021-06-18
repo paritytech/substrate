@@ -16,7 +16,7 @@
 
 /// The maximum number of live gossip rounds allowed, i.e. we will expire messages older than this.
 use codec::{Decode, Encode};
-use log::debug;
+use log::{debug, trace};
 use parking_lot::RwLock;
 
 use sc_network::PeerId;
@@ -35,7 +35,7 @@ use beefy_primitives::{
 use crate::keystore::BeefyKeystore;
 
 // Limit BEEFY gossip by keeping only a bound number of voting rounds alive.
-const MAX_LIVE_GOSSIP_ROUNDS: usize = 5;
+const MAX_LIVE_GOSSIP_ROUNDS: usize = 3;
 
 /// Gossip engine messages topic
 pub(crate) fn topic<B: Block>() -> B::Hash
@@ -73,6 +73,8 @@ where
 	}
 
 	pub(crate) fn note_round(&self, round: NumberFor<B>) {
+		trace!(target: "beefy", "🥩 About to note round #{}", round);
+
 		let mut live_rounds = self.live_rounds.write();
 
 		// NOTE: ideally we'd use a VecDeque here, but currently binary search is only available on
@@ -87,7 +89,11 @@ where
 	}
 
 	fn is_live(live_rounds: &[NumberFor<B>], round: NumberFor<B>) -> bool {
-		live_rounds.binary_search(&round).is_ok()
+		let live = live_rounds.binary_search(&round).is_ok();
+
+		trace!(target: "beefy", "🥩 Round #{} is live: {}", round, live);
+
+		live
 	}
 }
 
