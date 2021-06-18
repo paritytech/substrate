@@ -671,9 +671,8 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		)
 	};
 
-	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 	// TODO: use handle here and let the service spawn the server.
-	let rpc = start_rpc_servers(&config, gen_rpc_module, rpc_metrics.clone())?;
+	let rpc = start_rpc_servers(&config, gen_rpc_module)?;
 
 	// NOTE(niklasad1): dummy type for now.
 	let rpc_handlers = RpcHandlers;

@@ -294,100 +294,40 @@ async fn build_network_future<
 
 #[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
-mod waiting {
-	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
-	impl Drop for HttpServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				server.wait();
-			}
-		}
-	}
-
-	pub struct IpcServer(pub Option<sc_rpc_server::IpcServer>);
-	impl Drop for IpcServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				let _ = server.wait();
-			}
-		}
-	}
-
-	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
-	impl Drop for WsServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				let _ = server.wait();
-			}
-		}
-	}
-}
+// TODO(niklasad1): not supported yet.
+mod waiting {}
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<
-	R: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>,
->(
+fn start_rpc_servers<R>(
 	config: &Configuration,
 	mut gen_rpc_module: R,
-	_rpc_metrics: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
+where
+	R: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>,
+{
 	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
-	let m = module.clone();
 	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().unwrap());
 	let http_addr = config.rpc_http.unwrap_or_else(|| "127.0.0.1:9933".parse().unwrap());
 
-	std::thread::spawn(move || {
-		use jsonrpsee::ws_server::WsServerBuilder;
-		let rt = tokio::runtime::Runtime::new().unwrap();
+	let http = sc_rpc_server::start_http(
+		http_addr,
+		config.rpc_http_threads,
+		config.rpc_cors.as_ref(),
+		config.rpc_max_payload,
+		module.clone(),
+	);
 
-		rt.block_on(async move {
-			let mut server = WsServerBuilder::default().build(ws_addr).await.unwrap();
+	let ws = sc_rpc_server::start_ws(
+		ws_addr,
+		Some(4),
+		config.rpc_ws_max_connections,
+		config.rpc_cors.as_ref(),
+		config.rpc_max_payload,
+		module,
+	);
 
-			server.register_module(m).unwrap();
-			let mut methods_api = RpcModule::new(());
-			let mut methods = server.method_names();
-			methods.sort();
-
-			methods_api.register_method("rpc_methods", move |_, _| {
-				Ok(serde_json::json!({
-					"version": 1,
-					"methods": methods,
-				}))
-			}).unwrap();
-
-			server.register_module(methods_api).unwrap();
-			server.start().await;
-		})
-	});
-
-	std::thread::spawn(move || {
-		use jsonrpsee::http_server::HttpServerBuilder;
-
-		let rt = tokio::runtime::Runtime::new().unwrap();
-
-		rt.block_on(async move {
-			let mut server = HttpServerBuilder::default().build(http_addr).unwrap();
-			server.register_module(module.clone()).unwrap();
-			let mut methods_api = RpcModule::new(());
-			let mut methods = server.method_names();
-			methods.sort();
-
-			methods_api.register_method("rpc_methods", move |_, _| {
-				Ok(serde_json::json!({
-					"version": 1,
-					"methods": methods,
-				}))
-			}).unwrap();
-
-			let _ = server.start().await;
-		})
-	});
-
-	Ok(Box::new(()))
+	Ok(Box::new((http, ws)))
 }
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
