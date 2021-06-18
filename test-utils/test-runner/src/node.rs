@@ -19,7 +19,6 @@
 use std::sync::Arc;
 
 use futures::{FutureExt, SinkExt, channel::{mpsc, oneshot}};
-use jsonrpc_core::MetaIoHandler;
 use manual_seal::{run_manual_seal, EngineCommand, ManualSealParams};
 use sc_cli::build_runtime;
 use sc_client_api::{
@@ -226,7 +225,7 @@ impl<T: ChainInfo> Node<T> {
 	}
 
 	/// Returns a reference to the rpc handlers.
-	pub fn rpc_handler(&self) -> Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
+	pub fn rpc_handler(&self) -> () {
 		todo!("not ported to jsonrpsee yet");
 	}
 

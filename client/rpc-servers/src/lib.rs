@@ -20,12 +20,9 @@
 
 #![warn(missing_docs)]
 
-mod middleware;
+// mod middleware;
 
 use std::io;
-use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
-use log::error;
-use pubsub::PubSubMetadata;
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -38,138 +35,125 @@ const WS_MAX_CONNECTIONS: usize = 100;
 /// Default thread pool size for RPC HTTP servers.
 const HTTP_THREADS: usize = 4;
 
-/// The RPC IoHandler containing all requested APIs.
-pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
-
 pub use self::inner::*;
-pub use middleware::{RpcMiddleware, RpcMetrics};
-
-/// Construct rpc `IoHandler`
-pub fn rpc_handler<M: PubSubMetadata>(
-	extension: impl IoHandlerExtension<M>,
-	rpc_middleware: RpcMiddleware,
-) -> RpcHandler<M> {
-	let io_handler = MetaIoHandler::with_middleware(rpc_middleware);
-	let mut io = pubsub::PubSubHandler::new(io_handler);
-	extension.augment(&mut io);
-
-	// add an endpoint to list all available methods.
-	let mut methods = io.iter().map(|x| x.0.clone()).collect::<Vec<String>>();
-	io.add_method("rpc_methods", {
-		methods.sort();
-		let methods = serde_json::to_value(&methods)
-			.expect("Serialization of Vec<String> is infallible; qed");
-
-		move |_| Ok(serde_json::json!({
-			"version": 1,
-			"methods": methods.clone(),
-		}))
-	});
-	io
-}
+// pub use middleware::{RpcMiddleware, RpcMetrics};
 
 #[cfg(not(target_os = "unknown"))]
 mod inner {
 	use super::*;
-
-	/// Type alias for ipc server
-	pub type IpcServer = ipc::Server;
-	/// Type alias for http server
-	pub type HttpServer = http::Server;
-	/// Type alias for ws server
-	pub type WsServer = ws::Server;
+	use jsonrpsee::{ws_server::WsServerBuilder, http_server::HttpServerBuilder, RpcModule};
 
 	/// Start HTTP server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_http<M: pubsub::PubSubMetadata + Default>(
-		addr: &std::net::SocketAddr,
-		thread_pool_size: Option<usize>,
-		cors: Option<&Vec<String>>,
-		io: RpcHandler<M>,
+	// TODO: return handle here.
+	pub fn start_http<M: Send + Sync + 'static>(
+		addr: std::net::SocketAddr,
+		worker_threads: Option<usize>,
+		_cors: Option<&Vec<String>>,
 		maybe_max_payload_mb: Option<usize>,
-	) -> io::Result<http::Server> {
+		module: RpcModule<M>,
+	) -> io::Result<()>  {
+
 		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
-		http::ServerBuilder::new(io)
-			.threads(thread_pool_size.unwrap_or(HTTP_THREADS))
-			.health_api(("/health", "system_health"))
-			.allowed_hosts(hosts_filtering(cors.is_some()))
-			.rest_api(if cors.is_some() {
-				http::RestApi::Secure
-			} else {
-				http::RestApi::Unsecure
-			})
-			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
-			.max_request_body_size(max_request_body_size)
-			.start_http(addr)
-	}
+		std::thread::spawn(move || {
+			let rt = tokio::runtime::Builder::new_multi_thread()
+				.worker_threads(worker_threads.unwrap_or(HTTP_THREADS))
+				.thread_name("substrate jsonrpc http server")
+				.build()
+				.unwrap();
 
-	/// Start IPC server listening on given path.
-	///
-	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ipc<M: pubsub::PubSubMetadata + Default>(
-		addr: &str,
-		io: RpcHandler<M>,
-	) -> io::Result<ipc::Server> {
-		let builder = ipc::ServerBuilder::new(io);
-		#[cfg(target_os = "unix")]
-		builder.set_security_attributes({
-			let security_attributes = ipc::SecurityAttributes::empty();
-			security_attributes.set_mode(0o600)?;
-			security_attributes
+			rt.block_on(async move {
+				let mut server = HttpServerBuilder::default()
+					.max_request_body_size(max_request_body_size as u32)
+					.build(addr)
+					.unwrap();
+
+				server.register_module(module).unwrap();
+				let mut methods_api = RpcModule::new(());
+				let mut methods = server.method_names();
+				methods.sort();
+
+				methods_api.register_method("rpc_methods", move |_, _| {
+					Ok(serde_json::json!({
+						"version": 1,
+						"methods": methods,
+					}))
+				}).unwrap();
+
+				let _ = server.start().await;
+			});
 		});
-		builder.start(addr)
+
+		Ok(())
 	}
 
 	/// Start WS server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ws<
-		M: pubsub::PubSubMetadata + From<jsonrpc_core::futures::sync::mpsc::Sender<String>>,
-	>(
-		addr: &std::net::SocketAddr,
+	pub fn start_ws<M: Send + Sync + 'static>(
+		addr: std::net::SocketAddr,
+		worker_threads: Option<usize>,
 		max_connections: Option<usize>,
-		cors: Option<&Vec<String>>,
-		io: RpcHandler<M>,
+		_cors: Option<&Vec<String>>,
 		maybe_max_payload_mb: Option<usize>,
-	) -> io::Result<ws::Server> {
-		let rpc_max_payload = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
+		module: RpcModule<M>,
+	) -> io::Result<()> {
+		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
-		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
-			.max_payload(rpc_max_payload)
-			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
-			.allowed_origins(map_cors(cors))
-			.allowed_hosts(hosts_filtering(cors.is_some()))
-			.start(addr)
-			.map_err(|err| match err {
-				ws::Error::Io(io) => io,
-				ws::Error::ConnectionClosed => io::ErrorKind::BrokenPipe.into(),
-				e => {
-					error!("{}", e);
-					io::ErrorKind::Other.into()
-				}
-			})
+		let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
+
+		std::thread::spawn(move || {
+			let rt = tokio::runtime::Builder::new_multi_thread()
+				.worker_threads(worker_threads.unwrap_or(HTTP_THREADS))
+				.thread_name("substrate jsonrpc http server")
+				.build()
+				.unwrap();
+
+			rt.block_on(async move {
+				let mut server = WsServerBuilder::default()
+					.max_request_body_size(max_request_body_size as u32)
+					.max_connections(max_connections as u64)
+					.build(addr)
+					.await
+					.unwrap();
+
+				server.register_module(module).unwrap();
+				let mut methods_api = RpcModule::new(());
+				let mut methods = server.method_names();
+				methods.sort();
+
+				methods_api.register_method("rpc_methods", move |_, _| {
+					Ok(serde_json::json!({
+						"version": 1,
+						"methods": methods,
+					}))
+				}).unwrap();
+
+				let _ = server.start().await;
+			});
+		});
+		Ok(())
 	}
 
-	fn map_cors<T: for<'a> From<&'a str>>(
-		cors: Option<&Vec<String>>
-	) -> http::DomainsValidation<T> {
-		cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
-	}
-
-	fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
-		if enable {
-			// NOTE The listening address is whitelisted by default.
-			// Setting an empty vector here enables the validation
-			// and allows only the listening address.
-			http::DomainsValidation::AllowOnly(vec![])
-		} else {
-			http::DomainsValidation::Disabled
-		}
-	}
+	// fn map_cors<T: for<'a> From<&'a str>>(
+	//     cors: Option<&Vec<String>>
+	// ) -> http::DomainsValidation<T> {
+	//     cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
+	// }
+    //
+	// fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
+	//     if enable {
+	//         // NOTE The listening address is whitelisted by default.
+	//         // Setting an empty vector here enables the validation
+	//         // and allows only the listening address.
+	//         http::DomainsValidation::AllowOnly(vec![])
+	//     } else {
+	//         http::DomainsValidation::Disabled
+	//     }
+	// }
 }
 
 #[cfg(target_os = "unknown")]
-mod inner {
-}
+mod inner {}
