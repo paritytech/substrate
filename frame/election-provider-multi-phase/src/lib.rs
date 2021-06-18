@@ -249,13 +249,15 @@ pub mod helpers;
 
 const LOG_TARGET: &'static str = "runtime::election-provider";
 
-pub mod unsigned;
 pub mod signed;
+pub mod unsigned;
 pub mod weights;
 
+pub use signed::{
+	BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmission, SignedSubmissionOf,
+	SignedSubmissions, SubmissionIndicesOf,
+};
 pub use weights::WeightInfo;
-
-pub use signed::{SignedSubmission, BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
 
 /// The compact solution type used by this crate.
 pub type CompactOf<T> = <T as Config>::CompactSolution;
@@ -387,7 +389,7 @@ impl Default for ElectionCompute {
 ///
 /// Such a solution should never become effective in anyway before being checked by the
 /// `Pallet::feasibility_check`
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, PartialOrd, Ord)]
 pub struct RawSolution<C> {
 	/// Compact election edges.
 	pub compact: C,
@@ -562,6 +564,7 @@ pub mod pallet {
 		/// Maximum number of signed submissions that can be queued.
 		#[pallet::constant]
 		type SignedMaxSubmissions: Get<u32>;
+
 		/// Maximum weight of a signed solution.
 		///
 		/// This should probably be similar to [`Config::MinerMaxWeight`].
@@ -603,6 +606,7 @@ pub mod pallet {
 			+ Eq
 			+ Clone
 			+ sp_std::fmt::Debug
+			+ Ord
 			+ CompactSolution;
 
 		/// Accuracy used for fallback on-chain election.
@@ -879,22 +883,37 @@ pub mod pallet {
 				Error::<T>::SignedTooMuchWeight,
 			);
 
-			// ensure solution claims is better.
+			// create the submission
+			let reward = T::SignedRewardBase::get();
+			let deposit = Self::deposit_for(&solution, size);
+			let submission = SignedSubmission { who: who.clone(), deposit, reward, solution };
+
+			// insert the submission if the queue has space or it's better than the weakest
+			// eject the weakest if the queue was full
 			let mut signed_submissions = Self::signed_submissions();
-			let ejected_a_solution = signed_submissions.len()
-				== T::SignedMaxSubmissions::get().saturated_into::<usize>();
-			let index = Self::insert_submission(&who, &mut signed_submissions, solution, size)
-				.ok_or(Error::<T>::SignedQueueFull)?;
+			let (inserted, maybe_weakest) = signed_submissions.insert(submission);
+			let ejected_a_solution = maybe_weakest.is_some();
 
-			// collect deposit. Thereafter, the function cannot fail.
-			let deposit = signed_submissions
-				.get(index)
-				.map(|s| s.deposit)
-				.ok_or(Error::<T>::InvalidSubmissionIndex)?;
-			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+			// it's an error if we neither inserted nor removed any submissions: this indicates
+			// the queue was full but our solution had insufficient score to eject any solution
+			ensure!(
+				(false, false) != (inserted, ejected_a_solution),
+				Error::<T>::SignedQueueFull,
+			);
 
-			// store the new signed submission.
-			<SignedSubmissions<T>>::put(signed_submissions);
+			if inserted {
+				// collect deposit. Thereafter, the function cannot fail.
+				T::Currency::reserve(&who, deposit)
+					.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+			}
+
+			// if we had to remove the weakest solution, unreserve its deposit
+			if let Some(weakest) = maybe_weakest {
+				let _remainder = T::Currency::unreserve(&weakest.who, weakest.deposit);
+				debug_assert!(_remainder.is_zero());
+			}
+
+			signed_submissions.put();
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
 			Ok(())
 		}
@@ -1048,14 +1067,34 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
-	/// Sorted (worse -> best) list of unchecked, signed solutions.
+	/// The next index to be assigned to an incoming signed submission.
+	///
+	/// We can't just use `SignedSubmissionIndices.len()`, because that's a bounded set; past its
+	/// capacity, it will simply saturate. We can't just iterate over `SignedSubmissionsMap`,
+	/// because iteration is slow. Instead, we store the value here.
 	#[pallet::storage]
-	#[pallet::getter(fn signed_submissions)]
-	pub type SignedSubmissions<T: Config> = StorageValue<
-		_,
-		Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
-		ValueQuery,
-	>;
+	pub(crate) type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
+
+	/// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
+	/// `SignedSubmissions`.
+	///
+	/// We never need to process more than a single signed submission at a time. Signed submissions
+	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access
+	/// them one at a time instead of reading and decoding all of them at once.
+	#[pallet::storage]
+	pub(crate) type SignedSubmissionIndices<T: Config> =
+		StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
+
+	/// Unchecked, signed solutions.
+	///
+	/// Together with `SubmissionIndices`, this stores a bounded set of `SignedSubmissions` while
+	/// allowing us to keep only a single one in memory at a time.
+	///
+	/// Twox note: the key of the map is an auto-incrementing index which users cannot inspect or
+	/// affect; we shouldn't need a cryptographically secure hasher.
+	#[pallet::storage]
+	pub(crate) type SignedSubmissionsMap<T: Config> =
+		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, ValueQuery>;
 
 	/// The minimum score that each 'untrusted' solution must attain in order to be considered
 	/// feasible.

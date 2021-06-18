@@ -273,19 +273,16 @@ frame_benchmarking::benchmarks! {
 		MultiPhase::<T>::on_initialize_open_signed().expect("should be ok to start signed phase");
 		<Round<T>>::put(1);
 
-		<SignedSubmissions<T>>::mutate(|queue| {
-			for i in 0..c {
-				let solution = RawSolution {
-					score: [(10_000_000 + i).into(), 0, 0],
-					..Default::default()
-				};
-				let signed_submission = SignedSubmission { solution, ..Default::default() };
-				queue.push(signed_submission);
-			}
-			// as of here, the queue is ordered worst-to-best.
-			// However, we have an invariant that it should be ordered best-to-worst
-			queue.reverse();
-		});
+		let mut signed_submissions = SignedSubmissions::<T>::get();
+		for i in 0..c {
+			let solution = RawSolution {
+				score: [(10_000_000 + i).into(), 0, 0],
+				..Default::default()
+			};
+			let signed_submission = SignedSubmission { solution, ..Default::default() };
+			signed_submissions.insert(signed_submission);
+		}
+		signed_submissions.put();
 
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
