@@ -137,22 +137,7 @@ mod inner {
 		Ok(())
 	}
 
-	// fn map_cors<T: for<'a> From<&'a str>>(
-	//     cors: Option<&Vec<String>>
-	// ) -> http::DomainsValidation<T> {
-	//     cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
-	// }
-    //
-	// fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
-	//     if enable {
-	//         // NOTE The listening address is whitelisted by default.
-	//         // Setting an empty vector here enables the validation
-	//         // and allows only the listening address.
-	//         http::DomainsValidation::AllowOnly(vec![])
-	//     } else {
-	//         http::DomainsValidation::Disabled
-	//     }
-	// }
+	// TODO: CORS and host filtering.
 }
 
 #[cfg(target_os = "unknown")]
