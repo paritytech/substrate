@@ -514,8 +514,8 @@ fn nominating_and_rewards_should_work() {
 					total: 1000 + 800,
 					own: 1000,
 					others: vec![
-						IndividualExposure { who: 3, value: 400 },
 						IndividualExposure { who: 1, value: 400 },
+						IndividualExposure { who: 3, value: 400 },
 					]
 				},
 			);
@@ -525,8 +525,8 @@ fn nominating_and_rewards_should_work() {
 					total: 1000 + 1200,
 					own: 1000,
 					others: vec![
-						IndividualExposure { who: 3, value: 600 },
 						IndividualExposure { who: 1, value: 600 },
+						IndividualExposure { who: 3, value: 600 },
 					]
 				},
 			);
@@ -1860,13 +1860,13 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into
 			// account.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap().0;
-			assert_eq!(
-				supports,
-				vec![
+			assert!(supports_eq_unordered(
+				&supports,
+				&vec![
 					(21, Support { total: 1800, voters: vec![(21, 1000), (3, 400), (1, 400)] }),
 					(31, Support { total: 2200, voters: vec![(31, 1000), (3, 600), (1, 600)] })
 				],
-			);
+			));
 		});
 }
 
@@ -3958,7 +3958,7 @@ mod election_data_provider {
 	#[test]
 	fn respects_len_limits() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(Staking::voters(Some(1)).unwrap_err(), "Voter snapshot too big");
+			assert_eq!(Staking::voters(Some(1)).unwrap().0.len(), 1);
 			assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
 		});
 	}
