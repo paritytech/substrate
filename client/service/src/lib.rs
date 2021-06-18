@@ -34,19 +34,18 @@ pub mod client;
 mod client;
 mod task_manager;
 
-use std::{io, pin::Pin};
-use std::net::SocketAddr;
+use std::pin::Pin;
 use std::collections::HashMap;
 use std::task::Poll;
 
-use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
+use futures::{Future, FutureExt, Stream, StreamExt, stream};
 use sc_network::PeerId;
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
-use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver}};
+use sp_utils::mpsc::TracingUnboundedReceiver;
 use jsonrpsee::RpcModule;
 
 pub use self::error::Error;
@@ -97,7 +96,7 @@ impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>);
+pub struct RpcHandlers;
 
 impl RpcHandlers {
 	/// Starts an RPC query.
@@ -109,18 +108,9 @@ impl RpcHandlers {
 	///
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
-	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
+	pub fn rpc_query(&self, _mem: &RpcSession, _request: &str)
 		-> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		self.0.handle_request(request, mem.metadata.clone())
-			.compat()
-			.map(|res| res.expect("this should never fail"))
-			.boxed()
-	}
-
-	/// Provides access to the underlying `MetaIoHandler`
-	pub fn io_handler(&self)
-		-> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
-		self.0.clone()
+		todo!();
 	}
 }
 
@@ -343,28 +333,11 @@ fn start_rpc_servers<
 >(
 	config: &Configuration,
 	mut gen_rpc_module: R,
-	rpc_metrics: sc_rpc_server::RpcMetrics,
+	_rpc_metrics: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
-		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
-		{
-			address.map(|mut address| start(&address)
-				.or_else(|e| match e.kind() {
-					io::ErrorKind::AddrInUse |
-					io::ErrorKind::PermissionDenied => {
-						warn!("Unable to bind RPC server to {}. Trying random port.", address);
-						address.set_port(0);
-						start(&address)
-					},
-					_ => Err(e),
-				}
-			) ).transpose()
-		}
-
 	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
 	let rpsee_addr = config.rpc_ws.map(|mut addr| {
-		let port = addr.port() + 1;
-		addr.set_port(port);
+		addr.set_port(addr.port());
 		addr
 	}).unwrap_or_else(|| "127.0.0.1:9945".parse().unwrap());
 
@@ -394,14 +367,6 @@ fn start_rpc_servers<
 		});
 	});
 
-	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
-		let is_exposed_addr = !addr.ip().is_loopback();
-		match (is_exposed_addr, methods) {
-			| (_, RpcMethods::Unsafe)
-			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
-			_ => sc_rpc::DenyUnsafe::Yes
-		}
-	}
 	Ok(Box::new(()))
 }
 

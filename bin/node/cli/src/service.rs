@@ -580,14 +580,14 @@ pub fn new_light_base(
 			telemetry: telemetry.as_mut(),
 		})?;
 
-	todo!();
-	// Ok((
-	//     task_manager,
-	//     rpc_handlers,
-	//     client,
-	//     network,
-	//     transaction_pool,
-	// ))
+	network_starter.start_network();
+	Ok((
+		task_manager,
+		rpc_handlers,
+		client,
+		network,
+		transaction_pool,
+	))
 }
 
 /// Builds a new service for a light client.

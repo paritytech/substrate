@@ -20,6 +20,7 @@
 
 use crate::errors;
 use jsonrpc_core as rpc;
+use jsonrpsee_types::Error as JsonRpseeError;
 
 /// State RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -82,5 +83,18 @@ impl From<Error> for rpc::Error {
 			},
 			e => errors::internal(e),
 		}
+	}
+}
+
+/// TODO(niklasad1): better errors
+impl From<Error> for JsonRpseeError {
+	fn from(e: Error) -> Self {
+		Self::Custom(e.to_string())
+	}
+}
+
+impl From<JsonRpseeError> for Error {
+	fn from(e: JsonRpseeError) -> Self {
+		Self::Client(Box::new(e))
 	}
 }

@@ -8009,6 +8009,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.11.1",
+ "rand 0.8.3",
  "sc-block-builder",
  "sc-cli",
  "sc-client-api",

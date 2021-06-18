@@ -28,16 +28,16 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use futures::{future, StreamExt};
+use futures::future;
 use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use jsonrpsee::RpcModule;
+use jsonrpsee::{RpcModule, ws_server::SubscriptionSink};
 use futures::FutureExt;
 
 use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
-use sp_core::{Bytes, storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey, well_known_keys}};
+use sp_core::{Bytes, storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey}};
 use sp_version::RuntimeVersion;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{traits::Block as BlockT};
 
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
@@ -152,6 +152,19 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		targets: Option<String>,
 		storage_keys: Option<String>,
 	) -> Result<sp_rpc::tracing::TraceBlockResponse, Error>;
+
+	/// New runtime version subscription
+	fn subscribe_runtime_version(
+		&self,
+		sink: SubscriptionSink,
+	) -> Result<(), Error>;
+
+	/// New storage subscription
+	fn subscribe_storage(
+		&self,
+		sink: SubscriptionSink,
+		keys: Option<Vec<StorageKey>>,
+	) -> Result<(), Error>;
 }
 
 /// Create new state API that works on full node.
@@ -170,11 +183,11 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		Client::Api: Metadata<Block>,
 {
 	let child_backend = Box::new(
-		self::state_full::FullState::new(client.clone())
+		self::state_full::FullState::new(client.clone(), executor.clone())
 	);
-	let backend = Arc::new(self::state_full::FullState::new(client.clone()));
+	let backend = Arc::new(self::state_full::FullState::new(client.clone(), executor));
 	(
-		State { backend, client, executor, deny_unsafe },
+		State { backend, deny_unsafe },
 		ChildState { backend: child_backend }
 	)
 }
@@ -182,9 +195,9 @@ pub fn new_full<BE, Block: BlockT, Client>(
 /// Create new state API that works on light node.
 pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
+	executor: Arc<SubscriptionTaskExecutor>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
-	executor: Arc<SubscriptionTaskExecutor>,
 	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
@@ -198,17 +211,19 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 {
 	let child_backend = Box::new(self::state_light::LightState::new(
 			client.clone(),
+			executor.clone(),
 			remote_blockchain.clone(),
 			fetcher.clone(),
 	));
 
 	let backend = Arc::new(self::state_light::LightState::new(
 			client.clone(),
+			executor.clone(),
 			remote_blockchain,
 			fetcher,
 	));
 	(
-		State { backend, client, executor, deny_unsafe },
+		State { backend, deny_unsafe },
 		ChildState { backend: child_backend }
 	)
 }
@@ -216,11 +231,6 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 /// State API with subscriptions support.
 pub struct State<Block, Client> {
 	backend: Arc<dyn StateBackend<Block, Client>>,
-	executor: Arc<SubscriptionTaskExecutor>,
-	// TODO: this is pretty dumb. the `FullState` struct has a `client` in it, but I don't know how to get a
-	// reference to it. I could impl `ChainBackend` which has a `client()` method, but that's pretty lame. I could
-	// also add a `client()` method to the `StateBackend` trait but that's also terrible.
-	client: Arc<Client>,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
@@ -381,116 +391,16 @@ impl<Block, Client> State<Block, Client>
 		module.register_subscription(
 			"state_subscribeRuntimeVersion",
 			"state_unsubscribeRuntimeVersion",
-			|_params, mut sink, ctx| {
-				let executor = ctx.executor.clone();
-				let client = ctx.client.clone();
-
-				let mut previous_version = client.runtime_version_at(&BlockId::hash(client.info().best_hash))
-					.expect("best hash is valid; qed");
-				let _ = sink.send(&previous_version);
-				let rt_version_stream = client.storage_changes_notification_stream(Some(&[StorageKey(well_known_keys::CODE.to_vec())]), None, )
-					.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))
-					.map_err(to_jsonrpsee_call_error)?;
-
-				let fut = async move {
-                    rt_version_stream
-                        .filter_map(|_| {
-                            let info = client.info();
-                            let version = client
-                                .runtime_version_at(&BlockId::hash(info.best_hash));
-                                match version {
-                                    Ok(v) => if previous_version != v {
-                                            previous_version = v.clone();
-                                            future::ready(Some(v))
-                                        } else {
-                                            future::ready(None)
-                                        },
-                                    Err(e) => {
-                                        log::error!("Could not fetch current runtime version. Error={:?}", e);
-                                        future::ready(None)
-                                    }
-                                }
-                        })
-                        .take_while(|version| {
-							future::ready(
-								sink.send(&version).map_or_else(|e| {
-									log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
-									false
-								}, |_| true)
-							)
-
-                        })
-                        .for_each(|_| future::ready(()))
-                        .await;
-                }.boxed();
-				executor.execute_new(fut);
-				Ok(())
+			|_params, sink, ctx| {
+				ctx.backend.subscribe_runtime_version(sink).map_err(Into::into)
 		})?;
 
 		module.register_subscription(
 			"state_subscribeStorage",
 			"state_unsubscribeStorage",
-			|params, mut sink, ctx| {
-				let executor = ctx.executor.clone();
-				let backend = ctx.backend.clone();
+			|params, sink, ctx| {
 				let keys = params.one::<Option<Vec<StorageKey>>>()?;
-
-				let initial = {
-					let block = ctx.client.info().best_hash;
-					let changes: Vec<(StorageKey, Option<StorageData>)> = keys.as_ref().map(|keys| {
-						keys
-							.iter()
-							.map(|storage_key| {
-								futures::executor::block_on(
-									StateBackend::storage(&*backend, Some(block.clone()).into(), storage_key.clone())
-										.map(|val| (storage_key.clone(), val.unwrap_or(None)))
-								)
-							})
-							.collect()
-					}).unwrap_or_default();
-					vec![StorageChangeSet { block, changes }]
-				};
-				sink.send(&initial)?;
-
-				let stream = ctx.client.storage_changes_notification_stream(
-					keys.as_ref().map(|keys| &**keys),
-					None
-					)
-					.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))
-					.map_err(to_jsonrpsee_call_error)?;
-
-				let fut = async move {
-					stream.map(|(block, changes)| {
-						StorageChangeSet {
-							block,
-							changes: changes
-								.iter()
-								.filter_map(|(o_sk, k, v)| {
-									// Note: the first `Option<&StorageKey>` seems to be the parent key, so it's set only
-									// for storage events stemming from child storage, `None` otherwise. This RPC only
-									// returns non-child storage.
-									if o_sk.is_none() {
-										Some((k.clone(), v.cloned()))
-									} else {
-										None
-									}
-								}).collect(),
-						}
-					})
-        			.take_while(|changes| {
-						future::ready(
-							sink.send(&changes).map_or_else(|e| {
-								log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
-								false
-							}, |_| true)
-						)
-					})
-        			.for_each(|_| future::ready(()))
-					.await;
-				}.boxed();
-
-				executor.execute_new(fut);
-				Ok(())
+				ctx.backend.subscribe_storage(sink, keys).map_err(Into::into)
 		})?;
 
 		Ok(module)

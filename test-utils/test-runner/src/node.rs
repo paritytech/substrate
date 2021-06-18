@@ -39,6 +39,8 @@ use sp_runtime::traits::{Block as BlockT, Extrinsic};
 use sp_runtime::{generic::BlockId, transaction_validity::TransactionSource, MultiSignature, MultiAddress};
 use sp_runtime::{generic::UncheckedExtrinsic, traits::NumberFor};
 use sp_session::SessionKeys;
+// TODO(niklasad1): this is a hack.
+use sc_service::RpcHandlers;
 use sp_state_machine::Ext;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_transaction_pool::TransactionPool;
@@ -51,7 +53,7 @@ use log::LevelFilter;
 /// also holds logs from the process.
 pub struct Node<T: ChainInfo> {
 	/// rpc handler for communicating with the node over rpc.
-	rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
+	_rpc_handler: RpcHandlers,
 	/// Stream of log lines
 	log_stream: mpsc::UnboundedReceiver<String>,
 	/// node tokio runtime
@@ -206,27 +208,26 @@ impl<T: ChainInfo> Node<T> {
 			.spawn("manual-seal", authorship_future);
 
 		network_starter.start_network();
-		todo!();
+		// TODO(niklasad1): use a real rpc handler :)
 		// let rpc_handler = rpc_handlers.io_handler();
-		// let initial_number = client.info().best_number;
-		//
-		// Ok(Self {
-		//	rpc_handler,
-		//	task_manager: Some(task_manager),
-		//	_runtime: tokio_runtime,
-		//	client,
-		//	pool: transaction_pool,
-		//	backend,
-		//	log_stream,
-		//	manual_seal_command_sink: command_sink,
-		//	initial_block_number: initial_number,
-		// })
+		let initial_number = client.info().best_number;
+
+		Ok(Self {
+			_rpc_handler: rpc_handlers,
+			_task_manager: Some(task_manager),
+			_runtime: tokio_runtime,
+			client,
+			pool: transaction_pool,
+			backend,
+			log_stream,
+			manual_seal_command_sink: command_sink,
+			initial_block_number: initial_number,
+		})
 	}
 
 	/// Returns a reference to the rpc handlers.
 	pub fn rpc_handler(&self) -> Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
-		todo!();
-		// self.rpc_handler.clone()
+		todo!("not ported to jsonrpsee yet");
 	}
 
 	/// Return a reference to the Client

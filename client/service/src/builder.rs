@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, MallocSizeOfWasm,
+	error::Error, MallocSizeOfWasm, RpcHandlers,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
@@ -559,7 +559,7 @@ pub fn build_offchain_workers<TBl, TCl>(
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-) -> Result<(), Error>
+) -> Result<RpcHandlers, Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
@@ -585,7 +585,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		backend,
 		keystore,
 		transaction_pool,
-		rpc_extensions_builder,
+		rpc_extensions_builder: _,
 		remote_blockchain,
 		network,
 		system_rpc_tx,
@@ -673,7 +673,10 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
 	// TODO: use handle here and let the service spawn the server.
-	let _rpc = start_rpc_servers(&config, gen_rpc_module, rpc_metrics.clone())?;
+	let rpc = start_rpc_servers(&config, gen_rpc_module, rpc_metrics.clone())?;
+
+	// NOTE(niklasad1): dummy type for now.
+	let rpc_handlers = RpcHandlers;
 	// This is used internally, so don't restrict access to unsafe RPC
 	// let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
 	//     sc_rpc::DenyUnsafe::No,
@@ -688,9 +691,10 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.informant_output_format,
 	));
 
-	// task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
+	// NOTE(niklasad1): we spawn jsonrpsee in seperate thread now.
+	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
 
-	Ok(())
+	Ok(rpc_handlers)
 }
 
 async fn transaction_notifications<TBl, TExPool>(
@@ -772,6 +776,8 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 			sp_api::Metadata<TBl>,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 {
+	const PROOF: &str = "Method names are unique; qed";
+
 	// TODO(niklasad1): expose CORS to jsonrpsee to handle this propely.
 	let deny_unsafe = sc_rpc::DenyUnsafe::No;
 
@@ -786,42 +792,62 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 
 	let mut rpc_api = RpcModule::new(());
 
-	// RPC APIs.
-	// TODO(niklasad1): add remaining RPC API's here
-	let chain_rpc = sc_rpc::chain::new_full(client.clone(), task_executor.clone())
-		.into_rpc_module()
-		.expect("Infallible; qed");
+	let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
+		(remote_blockchain, on_demand) {
+		// Light clients
+		let chain = sc_rpc::chain::new_light(
+			client.clone(),
+			task_executor.clone(),
+			remote_blockchain.clone(),
+			on_demand.clone(),
+		).into_rpc_module().expect(PROOF);
+		let (state, child_state) = sc_rpc::state::new_light(
+			client.clone(),
+			task_executor.clone(),
+			remote_blockchain.clone(),
+			on_demand,
+			deny_unsafe,
+		);
+		(chain, state.into_rpc_module().expect(PROOF), child_state.into_rpc_module().expect(PROOF))
+	} else {
+		// Full nodes
+		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone())
+			.into_rpc_module()
+			.expect(PROOF);
 
-	let author_rpc = sc_rpc::author::Author::new(
+		let (state, child_state) = sc_rpc::state::new_full(client.clone(), task_executor.clone(), deny_unsafe);
+		let state = state.into_rpc_module().expect(PROOF);
+		let child_state = child_state.into_rpc_module().expect(PROOF);
+
+		(chain, state, child_state)
+	};
+
+	let author = sc_rpc::author::Author::new(
 		client.clone(),
 		transaction_pool,
 		keystore,
 		deny_unsafe,
 		task_executor.clone()
-	).into_rpc_module().expect("Infallible; qed");
+	).into_rpc_module().expect(PROOF);
 
-	let system_rpc = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe)
+	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe)
 		.into_rpc_module()
-		.expect("Infallible; qed");
-	let (state, child_state) = sc_rpc::state::new_full(client.clone(), task_executor.clone(), deny_unsafe);
+		.expect(PROOF);
 
-	let state_rpc = state.into_rpc_module().expect("Method names are unique; qed");
-	let child_state_rpc = child_state.into_rpc_module().expect("Method names are unique; qed");
-
-	let maybe_offchain_rpc = offchain_storage.map(|storage| {
+	if let Some(storage) = offchain_storage {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe)
 			.into_rpc_module()
-			.expect("Infaillible; qed");
+			.expect(PROOF);
 
-		rpc_api.merge(offchain).unwrap();
-	});
+		rpc_api.merge(offchain).expect(PROOF);
+	}
 
 	// only unique method names used; qed
-	rpc_api.merge(chain_rpc).unwrap();
-	rpc_api.merge(author_rpc).unwrap();
-	rpc_api.merge(system_rpc).unwrap();
-	rpc_api.merge(state_rpc).unwrap();
-	rpc_api.merge(child_state_rpc).unwrap();
+	rpc_api.merge(chain).expect(PROOF);
+	rpc_api.merge(author).expect(PROOF);
+	rpc_api.merge(system).expect(PROOF);
+	rpc_api.merge(state).expect(PROOF);
+	rpc_api.merge(child_state).expect(PROOF);
 
 	rpc_api
 }
