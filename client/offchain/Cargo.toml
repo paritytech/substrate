@@ -28,7 +28,7 @@ sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-offchain = { version = "3.0.0", path = "../../primitives/offchain" }
+sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
 threadpool = "1.7"

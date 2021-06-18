@@ -31,7 +31,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/comm
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
-sp-offchain = { version = "3.0.0", path = "../../primitives/offchain" }
+sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
 
