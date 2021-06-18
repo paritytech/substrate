@@ -23,7 +23,7 @@ log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
 sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
-frame-system-rpc-runtime-api = { version = "3.0.0", path = "../../../../frame/system/rpc/runtime-api" }
+frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../../frame/system/rpc/runtime-api" }
 sp-core = { version = "4.0.0-dev", path = "../../../../primitives/core" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../../../primitives/transaction-pool" }
