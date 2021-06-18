@@ -61,6 +61,7 @@ mod inner {
 			let rt = tokio::runtime::Builder::new_multi_thread()
 				.worker_threads(worker_threads.unwrap_or(HTTP_THREADS))
 				.thread_name("substrate jsonrpc http server")
+				.enable_all()
 				.build()
 				.unwrap();
 
@@ -108,6 +109,7 @@ mod inner {
 			let rt = tokio::runtime::Builder::new_multi_thread()
 				.worker_threads(worker_threads.unwrap_or(HTTP_THREADS))
 				.thread_name("substrate jsonrpc http server")
+				.enable_all()
 				.build()
 				.unwrap();
 
