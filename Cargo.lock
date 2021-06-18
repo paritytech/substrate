@@ -3086,9 +3086,9 @@ dependencies = [
  "serde_json",
  "soketto 0.5.0",
  "thiserror",
- "tokio 0.2.25",
- "tokio-rustls 0.15.0",
- "tokio-util 0.3.1",
+ "tokio 1.6.0",
+ "tokio-rustls 0.22.0",
+ "tokio-util 0.6.3",
  "url 2.2.1",
 ]
 
@@ -6890,7 +6890,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "tokio 0.2.25",
+ "tokio 1.6.0",
 ]
 
 [[package]]
@@ -7241,7 +7241,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tiny-bip39",
- "tokio 0.2.25",
+ "tokio 1.6.0",
 ]
 
 [[package]]
@@ -7987,7 +7987,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
- "futures 0.1.31",
  "futures 0.3.15",
  "hash-db",
  "jsonrpc-core",
@@ -8024,7 +8023,6 @@ dependencies = [
  "sp-utils",
  "sp-version",
  "substrate-test-runtime-client",
- "tokio 0.1.22",
 ]
 
 [[package]]
@@ -9946,7 +9944,7 @@ dependencies = [
  "futures 0.3.15",
  "sc-service",
  "substrate-test-utils-derive",
- "tokio 0.2.25",
+ "tokio 1.6.0",
  "trybuild",
 ]
 
@@ -10097,7 +10095,7 @@ dependencies = [
  "sp-state-machine",
  "sp-transaction-pool",
  "sp-wasm-interface",
- "tokio 0.2.25",
+ "tokio 1.6.0",
 ]
 
 [[package]]
@@ -10278,17 +10276,11 @@ dependencies = [
  "futures-core",
  "iovec",
  "lazy_static",
- "libc",
  "memchr",
  "mio 0.6.23",
- "mio-named-pipes",
- "mio-uds",
- "num_cpus",
  "pin-project-lite 0.1.12",
- "signal-hook-registry",
  "slab",
  "tokio-macros 0.2.6",
- "winapi 0.3.9",
 ]
 
 [[package]]
@@ -10303,8 +10295,12 @@ dependencies = [
  "memchr",
  "mio 0.7.9",
  "num_cpus",
+ "once_cell",
+ "parking_lot 0.11.1",
  "pin-project-lite 0.2.6",
+ "signal-hook-registry",
  "tokio-macros 1.2.0",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -10439,13 +10435,12 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.15.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03d15e5669243a45f630a5167d101b942174ca94b615445b2057eace1c818736"
+checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
- "futures-core",
  "rustls 0.19.1",
- "tokio 0.2.25",
+ "tokio 1.6.0",
  "webpki",
 ]
 
@@ -10563,7 +10558,6 @@ checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
 dependencies = [
  "bytes 0.5.6",
  "futures-core",
- "futures-io",
  "futures-sink",
  "log",
  "pin-project-lite 0.1.12",

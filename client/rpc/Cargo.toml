@@ -49,12 +49,10 @@ jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master"
 
 [dev-dependencies]
 assert_matches = "1.3.0"
-futures01 = { package = "futures", version = "0.1.29" }
 lazy_static = "1.4.0"
 sc-network = { version = "0.9.0", path = "../network" }
 sp-io = { version = "3.0.0", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-tokio = "0.1.22"
 sc-transaction-pool = { version = "3.0.0", path = "../transaction-pool" }
 sc-cli = { version = "0.9.0", path = "../cli" }
 
