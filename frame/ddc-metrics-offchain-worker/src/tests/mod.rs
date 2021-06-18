@@ -214,11 +214,6 @@ fn should_submit_signed_transaction_on_chain() {
             b"ddc-metrics-offchain-worker::sc_address",
             contract_id.as_ref(),
         );
-        sp_io::offchain::local_storage_set(
-            kind,
-            b"ddc-metrics-offchain-worker::ddc_url",
-            b"https://TEST_DDC",
-        );
 
         // Trigger the worker.
         DdcMetricsOffchainWorker::offchain_worker(0);
@@ -254,14 +249,14 @@ fn should_submit_signed_transaction_on_chain() {
         );
 
         let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".as_bytes(), INIT_DAY_MS, 2 + 200, 0, 0);
+            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".to_string(), INIT_DAY_MS, 2 + 200, 0, 0);
         assert!(
             transactions[2].ends_with(&expected_call),
             "Expected a specific call to the report_metrics_ddn function"
         );
 
 		let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".as_bytes(), INIT_DAY_MS, 20, 0, 0);
+            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".to_string(), INIT_DAY_MS, 20, 0, 0);
         assert!(
             transactions[3].ends_with(&expected_call),
             "Expected a specific call to the report_metrics_ddn function"
@@ -349,14 +344,15 @@ fn deploy_contract() -> AccountId {
 	pub const ADD_DDC_NODE_SELECTOR: [u8; 4] = hex!("11a9e1b9");
 
 	let call_data_items = vec![
-		["12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "https://node-0.ddc.stage.cere.network"],
-		["12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "https://node-3.ddc.stage.cere.network"],
+		["12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "/dns4/node-0.ddc.dev.cere.network/tcp/5000/p2p/12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "https://node-0.ddc.stage.cere.network"],
+		["12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "/dns4/node-3.ddc.dev.cere.network/tcp/5000/p2p/12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "https://node-3.ddc.stage.cere.network"],
 	];
 
 	for call_data_item in call_data_items {
 		let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
 		call_data_item[0].encode_to(&mut call_data);
 		call_data_item[1].encode_to(&mut call_data);
+		call_data_item[2].encode_to(&mut call_data);
 
 		let results = Contracts::call(
 			Origin::signed(alice.clone()),
