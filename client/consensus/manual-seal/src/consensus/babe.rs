@@ -221,38 +221,43 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				authority_index: 0_u32,
 			});
 
-			// let mut epoch_changes = self.epoch_changes.shared_data();
-			// let epoch_descriptor = epoch_changes
-			// 	.epoch_descriptor_for_child_of(
-			// 		descendent_query(&*self.client),
-			// 		&parent.hash(),
-			// 		parent.number().clone(),
-			// 		slot,
-			// 	)
-			// 	.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
-			// 	.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
-			//
-			// let epoch_mut = match epoch_descriptor {
-			// 	ViableEpochDescriptor::Signaled(identifier, _epoch_header) => {
-			// 		epoch_changes.epoch_mut(&identifier)
-			// 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?
-			// 	},
-			// 	_ => unreachable!("we couldn't claim a slot, so this isn't the genesis epoch; qed")
-			// };
+			let mut epoch_changes = self.epoch_changes.shared_data();
+			let epoch_descriptor = epoch_changes
+				.epoch_descriptor_for_child_of(
+					descendent_query(&*self.client),
+					&parent.hash(),
+					parent.number().clone(),
+					slot,
+				)
+				.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
+				.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 
-			// mutate the current epoch
-			// epoch_mut.authorities = self.authorities.clone();
-			//
-			// let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
-			// 	authorities: self.authorities.clone(),
-			// 	// copy the old randomness
-			// 	randomness: epoch_mut.randomness.clone(),
-			// });
+			match epoch_descriptor {
+				ViableEpochDescriptor::Signaled(identifier, _epoch_header) => {
+					let epoch_mut = epoch_changes.epoch_mut(&identifier)
+						.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 
-			vec![
-				DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
-				// DigestItemFor::<B>::Consensus(BABE_ENGINE_ID, next_epoch.encode())
-			]
+					// mutate the current epoch
+					epoch_mut.authorities = self.authorities.clone();
+
+					let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
+						authorities: self.authorities.clone(),
+						// copy the old randomness
+						randomness: epoch_mut.randomness.clone(),
+					});
+
+					vec![
+						DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
+						DigestItemFor::<B>::Consensus(BABE_ENGINE_ID, next_epoch.encode())
+					]
+				},
+				ViableEpochDescriptor::Genesis(_) => {
+					// since this is the genesis, secondary predigest works for now.
+					vec![
+						DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
+					]
+				}
+			}
 		};
 
 		Ok(Digest { logs })
