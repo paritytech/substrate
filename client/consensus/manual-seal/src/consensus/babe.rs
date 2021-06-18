@@ -251,7 +251,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 						DigestItemFor::<B>::Consensus(BABE_ENGINE_ID, next_epoch.encode())
 					]
 				},
-				ViableEpochDescriptor::Genesis(_) => {
+				ViableEpochDescriptor::UnimportedGenesis(_) => {
 					// since this is the genesis, secondary predigest works for now.
 					vec![
 						DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
