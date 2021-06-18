@@ -697,12 +697,25 @@ pub struct Store<FR> {
 }
 
 impl<FR> Store<FR> {
-	fn allocate_memory(
-		memories: &mut Vec<Option<Memory>>,
-		backend_context: &BackendContext,
-		initial: u32,
-		maximum: u32
-	) -> Result<(u32, Memory)> {
+	/// Create a new empty sandbox store.
+	pub fn new(backend: SandboxBackend) -> Self {
+		Store {
+			instances: Vec::new(),
+			memories: Vec::new(),
+			backend_context: BackendContext::new(backend),
+		}
+	}
+
+	/// Create a new memory instance and return it's index.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` if the memory couldn't be created.
+	/// Typically happens if `initial` is more than `maximum`.
+	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
+		let memories = &mut self.memories;
+		let backend_context = &self.backend_context;
+
 		let maximum = match maximum {
 			sandbox_primitives::MEM_UNLIMITED => None,
 			specified_limit => Some(specified_limit),
@@ -729,30 +742,7 @@ impl<FR> Store<FR> {
 		let mem_idx = memories.len();
 		memories.push(Some(memory.clone()));
 
-		Ok((mem_idx as u32, memory))
-	}
-}
-
-impl<FR> Store<FR> {
-	/// Create a new empty sandbox store.
-	pub fn new(backend: SandboxBackend) -> Self {
-		Store {
-			instances: Vec::new(),
-			memories: Vec::new(),
-			backend_context: BackendContext::new(backend),
-		}
-	}
-
-	/// Create a new memory instance and return it's index.
-	///
-	/// # Errors
-	///
-	/// Returns `Err` if the memory couldn't be created.
-	/// Typically happens if `initial` is more than `maximum`.
-	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
-		let memories = &mut self.memories;
-		let backend_context = &self.backend_context;
-		Self::allocate_memory(memories, backend_context, initial, maximum).map(|(index, _)| index)
+		Ok(mem_idx as u32)
 	}
 
 	/// Returns `SandboxInstance` by `instance_idx`.
