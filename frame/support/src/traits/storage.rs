@@ -18,6 +18,7 @@
 //! Traits for encoding data related to pallet's storage items.
 
 use sp_std::prelude::*;
+pub use sp_storage::StorageInfo;
 
 /// An instance of a pallet in the storage.
 ///
@@ -46,21 +47,6 @@ pub trait StorageInstance {
 
 	/// Prefix given to a storage to isolate from other storages in the pallet.
 	const STORAGE_PREFIX: &'static str;
-}
-
-/// Some info about an individual storage in a pallet.
-#[derive(codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone)]
-pub struct StorageInfo {
-	/// Encoded string of pallet name.
-	pub pallet_name: Vec<u8>,
-	/// Encoded string of storage name.
-	pub storage_name: Vec<u8>,
-	/// The prefix of the storage. All keys after the prefix are considered part of the storage
-	pub prefix: [u8; 32],
-	/// The maximum number of values in the storage, or none if no maximum specified.
-	pub max_values: Option<u32>,
-	/// The maximum size of key/values in the storage, or none if no maximum specified.
-	pub max_size: Option<u32>,
 }
 
 /// A trait to give information about storage.

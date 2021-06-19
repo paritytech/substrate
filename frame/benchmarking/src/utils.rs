@@ -200,6 +200,7 @@ pub trait Benchmarking<T> {
 		steps: &[u32],
 		repeat: u32,
 		whitelist: &[TrackedStorageKey],
+		storage_info: &[StorageInfo],
 		verify: bool,
 	) -> Result<Vec<T>, &'static str>;
 }
