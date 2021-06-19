@@ -164,8 +164,8 @@ pub trait Benchmarking {
 		self.set_whitelist(whitelist);
 	}
 
-	fn extend_storage_info(&mut self, new: Vec<StorageInfo>) {
-		self.extend_storage_info(new);
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)> {
+		self.get_read_and_written_keys()
 	}
 
 	/// Get current estimated proof size.

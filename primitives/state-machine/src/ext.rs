@@ -23,7 +23,7 @@ use crate::{
 };
 use hash_db::Hasher;
 use sp_core::{
-	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey, StorageInfo},
+	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
@@ -779,8 +779,8 @@ where
 		self.backend.proof_size()
 	}
 
-	fn extend_storage_info(&mut self, new: Vec<StorageInfo>) {
-		self.backend.extend_storage_info(new)
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)> {
+		self.backend.get_read_and_written_keys()
 	}
 }
 

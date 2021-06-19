@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use hash_db::{Prefix, Hasher};
 use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey, StorageInfo},
+	storage::{ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay
 };
 use sp_runtime::traits::{Block as BlockT, HashFor};
@@ -73,6 +73,15 @@ pub struct KeyTracker {
 	has_been_written: bool,
 }
 
+impl From<(bool, bool)> for KeyTracker {
+	fn from(x: (bool, bool)) -> Self {
+		Self {
+			has_been_read: x.0,
+			has_been_written: x.1
+		}
+	}
+}
+
 /// A simple object that counts the reads and writes at the key level to the underlying state db.
 #[derive(Default, Clone, Copy, Debug)]
 pub struct ReadWriteTracker {
@@ -118,8 +127,6 @@ pub struct BenchmarkingState<B: BlockT> {
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
 	proof_recorder: Option<ProofRecorder<B::Hash>>,
 	proof_recorder_root: Cell<B::Hash>,
-	/// Storage info identified by their storage prefix, which is always 32 bytes.
-	storage_info: RefCell<HashMap<[u8; 32], StorageInfo>>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -143,7 +150,6 @@ impl<B: BlockT> BenchmarkingState<B> {
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
 			proof_recorder_root: Cell::new(root.clone()),
-			storage_info: Default::default(),
 		};
 
 		state.add_whitelist_to_tracker();
@@ -515,11 +521,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		*self.whitelist.borrow_mut() = new;
 	}
 
-	fn extend_storage_info(&self, new: Vec<StorageInfo>) {
-		for item in new {
-			let prefix = item.prefix;
-			self.storage_info.borrow_mut().insert(prefix, item);
-		}
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)> {
+		self.main_key_tracker.borrow().iter().map(|(key, value)| -> (Vec<u8>, bool, bool) {
+			let (read, written) = (value.has_been_read, value.has_been_written);
+			(key.to_vec(), read, written)
+		}).collect::<Vec<_>>()
 	}
 
 	fn register_overlay_stats(&self, stats: &sp_state_machine::StateMachineStats) {

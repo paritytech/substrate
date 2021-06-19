@@ -20,7 +20,7 @@
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use sp_core::{
-	storage::{ChildInfo, well_known_keys, TrackedStorageKey, StorageInfo}
+	storage::{ChildInfo, well_known_keys, TrackedStorageKey}
 };
 use crate::{
 	trie_backend::TrieBackend,
@@ -252,7 +252,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// Extend storage info for benchmarking db
-	fn extend_storage_info(&self, _: Vec<StorageInfo>) {}
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)> {
+		unimplemented!()
+	}
 }
 
 /// Trait that allows consolidate two transactions together.

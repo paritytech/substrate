@@ -20,7 +20,7 @@
 
 use std::any::{TypeId, Any};
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey, StorageInfo},
+	storage::{ChildInfo, TrackedStorageKey},
 	traits::{Externalities, SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
 };
 use sp_externalities::{Extensions, ExternalitiesExt as _};
@@ -190,8 +190,8 @@ impl Externalities for AsyncExternalities {
 		unimplemented!("set_whitelist is not supported in AsyncExternalities")
 	}
 
-	fn extend_storage_info(&mut self, _: Vec<StorageInfo>) {
-		unimplemented!("extend_storage_info is not supported in AsyncExternalities")
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)> {
+		unimplemented!("get_read_and_written_keys is not supported in AsyncExternalities")
 	}
 }
 

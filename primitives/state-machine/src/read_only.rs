@@ -24,7 +24,7 @@ use std::{
 use crate::{Backend, StorageKey, StorageValue};
 use hash_db::Hasher;
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey, StorageInfo},
+	storage::{ChildInfo, TrackedStorageKey},
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
@@ -203,8 +203,8 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
 
-	fn extend_storage_info(&mut self, _: Vec<StorageInfo>) {
-		unimplemented!("extend_storage_info is not supported in ReadOnlyExternalities")
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)> {
+		unimplemented!("get_read_and_written_keys is not supported in ReadOnlyExternalities")
 	}
 }
 

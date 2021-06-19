@@ -27,7 +27,7 @@
 
 use sp_std::{any::{Any, TypeId}, vec::Vec, boxed::Box};
 
-use sp_storage::{ChildInfo, TrackedStorageKey, StorageInfo};
+use sp_storage::{ChildInfo, TrackedStorageKey};
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
 pub use extensions::{Extension, Extensions, ExtensionStore};
@@ -296,8 +296,8 @@ pub trait Externalities: ExtensionStore {
 	/// Benchmarking related functionality and shouldn't be used anywhere else!
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	///
-	/// Adds new storage info to the benchmarking DB.
-	fn extend_storage_info(&mut self, new: Vec<StorageInfo>);
+	/// Get all the keys that have been read or written to during the benchmark.
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)>;
 }
 
 /// Extension for the [`Externalities`] trait.
