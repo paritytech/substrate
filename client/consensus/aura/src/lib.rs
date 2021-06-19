@@ -140,7 +140,7 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
 	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
 	/// because there were no blocks produced for some slots.
 	pub block_proposal_slot_portion: SlotProportion,
-	/// The maximum proportion of the slot dedicated to proposing with any lenience factor applied.
+	/// The maximum proportion of the slot dedicated to proposing with any lenience factor applied
 	/// due to no blocks being produced.
 	pub max_block_proposal_slot_portion: Option<SlotProportion>,
 	/// Telemetry instance used to report telemetry metrics.
