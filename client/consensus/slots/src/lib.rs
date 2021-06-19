@@ -725,27 +725,32 @@ pub fn proposing_remaining_duration<Block: BlockT>(
 	};
 
 	if let Some(slot_lenience) = slot_lenience {
-		debug!(
-			target: log_target,
-			"No block for {} slots. Applying {} lenience of {}s",
-			slot_info.slot.saturating_sub(parent_slot + 1),
-			slot_lenience_type.as_str(),
-			slot_lenience.as_secs(),
-		);
-
 		let lenient_proposing_duration =
-			proposing_duration + (slot_lenience.mul_f32(block_proposal_slot_portion.get()));
+			proposing_duration + slot_lenience.mul_f32(block_proposal_slot_portion.get());
 
 		// if we defined a maximum portion of the slot for proposal then we must make sure the
 		// lenience doesn't go over it
-		if let Some(ref max_block_proposal_slot_portion) = max_block_proposal_slot_portion {
-			std::cmp::min(
-				lenient_proposing_duration,
-				slot_info.duration.mul_f32(max_block_proposal_slot_portion.get()),
-			)
-		} else {
-			lenient_proposing_duration
-		}
+		let lenient_proposing_duration =
+			if let Some(ref max_block_proposal_slot_portion) = max_block_proposal_slot_portion {
+				std::cmp::min(
+					lenient_proposing_duration,
+					slot_info
+						.duration
+						.mul_f32(max_block_proposal_slot_portion.get()),
+				)
+			} else {
+				lenient_proposing_duration
+			};
+
+		debug!(
+			target: log_target,
+			"No block for {} slots. Applying {} lenience, total proposing duration: {}",
+			slot_info.slot.saturating_sub(parent_slot + 1),
+			slot_lenience_type.as_str(),
+			lenient_proposing_duration.as_secs(),
+		);
+
+		lenient_proposing_duration
 	} else {
 		proposing_duration
 	}
