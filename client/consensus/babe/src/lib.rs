@@ -412,30 +412,35 @@ pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS, CAW> {
 	/// because there were no blocks produced for some slots.
 	pub block_proposal_slot_portion: SlotProportion,
 
+	/// The maximum proportion of the slot dedicated to proposing with any lenience factor applied
+	/// due to no blocks being produced.
+	pub max_block_proposal_slot_portion: Option<SlotProportion>,
+
 	/// Handle use to report telemetries.
 	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Start the babe worker.
-pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(BabeParams {
-	keystore,
-	client,
-	select_chain,
-	env,
-	block_import,
-	sync_oracle,
-	justification_sync_link,
-	create_inherent_data_providers,
-	force_authoring,
-	backoff_authoring_blocks,
-	babe_link,
-	can_author_with,
-	block_proposal_slot_portion,
-	telemetry,
-}: BabeParams<B, C, SC, E, I, SO, L, CIDP, BS, CAW>) -> Result<
-	BabeWorker<B>,
-	sp_consensus::Error,
-> where
+pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(
+	BabeParams {
+		keystore,
+		client,
+		select_chain,
+		env,
+		block_import,
+		sync_oracle,
+		justification_sync_link,
+		create_inherent_data_providers,
+		force_authoring,
+		backoff_authoring_blocks,
+		babe_link,
+		can_author_with,
+		block_proposal_slot_portion,
+		max_block_proposal_slot_portion,
+		telemetry,
+	}: BabeParams<B, C, SC, E, I, SO, L, CIDP, BS, CAW>,
+) -> Result<BabeWorker<B>, sp_consensus::Error>
+where
 	B: BlockT,
 	C: ProvideRuntimeApi<B>
 		+ ProvideCache<B>
@@ -480,6 +485,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(BabeParams {
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
 		block_proposal_slot_portion,
+		max_block_proposal_slot_portion,
 		telemetry,
 	};
 
@@ -630,6 +636,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
 	block_proposal_slot_portion: SlotProportion,
+	max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
 }
 
@@ -637,10 +644,10 @@ impl<B, C, E, I, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
 	for BabeSlotWorker<B, C, E, I, SO, L, BS>
 where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> +
-		ProvideCache<B> +
-		HeaderBackend<B> +
-		HeaderMetadata<B, Error = ClientError>,
+	C: ProvideRuntimeApi<B>
+		+ ProvideCache<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -832,42 +839,17 @@ where
 		self.telemetry.clone()
 	}
 
-	fn proposing_remaining_duration(
-		&self,
-		slot_info: &SlotInfo<B>,
-	) -> std::time::Duration {
-		let max_proposing = slot_info.duration.mul_f32(self.block_proposal_slot_portion.get());
+	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> std::time::Duration {
+		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot());
 
-		let slot_remaining = slot_info.ends_at
-			.checked_duration_since(std::time::Instant::now())
-			.unwrap_or_default();
-
-		let slot_remaining = std::cmp::min(slot_remaining, max_proposing);
-
-		// If parent is genesis block, we don't require any lenience factor.
-		if slot_info.chain_head.number().is_zero() {
-			return slot_remaining
-		}
-
-		let parent_slot = match find_pre_digest::<B>(&slot_info.chain_head) {
-			Err(_) => return slot_remaining,
-			Ok(d) => d.slot(),
-		};
-
-		if let Some(slot_lenience) =
-			sc_consensus_slots::slot_lenience_exponential(parent_slot, slot_info)
-		{
-			debug!(
-				target: "babe",
-				"No block for {} slots. Applying exponential lenience of {}s",
-				slot_info.slot.saturating_sub(parent_slot + 1),
-				slot_lenience.as_secs(),
-			);
-
-			slot_remaining + slot_lenience
-		} else {
-			slot_remaining
-		}
+		sc_consensus_slots::proposing_remaining_duration(
+			parent_slot,
+			slot_info,
+			&self.block_proposal_slot_portion,
+			self.max_block_proposal_slot_portion.as_ref(),
+			sc_consensus_slots::SlotLenienceType::Exponential,
+			self.logging_target(),
+		)
 	}
 }
 
