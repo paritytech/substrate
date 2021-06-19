@@ -73,15 +73,6 @@ pub struct KeyTracker {
 	has_been_written: bool,
 }
 
-impl From<(bool, bool)> for KeyTracker {
-	fn from(x: (bool, bool)) -> Self {
-		Self {
-			has_been_read: x.0,
-			has_been_written: x.1
-		}
-	}
-}
-
 /// A simple object that counts the reads and writes at the key level to the underlying state db.
 #[derive(Default, Clone, Copy, Debug)]
 pub struct ReadWriteTracker {

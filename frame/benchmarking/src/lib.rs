@@ -808,6 +808,13 @@ macro_rules! impl_benchmark {
 								"Read/Write Count {:?}", read_write_count
 							);
 
+							let read_and_written_keys = $crate::benchmarking::get_read_and_written_keys();
+
+							$crate::log::trace!(
+								target: "benchmark",
+								"read and written keys: {:?}", read_and_written_keys
+							);
+
 							let time = $crate::benchmarking::current_time();
 							if time.saturating_sub(progress) > 5000000000 {
 								progress = $crate::benchmarking::current_time();

@@ -25,7 +25,6 @@ sp-core = { version = "3.0.0", default-features = false, path = "../../primitive
 sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "3.0.0", default-features = false, path = "../../primitives/inherents" }
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
-sp-storage = { version = "3.0.0", default-features = false, path = "../../primitives/storage" }
 frame-support-procedural = { version = "3.0.0", default-features = false, path = "./procedural" }
 paste = "1.0"
 once_cell = { version = "1", default-features = false, optional = true }
