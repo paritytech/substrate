@@ -809,8 +809,8 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// Remove all received heartbeats and number of authored blocks from the
 		// current session, they have already been processed and won't be needed
 		// anymore.
-		ReceivedHeartbeats::<T>::remove_prefix(&T::ValidatorSet::session_index());
-		AuthoredBlocks::<T>::remove_prefix(&T::ValidatorSet::session_index());
+		ReceivedHeartbeats::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
+		AuthoredBlocks::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
 
 		if offenders.is_empty() {
 			Self::deposit_event(Event::<T>::AllGood);

@@ -867,7 +867,7 @@ mod tests {
 		#[pallet::call]
 		impl<T: Config> Pallet<T> where <T as system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>  {
 			#[pallet::weight(*weight)]
-			fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
+			pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 				Self::deposit_event(Event::Logged(i, weight));
 				LOG.with(|log| {
 					log.borrow_mut().push((origin.caller().clone(), i));
@@ -876,7 +876,7 @@ mod tests {
 			}
 
 			#[pallet::weight(*weight)]
-			fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
+			pub fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 				Self::deposit_event(Event::Logged(i, weight));
 				LOG.with(|log| {
 					log.borrow_mut().push((origin.caller().clone(), i));

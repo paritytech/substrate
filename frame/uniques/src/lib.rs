@@ -417,9 +417,9 @@ pub mod pallet {
 				for (instance, details) in Asset::<T, I>::drain_prefix(&class) {
 					Account::<T, I>::remove((&details.owner, &class, &instance));
 				}
-				InstanceMetadataOf::<T, I>::remove_prefix(&class);
+				InstanceMetadataOf::<T, I>::remove_prefix(&class, None);
 				ClassMetadataOf::<T, I>::remove(&class);
-				Attribute::<T, I>::remove_prefix((&class,));
+				Attribute::<T, I>::remove_prefix((&class,), None);
 				T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
 
 				Self::deposit_event(Event::Destroyed(class));
