@@ -437,6 +437,7 @@ mod test_iterators {
 	fn n_map_double_map_identical_key() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			NMap::insert((1, 2), 50);
+			let key_hash = NMap::hashed_key_for((1, 2));
 
 			{
 				crate::generate_storage_alias!(Test, NMap => DoubleMap<
@@ -447,6 +448,7 @@ mod test_iterators {
 
 				let value = NMap::get(1, 2).unwrap();
 				assert_eq!(value, 50);
+				assert_eq!(NMap::hashed_key_for(1, 2), key_hash);
 			}
 		});
 	}
