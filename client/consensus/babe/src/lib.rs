@@ -989,7 +989,7 @@ where
 		Ok(())
 	}
 
-	fn check_and_report_equivocation(
+	async fn check_and_report_equivocation(
 		&self,
 		slot_now: Slot,
 		slot: Slot,
@@ -1024,6 +1024,7 @@ where
 		let best_id = self
 			.select_chain
 			.best_chain()
+			.await
 			.map(|h| BlockId::Hash(h.hash()))
 			.map_err(|e| Error::Client(e.into()))?;
 
@@ -1070,13 +1071,26 @@ where
 	}
 }
 
+type BlockVerificationResult<Block> = Result<
+	(
+		BlockImportParams<Block, ()>,
+		Option<Vec<(CacheKeyId, Vec<u8>)>>,
+	),
+	String,
+>;
+
 #[async_trait::async_trait]
 impl<Block, Client, SelectChain, CAW, CIDP> Verifier<Block>
 	for BabeVerifier<Block, Client, SelectChain, CAW, CIDP>
 where
 	Block: BlockT,
-	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
-		+ Send + Sync + AuxStore + ProvideCache<Block>,
+	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ AuxStore
+		+ ProvideCache<Block>,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block> + Send + Sync,
@@ -1089,7 +1103,7 @@ where
 		header: Block::Header,
 		justifications: Option<Justifications>,
 		mut body: Option<Vec<Block::Extrinsic>>,
-	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> BlockVerificationResult<Block> {
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
@@ -1158,7 +1172,7 @@ where
 					&header,
 					&verified_info.author,
 					&origin,
-				) {
+				).await {
 					warn!(target: "babe", "Error checking/reporting BABE equivocation: {:?}", err);
 				}
 
