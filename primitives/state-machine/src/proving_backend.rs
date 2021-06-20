@@ -20,7 +20,7 @@
 use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};
 use parking_lot::RwLock;
 use codec::{Decode, Codec, Encode};
-use log::{debug, info};
+use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
@@ -249,9 +249,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		let value = self.0.storage(key);
-		info!(target: "storage", "{:?} => {:?}", key, value);
-		value
+		self.0.storage(key)
 	}
 
 	fn child_storage(
