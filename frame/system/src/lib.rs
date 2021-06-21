@@ -85,7 +85,7 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	Parameter, storage,
+	Parameter, storage, WeakBoundedVec,
 	traits::{
 		SortedMembers, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
 		StoredMap, EnsureOrigin, OriginTrait, Filter, MaxEncodedLen,
@@ -188,7 +188,7 @@ pub mod pallet {
 		/// with a sender account.
 		type Index:
 			Parameter + Member + MaybeSerializeDeserialize + Debug + Default + MaybeDisplay + AtLeast32Bit
-			+ Copy;
+			+ Copy + MaxEncodedLen;
 
 		/// The block number type used by the runtime.
 		type BlockNumber:
@@ -248,7 +248,7 @@ pub mod pallet {
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
 		/// pallet does regardless).
-		type AccountData: Member + FullCodec + Clone + Default;
+		type AccountData: Member + FullCodec + Clone + Default + MaxEncodedLen;
 
 		/// Handler for when a new account has just been created.
 		type OnNewAccount: OnNewAccount<Self::AccountId>;
@@ -275,6 +275,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -561,7 +562,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_data)]
 	pub(super) type ExtrinsicData<T: Config> =
-		StorageMap<_, Twox64Concat, u32, Vec<u8>, ValueQuery>;
+		StorageMap<_, Twox64Concat, u32, WeakBoundedVec<u8, ConstU32<100_000>>, ValueQuery>;
 
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
@@ -582,7 +583,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn events)]
 	pub(super) type Events<T: Config> =
-		StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
+		StorageValue<_, WeakBoundedVec<EventRecord<T::Event, T::Hash>, ConstU32<100_000>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
@@ -733,7 +734,7 @@ impl Default for Phase {
 }
 
 /// Record of an event happening.
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
@@ -785,7 +786,7 @@ type EventIndex = u32;
 pub type RefCount = u32;
 
 /// Information of an account.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, MaxEncodedLen)]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	pub nonce: Index,
