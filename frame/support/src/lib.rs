@@ -2374,7 +2374,3 @@ pub mod pallet_prelude {
 /// * use the newest nightly possible.
 ///
 pub use frame_support_procedural::pallet;
-
-/// The `max_encoded_len` module contains the `MaxEncodedLen` trait and derive macro, which is
-/// useful for computing upper bounds on storage size.
-pub use max_encoded_len;
