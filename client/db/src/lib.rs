@@ -65,8 +65,7 @@ use sp_blockchain::{
 };
 use codec::{Decode, Encode};
 use hash_db::Prefix;
-use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key, StateHasher,
-	Meta, MetaHasher};
+use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::Transaction;
 use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::OffchainOverlayedChange;
@@ -889,25 +888,17 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
-	fn get(
-		&self,
-		key: &Block::Hash,
-		prefix: Prefix,
-		global: Option<u32>,
-	) -> Result<Option<(DBValue, Meta)>, String> {
+	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if self.prefix_keys {
 			let key = prefixed_key::<HashFor<Block>>(key, prefix);
 			self.state_db.get(&key, self)
 		} else {
 			self.state_db.get(key.as_ref(), self)
 		}
-		.map(|result| result.map(|value|
-			<StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)
-		)).map_err(|e| format!("Database backend error: {:?}", e))
+		.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 
-	fn access_from(&self, _key: &Block::Hash) {
-	}
+	fn access_from(&self, _key: &Block::Hash) { }
 }
 
 impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
@@ -931,14 +922,10 @@ impl<Block: BlockT> DbGenesisStorage<Block> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStorage<Block> {
-	fn get(
-		&self,
-		_key: &Block::Hash,
-		_prefix: Prefix,
-		_global: Option<u32>,
-	) -> Result<Option<(DBValue, Meta)>, String> {
+	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
+
 	fn access_from(&self, _key: &Block::Hash) {
 	}
 }
@@ -2157,7 +2144,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						self.storage.as_ref(),
 						&header.state_root,
 						(&[], None),
-						Default::default(),
 					).unwrap_or(None).is_some()
 				},
 				_ => false,

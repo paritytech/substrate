@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
-use sp_trie::{MemoryDB, prefixed_key, StateHasher, Meta, MetaHasher};
+use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay
@@ -49,30 +49,22 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
-	fn get(
-		&self,
-		key: &Block::Hash,
-		prefix: Prefix,
-		global: Option<u32>,
-	) -> Result<Option<(DBValue, Meta)>, String> {
+	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 		if let Some(recorder) = &self.proof_recorder {
 			if let Some(v) = recorder.get(&key) {
 				return Ok(v.clone());
 			}
 			let backend_value = self.db.get(0, &prefixed_key)
-				.map(|result| result.map(|value|
-					<StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)
-				)).map_err(|e| format!("Database backend error: {:?}", e))?;
+				.map_err(|e| format!("Database backend error: {:?}", e))?;
 			recorder.record::<HashFor<Block>>(key.clone(), backend_value.clone());
 			Ok(backend_value)
 		} else {
 			self.db.get(0, &prefixed_key)
-				.map(|result| result.map(|value|
-					<StateHasher as MetaHasher<HashFor<Block>, _>>::extract_value_owned(value, global)
-				)).map_err(|e| format!("Database backend error: {:?}", e))
+				.map_err(|e| format!("Database backend error: {:?}", e))
 		}
 	}
+
 	fn access_from(&self, key: &Block::Hash) {
 		if let Some(recorder) = &self.proof_recorder {
 			recorder.access_from(key, HashFor::<Block>::LENGTH);

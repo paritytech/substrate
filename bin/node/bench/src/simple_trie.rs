@@ -20,7 +20,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use kvdb::KeyValueDB;
 use node_primitives::Hash;
-use sp_trie::{DBValue, Meta, StateHasher, MetaHasher};
+use sp_trie::DBValue;
 use hash_db::{HashDB, AsHashDB, Prefix, Hasher as _};
 
 pub type Hasher = sp_core::Blake2Hasher;
@@ -31,15 +31,15 @@ pub struct SimpleTrie<'a> {
 	pub overlay: &'a mut HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
-impl<'a> AsHashDB<Hasher, DBValue, Meta, Option<u32>> for SimpleTrie<'a> {
-	fn as_hash_db(&self) -> &dyn hash_db::HashDB<Hasher, DBValue, Meta, Option<u32>> { &*self }
+impl<'a> AsHashDB<Hasher, DBValue> for SimpleTrie<'a> {
+	fn as_hash_db(&self) -> &dyn hash_db::HashDB<Hasher, DBValue> { &*self }
 
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<Hasher, DBValue, Meta, Option<u32>> + 'b) {
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<Hasher, DBValue> + 'b) {
 		&mut *self
 	}
 }
 
-impl<'a> HashDB<Hasher, DBValue, Meta, Option<u32>> for SimpleTrie<'a> {
+impl<'a> HashDB<Hasher, DBValue> for SimpleTrie<'a> {
 	fn get(&self, key: &Hash, prefix: Prefix) -> Option<DBValue> {
 		let key = sp_trie::prefixed_key::<Hasher>(key, prefix);
 		if let Some(value) = self.overlay.get(&key) {
@@ -48,20 +48,8 @@ impl<'a> HashDB<Hasher, DBValue, Meta, Option<u32>> for SimpleTrie<'a> {
 		self.db.get(0, &key).expect("Database backend error")
 	}
 
-	fn get_with_meta(&self, key: &Hash, prefix: Prefix, global: Option<u32>) -> Option<(DBValue, Meta)> {
-		let result = self.get(key, prefix);
-		result.map(|value| <StateHasher as MetaHasher<Hasher, _>>::extract_value_owned(value, global))
-	}
-
 	fn contains(&self, hash: &Hash, prefix: Prefix) -> bool {
 		self.get(hash, prefix).is_some()
-	}
-
-	fn insert_with_meta(&mut self, prefix: Prefix, value: &[u8], meta: Meta) -> Hash {
-		let key = <StateHasher as MetaHasher<Hasher, DBValue>>::hash(value, &meta);
-		let stored_value = <StateHasher as MetaHasher<Hasher, _>>::stored_value(value, meta);
-		self.emplace(key, prefix, stored_value);
-		key
 	}
 
 	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> Hash {
@@ -73,6 +61,11 @@ impl<'a> HashDB<Hasher, DBValue, Meta, Option<u32>> for SimpleTrie<'a> {
 	fn emplace(&mut self, key: Hash, prefix: Prefix, value: DBValue) {
 		let key = sp_trie::prefixed_key::<Hasher>(&key, prefix);
 		self.overlay.insert(key, Some(value));
+	}
+
+	fn emplace_ref(&mut self, key: &Hash, prefix: Prefix, value: &[u8]) {
+		let key = sp_trie::prefixed_key::<Hasher>(key, prefix);
+		self.overlay.insert(key, Some(value.into()));
 	}
 
 	fn remove(&mut self, key: &Hash, prefix: Prefix) {

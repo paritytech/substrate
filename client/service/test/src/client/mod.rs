@@ -51,7 +51,7 @@ use sp_consensus::{
 	BlockStatus, BlockImportParams, ForkChoiceStrategy,
 };
 use sp_storage::StorageKey;
-use sp_trie::{TrieConfiguration, trie_types::Layout};
+use sp_trie::{TrieConfiguration, Layout};
 use sp_runtime::{generic::BlockId, DigestItem, Justifications};
 use hex_literal::hex;
 use futures::executor::block_on;

@@ -161,7 +161,7 @@ pub type TrieHash<L> = <<L as TrieLayout>::Hash as Hasher>::Out;
 /// This module is for non generic definition of trie type.
 /// Only the `Hasher` trait is generic in this case.
 pub mod trie_types {
-	use super::Layout;
+	pub type Layout<H> = super::Layout<H>;
 	/// Persistent trie database read-access interface for the a given hasher.
 	pub type TrieDB<'a, H> = super::TrieDB<'a, Layout<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.

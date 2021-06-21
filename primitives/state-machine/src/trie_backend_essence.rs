@@ -48,6 +48,7 @@ pub trait Storage<H: Hasher>: Send + Sync {
 		key: &H::Out,
 		prefix: Prefix,
 	) -> Result<Option<DBValue>>;
+
 	/// Call back when value get accessed in trie.
 	fn access_from(&self, key: &H::Out);
 }

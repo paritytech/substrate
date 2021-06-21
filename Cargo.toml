@@ -278,8 +278,8 @@ zeroize = { opt-level = 3 }
 panic = "unwind"
 
 [patch.crates-io]
-hash-db = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple7" }
-memory-db = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple7" }
-trie-db = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple7" }
-trie-root = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple7" }
-trie-bench = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple7" }
+hash-db = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple4" }
+memory-db = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple4" }
+trie-db = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple4" }
+trie-root = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple4" }
+trie-bench = { git = "https://github.com/cheme/trie.git", branch = "hashed-value-simple4" }

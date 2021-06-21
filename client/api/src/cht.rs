@@ -94,7 +94,7 @@ pub fn compute_root<Header, Hasher, I>(
 		I: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
 	use sp_trie::TrieConfiguration;
-	Ok(sp_trie::trie_types::Layout::<Hasher>::default().trie_root(
+	Ok(sp_trie::Layout::<Hasher>::default().trie_root(
 		build_pairs::<Header, I>(cht_size, cht_num, hashes)?
 	))
 }
@@ -172,7 +172,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 		local_number,
 		remote_hash,
 		|_, local_cht_key|
-			read_proof_check_on_proving_backend::<Hasher, _, _>(
+			read_proof_check_on_proving_backend::<Hasher, _>(
 				proving_backend,
 				local_cht_key,
 			).map_err(ClientError::from_state),
