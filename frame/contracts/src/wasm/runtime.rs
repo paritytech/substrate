@@ -1140,7 +1140,6 @@ define_env!(Env, <E: Ext>,
 	// - beneficiary_ptr: a pointer to the address of the beneficiary account where all
 	//   where all remaining funds of the caller are transferred.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
-	// - beneficiary_len: length of the address buffer.
 	//
 	// # Traps
 	//
@@ -1540,16 +1539,33 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Set rent allowance of the contract
+	// Set rent allowance of the contract.
 	//
-	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
-	//   Should be decodable as a `T::Balance`. Traps otherwise.
-	// - value_len: length of the value buffer.
+	// # Deprecation
+	//
+	// This is equivalent to calling the newer version of this function. The newer version
+	// drops the now unnecessary length fields.
+	//
+	// # Note
+	//
+	// The value `_VALUE_len` is ignored because the encoded sizes
+	// this type is fixed through `[`MaxEncodedLen`]. The field exist for backwards
+	// compatibility. Consider switching to the newest version of this function.
 	[seal0] seal_set_rent_allowance(ctx, value_ptr: u32, _value_len: u32) => {
 		ctx.charge_gas(RuntimeCosts::SetRentAllowance)?;
 		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr)?;
 		ctx.ext.set_rent_allowance(value);
+		Ok(())
+	},
 
+	// Set rent allowance of the contract.
+	//
+	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
+	//   Should be decodable as a `T::Balance`. Traps otherwise.
+	[seal1] seal_set_rent_allowance(ctx, value_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::SetRentAllowance)?;
+		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr)?;
+		ctx.ext.set_rent_allowance(value);
 		Ok(())
 	},
 
