@@ -111,7 +111,8 @@ pub struct SharedParams {
 			&[("command", "offchain-worker"), ("command", "execute-block"), ("subcommand", "live")]
 		)
 	)]
-	pub block_at: String,
+	block_at: String,
+
 	/// Whether or not to overwrite the code from state with the code from
 	/// the specified chain spec.
 	#[structopt(long)]
@@ -124,6 +125,20 @@ pub struct SharedParams {
 	// https://github.com/paritytech/substrate/issues/9027
 	#[structopt(short, long, default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
 	url: String,
+}
+
+impl SharedParams {
+	/// Get the configured value of `block_at`, interpreted as the hash type of `Block`.
+	pub fn block_at<Block>(&self) -> sc_cli::Result<Block::Hash>
+	where
+		Block: BlockT,
+		<Block as BlockT>::Hash: FromStr,
+		<<Block as BlockT>::Hash as FromStr>::Err: Debug,
+	{
+		self.block_at
+			.parse::<<Block as BlockT>::Hash>()
+			.map_err(|e| format!("Could not parse block hash: {:?}", e).into())
+	}
 }
 
 /// Various commands to try out against runtime state at a specific block.
@@ -161,7 +176,7 @@ pub enum State {
 async fn on_runtime_upgrade<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: OnRuntimeUpgradeCmd,
-	config: Configuration
+	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT,
@@ -197,7 +212,7 @@ where
 				transport: shared.url.to_owned().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
-				at: Some(shared.block_at.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?),
+				at: Some(shared.block_at::<Block>()?),
 				..Default::default()
 			})),
 		};
@@ -267,7 +282,7 @@ where
 				snapshot_path,
 				modules
 			} => {
-				let at = shared.block_at.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?;
+				let at = shared.block_at::<Block>()?;
 				let online_config = OnlineConfig {
 					transport: shared.url.to_owned().into(),
 					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
@@ -306,9 +321,7 @@ where
 	ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
-	let header_hash: Block::Hash = shared.block_at
-		.parse()
-		.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
+	let header_hash = shared.block_at::<Block>()?;
 	let header = rpc_api::get_header::<Block, _>(shared.url, header_hash).await?;
 
 	let _ = StateMachine::<_, _, NumberFor<Block>, _>::new(
@@ -335,7 +348,7 @@ async fn execute_block<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: ExecuteBlockCmd,
 	config: Configuration,
-)-> sc_cli::Result<()>
+) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
@@ -356,9 +369,7 @@ where
 		max_runtime_instances,
 	);
 
-	let block_hash: Block::Hash = shared.block_at
-		.parse()
-		.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
+	let block_hash = shared.block_at::<Block>()?;
 	let block: Block = rpc_api::get_block::<Block, _>(shared.url.clone(), block_hash).await?;
 
 	let mode = match command.state {
