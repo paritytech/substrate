@@ -123,7 +123,7 @@ impl<H: Hasher> NodeCodec<H> {
 				let bitmap = Bitmap::decode(&data[bitmap_range])?;
 				let value = if branch_has_value {
 					if alt_hashing && contains_hash {
-						ValuePlan::HashedValue(input.take(H::LENGTH)?, 0)
+						ValuePlan::HashedValue(input.take(H::LENGTH)?)
 					} else {
 						let with_len = input.offset;
 						let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
@@ -165,7 +165,7 @@ impl<H: Hasher> NodeCodec<H> {
 				)?;
 				let partial_padding = nibble_ops::number_padding(nibble_count);
 				let value = if alt_hashing && contains_hash {
-					ValuePlan::HashedValue(input.take(H::LENGTH)?, 0)
+					ValuePlan::HashedValue(input.take(H::LENGTH)?)
 				} else {
 					let with_len = input.offset;
 					let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
@@ -239,12 +239,12 @@ impl<H> NodeCodecT for NodeCodec<H>
 				let end = output.len();
 				meta.encoded_value_callback(ValuePlan::Value(start..end, with_len));
 			},
-			Value::HashedValue(hash, _size) => {
+			Value::HashedValue(hash) => {
 				debug_assert!(hash.len() == H::LENGTH);
 				let start = output.len();
 				output.extend_from_slice(hash);
 				let end = output.len();
-				meta.encoded_value_callback(ValuePlan::HashedValue(start..end, 0));
+				meta.encoded_value_callback(ValuePlan::HashedValue(start..end));
 			},
 			Value::NoValue => unimplemented!("No support for incomplete nodes"),
 		}
@@ -307,12 +307,12 @@ impl<H> NodeCodecT for NodeCodec<H>
 				let end = output.len();
 				meta.encoded_value_callback(ValuePlan::Value(start..end, with_len));
 			},
-			Value::HashedValue(hash, _size) => {
+			Value::HashedValue(hash) => {
 				debug_assert!(hash.len() == H::LENGTH);
 				let start = output.len();
 				output.extend_from_slice(hash);
 				let end = output.len();
-				meta.encoded_value_callback(ValuePlan::HashedValue(start..end, 0));
+				meta.encoded_value_callback(ValuePlan::HashedValue(start..end));
 			},
 			Value::NoValue => (),
 		}
