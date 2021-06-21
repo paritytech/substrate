@@ -17,6 +17,8 @@
 
 //! Tests for the module.
 
+use crate::voter_bags::Node;
+
 use super::{*, Event};
 use mock::*;
 use sp_npos_elections::supports_eq_unordered;
@@ -30,6 +32,7 @@ use frame_support::{
 	traits::{Currency, ReservableCurrency, OnInitialize},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
+use frame_system::RawOrigin;
 use pallet_balances::Error as BalancesError;
 use substrate_test_utils::assert_eq_uvec;
 use frame_election_provider_support::Support;
@@ -3858,6 +3861,98 @@ fn on_finalize_weight_is_nonzero() {
 		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
 		assert!(<Staking as Hooks<u64>>::on_initialize(1) >= on_finalize_weight);
 	})
+}
+
+
+
+/// adapted from benchmarking.rs for debugging purposes; it is failing for non-obvious reasons.
+#[test]
+fn payout_stakers_dead_controller() {
+	ExtBuilder::default()
+		.build_and_execute(|| {
+			// setup
+			let n = <Test as Config>::MaxNominatorRewardedPerValidator::get() as u32;
+			let (validator, nominators) = crate::benchmarking::create_validator_with_nominators::<Test>(
+				n,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				true,
+				RewardDestination::Controller,
+			).unwrap();
+
+			let current_era = CurrentEra::<Test>::get().unwrap();
+			// set the commission for this particular era as well.
+			<ErasValidatorPrefs<Test>>::insert(current_era, validator.clone(), <Pallet<Test>>::validators(&validator));
+
+			let caller = crate::benchmarking::whitelisted_caller();
+			let validator_controller = <Bonded<Test>>::get(&validator).unwrap();
+			let balance_before = <Test as Config>::Currency::free_balance(&validator_controller);
+			for (_, controller) in &nominators {
+				let balance = <Test as Config>::Currency::free_balance(controller);
+				assert!(balance.is_zero(), "Controller has balance, but should be dead.");
+			}
+
+			// benchmark
+			Staking::payout_stakers(RawOrigin::Signed(caller).into(), validator.clone(), current_era).unwrap();
+
+			// verify
+			let balance_after = <Test as Config>::Currency::free_balance(&validator_controller);
+			assert!(
+				balance_before < balance_after,
+				"Balance of validator controller should have increased after payout.",
+			);
+			for (_, controller) in &nominators {
+				let balance = <Test as Config>::Currency::free_balance(controller);
+				if balance.is_zero() {
+					dbg!(controller, Node::<Test>::from_id(controller));
+				}
+				assert!(!balance.is_zero(), "Payout not given to controller.");
+			}
+		});
+}
+
+/// adapted from benchmarking.rs for debugging purposes; it is failing for non-obvious reasons.
+#[test]
+fn payout_stakers_alive_staked() {
+	ExtBuilder::default()
+		.build_and_execute(|| {
+			// setup
+			let n = <Test as Config>::MaxNominatorRewardedPerValidator::get() as u32;
+			let (validator, nominators) = crate::benchmarking::create_validator_with_nominators::<Test>(
+				n,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
+				false,
+				RewardDestination::Staked,
+			).unwrap();
+
+			let current_era = CurrentEra::<Test>::get().unwrap();
+			// set the commission for this particular era as well.
+			<ErasValidatorPrefs<Test>>::insert(current_era, validator.clone(), <Pallet<Test>>::validators(&validator));
+
+			let caller = crate::benchmarking::whitelisted_caller();
+			let balance_before = <Test as Config>::Currency::free_balance(validator);
+			let mut nominator_balances_before = Vec::new();
+			for (stash, _) in &nominators {
+				let balance = <Test as Config>::Currency::free_balance(stash);
+				nominator_balances_before.push(balance);
+			}
+
+			// benchmark
+			Staking::payout_stakers(RawOrigin::Signed(caller).into(), validator.clone(), current_era).unwrap();
+
+			// verify
+			let balance_after = <Test as Config>::Currency::free_balance(validator);
+			assert!(
+				balance_before < balance_after,
+				"Balance of validator stash should have increased after payout.",
+			);
+			for ((stash, _), balance_before) in nominators.iter().zip(nominator_balances_before.iter()) {
+				let balance_after = <Test as Config>::Currency::free_balance(stash);
+				assert!(
+					balance_before < &balance_after,
+					"Balance of nominator stash should have increased after payout.",
+				);
+			}
+		});
 }
 
 mod election_data_provider {
