@@ -18,6 +18,7 @@
 //! Test implementation for Externalities.
 
 use std::{any::{Any, TypeId}, panic::{AssertUnwindSafe, UnwindSafe}};
+use std::collections::{HashMap, BTreeMap};
 
 use crate::{
 	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext, InMemoryBackend,
@@ -36,7 +37,7 @@ use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, is_child_storage_key},
-		Storage,
+		Storage, ChildInfo,
 	},
 	traits::TaskExecutorExt,
 	testing::TaskExecutor,
@@ -88,13 +89,24 @@ where
 		Self::new_with_code(&[], storage)
 	}
 
+	/// Create a new instance of `TestExternalities` with storage
+	/// on a backend containing defined default alt hashing threshold.
+	pub fn new_with_alt_hashing(storage: Storage) -> Self {
+		Self::new_with_code_inner(&[], storage, true)
+	}
+
+
 	/// New empty test externalities.
 	pub fn new_empty() -> Self {
 		Self::new_with_code(&[], Storage::default())
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
+	pub fn new_with_code(code: &[u8], storage: Storage) -> Self {
+		Self::new_with_code_inner(code, storage, false)
+	}
+
+	fn new_with_code_inner(code: &[u8], mut storage: Storage, force_alt_hashing: bool) -> Self {
 		let mut overlay = OverlayedChanges::default();
 		let changes_trie_config = storage.top.get(CHANGES_TRIE_CONFIG)
 			.and_then(|v| Decode::decode(&mut &v[..]).ok());
@@ -110,13 +122,32 @@ where
 
 		let offchain_db = TestPersistentOffchainDB::new();
 
+		let backend = if force_alt_hashing {
+			let mut backend: InMemoryBackend<H> = {
+				let mut storage = Storage::default();
+				storage.modify_trie_alt_hashing_threshold(Some(
+					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD
+				));
+				storage.into()
+			};
+			let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>
+				= storage.children_default.into_iter().map(|(_k, c)| (Some(c.child_info), c.data)).collect();
+			inner.insert(None, storage.top);
+			backend.insert(
+				inner.into_iter().map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())),
+			);
+			backend
+		} else {
+			storage.into()
+		};
+
 		TestExternalities {
 			overlay,
 			offchain_db,
 			changes_trie_config,
 			extensions,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			backend: storage.into(),
+			backend,
 			storage_transaction_cache: Default::default(),
 		}
 	}
