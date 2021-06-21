@@ -128,6 +128,7 @@ pub struct SharedParams {
 }
 
 impl SharedParams {
+	/// Get the configured value of `block_at`, interpreted as the hash type of `Block`.
 	pub fn block_at<Block>(&self) -> sc_cli::Result<Block::Hash>
 	where
 		Block: BlockT,
