@@ -131,7 +131,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				);
 
 				// log info about the upgrade.
-				let new_storage_version = #frame_support::crate_to_pallet_version!();
+				let new_storage_version = #frame_support::pallet_version!();
 				let pallet_name = <
 					<T as #frame_system::Config>::PalletInfo
 					as

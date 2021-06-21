@@ -17,10 +17,7 @@
 
 //! Migrations to version [`4.0.0`], as denoted by the changelog.
 
-use frame_support::{
-	weights::Weight,
-	traits::{GetPalletVersion, PalletVersion, Get},
-};
+use frame_support::{weights::Weight, traits::{GetPalletVersion, Get}};
 
 /// The old prefix.
 pub const OLD_PREFIX: &[u8] = b"PhragmenElection";
@@ -52,7 +49,7 @@ pub fn migrate<
 	);
 
 	match maybe_storage_version {
-		Some(storage_version) if storage_version <= PalletVersion::new(3, 0, 0) => {
+		Some(storage_version) if storage_version <= 3 => {
 			log::info!("new prefix: {}", new_pallet_name.as_ref());
 			frame_support::storage::migration::move_pallet(
 				OLD_PREFIX,
@@ -96,7 +93,7 @@ pub fn pre_migration<P: GetPalletVersion, N: AsRef<str>>(new: N) {
 		sp_core::hexdisplay::HexDisplay::from(&sp_io::storage::next_key(new.as_bytes()).unwrap())
 	);
 	// ensure storage version is 3.
-	assert!(<P as GetPalletVersion>::storage_version().unwrap().major == 3);
+	assert!(<P as GetPalletVersion>::storage_version().unwrap() == 3);
 }
 
 /// Some checks for after migration. This can be linked to
@@ -106,5 +103,5 @@ pub fn pre_migration<P: GetPalletVersion, N: AsRef<str>>(new: N) {
 pub fn post_migration<P : GetPalletVersion>() {
 	log::info!("post-migration elections-phragmen");
 	// ensure we've been updated to v4 by the automatic write of crate version -> storage version.
-	assert!(<P as GetPalletVersion>::storage_version().unwrap().major == 4);
+	assert!(<P as GetPalletVersion>::storage_version().unwrap() == 4);
 }

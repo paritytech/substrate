@@ -1446,7 +1446,7 @@ macro_rules! decl_module {
 					as
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
-				let new_storage_version = $crate::crate_to_pallet_version!();
+				let new_storage_version = $crate::pallet_version!();
 
 				$crate::log::info!(
 					target: $crate::LOG_TARGET,
@@ -1495,7 +1495,7 @@ macro_rules! decl_module {
 					as
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
-				let new_storage_version = $crate::crate_to_pallet_version!();
+				let new_storage_version = $crate::pallet_version!();
 
 				$crate::log::info!(
 					target: $crate::LOG_TARGET,
@@ -2025,7 +2025,7 @@ macro_rules! decl_module {
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn current_version() -> $crate::traits::PalletVersion {
-				$crate::crate_to_pallet_version!()
+				$crate::pallet_version!()
 			}
 
 			fn storage_version() -> Option<$crate::traits::PalletVersion> {
@@ -2042,7 +2042,7 @@ macro_rules! decl_module {
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_genesis() {
-				$crate::crate_to_pallet_version!()
+				$crate::pallet_version!()
 					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
 			}
 		}

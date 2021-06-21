@@ -335,15 +335,14 @@ mod tests {
 
 	#[test]
 	fn check_pallet_version_ordering() {
-		let version = PalletVersion::new(1, 0, 0);
-		assert!(version > PalletVersion::new(0, 1, 2));
-		assert!(version == PalletVersion::new(1, 0, 0));
-		assert!(version < PalletVersion::new(1, 0, 1));
-		assert!(version < PalletVersion::new(1, 1, 0));
+		let version = PalletVersion::new(1);
+		assert!(version == PalletVersion::new(1));
+		assert!(version < PalletVersion::new(2));
+		assert!(version < PalletVersion::new(3));
 
-		let version = PalletVersion::new(2, 50, 50);
-		assert!(version < PalletVersion::new(2, 50, 51));
-		assert!(version > PalletVersion::new(2, 49, 51));
-		assert!(version < PalletVersion::new(3, 49, 51));
+		let version = PalletVersion::new(2);
+		assert!(version < PalletVersion::new(3));
+		assert!(version > PalletVersion::new(1));
+		assert!(version < PalletVersion::new(5));
 	}
 }

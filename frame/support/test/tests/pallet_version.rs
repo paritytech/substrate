@@ -23,12 +23,12 @@ use codec::{Decode, Encode};
 use sp_runtime::{generic, traits::{BlakeTwo256, Verify}, BuildStorage};
 use frame_support::{
 	traits::{PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletVersion, OnRuntimeUpgrade, GetPalletVersion},
-	crate_to_pallet_version, weights::Weight,
+	pallet_version, weights::Weight,
 };
 use sp_core::{H256, sr25519};
 
 /// A version that we will check for in the tests
-const SOME_TEST_VERSION: PalletVersion = PalletVersion { major: 3000, minor: 30, patch: 13 };
+const SOME_TEST_VERSION: PalletVersion = PalletVersion::new(3000);
 
 /// Checks that `on_runtime_upgrade` sets the latest pallet version when being called without
 /// being provided by the user.
@@ -54,7 +54,7 @@ mod module2 {
 			origin: <T as frame_system::Config>::Origin,
 		{
 			fn on_runtime_upgrade() -> Weight {
-				assert_eq!(crate_to_pallet_version!(), Self::current_version());
+				assert_eq!(pallet_version!(), Self::current_version());
 
 				let version_key = PalletVersion::storage_key::<T::PalletInfo, Self>().unwrap();
 				let version_value = sp_io::storage::get(&version_key);
@@ -213,7 +213,7 @@ fn check_pallet_version(pallet: &str) {
 	let version = PalletVersion::decode(&mut &value[..])
 		.expect("Pallet version is encoded correctly");
 
-	assert_eq!(crate_to_pallet_version!(), version);
+	assert_eq!(pallet_version!(), version);
 }
 
 #[test]

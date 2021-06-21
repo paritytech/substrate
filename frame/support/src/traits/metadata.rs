@@ -78,24 +78,13 @@ pub const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 ///
 /// Each pallet version is stored in the state under a fixed key. See
 /// [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] for how this key is built.
-#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord, Clone, Copy)]
-pub struct PalletVersion {
-	/// The major version of the pallet.
-	pub major: u16,
-	/// The minor version of the pallet.
-	pub minor: u8,
-	/// The patch version of the pallet.
-	pub patch: u8,
-}
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord, Clone, Copy, PartialOrd)]
+pub struct PalletVersion(u16);
 
 impl PalletVersion {
 	/// Creates a new instance of `Self`.
-	pub fn new(major: u16, minor: u8, patch: u8) -> Self {
-		Self {
-			major,
-			minor,
-			patch,
-		}
+	pub const fn new(version: u16) -> Self {
+		Self(version)
 	}
 
 	/// Returns the storage key for a pallet version.
@@ -137,17 +126,15 @@ impl PalletVersion {
 	}
 }
 
-impl sp_std::cmp::PartialOrd for PalletVersion {
-	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
-		let res = self.major
-			.cmp(&other.major)
-			.then_with(||
-				self.minor
-					.cmp(&other.minor)
-					.then_with(|| self.patch.cmp(&other.patch)
-					));
+impl PartialEq<u16> for PalletVersion {
+	fn eq(&self, other: &u16) -> bool {
+		self.0 == *other
+	}
+}
 
-		Some(res)
+impl PartialOrd<u16> for PalletVersion {
+	fn partial_cmp(&self, other: &u16) -> Option<sp_std::cmp::Ordering> {
+		Some(self.0.cmp(other))
 	}
 }
 

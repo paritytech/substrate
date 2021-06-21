@@ -15,10 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{
-	weights::Weight,
-	traits::{GetPalletVersion, PalletVersion, Get},
-};
+use frame_support::{weights::Weight, traits::{GetPalletVersion, Get, PalletVersion}};
 use sp_io::hashing::twox_128;
 
 /// The old prefix.
@@ -52,7 +49,7 @@ pub fn migrate<
 	);
 
 	match maybe_storage_version {
-		Some(storage_version) if storage_version <= PalletVersion::new(3, 0, 0) => {
+		Some(storage_version) if storage_version <= 3 => {
 			log::info!("new prefix: {}", new_pallet_name.as_ref());
 			frame_support::storage::migration::move_pallet(
 				OLD_PREFIX,
@@ -60,14 +57,7 @@ pub fn migrate<
 			);
 			<T as frame_system::Config>::BlockWeights::get().max_block
 		}
-		_ => {
-			log::warn!(
-				target: "runtime::afg",
-				"Attempted to apply migration to v3.1 but cancelled because storage version is {:?}",
-				maybe_storage_version,
-			);
-			0
-		},
+		_ => 0,
 	}
 }
 
@@ -108,7 +98,7 @@ pub fn pre_migration<
 		),
 	);
 	// ensure storage version is 3.
-	assert!(<P as GetPalletVersion>::storage_version().unwrap().major == 3);
+	assert!(<P as GetPalletVersion>::storage_version().unwrap() == 3);
 }
 
 /// Some checks for after migration. This can be linked to

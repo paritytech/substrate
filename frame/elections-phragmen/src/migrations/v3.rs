@@ -19,10 +19,7 @@
 
 use codec::{Encode, Decode, FullCodec};
 use sp_std::prelude::*;
-use frame_support::{
-	RuntimeDebug, weights::Weight, Twox64Concat,
-	traits::{GetPalletVersion, PalletVersion},
-};
+use frame_support::{RuntimeDebug, weights::Weight, Twox64Concat, traits::GetPalletVersion};
 
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
 struct SeatHolder<AccountId, Balance> {
@@ -83,7 +80,7 @@ pub fn apply<T: V2ToV3>(old_voter_bond: T::Balance, old_candidacy_bond: T::Balan
 		maybe_storage_version,
 	);
 	match maybe_storage_version {
-		Some(storage_version) if storage_version <= PalletVersion::new(2, 0, 0) => {
+		Some(storage_version) if storage_version <= 2 => {
 			migrate_voters_to_recorded_deposit::<T>(old_voter_bond);
 			migrate_candidates_to_recorded_deposit::<T>(old_candidacy_bond);
 			migrate_runners_up_to_recorded_deposit::<T>(old_candidacy_bond);

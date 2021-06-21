@@ -153,7 +153,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn current_version() -> #frame_support::traits::PalletVersion {
-				#frame_support::crate_to_pallet_version!()
+				#frame_support::pallet_version!()
 			}
 
 			fn storage_version() -> Option<#frame_support::traits::PalletVersion> {
@@ -171,7 +171,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn on_genesis() {
-				#frame_support::crate_to_pallet_version!()
+				#frame_support::pallet_version!()
 					.put_into_storage::<<T as #frame_system::Config>::PalletInfo, Self>();
 			}
 		}

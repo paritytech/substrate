@@ -15,18 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{crate_to_pallet_version, traits::PalletVersion};
+use frame_support::{pallet_version, traits::PalletVersion};
 
 #[test]
 fn ensure_that_current_pallet_version_is_correct() {
-	let expected = PalletVersion {
-		major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
-		minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
-		patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
-	};
+	let expected = PalletVersion::new(10);
 
 	assert_eq!(
 		expected,
-		crate_to_pallet_version!(),
+		pallet_version!(),
 	)
 }
