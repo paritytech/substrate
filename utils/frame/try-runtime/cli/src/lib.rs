@@ -128,7 +128,7 @@ pub struct SharedParams {
 }
 
 impl SharedParams {
-	pub fn block_at<Block: BlockT>(&self) -> sc_cli::Result<Block::Hash>
+	pub fn block_at<Block>(&self) -> sc_cli::Result<Block::Hash>
 	where
 		Block: BlockT,
 		<Block as BlockT>::Hash: FromStr,
