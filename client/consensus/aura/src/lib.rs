@@ -140,6 +140,9 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
 	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
 	/// because there were no blocks produced for some slots.
 	pub block_proposal_slot_portion: SlotProportion,
+	/// The maximum proportion of the slot dedicated to proposing with any lenience factor applied
+	/// due to no blocks being produced.
+	pub max_block_proposal_slot_portion: Option<SlotProportion>,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
 }
@@ -160,9 +163,11 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
 		keystore,
 		can_author_with,
 		block_proposal_slot_portion,
+		max_block_proposal_slot_portion,
 		telemetry,
 	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW>,
-) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
+) -> Result<impl Future<Output = ()>, sp_consensus::Error>
+where
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Hash + Member + Encode + Decode,
 	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
@@ -192,6 +197,7 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
 		backoff_authoring_blocks,
 		telemetry,
 		block_proposal_slot_portion,
+		max_block_proposal_slot_portion,
 	});
 
 	Ok(sc_consensus_slots::start_slot_worker(
@@ -228,6 +234,9 @@ pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS> {
 	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
 	/// because there were no blocks produced for some slots.
 	pub block_proposal_slot_portion: SlotProportion,
+	/// The maximum proportion of the slot dedicated to proposing with any lenience factor applied
+	/// due to no blocks being produced.
+	pub max_block_proposal_slot_portion: Option<SlotProportion>,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
 }
@@ -245,10 +254,12 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 		backoff_authoring_blocks,
 		keystore,
 		block_proposal_slot_portion,
+		max_block_proposal_slot_portion,
 		telemetry,
 		force_authoring,
 	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS>,
-) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof> where
+) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof>
+where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
@@ -274,6 +285,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 		backoff_authoring_blocks,
 		telemetry,
 		block_proposal_slot_portion,
+		max_block_proposal_slot_portion,
 		_key_type: PhantomData::<P>,
 	}
 }
@@ -288,6 +300,7 @@ struct AuraWorker<C, E, I, P, SO, L, BS> {
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
 	block_proposal_slot_portion: SlotProportion,
+	max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
 	_key_type: PhantomData<P>,
 }
@@ -452,42 +465,17 @@ where
 		self.telemetry.clone()
 	}
 
-	fn proposing_remaining_duration(
-		&self,
-		slot_info: &SlotInfo<B>,
-	) -> std::time::Duration {
-		let max_proposing = slot_info.duration.mul_f32(self.block_proposal_slot_portion.get());
+	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> std::time::Duration {
+		let parent_slot = find_pre_digest::<B, P::Signature>(&slot_info.chain_head).ok();
 
-		let slot_remaining = slot_info.ends_at
-			.checked_duration_since(std::time::Instant::now())
-			.unwrap_or_default();
-
-		let slot_remaining = std::cmp::min(slot_remaining, max_proposing);
-
-		// If parent is genesis block, we don't require any lenience factor.
-		if slot_info.chain_head.number().is_zero() {
-			return slot_remaining
-		}
-
-		let parent_slot = match find_pre_digest::<B, P::Signature>(&slot_info.chain_head) {
-			Err(_) => return slot_remaining,
-			Ok(d) => d,
-		};
-
-		if let Some(slot_lenience) =
-			sc_consensus_slots::slot_lenience_exponential(parent_slot, slot_info)
-		{
-			debug!(
-				target: "aura",
-				"No block for {} slots. Applying linear lenience of {}s",
-				slot_info.slot.saturating_sub(parent_slot + 1),
-				slot_lenience.as_secs(),
-			);
-
-			slot_remaining + slot_lenience
-		} else {
-			slot_remaining
-		}
+		sc_consensus_slots::proposing_remaining_duration(
+			parent_slot,
+			slot_info,
+			&self.block_proposal_slot_portion,
+			self.max_block_proposal_slot_portion.as_ref(),
+			sc_consensus_slots::SlotLenienceType::Exponential,
+			self.logging_target(),
+		)
 	}
 }
 
@@ -759,6 +747,7 @@ mod tests {
 				keystore,
 				can_author_with: sp_consensus::AlwaysCanAuthor,
 				block_proposal_slot_portion: SlotProportion::new(0.5),
+				max_block_proposal_slot_portion: None,
 				telemetry: None,
 			}).expect("Starts aura"));
 		}
@@ -823,6 +812,7 @@ mod tests {
 			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
+			max_block_proposal_slot_portion: None,
 		};
 
 		let head = Header::new(
@@ -873,6 +863,7 @@ mod tests {
 			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
+			max_block_proposal_slot_portion: None,
 		};
 
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
