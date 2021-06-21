@@ -152,6 +152,9 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Take the submission at a particular index.
+	///
+	/// Note that this function does not examine the insertion overlay. If that behavior is desired,
+	/// try `self.insetion_overlay.remove(&idx).or_else(|| self.take_submission(idx))`.
 	fn take_submission(&mut self, idx: u32) -> Option<SignedSubmissionOf<T>> {
 		self.insertion_overlay.remove(&idx).or_else(|| {
 			if self.deletion_overlay.contains(&idx) {
