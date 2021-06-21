@@ -504,8 +504,8 @@ where
 		let is_descendent_of = is_descendent_of(&*self.client, None);
 
 		let (best_block_hash, best_block_number) = {
-			// TODO: Use SelectChain::best_chain() to get a
-			// potentially more accurate best block
+			// TODO [#9158]: Use SelectChain::best_chain() to get a potentially
+			// more accurate best block
 			let info = self.client.info();
 			(info.best_hash, info.best_number)
 		};
