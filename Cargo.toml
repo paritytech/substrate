@@ -218,6 +218,14 @@ branch = "igor-max-encoded-len"
 git = "https://github.com/paritytech/parity-scale-codec"
 branch = "igor-max-encoded-len"
 version = "2.2.0"
+[patch.crates-io.primitive-types]
+git = "https://github.com/paritytech/parity-common"
+branch = "igor-prim-types-new-codec"
+version = "0.9.1"
+[patch.crates-io.impl-codec]
+git = "https://github.com/paritytech/parity-common"
+branch = "igor-prim-types-new-codec"
+version = "0.6.0"
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of

@@ -469,11 +469,10 @@ dependencies = [
 
 [[package]]
 name = "bincode"
-version = "1.3.2"
+version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d175dfa69e619905c4c3cdb7c3c203fa3bdd5d51184e3afdb2742c0280493772"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
 dependencies = [
- "byteorder",
  "serde",
 ]
 
@@ -679,9 +678,9 @@ checksum = "e3b5ca7a04898ad4bcd41c90c5285445ff5b791899bb1b0abdd2a2aa791211d7"
 
 [[package]]
 name = "byteorder"
-version = "1.3.4"
+version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
+checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
@@ -1696,8 +1695,7 @@ dependencies = [
 [[package]]
 name = "fixed-hash"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
+source = "git+https://github.com/paritytech/parity-common?branch=igor-prim-types-new-codec#cf4a9684c92c10a4ac99a6020ce7df67f86d647c"
 dependencies = [
  "byteorder",
  "rand 0.8.3",
@@ -2701,9 +2699,8 @@ dependencies = [
 
 [[package]]
 name = "impl-codec"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df170efa359aebdd5cb7fe78edcc67107748e4737bdca8a8fb40d15ea7a877ed"
+version = "0.6.0"
+source = "git+https://github.com/paritytech/parity-common?branch=igor-prim-types-new-codec#cf4a9684c92c10a4ac99a6020ce7df67f86d647c"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -2713,6 +2710,14 @@ name = "impl-serde"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b47ca4d2b6931707a55fce5cf66aff80e2178c8b63bbb4ecb5695cbc870ddf6f"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "impl-serde"
+version = "0.3.1"
+source = "git+https://github.com/paritytech/parity-common?branch=igor-prim-types-new-codec#cf4a9684c92c10a4ac99a6020ce7df67f86d647c"
 dependencies = [
  "serde",
 ]
@@ -3344,7 +3349,7 @@ dependencies = [
  "rand 0.7.3",
  "sha2 0.9.3",
  "smallvec 1.6.1",
- "uint",
+ "uint 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsigned-varint 0.7.0",
  "void",
  "wasm-timer",
@@ -6258,14 +6263,13 @@ dependencies = [
 
 [[package]]
 name = "primitive-types"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2415937401cb030a2a0a4d922483f945fa068f52a7dbb22ce0fe5f2b6f6adace"
+version = "0.9.1"
+source = "git+https://github.com/paritytech/parity-common?branch=igor-prim-types-new-codec#cf4a9684c92c10a4ac99a6020ce7df67f86d647c"
 dependencies = [
  "fixed-hash",
  "impl-codec",
- "impl-serde",
- "uint",
+ "impl-serde 0.3.1 (git+https://github.com/paritytech/parity-common?branch=igor-prim-types-new-codec)",
+ "uint 0.9.0 (git+https://github.com/paritytech/parity-common?branch=igor-prim-types-new-codec)",
 ]
 
 [[package]]
@@ -8944,7 +8948,7 @@ dependencies = [
  "hash256-std-hasher",
  "hex",
  "hex-literal",
- "impl-serde",
+ "impl-serde 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "libsecp256k1",
  "log",
@@ -9341,7 +9345,7 @@ version = "3.0.0"
 name = "sp-storage"
 version = "3.0.0"
 dependencies = [
- "impl-serde",
+ "impl-serde 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec",
  "ref-cast",
  "serde",
@@ -9469,7 +9473,7 @@ dependencies = [
 name = "sp-version"
 version = "3.0.0"
 dependencies = [
- "impl-serde",
+ "impl-serde 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec",
  "serde",
  "sp-runtime",
@@ -10696,6 +10700,17 @@ name = "uint"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e11fe9a9348741cf134085ad57c249508345fe16411b3d7fb4ff2da2f1d6382e"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "hex",
+ "static_assertions",
+]
+
+[[package]]
+name = "uint"
+version = "0.9.0"
+source = "git+https://github.com/paritytech/parity-common?branch=igor-prim-types-new-codec#cf4a9684c92c10a4ac99a6020ce7df67f86d647c"
 dependencies = [
  "byteorder",
  "crunchy",
