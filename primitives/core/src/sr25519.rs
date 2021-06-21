@@ -42,7 +42,7 @@ use crate::crypto::Ss58Codec;
 
 use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use crate::hash::{H256, H512};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
@@ -62,7 +62,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(
 	PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner,
-	max_encoded_len::MaxEncodedLen,
+	MaxEncodedLen,
 )]
 pub struct Public(pub [u8; 32]);
 

@@ -22,7 +22,6 @@ frame-support = { version = "3.0.0", default-features = false, path = "../suppor
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
-max-encoded-len = { version = "3.0.0", default-features = false, path = "../../max-encoded-len", features = [ "derive" ] }
 
 [dev-dependencies]
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
@@ -39,7 +38,6 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"frame-benchmarking/std",
-	"max-encoded-len/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
