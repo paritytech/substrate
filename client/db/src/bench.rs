@@ -69,8 +69,33 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 /// Track whether a specific key has already been read or written to.
 #[derive(Default, Clone, Copy)]
 pub struct KeyTracker {
-	has_been_read: bool,
-	has_been_written: bool,
+	reads: u32,
+	writes: u32,
+	whitelisted: bool,
+}
+
+impl KeyTracker {
+	fn new() -> Self {
+		Self::default()
+	}
+	fn has_been_read(&self) -> bool {
+		self.whitelisted || self.reads > 0u32 || self.has_been_written()
+	}
+	fn has_been_written(&self) -> bool {
+		self.whitelisted || self.writes > 0u32
+	}
+	fn add_read(&mut self) -> Self {
+		self.reads += 1;
+		*self
+	}
+	fn add_write(&mut self) -> Self {
+		self.writes += 1;
+		*self
+	}
+	fn whitelist(&mut self) -> Self {
+		self.whitelisted = true;
+		*self
+	}
 }
 
 /// A simple object that counts the reads and writes at the key level to the underlying state db.
@@ -191,10 +216,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let whitelist = self.whitelist.borrow();
 
 		whitelist.iter().for_each(|key| {
-			let whitelisted = KeyTracker {
-				has_been_read: key.has_been_read,
-				has_been_written: key.has_been_written,
-			};
+			let whitelisted = KeyTracker::new().whitelist();
 			main_key_tracker.insert(key.key.clone(), whitelisted);
 		});
 	}
@@ -218,33 +240,28 @@ impl<B: BlockT> BenchmarkingState<B> {
 			&mut main_key_tracker
 		};
 
-		let read = match key_tracker.get(key) {
+		let should_log = match key_tracker.get_mut(key) {
 			None => {
-				let has_been_read = KeyTracker {
-					has_been_read: true,
-					has_been_written: false,
-				};
+				let has_been_read = KeyTracker::default().add_read();
 				key_tracker.insert(key.to_vec(), has_been_read);
 				read_write_tracker.add_read();
 				true
 			},
 			Some(tracker) => {
-				if !tracker.has_been_read {
-					let has_been_read = KeyTracker {
-						has_been_read: true,
-						has_been_written: tracker.has_been_written,
-					};
-					key_tracker.insert(key.to_vec(), has_been_read);
+				let mut tracker = tracker.clone();
+				let should_log = if !tracker.has_been_read() {
 					read_write_tracker.add_read();
 					true
 				} else {
 					read_write_tracker.add_repeat_read();
 					false
-				}
+				};
+				tracker.add_read();
+				should_log
 			}
 		};
 
-		if read {
+		if should_log {
 			if let Some(childtrie) = childtrie {
 				log::trace!(
 					target: "benchmark",
@@ -269,30 +286,28 @@ impl<B: BlockT> BenchmarkingState<B> {
 		};
 
 		// If we have written to the key, we also consider that we have read from it.
-		let has_been_written = KeyTracker {
-			has_been_read: true,
-			has_been_written: true,
-		};
 
-		let write = match key_tracker.get(key) {
+		let should_log = match key_tracker.get_mut(key) {
 			None => {
+				let has_been_written = KeyTracker::new().add_write();
 				key_tracker.insert(key.to_vec(), has_been_written);
 				read_write_tracker.add_write();
 				true
 			},
 			Some(tracker) => {
-				if !tracker.has_been_written {
-					key_tracker.insert(key.to_vec(), has_been_written);
+				let should_log = if !tracker.has_been_written() {
 					read_write_tracker.add_write();
 					true
 				} else {
 					read_write_tracker.add_repeat_write();
 					false
-				}
+				};
+				tracker.add_write();
+				should_log
 			}
 		};
 
-		if write {
+		if should_log {
 			if let Some(childtrie) = childtrie {
 				log::trace!(
 					target: "benchmark",
@@ -515,7 +530,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)> {
 		self.main_key_tracker.borrow().iter().map(|(key, value)| -> (Vec<u8>, bool, bool) {
-			let (read, written) = (value.has_been_read, value.has_been_written);
+			let (read, written) = (value.has_been_read(), value.has_been_written());
 			(key.to_vec(), read, written)
 		}).collect::<Vec<_>>()
 	}
