@@ -205,9 +205,6 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/prometheus",
 	"utils/wasm-builder",
-	# temp deps
-	"max-encoded-len",
-	"max-encoded-len/derive",
 ]
 
 [patch.crates-io.parity-scale-codec]
