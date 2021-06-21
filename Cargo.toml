@@ -210,6 +210,15 @@ members = [
 	"max-encoded-len/derive",
 ]
 
+[patch.crates-io.parity-scale-codec]
+git = "https://github.com/paritytech/parity-scale-codec"
+version = "2.2.0"
+branch = "igor-max-encoded-len"
+[patch.crates-io.parity-scale-codec-derive]
+git = "https://github.com/paritytech/parity-scale-codec"
+branch = "igor-max-encoded-len"
+version = "2.2.0"
+
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
 # their debug info might be missing) or to require to be frequently recompiled. We compile these

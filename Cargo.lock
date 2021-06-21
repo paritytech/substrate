@@ -5759,24 +5759,23 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0f518afaa5a47d0d6386229b0a6e01e86427291d643aa4cabb4992219f504f8"
+version = "2.2.0"
+source = "git+https://github.com/paritytech/parity-scale-codec?branch=igor-max-encoded-len#95245ed6f57e3bf44d0bb0b42588a4bf0ec08e13"
 dependencies = [
  "arrayvec 0.7.0",
  "bitvec",
  "byte-slice-cast",
+ "impl-trait-for-tuples",
  "parity-scale-codec-derive",
  "serde",
 ]
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f44c5f94427bd0b5076e8f7e15ca3f60a4d8ac0077e4793884e6fdfd8915344e"
+version = "2.2.0"
+source = "git+https://github.com/paritytech/parity-scale-codec?branch=igor-max-encoded-len#95245ed6f57e3bf44d0bb0b42588a4bf0ec08e13"
 dependencies = [
- "proc-macro-crate 0.1.5",
+ "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
  "syn",
