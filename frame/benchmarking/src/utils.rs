@@ -64,6 +64,7 @@ pub struct BenchmarkResults {
 	pub writes: u32,
 	pub repeat_writes: u32,
 	pub proof_size: u32,
+	pub keys: Vec<(Vec<u8>, u32, u32)>,
 }
 
 /// Configuration used to setup and run runtime benchmarks.
@@ -91,7 +92,8 @@ sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
 		/// Dispatch the given benchmark.
-		fn dispatch_benchmark(config: BenchmarkConfig) -> Result<Vec<BenchmarkBatch>, sp_runtime::RuntimeString>;
+		fn dispatch_benchmark(config: BenchmarkConfig)
+			-> Result<(Vec<BenchmarkBatch>, Vec<StorageInfo>), sp_runtime::RuntimeString>;
 	}
 }
 
@@ -201,7 +203,6 @@ pub trait Benchmarking<T> {
 		steps: &[u32],
 		repeat: u32,
 		whitelist: &[TrackedStorageKey],
-		storage_info: &[StorageInfo],
 		verify: bool,
 	) -> Result<Vec<T>, &'static str>;
 }

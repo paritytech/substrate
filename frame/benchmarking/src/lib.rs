@@ -705,7 +705,6 @@ macro_rules! impl_benchmark {
 				steps: &[u32],
 				repeat: u32,
 				whitelist: &[$crate::TrackedStorageKey],
-				storage_info: &[$crate::frame_support::traits::StorageInfo],
 				verify: bool,
 			) -> Result<$crate::Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
@@ -844,6 +843,7 @@ macro_rules! impl_benchmark {
 								writes: read_write_count.2,
 								repeat_writes: read_write_count.3,
 								proof_size: diff_pov,
+								keys: read_and_written_keys,
 							});
 						}
 
@@ -1346,7 +1346,7 @@ macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:path, $( $location:tt )* ) => (
 		let name_string = stringify!($name).as_bytes();
 		let instance_string = stringify!( $( $location )* ).as_bytes();
-		let (config, whitelist, storage_info) = $params;
+		let (config, whitelist) = $params;
 		let $crate::BenchmarkConfig {
 			pallet,
 			benchmark,
@@ -1371,7 +1371,6 @@ macro_rules! add_benchmark {
 							&steps[..],
 							*repeat,
 							whitelist,
-							storage_info,
 							*verify,
 						).map_err(|e| {
 							$crate::show_benchmark_debug_info(
@@ -1399,7 +1398,6 @@ macro_rules! add_benchmark {
 						&steps[..],
 						*repeat,
 						whitelist,
-						storage_info,
 						*verify,
 					).map_err(|e| {
 						$crate::show_benchmark_debug_info(

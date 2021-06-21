@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
+use frame_support::traits::StorageInfo;
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
@@ -31,7 +31,7 @@ use sp_keystore::{
 	SyncCryptoStorePtr, KeystoreExt,
 	testing::KeyStore,
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc, collections::HashMap};
 
 impl BenchmarkCmd {
 	/// Runs the command and benchmarks the chain.
@@ -98,11 +98,19 @@ impl BenchmarkCmd {
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-		let results = <std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
+		let results = <std::result::Result<
+				(Vec<BenchmarkBatch>, Vec<StorageInfo>),
+				String,
+			> as Decode>::decode(&mut &result[..])
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
 		match results {
-			Ok(batches) => {
+			Ok((batches, storage_info)) => {
+				let mut storage_info_map = HashMap::new();
+				storage_info.iter().for_each(|info| {
+					storage_info_map.insert(info.prefix, info);
+				});
+
 				if let Some(output_path) = &self.output {
 					crate::writer::write_results(&batches, output_path, self)?;
 				}
@@ -129,6 +137,8 @@ impl BenchmarkCmd {
 						print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes\n");
 						// Print the values
 						batch.results.iter().for_each(|result| {
+							match_keys(&result.keys, &storage_info_map);
+
 							let parameters = &result.components;
 							parameters.iter().for_each(|param| print!("{:?},", param.1));
 							// Print extrinsic time and storage root time
@@ -190,5 +200,19 @@ impl CliConfiguration for BenchmarkCmd {
 			Some(ref chain) => chain.clone(),
 			None => "dev".into(),
 		})
+	}
+}
+
+fn match_keys(keys: &[(Vec<u8>, u32, u32)], storage_info: &HashMap<[u8; 32], &StorageInfo>) {
+	println!("info: {:x?}", storage_info);
+	for key in keys {
+		println!("key: {:x?}", &key.0);
+		if let Some(key_info) = storage_info.get(&key.0[0..32]) {
+			println!(
+				"Match! {} {}",
+				String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
+				String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
+			)
+		}
 	}
 }
