@@ -2987,8 +2987,9 @@ impl<T: Config> Pallet<T> {
 			.collect()
 	}
 
-	pub fn get_npos_targets() -> Vec<AccountIdOf<T>> {
-		<Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>()
+	/// This is a very expensive function and result should be cached versus being called multiple times.
+	pub fn get_npos_targets() -> Vec<T::AccountId> {
+		Validators::<T>::iter().map(|(v, _)| v).collect::<Vec<_>>()
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
