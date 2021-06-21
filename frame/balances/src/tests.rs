@@ -966,6 +966,46 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn transfer_all_works() {
+			<$ext_builder>::default()
+				.existential_deposit(100)
+				.build()
+				.execute_with(|| {
+					// setup
+					assert_ok!(Balances::set_balance(Origin::root(), 1, 200, 0));
+					assert_ok!(Balances::set_balance(Origin::root(), 2, 0, 0));
+					// transfer all and allow death
+					assert_ok!(Balances::transfer_all(Some(1).into(), 2, false));
+					assert_eq!(Balances::total_balance(&1), 0);
+					assert_eq!(Balances::total_balance(&2), 200);
+
+					// setup
+					assert_ok!(Balances::set_balance(Origin::root(), 1, 200, 0));
+					assert_ok!(Balances::set_balance(Origin::root(), 2, 0, 0));
+					// transfer all and keep alive
+					assert_ok!(Balances::transfer_all(Some(1).into(), 2, true));
+					assert_eq!(Balances::total_balance(&1), 100);
+					assert_eq!(Balances::total_balance(&2), 100);
+
+					// setup
+					assert_ok!(Balances::set_balance(Origin::root(), 1, 200, 10));
+					assert_ok!(Balances::set_balance(Origin::root(), 2, 0, 0));
+					// transfer all and allow death w/ reserved
+					assert_ok!(Balances::transfer_all(Some(1).into(), 2, false));
+					assert_eq!(Balances::total_balance(&1), 0);
+					assert_eq!(Balances::total_balance(&2), 200);
+
+					// setup
+					assert_ok!(Balances::set_balance(Origin::root(), 1, 200, 10));
+					assert_ok!(Balances::set_balance(Origin::root(), 2, 0, 0));
+					// transfer all and keep alive w/ reserved
+					assert_ok!(Balances::transfer_all(Some(1).into(), 2, true));
+					assert_eq!(Balances::total_balance(&1), 100);
+					assert_eq!(Balances::total_balance(&2), 110);
+				});
+		}
+
+		#[test]
 		fn named_reserve_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
