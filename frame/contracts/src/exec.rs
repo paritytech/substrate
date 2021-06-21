@@ -334,7 +334,7 @@ pub trait Executable<T: Config>: Sized {
 	///
 	/// # Note
 	///
-	/// Does not charge from the gas meter. Do not in contexts where this is important.
+	/// Does not charge from the gas meter. Do not call in contexts where this is important.
 	fn from_storage_noinstr(code_hash: CodeHash<T>) -> Result<Self, DispatchError>;
 
 	/// Decrements the refcount by one and deletes the code if it drops to zero.

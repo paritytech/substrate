@@ -240,9 +240,9 @@ where
 		// the contract.
 		match *self {
 			Instrument(len) => T::WeightInfo::instrument(len / 1024),
-			Load(len) => T::WeightInfo::code_load(len / 1024) - T::WeightInfo::code_load(0),
+			Load(len) => T::WeightInfo::code_load(len / 1024).saturating_sub(T::WeightInfo::code_load(0)),
 			UpdateRefcount(len) =>
-				T::WeightInfo::code_refcount(len / 1024) - T::WeightInfo::code_refcount(0),
+				T::WeightInfo::code_refcount(len / 1024).saturating_sub(T::WeightInfo::code_refcount(0)),
 		}
 	}
 }
