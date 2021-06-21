@@ -124,10 +124,11 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Put the signed submissions back into storage.
-	pub fn put(self) {
+	pub fn put(mut self) {
 		SignedSubmissionIndices::<T>::put(self.indices);
 		SignedSubmissionNextIndex::<T>::put(self.next_idx);
 		for key in self.deletion_overlay {
+			self.insertion_overlay.remove(&key);
 			SignedSubmissionsMap::<T>::remove(key);
 		}
 		for (key, value) in self.insertion_overlay {
@@ -137,10 +138,17 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Get the submission at a particular index.
 	fn get_submission(&self, idx: u32) -> Option<SignedSubmissionOf<T>> {
-		self.insertion_overlay
-			.get(&idx)
-			.cloned()
-			.or_else(|| SignedSubmissionsMap::<T>::try_get(idx).ok())
+		if self.deletion_overlay.contains(&idx) {
+			// Note: can't actually remove the item from the insertion overlay (if present)
+			// because we don't want to use `&mut self` here. There may be some kind of
+			// `RefCell` optimization possible here in the future.
+			None
+		} else {
+			self.insertion_overlay
+				.get(&idx)
+				.cloned()
+				.or_else(|| SignedSubmissionsMap::<T>::try_get(idx).ok())
+		}
 	}
 
 	/// Take the submission at a particular index.
