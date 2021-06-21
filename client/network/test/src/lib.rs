@@ -1075,10 +1075,15 @@ impl TestNetFactory for TestNet {
 
 pub struct ForceFinalized(PeersClient);
 
+#[async_trait::async_trait]
 impl JustificationImport<Block> for ForceFinalized {
 	type Error = ConsensusError;
 
-	fn import_justification(
+	async fn on_start(&mut self) -> Vec<(H256, NumberFor<Block>)> {
+		Vec::new()
+	}
+
+	async fn import_justification(
 		&mut self,
 		hash: H256,
 		_number: NumberFor<Block>,

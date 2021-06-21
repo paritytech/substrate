@@ -80,45 +80,47 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 		create_inherent_data_providers,
 		consensus_data_provider: digest_provider,
 		mut sender,
-	}: SealBlockParams<'_, B, BI, SC, C, E, P, CIDP>
-)
-	where
-		B: BlockT,
-		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
-			+ Send + Sync + 'static,
-		C: HeaderBackend<B> + ProvideRuntimeApi<B>,
-		E: Environment<B>,
-		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
-		P: txpool::ChainApi<Block=B>,
-		SC: SelectChain<B>,
-		TransactionFor<C, B>: 'static,
-		CIDP: CreateInherentDataProviders<B, ()>,
+	}: SealBlockParams<'_, B, BI, SC, C, E, P, CIDP>,
+) where
+	B: BlockT,
+	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
+		+ Send
+		+ Sync
+		+ 'static,
+	C: HeaderBackend<B> + ProvideRuntimeApi<B>,
+	E: Environment<B>,
+	E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
+	P: txpool::ChainApi<Block = B>,
+	SC: SelectChain<B>,
+	TransactionFor<C, B>: 'static,
+	CIDP: CreateInherentDataProviders<B, ()>,
 {
 	let future = async {
 		if pool.validated_pool().status().ready == 0 && !create_empty {
-			return Err(Error::EmptyTransactionPool)
+			return Err(Error::EmptyTransactionPool);
 		}
 
 		// get the header to build this new block on.
 		// use the parent_hash supplied via `EngineCommand`
 		// or fetch the best_block.
 		let parent = match parent_hash {
-			Some(hash) => {
-				client.header(BlockId::Hash(hash))?.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?
-			}
-			None => select_chain.best_chain()?
+			Some(hash) => client
+				.header(BlockId::Hash(hash))?
+				.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?,
+			None => select_chain.best_chain().await?,
 		};
 
-		let inherent_data_providers =
-			create_inherent_data_providers
-				.create_inherent_data_providers(parent.hash(), ())
-				.await
-				.map_err(|e| Error::Other(e))?;
+		let inherent_data_providers = create_inherent_data_providers
+			.create_inherent_data_providers(parent.hash(), ())
+			.await
+			.map_err(|e| Error::Other(e))?;
 
 		let inherent_data = inherent_data_providers.create_inherent_data()?;
 
-		let proposer = env.init(&parent)
-			.map_err(|err| Error::StringError(format!("{:?}", err))).await?;
+		let proposer = env
+			.init(&parent)
+			.map_err(|err| Error::StringError(format!("{:?}", err)))
+			.await?;
 		let inherents_len = inherent_data.len();
 
 		let digest = if let Some(digest_provider) = digest_provider {

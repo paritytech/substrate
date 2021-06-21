@@ -501,8 +501,11 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound
+	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound,
 };
+
+#[doc(hidden)]
+pub use frame_support_procedural::__generate_dummy_part_checker;
 
 /// Derive [`Clone`] but do not bound any generic.
 ///
@@ -1005,7 +1008,10 @@ pub mod tests {
 			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
-			DoubleMap::remove_prefix(&key1);
+			assert!(matches!(
+				DoubleMap::remove_prefix(&key1, None),
+				sp_io::KillStorageResult::AllRemoved(0), // all in overlay
+			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
 			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
@@ -1438,7 +1444,7 @@ pub mod pallet_prelude {
 /// impl<T: Config> Pallet<T> {
 /// 	/// $some_doc
 /// 	#[pallet::weight($ExpressionResultingInWeight)]
-/// 	$vis fn $fn_name(
+/// 	pub fn $fn_name(
 /// 		origin: OriginFor<T>,
 /// 		$some_arg: $some_type,
 /// 		// or with compact attribute: #[pallet::compact] $some_arg: $some_type,
@@ -1897,7 +1903,7 @@ pub mod pallet_prelude {
 /// 	impl<T: Config> Pallet<T> {
 /// 		/// Doc comment put in metadata
 /// 		#[pallet::weight(0)] // Defines weight for call (function parameters are in scope)
-/// 		fn toto(
+/// 		pub fn toto(
 /// 			origin: OriginFor<T>,
 /// 			#[pallet::compact] _foo: u32,
 /// 		) -> DispatchResultWithPostInfo {
@@ -2071,7 +2077,7 @@ pub mod pallet_prelude {
 /// 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 /// 		/// Doc comment put in metadata
 /// 		#[pallet::weight(0)]
-/// 		fn toto(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
+/// 		pub fn toto(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
 /// 			let _ = origin;
 /// 			unimplemented!();
 /// 		}
