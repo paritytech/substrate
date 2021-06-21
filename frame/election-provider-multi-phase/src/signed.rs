@@ -245,6 +245,7 @@ impl<T: Config> SignedSubmissions<T> {
 
 		// we've taken out the weakest, so update the storage map and the next index
 		self.insertion_overlay.insert(self.next_idx, submission);
+		debug_assert!(!self.deletion_overlay.contains(&self.next_idx));
 		self.next_idx += 1;
 		(true, weakest)
 	}
