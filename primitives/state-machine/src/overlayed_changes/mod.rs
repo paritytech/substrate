@@ -636,10 +636,7 @@ impl OverlayedChanges {
 				|(k, v)| (&k[..], v.value().map(|v| &v[..]))
 			)));
 
-		let (root, transaction) = backend.full_storage_root(
-			delta,
-			child_delta,
-		);
+		let (root, transaction) = backend.full_storage_root(delta, child_delta);
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);

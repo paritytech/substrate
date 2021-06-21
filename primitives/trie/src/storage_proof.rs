@@ -174,14 +174,9 @@ impl Iterator for StorageProofNodeIterator {
 impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
-		// Needed because we do not read trie structure, so
-		// we do a heuristic related to the fact that host function
-		// only allow global definition.
-		// Using compact proof will work directly here (read trie structure and
-		// work directly.
 		for item in proof.trie_nodes.iter() {
 			let mut meta = Default::default();
-			// read state meta (required for value layout).
+			// Read meta from state (required for value layout).
 			let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(item.as_slice(), &mut meta);
 			db.alt_insert(
 				crate::EMPTY_PREFIX,

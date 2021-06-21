@@ -26,7 +26,7 @@ use sp_core::{
 	storage::{well_known_keys::is_child_storage_key, ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay,
 };
-use sp_trie::{Layout, empty_child_trie_root};
+use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
 	Externalities, Extensions, Extension, ExtensionStore,
 };
@@ -530,10 +530,7 @@ where
 			return root.encode();
 		}
 
-		let root = self.overlay.storage_root(
-			self.backend,
-			self.storage_transaction_cache,
-		);
+		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
 		trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
 		root.encode()
 	}

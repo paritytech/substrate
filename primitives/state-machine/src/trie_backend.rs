@@ -34,8 +34,8 @@ use sp_std::{boxed::Box, vec::Vec};
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	pub (crate) essence: TrieBackendEssence<S, H>,
 	// Allows setting alt hashing at start for testing only
-	// (see in_memory_backend that cannot read from state as
-	// it changes.
+	// (mainly for in_memory_backend when it cannot read it from
+	// state).
 	pub (crate) force_alt_hashing: Option<Option<u32>>,
 }
 

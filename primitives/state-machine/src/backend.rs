@@ -169,7 +169,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
-	/// Alt hashing paremeter must contain possible changes from delta.
 	fn full_storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
@@ -257,7 +256,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// Read current trie hashing threshold.
-	/// Please do not reimplement.
+	/// Please do not change default implementation when implementing this trait.
 	fn get_trie_alt_hashing_threshold(&self) -> Option<u32> {
 		self.storage(sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG).ok().flatten()
 			.and_then(|encoded| sp_core::storage::trie_threshold_decode(&mut encoded.as_slice()))

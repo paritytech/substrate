@@ -88,7 +88,7 @@ where
 		self.root() == other.root()
 	}
 
-	/// setting a alt hashing threshold at start.
+	/// Setting a alternate hashing threshold at start.
 	pub fn force_alt_hashing(&mut self, threshold: Option<u32>) {
 		self.force_alt_hashing = Some(threshold);
 	}

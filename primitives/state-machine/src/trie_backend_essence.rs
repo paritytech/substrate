@@ -43,11 +43,7 @@ type Result<V> = sp_std::result::Result<V, crate::DefaultError>;
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get a trie node.
-	fn get(
-		&self,
-		key: &H::Out,
-		prefix: Prefix,
-	) -> Result<Option<DBValue>>;
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 
 	/// Call back when value get accessed in trie.
 	fn access_from(&self, key: &H::Out);
@@ -416,8 +412,10 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue>
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	/// Type of in-memory overlay.
 	type Overlay: HashDB<H, DBValue> + Default + Consolidate;
+
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
+
 	/// Call back when value get accessed in trie.
 	fn access_from(&self, key: &H::Out);
 }
@@ -427,11 +425,7 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
 
-	fn get(
-		&self,
-		key: &H::Out,
-		prefix: Prefix,
-	) -> Result<Option<DBValue>> {
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(self.deref(), key, prefix)
 	}
 

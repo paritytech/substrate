@@ -1561,8 +1561,6 @@ mod tests {
 				local_result1.into_iter().collect::<Vec<_>>(),
 				vec![(b"foo222".to_vec(), Some(vec![5u8; 100]))],
 			);
-			println!("a{:?}", remote_proof.encode().len());
-			println!("b{:?}", remote_proof.encoded_size());
 			remote_proof
 		};
 
@@ -1651,7 +1649,6 @@ mod tests {
 		);
 		remote_backend.backend_storage_mut().consolidate(transaction);
 		remote_backend.essence.set_root(remote_root.clone());
-		println!("{:?}", remote_root);
 		let remote_proof = prove_child_read(
 			remote_backend,
 			&child_info1,
