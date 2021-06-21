@@ -256,6 +256,8 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
+		module.register_alias("state_callAt", "state_call")?;
+
 		module.register_async_method("state_getKeys", |params, state| {
 			let (key_prefix, block) = match params.parse() {
 				Ok(params) => params,
@@ -296,6 +298,8 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
+		module.register_alias("state_getKeysPagedAt", "state_getKeysPaged")?;
+
 		module.register_async_method("state_getStorage", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
@@ -305,6 +309,8 @@ impl<Block, Client> State<Block, Client>
 				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
+
+		module.register_alias("state_getStorageAt", "state_getStorage")?;
 
 		module.register_async_method("state_getStorageHash", |params, state| {
 			let (key, block) = match params.parse() {
@@ -316,6 +322,8 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
+		module.register_alias("state_getStorageHashAt", "state_getStorageHash")?;
+
 		module.register_async_method("state_getStorageSize", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
@@ -325,6 +333,8 @@ impl<Block, Client> State<Block, Client>
 				state.backend.storage_size(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
+
+		module.register_alias("state_getStorageSizeAt", "state_getStorageSize")?;
 
 		module.register_async_method("state_getMetadata", |params, state| {
 			let maybe_block = params.one().ok();
@@ -340,6 +350,8 @@ impl<Block, Client> State<Block, Client>
 				state.backend.runtime_version(at).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
+
+		module.register_alias("chain_getRuntimeVersion", "state_getRuntimeVersion")?;
 
 		module.register_async_method("state_queryStorage", |params, state| {
 			let (keys, from, to) = match params.parse() {
@@ -395,6 +407,9 @@ impl<Block, Client> State<Block, Client>
 				ctx.backend.subscribe_runtime_version(sink).map_err(Into::into)
 		})?;
 
+		module.register_alias("chain_subscribeRuntimeVersion", "state_subscribeRuntimeVersion")?;
+		module.register_alias("chain_unsubscribeRuntimeVersion", "state_unsubscribeRuntimeVersion")?;
+
 		module.register_subscription(
 			"state_subscribeStorage",
 			"state_unsubscribeStorage",
@@ -402,6 +417,7 @@ impl<Block, Client> State<Block, Client>
 				let keys = params.one::<Option<Vec<StorageKey>>>()?;
 				ctx.backend.subscribe_storage(sink, keys).map_err(Into::into)
 		})?;
+
 
 		Ok(module)
 	}
