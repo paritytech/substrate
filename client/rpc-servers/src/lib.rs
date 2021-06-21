@@ -83,6 +83,7 @@ mod inner {
 					}))
 				}).unwrap();
 
+				server.register_module(methods_api).unwrap();
 				let _ = server.start().await;
 			});
 		});
@@ -132,6 +133,8 @@ mod inner {
 						"methods": methods,
 					}))
 				}).unwrap();
+
+				server.register_module(methods_api).unwrap();
 
 				let _ = server.start().await;
 			});
