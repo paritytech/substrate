@@ -285,7 +285,7 @@ pub(crate) fn compute_slash<T: Config>(params: SlashParams<T>)
 			// chill the validator - it misbehaved in the current span and should
 			// not continue in the next election. also end the slashing span.
 			spans.end_span(now);
-			<Pallet<T>>::chill_stash(stash, None);
+			<Pallet<T>>::chill_stash(stash);
 
 			// make sure to disable validator till the end of this session
 			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
@@ -325,7 +325,7 @@ fn kick_out_if_recent<T: Config>(
 
 	if spans.era_span(params.slash_era).map(|s| s.index) == Some(spans.span_index()) {
 		spans.end_span(params.now);
-		<Pallet<T>>::chill_stash(params.stash, None);
+		<Pallet<T>>::chill_stash(params.stash);
 
 		// make sure to disable validator till the end of this session
 		if T::SessionInterface::disable_validator(params.stash).unwrap_or(false) {
