@@ -165,7 +165,7 @@ pub trait Benchmarking {
 		self.set_whitelist(whitelist);
 	}
 
-	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)> {
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32)> {
 		self.get_read_and_written_keys()
 	}
 

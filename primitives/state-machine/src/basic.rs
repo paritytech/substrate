@@ -340,7 +340,7 @@ impl Externalities for BasicExternalities {
 		unimplemented!("set_whitelist is not supported in Basic")
 	}
 
-	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)> {
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32)> {
 		unimplemented!("get_read_and_written_keys is not supported in Basic")
 	}
 }

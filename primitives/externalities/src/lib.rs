@@ -302,7 +302,7 @@ pub trait Externalities: ExtensionStore {
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	///
 	/// Get all the keys that have been read or written to during the benchmark.
-	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, bool, bool)>;
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32)>;
 }
 
 /// Extension for the [`Externalities`] trait.
