@@ -171,8 +171,10 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Empty the set of signed submissions, returning an iterator of signed submissions in
-	/// arbitrary order
-	pub fn drain(&mut self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
+	/// arbitrary order.
+	///
+	/// Note that if the iterator is dropped without consuming all elements, not all may be removed.
+	fn drain(&mut self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
 		self.indices.clear();
 		SignedSubmissionNextIndex::<T>::kill();
 		let insertion_overlay = sp_std::mem::take(&mut self.insertion_overlay);
