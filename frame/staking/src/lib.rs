@@ -1761,7 +1761,7 @@ pub mod pallet {
 			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
 
 			let stash = &ledger.stash;
-			Self::do_remove_nominator(stash);
+			Self::do_remove_nominator(stash, &controller);
 			Self::do_add_validator(stash, prefs);
 			Ok(())
 		}
@@ -1824,7 +1824,7 @@ pub mod pallet {
 			};
 
 			Self::do_remove_validator(stash);
-			Self::do_add_nominator(stash, nominations);
+			Self::do_add_nominator(stash, &controller, nominations);
 			Ok(())
 		}
 
@@ -1849,8 +1849,7 @@ pub mod pallet {
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			Self::chill_stash(&ledger.stash);
-			VoterList::<T>::remove(&ledger.stash);
+			Self::chill_stash(&ledger.stash, controller.into());
 			Ok(())
 		}
 
@@ -2361,7 +2360,7 @@ pub mod pallet {
 				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
 			}
 
-			Self::chill_stash(&stash);
+			Self::chill_stash(&stash, controller.into());
 			Ok(())
 		}
 	}
@@ -2524,9 +2523,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Chill a stash account.
-	fn chill_stash(stash: &T::AccountId) {
+	///
+	/// If `controller.is_none()`, looks it up in the ledger. However, if the controller is avilable
+	/// in the calling scope, it's more efficient to pass it directly.
+	fn chill_stash(stash: &T::AccountId, controller: Option<T::AccountId>) {
 		Self::do_remove_validator(stash);
-		Self::do_remove_nominator(stash);
+		let controller = controller.unwrap_or_else(|| {
+			Bonded::<T>::get(stash).expect("TODO: fix this error handling")
+		});
+		Self::do_remove_nominator(stash, &controller);
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -2875,7 +2880,7 @@ impl<T: Config> Pallet<T> {
 
 		<Payee<T>>::remove(stash);
 		Self::do_remove_validator(stash);
-		Self::do_remove_nominator(stash);
+		Self::do_remove_nominator(stash, &controller);
 
 		VoterList::<T>::remove(stash);
 
@@ -2996,22 +3001,26 @@ impl<T: Config> Pallet<T> {
 	/// and keep track of the `CounterForNominators`.
 	///
 	/// If the nominator already exists, their nominations will be updated.
-	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
-		if !Nominators::<T>::contains_key(who) {
+	pub fn do_add_nominator(
+		stash: &T::AccountId,
+		controller: &T::AccountId,
+		nominations: Nominations<T::AccountId>,
+	) {
+		if !Nominators::<T>::contains_key(stash) {
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc())
 		}
-		Nominators::<T>::insert(who, nominations);
-		VoterList::<T>::insert_as(who, VoterType::Nominator);
+		Nominators::<T>::insert(stash, nominations);
+		VoterList::<T>::insert_as(controller, VoterType::Nominator);
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
 	/// and keep track of the `CounterForNominators`.
-	pub fn do_remove_nominator(who: &T::AccountId) {
-		if Nominators::<T>::contains_key(who) {
-			Nominators::<T>::remove(who);
+	pub fn do_remove_nominator(stash: &T::AccountId, controller: &T::AccountId) {
+		if Nominators::<T>::contains_key(stash) {
+			Nominators::<T>::remove(stash);
 			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
-			VoterList::<T>::remove(who);
 		}
+		VoterList::<T>::remove(controller);
 	}
 
 	/// This function will add a validator to the `Validators` storage map,
@@ -3151,8 +3160,10 @@ impl<T: Config>
 					claimed_rewards: vec![],
 				},
 			);
+			let controller = Bonded::<T>::get(&v).unwrap();
 			Self::do_add_nominator(
 				&v,
+				&controller,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },
 			);
 		});

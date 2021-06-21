@@ -85,6 +85,7 @@ pub fn create_validator_with_nominators<T: Config>(
 		};
 		if i < n {
 			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
+			assert!(crate::voter_bags::Node::<T>::from_id(&n_controller).is_some());
 			nominators.push((n_stash, n_controller));
 		}
 	}
