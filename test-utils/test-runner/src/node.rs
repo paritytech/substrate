@@ -134,7 +134,7 @@ impl<T: ChainInfo> Node<T> {
 			config.transaction_pool.clone(),
 			true.into(),
 			config.prometheus_registry(),
-			task_manager.spawn_handle(),
+			task_manager.spawn_essential_handle(),
 			client.clone(),
 		);
 

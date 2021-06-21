@@ -190,7 +190,7 @@ pub mod pallet {
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
-		fn report_equivocation(
+		pub fn report_equivocation(
 			origin: OriginFor<T>,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
@@ -214,7 +214,7 @@ pub mod pallet {
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
-		pub(super) fn report_equivocation_unsigned(
+		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
@@ -236,7 +236,7 @@ pub mod pallet {
 		/// will start the new authority set using the given finalized block as base.
 		/// Only callable by root.
 		#[pallet::weight(T::WeightInfo::note_stalled())]
-		fn note_stalled(
+		pub fn note_stalled(
 			origin: OriginFor<T>,
 			delay: T::BlockNumber,
 			best_finalized_block_number: T::BlockNumber,
@@ -339,6 +339,18 @@ pub mod pallet {
 		fn build(&self) {
 			CurrentSetId::<T>::put(fg_primitives::SetId::default());
 			Pallet::<T>::initialize(&self.authorities)
+		}
+	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			Self::validate_unsigned(source, call)
+		}
+
+		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+			Self::pre_dispatch(call)
 		}
 	}
 }
