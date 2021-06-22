@@ -588,6 +588,12 @@ pub mod pallet {
 		type MinerMaxWeight: Get<Weight>;
 
 		/// Maximum number of signed submissions that can be queued.
+		///
+		/// It is best to avoid adjusting this during an election, as it impacts downstream data
+		/// structures. In particular, `SignedSubmissionIndices<T>` is bounded on this value. If you
+		/// update this value during an election, you _must_ ensure that
+		/// `SignedSubmissionIndices.len()` is less than or equal to the new value. Otherwise,
+		/// attempts to submit new solutions may cause a runtime panic.
 		#[pallet::constant]
 		type SignedMaxSubmissions: Get<u32>;
 
