@@ -175,7 +175,7 @@ pub enum IdentityField {
 }
 
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
-#[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Default, RuntimeDebug, MaxEncodedLen)]
 pub struct IdentityFields(pub(crate) BitFlags<IdentityField>);
 
 impl Eq for IdentityFields {}
@@ -304,7 +304,7 @@ impl<
 }
 
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
