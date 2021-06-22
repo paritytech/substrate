@@ -34,7 +34,7 @@ pub struct Service {
 
 impl Debug for Service {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "sc_authority_discovery::Service(..)")
+		f.debug_tuple("AuthorityDiscoveryService").finish()
 	}
 }
 
