@@ -20,6 +20,7 @@
 use super::*;
 use crate as pallet_identity;
 
+use codec::{Encode, Decode};
 use sp_runtime::traits::BadOrigin;
 use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
 use sp_core::H256;
