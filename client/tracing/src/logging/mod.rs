@@ -97,13 +97,14 @@ fn prepare_subscriber<N, E, F, W>(
 			fn() -> std::io::Stderr,
 		>,
 	) -> SubscriberBuilder<N, E, F, W>,
+	rotation: RotationBuilder,
 ) -> Result<impl Subscriber + for<'a> LookupSpan<'a>>
-where
-	N: for<'writer> FormatFields<'writer> + 'static,
-	E: FormatEvent<Registry, N> + 'static,
-	W: MakeWriter + 'static,
-	F: layer::Layer<Formatter<N, E, W>> + Send + Sync + 'static,
-	FmtLayer<Registry, N, E, W>: layer::Layer<Registry> + Send + Sync + 'static,
+	where
+		N: for<'writer> FormatFields<'writer> + 'static,
+		E: FormatEvent<Registry, N> + 'static,
+		W: MakeWriter + 'static,
+		F: layer::Layer<Formatter<N, E, W>> + Send + Sync + 'static,
+		FmtLayer<Registry, N, E, W>: layer::Layer<Registry> + Send + Sync + 'static,
 {
 	// Accept all valid directives and print invalid ones
 	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> Result<EnvFilter> {
@@ -204,18 +205,32 @@ where
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder_hook(builder);
 
-	let (dir, day) = ("log", 10);
-	let file_appender = move || tracing_appender::rolling::daily(dir, "chainx.log");
-	let rotation = tracing_subscriber::fmt::Layer::new()
-		.with_writer(file_appender)
-		.event_format(event_format_file);
-	let cleaner = CleanLayer::new(day, dir.to_string()).with_format(String::from("%Y-%m-%d"));
-	let subscriber = builder.finish().with(PrefixLayer).with(cleaner).with(rotation);
+	let subscriber = builder.finish().with(PrefixLayer);
 
 	#[cfg(target_os = "unknown")]
 	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
 
+	let kind = rotation.rotation_kind;
+	let dir = rotation.rotation_dir.unwrap_or("log".to_owned());
+	let prefix = rotation.rotation_prefix.unwrap_or("log".to_owned());
+	let remain = rotation.rotation_remain.unwrap_or(10);
+	let rotation = RotationLayer::new(kind, dir, prefix).event_format(event_format_file).with_remain(remain);
+	let subscriber = subscriber.with(rotation);
+
 	Ok(subscriber)
+}
+
+/// A builder that is used to initialize the rotation.
+#[derive(Default)]
+pub struct RotationBuilder {
+	/// Log segmentation type
+	pub rotation_kind: Option<RotationKind>,
+	/// tracing storage directory
+	pub rotation_dir: Option<String>,
+	/// Log file prefix
+	pub rotation_prefix: Option<String>,
+	/// Remain time, the unit is determined by kind
+	pub rotation_remain: Option<Remain>,
 }
 
 /// A builder that is used to initialize the global logger.
@@ -224,6 +239,7 @@ pub struct LoggerBuilder {
 	profiling: Option<(crate::TracingReceiver, String)>,
 	log_reloading: bool,
 	force_colors: Option<bool>,
+	rotation: RotationBuilder,
 }
 
 impl LoggerBuilder {
@@ -234,7 +250,14 @@ impl LoggerBuilder {
 			profiling: None,
 			log_reloading: true,
 			force_colors: None,
+			rotation: Default::default(),
 		}
+	}
+
+	/// Set up rotation.
+	pub fn with_rotation(&mut self, r: RotationBuilder) -> &mut Self {
+		self.rotation = r;
+		self
 	}
 
 	/// Set up the profiling.
@@ -270,6 +293,7 @@ impl LoggerBuilder {
 					Some(&profiling_targets),
 					self.force_colors,
 					|builder| enable_log_reloading!(builder),
+					self.rotation,
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
@@ -282,6 +306,7 @@ impl LoggerBuilder {
 					Some(&profiling_targets),
 					self.force_colors,
 					|builder| builder,
+					self.rotation,
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
@@ -296,6 +321,7 @@ impl LoggerBuilder {
 					None,
 					self.force_colors,
 					|builder| enable_log_reloading!(builder),
+					self.rotation,
 				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
@@ -307,6 +333,7 @@ impl LoggerBuilder {
 					None,
 					self.force_colors,
 					|builder| builder,
+					self.rotation,
 				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
