@@ -16,33 +16,33 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use std::marker::{PhantomData, Unpin};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use finality_grandpa::{voter, voter_set::VoterSet, BlockNumberOps, Error as GrandpaError};
 use futures::prelude::*;
-
-use finality_grandpa::{
-	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
-};
 use log::{debug, info, warn};
-use sp_keystore::SyncCryptoStorePtr;
-use sp_consensus::SelectChain;
+
 use sc_client_api::backend::Backend;
 use sc_telemetry::TelemetryHandle;
-use sp_utils::mpsc::TracingUnboundedReceiver;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
 use sp_blockchain::HeaderMetadata;
+use sp_consensus::SelectChain;
+use sp_finality_grandpa::AuthorityId;
+use sp_keystore::SyncCryptoStorePtr;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_utils::mpsc::TracingUnboundedReceiver;
 
 use crate::{
-	global_communication, CommandOrError, CommunicationIn, Config, environment,
-	LinkHalf, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
+	authorities::SharedAuthoritySet,
+	aux_schema::PersistentData,
+	communication::{Network as NetworkT, NetworkBridge},
+	environment, global_communication,
+	notification::GrandpaJustificationSender,
+	ClientForGrandpa, CommandOrError, CommunicationIn, Config, Error, LinkHalf, VoterCommand,
+	VoterSetState,
 };
-use crate::authorities::SharedAuthoritySet;
-use crate::communication::{Network as NetworkT, NetworkBridge};
-use crate::notification::GrandpaJustificationSender;
-use sp_finality_grandpa::AuthorityId;
-use std::marker::{PhantomData, Unpin};
 
 struct ObserverChain<'a, Block: BlockT, Client> {
 	client: &'a Arc<Client>,
@@ -50,12 +50,17 @@ struct ObserverChain<'a, Block: BlockT, Client> {
 }
 
 impl<'a, Block, Client> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
-	for ObserverChain<'a, Block, Client> where
-		Block: BlockT,
-		Client: HeaderMetadata<Block, Error = sp_blockchain::Error>,
-		NumberFor<Block>: BlockNumberOps,
+	for ObserverChain<'a, Block, Client>
+where
+	Block: BlockT,
+	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	NumberFor<Block>: BlockNumberOps,
 {
-	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+	fn ancestry(
+		&self,
+		base: Block::Hash,
+		block: Block::Hash,
+	) -> Result<Vec<Block::Hash>, GrandpaError> {
 		environment::ancestry(&self.client, base, block)
 	}
 }
@@ -75,7 +80,7 @@ where
 	S: Stream<Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>>,
 	F: Fn(u64),
 	BE: Backend<Block>,
-	Client: crate::ClientForGrandpa<Block, BE>,
+	Client: ClientForGrandpa<Block, BE>,
 {
 	let authority_set = authority_set.clone();
 	let client = client.clone();
@@ -160,13 +165,13 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 	config: Config,
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
-) -> sp_blockchain::Result<impl Future<Output = ()> + Unpin + Send + 'static>
+) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
 	BE: Backend<Block> + Unpin + 'static,
-	N: NetworkT<Block> + Send + Clone + 'static,
-	SC: SelectChain<Block> + 'static,
+	N: NetworkT<Block>,
+	SC: SelectChain<Block>,
 	NumberFor<Block>: BlockNumberOps,
-	Client: crate::ClientForGrandpa<Block, BE> + 'static,
+	Client: ClientForGrandpa<Block, BE> + 'static,
 {
 	let LinkHalf {
 		client,
@@ -223,7 +228,7 @@ impl<B, BE, Client, Network> ObserverWork<B, BE, Client, Network>
 where
 	B: BlockT,
 	BE: Backend<B> + 'static,
-	Client: crate::ClientForGrandpa<B, BE> + 'static,
+	Client: ClientForGrandpa<B, BE> + 'static,
 	Network: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 {
@@ -236,7 +241,6 @@ where
 		justification_sender: Option<GrandpaJustificationSender<B>>,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
-
 		let mut work = ObserverWork {
 			// `observer` is set to a temporary value and replaced below when
 			// calling `rebuild_observer`.
@@ -344,7 +348,7 @@ impl<B, BE, C, N> Future for ObserverWork<B, BE, C, N>
 where
 	B: BlockT,
 	BE: Backend<B> + Unpin + 'static,
-	C: crate::ClientForGrandpa<B, BE> + 'static,
+	C: ClientForGrandpa<B, BE> + 'static,
 	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 {
