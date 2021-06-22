@@ -36,8 +36,8 @@ Follow the [instructions](https://github.com/Cerebellum-Network/validator-instru
 3. Run the following command to copy SC artifacts to test_data folder.
 
 ```
-id=$(docker create $ECR_REGISTRY/crb-smart-contracts:$SMART_CONTRACT_VERSION)
-docker cp $id::/smart-contracts/artifacts/ ./artifacts/
+id=$(docker create $ECR_REGISTRY/ddc-smart-contract:$DDC_SMART_CONTRACT_VERSION)
+docker cp $id::/ddc-smart-contract/artifacts/ ./artifacts/
 docker rm -v $id
 ```
 
