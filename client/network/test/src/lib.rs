@@ -29,6 +29,7 @@ use std::{
 use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::block_request_handler::{self, BlockRequestHandler};
+use sc_network::state_request_handler::{self, StateRequestHandler};
 use sc_network::light_client_requests::{self, handler::LightClientRequestHandler};
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
@@ -55,7 +56,7 @@ use sc_network::{
 	NetworkWorker, NetworkService, config::{ProtocolId, MultiaddrWithPeerId, NonReservedPeerMode},
 	Multiaddr,
 };
-use sc_network::config::{NetworkConfiguration, NonDefaultSetConfig, TransportConfig};
+use sc_network::config::{NetworkConfiguration, NonDefaultSetConfig, TransportConfig, SyncMode};
 use libp2p::PeerId;
 use parking_lot::Mutex;
 use sp_core::H256;
@@ -179,6 +180,19 @@ impl PeersClient {
 		}
 	}
 
+	pub fn has_state_at(&self, block: &BlockId<Block>) -> bool {
+		let header = match self.header(block).unwrap() {
+			Some(header) => header,
+			None => return false,
+		};
+		match self {
+			PeersClient::Full(_client, backend) =>
+				backend.have_state_at(&header.hash(), *header.number()),
+			PeersClient::Light(_client, backend) =>
+				backend.have_state_at(&header.hash(), *header.number()),
+		}
+	}
+
 	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match *self {
 			PeersClient::Full(ref client, ref _backend) => client.justifications(block),
@@ -235,9 +249,9 @@ impl BlockImport<Block> for PeersClient {
 	) -> Result<ImportResult, Self::Error> {
 		match self {
 			PeersClient::Full(client, _) =>
-				client.import_block(block.convert_transaction(), cache).await,
+				client.import_block(block.clear_storage_changes_and_mutate(), cache).await,
 			PeersClient::Light(client, _) =>
-				client.import_block(block.convert_transaction(), cache).await,
+				client.import_block(block.clear_storage_changes_and_mutate(), cache).await,
 		}
 	}
 }
@@ -584,7 +598,7 @@ impl<I> BlockImport<Block> for BlockImportAdapter<I> where
 		block: BlockImportParams<Block, ()>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.import_block(block.convert_transaction(), cache).await
+		self.inner.import_block(block.clear_storage_changes_and_mutate(), cache).await
 	}
 }
 
@@ -644,6 +658,8 @@ pub struct FullPeerConfig {
 	pub connect_to_peers: Option<Vec<usize>>,
 	/// Whether the full peer should have the authority role.
 	pub is_authority: bool,
+	/// Syncing mode
+	pub sync_mode: SyncMode,
 }
 
 pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>::Transaction: Send {
@@ -699,10 +715,13 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 
 	/// Add a full peer.
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
-		let test_client_builder = match config.keep_blocks {
+		let mut test_client_builder = match config.keep_blocks {
 			Some(keep_blocks) => TestClientBuilder::with_pruning_window(keep_blocks),
 			None => TestClientBuilder::with_default_backend(),
 		};
+		if matches!(config.sync_mode, SyncMode::Fast{..}) {
+			test_client_builder = test_client_builder.set_no_genesis();
+		}
 		let backend = test_client_builder.backend();
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
@@ -736,6 +755,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			Default::default(),
 			None,
 		);
+		network_config.sync_mode = config.sync_mode;
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
@@ -769,6 +789,16 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			protocol_config
 		};
 
+		let state_request_protocol_config = {
+			let (handler, protocol_config) = StateRequestHandler::new(
+				&protocol_id,
+				client.clone(),
+				50,
+			);
+			self.spawn_task(handler.run().boxed());
+			protocol_config
+		};
+
 		let light_client_request_protocol_config = {
 			let (handler, protocol_config) = LightClientRequestHandler::new(&protocol_id, client.clone());
 			self.spawn_task(handler.run().boxed());
@@ -789,6 +819,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
 			block_request_protocol_config,
+			state_request_protocol_config,
 			light_client_request_protocol_config,
 		}).unwrap();
 
@@ -862,6 +893,9 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 		let block_request_protocol_config = block_request_handler::generate_protocol_config(
 			&protocol_id,
 		);
+		let state_request_protocol_config = state_request_handler::generate_protocol_config(
+			&protocol_id,
+		);
 
 		let light_client_request_protocol_config =
 			light_client_requests::generate_protocol_config(&protocol_id);
@@ -879,6 +913,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
 			block_request_protocol_config,
+			state_request_protocol_config,
 			light_client_request_protocol_config,
 		}).unwrap();
 

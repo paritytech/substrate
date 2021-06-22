@@ -456,7 +456,11 @@ where
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block
 		match self.inner.status(BlockId::Hash(hash)) {
-			Ok(BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(BlockStatus::InChain) => {
+				// Strip justifications when re-importing an existing block.
+				let _justifications = block.justifications.take();
+				return (&*self.inner).import_block(block, new_cache).await
+			}
 			Ok(BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}

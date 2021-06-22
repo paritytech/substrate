@@ -28,7 +28,7 @@ use futures::prelude::*;
 use sc_transaction_pool::txpool;
 use sp_consensus::{
 	self, BlockImport, Environment, Proposer, ForkChoiceStrategy,
-	BlockImportParams, BlockOrigin, ImportResult, SelectChain,
+	BlockImportParams, BlockOrigin, ImportResult, SelectChain, StateAction,
 };
 use sp_blockchain::HeaderBackend;
 use std::collections::HashMap;
@@ -145,7 +145,9 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 		params.body = Some(body);
 		params.finalized = finalize;
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		params.storage_changes = Some(proposal.storage_changes);
+		params.state_action = StateAction::ApplyChanges(
+			sp_consensus::StorageChanges::Changes(proposal.storage_changes)
+		);
 
 		if let Some(digest_provider) = digest_provider {
 			digest_provider.append_block_import(&parent, &mut params, &inherent_data)?;

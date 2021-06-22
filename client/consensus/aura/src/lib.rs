@@ -42,7 +42,7 @@ use codec::{Encode, Decode, Codec};
 
 use sp_consensus::{
 	BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
-	BlockOrigin, Error as ConsensusError, SelectChain,
+	BlockOrigin, Error as ConsensusError, SelectChain, StateAction,
 };
 use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
 use sp_blockchain::{Result as CResult, ProvideCache, HeaderBackend};
@@ -421,7 +421,9 @@ where
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(signature_digest_item);
 			import_block.body = Some(body);
-			import_block.storage_changes = Some(storage_changes);
+			import_block.state_action = StateAction::ApplyChanges(
+				sp_consensus::StorageChanges::Changes(storage_changes)
+			);
 			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 			Ok(import_block)

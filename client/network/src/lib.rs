@@ -260,6 +260,7 @@ mod utils;
 pub mod block_request_handler;
 pub mod bitswap;
 pub mod light_client_requests;
+pub mod state_request_handler;
 pub mod config;
 pub mod error;
 pub mod gossip;
@@ -268,7 +269,8 @@ pub mod transactions;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
+pub use protocol::{event::{DhtEvent, Event, ObservedRole}, PeerInfo};
+pub use protocol::sync::{SyncState, StateDownloadProgress};
 pub use service::{
 	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
 	NotificationSenderReady, IfDisconnected,
@@ -321,4 +323,6 @@ pub struct NetworkStatus<B: BlockT> {
 	pub total_bytes_inbound: u64,
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
+	/// State sync in progress.
+	pub state_sync: Option<protocol::sync::StateDownloadProgress>,
 }
