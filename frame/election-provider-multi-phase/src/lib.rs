@@ -1141,6 +1141,10 @@ pub mod pallet {
 
 	/// The next index to be assigned to an incoming signed submission.
 	///
+	/// Every accepted submission is assigned a unique index; that index is bound to that particular
+	/// submission for the duration of the election. On election finalization, the next index is
+	/// reset to 0.
+	///
 	/// We can't just use `SignedSubmissionIndices.len()`, because that's a bounded set; past its
 	/// capacity, it will simply saturate. We can't just iterate over `SignedSubmissionsMap`,
 	/// because iteration is slow. Instead, we store the value here.
