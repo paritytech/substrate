@@ -302,7 +302,7 @@ impl<B: BlockT> Builder<B> {
 			let values = client.batch_request::<Option<StorageData>>(batch)
 				.await
 				.map_err(|e| {
-					log::error!(target: LOG_TARGET, "failed to execute batch {:?} due to {:?}", chunk_keys, e);
+					log::error!(target: LOG_TARGET, "failed to execute batch: {:?}. Error: {:?}", chunk_keys, e);
 					"batch failed."
 				})?;
 			assert_eq!(chunk_keys.len(), values.len());
