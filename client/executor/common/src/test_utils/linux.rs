@@ -18,11 +18,11 @@
 
 //! Implementation of Linux specific tests and/or helper functions.
 
+use crate::wasm_runtime::WasmInstance;
 use std::{
 	ops::Range,
 	collections::BTreeMap,
 };
-use sc_executor_common::wasm_runtime::WasmInstance;
 
 /// Returns how much bytes of the instance's memory is currently resident (backed by phys mem)
 pub fn instance_resident_bytes(instance: &dyn WasmInstance) -> usize {

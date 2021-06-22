@@ -28,5 +28,8 @@ sp-maybe-compressed-blob = { version = "3.0.0", path = "../../../primitives/mayb
 sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
 thiserror = "1.0.21"
 
+[dev-dependencies]
+regex = "1"
+
 [features]
 default = []
