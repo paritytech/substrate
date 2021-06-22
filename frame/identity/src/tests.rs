@@ -139,7 +139,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-fn ten() -> IdentityInfo {
+fn ten() -> IdentityInfo<MaxAdditionalFields> {
 	IdentityInfo {
 		display: Data::Raw(b"ten".to_vec()),
 		legal: Data::Raw(b"The Right Ordinal Ten, Esq.".to_vec()),
@@ -147,7 +147,7 @@ fn ten() -> IdentityInfo {
 	}
 }
 
-fn twenty() -> IdentityInfo {
+fn twenty() -> IdentityInfo<MaxAdditionalFields> {
 	IdentityInfo {
 		display: Data::Raw(b"twenty".to_vec()),
 		legal: Data::Raw(b"The Right Ordinal Twenty, Esq.".to_vec()),

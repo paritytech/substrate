@@ -78,12 +78,16 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::prelude::*;
-use sp_std::{fmt::Debug, ops::Add, iter::once};
+use sp_std::{convert::TryInto, fmt::{self, Debug}, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput, Saturating};
-use frame_support::traits::{Currency, ReservableCurrency, OnUnbalanced, BalanceStatus};
+use frame_support::{
+	parameter_types,
+	traits::{BalanceStatus, Currency, Get, MaxEncodedLen, OnUnbalanced, ReservableCurrency},
+	BoundedVec,
+};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -91,16 +95,20 @@ pub use pallet::*;
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
+parameter_types! {
+	pub const MaxDataSize: u32 = 32;
+}
+
 /// Either underlying data blob if it is at most 32 bytes, or a hash of it. If the data is greater
 /// than 32-bytes then it will be truncated when encoding.
 ///
 /// Can also be `None`.
-#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
 pub enum Data {
 	/// No data here.
 	None,
 	/// The data is stored directly.
-	Raw(Vec<u8>),
+	Raw(BoundedVec<u8, MaxDataSize>),
 	/// Only the Blake2 hash of the data is stored. The preimage of the hash may be retrieved
 	/// through some hash-lookup service.
 	BlakeTwo256([u8; 32]),
@@ -121,7 +129,9 @@ impl Decode for Data {
 		Ok(match b {
 			0 => Data::None,
 			n @ 1 ..= 33 => {
-				let mut r = vec![0u8; n as usize - 1];
+				let mut r: BoundedVec<_, _> = vec![0u8; n as usize - 1]
+					.try_into()
+					.expect("bound checked in match arm condition; qed");
 				input.read(&mut r[..])?;
 				Data::Raw(r)
 			}
@@ -166,7 +176,7 @@ pub type RegistrarIndex = u32;
 ///
 /// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
 /// which fields their attestation is relevant for by off-chain means.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
 pub enum Judgement<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > {
@@ -250,12 +260,12 @@ impl Decode for IdentityFields {
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Eq, MaxEncodedLen)]
 #[cfg_attr(test, derive(Default))]
-pub struct IdentityInfo {
+pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
 	/// fields.
-	pub additional: Vec<(Data, Data)>,
+	pub additional: BoundedVec<(Data, Data), FieldLimit>,
 
 	/// A reasonable display name for the controller of the account. This should be whatever it is
 	/// that it is typically known as and should not be confusable with other entities, given
@@ -298,28 +308,85 @@ pub struct IdentityInfo {
 	pub twitter: Data,
 }
 
+#[cfg(not(feature = "std"))]
+impl<FieldLimit: Get<u32>> Debug for IdentityInfo<FieldLimit> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		write!(f, "<wasm:stripped>")
+	}
+}
+
+#[cfg(feature = "std")]
+impl<FieldLimit: Get<u32>> Debug for IdentityInfo<FieldLimit> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("IdentityInfo")
+			.field("additional", &self.additional)
+			.field("display", &self.display)
+			.field("legal", &self.legal)
+			.field("web", &self.web)
+			.field("riot", &self.riot)
+			.field("email", &self.email)
+			.field("pgp_fingerprint", &self.pgp_fingerprint)
+			.field("image", &self.image)
+			.field("twitter", &self.twitter)
+			.finish()
+	}
+}
+
+impl<FieldLimit: Get<u32>> PartialEq for IdentityInfo<FieldLimit> {
+	fn eq(&self, other: &IdentityInfo<FieldLimit>) -> bool {
+		self.additional == other.additional
+			&& self.display == other.display
+			&& self.legal == other.legal
+			&& self.web == other.web
+			&& self.riot == other.riot
+			&& self.email == other.email
+			&& self.image == other.image
+			&& self.twitter == other.twitter
+	}
+}
+
+impl<FieldLimit: Get<u32>> Clone for IdentityInfo<FieldLimit> {
+	fn clone(&self) -> Self {
+		Self {
+			additional: self.additional.clone(),
+			display: self.display.clone(),
+			legal: self.legal.clone(),
+			web: self.web.clone(),
+			riot: self.riot.clone(),
+			email: self.email.clone(),
+			pgp_fingerprint: self.pgp_fingerprint.clone(),
+			image: self.image.clone(),
+			twitter: self.twitter.clone(),
+		}
+	}
+}
+
 /// Information concerning the identity of the controller of an account.
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
 pub struct Registration<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
+	MaxJudgments: Get<u32>,
+	MaxAdditionalFields: Get<u32>,
 > {
 	/// Judgements from the registrars on this identity. Stored ordered by `RegistrarIndex`. There
 	/// may be only a single judgement from each registrar.
-	pub judgements: Vec<(RegistrarIndex, Judgement<Balance>)>,
+	pub judgements: BoundedVec<(RegistrarIndex, Judgement<Balance>), MaxJudgments>,
 
 	/// Amount held on deposit for this information.
 	pub deposit: Balance,
 
 	/// Information on the identity.
-	pub info: IdentityInfo,
+	pub info: IdentityInfo<MaxAdditionalFields>,
 }
 
 impl <
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
-> Registration<Balance> {
+	MaxJudgments: Get<u32>,
+	MaxAdditionalFields: Get<u32>,
+> Registration<Balance, MaxJudgments, MaxAdditionalFields> {
 	fn total_deposit(&self) -> Balance {
 		self.deposit + self.judgements.iter()
 			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
@@ -329,7 +396,9 @@ impl <
 
 impl<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
-> Decode for Registration<Balance> {
+	MaxJudgments: Get<u32>,
+	MaxAdditionalFields: Get<u32>,
+> Decode for Registration<Balance, MaxJudgments, MaxAdditionalFields> {
 	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let (judgements, deposit, info) = Decode::decode(&mut AppendZerosInput::new(input))?;
 		Ok(Self { judgements, deposit, info })
@@ -422,7 +491,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Registration<BalanceOf<T>>,
+		Registration<BalanceOf<T>, T::MaxRegistrars, T::MaxAdditionalFields>,
 		OptionQuery,
 	>;
 
@@ -461,7 +530,7 @@ pub mod pallet {
 	#[pallet::getter(fn registrars)]
 	pub(super) type Registrars<T: Config> = StorageValue<
 		_,
-		Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>,
+		BoundedVec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>, T::MaxRegistrars>,
 		ValueQuery,
 	>;
 
@@ -555,9 +624,10 @@ pub mod pallet {
 			let (i, registrar_count) = <Registrars<T>>::try_mutate(
 				|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
 					ensure!(registrars.len() < T::MaxRegistrars::get() as usize, Error::<T>::TooManyRegistrars);
-					registrars.push(Some(RegistrarInfo {
+					registrars.try_push(Some(RegistrarInfo {
 						account, fee: Zero::zero(), fields: Default::default()
-					}));
+					}))
+					.map_err(|_| Error::<T>::TooManyRegistrars)?;
 					Ok(((registrars.len() - 1) as RegistrarIndex, registrars.len()))
 				}
 			)?;
@@ -590,7 +660,7 @@ pub mod pallet {
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		))]
-		pub fn set_identity(origin: OriginFor<T>, info: IdentityInfo) -> DispatchResultWithPostInfo {
+		pub fn set_identity(origin: OriginFor<T>, info: IdentityInfo<T::MaxAdditionalFields>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
 			ensure!(extra_fields <= T::MaxAdditionalFields::get(), Error::<T>::TooManyFields);
@@ -603,7 +673,7 @@ pub mod pallet {
 					id.info = info;
 					id
 				}
-				None => Registration { info, judgements: Vec::new(), deposit: Zero::zero() },
+				None => Registration { info, judgements: BoundedVec::default(), deposit: Zero::zero() },
 			};
 
 			let old_deposit = id.deposit;
@@ -786,7 +856,10 @@ pub mod pallet {
 				} else {
 					id.judgements[i] = item
 				},
-				Err(i) => id.judgements.insert(i, item),
+				Err(i) => id
+					.judgements
+					.try_insert(i, item)
+					.map_err(|_| Error::<T>::TooManyRegistrars)?,
 			}
 
 			T::Currency::reserve(&sender, registrar.fee)?;
@@ -988,7 +1061,10 @@ pub mod pallet {
 					}
 					id.judgements[position] = item
 				}
-				Err(position) => id.judgements.insert(position, item),
+				Err(position) => id
+					.judgements
+					.try_insert(position, item)
+					.map_err(|_| Error::<T>::TooManyRegistrars)?,
 			}
 
 			let judgements = id.judgements.len();
