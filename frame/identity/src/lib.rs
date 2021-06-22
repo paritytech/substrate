@@ -261,7 +261,6 @@ impl Decode for IdentityFields {
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
 #[derive(Encode, Decode, Eq, MaxEncodedLen)]
-#[cfg_attr(test, derive(Default))]
 pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
 	/// fields.
@@ -308,6 +307,23 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	pub twitter: Data,
 }
 
+#[cfg(test)]
+impl<FieldLimit: Get<u32>> Default for IdentityInfo<FieldLimit> {
+	fn default() -> Self {
+		Self {
+			additional: Default::default(),
+			display: Default::default(),
+			legal: Default::default(),
+			web: Default::default(),
+			riot: Default::default(),
+			email: Default::default(),
+			pgp_fingerprint: Default::default(),
+			image: Default::default(),
+			twitter: Default::default(),
+		}
+	}
+}
+
 #[cfg(not(feature = "std"))]
 impl<FieldLimit: Get<u32>> Debug for IdentityInfo<FieldLimit> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -340,6 +356,7 @@ impl<FieldLimit: Get<u32>> PartialEq for IdentityInfo<FieldLimit> {
 			&& self.web == other.web
 			&& self.riot == other.riot
 			&& self.email == other.email
+			&& self.pgp_fingerprint == other.pgp_fingerprint
 			&& self.image == other.image
 			&& self.twitter == other.twitter
 	}
@@ -365,7 +382,7 @@ impl<FieldLimit: Get<u32>> Clone for IdentityInfo<FieldLimit> {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Encode, Eq, MaxEncodedLen)]
 pub struct Registration<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
 	MaxJudgments: Get<u32>,
@@ -380,6 +397,58 @@ pub struct Registration<
 
 	/// Information on the identity.
 	pub info: IdentityInfo<MaxAdditionalFields>,
+}
+
+#[cfg(not(feature = "std"))]
+impl<
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
+	MaxJudgments: Get<u32>,
+	MaxAdditionalFields: Get<u32>,
+> Debug for Registration<Balance, MaxJudgments, MaxAdditionalFields> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "<wasm:stripped>")
+	}
+}
+
+#[cfg(feature = "std")]
+impl<
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
+	MaxJudgments: Get<u32>,
+	MaxAdditionalFields: Get<u32>,
+> Debug for Registration<Balance, MaxJudgments, MaxAdditionalFields> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Registration")
+			.field("judgements", &self.judgements)
+			.field("deposit", &self.deposit)
+			.field("info", &self.info)
+			.finish()
+	}
+}
+
+impl<
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
+	MaxJudgments: Get<u32>,
+	MaxAdditionalFields: Get<u32>,
+> Clone for Registration<Balance, MaxJudgments, MaxAdditionalFields> {
+	fn clone(&self) -> Self {
+		Self {
+			judgements: self.judgements.clone(),
+			deposit: self.deposit.clone(),
+			info: self.info.clone(),
+		}
+	}
+}
+
+impl<
+	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
+	MaxJudgments: Get<u32>,
+	MaxAdditionalFields: Get<u32>,
+> PartialEq for Registration<Balance, MaxJudgments, MaxAdditionalFields> {
+	fn eq(&self, other: &Registration<Balance, MaxJudgments, MaxAdditionalFields>) -> bool {
+		self.judgements == other.judgements
+			&& self.deposit == other.deposit
+			&& self.info == other.info
+	}
 }
 
 impl <
@@ -623,7 +692,6 @@ pub mod pallet {
 
 			let (i, registrar_count) = <Registrars<T>>::try_mutate(
 				|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
-					ensure!(registrars.len() < T::MaxRegistrars::get() as usize, Error::<T>::TooManyRegistrars);
 					registrars.try_push(Some(RegistrarInfo {
 						account, fee: Zero::zero(), fields: Default::default()
 					}))
