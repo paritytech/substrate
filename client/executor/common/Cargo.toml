@@ -27,8 +27,6 @@ sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interf
 sp-maybe-compressed-blob = { version = "3.0.0", path = "../../../primitives/maybe-compressed-blob" }
 sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
 thiserror = "1.0.21"
-
-[dev-dependencies]
 regex = "1"
 
 [features]
