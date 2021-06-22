@@ -303,13 +303,14 @@ impl<T: Config> Pallet<T> {
 		let mut found_solution = false;
 		let mut weight = T::DbWeight::get().reads(1);
 
+		let SolutionOrSnapshotSize { voters, targets } =
+			Self::snapshot_metadata().unwrap_or_default();
+
 		while let Some(best) = all_submissions.pop_last() {
 			let SignedSubmission { solution, who, deposit, reward } = best;
 			let active_voters = solution.compact.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
-				let SolutionOrSnapshotSize { voters, targets } =
-					Self::snapshot_metadata().unwrap_or_default();
 				let desired_targets = Self::desired_targets().unwrap_or_default();
 				T::WeightInfo::feasibility_check(
 					voters,
