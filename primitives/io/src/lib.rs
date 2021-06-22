@@ -990,7 +990,7 @@ pub trait Offchain {
 			.local_storage_compare_and_set(
 				kind,
 				key,
-				old_value.as_ref().map(|v| v.deref()),
+				old_value.as_deref(),
 				new_value,
 			)
 	}
