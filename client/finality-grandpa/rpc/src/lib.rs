@@ -128,32 +128,23 @@ where
 	/// Convert this to a RPC module.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
 		let mut module = RpcModule::new(self);
-		// TODO: implement all RPCs here
-		module.register_method("grandpa_hi", |_p, _cx| {
-			Ok("hi grandpa")
-		});
 
+		// Returns the state of the current best round state as well as the
+		// ongoing background rounds.
 		module.register_method("grandpa_roundState", |_params, grandpa| {
 			ReportedRoundStates::from(&grandpa.authority_set, &grandpa.voter_state)
 				.map_err(to_jsonrpsee_call_error)
-			// async move {
-			// 	ReportedRoundStates::from(&grandpa.authority_set, &grandpa.voter_state)
-			// }
-			// Orig
-			// let round_states = ReportedRoundStates::from(&grandpa.authority_set, &grandpa.voter_state);
-			// let future = async move { round_states }.boxed();
-			// Box::new(future.map_err(jsonrpc_core::Error::from).compat())
+		})?;
 
-
-			// From state
-			// let (method, data, block) = match params.parse() {
-			// 	Ok(params) => params,
-			// 	Err(e) => return Box::pin(future::err(e)),
-			// };
-
-			// async move {
-			// 	state.backend.call(block, method, data).await.map_err(to_jsonrpsee_call_error)
-			// }.boxed()
+		// Prove finality for the given block number by returning the Justification for the last block
+		// in the set and all the intermediary headers to link them together.
+		module.register_method("grandpa_proveFinality", |params, grandpa| {
+			let block: NumberFor<Block> = params.one()?;
+			grandpa
+				.finality_proof_provider
+				.rpc_prove_finality(block)
+				.map_err(|finality_err| error::Error::ProveFinalityFailed(finality_err))
+				.map_err(to_jsonrpsee_call_error)
 		})?;
 
 		Ok(module)
