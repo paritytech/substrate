@@ -155,6 +155,9 @@ impl<T: Config> SignedSubmissions<T> {
 	///
 	/// Note that this function does not examine the insertion overlay. If that behavior is desired,
 	/// try `self.insetion_overlay.remove(&idx).or_else(|| self.take_submission(idx))`.
+	///
+	/// Note that though this function updates the fields `insertion_overlay` and `deletion_overlay`,
+	/// it does not update the field `indices`. That must be handled separately.
 	fn take_submission(&mut self, idx: u32) -> Option<SignedSubmissionOf<T>> {
 		self.insertion_overlay.remove(&idx).or_else(|| {
 			if self.deletion_overlay.contains(&idx) {
