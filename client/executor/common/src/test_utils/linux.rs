@@ -38,6 +38,7 @@ pub fn instance_resident_bytes(instance: &dyn WasmInstance) -> usize {
 pub struct Smaps(Vec<(Range<usize>, BTreeMap<String, usize>)>);
 
 impl Smaps {
+	/// Create a in-memory representation of the calling processe's memory map.
 	pub fn new() -> Self {
 		let regex_start = regex::RegexBuilder::new("^([0-9a-f]+)-([0-9a-f]+)")
 			.multi_line(true)
@@ -76,15 +77,18 @@ impl Smaps {
 		Self(output)
 	}
 
+	/// Returns how much memory is currently resident in the memory mapping that is
+	/// associated with the specified address.
+	pub fn get_rss(&self, addr: usize) -> Option<usize> {
+		self.get_map(addr).get("Rss").cloned()
+	}
+
+	/// Get the mapping at the specified address.
 	fn get_map(&self, addr: usize) -> &BTreeMap<String, usize> {
 		&self.0
 			.iter()
 			.find(|(range, _)| addr >= range.start && addr < range.end)
 			.unwrap()
 			.1
-	}
-
-	pub fn get_rss(&self, addr: usize) -> Option<usize> {
-		self.get_map(addr).get("Rss").cloned()
 	}
 }
