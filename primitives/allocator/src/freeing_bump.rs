@@ -60,8 +60,8 @@
 //!   fail.
 //!
 //! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001 MiB
-//!   will be put into the bucket of 4 MiB. Therefore, typically more than half of the space in allocation
-//!   will be wasted. This is more pronounced with larger allocation sizes.
+//!   will be put into the bucket of 4 MiB. Therefore, on average 25% of the space in allocation
+//!   will be wasted. This is more pronounced in absolute values with larger allocation sizes.
 
 use crate::Error;
 use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
