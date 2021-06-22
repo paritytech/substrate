@@ -33,6 +33,7 @@ pub enum Error {
 	ProveFinalityFailed(sc_finality_grandpa::FinalityProofError),
 }
 
+// TODO: remove
 /// The error codes returned by jsonrpc.
 pub enum ErrorCode {
 	/// Returned when Grandpa RPC endpoint is not ready.
@@ -45,6 +46,7 @@ pub enum ErrorCode {
 	ProveFinality,
 }
 
+// TODO: remove (?)
 impl From<Error> for ErrorCode {
 	fn from(error: Error) -> Self {
 		match error {
@@ -56,6 +58,7 @@ impl From<Error> for ErrorCode {
 	}
 }
 
+// TODO: remove
 impl From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
 		let message = format!("{}", error);

@@ -35,7 +35,6 @@ use node_executor::Executor;
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_consensus_babe::SlotProportion;
 
-use jsonrpsee_types::error::Error as JsonRpseeError;
 use jsonrpsee_ws_server::RpcModule;
 use sc_finality_grandpa_rpc::GrandpaRpsee;
 

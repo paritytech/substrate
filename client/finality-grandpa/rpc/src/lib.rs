@@ -191,6 +191,7 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 	}
 }
 
+// TODO: remove
 impl<AuthoritySet, VoterState, Block, ProofProvider>
 	GrandpaApi<JustificationNotification, Block::Hash, NumberFor<Block>>
 	for GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider>

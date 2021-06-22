@@ -302,7 +302,7 @@ mod waiting {}
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<R>(
 	config: &Configuration,
-	mut gen_rpc_module: R,
+	gen_rpc_module: R,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
 where
 	R: FnOnce(sc_rpc::DenyUnsafe) -> RpcModule<()>,
