@@ -243,7 +243,11 @@ impl<T: Config> SignedSubmissions<T> {
 					return (false, None);
 				}
 
-				self.indices.remove(&weakest_score);
+				let _removed = self.indices.remove(&weakest_score);
+				debug_assert!(
+					_removed.is_some(),
+					"we mut have really removed an index to validate our expectation",
+				);
 				self.indices
 					.try_insert(score, insert_idx)
 					.expect("just removed an item, we must be under capacity; qed");
