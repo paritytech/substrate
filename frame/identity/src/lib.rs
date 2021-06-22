@@ -85,7 +85,10 @@ use frame_support::traits::{BalanceStatus, Currency, OnUnbalanced, ReservableCur
 pub use weights::WeightInfo;
 
 pub use pallet::*;
-use types::{Data, IdentityFields, IdentityInfo, Judgement, RegistrarIndex, RegistrarInfo, Registration};
+pub use types::{
+	Data, IdentityField, IdentityFields, IdentityInfo, Judgement, RegistrarIndex,
+	RegistrarInfo, Registration,
+};
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
