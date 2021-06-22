@@ -60,8 +60,11 @@
 //!   fail.
 //!
 //! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001 MiB
-//!   will be put into the bucket of 4 MiB. Therefore, on average 25% of the space in allocation
-//!   will be wasted. This is more pronounced in absolute values with larger allocation sizes.
+//!   will be put into the bucket of 4 MiB. Therefore, any allocation of size `(N, 2N]` will take
+//!   up to `2N`, thus assuming a uniform distribution of allocation sizes, the average amount in use
+//!   of a `2N` space on the heap will be `(3N + ε) / 2`. So average utilisation is going to be around
+//!   75% (`(3N + ε) / 2 / 2N`) meaning that around 25% of the space in allocation will be wasted.
+//!   This is more pronounced in absolute values with larger allocation sizes.
 
 use crate::Error;
 use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
