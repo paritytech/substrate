@@ -81,6 +81,7 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone
 	}
 }
 
+#[async_trait::async_trait]
 impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 	for GrandpaBlockImport<BE, Block, Client, SC>
 where
@@ -92,22 +93,30 @@ where
 {
 	type Error = ConsensusError;
 
-	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+	async fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
 		let mut out = Vec::new();
 		let chain_info = self.inner.info();
 
 		// request justifications for all pending changes for which change blocks have already been imported
-		let authorities = self.authority_set.inner();
-		for pending_change in authorities.pending_changes() {
+		let pending_changes: Vec<_> = self
+			.authority_set
+			.inner()
+			.pending_changes()
+			.cloned()
+			.collect();
+
+		for pending_change in pending_changes {
 			if pending_change.delay_kind == DelayKind::Finalized &&
 				pending_change.effective_number() > chain_info.finalized_number &&
 				pending_change.effective_number() <= chain_info.best_number
 			{
 				let effective_block_hash = if !pending_change.delay.is_zero() {
-					self.select_chain.finality_target(
-						pending_change.canon_hash,
-						Some(pending_change.effective_number()),
-					)
+					self.select_chain
+						.finality_target(
+							pending_change.canon_hash,
+							Some(pending_change.effective_number()),
+						)
+						.await
 				} else {
 					Ok(Some(pending_change.canon_hash))
 				};
@@ -125,7 +134,7 @@ where
 		out
 	}
 
-	fn import_justification(
+	async fn import_justification(
 		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
