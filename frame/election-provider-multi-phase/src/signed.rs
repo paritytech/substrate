@@ -352,6 +352,10 @@ impl<T: Config> Pallet<T> {
 			debug_assert!(_remaining.is_zero());
 		}
 
+		debug_assert!(!SignedSubmissionIndices::<T>::exists());
+		debug_assert!(!SignedSubmissionNextIndex::<T>::exists());
+		debug_assert!(SignedSubmissionsMap::<T>::iter().next().is_none());
+
 		log!(debug, "closed signed phase, found solution? {}, discarded {}", found_solution, discarded);
 		(found_solution, weight)
 	}
