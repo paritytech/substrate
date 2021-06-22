@@ -1135,6 +1135,10 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
+	// The following storage items collectively comprise `SignedSubmissions<T>`, and should never be
+	// accessed independently. Instead, get `Self::signed_submissions()`, modify it as desired, and
+	// then do `signed_submissions.put()` when you're done with it.
+
 	/// The next index to be assigned to an incoming signed submission.
 	///
 	/// We can't just use `SignedSubmissionIndices.len()`, because that's a bounded set; past its
@@ -1163,6 +1167,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type SignedSubmissionsMap<T: Config> =
 		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, ValueQuery>;
+
+	// `SignedSubmissions` items end here.
 
 	/// The minimum score that each 'untrusted' solution must attain in order to be considered
 	/// feasible.
