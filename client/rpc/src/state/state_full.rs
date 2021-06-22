@@ -19,9 +19,15 @@
 //! State API backend for full nodes.
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::marker::PhantomData;
 use std::ops::Range;
+use std::sync::Arc;
 
+use crate::SubscriptionTaskExecutor;
+use super::{StateBackend, ChildStateBackend, error::{Error, Result}, client_err};
+
+use futures::{future, StreamExt, FutureExt};
+use jsonrpsee::ws_server::SubscriptionSink;
 use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata,
@@ -29,17 +35,13 @@ use sp_blockchain::{
 };
 use sp_core::{
 	Bytes, storage::{StorageKey, StorageData, StorageChangeSet,
-	ChildInfo, ChildType, PrefixedStorageKey},
+	ChildInfo, ChildType, PrefixedStorageKey, well_known_keys},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion, CheckedSub},
 };
-
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
-
-use super::{StateBackend, ChildStateBackend, error::{Error, Result}, client_err};
-use std::marker::PhantomData;
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, StorageProvider, ExecutorProvider,
 	ProofProvider
@@ -62,7 +64,9 @@ struct QueryStorageRange<Block: BlockT> {
 /// State API backend for full nodes.
 pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
-	_phantom: PhantomData<(BE, Block)>
+	executor: Arc<SubscriptionTaskExecutor>,
+	_phantom: PhantomData<(BE, Block)>,
+	rpc_max_payload: Option<usize>,
 }
 
 impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
@@ -73,8 +77,12 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 		Block: BlockT + 'static,
 {
 	/// Create new state API backend for full nodes.
-	pub fn new(client: Arc<Client>) -> Self {
-		Self { client, _phantom: PhantomData }
+	pub fn new(
+		client: Arc<Client>,
+		executor: Arc<SubscriptionTaskExecutor>,
+		rpc_max_payload: Option<usize>,
+	) -> Self {
+		Self { client, executor, _phantom: PhantomData, rpc_max_payload }
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
@@ -409,9 +417,132 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		targets: Option<String>,
 		storage_keys: Option<String>,
 	) -> std::result::Result<sp_rpc::tracing::TraceBlockResponse, Error> {
-		sc_tracing::block::BlockExecutor::new(self.client.clone(), block, targets, storage_keys)
-			.trace_block()
-			.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
+		sc_tracing::block::BlockExecutor::new(
+			self.client.clone(),
+			block,
+			targets,
+			storage_keys,
+			self.rpc_max_payload,
+		)
+		.trace_block()
+		.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
+	}
+
+	fn subscribe_runtime_version(
+		&self,
+		mut sink: SubscriptionSink,
+	) -> std::result::Result<(), Error> {
+		let executor = self.executor.clone();
+		let client = self.client.clone();
+
+		let mut previous_version = client.runtime_version_at(&BlockId::hash(client.info().best_hash))
+			.expect("best hash is valid; qed");
+		let _ = sink.send(&previous_version);
+		let rt_version_stream = client.storage_changes_notification_stream(Some(&[StorageKey(well_known_keys::CODE.to_vec())]), None, )
+			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
+
+		let fut = async move {
+			rt_version_stream
+				.filter_map(|_| {
+					let info = client.info();
+					let version = client
+						.runtime_version_at(&BlockId::hash(info.best_hash));
+						match version {
+							Ok(v) => if previous_version != v {
+									previous_version = v.clone();
+									future::ready(Some(v))
+								} else {
+									future::ready(None)
+								},
+							Err(e) => {
+								log::error!("Could not fetch current runtime version. Error={:?}", e);
+								future::ready(None)
+							}
+						}
+				})
+				.take_while(|version| {
+					future::ready(
+						sink.send(&version).map_or_else(|e| {
+							log::error!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
+							false
+						}, |_| true)
+					)
+
+				})
+				.for_each(|_| future::ready(()))
+				.await;
+		}.boxed();
+		executor.execute_new(fut);
+
+		Ok(())
+	}
+
+	fn subscribe_storage(
+		&self,
+		mut sink: SubscriptionSink,
+		keys: Option<Vec<StorageKey>>,
+	) -> std::result::Result<(), Error> {
+		let executor = self.executor.clone();
+		let client = self.client.clone();
+
+		let initial = {
+			let block = client.info().best_hash;
+			let changes: Vec<(StorageKey, Option<StorageData>)> = keys.as_ref().map(|keys| {
+				keys
+					.iter()
+					.map(|storage_key| {
+						futures::executor::block_on(
+							StateBackend::storage(self, Some(block.clone()).into(), storage_key.clone())
+								.map(|val| (storage_key.clone(), val.unwrap_or(None)))
+						)
+					})
+					.collect()
+			}).unwrap_or_default();
+			vec![StorageChangeSet { block, changes }]
+		};
+
+		if let Err(e) = sink.send(&initial) {
+			return Err(e.into());
+		}
+
+		let stream = client.storage_changes_notification_stream(
+			keys.as_ref().map(|keys| &**keys),
+			None
+		).map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
+
+		let fut = async move {
+			stream.map(|(block, changes)| {
+				StorageChangeSet {
+					block,
+					changes: changes
+						.iter()
+						.filter_map(|(o_sk, k, v)| {
+							// Note: the first `Option<&StorageKey>` seems to be the parent key, so it's set only
+							// for storage events stemming from child storage, `None` otherwise. This RPC only
+							// returns non-child storage.
+							if o_sk.is_none() {
+								Some((k.clone(), v.cloned()))
+							} else {
+								None
+							}
+						}).collect(),
+				}
+			})
+			.take_while(|changes| {
+				future::ready(
+					sink.send(&changes).map_or_else(|e| {
+						log::error!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
+						false
+					}, |_| true)
+				)
+			})
+			.for_each(|_| future::ready(()))
+			.await;
+		}.boxed();
+
+		executor.execute_new(fut);
+
+		Ok(())
 	}
 }
 

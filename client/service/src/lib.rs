@@ -34,19 +34,18 @@ pub mod client;
 mod client;
 mod task_manager;
 
-use std::{io, pin::Pin};
-use std::net::SocketAddr;
+use std::pin::Pin;
 use std::collections::HashMap;
 use std::task::Poll;
 
-use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
+use futures::{Future, FutureExt, Stream, StreamExt, stream};
 use sc_network::PeerId;
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
-use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver}};
+use sp_utils::mpsc::TracingUnboundedReceiver;
 use jsonrpsee::RpcModule;
 
 pub use self::error::Error;
@@ -97,7 +96,7 @@ impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>);
+pub struct RpcHandlers;
 
 impl RpcHandlers {
 	/// Starts an RPC query.
@@ -109,18 +108,9 @@ impl RpcHandlers {
 	///
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
-	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
+	pub fn rpc_query(&self, _mem: &RpcSession, _request: &str)
 		-> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		self.0.handle_request(request, mem.metadata.clone())
-			.compat()
-			.map(|res| res.expect("this should never fail"))
-			.boxed()
-	}
-
-	/// Provides access to the underlying `MetaIoHandler`
-	pub fn io_handler(&self)
-		-> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
-		self.0.clone()
+		todo!();
 	}
 }
 
@@ -304,106 +294,41 @@ async fn build_network_future<
 
 #[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
-mod waiting {
-	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
-	impl Drop for HttpServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				server.wait();
-			}
-		}
-	}
-
-	pub struct IpcServer(pub Option<sc_rpc_server::IpcServer>);
-	impl Drop for IpcServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				let _ = server.wait();
-			}
-		}
-	}
-
-	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
-	impl Drop for WsServer {
-		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				server.close_handle().close();
-				let _ = server.wait();
-			}
-		}
-	}
-}
+// TODO(niklasad1): not supported yet.
+mod waiting {}
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 /// Once this is called, no more methods can be added to the server.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<
-	R: FnOnce(sc_rpc::DenyUnsafe) -> RpcModule<()>,
->(
+fn start_rpc_servers<R>(
 	config: &Configuration,
 	mut gen_rpc_module: R,
-	rpc_metrics: sc_rpc_server::RpcMetrics,
-) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
-		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
-		{
-			address.map(|mut address| start(&address)
-				.or_else(|e| match e.kind() {
-					io::ErrorKind::AddrInUse |
-					io::ErrorKind::PermissionDenied => {
-						warn!("Unable to bind RPC server to {}. Trying random port.", address);
-						address.set_port(0);
-						start(&address)
-					},
-					_ => Err(e),
-				}
-			) ).transpose()
-		}
-
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
+where
+	R: FnOnce(sc_rpc::DenyUnsafe) -> RpcModule<()>,
+{
 	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
-	let rpsee_addr = config.rpc_ws.map(|mut addr| {
-		let port = addr.port() + 1;
-		addr.set_port(port);
-		addr
-	}).unwrap_or_else(|| "127.0.0.1:9945".parse().unwrap());
+	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().unwrap());
+	let http_addr = config.rpc_http.unwrap_or_else(|| "127.0.0.1:9933".parse().unwrap());
 
-	std::thread::spawn(move || {
-		use jsonrpsee::ws_server::WsServerBuilder;
+	let http = sc_rpc_server::start_http(
+		http_addr,
+		config.rpc_http_threads,
+		config.rpc_cors.as_ref(),
+		config.rpc_max_payload,
+		module.clone(),
+	);
 
-		let rt = tokio::runtime::Runtime::new().unwrap();
+	let ws = sc_rpc_server::start_ws(
+		ws_addr,
+		Some(4),
+		config.rpc_ws_max_connections,
+		config.rpc_cors.as_ref(),
+		config.rpc_max_payload,
+		module,
+	);
 
-		rt.block_on(async {
-			let mut server = WsServerBuilder::default().build(rpsee_addr).await.unwrap();
-
-			server.register_module(module).unwrap();
-			let mut methods_api = RpcModule::new(());
-			let mut methods = server.method_names();
-			methods.sort();
-
-			methods_api.register_method("rpc_methods", move |_, _| {
-				Ok(serde_json::json!({
-					"version": 1,
-					"methods": methods,
-				}))
-			}).unwrap();
-
-			server.register_module(methods_api).unwrap();
-
-			server.start().await;
-		});
-	});
-
-	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
-		let is_exposed_addr = !addr.ip().is_loopback();
-		match (is_exposed_addr, methods) {
-			| (_, RpcMethods::Unsafe)
-			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
-			_ => sc_rpc::DenyUnsafe::Yes
-		}
-	}
-	Ok(Box::new(()))
+	Ok(Box::new((http, ws)))
 }
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
@@ -561,13 +486,14 @@ mod tests {
 			client.clone(),
 		);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
-		let best = longest_chain.best_chain().unwrap();
+		let best = block_on(longest_chain.best_chain()).unwrap();
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
-		}.into_signed_tx();
+		}
+		.into_signed_tx();
 		block_on(pool.submit_one(
 			&BlockId::hash(best.hash()), source, transaction.clone()),
 		).unwrap();

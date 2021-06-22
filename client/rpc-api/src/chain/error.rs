@@ -61,3 +61,12 @@ impl From<Error> for rpc::Error {
 		}
 	}
 }
+
+impl From<Error> for jsonrpsee_types::Error {
+	fn from(e: Error) -> Self {
+		match e {
+			Error::Other(msg) => Self::Custom(msg),
+			Error::Client(e) => Self::Custom(e.to_string()),
+		}
+	}
+}

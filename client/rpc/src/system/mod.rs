@@ -26,8 +26,8 @@ use sc_rpc_api::DenyUnsafe;
 use sc_tracing::logging;
 use sp_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{self, Header as HeaderT};
-use jsonrpsee_ws_server::RpcModule;
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
+use jsonrpsee::RpcModule;
+use jsonrpsee::types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
 
 use self::error::Result;
 
@@ -105,7 +105,7 @@ impl<B: traits::Block> System<B> {
 		})?;
 
 		rpc_module.register_method("system_properties", |_, system| {
-			Ok(system.info.chain_type.clone())
+			Ok(system.info.properties.clone())
 		})?;
 
 		rpc_module.register_async_method("system_health", |_, system| {

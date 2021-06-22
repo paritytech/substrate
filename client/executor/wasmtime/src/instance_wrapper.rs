@@ -415,6 +415,43 @@ impl InstanceWrapper {
 			slice::from_raw_parts_mut(ptr, len)
 		}
 	}
+
+	/// Returns the pointer to the first byte of the linear memory for this instance.
+	pub fn base_ptr(&self) -> *const u8 {
+		self.memory.data_ptr()
+	}
+
+	/// Removes physical backing from the allocated linear memory. This leads to returning the memory
+	/// back to the system. While the memory is zeroed this is considered as a side-effect and is not
+	/// relied upon. Thus this function acts as a hint.
+	pub fn decommit(&self) {
+		if self.memory.data_size() == 0 {
+			return;
+		}
+
+		cfg_if::cfg_if! {
+			if #[cfg(target_os = "linux")] {
+				use std::sync::Once;
+
+				unsafe {
+					let ptr = self.memory.data_ptr();
+					let len = self.memory.data_size();
+
+					// Linux handles MADV_DONTNEED reliably. The result is that the given area
+					// is unmapped and will be zeroed on the next pagefault.
+					if libc::madvise(ptr as _, len, libc::MADV_DONTNEED) != 0 {
+						static LOGGED: Once = Once::new();
+						LOGGED.call_once(|| {
+							log::warn!(
+								"madvise(MADV_DONTNEED) failed: {}",
+								std::io::Error::last_os_error(),
+							);
+						});
+					}
+				}
+			}
+		}
+	}
 }
 
 impl runtime_blob::InstanceGlobals for InstanceWrapper {
