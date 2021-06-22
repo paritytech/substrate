@@ -84,11 +84,11 @@ fn add_sub_accounts<T: Config>(who: &T::AccountId, s: u32) -> Result<Vec<(T::Acc
 
 // This creates an `IdentityInfo` object with `num_fields` extra fields.
 // All data is pre-populated with some arbitrary bytes.
-fn create_identity_info<T: Config>(num_fields: u32) -> IdentityInfo {
+fn create_identity_info<T: Config>(num_fields: u32) -> IdentityInfo<T::MaxAdditionalFields> {
 	let data = Data::Raw(vec![0; 32]);
 
 	let info = IdentityInfo {
-		additional: vec![(data.clone(), data.clone()); num_fields as usize],
+		additional: vec![(data.clone(), data.clone()); num_fields as usize].try_into().unwrap(),
 		display: data.clone(),
 		legal: data.clone(),
 		web: data.clone(),
