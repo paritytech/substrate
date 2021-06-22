@@ -402,7 +402,7 @@ impl<T: Config> Pallet<T> {
 		)
 	}
 
-	/// Collect sufficient deposit to store this solution this chain.
+	/// Collect a sufficient deposit to store this solution.
 	///
 	/// The deposit is composed of 3 main elements:
 	///
@@ -575,7 +575,6 @@ mod tests {
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
-			dbg!(MultiPhase::signed_submissions().len(), SignedMaxSubmissions::get());
 
 			// weaker.
 			let solution = RawSolution { score: [4, 0, 0], ..Default::default() };
@@ -623,7 +622,7 @@ mod tests {
 	}
 
 	#[test]
-	fn weakest_is_removed_if_better_provided_wont_remove_self() {
+	fn replace_weakest_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_signed());

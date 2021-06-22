@@ -610,15 +610,18 @@ pub mod pallet {
 		/// Base deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositBase: Get<BalanceOf<Self>>;
+
 		/// Per-byte deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositByte: Get<BalanceOf<Self>>;
+
 		/// Per-weight deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
 		/// Handler for the rewards.
 		type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
@@ -1019,7 +1022,7 @@ pub mod pallet {
 		SignedQueueFull,
 		/// The origin failed to pay the deposit.
 		SignedCannotPayDeposit,
-		/// witness data to dispatchable is invalid.
+		/// Witness data to dispatchable is invalid.
 		SignedInvalidWitness,
 		/// The signed submission consumes too much weight
 		SignedTooMuchWeight,
