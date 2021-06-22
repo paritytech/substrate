@@ -176,9 +176,12 @@ impl<T: Config> SignedSubmissions<T> {
 	/// Empty the set of signed submissions, returning an iterator of signed submissions in
 	/// arbitrary order.
 	///
-	/// Note that if the iterator is dropped without consuming all elements, not all may be removed.
-	fn drain(&mut self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
-		self.indices.clear();
+	/// Note that if the iterator is dropped without consuming all elements, not all may be removed
+	/// from the underlying `SignedSubmissionsMap`, putting the struct into an invalid state.
+	///
+	/// Note that, like `put`, this function consumes `Self` and modifies storage.
+	fn drain(mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
+		SignedSubmissionIndices::<T>::kill();
 		SignedSubmissionNextIndex::<T>::kill();
 		let insertion_overlay = sp_std::mem::take(&mut self.insertion_overlay);
 		SignedSubmissionsMap::<T>::drain()
@@ -337,8 +340,6 @@ impl<T: Config> Pallet<T> {
 			weight = weight.saturating_add(T::DbWeight::get().writes(1));
 			debug_assert!(_remaining.is_zero());
 		}
-
-		all_submissions.put();
 
 		log!(debug, "closed signed phase, found solution? {}, discarded {}", found_solution, discarded);
 		(found_solution, weight)
