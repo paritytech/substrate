@@ -363,15 +363,16 @@ impl<B: BlockT, T, E: std::error::Error + Send + 'static, Transaction> BlockImpo
 }
 
 /// Justification import trait
+#[async_trait::async_trait]
 pub trait JustificationImport<B: BlockT> {
 	type Error: std::error::Error + Send + 'static;
 
 	/// Called by the import queue when it is started. Returns a list of justifications to request
 	/// from the network.
-	fn on_start(&mut self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
+	async fn on_start(&mut self) -> Vec<(B::Hash, NumberFor<B>)>;
 
 	/// Import a Block justification and finalize the given block.
-	fn import_justification(
+	async fn import_justification(
 		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
