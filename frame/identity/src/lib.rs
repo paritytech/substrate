@@ -189,7 +189,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		(BalanceOf<T>, Vec<T::AccountId>),
+		(BalanceOf<T>, BoundedVec<T::AccountId, T::MaxSubAccounts>),
 		ValueQuery,
 	>;
 
@@ -418,10 +418,15 @@ pub mod pallet {
 			for s in old_ids.iter() {
 				<SuperOf<T>>::remove(s);
 			}
-			let ids = subs.into_iter().map(|(id, name)| {
-				<SuperOf<T>>::insert(&id, (sender.clone(), name));
-				id
-			}).collect::<Vec<_>>();
+			let ids: BoundedVec<_, _> = subs
+				.into_iter()
+				.map(|(id, name)| {
+					<SuperOf<T>>::insert(&id, (sender.clone(), name));
+					id
+				})
+				.collect::<Vec<_>>()
+				.try_into()
+				.map_err(|_| Error::<T>::TooManySubAccounts)?;
 			let new_subs = ids.len();
 
 			if ids.is_empty() {
@@ -821,7 +826,7 @@ pub mod pallet {
 				T::Currency::reserve(&sender, deposit)?;
 
 				SuperOf::<T>::insert(&sub, (sender.clone(), data));
-				sub_ids.push(sub.clone());
+				sub_ids.try_push(sub.clone()).expect("sub ids length checked above; qed");
 				*subs_deposit = subs_deposit.saturating_add(deposit);
 
 				Self::deposit_event(Event::SubIdentityAdded(sub, sender.clone(), deposit));

@@ -22,7 +22,7 @@ use crate as pallet_identity;
 
 use codec::{Encode, Decode};
 use sp_runtime::traits::BadOrigin;
-use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
+use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types, BoundedVec};
 use sp_core::H256;
 use frame_system::{EnsureSignedBy, EnsureOneOf, EnsureRoot};
 use sp_runtime::{
@@ -342,14 +342,14 @@ fn setting_subaccounts_should_work() {
 		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 		assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 		assert_eq!(Balances::free_balance(10), 80);
-		assert_eq!(Identity::subs_of(10), (10, vec![20]));
+		assert_eq!(Identity::subs_of(10), (10, vec![20].try_into().unwrap()));
 		assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1].try_into().unwrap()))));
 
 		// push another item and re-set it.
 		subs.push((30, Data::Raw(vec![50; 1].try_into().unwrap())));
 		assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 		assert_eq!(Balances::free_balance(10), 70);
-		assert_eq!(Identity::subs_of(10), (20, vec![20, 30]));
+		assert_eq!(Identity::subs_of(10), (20, vec![20, 30].try_into().unwrap()));
 		assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1].try_into().unwrap()))));
 		assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1].try_into().unwrap()))));
 
@@ -357,7 +357,7 @@ fn setting_subaccounts_should_work() {
 		subs[0] = (40, Data::Raw(vec![60; 1].try_into().unwrap()));
 		assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 		assert_eq!(Balances::free_balance(10), 70); // no change in the balance
-		assert_eq!(Identity::subs_of(10), (20, vec![40, 30]));
+		assert_eq!(Identity::subs_of(10), (20, vec![40, 30].try_into().unwrap()));
 		assert_eq!(Identity::super_of(20), None);
 		assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1].try_into().unwrap()))));
 		assert_eq!(Identity::super_of(40), Some((10, Data::Raw(vec![60; 1].try_into().unwrap()))));
@@ -365,7 +365,7 @@ fn setting_subaccounts_should_work() {
 		// clear
 		assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
 		assert_eq!(Balances::free_balance(10), 90);
-		assert_eq!(Identity::subs_of(10), (0, vec![]));
+		assert_eq!(Identity::subs_of(10), (0, BoundedVec::default()));
 		assert_eq!(Identity::super_of(30), None);
 		assert_eq!(Identity::super_of(40), None);
 
