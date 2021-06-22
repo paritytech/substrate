@@ -1,5 +1,5 @@
 # ===== FIRST STAGE ======
-ARG DDC_SMART_CONTRACT_VERSION=1.1.0
+ARG DDC_SMART_CONTRACT_VERSION=v1.1.0
 ARG ECR_REGISTRY
 FROM phusion/baseimage:0.11 as builder
 LABEL maintainer="team@cere.network"
@@ -11,7 +11,7 @@ COPY . /cerenetwork
 FROM $ECR_REGISTRY/ddc-smart-contract:$DDC_SMART_CONTRACT_VERSION as ddc-smart-contract
 
 FROM builder
-# Copy smart-contract artifacts (cere01.wasm and metadata.json)
+# Copy smart-contract artifacts (ddc.wasm and metadata.json)
 COPY --from=ddc-smart-contract /ddc-smart-contract/artifacts/ddc.wasm /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data/
 COPY --from=ddc-smart-contract /ddc-smart-contract/artifacts/metadata.json /cerenetwork/frame/ddc-metrics-offchain-worker/src/tests/test_data/
 
