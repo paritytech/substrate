@@ -1876,7 +1876,7 @@ mod tests {
 
 			// an unexpected call to elect.
 			roll_to(20);
-			MultiPhase::elect().unwrap();
+			assert!(MultiPhase::elect().is_ok());
 
 			// all storage items must be cleared.
 			assert_eq!(MultiPhase::round(), 2);
