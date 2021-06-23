@@ -10703,6 +10703,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-externalities",
+ "sp-io",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
