@@ -203,8 +203,17 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Iterate through the set of signed submissions in order of increasing score.
 	pub fn iter(&self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
-		self.indices.iter().map(move |(_score, idx)| {
-			self.get_submission(*idx).expect("SignedSubmissions must remain internally consistent")
+		self.indices.iter().filter_map(move |(_score, &idx)| {
+			let maybe_submission = self.get_submission(idx);
+			if maybe_submission.is_none() {
+				log!(
+					error,
+					"SignedSubmissions internal state is invalid (idx {}); \
+					there is a logic error in code handling signed solution submissions",
+					idx,
+				)
+			}
+			maybe_submission
 		})
 	}
 
