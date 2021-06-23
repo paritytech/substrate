@@ -400,10 +400,6 @@ impl<T: Trait> Module<T> {
         info!("[OCW] Using Contract Address: {:?}", contract_id);
 
         for one_metric in metrics.iter() {
-            if one_metric.storage_bytes == 0 && one_metric.wcu_used == 0 && one_metric.rcu_used == 0 {
-                continue;
-            }
-
             let results = signer.send_signed_transaction(|account| {
                 info!(
 					"[OCW] Sending transactions from {:?}: report_metrics_ddn({:?}, {:?}, {:?}, {:?}, {:?})",
