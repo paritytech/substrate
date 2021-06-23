@@ -53,7 +53,7 @@ pub struct DDCNode {
 #[serde(crate = "alt_serde")]
 #[allow(non_snake_case)]
 struct MetricInfo {
-    appPubKey: String,
+    app_id: String,
     storageBytes: u128,
     wcuUsed: u128,
     rcuUsed: u128,
@@ -346,7 +346,7 @@ impl<T: Trait> Module<T> {
         info!("[OCW] Using Contract Address: {:?}", contract_id);
 
         for one_metric in metrics.iter() {
-            let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
+            let app_id = Self::account_id_from_hex(&one_metric.app_id)?;
 
             if one_metric.storageBytes == 0 && one_metric.wcuUsed == 0 && one_metric.rcuUsed == 0 {
                 continue;
@@ -354,13 +354,13 @@ impl<T: Trait> Module<T> {
 
             let results = signer.send_signed_transaction(|account| {
                 info!(
-                    "[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?}, {:?})",
-                    account.id,
-                    one_metric.appPubKey,
-                    day_start_ms,
-                    one_metric.storageBytes,
-                    one_metric.wcuUsed,
-                    one_metric.rcuUsed,
+					"[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?}, {:?})",
+					account.id,
+					one_metric.app_id,
+					day_start_ms,
+					one_metric.storageBytes,
+					one_metric.wcuUsed,
+					one_metric.rcuUsed,
                 );
 
                 let call_data = Self::encode_report_metrics(
@@ -639,12 +639,12 @@ impl MetricsAggregator {
         let existing_pubkey_index = self
             .0
             .iter()
-            .position(|one_result_obj| metrics.appPubKey == one_result_obj.appPubKey);
+            .position(|one_result_obj| metrics.app_id == one_result_obj.app_id);
 
         if existing_pubkey_index.is_none() {
             // New app.
             let new_metric_obj = MetricInfo {
-                appPubKey: metrics.appPubKey.clone(),
+                app_id: metrics.app_id.clone(),
                 storageBytes: metrics.storageBytes,
                 wcuUsed: metrics.wcuUsed,
                 rcuUsed: metrics.rcuUsed,
