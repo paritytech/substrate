@@ -173,7 +173,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	executor: Arc<SubscriptionTaskExecutor>,
 	deny_unsafe: DenyUnsafe,
 	rpc_max_payload: Option<usize>,
-) -> (State<Block, Client>, ChildState<Block, Client>)
+) -> (StateApi<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
@@ -189,7 +189,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	let backend = Box::new(
 		self::state_full::FullState::new(client.clone(), executor, rpc_max_payload)
 	);
-	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
+	(StateApi { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// Create new state API that works on light node.
@@ -199,7 +199,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 	deny_unsafe: DenyUnsafe,
-) -> (State<Block, Client>, ChildState<Block, Client>)
+) -> (StateApi<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
@@ -223,19 +223,19 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 			fetcher,
 	));
 	(
-		State { backend, deny_unsafe },
+		StateApi { backend, deny_unsafe },
 		ChildState { backend: child_backend }
 	)
 }
 
 /// State API with subscriptions support.
-pub struct State<Block, Client> {
+pub struct StateApi<Block, Client> {
 	backend: Box<dyn StateBackend<Block, Client>>,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
 
-impl<Block, Client> State<Block, Client>
+impl<Block, Client> StateApi<Block, Client>
 	where
 		Block: BlockT + 'static,
 		Client: BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block>
@@ -547,7 +547,7 @@ fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
 }
 
-// TODO: make available to other code?
+// TODO: (dp) make available to other code?
 fn to_jsonrpsee_call_error(err: Error) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(err))
 }

@@ -34,7 +34,7 @@ pub use self::helpers::ReadProof;
 
 /// Substrate state API
 #[rpc]
-pub trait StateApi<Hash> {
+pub trait StateApiOld<Hash> {
 	/// RPC Metadata
 	type Metadata;
 

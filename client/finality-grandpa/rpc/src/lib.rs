@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 
 use std::sync::Arc;
-use futures::{FutureExt, TryFutureExt, TryStreamExt, StreamExt};
+use futures::{future, FutureExt, TryFutureExt, TryStreamExt, StreamExt};
 use log::warn;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
@@ -40,6 +40,7 @@ mod notification;
 mod report;
 
 use sc_finality_grandpa::GrandpaJustificationStream;
+use sc_rpc::SubscriptionTaskExecutor;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
@@ -51,7 +52,7 @@ type FutureResult<T> =
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
-pub trait GrandpaApi<Notification, Hash, Number> {
+pub trait GrandpaApiOld<Notification, Hash, Number> {
 	/// RPC Metadata
 	type Metadata;
 
@@ -94,30 +95,32 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 	) -> FutureResult<Option<EncodedFinalityProof>>;
 }
 
-// TODO: better name
-/// TODO: docs
-pub struct GrandpaRpsee<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
+/// Provides RPC methods for interacting with GRANDPA.
+pub struct GrandpaApi<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
+	executor: Arc<SubscriptionTaskExecutor>,
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
 	justification_stream: GrandpaJustificationStream<Block>,
 	finality_proof_provider: Arc<ProofProvider>,
 }
 
-impl<AuthoritySet, VoterState, Block, ProofProvider> GrandpaRpsee<AuthoritySet, VoterState, Block, ProofProvider>
+impl<AuthoritySet, VoterState, Block, ProofProvider> GrandpaApi<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
 	Block: BlockT,
 	ProofProvider: RpcFinalityProofProvider<Block> + Send + Sync + 'static,
 {
-	/// TODO: docs
+	/// Prepare a new [`GrandpaApi`]
 	pub fn new(
+		executor: Arc<SubscriptionTaskExecutor>,
 		authority_set: AuthoritySet,
 		voter_state: VoterState,
 		justification_stream: GrandpaJustificationStream<Block>,
 		finality_proof_provider: Arc<ProofProvider>,
 	) -> Self {
 		Self {
+			executor,
 			authority_set,
 			voter_state,
 			justification_stream,
@@ -125,7 +128,7 @@ where
 		}
 	}
 
-	/// Convert this to a RPC module.
+	/// Convert this [`GrandpaApi`] to an [`RpcModule`].
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
 		let mut module = RpcModule::new(self);
 
@@ -136,7 +139,7 @@ where
 				.map_err(to_jsonrpsee_call_error)
 		})?;
 
-		// Prove finality for the given block number by returning the Justification for the last block
+		// Prove finality for the given block number by returning the [`Justification`] for the last block
 		// in the set and all the intermediary headers to link them together.
 		module.register_method("grandpa_proveFinality", |params, grandpa| {
 			let block: NumberFor<Block> = params.one()?;
@@ -147,11 +150,40 @@ where
 				.map_err(to_jsonrpsee_call_error)
 		})?;
 
+		// Returns the block most recently finalized by Grandpa, alongside its justification.
+		module.register_subscription(
+			"grandpa_justifications",
+			"grandpa_unsubscribeJustifications",
+			|_params, mut sink: SubscriptionSink, ctx: Arc<GrandpaApi<_, _, _, _>>| {
+				let stream = ctx
+					.justification_stream
+					.subscribe()
+					.map(|x: sc_finality_grandpa::GrandpaJustification<Block>| JustificationNotification::from(x));
+
+				fn log_err(err: jsonrpsee_types::Error) -> bool {
+					log::error!("Could not send data to grandpa_justifications subscription. Error: {:?}", err);
+					false
+				}
+
+				let fut = async move {
+					stream.take_while(|justification| {
+						future::ready(
+							sink.send(justification).map_or_else( log_err , |_| true )
+						)
+					})
+					.for_each(|_| future::ready(()))
+					.await;
+				}.boxed();
+				ctx.executor.execute_new(fut);
+				Ok(())
+			}
+		)?;
+
 		Ok(module)
 	}
 }
 
-// TODO: make available to other code?
+// TODO: (dp) make available to other code?
 fn to_jsonrpsee_call_error(err: error::Error) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(err))
 }
@@ -193,7 +225,7 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 
 // TODO: remove
 impl<AuthoritySet, VoterState, Block, ProofProvider>
-	GrandpaApi<JustificationNotification, Block::Hash, NumberFor<Block>>
+	GrandpaApiOld<JustificationNotification, Block::Hash, NumberFor<Block>>
 	for GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
@@ -394,7 +426,7 @@ mod tests {
 		);
 
 		let mut io = jsonrpc_core::MetaIoHandler::default();
-		io.extend_with(GrandpaApi::to_delegate(handler));
+		io.extend_with(GrandpaApiOld::to_delegate(handler));
 
 		(io, justification_sender)
 	}

@@ -36,7 +36,7 @@ use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_consensus_babe::SlotProportion;
 
 use jsonrpsee_ws_server::RpcModule;
-use sc_finality_grandpa_rpc::GrandpaRpsee;
+use sc_finality_grandpa_rpc::GrandpaApi;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -52,10 +52,10 @@ pub fn new_partial(
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
-		// rpc_extensions_builder (jsonrpc, old, remove)
+		// rpc_extensions_builder (jsonrpc, old,  TODO: (dp) remove)
 		impl Fn(node_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> node_rpc::IoHandler,
 		// rpc setup (jsonrpsee)
-		RpcModule<()>,
+		impl Fn(node_rpc::DenyUnsafe, Arc<sc_rpc::SubscriptionTaskExecutor>) -> RpcModule<()>,
 		// import setup
 		(
 			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
@@ -141,18 +141,24 @@ pub fn new_partial(
 		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
-
-	let rpsee_modules =  {
-		let grandpa_rpc = GrandpaRpsee::new(
-			grandpa_link.shared_authority_set().clone(),
+	// TODO: (dp) cleanup when removing the jsonrpc stuff below.
+	let shared_authority_set = grandpa_link.shared_authority_set().clone();
+	let justification_stream = grandpa_link.justification_stream().clone();
+	let backend2 = backend.clone();
+	let backend3 = backend.clone();
+	let rpsee_builder = move |deny_unsafe, executor| -> RpcModule<()> {
+		// TODO: pass in deny_unsafe and the executor here
+		let grandpa_rpc = GrandpaApi::new(
+			executor,
+			shared_authority_set.clone(), // TODO: without this clone the closure becomes a FnOnce, which might be fine?
 			grandpa::SharedVoterState::empty(),
-			grandpa_link.justification_stream(),
+			justification_stream.clone(), // TODO: without this clone the closure becomes a FnOnce, which might be fine?
 			grandpa::FinalityProofProvider::new_for_service(
-				backend.clone(),
-				Some(grandpa_link.shared_authority_set().clone()),
+				backend3.clone(), // TODO: without this clone the closure becomes a FnOnce, which might be fine?
+				Some(shared_authority_set.clone()),
 			),
 		).into_rpc_module().expect("TODO: error handling");
-
+		// TODO: add other rpc modules here
 		let mut module = RpcModule::new(());
 		module.merge(grandpa_rpc).expect("TODO: error handling");
 		module
@@ -170,7 +176,7 @@ pub fn new_partial(
 		let rpc_setup = shared_voter_state.clone();
 
 		let finality_proof_provider = grandpa::FinalityProofProvider::new_for_service(
-			backend.clone(),
+			backend2.clone(),
 			Some(shared_authority_set.clone()),
 		);
 
@@ -219,8 +225,8 @@ pub fn new_partial(
 		select_chain,
 		import_queue,
 		transaction_pool,
-		// TODO: `rpc_setup` is a copy of `shared_voter_state`, but why?
-		other: (rpc_extensions_builder, rpsee_modules, import_setup, rpc_setup, telemetry),
+		// TODO: (dp) `rpc_setup` is a copy of `shared_voter_state`, but why?
+		other: (rpc_extensions_builder, Box::new(rpsee_builder), import_setup, rpc_setup, telemetry),
 	})
 }
 
@@ -249,7 +255,7 @@ pub fn new_full_base(
 		transaction_pool,
 		other: (
 			rpc_extensions_builder,
-			rpsee_modules,
+			rpsee_builder,
 			import_setup,
 			rpc_setup,
 			mut telemetry
@@ -304,7 +310,7 @@ pub fn new_full_base(
 			keystore: keystore_container.sync_keystore(),
 			network: network.clone(),
 			rpc_extensions_builder: Box::new(rpc_extensions_builder),
-			rpsee_modules,
+			rpsee_builder: Box::new(rpsee_builder),
 			transaction_pool: transaction_pool.clone(),
 			task_manager: &mut task_manager,
 			on_demand: None,
@@ -603,8 +609,8 @@ pub fn new_light_base(
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
 			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
-			// TODO: figure out what we should do for light clients
-			rpsee_modules: RpcModule::new(()),
+			// TODO: (dp) figure out what we should do for light clients
+			rpsee_builder: Box::new(|_, _| RpcModule::new(())),
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
 			keystore: keystore_container.sync_keystore(),
