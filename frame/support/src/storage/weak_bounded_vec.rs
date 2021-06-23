@@ -20,13 +20,13 @@
 
 use sp_std::prelude::*;
 use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
 use crate::{
-	traits::{Get, MaxEncodedLen},
+	traits::Get,
 	storage::{StorageDecodeLength, StorageTryAppend},
 };
 

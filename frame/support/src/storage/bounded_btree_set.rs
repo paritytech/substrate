@@ -23,9 +23,9 @@ use sp_std::{
 };
 use crate::{
 	storage::StorageDecodeLength,
-	traits::{Get, MaxEncodedLen},
+	traits::Get,
 };
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 
 /// A bounded set based on a B-Tree.
 ///

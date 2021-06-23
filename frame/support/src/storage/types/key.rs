@@ -17,8 +17,8 @@
 
 //! Storage key type.
 
-use crate::{hash::{ReversibleStorageHasher, StorageHasher}, traits::MaxEncodedLen};
-use codec::{Encode, EncodeLike, FullCodec};
+use crate::hash::{ReversibleStorageHasher, StorageHasher};
+use codec::{Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use paste::paste;
 use sp_std::prelude::*;
 

@@ -81,6 +81,3 @@ pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 
 mod voting;
 pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
-
-// for backwards-compatibility with existing imports
-pub use codec::MaxEncodedLen;

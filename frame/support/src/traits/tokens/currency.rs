@@ -22,7 +22,7 @@ use sp_runtime::traits::MaybeSerializeDeserialize;
 use crate::dispatch::{DispatchResult, DispatchError};
 use super::misc::{Balance, WithdrawReasons, ExistenceRequirement};
 use super::imbalance::{Imbalance, SignedImbalance};
-use frame_support::traits::MaxEncodedLen;
+use codec::MaxEncodedLen;
 
 mod reservable;
 pub use reservable::{ReservableCurrency, NamedReservableCurrency};
