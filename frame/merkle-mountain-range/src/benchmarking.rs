@@ -30,15 +30,15 @@ benchmarks! {
 		let leaves = x as u64;
 	}: {
 		for b in 0..leaves {
-			Module::<T>::on_initialize((b as u32).into());
+			Pallet::<T, _>::on_initialize((b as u32).into());
 		}
 	} verify {
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), leaves);
+		assert_eq!(crate::NumberOfLeaves::<T, _>::get(), leaves);
 	}
 }
 
 impl_benchmark_test_suite!(
-	Module,
+	Pallet,
 	crate::tests::new_test_ext(),
 	crate::mock::Test,
 );
