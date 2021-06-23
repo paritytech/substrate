@@ -238,6 +238,7 @@ use std::sync::Arc;
 
 mod node;
 mod utils;
+mod rpc;
 mod host_functions;
 
 pub use host_functions::*;
@@ -329,5 +330,5 @@ pub trait ChainInfo: Sized {
 	>;
 
 	/// Given a call and a handle to the node, execute the call with root privileges.
-	fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &mut Node<Self>);
+	fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &Node<Self>);
 }

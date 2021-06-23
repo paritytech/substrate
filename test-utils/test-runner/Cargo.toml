@@ -47,6 +47,8 @@ env_logger = "0.7.1"
 log = "0.4.8"
 futures = { package = "futures", version = "0.3", features = ["compat"] }
 tokio = { version = "0.2", features = ["full"] }
-
+parking_lot = "0.11.1"
 # Calling RPC
 jsonrpc-core = "15.1"
+jsonrpc-core-client = "15.1"
+jsonrpc-derive = "15.1"

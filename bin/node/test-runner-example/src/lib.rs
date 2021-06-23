@@ -169,7 +169,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 		))
 	}
 
-	fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &mut Node<Self>) {
+	fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &Node<Self>) {
 		let alice = MultiSigner::from(Alice.public()).into_account();
 		let call = pallet_sudo::Call::sudo(Box::new(call));
 		node.submit_extrinsic(call, alice);
@@ -183,7 +183,7 @@ mod tests {
 
 	#[test]
 	fn test_runner() {
-		let mut node = Node::<NodeTemplateChainInfo>::new().unwrap();
+		let node = Node::<NodeTemplateChainInfo>::new().unwrap();
 		// seals blocks
 		node.seal_blocks(1);
 		// submit extrinsics
