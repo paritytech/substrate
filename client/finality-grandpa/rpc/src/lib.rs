@@ -40,7 +40,7 @@ use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 use notification::JustificationNotification;
 
 /// Provides RPC methods for interacting with GRANDPA.
-pub struct GrandpaApi<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
+pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 	executor: Arc<SubscriptionTaskExecutor>,
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
@@ -48,7 +48,7 @@ pub struct GrandpaApi<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 	finality_proof_provider: Arc<ProofProvider>,
 }
 
-impl<AuthoritySet, VoterState, Block, ProofProvider> GrandpaApi<AuthoritySet, VoterState, Block, ProofProvider>
+impl<AuthoritySet, VoterState, Block, ProofProvider> GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
@@ -98,7 +98,7 @@ where
 		module.register_subscription(
 			"grandpa_justifications",
 			"grandpa_unsubscribeJustifications",
-			|_params, mut sink: SubscriptionSink, ctx: Arc<GrandpaApi<_, _, _, _>>| {
+			|_params, mut sink: SubscriptionSink, ctx: Arc<GrandpaRpc<_, _, _, _>>| {
 				let stream = ctx
 					.justification_stream
 					.subscribe()

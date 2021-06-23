@@ -20,6 +20,9 @@
 
 use sc_consensus_babe::{Epoch, authorship, Config};
 use futures::{FutureExt as _, TryFutureExt as _};
+use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
+use jsonrpsee::RpcModule;
+
 use jsonrpc_core::{
 	Error as RpcError,
 	futures::future as rpc_future,
@@ -46,17 +49,8 @@ use std::{collections::HashMap, sync::Arc};
 
 type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
 
-/// Provides rpc methods for interacting with Babe.
-#[rpc]
-pub trait BabeApi {
-	/// Returns data about which slots (primary or secondary) can be claimed in the current epoch
-	/// with the keys in the keystore.
-	#[rpc(name = "babe_epochAuthorship")]
-	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>>;
-}
-
-/// Implements the BabeRpc trait for interacting with Babe.
-pub struct BabeRpcHandler<B: BlockT, C, SC> {
+/// Provides RPC methods for interacting with Babe.
+pub struct BabeRpc<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
 	/// shared reference to EpochChanges
@@ -71,7 +65,74 @@ pub struct BabeRpcHandler<B: BlockT, C, SC> {
 	deny_unsafe: DenyUnsafe,
 }
 
-impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
+impl<B: BlockT, C, SC> BabeRpc<B, C, SC>
+where
+	B: BlockT,
+	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error = BlockChainError> + 'static,
+	C::Api: BabeRuntimeApi<B>,
+	SC: SelectChain<B> + Clone + 'static,
+{
+	/// Creates a new instance of the BabeRpc handler.
+	pub fn new(
+		client: Arc<C>,
+		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
+		keystore: SyncCryptoStorePtr,
+		babe_config: Config,
+		select_chain: SC,
+		deny_unsafe: DenyUnsafe,
+	) -> Self {
+		Self {
+			client,
+			shared_epoch_changes,
+			keystore,
+			babe_config,
+			select_chain,
+			deny_unsafe,
+		}
+	}
+
+	/// Convert this [`BabeRpc`] to an [`RpcModule`].
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut module = RpcModule::new(self);
+		// Returns data about which slots (primary or secondary) can be claimed in the current epoch
+		// with the keys in the keystore.
+		module.register_async_method("babe_epochAuthorship", |_params, babe| {
+			async move {
+				babe.deny_unsafe.check_if_safe()?;
+				Ok(())
+			}.boxed()
+		})?;
+
+		Ok(module)
+	}
+}
+
+/// Provides rpc methods for interacting with Babe.
+#[rpc]
+pub trait BabeApiRemoveMe {
+	/// Returns data about which slots (primary or secondary) can be claimed in the current epoch
+	/// with the keys in the keystore.
+	#[rpc(name = "babe_epochAuthorship")]
+	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>>;
+}
+
+/// Implements the BabeRpc trait for interacting with Babe.
+pub struct BabeRpcHandlerRemoveMe<B: BlockT, C, SC> {
+	/// shared reference to the client.
+	client: Arc<C>,
+	/// shared reference to EpochChanges
+	shared_epoch_changes: SharedEpochChanges<B, Epoch>,
+	/// shared reference to the Keystore
+	keystore: SyncCryptoStorePtr,
+	/// config (actually holds the slot duration)
+	babe_config: Config,
+	/// The SelectChain strategy
+	select_chain: SC,
+	/// Whether to deny unsafe calls
+	deny_unsafe: DenyUnsafe,
+}
+
+impl<B: BlockT, C, SC> BabeRpcHandlerRemoveMe<B, C, SC> {
 	/// Creates a new instance of the BabeRpc handler.
 	pub fn new(
 		client: Arc<C>,
@@ -92,7 +153,7 @@ impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
 	}
 }
 
-impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
+impl<B, C, SC> BabeApiRemoveMe for BabeRpcHandlerRemoveMe<B, C, SC>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B>
@@ -273,7 +334,7 @@ mod tests {
 
 	fn test_babe_rpc_handler(
 		deny_unsafe: DenyUnsafe
-	) -> BabeRpcHandler<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
+	) -> BabeRpcHandlerRemoveMe<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
@@ -287,7 +348,7 @@ mod tests {
 		let epoch_changes = link.epoch_changes().clone();
 		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
 
-		BabeRpcHandler::new(
+		BabeRpcHandlerRemoveMe::new(
 			client.clone(),
 			epoch_changes,
 			keystore,
@@ -302,7 +363,7 @@ mod tests {
 		let handler = test_babe_rpc_handler(DenyUnsafe::No);
 		let mut io = IoHandler::new();
 
-		io.extend_with(BabeApi::to_delegate(handler));
+		io.extend_with(BabeApiRemoveMe::to_delegate(handler));
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
 		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
@@ -314,7 +375,7 @@ mod tests {
 		let handler = test_babe_rpc_handler(DenyUnsafe::Yes);
 		let mut io = IoHandler::new();
 
-		io.extend_with(BabeApi::to_delegate(handler));
+		io.extend_with(BabeApiRemoveMe::to_delegate(handler));
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
 
 		let response = io.handle_request_sync(request).unwrap();

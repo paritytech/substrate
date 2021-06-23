@@ -36,7 +36,8 @@ use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_consensus_babe::SlotProportion;
 
 use jsonrpsee_ws_server::RpcModule;
-use sc_finality_grandpa_rpc::GrandpaApi;
+use sc_finality_grandpa_rpc::GrandpaRpc;
+use sc_consensus_babe_rpc::BabeRpc;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -141,13 +142,20 @@ pub fn new_partial(
 		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
-	// TODO: (dp) cleanup when removing the jsonrpc stuff below.
+	// TODO: (dp) cleanup all of this crap when removing the jsonrpc stuff below.
+	// Grandpa stuff
 	let shared_authority_set = grandpa_link.shared_authority_set().clone();
 	let justification_stream = grandpa_link.justification_stream().clone();
 	let backend2 = backend.clone();
-	let rpsee_builder = move |_deny_unsafe, executor| -> RpcModule<()> {
-		// TODO: pass in deny_unsafe and the executor here
-		let grandpa_rpc = GrandpaApi::new(
+	// Babe stuff
+	let select_chain2 = select_chain.clone();
+	let select_chain3 = select_chain.clone();
+	let sync_keystore = keystore_container.sync_keystore().clone();
+	let client2 = client.clone();
+	let babe_link2 = babe_link.clone();
+
+	let rpsee_builder = move |deny_unsafe, executor| -> RpcModule<()> {
+		let grandpa_rpc = GrandpaRpc::new(
 			executor,
 			shared_authority_set.clone(),
 			grandpa::SharedVoterState::empty(),
@@ -157,13 +165,23 @@ pub fn new_partial(
 				Some(shared_authority_set),
 			),
 		).into_rpc_module().expect("TODO: error handling");
+
+		let babe_rpc = BabeRpc::new(
+			client2,
+			babe_link.epoch_changes().clone(),
+			sync_keystore,
+			babe_link.config().clone(),
+			select_chain3,
+			deny_unsafe,
+		).into_rpc_module().expect("TODO: error handling");
 		// TODO: add other rpc modules here
 		let mut module = RpcModule::new(());
 		module.merge(grandpa_rpc).expect("TODO: error handling");
+		module.merge(babe_rpc).expect("TODO: error handling");
 		module
 	};
 
-	let import_setup = (block_import, grandpa_link, babe_link);
+	let import_setup = (block_import, grandpa_link, babe_link2);
 
 	// TODO: (dp) remove this when all APIs are ported.
 	let (rpc_extensions_builder, rpc_setup) = {
@@ -185,7 +203,7 @@ pub fn new_partial(
 
 		let client = client.clone();
 		let pool = transaction_pool.clone();
-		let select_chain = select_chain.clone();
+		let select_chain = select_chain2.clone();
 		let keystore = keystore_container.sync_keystore();
 		let chain_spec = config.chain_spec.cloned_box();
 

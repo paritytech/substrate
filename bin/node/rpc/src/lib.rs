@@ -35,7 +35,7 @@ use std::sync::Arc;
 use sp_keystore::SyncCryptoStorePtr;
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use sc_consensus_babe::{Config, Epoch};
-use sc_consensus_babe_rpc::BabeRpcHandler;
+use sc_consensus_babe_rpc::BabeRpcHandlerRemoveMe;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{
 	SharedVoterState, SharedAuthoritySet, FinalityProofProvider, GrandpaJustificationStream
@@ -164,8 +164,8 @@ pub fn create_full<C, P, SC, B>(
 		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
 	);
 	io.extend_with(
-		sc_consensus_babe_rpc::BabeApi::to_delegate(
-			BabeRpcHandler::new(
+		sc_consensus_babe_rpc::BabeApiRemoveMe::to_delegate(
+			BabeRpcHandlerRemoveMe::new(
 				client.clone(),
 				shared_epoch_changes.clone(),
 				keystore,
