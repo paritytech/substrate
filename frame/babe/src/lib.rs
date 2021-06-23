@@ -31,7 +31,7 @@ use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
-	ConsensusEngineId, KeyTypeId, Percent,
+	ConsensusEngineId, KeyTypeId, Permill,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_std::prelude::*;
@@ -848,11 +848,11 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
 		T::EpochDuration::get().saturated_into()
 	}
 
-	fn estimate_current_session_progress(_now: T::BlockNumber) -> (Option<Percent>, Weight) {
+	fn estimate_current_session_progress(_now: T::BlockNumber) -> (Option<Permill>, Weight) {
 		let elapsed = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start()) + 1;
 
 		(
-			Some(Percent::from_rational(
+			Some(Permill::from_rational(
 				*elapsed,
 				T::EpochDuration::get(),
 			)),

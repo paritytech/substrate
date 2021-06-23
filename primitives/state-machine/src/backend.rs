@@ -93,11 +93,28 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		key: &[u8]
 	) -> Result<Option<StorageKey>, Self::Error>;
 
-	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
+	/// Iterate over storage starting at key, for a given prefix and child trie.
 	/// Aborts as soon as `f` returns false.
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
+	/// Warning, this fails at first error when usual iteration skips errors.
+	/// If `allow_missing` is true, iteration stops when it reaches a missing trie node.
+	/// Otherwise an error is produced.
+	///
+	/// Returns `true` if trie end is reached.
+	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
 		&self,
-		child_info: &ChildInfo,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+		allow_missing: bool,
+	) -> Result<bool, Self::Error>;
+
+	/// Retrieve all entries keys of storage and call `f` for each of those keys.
+	/// Aborts as soon as `f` returns false.
+	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
 		f: F,
 	);
 
@@ -190,7 +207,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			}
 		}
 		let (root, parent_txs) = self.storage_root(delta
-			.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			.map(|(k, v)| (k, v.as_ref().map(|v| &v[..])))
 			.chain(
 				child_roots
 					.iter()

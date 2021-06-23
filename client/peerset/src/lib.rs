@@ -444,6 +444,8 @@ impl Peerset {
 					set_id: SetId(set_index),
 					peer_id: peer.into_peer_id(),
 				});
+
+				self.alloc_slots(SetId(set_index));
 			}
 		}
 	}
@@ -523,6 +525,14 @@ impl Peerset {
 				peersstate::Peer::NotConnected(n) => n,
 				peersstate::Peer::Connected(_) => continue,
 			};
+
+			// Don't connect to nodes with an abysmal reputation, even if they're reserved.
+			// This is a rather opinionated behaviour, and it wouldn't be fundamentally wrong to
+			// remove that check. If necessary, the peerset should be refactored to give more
+			// control over what happens in that situation.
+			if entry.reputation() < BANNED_THRESHOLD {
+				break;
+			}
 
 			match entry.try_outgoing() {
 				Ok(conn) => self.message_queue.push_back(Message::Connect {
