@@ -64,7 +64,7 @@ struct MetricInfo {
 #[allow(non_snake_case)]
 #[derive(Default, Debug)]
 struct DDNMetricInfo {
-    ddn_id: String,
+    p2p_id: String,
     storageBytes: u128,
     wcuUsed: u128,
     rcuUsed: u128,
@@ -418,21 +418,21 @@ impl<T: Trait> Module<T> {
 
             let results = signer.send_signed_transaction(|account| {
                 info!(
-                    "[OCW] Sending transactions from {:?}: report_metrics_ddn({:?}, {:?}, {:?}, {:?}, {:?})",
-                    account.id,
-					one_metric.ddn_id,
-                    day_start_ms,
-                    one_metric.storageBytes,
-                    one_metric.wcuUsed,
-                    one_metric.rcuUsed,
+					"[OCW] Sending transactions from {:?}: report_metrics_ddn({:?}, {:?}, {:?}, {:?}, {:?})",
+					account.id,
+					one_metric.p2p_id,
+					day_start_ms,
+					one_metric.storageBytes,
+					one_metric.wcuUsed,
+					one_metric.rcuUsed,
                 );
 
                 let call_data = Self::encode_report_metrics_ddn(
-                    one_metric.ddn_id.clone(),
-                    day_start_ms,
-                    one_metric.storageBytes,
-                    one_metric.wcuUsed,
-                    one_metric.rcuUsed,
+					one_metric.p2p_id.clone(),
+					day_start_ms,
+					one_metric.storageBytes,
+					one_metric.wcuUsed,
+					one_metric.rcuUsed,
                 );
 
                 let contract_id_unl =
@@ -614,14 +614,14 @@ impl<T: Trait> Module<T> {
     }
 
     fn encode_report_metrics_ddn(
-        ddn_id: String,
-        day_start_ms: u64,
-        storage_bytes: u128,
-        wcu_used: u128,
-        rcu_used: u128,
+		p2p_id: String,
+		day_start_ms: u64,
+		storage_bytes: u128,
+		wcu_used: u128,
+		rcu_used: u128,
     ) -> Vec<u8> {
         let mut call_data = REPORT_METRICS_DDN_SELECTOR.to_vec();
-        ddn_id.encode_to(&mut call_data);
+        p2p_id.encode_to(&mut call_data);
         day_start_ms.encode_to(&mut call_data);
         storage_bytes.encode_to(&mut call_data);
         wcu_used.encode_to(&mut call_data);
@@ -678,11 +678,11 @@ impl MetricsAggregator {
 struct DDnMetricsAggregator(Vec<DDNMetricInfo>);
 
 impl DDnMetricsAggregator {
-    fn add(&mut self, ddn_id: String, metrics: &Vec<MetricInfo>) {
+    fn add(&mut self, p2p_id: String, metrics: &Vec<MetricInfo>) {
         let existing_pubkey_index = self
             .0
             .iter()
-            .position(|one_result_obj| ddn_id == one_result_obj.ddn_id);
+            .position(|one_result_obj| p2p_id == one_result_obj.p2p_id);
 
         // Only if key does not exists - add new item, otherwise - skip
         if existing_pubkey_index.is_none() {
@@ -697,7 +697,7 @@ impl DDnMetricsAggregator {
             }
 
             let new_metric_obj = DDNMetricInfo {
-                ddn_id,
+				p2p_id,
                 storageBytes: storage_bytes_sum,
                 wcuUsed: wcu_used_sum,
                 rcuUsed: rcu_used_sum,
