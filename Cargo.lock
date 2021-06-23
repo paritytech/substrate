@@ -8144,6 +8144,8 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
+ "jsonrpsee",
+ "jsonrpsee-types",
  "sc-chain-spec",
  "sc-client-api",
  "sc-consensus-babe",

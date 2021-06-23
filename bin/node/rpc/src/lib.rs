@@ -163,8 +163,8 @@ pub fn create_full<C, P, SC, B>(
 	);
 
 	io.extend_with(
-		sc_sync_state_rpc::SyncStateRpcApi::to_delegate(
-			sc_sync_state_rpc::SyncStateRpcHandler::new(
+		sc_sync_state_rpc::SyncStateRpcApiRemoveMe::to_delegate(
+			sc_sync_state_rpc::SyncStateRpcHandlerRemoveMe::new(
 				chain_spec,
 				client,
 				shared_authority_set,
