@@ -162,6 +162,8 @@ impl<T: Config> SignedSubmissions<T> {
 	///
 	/// Note: this does not enforce any ordering relation between the submission removed and that
 	/// inserted.
+	///
+	/// Note: this doesn't insert into `insertion_overlay`, the optional new insertion must be inserted into  `insertion_overlay` to keep the variable `self` in a valid state.
 	fn swap_out_submission(
 		&mut self,
 		remove_score: ElectionScore,
@@ -193,7 +195,7 @@ impl<T: Config> SignedSubmissions<T> {
 	/// arbitrary order.
 	///
 	/// Note that if the iterator is dropped without consuming all elements, not all may be removed
-	/// from the underlying `SignedSubmissionsMap`, putting the struct into an invalid state.
+	/// from the underlying `SignedSubmissionsMap`, putting the storages into an invalid state.
 	///
 	/// Note that, like `put`, this function consumes `Self` and modifies storage.
 	fn drain(mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
