@@ -51,21 +51,19 @@ pub struct DDCNode {
 
 #[derive(Deserialize, Default, Debug)]
 #[serde(crate = "alt_serde")]
-#[allow(non_snake_case)]
 struct MetricInfo {
     app_id: String,
-    storageBytes: u128,
-    wcuUsed: u128,
-    rcuUsed: u128,
+    storage_bytes: u128,
+    wcu_used: u128,
+    rcu_used: u128,
 }
 
-#[allow(non_snake_case)]
 #[derive(Default, Debug)]
 struct DDNMetricInfo {
     p2p_id: String,
-    storageBytes: u128,
-    wcuUsed: u128,
-    rcuUsed: u128,
+    storage_bytes: u128,
+    wcu_used: u128,
+    rcu_used: u128,
 }
 
 /// Defines application identifier for crypto keys of this module.
@@ -348,7 +346,7 @@ impl<T: Trait> Module<T> {
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.app_id)?;
 
-            if one_metric.storageBytes == 0 && one_metric.wcuUsed == 0 && one_metric.rcuUsed == 0 {
+            if one_metric.storage_bytes == 0 && one_metric.wcu_used == 0 && one_metric.rcu_used == 0 {
                 continue;
             }
 
@@ -358,17 +356,17 @@ impl<T: Trait> Module<T> {
 					account.id,
 					one_metric.app_id,
 					day_start_ms,
-					one_metric.storageBytes,
-					one_metric.wcuUsed,
-					one_metric.rcuUsed,
+					one_metric.storage_bytes,
+					one_metric.wcu_used,
+					one_metric.rcu_used,
                 );
 
                 let call_data = Self::encode_report_metrics(
-                    &app_id,
-                    day_start_ms,
-                    one_metric.storageBytes,
-                    one_metric.wcuUsed,
-                    one_metric.rcuUsed,
+					&app_id,
+					day_start_ms,
+					one_metric.storage_bytes,
+					one_metric.wcu_used,
+					one_metric.rcu_used,
                 );
 
                 let contract_id_unl =
@@ -402,7 +400,7 @@ impl<T: Trait> Module<T> {
         info!("[OCW] Using Contract Address: {:?}", contract_id);
 
         for one_metric in metrics.iter() {
-            if one_metric.storageBytes == 0 && one_metric.wcuUsed == 0 && one_metric.rcuUsed == 0 {
+            if one_metric.storage_bytes == 0 && one_metric.wcu_used == 0 && one_metric.rcu_used == 0 {
                 continue;
             }
 
@@ -412,17 +410,17 @@ impl<T: Trait> Module<T> {
 					account.id,
 					one_metric.p2p_id,
 					day_start_ms,
-					one_metric.storageBytes,
-					one_metric.wcuUsed,
-					one_metric.rcuUsed,
+					one_metric.storage_bytes,
+					one_metric.wcu_used,
+					one_metric.rcu_used,
                 );
 
                 let call_data = Self::encode_report_metrics_ddn(
 					one_metric.p2p_id.clone(),
 					day_start_ms,
-					one_metric.storageBytes,
-					one_metric.wcuUsed,
-					one_metric.rcuUsed,
+					one_metric.storage_bytes,
+					one_metric.wcu_used,
+					one_metric.rcu_used,
                 );
 
                 let contract_id_unl =
@@ -645,16 +643,16 @@ impl MetricsAggregator {
             // New app.
             let new_metric_obj = MetricInfo {
                 app_id: metrics.app_id.clone(),
-                storageBytes: metrics.storageBytes,
-                wcuUsed: metrics.wcuUsed,
-                rcuUsed: metrics.rcuUsed,
+                storage_bytes: metrics.storage_bytes,
+                wcu_used: metrics.wcu_used,
+                rcu_used: metrics.rcu_used,
             };
             self.0.push(new_metric_obj);
         } else {
             // Add to metrics of an existing app.
-            self.0[existing_pubkey_index.unwrap()].storageBytes += metrics.storageBytes;
-            self.0[existing_pubkey_index.unwrap()].wcuUsed += metrics.wcuUsed;
-            self.0[existing_pubkey_index.unwrap()].rcuUsed += metrics.rcuUsed;
+            self.0[existing_pubkey_index.unwrap()].storage_bytes += metrics.storage_bytes;
+            self.0[existing_pubkey_index.unwrap()].wcu_used += metrics.wcu_used;
+            self.0[existing_pubkey_index.unwrap()].rcu_used += metrics.rcu_used;
         }
     }
 
@@ -680,16 +678,16 @@ impl DDnMetricsAggregator {
             let mut rcu_used_sum = 0;
 
             for metric_item in metrics.iter() {
-                storage_bytes_sum += metric_item.storageBytes;
-                wcu_used_sum += metric_item.wcuUsed;
-                rcu_used_sum += metric_item.rcuUsed;
+                storage_bytes_sum += metric_item.storage_bytes;
+                wcu_used_sum += metric_item.wcu_used;
+                rcu_used_sum += metric_item.rcu_used;
             }
 
             let new_metric_obj = DDNMetricInfo {
 				p2p_id,
-                storageBytes: storage_bytes_sum,
-                wcuUsed: wcu_used_sum,
-                rcuUsed: rcu_used_sum,
+                storage_bytes: storage_bytes_sum,
+                wcu_used: wcu_used_sum,
+                rcu_used: rcu_used_sum,
             };
             self.0.push(new_metric_obj);
         }
