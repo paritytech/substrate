@@ -506,6 +506,24 @@
 			"website": "https://manta.network"
 		},
 		{
+			"prefix": 98,
+			"network": "polkasmith",
+			"displayName": "PolkaSmith Canary Network",
+			"symbols": ["PKS"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://polkafoundry.com"
+		},
+		{
+			"prefix": 99,
+			"network": "polkafoundry",
+			"displayName": "PolkaFoundry Network",
+			"symbols": ["PKF"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://polkafoundry.com"
+  	        },
+		{
 			"prefix": 252,
 			"network": "social-network",
 			"displayName": "Social Network",
