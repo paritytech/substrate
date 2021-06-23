@@ -134,7 +134,7 @@ groups:
   ##############################################################################
 
   - alert: ContinuousTaskEnded
-    expr: '(polkadot_tasks_spawned_total{task_name != "basic-authorship-proposer"} == 1)
+    expr: '(polkadot_tasks_spawned_total{task_name != "basic-authorship-proposer", task_name != "substrate-rpc-subscription"} == 1)
         - on(instance, task_name) group_left() (polkadot_tasks_ended_total == 1)'
     for: 5m
     labels:

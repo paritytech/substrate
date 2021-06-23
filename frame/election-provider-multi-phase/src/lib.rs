@@ -608,7 +608,7 @@ pub mod pallet {
 		type Fallback: Get<FallbackStrategy>;
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
-		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin. 
+		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The configuration of benchmarking.
