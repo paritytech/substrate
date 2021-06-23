@@ -113,7 +113,7 @@ pub type RegistrarIndex = u32;
 /// which fields their attestation is relevant for by off-chain means.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
 pub enum Judgement<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
+	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq
 > {
 	/// The default value; no opinion is held.
 	Unknown,
@@ -137,7 +137,7 @@ pub enum Judgement<
 }
 
 impl<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
+	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq
 > Judgement<Balance> {
 	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
 	/// it should not be cleared or replaced except by an operation which utilizes the deposit.
@@ -174,9 +174,21 @@ pub enum IdentityField {
 	Twitter        = 0b0000000000000000000000000000000000000000000000000000000010000000,
 }
 
+impl MaxEncodedLen for IdentityField {
+	fn max_encoded_len() -> usize {
+		8
+	}
+}
+
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
-#[derive(Clone, Copy, PartialEq, Default, RuntimeDebug, MaxEncodedLen)]
+#[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
 pub struct IdentityFields(pub(crate) BitFlags<IdentityField>);
+
+impl MaxEncodedLen for IdentityFields {
+	fn max_encoded_len() -> usize {
+		IdentityField::max_encoded_len()
+	}
+}
 
 impl Eq for IdentityFields {}
 impl Encode for IdentityFields {
@@ -195,7 +207,7 @@ impl Decode for IdentityFields {
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
-#[derive(CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound)]
+#[derive(CloneNoBound, Encode, Decode, Eq, PartialEqNoBound, RuntimeDebugNoBound)]
 pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
 	/// fields.
@@ -242,6 +254,22 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	pub twitter: Data,
 }
 
+impl<FieldLimit: Get<u32>> MaxEncodedLen for IdentityInfo<FieldLimit> {
+	fn max_encoded_len() -> usize {
+		let mut len = 0usize;
+		len = len.saturating_add(<BoundedVec<(Data, Data), FieldLimit>>::max_encoded_len());
+		len = len.saturating_add(Data::max_encoded_len());
+		len = len.saturating_add(Data::max_encoded_len());
+		len = len.saturating_add(Data::max_encoded_len());
+		len = len.saturating_add(Data::max_encoded_len());
+		len = len.saturating_add(Data::max_encoded_len());
+		len = len.saturating_add(<Option<[u8; 20]>>::max_encoded_len());
+		len = len.saturating_add(Data::max_encoded_len());
+		len = len.saturating_add(Data::max_encoded_len());
+		len
+	}
+}
+
 #[cfg(test)]
 impl<FieldLimit: Get<u32>> Default for IdentityInfo<FieldLimit> {
 	fn default() -> Self {
@@ -263,15 +291,15 @@ impl<FieldLimit: Get<u32>> Default for IdentityInfo<FieldLimit> {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(CloneNoBound, Encode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound)]
+#[derive(CloneNoBound, Encode, Eq, PartialEqNoBound, RuntimeDebugNoBound)]
 pub struct Registration<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
-	MaxJudgments: Get<u32>,
+	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,
+	MaxJudgements: Get<u32>,
 	MaxAdditionalFields: Get<u32>,
 > {
 	/// Judgements from the registrars on this identity. Stored ordered by `RegistrarIndex`. There
 	/// may be only a single judgement from each registrar.
-	pub judgements: BoundedVec<(RegistrarIndex, Judgement<Balance>), MaxJudgments>,
+	pub judgements: BoundedVec<(RegistrarIndex, Judgement<Balance>), MaxJudgements>,
 
 	/// Amount held on deposit for this information.
 	pub deposit: Balance,
@@ -281,10 +309,24 @@ pub struct Registration<
 }
 
 impl <
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
-	MaxJudgments: Get<u32>,
+	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
+	MaxJudgements: Get<u32>,
 	MaxAdditionalFields: Get<u32>,
-> Registration<Balance, MaxJudgments, MaxAdditionalFields> {
+> MaxEncodedLen for Registration<Balance, MaxJudgements, MaxAdditionalFields> {
+	fn max_encoded_len() -> usize {
+		let mut len = 0usize;
+		len = len.saturating_add(<BoundedVec<(RegistrarIndex, Judgement<Balance>), MaxJudgements>>::max_encoded_len());
+		len = len.saturating_add(Balance::max_encoded_len());
+		len = len.saturating_add(<IdentityInfo<MaxAdditionalFields>>::max_encoded_len());
+		len
+	}
+}
+
+impl <
+	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
+	MaxJudgements: Get<u32>,
+	MaxAdditionalFields: Get<u32>,
+> Registration<Balance, MaxJudgements, MaxAdditionalFields> {
 	pub(crate) fn total_deposit(&self) -> Balance {
 		self.deposit + self.judgements.iter()
 			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
@@ -293,10 +335,10 @@ impl <
 }
 
 impl<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
-	MaxJudgments: Get<u32>,
+	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,
+	MaxJudgements: Get<u32>,
 	MaxAdditionalFields: Get<u32>,
-> Decode for Registration<Balance, MaxJudgments, MaxAdditionalFields> {
+> Decode for Registration<Balance, MaxJudgements, MaxAdditionalFields> {
 	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let (judgements, deposit, info) = Decode::decode(&mut AppendZerosInput::new(input))?;
 		Ok(Self { judgements, deposit, info })
