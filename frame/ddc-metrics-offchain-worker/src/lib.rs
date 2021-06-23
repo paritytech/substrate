@@ -517,8 +517,8 @@ impl<T: Trait> Module<T> {
 
             ddn_aggregated_metrics.add(node.p2p_id.clone(), &metrics_of_node);
 
-            for metrics in &metrics_of_node {
-                aggregated_metrics.add(metrics);
+            for metric in &metrics_of_node {
+                aggregated_metrics.add(metric);
             }
         }
 
@@ -706,26 +706,26 @@ impl<T: Trait> Module<T> {
 struct MetricsAggregator(Vec<MetricInfo>);
 
 impl MetricsAggregator {
-    fn add(&mut self, metrics: &MetricInfo) {
+    fn add(&mut self, metric: &MetricInfo) {
         let existing_pubkey_index = self
             .0
             .iter()
-            .position(|one_result_obj| metrics.app_id == one_result_obj.app_id);
+            .position(|one_result_obj| metric.app_id == one_result_obj.app_id);
 
         if existing_pubkey_index.is_none() {
             // New app.
             let new_metric_obj = MetricInfo {
-                app_id: metrics.app_id.clone(),
-                storage_bytes: metrics.storage_bytes,
-                wcu_used: metrics.wcu_used,
-                rcu_used: metrics.rcu_used,
+                app_id: metric.app_id.clone(),
+                storage_bytes: metric.storage_bytes,
+                wcu_used: metric.wcu_used,
+                rcu_used: metric.rcu_used,
             };
             self.0.push(new_metric_obj);
         } else {
             // Add to metrics of an existing app.
-            self.0[existing_pubkey_index.unwrap()].storage_bytes += metrics.storage_bytes;
-            self.0[existing_pubkey_index.unwrap()].wcu_used += metrics.wcu_used;
-            self.0[existing_pubkey_index.unwrap()].rcu_used += metrics.rcu_used;
+            self.0[existing_pubkey_index.unwrap()].storage_bytes += metric.storage_bytes;
+            self.0[existing_pubkey_index.unwrap()].wcu_used += metric.wcu_used;
+            self.0[existing_pubkey_index.unwrap()].rcu_used += metric.rcu_used;
         }
     }
 
