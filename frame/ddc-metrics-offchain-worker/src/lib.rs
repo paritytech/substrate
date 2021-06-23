@@ -38,6 +38,7 @@ pub const BLOCK_INTERVAL: u32 = 100; // TODO: Change to 1200 later [1h]. Now - 2
 // Smart contract method selectors
 pub const REPORT_METRICS_DDN_SELECTOR: [u8; 4] = hex!("de028ad8");
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
+pub const REPORT_DDN_STATUS_SELECTOR: [u8; 4] = hex!("83fd8226");
 pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
 pub const GET_ALL_DDC_NODES_SELECTOR: [u8; 4] = hex!("e6c98b60");
 pub const FINALIZE_METRIC_PERIOD: [u8; 4] = hex!("b269d557");
@@ -175,11 +176,20 @@ impl<T: Trait> Module<T> {
 
         let day_end_ms = day_start_ms + MS_PER_DAY;
 
-        let (aggregated_metrics, ddn_aggregated_metrics) =
+        let (aggregated_metrics, ddn_aggregated_metrics, offline_nodes) =
             Self::fetch_all_metrics(contract_address.clone(), day_start_ms).map_err(|err| {
                 error!("[OCW] HTTP error occurred: {:?}", err);
                 "could not fetch metrics"
             })?;
+
+        for offline_node in offline_nodes {
+            let p2p_id = offline_node.p2p_id;
+            let contract_id = contract_address.clone();
+            Self::report_ddn_status_to_sc(contract_id, &signer, &p2p_id, false).map_err(|err| {
+                error!("[OCW] Contract error occurred: {:?}", err);
+                "could not submit report_ddn_status TX"
+            })?;
+        }
 
         Self::send_metrics_to_sc(
             contract_address.clone(),
@@ -442,10 +452,42 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
+    fn report_ddn_status_to_sc(
+        contract_id: <T::CT as frame_system::Trait>::AccountId,
+        signer: &Signer<T::CST, T::AuthorityId>,
+        p2p_id: &String,
+        is_online: bool,
+    ) -> ResultStr<()> {
+        info!("[OCW] Using Contract Address: {:?}", contract_id);
+
+        let results = signer.send_signed_transaction(|account| {
+            info!(
+                "[OCW] Sending transactions from {:?}: report_ddn_status({:?}, {:?})",
+                account.id, p2p_id, is_online,
+            );
+
+            let call_data = Self::encode_report_ddn_status(&p2p_id, is_online);
+
+            let contract_id_unl =
+                <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::unlookup(
+                    contract_id.clone(),
+                );
+
+            pallet_contracts::Call::call(contract_id_unl, 0u32.into(), 100_000_000_000, call_data)
+        });
+
+        match &results {
+            None | Some((_, Err(()))) => return Err("Error while submitting TX to SC"),
+            Some((_, Ok(()))) => {}
+        }
+
+        Ok(())
+    }
+
     fn fetch_all_metrics(
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         day_start_ms: u64,
-    ) -> ResultStr<(Vec<MetricInfo>, Vec<DDNMetricInfo>)> {
+    ) -> ResultStr<(Vec<MetricInfo>, Vec<DDNMetricInfo>, Vec<DDCNode>)> {
         let a_moment_ago_ms = sp_io::offchain::timestamp()
             .sub(Duration::from_millis(END_TIME_DELAY_MS))
             .unix_millis();
@@ -454,10 +496,17 @@ impl<T: Trait> Module<T> {
         let mut ddn_aggregated_metrics = DDNMetricsAggregator::default();
 
         let nodes = Self::fetch_nodes(contract_id)?;
+        let mut offline_nodes: Vec<DDCNode> = Vec::new();
 
-        for node in &nodes {
+        for node in nodes {
             let metrics_of_node =
-                Self::fetch_node_metrics(&node.url, day_start_ms, a_moment_ago_ms)?;
+                match Self::fetch_node_metrics(&node.url, day_start_ms, a_moment_ago_ms) {
+                    Ok(value) => value,
+                    Err(_) => {
+                        offline_nodes.push(node);
+                        continue;
+                    }
+                };
 
             ddn_aggregated_metrics.add(node.p2p_id.clone(), &metrics_of_node);
 
@@ -466,7 +515,11 @@ impl<T: Trait> Module<T> {
             }
         }
 
-        Ok((aggregated_metrics.finish(), ddn_aggregated_metrics.finish()))
+        Ok((
+            aggregated_metrics.finish(),
+            ddn_aggregated_metrics.finish(),
+            offline_nodes,
+        ))
     }
 
     fn fetch_nodes(
@@ -612,6 +665,13 @@ impl<T: Trait> Module<T> {
         wcu_used.encode_to(&mut call_data);
         rcu_used.encode_to(&mut call_data);
 
+        call_data
+    }
+
+    fn encode_report_ddn_status(p2p_id: &String, is_online: bool) -> Vec<u8> {
+        let mut call_data = REPORT_DDN_STATUS_SELECTOR.to_vec();
+        p2p_id.encode_to(&mut call_data);
+        is_online.encode_to(&mut call_data);
         call_data
     }
 
