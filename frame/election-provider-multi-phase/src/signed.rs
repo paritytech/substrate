@@ -151,24 +151,34 @@ impl<T: Config> SignedSubmissions<T> {
 		}
 	}
 
-	/// Take the submission at a particular index.
+	/// Perform three operations:
 	///
-	/// Note that this function does not examine the insertion overlay. If that behavior is desired,
-	/// try `self.insetion_overlay.remove(&idx).or_else(|| self.take_submission(idx))`.
+	/// - Remove a submission (identified by score)
+	/// - Insert a new submission (identified by score and insertion index)
+	/// - Return the weakest submission
 	///
-	/// Note that though this function updates the fields `insertion_overlay` and `deletion_overlay`,
-	/// it does not update the field `indices`. That must be handled separately.
-	fn take_submission(&mut self, idx: u32) -> Option<SignedSubmissionOf<T>> {
-		// We never override an existing index in `self.insertion_overlay`, so if we successfully
-		// removed an item from the insertion overlay, we can be confident that it is not also
-		// present in `SignedSubmissionsMap`.
-		self.insertion_overlay.remove(&idx).or_else(|| {
-			if self.deletion_overlay.contains(&idx) {
-				None
-			} else {
-				self.deletion_overlay.insert(idx);
-				SignedSubmissionsMap::<T>::try_get(idx).ok()
-			}
+	/// Note: in the case that `weakest_score` is not present in `self.indices`, this will return
+	/// `None` without inserting the new submission and without further notice.
+	///
+	/// Note: this does not enforce any ordering relation between the submission removed and that
+	/// inserted.
+	fn swap_out_submission(
+		&mut self,
+		remove_score: ElectionScore,
+		insert: Option<(ElectionScore, u32)>,
+	) -> Option<SignedSubmissionOf<T>> {
+		let remove_idx = self.indices.remove(&remove_score)?;
+		if let Some((insert_score, insert_idx)) = insert {
+			self.indices
+				.try_insert(insert_score, insert_idx)
+				.expect("just removed an item, we must be under capacity; qed");
+		}
+
+		self.insertion_overlay.remove(&remove_idx).or_else(|| {
+			(!self.deletion_overlay.contains(&remove_idx)).then(|| {
+				self.deletion_overlay.insert(remove_idx);
+				SignedSubmissionsMap::<T>::try_get(remove_idx).ok()
+			}).flatten()
 		})
 	}
 
@@ -230,34 +240,23 @@ impl<T: Config> SignedSubmissions<T> {
 				// successfully inserted into the set; no need to take out weakest member
 				None
 			}
-			Err((score, insert_idx)) => {
+			Err((insert_score, insert_idx)) => {
 				// could not insert into the set because it is full.
 				// note that we short-circuit return here in case the iteration produces `None`.
 				// If there wasn't a weakest entry to remove, then there must be a capacity of 0,
 				// which means that we can't meaningfully proceed.
-				let (weakest_score, weakest_idx) = match self.indices.iter().next() {
+				let weakest_score = match self.indices.iter().next() {
 					None => return (false, None),
-					Some((score, idx)) => (*score, *idx),
+					Some((score, _)) => *score,
 				};
 				let threshold = T::SolutionImprovementThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
-				if !is_score_better(score, weakest_score, threshold) {
+				if !is_score_better(insert_score, weakest_score, threshold) {
 					return (false, None);
 				}
 
-				let _removed = self.indices.remove(&weakest_score);
-				debug_assert!(
-					_removed.is_some(),
-					"we mut have really removed an index to validate our expectation",
-				);
-				self.indices
-					.try_insert(score, insert_idx)
-					.expect("just removed an item, we must be under capacity; qed");
-
-				// ensure that SignedSubmissionsMap never grows past capacity by taking out the
-				// weakest member here.
-				self.take_submission(weakest_idx)
+				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
 			}
 		};
 
@@ -270,10 +269,10 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Remove the signed submission with the highest score from the set.
 	pub fn pop_last(&mut self) -> Option<SignedSubmissionOf<T>> {
-		let (highest_score, idx) = self.indices.iter().rev().next()?;
-		let (highest_score, idx) = (*highest_score, *idx);
-		self.indices.remove(&highest_score);
-		self.take_submission(idx)
+		let (score, _) = self.indices.iter().rev().next()?;
+		// deref in advance to prevent mutable-immutable borrow conflict
+		let score = *score;
+		self.swap_out_submission(score, None)
 	}
 }
 
