@@ -389,7 +389,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(n + m)` where:
 		/// - `n = witness.instances`
-		/// - `m = witness.instance_metdadatas`
+		/// - `m = witness.instance_metadatas`
 		/// - `a = witness.attributes`
 		#[pallet::weight(T::WeightInfo::destroy(
 			witness.instances,
