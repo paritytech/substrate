@@ -43,15 +43,13 @@ pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
 pub const GET_ALL_DDC_NODES_SELECTOR: [u8; 4] = hex!("e6c98b60");
 pub const FINALIZE_METRIC_PERIOD: [u8; 4] = hex!("b269d557");
 
-#[derive(Encode, Decode)]
+#[derive(Decode)]
 pub struct DDCNode {
     p2p_id: String,
     p2p_addr: String,
     url: String,
 }
 
-#[derive(Deserialize, Default, Debug)]
-#[serde(crate = "alt_serde")]
 struct MetricInfo {
     app_id: String,
     storage_bytes: u128,
@@ -59,12 +57,21 @@ struct MetricInfo {
     rcu_used: u128,
 }
 
-#[derive(Default, Debug)]
 struct DDNMetricInfo {
     p2p_id: String,
     storage_bytes: u128,
     wcu_used: u128,
     rcu_used: u128,
+}
+
+#[derive(Deserialize)]
+#[serde(crate = "alt_serde")]
+#[allow(non_snake_case)]
+struct ApiMetric {
+    appPubKey: String,
+    storageBytes: u128,
+    wcuUsed: u128,
+    rcuUsed: u128
 }
 
 /// Defines application identifier for crypto keys of this module.
@@ -566,7 +573,16 @@ impl<T: Trait> Module<T> {
             end_ms / 1000
         );
 
-        Self::http_get_json(&metrics_url)
+        let metrics: Vec<ApiMetric> = Self::http_get_json(&metrics_url)?;
+
+        Ok(metrics.into_iter()
+        .map(|data| MetricInfo {
+            app_id: data.appPubKey,
+            storage_bytes: data.storageBytes,
+            wcu_used: data.wcuUsed,
+            rcu_used: data.rcuUsed,
+        })
+        .collect::<Vec<MetricInfo>>())
     }
 
     fn http_get_json<OUT: DeserializeOwned>(url: &str) -> ResultStr<OUT> {
