@@ -50,14 +50,14 @@ pub struct DDCNode {
     url: String,
 }
 
-struct MetricInfo {
+struct Metric {
     app_id: String,
     storage_bytes: u128,
     wcu_used: u128,
     rcu_used: u128,
 }
 
-struct DDNMetricInfo {
+struct MetricDDN {
     p2p_id: String,
     storage_bytes: u128,
     wcu_used: u128,
@@ -356,7 +356,7 @@ impl<T: Trait> Module<T> {
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         signer: &Signer<T::CST, T::AuthorityId>,
         day_start_ms: u64,
-        metrics: Vec<MetricInfo>,
+        metrics: Vec<Metric>,
     ) -> ResultStr<()> {
         info!("[OCW] Using Contract Address: {:?}", contract_id);
 
@@ -413,7 +413,7 @@ impl<T: Trait> Module<T> {
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         signer: &Signer<T::CST, T::AuthorityId>,
         day_start_ms: u64,
-        metrics: Vec<DDNMetricInfo>,
+        metrics: Vec<MetricDDN>,
     ) -> ResultStr<()> {
         info!("[OCW] Using Contract Address: {:?}", contract_id);
 
@@ -494,7 +494,7 @@ impl<T: Trait> Module<T> {
     fn fetch_all_metrics(
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         day_start_ms: u64,
-    ) -> ResultStr<(Vec<MetricInfo>, Vec<DDNMetricInfo>, Vec<DDCNode>)> {
+    ) -> ResultStr<(Vec<Metric>, Vec<MetricDDN>, Vec<DDCNode>)> {
         let a_moment_ago_ms = sp_io::offchain::timestamp()
             .sub(Duration::from_millis(END_TIME_DELAY_MS))
             .unix_millis();
@@ -562,7 +562,7 @@ impl<T: Trait> Module<T> {
         node_url: &str,
         day_start_ms: u64,
         end_ms: u64,
-    ) -> ResultStr<Vec<MetricInfo>> {
+    ) -> ResultStr<Vec<Metric>> {
         let metrics_url = format!(
             "{}{}{}{}{}{}",
             node_url,
@@ -576,13 +576,13 @@ impl<T: Trait> Module<T> {
         let metrics: Vec<ApiMetric> = Self::http_get_json(&metrics_url)?;
 
         Ok(metrics.into_iter()
-        .map(|data| MetricInfo {
+        .map(|data| Metric {
             app_id: data.appPubKey,
             storage_bytes: data.storageBytes,
             wcu_used: data.wcuUsed,
             rcu_used: data.rcuUsed,
         })
-        .collect::<Vec<MetricInfo>>())
+        .collect::<Vec<Metric>>())
     }
 
     fn http_get_json<OUT: DeserializeOwned>(url: &str) -> ResultStr<OUT> {
@@ -703,10 +703,10 @@ impl<T: Trait> Module<T> {
 }
 
 #[derive(Default)]
-struct MetricsAggregator(Vec<MetricInfo>);
+struct MetricsAggregator(Vec<Metric>);
 
 impl MetricsAggregator {
-    fn add(&mut self, metric: &MetricInfo) {
+    fn add(&mut self, metric: &Metric) {
         let existing_pubkey_index = self
             .0
             .iter()
@@ -714,7 +714,7 @@ impl MetricsAggregator {
 
         if existing_pubkey_index.is_none() {
             // New app.
-            let new_metric_obj = MetricInfo {
+            let new_metric_obj = Metric {
                 app_id: metric.app_id.clone(),
                 storage_bytes: metric.storage_bytes,
                 wcu_used: metric.wcu_used,
@@ -729,16 +729,16 @@ impl MetricsAggregator {
         }
     }
 
-    fn finish(self) -> Vec<MetricInfo> {
+    fn finish(self) -> Vec<Metric> {
         self.0
     }
 }
 
 #[derive(Default)]
-struct DDNMetricsAggregator(Vec<DDNMetricInfo>);
+struct DDNMetricsAggregator(Vec<MetricDDN>);
 
 impl DDNMetricsAggregator {
-    fn add(&mut self, p2p_id: String, metrics: &Vec<MetricInfo>) {
+    fn add(&mut self, p2p_id: String, metrics: &Vec<Metric>) {
         let existing_pubkey_index = self
             .0
             .iter()
@@ -756,7 +756,7 @@ impl DDNMetricsAggregator {
                 rcu_used_sum += metric_item.rcu_used;
             }
 
-            let new_metric_obj = DDNMetricInfo {
+            let new_metric_obj = MetricDDN {
                 p2p_id,
                 storage_bytes: storage_bytes_sum,
                 wcu_used: wcu_used_sum,
@@ -766,7 +766,7 @@ impl DDNMetricsAggregator {
         }
     }
 
-    fn finish(self) -> Vec<DDNMetricInfo> {
+    fn finish(self) -> Vec<MetricDDN> {
         self.0
     }
 }
