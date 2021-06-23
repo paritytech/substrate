@@ -30,9 +30,6 @@
 use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
-use sp_std::ops::Deref;
-
-#[cfg(feature = "std")]
 use tracing;
 
 #[cfg(feature = "std")]
