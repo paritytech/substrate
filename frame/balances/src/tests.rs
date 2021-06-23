@@ -87,7 +87,7 @@ macro_rules! decl_tests {
 		#[test]
 		fn lock_removal_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::all());
+				Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
 				Balances::remove_lock(ID_1, &1);
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			});
@@ -96,7 +96,7 @@ macro_rules! decl_tests {
 		#[test]
 		fn lock_replacement_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::all());
+				Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
 				Balances::set_lock(ID_1, &1, 5, WithdrawReasons::all());
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			});
@@ -114,7 +114,7 @@ macro_rules! decl_tests {
 		#[test]
 		fn combination_locking_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
-				Balances::set_lock(ID_1, &1, u64::max_value(), WithdrawReasons::empty());
+				Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::empty());
 				Balances::set_lock(ID_2, &1, 0, WithdrawReasons::all());
 				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
 			});
@@ -513,15 +513,15 @@ macro_rules! decl_tests {
 		#[test]
 		fn transferring_too_high_value_should_not_panic() {
 			<$ext_builder>::default().build().execute_with(|| {
-				Balances::make_free_balance_be(&1, u64::max_value());
+				Balances::make_free_balance_be(&1, u64::MAX);
 				Balances::make_free_balance_be(&2, 1);
 
 				assert_err!(
-					Balances::transfer(Some(1).into(), 2, u64::max_value()),
+					Balances::transfer(Some(1).into(), 2, u64::MAX),
 					ArithmeticError::Overflow,
 				);
 
-				assert_eq!(Balances::free_balance(1), u64::max_value());
+				assert_eq!(Balances::free_balance(1), u64::MAX);
 				assert_eq!(Balances::free_balance(2), 1);
 			});
 		}

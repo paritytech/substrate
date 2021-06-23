@@ -300,20 +300,20 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let yamux_maximum_buffer_size = {
 					let requests_max = params.network_config
 						.request_response_protocols.iter()
-						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::max_value()));
+						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::MAX));
 					let responses_max = params.network_config
 						.request_response_protocols.iter()
-						.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::max_value()));
+						.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::MAX));
 					let notifs_max = params.network_config
 						.extra_sets.iter()
-						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::max_value()));
+						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::MAX));
 
 					// A "default" max is added to cover all the other protocols: ping, identify,
 					// kademlia, block announces, and transactions.
 					let default_max = cmp::max(
 						1024 * 1024,
 						usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
-							.unwrap_or(usize::max_value())
+							.unwrap_or(usize::MAX)
 					);
 
 					iter::once(default_max)

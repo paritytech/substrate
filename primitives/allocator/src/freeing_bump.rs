@@ -179,7 +179,7 @@ impl Order {
 }
 
 /// A special magic value for a pointer in a link that denotes the end of the linked list.
-const NIL_MARKER: u32 = u32::max_value();
+const NIL_MARKER: u32 = u32::MAX;
 
 /// A link between headers in the free list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
