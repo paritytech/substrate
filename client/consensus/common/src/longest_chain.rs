@@ -32,7 +32,7 @@ use sp_runtime::{
 /// where 'longest' is defined as the highest number of blocks
 pub struct LongestChain<B, Block> {
 	backend: Arc<B>,
-	_phantom: PhantomData<Block>
+	_phantom: PhantomData<Block>,
 }
 
 impl<B, Block> Clone for LongestChain<B, Block> {
@@ -40,15 +40,15 @@ impl<B, Block> Clone for LongestChain<B, Block> {
 		let backend = self.backend.clone();
 		LongestChain {
 			backend,
-			_phantom: Default::default()
+			_phantom: Default::default(),
 		}
 	}
 }
 
 impl<B, Block> LongestChain<B, Block>
-where
-	B: backend::Backend<Block>,
-	Block: BlockT,
+	where
+		B: backend::Backend<Block>,
+		Block: BlockT,
 {
 	/// Instantiate a new LongestChain for Backend B
 	pub fn new(backend: Arc<B>) -> Self {
@@ -77,9 +77,9 @@ where
 
 #[async_trait::async_trait]
 impl<B, Block> SelectChain<Block> for LongestChain<B, Block>
-where
-	B: backend::Backend<Block>,
-	Block: BlockT,
+	where
+		B: backend::Backend<Block>,
+		Block: BlockT,
 {
 	async fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, ConsensusError> {
 		LongestChain::leaves(self).map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
@@ -94,11 +94,16 @@ where
 		&self,
 		target_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>,
-	) -> Result<Option<Block::Hash>, ConsensusError> {
+	) -> Result<Block::Hash, ConsensusError> {
 		let import_lock = self.backend.get_import_lock();
-		self.backend
+		let x = self.backend
 			.blockchain()
 			.best_containing(target_hash, maybe_max_number, import_lock)
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into());
+		match x {
+			Err(e) => Err(e),
+			Ok(Some(h)) => Ok(h),
+			Ok(None) => Ok(target_hash),
+		}
 	}
 }
