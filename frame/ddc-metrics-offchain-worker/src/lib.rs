@@ -42,16 +42,6 @@ pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
 pub const GET_ALL_DDC_NODES_SELECTOR: [u8; 4] = hex!("e6c98b60");
 pub const FINALIZE_METRIC_PERIOD: [u8; 4] = hex!("b269d557");
 
-// Specifying serde path as `alt_serde`
-// ref: https://serde.rs/container-attrs.html#crate
-#[derive(Deserialize, Default, Debug)]
-#[serde(crate = "alt_serde")]
-#[allow(non_snake_case)]
-struct NodeInfo {
-    id: String,
-    httpAddr: String,
-}
-
 #[derive(Encode, Decode)]
 pub struct DDCNode {
     p2p_id: String,
@@ -482,9 +472,9 @@ impl<T: Trait> Module<T> {
 
         for node in &nodes {
             let metrics_of_node =
-                Self::fetch_node_metrics(&node.httpAddr, day_start_ms, a_moment_ago_ms)?;
+                Self::fetch_node_metrics(&node.url, day_start_ms, a_moment_ago_ms)?;
 
-            ddn_aggregated_metrics.add(node.id.clone(), &metrics_of_node);
+            ddn_aggregated_metrics.add(node.p2p_id.clone(), &metrics_of_node);
 
             for metrics in &metrics_of_node {
                 aggregated_metrics.add(metrics);
@@ -496,7 +486,7 @@ impl<T: Trait> Module<T> {
 
     fn fetch_nodes(
         contract_id: <T::CT as frame_system::Trait>::AccountId,
-    ) -> ResultStr<Vec<NodeInfo>> {
+    ) -> ResultStr<Vec<DDCNode>> {
         let call_data = Self::encode_get_all_ddc_nodes();
         let (exec_result, _gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
             Default::default(),
@@ -520,16 +510,7 @@ impl<T: Trait> Module<T> {
         let ddc_nodes = Vec::<DDCNode>::decode(&mut data)
             .map_err(|_| "[OCW] error decoding get_all_ddc_nodes result")?;
 
-        let mut result = Vec::new();
-
-        for ddc_node in ddc_nodes.iter() {
-            result.push(NodeInfo {
-                id: ddc_node.p2p_id.clone(),
-                httpAddr: ddc_node.url.clone(),
-            });
-        }
-
-        Ok(result)
+        Ok(ddc_nodes)
     }
 
     fn fetch_node_metrics(
