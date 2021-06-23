@@ -338,7 +338,7 @@ pub fn create_wasm_runtime_with_code(
 }
 
 fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
-	let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut version)
+	let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut &version[..])
 		.map_err(|_|
 				 WasmError::Instantiation(
 					 "failed to decode \"Core_version\" result using old runtime version".into(),
