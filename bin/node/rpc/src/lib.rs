@@ -35,7 +35,6 @@ use std::sync::Arc;
 use sp_keystore::SyncCryptoStorePtr;
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use sc_consensus_babe::{Config, Epoch};
-use sc_consensus_babe_rpc::BabeRpcHandlerRemoveMe;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{
 	SharedVoterState, SharedAuthoritySet, FinalityProofProvider, GrandpaJustificationStream
@@ -133,7 +132,7 @@ pub fn create_full<C, P, SC, B>(
 	let FullDeps {
 		client,
 		pool,
-		select_chain,
+		select_chain: _, // TODO: (dp) remove from FullDeps
 		chain_spec,
 		deny_unsafe,
 		babe,
@@ -141,9 +140,8 @@ pub fn create_full<C, P, SC, B>(
 	} = deps;
 
 	let BabeDeps {
-		keystore,
-		babe_config,
 		shared_epoch_changes,
+		..
 	} = babe;
 
 	let GrandpaDeps { shared_authority_set, .. } = grandpa;
@@ -162,18 +160,6 @@ pub fn create_full<C, P, SC, B>(
 	);
 	io.extend_with(
 		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
-	);
-	io.extend_with(
-		sc_consensus_babe_rpc::BabeApiRemoveMe::to_delegate(
-			BabeRpcHandlerRemoveMe::new(
-				client.clone(),
-				shared_epoch_changes.clone(),
-				keystore,
-				babe_config,
-				select_chain,
-				deny_unsafe,
-			),
-		)
 	);
 
 	io.extend_with(

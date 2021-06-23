@@ -20,14 +20,9 @@
 
 use sc_consensus_babe::{Epoch, authorship, Config};
 use futures::{FutureExt as _, TryFutureExt as _};
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
+use jsonrpsee_types::error::{Error as JsonRpseeError};
 use jsonrpsee::RpcModule;
 
-use jsonrpc_core::{
-	Error as RpcError,
-	futures::future as rpc_future,
-};
-use jsonrpc_derive::rpc;
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
 use sp_consensus_babe::{
 	AuthorityId,
@@ -46,8 +41,6 @@ use sp_runtime::traits::{Block as BlockT, Header as _};
 use sp_consensus::{SelectChain, Error as ConsensusError};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
 use std::{collections::HashMap, sync::Arc};
-
-type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
 
 /// Provides RPC methods for interacting with Babe.
 pub struct BabeRpc<B: BlockT, C, SC> {
@@ -99,147 +92,64 @@ where
 		module.register_async_method("babe_epochAuthorship", |_params, babe| {
 			async move {
 				babe.deny_unsafe.check_if_safe()?;
-				Ok(())
+				let header = babe.select_chain.best_chain().map_err(Error::Consensus).await?;
+				let epoch_start = babe.client
+					.runtime_api()
+					.current_epoch_start(&BlockId::Hash(header.hash()))
+					.map_err(|err| Error::StringError(format!("{:?}", err)))?;
+
+				let epoch = epoch_data(
+					&babe.shared_epoch_changes,
+					&babe.client,
+					&babe.babe_config,
+					*epoch_start,
+					&babe.select_chain,
+				)
+				.await?;
+				let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
+				let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
+
+				let keys = {
+					epoch
+						.authorities
+						.iter()
+						.enumerate()
+						.filter_map(|(i, a)| {
+							if SyncCryptoStore::has_keys(
+								&*babe.keystore,
+								&[(a.0.to_raw_vec(), AuthorityId::ID)],
+							) {
+								Some((a.0.clone(), i))
+							} else {
+								None
+							}
+						})
+						.collect::<Vec<_>>()
+				};
+
+				for slot in *epoch_start..*epoch_end {
+					if let Some((claim, key)) =
+						authorship::claim_slot_using_keys(slot.into(), &epoch, &babe.keystore, &keys)
+					{
+						match claim {
+							PreDigest::Primary { .. } => {
+								claims.entry(key).or_default().primary.push(slot);
+							}
+							PreDigest::SecondaryPlain { .. } => {
+								claims.entry(key).or_default().secondary.push(slot);
+							}
+							PreDigest::SecondaryVRF { .. } => {
+								claims.entry(key).or_default().secondary_vrf.push(slot.into());
+							},
+						};
+					}
+				}
+
+				Ok(claims)
 			}.boxed()
 		})?;
 
 		Ok(module)
-	}
-}
-
-/// Provides rpc methods for interacting with Babe.
-#[rpc]
-pub trait BabeApiRemoveMe {
-	/// Returns data about which slots (primary or secondary) can be claimed in the current epoch
-	/// with the keys in the keystore.
-	#[rpc(name = "babe_epochAuthorship")]
-	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>>;
-}
-
-/// Implements the BabeRpc trait for interacting with Babe.
-pub struct BabeRpcHandlerRemoveMe<B: BlockT, C, SC> {
-	/// shared reference to the client.
-	client: Arc<C>,
-	/// shared reference to EpochChanges
-	shared_epoch_changes: SharedEpochChanges<B, Epoch>,
-	/// shared reference to the Keystore
-	keystore: SyncCryptoStorePtr,
-	/// config (actually holds the slot duration)
-	babe_config: Config,
-	/// The SelectChain strategy
-	select_chain: SC,
-	/// Whether to deny unsafe calls
-	deny_unsafe: DenyUnsafe,
-}
-
-impl<B: BlockT, C, SC> BabeRpcHandlerRemoveMe<B, C, SC> {
-	/// Creates a new instance of the BabeRpc handler.
-	pub fn new(
-		client: Arc<C>,
-		shared_epoch_changes: SharedEpochChanges<B, Epoch>,
-		keystore: SyncCryptoStorePtr,
-		babe_config: Config,
-		select_chain: SC,
-		deny_unsafe: DenyUnsafe,
-	) -> Self {
-		Self {
-			client,
-			shared_epoch_changes,
-			keystore,
-			babe_config,
-			select_chain,
-			deny_unsafe,
-		}
-	}
-}
-
-impl<B, C, SC> BabeApiRemoveMe for BabeRpcHandlerRemoveMe<B, C, SC>
-where
-	B: BlockT,
-	C: ProvideRuntimeApi<B>
-		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = BlockChainError>
-		+ 'static,
-	C::Api: BabeRuntimeApi<B>,
-	SC: SelectChain<B> + Clone + 'static,
-{
-	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {
-		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(rpc_future::err(err.into()));
-		}
-
-		let (
-			babe_config,
-			keystore,
-			shared_epoch,
-			client,
-			select_chain,
-		) = (
-			self.babe_config.clone(),
-			self.keystore.clone(),
-			self.shared_epoch_changes.clone(),
-			self.client.clone(),
-			self.select_chain.clone(),
-		);
-		let future = async move {
-			let header = select_chain.best_chain().map_err(Error::Consensus).await?;
-			let epoch_start = client
-				.runtime_api()
-				.current_epoch_start(&BlockId::Hash(header.hash()))
-				.map_err(|err| Error::StringError(format!("{:?}", err)))?;
-			let epoch = epoch_data(
-				&shared_epoch,
-				&client,
-				&babe_config,
-				*epoch_start,
-				&select_chain,
-			)
-			.await?;
-			let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
-
-			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
-
-			let keys = {
-				epoch
-					.authorities
-					.iter()
-					.enumerate()
-					.filter_map(|(i, a)| {
-						if SyncCryptoStore::has_keys(
-							&*keystore,
-							&[(a.0.to_raw_vec(), AuthorityId::ID)],
-						) {
-							Some((a.0.clone(), i))
-						} else {
-							None
-						}
-					})
-					.collect::<Vec<_>>()
-			};
-
-			for slot in *epoch_start..*epoch_end {
-				if let Some((claim, key)) =
-					authorship::claim_slot_using_keys(slot.into(), &epoch, &keystore, &keys)
-				{
-					match claim {
-						PreDigest::Primary { .. } => {
-							claims.entry(key).or_default().primary.push(slot);
-						}
-						PreDigest::SecondaryPlain { .. } => {
-							claims.entry(key).or_default().secondary.push(slot);
-						}
-						PreDigest::SecondaryVRF { .. } => {
-							claims.entry(key).or_default().secondary_vrf.push(slot.into());
-						},
-					};
-				}
-			}
-
-			Ok(claims)
-		}
-		.boxed();
-
-		Box::new(future.compat())
 	}
 }
 
@@ -263,13 +173,11 @@ pub enum Error {
 	StringError(String)
 }
 
-impl From<Error> for jsonrpc_core::Error {
+impl std::error::Error for Error {}
+
+impl From<Error> for jsonrpsee_types::error::CallError {
 	fn from(error: Error) -> Self {
-		jsonrpc_core::Error {
-			message: format!("{}", error),
-			code: jsonrpc_core::ErrorCode::ServerError(1234),
-			data: None,
-		}
+		jsonrpsee_types::error::CallError::Failed(Box::new(error))
 	}
 }
 
