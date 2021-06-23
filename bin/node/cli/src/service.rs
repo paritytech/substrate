@@ -35,6 +35,10 @@ use node_executor::Executor;
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_consensus_babe::SlotProportion;
 
+use jsonrpsee::RpcModule;
+use sc_finality_grandpa_rpc::GrandpaRpc;
+use sc_consensus_babe_rpc::BabeRpc;
+
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
@@ -49,10 +53,11 @@ pub fn new_partial(
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
-		impl Fn(
-			node_rpc::DenyUnsafe,
-			sc_rpc::SubscriptionTaskExecutor,
-		) -> node_rpc::IoHandler,
+		// rpc_extensions_builder (jsonrpc, old,  TODO: (dp) remove)
+		impl Fn(node_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> node_rpc::IoHandler,
+		// rpc setup (jsonrpsee)
+		impl FnOnce(node_rpc::DenyUnsafe, Arc<sc_rpc::SubscriptionTaskExecutor>) -> RpcModule<()>,
+		// import setup
 		(
 			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 			grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
@@ -137,14 +142,55 @@ pub fn new_partial(
 		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
-	let import_setup = (block_import, grandpa_link, babe_link);
+	// TODO: (dp) cleanup all of this crap when removing the jsonrpc stuff below.
+	// Grandpa stuff
+	let shared_authority_set = grandpa_link.shared_authority_set().clone();
+	let justification_stream = grandpa_link.justification_stream().clone();
+	let backend2 = backend.clone();
+	// Babe stuff
+	let select_chain2 = select_chain.clone();
+	let select_chain3 = select_chain.clone();
+	let sync_keystore = keystore_container.sync_keystore().clone();
+	let client2 = client.clone();
+	let babe_link2 = babe_link.clone();
 
+	let rpsee_builder = move |deny_unsafe, executor| -> RpcModule<()> {
+		let grandpa_rpc = GrandpaRpc::new(
+			executor,
+			shared_authority_set.clone(),
+			grandpa::SharedVoterState::empty(),
+			justification_stream,
+			grandpa::FinalityProofProvider::new_for_service(
+				backend2,
+				Some(shared_authority_set),
+			),
+		).into_rpc_module().expect("TODO: error handling");
+
+		let babe_rpc = BabeRpc::new(
+			client2,
+			babe_link.epoch_changes().clone(),
+			sync_keystore,
+			babe_link.config().clone(),
+			select_chain3,
+			deny_unsafe,
+		).into_rpc_module().expect("TODO: error handling");
+		// TODO: add other rpc modules here
+		let mut module = RpcModule::new(());
+		module.merge(grandpa_rpc).expect("TODO: error handling");
+		module.merge(babe_rpc).expect("TODO: error handling");
+		module
+	};
+
+	let import_setup = (block_import, grandpa_link, babe_link2);
+
+	// TODO: (dp) remove this when all APIs are ported.
 	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, babe_link) = &import_setup;
 
 		let justification_stream = grandpa_link.justification_stream();
 		let shared_authority_set = grandpa_link.shared_authority_set().clone();
 		let shared_voter_state = grandpa::SharedVoterState::empty();
+		// TODO: why do we make a clone here and then one more clone for the GrandpaDeps?
 		let rpc_setup = shared_voter_state.clone();
 
 		let finality_proof_provider = grandpa::FinalityProofProvider::new_for_service(
@@ -157,7 +203,7 @@ pub fn new_partial(
 
 		let client = client.clone();
 		let pool = transaction_pool.clone();
-		let select_chain = select_chain.clone();
+		let select_chain = select_chain2.clone();
 		let keystore = keystore_container.sync_keystore();
 		let chain_spec = config.chain_spec.cloned_box();
 
@@ -196,7 +242,8 @@ pub fn new_partial(
 		select_chain,
 		import_queue,
 		transaction_pool,
-		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry),
+		// TODO: (dp) `rpc_setup` is a copy of `shared_voter_state`, but why?
+		other: (rpc_extensions_builder, Box::new(rpsee_builder), import_setup, rpc_setup, telemetry),
 	})
 }
 
@@ -223,7 +270,13 @@ pub fn new_full_base(
 		keystore_container,
 		select_chain,
 		transaction_pool,
-		other: (rpc_extensions_builder, import_setup, rpc_setup, mut telemetry),
+		other: (
+			rpc_extensions_builder,
+			rpsee_builder,
+			import_setup,
+			rpc_setup,
+			mut telemetry
+		),
 	} = new_partial(&config)?;
 
 	let shared_voter_state = rpc_setup;
@@ -274,6 +327,7 @@ pub fn new_full_base(
 			keystore: keystore_container.sync_keystore(),
 			network: network.clone(),
 			rpc_extensions_builder: Box::new(rpc_extensions_builder),
+			rpsee_builder: Box::new(rpsee_builder),
 			transaction_pool: transaction_pool.clone(),
 			task_manager: &mut task_manager,
 			on_demand: None,
@@ -572,6 +626,8 @@ pub fn new_light_base(
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
 			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
+			// TODO: (dp) figure out what we should do for light clients
+			rpsee_builder: Box::new(|_, _| RpcModule::new(())),
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
 			keystore: keystore_container.sync_keystore(),

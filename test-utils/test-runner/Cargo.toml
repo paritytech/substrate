@@ -50,3 +50,5 @@ tokio = { version = "1", features = ["full"] }
 
 # Calling RPC
 jsonrpc-core = "15.1"
+jsonrpsee-ws-server = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
+jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }

@@ -298,13 +298,14 @@ async fn build_network_future<
 mod waiting {}
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+/// Once this is called, no more methods can be added to the server.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<R>(
 	config: &Configuration,
-	mut gen_rpc_module: R,
+	gen_rpc_module: R,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
 where
-	R: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>,
+	R: FnOnce(sc_rpc::DenyUnsafe) -> RpcModule<()>,
 {
 	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
 	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().unwrap());

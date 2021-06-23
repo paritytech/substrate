@@ -35,12 +35,10 @@ use std::sync::Arc;
 use sp_keystore::SyncCryptoStorePtr;
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use sc_consensus_babe::{Config, Epoch};
-use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{
 	SharedVoterState, SharedAuthoritySet, FinalityProofProvider, GrandpaJustificationStream
 };
-use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 pub use sc_rpc_api::DenyUnsafe;
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
@@ -134,7 +132,7 @@ pub fn create_full<C, P, SC, B>(
 	let FullDeps {
 		client,
 		pool,
-		select_chain,
+		select_chain: _, // TODO: (dp) remove from FullDeps
 		chain_spec,
 		deny_unsafe,
 		babe,
@@ -142,17 +140,11 @@ pub fn create_full<C, P, SC, B>(
 	} = deps;
 
 	let BabeDeps {
-		keystore,
-		babe_config,
 		shared_epoch_changes,
+		..
 	} = babe;
-	let GrandpaDeps {
-		shared_voter_state,
-		shared_authority_set,
-		justification_stream,
-		subscription_executor,
-		finality_provider,
-	} = grandpa;
+
+	let GrandpaDeps { shared_authority_set, .. } = grandpa;
 
 	io.extend_with(
 		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
@@ -168,29 +160,6 @@ pub fn create_full<C, P, SC, B>(
 	);
 	io.extend_with(
 		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
-	);
-	io.extend_with(
-		sc_consensus_babe_rpc::BabeApi::to_delegate(
-			BabeRpcHandler::new(
-				client.clone(),
-				shared_epoch_changes.clone(),
-				keystore,
-				babe_config,
-				select_chain,
-				deny_unsafe,
-			),
-		)
-	);
-	io.extend_with(
-		sc_finality_grandpa_rpc::GrandpaApi::to_delegate(
-			GrandpaRpcHandler::new(
-				shared_authority_set.clone(),
-				shared_voter_state,
-				justification_stream,
-				subscription_executor,
-				finality_provider,
-			)
-		)
 	);
 
 	io.extend_with(
