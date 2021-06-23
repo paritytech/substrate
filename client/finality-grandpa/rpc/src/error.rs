@@ -46,7 +46,7 @@ pub enum ErrorCode {
 	ProveFinality,
 }
 
-// TODO: remove (?)
+// TODO: remove (?) – need support for application specific error codes.
 impl From<Error> for ErrorCode {
 	fn from(error: Error) -> Self {
 		match error {

@@ -12,7 +12,7 @@ use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_consensus::SlotData;
-use jsonrpsee_ws_server::RpcModule;
+use jsonrpsee::RpcModule;
 
 // Our native executor instance.
 native_executor_instance!(
