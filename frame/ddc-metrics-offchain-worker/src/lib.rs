@@ -583,7 +583,7 @@ impl<T: Trait> Module<T> {
                 wcu_used: data.wcuUsed,
                 rcu_used: data.rcuUsed,
             })
-            .collect::<Vec<Metric>>())
+            .collect())
     }
 
     fn http_get_json<OUT: DeserializeOwned>(url: &str) -> ResultStr<OUT> {
