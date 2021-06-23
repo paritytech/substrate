@@ -93,10 +93,19 @@ impl<B: BlockT> InformantDisplay<B> {
 				(diff_bytes_inbound, diff_bytes_outbound)
 			};
 
-		let (level, status, target) = match (net_status.sync_state, net_status.best_seen_block) {
-			(SyncState::Idle, _) => ("💤", "Idle".into(), "".into()),
-			(SyncState::Downloading, None) => ("⚙️ ", format!("Preparing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n)) => (
+		let (level, status, target) = match (
+			net_status.sync_state,
+			net_status.best_seen_block,
+			net_status.state_sync
+		) {
+			(_, _, Some(state)) => (
+				"⚙️ ",
+				"Downloading state".into(),
+				format!(", {}%, ({:.2}) Mib", state.percentage, (state.size as f32) / (1024f32 * 1024f32)),
+			),
+			(SyncState::Idle, _, _) => ("💤", "Idle".into(), "".into()),
+			(SyncState::Downloading, None, _) => ("⚙️ ", format!("Preparing{}", speed), "".into()),
+			(SyncState::Downloading, Some(n), None) => (
 				"⚙️ ",
 				format!("Syncing{}", speed),
 				format!(", target=#{}", n),
