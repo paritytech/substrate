@@ -7,7 +7,7 @@
 #[cfg(test)]
 mod tests;
 
-use alt_serde::{de::DeserializeOwned, Deserialize, Deserializer};
+use alt_serde::{de::DeserializeOwned, Deserialize};
 use codec::{Decode, Encode};
 use frame_support::traits::Get;
 use frame_support::{
@@ -54,8 +54,6 @@ pub struct DDCNode {
 #[allow(non_snake_case)]
 struct MetricInfo {
     appPubKey: String,
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    partitionId: Vec<u8>,
     storageBytes: u128,
     wcuUsed: u128,
     rcuUsed: u128,
@@ -68,14 +66,6 @@ struct DDNMetricInfo {
     storageBytes: u128,
     wcuUsed: u128,
     rcuUsed: u128,
-}
-
-pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: &str = Deserialize::deserialize(de)?;
-    Ok(s.as_bytes().to_vec())
 }
 
 /// Defines application identifier for crypto keys of this module.
@@ -655,7 +645,6 @@ impl MetricsAggregator {
             // New app.
             let new_metric_obj = MetricInfo {
                 appPubKey: metrics.appPubKey.clone(),
-                partitionId: vec![], // Ignored in aggregates.
                 storageBytes: metrics.storageBytes,
                 wcuUsed: metrics.wcuUsed,
                 rcuUsed: metrics.rcuUsed,
