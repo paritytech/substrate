@@ -32,7 +32,7 @@ use sp_runtime::{
 /// where 'longest' is defined as the highest number of blocks
 pub struct LongestChain<B, Block> {
 	backend: Arc<B>,
-	_phantom: PhantomData<Block>,
+	_phantom: PhantomData<Block>
 }
 
 impl<B, Block> Clone for LongestChain<B, Block> {
@@ -40,7 +40,7 @@ impl<B, Block> Clone for LongestChain<B, Block> {
 		let backend = self.backend.clone();
 		LongestChain {
 			backend,
-			_phantom: Default::default(),
+			_phantom: Default::default()
 		}
 	}
 }
@@ -96,11 +96,11 @@ impl<B, Block> SelectChain<Block> for LongestChain<B, Block>
 		maybe_max_number: Option<NumberFor<Block>>,
 	) -> Result<Block::Hash, ConsensusError> {
 		let import_lock = self.backend.get_import_lock();
-		let x = self.backend
+		let result = self.backend
 			.blockchain()
 			.best_containing(target_hash, maybe_max_number, import_lock)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into());
-		match x {
+		match result {
 			Err(e) => Err(e),
 			Ok(Some(h)) => Ok(h),
 			Ok(None) => Ok(target_hash),
