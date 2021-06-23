@@ -353,13 +353,13 @@ impl<T: Trait> Module<T> {
 
             let results = signer.send_signed_transaction(|account| {
                 info!(
-					"[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?}, {:?})",
-					account.id,
-					one_metric.app_id,
-					day_start_ms,
-					one_metric.storage_bytes,
-					one_metric.wcu_used,
-					one_metric.rcu_used,
+                    "[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?}, {:?})",
+                    account.id,
+                    one_metric.app_id,
+                    day_start_ms,
+                    one_metric.storage_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let call_data = Self::encode_report_metrics(
@@ -403,13 +403,13 @@ impl<T: Trait> Module<T> {
         for one_metric in metrics.iter() {
             let results = signer.send_signed_transaction(|account| {
                 info!(
-					"[OCW] Sending transactions from {:?}: report_metrics_ddn({:?}, {:?}, {:?}, {:?}, {:?})",
-					account.id,
-					one_metric.p2p_id,
-					day_start_ms,
-					one_metric.storage_bytes,
-					one_metric.wcu_used,
-					one_metric.rcu_used,
+                    "[OCW] Sending transactions from {:?}: report_metrics_ddn({:?}, {:?}, {:?}, {:?}, {:?})",
+                    account.id,
+                    one_metric.p2p_id,
+                    day_start_ms,
+                    one_metric.storage_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let call_data = Self::encode_report_metrics_ddn(
