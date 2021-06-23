@@ -18,17 +18,20 @@
 
 //! This module implements sandboxing support in the runtime.
 //!
-//! Sandboxing is baked by wasmi and wasmer, depending on the configuration.
+//! Sandboxing is backed by wasmi and wasmer, depending on the configuration.
 
 use crate::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
 use wasmi::{
-	Externals, ImportResolver, MemoryInstance, MemoryRef, Module,
+	Externals, ImportResolver, MemoryInstance, MemoryRef as WasmiMemoryRef, Module,
 	ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages
 };
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
+
+#[cfg(feature = "wasmer-sandbox")]
+use crate::util::wasmer::MemoryRef as WasmerMemoryRef;
 
 /// Index of a function inside the supervisor.
 ///
@@ -119,7 +122,7 @@ impl ImportResolver for Imports {
 		module_name: &str,
 		field_name: &str,
 		_memory_type: &::wasmi::MemoryDescriptor,
-	) -> std::result::Result<MemoryRef, wasmi::Error> {
+	) -> std::result::Result<WasmiMemoryRef, wasmi::Error> {
 		let mem = self.memory_by_name(module_name, field_name)
 			.ok_or_else(|| {
 				wasmi::Error::Instantiation(format!(
@@ -623,16 +626,16 @@ pub enum SandboxBackend {
 #[derive(Clone, Debug)]
 pub enum Memory {
 	/// Wasmi memory reference
-	Wasmi(MemoryRef),
+	Wasmi(WasmiMemoryRef),
 
 	/// Wasmer memory refernce
 	#[cfg(feature = "wasmer-sandbox")]
-	Wasmer(wasmer::Memory),
+	Wasmer(WasmerMemoryRef),
 }
 
 impl Memory {
 	/// View as wasmi memory
-	pub fn as_wasmi(&self) -> Option<MemoryRef> {
+	pub fn as_wasmi(&self) -> Option<WasmiMemoryRef> {
 		match self {
 			Memory::Wasmi(memory) => Some(memory.clone()),
 
@@ -643,7 +646,7 @@ impl Memory {
 
 	/// View as wasmer memory
 	#[cfg(feature = "wasmer-sandbox")]
-	pub fn as_wasmer(&self) -> Option<wasmer::Memory> {
+	pub fn as_wasmer(&self) -> Option<WasmerMemoryRef> {
 		match self {
 			Memory::Wasmer(memory) => Some(memory.clone()),
 			Memory::Wasmi(_) => None,
@@ -733,8 +736,10 @@ impl<FR> Store<FR> {
 			BackendContext::Wasmer(context) => {
 				let ty = wasmer::MemoryType::new(initial, maximum, false);
 				Memory::Wasmer(
-					wasmer::Memory::new(&context.store, ty)
-						.map_err(|_| Error::InvalidMemoryReference)?
+					WasmerMemoryRef::new(
+						wasmer::Memory::new(&context.store, ty)
+							.map_err(|_| Error::InvalidMemoryReference)?
+					)
 				)
 			}
 		};
@@ -934,7 +939,20 @@ impl<FR> Store<FR> {
 						import.name()
 					).ok_or(InstantiationError::ModuleDecoding)?;
 
-					exports.insert(import.name(), wasmer::Extern::Memory(memory.as_wasmer().unwrap()));
+					let mut wasmer_memory_ref = memory.as_wasmer().expect(
+						"memory is created by wasmer; \
+						exported by the same module and backend; \
+						thus the operation can't fail; \
+						qed"
+					);
+
+					// This is safe since we're only instantiating the module and populating
+					// the export table, so no memory access can happen at this time.
+					// All subsequent memory accesses should happen through the wrapper,
+					// that enforces the memory access protocol.
+					let wasmer_memory = unsafe { wasmer_memory_ref.clone_inner() };
+
+					exports.insert(import.name(), wasmer::Extern::Memory(wasmer_memory));
 				}
 
 				wasmer::ExternType::Function(func_ty) => {

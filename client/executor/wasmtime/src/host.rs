@@ -203,35 +203,29 @@ impl Sandbox for HostState {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				let len = buf_len as usize;
+				sandboxed_memory.with_direct_access(|sandboxed_memory| {
+					let len = buf_len as usize;
 
-				let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.data_size() as usize) {
-					Some(range) => range,
-					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-				};
+					let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
+						Some(range) => range,
+						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					};
 
-				let supervisor_mem_size = self.inner.instance.memory_size() as usize;
-				let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
-					Some(range) => range,
-					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-				};
+					let supervisor_mem_size = self.inner.instance.memory_size() as usize;
+					let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
+						Some(range) => range,
+						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					};
 
-				// This is safe because we construct slice from the same parts as
-				// the memory region itself. Current implementation is single threaded,
-				// so we should not face any synchronization or aliasing issues.
-				let source = unsafe { core::slice::from_raw_parts(
-					sandboxed_memory.data_ptr(),
-					sandboxed_memory.data_size() as usize)
-				};
+					self.inner.instance
+						.write_memory_from(
+							Pointer::new(dst_range.start as u32),
+							&sandboxed_memory[src_range],
+						)
+						.expect("ranges are checked above; write can't fail; qed");
 
-				self.inner.instance
-					.write_memory_from(
-						Pointer::new(dst_range.start as u32),
-						&source[src_range],
-					)
-					.expect("ranges are checked above; write can't fail; qed");
-
-				Ok(sandbox_primitives::ERR_OK)
+					Ok(sandbox_primitives::ERR_OK)
+				})
 			}
 		}
 	}
@@ -278,35 +272,29 @@ impl Sandbox for HostState {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				let len = val_len as usize;
-				let supervisor_mem_size = self.inner.instance.memory_size() as usize;
+				sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
+					let len = val_len as usize;
+					let supervisor_mem_size = self.inner.instance.memory_size() as usize;
 
-				let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
-					Some(range) => range,
-					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-				};
+					let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
+						Some(range) => range,
+						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					};
 
-				let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.data_size() as usize) {
-					Some(range) => range,
-					None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-				};
+					let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
+						Some(range) => range,
+						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					};
 
-				// This is safe because we construct slice from the same parts as
-				// the memory region itself. Current implementation is single threaded,
-				// so we should not face any synchronization or aliasing issues.
-				let dest = unsafe { core::slice::from_raw_parts_mut(
-					sandboxed_memory.data_ptr(),
-					sandboxed_memory.data_size() as usize)
-				};
+					self.inner.instance
+						.read_memory_into(
+							Pointer::new(src_range.start as u32),
+							&mut sandboxed_memory[dst_range],
+						)
+						.expect("ranges are checked above; read can't fail; qed");
 
-				self.inner.instance
-					.read_memory_into(
-						Pointer::new(src_range.start as u32),
-						&mut dest[dst_range],
-					)
-					.expect("ranges are checked above; read can't fail; qed");
-
-				Ok(sandbox_primitives::ERR_OK)
+					Ok(sandbox_primitives::ERR_OK)
+				})
 			}
 		}
 	}
