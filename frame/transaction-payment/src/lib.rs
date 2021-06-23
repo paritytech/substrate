@@ -273,6 +273,7 @@ pub mod pallet {
 
 	#[pallet::type_value]
 	pub fn NextFeeMultiplierOnEmpty() -> Multiplier { Multiplier::saturating_from_integer(1) }
+
 	#[pallet::storage]
 	#[pallet::getter(fn next_fee_multiplier)]
 	pub type NextFeeMultiplier<T: Config> = StorageValue<
@@ -286,13 +287,19 @@ pub mod pallet {
 	pub(super) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {}
+	pub struct GenesisConfig;
+
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self
+		}
+	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			<StorageVersion<T>>::put(Releases::V2);
+			StorageVersion::<T>::put(Releases::V2);
 		}
 	}
 
