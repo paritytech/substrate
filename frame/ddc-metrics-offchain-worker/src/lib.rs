@@ -450,7 +450,7 @@ impl<T: Trait> Module<T> {
             .unix_millis();
 
         let mut aggregated_metrics = MetricsAggregator::default();
-        let mut ddn_aggregated_metrics = DDnMetricsAggregator::default();
+        let mut ddn_aggregated_metrics = DDNMetricsAggregator::default();
 
         let nodes = Self::fetch_nodes(contract_id)?;
 
@@ -658,9 +658,9 @@ impl MetricsAggregator {
 }
 
 #[derive(Default)]
-struct DDnMetricsAggregator(Vec<DDNMetricInfo>);
+struct DDNMetricsAggregator(Vec<DDNMetricInfo>);
 
-impl DDnMetricsAggregator {
+impl DDNMetricsAggregator {
     fn add(&mut self, p2p_id: String, metrics: &Vec<MetricInfo>) {
         let existing_pubkey_index = self
             .0
