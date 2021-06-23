@@ -48,6 +48,11 @@ use primitive_types::{H160, H256, H512};
 #[cfg(feature = "derive")]
 pub use max_encoded_len_derive::MaxEncodedLen;
 
+/// Same as `MaxEncodedLen`, but without bounding the generics on the derived type with
+/// `MaxEncodedLen`.
+#[cfg(feature = "derive")]
+pub use max_encoded_len_derive::MaxEncodedLenNoBound;
+
 /// Items implementing `MaxEncodedLen` have a statically known maximum encoded size.
 ///
 /// Some containers, such as `BoundedVec`, have enforced size limits and this trait

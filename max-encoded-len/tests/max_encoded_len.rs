@@ -19,7 +19,8 @@
 
 #![cfg(feature = "derive")]
 
-use max_encoded_len::MaxEncodedLen;
+use max_encoded_len::{MaxEncodedLen, MaxEncodedLenNoBound};
+use std::marker::PhantomData;
 use codec::{Compact, Encode};
 
 // These structs won't even compile if the macro isn't working right.
@@ -74,6 +75,16 @@ fn two_generics_max_length() {
 		TwoGenerics::<Compact<u64>, [u16; 8]>::max_encoded_len(),
 		Compact::<u64>::max_encoded_len() + <[u16; 8]>::max_encoded_len()
 	);
+}
+
+#[derive(Encode, MaxEncodedLenNoBound)]
+struct NoBoundGeneric<T> {
+	one: PhantomData<T>,
+}
+
+#[test]
+fn no_bound_generic() {
+	assert_eq!(NoBoundGeneric::<u8>::max_encoded_len(), 0);
 }
 
 #[derive(Encode, MaxEncodedLen)]

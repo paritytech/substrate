@@ -42,6 +42,16 @@ fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Ident, Error> {
 /// Derive `MaxEncodedLen`.
 #[proc_macro_derive(MaxEncodedLen, attributes(max_encoded_len_crate))]
 pub fn derive_max_encoded_len(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	parse_and_generate_mel(input, false)
+}
+
+/// Derive `MaxEncodedLen` but do not bound any generics.
+#[proc_macro_derive(MaxEncodedLenNoBound, attributes(max_encoded_len_crate))]
+pub fn derive_max_encoded_len_no_bound(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	parse_and_generate_mel(input, true)
+}
+
+fn parse_and_generate_mel(input: proc_macro::TokenStream, no_bound: bool) -> proc_macro::TokenStream {
 	let input: DeriveInput = match syn::parse(input) {
 		Ok(input) => input,
 		Err(e) => return e.to_compile_error().into(),
@@ -53,7 +63,11 @@ pub fn derive_max_encoded_len(input: proc_macro::TokenStream) -> proc_macro::Tok
 	};
 
 	let name = &input.ident;
-	let generics = add_trait_bounds(input.generics, mel_trait.clone());
+	let generics = if no_bound {
+		input.generics
+	} else {
+		add_trait_bounds(input.generics, mel_trait.clone())
+	};
 	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
 	let data_expr = data_length_expr(&input.data);
