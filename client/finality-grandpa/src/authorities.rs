@@ -295,8 +295,7 @@ where
 
 		debug!(
 			target: "afg",
-			"Inserting potential standard set change signaled at block {:?} (delayed by {:?}
-			blocks).",
+			"Inserting potential standard set change signaled at block {:?} (delayed by {:?} blocks).",
 			(&number, &hash),
 			pending.delay,
 		);
@@ -310,8 +309,8 @@ where
 
 		debug!(
 			target: "afg",
-			"There are now {} alternatives for the next pending standard change (roots), and a
-			total of {} pending standard changes (across all forks).",
+			"There are now {} alternatives for the next pending standard change (roots), and a \
+			 total of {} pending standard changes (across all forks).",
 			self.pending_standard_changes.roots().count(),
 			self.pending_standard_changes.iter().count(),
 		);

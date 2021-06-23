@@ -279,22 +279,22 @@ fn prepare_digest_input<'a, H, Number>(
 					trie_root,
 				);
 
-				trie_storage.for_key_values_with_prefix(&child_prefix, |key, value|
-					if let Ok(InputKey::ChildIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
-						if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
+				trie_storage.for_key_values_with_prefix(&child_prefix, |mut key, mut value|
+					if let Ok(InputKey::ChildIndex::<Number>(trie_key)) = Decode::decode(&mut key) {
+						if let Ok(value) = <Vec<u8>>::decode(&mut value) {
 							let mut trie_root = <H as Hasher>::Out::default();
 							trie_root.as_mut().copy_from_slice(&value[..]);
 							children_roots.insert(trie_key.storage_key, trie_root);
 						}
 					});
 
-				trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
-					if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+				trie_storage.for_keys_with_prefix(&extrinsic_prefix, |mut key|
+					if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut key) {
 						insert_to_map(&mut map, trie_key.key);
 					});
 
-				trie_storage.for_keys_with_prefix(&digest_prefix, |key|
-					if let Ok(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+				trie_storage.for_keys_with_prefix(&digest_prefix, |mut key|
+					if let Ok(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut key) {
 						insert_to_map(&mut map, trie_key.key);
 					});
 			}
@@ -310,13 +310,13 @@ fn prepare_digest_input<'a, H, Number>(
 					crate::changes_trie::TrieBackendStorageAdapter(storage),
 					trie_root,
 				);
-				trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
-					if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+				trie_storage.for_keys_with_prefix(&extrinsic_prefix, |mut key|
+					if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut key) {
 						insert_to_map(&mut map, trie_key.key);
 					});
 
-				trie_storage.for_keys_with_prefix(&digest_prefix, |key|
-					if let Ok(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+				trie_storage.for_keys_with_prefix(&digest_prefix, |mut key|
+					if let Ok(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut key) {
 						insert_to_map(&mut map, trie_key.key);
 					});
 			}
