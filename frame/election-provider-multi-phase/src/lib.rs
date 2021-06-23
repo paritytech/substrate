@@ -934,27 +934,31 @@ pub mod pallet {
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
 			let mut signed_submissions = Self::signed_submissions();
-			let (inserted, maybe_weakest) = signed_submissions.insert(submission);
-			let ejected_a_solution = maybe_weakest.is_some();
+			let ejected_a_solution = match signed_submissions.insert(submission) {
+				(false, None) => {
+					// it's an error if we neither inserted nor removed any submissions: this
+					// indicates the queue was full but our solution had insufficient score to eject
+					// any solution
+					return Err(Error::<T>::SignedQueueFull.into());
+				}
+				(false, Some(_)) => {
+					unreachable!("`signed_submissions.insert` never returns this pattern")
+				}
+				(true, maybe_removed) => {
+					// collect deposit. Thereafter, the function cannot fail.
+					T::Currency::reserve(&who, deposit)
+						.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 
-			// it's an error if we neither inserted nor removed any submissions: this indicates
-			// the queue was full but our solution had insufficient score to eject any solution
-			ensure!(
-				(false, false) != (inserted, ejected_a_solution),
-				Error::<T>::SignedQueueFull,
-			);
+					let ejected_a_solution = maybe_removed.is_some();
+					// if we had to remove the weakest solution, unreserve its deposit
+					if let Some(removed) = maybe_removed {
+						let _remainder = T::Currency::unreserve(&removed.who, removed.deposit);
+						debug_assert!(_remainder.is_zero());
+					}
 
-			if inserted {
-				// collect deposit. Thereafter, the function cannot fail.
-				T::Currency::reserve(&who, deposit)
-					.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
-			}
-
-			// if we had to remove the weakest solution, unreserve its deposit
-			if let Some(weakest) = maybe_weakest {
-				let _remainder = T::Currency::unreserve(&weakest.who, weakest.deposit);
-				debug_assert!(_remainder.is_zero());
-			}
+					ejected_a_solution
+				}
+			};
 
 			signed_submissions.put();
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
