@@ -115,16 +115,32 @@ pub struct SignedSubmissions<T: Config> {
 impl<T: Config> SignedSubmissions<T> {
 	/// Get the signed submissions from storage.
 	pub fn get() -> Self {
-		SignedSubmissions {
+		let submissions = SignedSubmissions {
 			indices: SignedSubmissionIndices::<T>::get(),
 			next_idx: SignedSubmissionNextIndex::<T>::get(),
 			insertion_overlay: BTreeMap::new(),
 			deletion_overlay: BTreeSet::new(),
-		}
+		};
+		// validate that the stored state is sane
+		debug_assert!(submissions.indices.values().copied().max().map_or(
+			true,
+			|max_idx| submissions.next_idx > max_idx,
+		));
+		submissions
 	}
 
 	/// Put the signed submissions back into storage.
 	pub fn put(mut self) {
+		// validate that we're going to write only sane things to storage
+		debug_assert!(self.insertion_overlay.keys().copied().max().map_or(
+			true,
+			|max_idx| self.next_idx > max_idx,
+		));
+		debug_assert!(self.indices.values().copied().max().map_or(
+			true,
+			|max_idx| self.next_idx > max_idx,
+		));
+
 		SignedSubmissionIndices::<T>::put(self.indices);
 		SignedSubmissionNextIndex::<T>::put(self.next_idx);
 		for key in self.deletion_overlay {
@@ -163,7 +179,8 @@ impl<T: Config> SignedSubmissions<T> {
 	/// Note: this does not enforce any ordering relation between the submission removed and that
 	/// inserted.
 	///
-	/// Note: this doesn't insert into `insertion_overlay`, the optional new insertion must be inserted into  `insertion_overlay` to keep the variable `self` in a valid state.
+	/// Note: this doesn't insert into `insertion_overlay`, the optional new insertion must be
+	/// inserted into  `insertion_overlay` to keep the variable `self` in a valid state.
 	fn swap_out_submission(
 		&mut self,
 		remove_score: ElectionScore,
@@ -230,6 +247,9 @@ impl<T: Config> SignedSubmissions<T> {
 		&mut self,
 		submission: SignedSubmissionOf<T>,
 	) -> Option<Option<SignedSubmissionOf<T>>> {
+		// verify the expectation that we never reuse an index
+		debug_assert!(!self.indices.values().any(|&idx| idx == self.next_idx));
+
 		let weakest = match self.indices.try_insert(submission.solution.score, self.next_idx) {
 			Ok(Some(prev_idx)) => {
 				// a submission of equal score was already present in the set;
@@ -265,6 +285,7 @@ impl<T: Config> SignedSubmissions<T> {
 		};
 
 		// we've taken out the weakest, so update the storage map and the next index
+		debug_assert!(!self.insertion_overlay.contains_key(&self.next_idx));
 		self.insertion_overlay.insert(self.next_idx, submission);
 		debug_assert!(!self.deletion_overlay.contains(&self.next_idx));
 		self.next_idx += 1;
