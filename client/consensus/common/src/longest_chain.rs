@@ -96,14 +96,10 @@ impl<B, Block> SelectChain<Block> for LongestChain<B, Block>
 		maybe_max_number: Option<NumberFor<Block>>,
 	) -> Result<Block::Hash, ConsensusError> {
 		let import_lock = self.backend.get_import_lock();
-		let result = self.backend
+		self.backend
 			.blockchain()
 			.best_containing(target_hash, maybe_max_number, import_lock)
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into());
-		match result {
-			Err(e) => Err(e),
-			Ok(Some(h)) => Ok(h),
-			Ok(None) => Ok(target_hash),
-		}
+			.map(|maybe_hash| { maybe_hash.unwrap_or(target_hash) })
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 }
