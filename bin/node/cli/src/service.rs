@@ -55,7 +55,7 @@ pub fn new_partial(
 		// rpc_extensions_builder (jsonrpc, old,  TODO: (dp) remove)
 		impl Fn(node_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> node_rpc::IoHandler,
 		// rpc setup (jsonrpsee)
-		impl Fn(node_rpc::DenyUnsafe, Arc<sc_rpc::SubscriptionTaskExecutor>) -> RpcModule<()>,
+		impl FnOnce(node_rpc::DenyUnsafe, Arc<sc_rpc::SubscriptionTaskExecutor>) -> RpcModule<()>,
 		// import setup
 		(
 			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
@@ -145,17 +145,16 @@ pub fn new_partial(
 	let shared_authority_set = grandpa_link.shared_authority_set().clone();
 	let justification_stream = grandpa_link.justification_stream().clone();
 	let backend2 = backend.clone();
-	let backend3 = backend.clone();
 	let rpsee_builder = move |_deny_unsafe, executor| -> RpcModule<()> {
 		// TODO: pass in deny_unsafe and the executor here
 		let grandpa_rpc = GrandpaApi::new(
 			executor,
-			shared_authority_set.clone(), // TODO: without this clone the closure becomes a FnOnce, which might be fine?
+			shared_authority_set.clone(),
 			grandpa::SharedVoterState::empty(),
-			justification_stream.clone(), // TODO: without this clone the closure becomes a FnOnce, which might be fine?
+			justification_stream,
 			grandpa::FinalityProofProvider::new_for_service(
-				backend3.clone(), // TODO: without this clone the closure becomes a FnOnce, which might be fine?
-				Some(shared_authority_set.clone()),
+				backend2,
+				Some(shared_authority_set),
 			),
 		).into_rpc_module().expect("TODO: error handling");
 		// TODO: add other rpc modules here
@@ -166,6 +165,7 @@ pub fn new_partial(
 
 	let import_setup = (block_import, grandpa_link, babe_link);
 
+	// TODO: (dp) remove this when all APIs are ported.
 	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, babe_link) = &import_setup;
 
@@ -176,7 +176,7 @@ pub fn new_partial(
 		let rpc_setup = shared_voter_state.clone();
 
 		let finality_proof_provider = grandpa::FinalityProofProvider::new_for_service(
-			backend2.clone(),
+			backend.clone(),
 			Some(shared_authority_set.clone()),
 		);
 
@@ -189,7 +189,6 @@ pub fn new_partial(
 		let keystore = keystore_container.sync_keystore();
 		let chain_spec = config.chain_spec.cloned_box();
 
-		// TODO: remove this before merge
 		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),

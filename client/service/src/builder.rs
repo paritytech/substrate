@@ -32,6 +32,7 @@ use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator, Chain},
 	import_queue::ImportQueue,
 };
+use sc_rpc::SubscriptionTaskExecutor;
 use futures::{
 	FutureExt, StreamExt,
 	future::ready,
@@ -82,6 +83,7 @@ use jsonrpsee::RpcModule;
 /// specific interface where the RPC extension will be exposed is safe or not.
 /// This trait allows us to lazily build the RPC extension whenever we bind the
 /// service to an interface.
+// TODO: (dp) remove
 pub trait RpcExtensionBuilder {
 	/// The type of the RPC extension that will be built.
 	type Output: sc_rpc::RpcExtension<sc_rpc::Metadata>;
@@ -91,12 +93,12 @@ pub trait RpcExtensionBuilder {
 	fn build(
 		&self,
 		deny: sc_rpc::DenyUnsafe,
-		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
+		subscription_executor: SubscriptionTaskExecutor,
 	) -> Self::Output;
 }
 
 impl<F, R> RpcExtensionBuilder for F where
-	F: Fn(sc_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> R,
+	F: Fn(sc_rpc::DenyUnsafe, SubscriptionTaskExecutor) -> R,
 	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 	type Output = R;
@@ -104,7 +106,7 @@ impl<F, R> RpcExtensionBuilder for F where
 	fn build(
 		&self,
 		deny: sc_rpc::DenyUnsafe,
-		subscription_executor: sc_rpc::SubscriptionTaskExecutor,
+		subscription_executor: SubscriptionTaskExecutor,
 	) -> Self::Output {
 		(*self)(deny, subscription_executor)
 	}
@@ -113,6 +115,7 @@ impl<F, R> RpcExtensionBuilder for F where
 /// A utility struct for implementing an `RpcExtensionBuilder` given a cloneable
 /// `RpcExtension`, the resulting builder will simply ignore the provided
 /// `DenyUnsafe` instance and return a static `RpcExtension` instance.
+// TODO: (dp) remove
 pub struct NoopRpcExtensionBuilder<R>(pub R);
 
 impl<R> RpcExtensionBuilder for NoopRpcExtensionBuilder<R> where
@@ -123,7 +126,7 @@ impl<R> RpcExtensionBuilder for NoopRpcExtensionBuilder<R> where
 	fn build(
 		&self,
 		_deny: sc_rpc::DenyUnsafe,
-		_subscription_executor: sc_rpc::SubscriptionTaskExecutor,
+		_subscription_executor: SubscriptionTaskExecutor,
 	) -> Self::Output {
 		self.0.clone()
 	}
@@ -519,7 +522,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	// TODO: (dp) remove before merge
 	pub rpc_extensions_builder: Box<dyn RpcExtensionBuilder<Output = TRpc> + Send>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
-	pub rpsee_builder: Box<dyn Fn(sc_rpc::DenyUnsafe, Arc<sc_rpc::SubscriptionTaskExecutor>) -> RpcModule<()>>,
+	pub rpsee_builder: Box<dyn FnOnce(sc_rpc::DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 	/// An optional, shared remote blockchain instance. Used for light clients.
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
@@ -770,7 +773,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
-	rpsee_builder: Box<dyn Fn(sc_rpc::DenyUnsafe, Arc<sc_rpc::SubscriptionTaskExecutor>) -> RpcModule<()>>,
+	rpsee_builder: Box<dyn FnOnce(sc_rpc::DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 ) -> RpcModule<()>
 	where
 		TBl: BlockT,
@@ -796,7 +799,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 		properties: config.chain_spec.properties(),
 		chain_type: config.chain_spec.chain_type(),
 	};
-	let task_executor = Arc::new(sc_rpc::SubscriptionTaskExecutor::new(spawn_handle));
+	let task_executor = Arc::new(SubscriptionTaskExecutor::new(spawn_handle));
 
 	let mut rpc_api = RpcModule::new(());
 
@@ -865,7 +868,8 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	rpc_api.merge(state).expect(UNIQUE_METHOD_NAMES_PROOF);
 	rpc_api.merge(child_state).expect(UNIQUE_METHOD_NAMES_PROOF);
 	// Additional [`RpcModule`]s defined in the node to fit the specific blockchain
-	rpc_api.merge((&*rpsee_builder)(deny_unsafe, task_executor.clone())).expect(UNIQUE_METHOD_NAMES_PROOF);
+	let extra_rpcs = rpsee_builder(deny_unsafe, task_executor.clone());
+	rpc_api.merge(extra_rpcs).expect(UNIQUE_METHOD_NAMES_PROOF);
 
 	rpc_api
 }
