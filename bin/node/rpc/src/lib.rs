@@ -40,7 +40,6 @@ use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{
 	SharedVoterState, SharedAuthoritySet, FinalityProofProvider, GrandpaJustificationStream
 };
-use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 pub use sc_rpc_api::DenyUnsafe;
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
@@ -146,13 +145,8 @@ pub fn create_full<C, P, SC, B>(
 		babe_config,
 		shared_epoch_changes,
 	} = babe;
-	let GrandpaDeps {
-		shared_voter_state,
-		shared_authority_set,
-		justification_stream,
-		subscription_executor,
-		finality_provider,
-	} = grandpa;
+
+	let GrandpaDeps { shared_authority_set, .. } = grandpa;
 
 	io.extend_with(
 		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
@@ -179,17 +173,6 @@ pub fn create_full<C, P, SC, B>(
 				select_chain,
 				deny_unsafe,
 			),
-		)
-	);
-	io.extend_with(
-		sc_finality_grandpa_rpc::GrandpaApiOld::to_delegate(
-			GrandpaRpcHandler::new(
-				shared_authority_set.clone(),
-				shared_voter_state,
-				justification_stream,
-				subscription_executor,
-				finality_provider,
-			)
 		)
 	);
 

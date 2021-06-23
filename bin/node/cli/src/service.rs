@@ -146,7 +146,7 @@ pub fn new_partial(
 	let justification_stream = grandpa_link.justification_stream().clone();
 	let backend2 = backend.clone();
 	let backend3 = backend.clone();
-	let rpsee_builder = move |deny_unsafe, executor| -> RpcModule<()> {
+	let rpsee_builder = move |_deny_unsafe, executor| -> RpcModule<()> {
 		// TODO: pass in deny_unsafe and the executor here
 		let grandpa_rpc = GrandpaApi::new(
 			executor,
