@@ -346,7 +346,8 @@ impl<T: Trait> Module<T> {
         for one_metric in metrics.iter() {
             let app_id = Self::account_id_from_hex(&one_metric.app_id)?;
 
-            if one_metric.storage_bytes == 0 && one_metric.wcu_used == 0 && one_metric.rcu_used == 0 {
+            if one_metric.storage_bytes == 0 && one_metric.wcu_used == 0 && one_metric.rcu_used == 0
+            {
                 continue;
             }
 
@@ -362,11 +363,11 @@ impl<T: Trait> Module<T> {
                 );
 
                 let call_data = Self::encode_report_metrics(
-					&app_id,
-					day_start_ms,
-					one_metric.storage_bytes,
-					one_metric.wcu_used,
-					one_metric.rcu_used,
+                    &app_id,
+                    day_start_ms,
+                    one_metric.storage_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let contract_id_unl =
@@ -412,11 +413,11 @@ impl<T: Trait> Module<T> {
                 );
 
                 let call_data = Self::encode_report_metrics_ddn(
-					one_metric.p2p_id.clone(),
-					day_start_ms,
-					one_metric.storage_bytes,
-					one_metric.wcu_used,
-					one_metric.rcu_used,
+                    one_metric.p2p_id.clone(),
+                    day_start_ms,
+                    one_metric.storage_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let contract_id_unl =
@@ -598,11 +599,11 @@ impl<T: Trait> Module<T> {
     }
 
     fn encode_report_metrics_ddn(
-		p2p_id: String,
-		day_start_ms: u64,
-		storage_bytes: u128,
-		wcu_used: u128,
-		rcu_used: u128,
+        p2p_id: String,
+        day_start_ms: u64,
+        storage_bytes: u128,
+        wcu_used: u128,
+        rcu_used: u128,
     ) -> Vec<u8> {
         let mut call_data = REPORT_METRICS_DDN_SELECTOR.to_vec();
         p2p_id.encode_to(&mut call_data);
@@ -680,7 +681,7 @@ impl DDNMetricsAggregator {
             }
 
             let new_metric_obj = DDNMetricInfo {
-				p2p_id,
+                p2p_id,
                 storage_bytes: storage_bytes_sum,
                 wcu_used: wcu_used_sum,
                 rcu_used: rcu_used_sum,
