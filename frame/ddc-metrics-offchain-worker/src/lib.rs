@@ -43,7 +43,7 @@ pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
 pub const GET_ALL_DDC_NODES_SELECTOR: [u8; 4] = hex!("e6c98b60");
 pub const FINALIZE_METRIC_PERIOD: [u8; 4] = hex!("b269d557");
 
-#[derive(Decode)]
+#[derive(Encode, Decode)]
 pub struct DDCNode {
     p2p_id: String,
     p2p_addr: String,
