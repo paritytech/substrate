@@ -185,7 +185,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		&mut self,
 		instance_id: u32,
 		export_name: &str,
-		args: &[u8],
+		mut args: &[u8],
 		return_val: Pointer<u8>,
 		return_val_len: WordSize,
 		state: u32,
@@ -193,7 +193,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &args[..])
+		let args = Vec::<sp_wasm_interface::Value>::decode(&mut args)
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)
