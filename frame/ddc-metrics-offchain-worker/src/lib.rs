@@ -71,7 +71,7 @@ struct ApiMetric {
     appPubKey: String,
     storageBytes: u128,
     wcuUsed: u128,
-    rcuUsed: u128
+    rcuUsed: u128,
 }
 
 /// Defines application identifier for crypto keys of this module.
@@ -575,14 +575,15 @@ impl<T: Trait> Module<T> {
 
         let metrics: Vec<ApiMetric> = Self::http_get_json(&metrics_url)?;
 
-        Ok(metrics.into_iter()
-        .map(|data| Metric {
-            app_id: data.appPubKey,
-            storage_bytes: data.storageBytes,
-            wcu_used: data.wcuUsed,
-            rcu_used: data.rcuUsed,
-        })
-        .collect::<Vec<Metric>>())
+        Ok(metrics
+            .into_iter()
+            .map(|data| Metric {
+                app_id: data.appPubKey,
+                storage_bytes: data.storageBytes,
+                wcu_used: data.wcuUsed,
+                rcu_used: data.rcuUsed,
+            })
+            .collect::<Vec<Metric>>())
     }
 
     fn http_get_json<OUT: DeserializeOwned>(url: &str) -> ResultStr<OUT> {
