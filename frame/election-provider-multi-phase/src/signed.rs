@@ -442,7 +442,7 @@ mod tests {
 			SignedMaxSubmissions, SignedMaxWeight,
 		},
 	};
-	use frame_support::{dispatch::DispatchResult, assert_noop, assert_ok};
+	use frame_support::{dispatch::DispatchResult, assert_noop, assert_storage_noop, assert_ok};
 
 	fn submit_with_witness(
 		origin: Origin,
@@ -841,6 +841,37 @@ mod tests {
 			);
 
 			assert_eq!(balances(&123), (0, 0));
+		})
+	}
+
+	#[test]
+	fn finalize_signed_phase_is_idempotent_given_no_submissions() {
+		ExtBuilder::default().build_and_execute(|| {
+			for block_number in 0..25 {
+				roll_to(block_number);
+
+				assert_eq!(SignedSubmissions::<Runtime>::decode_len().unwrap_or_default(), 0);
+				assert_storage_noop!(MultiPhase::finalize_signed_phase());
+			}
+		})
+	}
+
+	#[test]
+	fn finalize_signed_phase_is_idempotent_given_submissions() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			let solution = raw_solution();
+
+			// submit a correct one.
+			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+
+			// _some_ good solution was stored.
+			assert!(MultiPhase::finalize_signed_phase().0);
+
+			// calling it again doesn't change anything
+			assert_storage_noop!(MultiPhase::finalize_signed_phase());
 		})
 	}
 }
