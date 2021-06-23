@@ -217,15 +217,17 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Insert a new signed submission into the set.
 	///
-	/// Returns `(inserted, removed)`. `inserted` is true when the submission was inserted.
-	/// `removed` is the removed weakest submission, if any.
+	/// The outer `Option` of the return value indicates whether a solution was inserted. In the
+	/// case that nothing was inserted, nothing is ever removed.
+	///
+	/// The inner `Option` of the return value contains the submission which was removed, if any.
 	///
 	/// In the event that the new submission is not better than the current weakest according
 	/// to `is_score_better`, we do not change anything.
 	pub fn insert(
 		&mut self,
 		submission: SignedSubmissionOf<T>,
-	) -> (bool, Option<SignedSubmissionOf<T>>) {
+	) -> Option<Option<SignedSubmissionOf<T>>> {
 		let weakest = match self.indices.try_insert(submission.solution.score, self.next_idx) {
 			Ok(Some(prev_idx)) => {
 				// a submission of equal score was already present in the set;
@@ -234,7 +236,7 @@ impl<T: Config> SignedSubmissions<T> {
 				self.indices
 					.try_insert(submission.solution.score, prev_idx)
 					.expect("didn't change the map size; qed");
-				return (false, None);
+				return None;
 			}
 			Ok(None) => {
 				// successfully inserted into the set; no need to take out weakest member
@@ -246,14 +248,14 @@ impl<T: Config> SignedSubmissions<T> {
 				// If there wasn't a weakest entry to remove, then there must be a capacity of 0,
 				// which means that we can't meaningfully proceed.
 				let weakest_score = match self.indices.iter().next() {
-					None => return (false, None),
+					None => return None,
 					Some((score, _)) => *score,
 				};
 				let threshold = T::SolutionImprovementThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
 				if !is_score_better(insert_score, weakest_score, threshold) {
-					return (false, None);
+					return None;
 				}
 
 				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
@@ -264,7 +266,7 @@ impl<T: Config> SignedSubmissions<T> {
 		self.insertion_overlay.insert(self.next_idx, submission);
 		debug_assert!(!self.deletion_overlay.contains(&self.next_idx));
 		self.next_idx += 1;
-		(true, weakest)
+		Some(weakest)
 	}
 
 	/// Remove the signed submission with the highest score from the set.

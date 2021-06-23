@@ -934,31 +934,22 @@ pub mod pallet {
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
 			let mut signed_submissions = Self::signed_submissions();
-			let ejected_a_solution = match signed_submissions.insert(submission) {
-				(false, None) => {
-					// it's an error if we neither inserted nor removed any submissions: this
-					// indicates the queue was full but our solution had insufficient score to eject
-					// any solution
-					return Err(Error::<T>::SignedQueueFull.into());
-				}
-				(false, Some(_)) => {
-					unreachable!("`signed_submissions.insert` never returns this pattern")
-				}
-				(true, maybe_removed) => {
-					// collect deposit. Thereafter, the function cannot fail.
-					T::Currency::reserve(&who, deposit)
-						.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+			let maybe_removed = signed_submissions
+				.insert(submission)
+				// it's an error if we failed to insert a submission: this indicates the queue was
+				// full but our solution had insufficient score to eject any solution
+				.ok_or(Error::<T>::SignedQueueFull)?;
 
-					let ejected_a_solution = maybe_removed.is_some();
-					// if we had to remove the weakest solution, unreserve its deposit
-					if let Some(removed) = maybe_removed {
-						let _remainder = T::Currency::unreserve(&removed.who, removed.deposit);
-						debug_assert!(_remainder.is_zero());
-					}
+			// collect deposit. Thereafter, the function cannot fail.
+			T::Currency::reserve(&who, deposit)
+				.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
 
-					ejected_a_solution
-				}
-			};
+			let ejected_a_solution = maybe_removed.is_some();
+			// if we had to remove the weakest solution, unreserve its deposit
+			if let Some(removed) = maybe_removed {
+				let _remainder = T::Currency::unreserve(&removed.who, removed.deposit);
+				debug_assert!(_remainder.is_zero());
+			}
 
 			signed_submissions.put();
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
