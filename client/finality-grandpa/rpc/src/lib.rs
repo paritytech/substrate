@@ -96,7 +96,7 @@ where
 
 		// Returns the block most recently finalized by Grandpa, alongside its justification.
 		module.register_subscription(
-			"grandpa_justifications",
+			"grandpa_subscribeJustifications",
 			"grandpa_unsubscribeJustifications",
 			|_params, mut sink: SubscriptionSink, ctx: Arc<GrandpaRpc<_, _, _, _>>| {
 				let stream = ctx
