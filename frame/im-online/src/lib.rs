@@ -80,7 +80,7 @@ use sp_core::offchain::OpaqueNetworkState;
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;
 use sp_runtime::{
-	offchain::storage::StorageValueRef,
+	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, TrailingZeroInput},
 	Perbill, Permill, PerThing, RuntimeDebug, SaturatedConversion,
 };
@@ -719,14 +719,15 @@ impl<T: Config> Pallet<T> {
 			key
 		};
 		let storage = StorageValueRef::persistent(&key);
-		let res = storage.mutate(|status: Option<Option<HeartbeatStatus<T::BlockNumber>>>| {
+		let res = storage.mutate(
+			|status: Result<Option<HeartbeatStatus<T::BlockNumber>>, StorageRetrievalError>| {
 			// Check if there is already a lock for that particular block.
 			// This means that the heartbeat has already been sent, and we are just waiting
 			// for it to be included. However if it doesn't get included for INCLUDE_THRESHOLD
 			// we will re-send it.
 			match status {
 				// we are still waiting for inclusion.
-				Some(Some(status)) if status.is_recent(session_index, now) => {
+				Ok(Some(status)) if status.is_recent(session_index, now) => {
 					Err(OffchainErr::WaitingForInclusion(status.sent_at))
 				},
 				// attempt to set new status
@@ -735,7 +736,10 @@ impl<T: Config> Pallet<T> {
 					sent_at: now,
 				}),
 			}
-		})?;
+		});
+		if let Err(MutateStorageError::ValueFunctionFailed(err)) = res {
+			return Err(err);
+		}
 
 		let mut new_status = res.map_err(|_| OffchainErr::FailedToAcquireLock)?;
 

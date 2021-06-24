@@ -27,6 +27,8 @@ use crate::traits::{Hash, TrailingZeroInput};
 ///
 /// It can be saved and later reloaded using the Codec traits.
 ///
+/// (It is recommended to use the `rand_chacha` crate as an alternative to this where possible.)
+///
 /// Example:
 /// ```
 /// use sp_runtime::traits::{Hash, BlakeTwo256};
@@ -63,7 +65,7 @@ impl<Hashing: Hash> RandomNumberGenerator<Hashing> {
 	/// Returns a number at least zero, at most `max`.
 	pub fn pick_u32(&mut self, max: u32) -> u32 {
 		let needed = (4 - max.leading_zeros() / 8) as usize;
-		let top = ((1 << (needed as u64 * 8)) / ((max + 1) as u64) * ((max + 1) as u64) - 1) as u32;
+		let top = ((1 << (needed as u64 * 8)) / (max as u64 + 1) * (max as u64 + 1) - 1) as u32;
 		loop {
 			if self.offset() + needed > self.current.as_ref().len() {
 				// rehash
@@ -100,5 +102,17 @@ impl<Hashing: Hash> RandomNumberGenerator<Hashing> {
 		} else {
 			Some(&items[self.pick_usize(items.len() - 1)])
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::RandomNumberGenerator;
+	use crate::traits::{Hash, BlakeTwo256};
+
+	#[test]
+	fn does_not_panic_on_max() {
+		let seed = BlakeTwo256::hash(b"Fourty-two");
+		let _random = RandomNumberGenerator::<BlakeTwo256>::new(seed).pick_u32(u32::MAX);
 	}
 }

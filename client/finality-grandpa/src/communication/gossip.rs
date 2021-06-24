@@ -110,12 +110,23 @@ const CATCH_UP_PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 /// catch up request.
 const CATCH_UP_THRESHOLD: u64 = 2;
 
-const PROPAGATION_ALL: u32 = 4; //in rounds;
-const PROPAGATION_ALL_AUTHORITIES: u32 = 2; //in rounds;
-const PROPAGATION_SOME_NON_AUTHORITIES: u32 = 3; //in rounds;
-const ROUND_DURATION: u32 = 2; // measured in gossip durations
+/// The total round duration measured in periods of gossip duration:
+/// 2 gossip durations for prevote timer
+/// 2 gossip durations for precommit timer
+/// 1 gossip duration for precommits to spread
+const ROUND_DURATION: u32 = 5;
 
-const MIN_LUCKY: usize = 5;
+/// The period, measured in rounds, since the latest round start, after which we will start
+/// propagating gossip messages to more nodes than just the lucky ones.
+const PROPAGATION_SOME: f32 = 1.5;
+
+/// The period, measured in rounds, since the latest round start, after which we will start
+/// propagating gossip messages to all the nodes we are connected to.
+const PROPAGATION_ALL: f32 = 3.0;
+
+/// Assuming a network of 3000 nodes, using a fanout of 4, after about 6 iterations
+/// of gossip a message has very likely reached all nodes on the network (`log4(3000)`).
+const LUCKY_PEERS: usize = 4;
 
 type Report = (PeerId, ReputationChange);
 
@@ -459,6 +470,7 @@ impl Misbehavior {
 	}
 }
 
+#[derive(Debug)]
 struct PeerInfo<N> {
 	view: View<N>,
 	roles: ObservedRole,
@@ -473,19 +485,27 @@ impl<N> PeerInfo<N> {
 	}
 }
 
-/// The peers we're connected do in gossip.
+/// The peers we're connected to in gossip.
 struct Peers<N> {
 	inner: HashMap<PeerId, PeerInfo<N>>,
-	lucky_peers: HashSet<PeerId>,
-	lucky_authorities: HashSet<PeerId>,
+	/// The randomly picked set of `LUCKY_PEERS` we'll gossip to in the first stage of round
+	/// gossiping.
+	first_stage_peers: HashSet<PeerId>,
+	/// The randomly picked set of peers we'll gossip to in the second stage of gossiping if the
+	/// first stage didn't allow us to spread the voting data enough to conclude the round. This set
+	/// should have size `sqrt(connected_peers)`.
+	second_stage_peers: HashSet<PeerId>,
+	/// The randomly picked set of `LUCKY_PEERS` light clients we'll gossip commit messages to.
+	lucky_light_peers: HashSet<PeerId>,
 }
 
 impl<N> Default for Peers<N> {
 	fn default() -> Self {
 		Peers {
 			inner: HashMap::new(),
-			lucky_peers: HashSet::new(),
-			lucky_authorities: HashSet::new(),
+			first_stage_peers: HashSet::new(),
+			second_stage_peers: HashSet::new(),
+			lucky_light_peers: HashSet::new(),
 		}
 	}
 }
@@ -493,14 +513,18 @@ impl<N> Default for Peers<N> {
 impl<N: Ord> Peers<N> {
 	fn new_peer(&mut self, who: PeerId, role: ObservedRole) {
 		match role {
-			ObservedRole::Authority if self.lucky_authorities.len() < MIN_LUCKY => {
-				self.lucky_authorities.insert(who.clone());
+			ObservedRole::Authority if self.first_stage_peers.len() < LUCKY_PEERS => {
+				self.first_stage_peers.insert(who.clone());
 			}
-			ObservedRole::Full if self.lucky_peers.len() < MIN_LUCKY => {
-				self.lucky_peers.insert(who.clone());
+			ObservedRole::Authority if self.second_stage_peers.len() < LUCKY_PEERS => {
+				self.second_stage_peers.insert(who.clone());
+			}
+			ObservedRole::Light if self.lucky_light_peers.len() < LUCKY_PEERS => {
+				self.lucky_light_peers.insert(who.clone());
 			}
 			_ => {}
 		}
+
 		self.inner.insert(who, PeerInfo::new(role));
 	}
 
@@ -508,14 +532,17 @@ impl<N: Ord> Peers<N> {
 		self.inner.remove(who);
 		// This does not happen often enough compared to round duration,
 		// so we don't reshuffle.
-		self.lucky_peers.remove(who);
-		self.lucky_authorities.remove(who);
+		self.first_stage_peers.remove(who);
+		self.second_stage_peers.remove(who);
+		self.lucky_light_peers.remove(who);
 	}
 
 	// returns a reference to the new view, if the peer is known.
-	fn update_peer_state(&mut self, who: &PeerId, update: NeighborPacket<N>)
-		-> Result<Option<&View<N>>, Misbehavior>
-	{
+	fn update_peer_state(
+		&mut self,
+		who: &PeerId,
+		update: NeighborPacket<N>,
+	) -> Result<Option<&View<N>>, Misbehavior> {
 		let peer = match self.inner.get_mut(who) {
 			None => return Ok(None),
 			Some(p) => p,
@@ -563,69 +590,93 @@ impl<N: Ord> Peers<N> {
 		self.inner.get(who)
 	}
 
-	fn connected_authorities(&self) -> usize {
-		self.inner
-			.iter()
-			.filter(|(_, info)| matches!(info.roles, ObservedRole::Authority))
-			.count()
-	}
-
-	fn connected_full(&self) -> usize {
-		self.inner
-			.iter()
-			.filter(|(_, info)| matches!(info.roles, ObservedRole::Full))
-			.count()
-	}
-
 	fn reshuffle(&mut self) {
-		let mut lucky_peers: Vec<_> = self
-			.inner
-			.iter()
-			.filter_map(|(id, info)| {
-				if matches!(info.roles, ObservedRole::Full) {
-					Some(id.clone())
+		// we want to randomly select peers into three sets according to the following logic:
+		// - first set: LUCKY_PEERS random peers where at least LUCKY_PEERS/2 are authorities (unless
+		// we're not connected to that many authorities)
+		// - second set: max(LUCKY_PEERS, sqrt(peers)) peers where at least LUCKY_PEERS are authorities.
+		// - third set: LUCKY_PEERS random light client peers
+
+		let shuffled_peers = {
+			let mut peers = self
+				.inner
+				.iter()
+				.map(|(peer_id, info)| (peer_id.clone(), info.clone()))
+				.collect::<Vec<_>>();
+
+			peers.shuffle(&mut rand::thread_rng());
+			peers
+		};
+
+		let shuffled_authorities = shuffled_peers.iter().filter_map(|(peer_id, info)| {
+			if matches!(info.roles, ObservedRole::Authority) {
+				Some(peer_id)
+			} else {
+				None
+			}
+		});
+
+		let mut first_stage_peers = HashSet::new();
+		let mut second_stage_peers = HashSet::new();
+
+		// we start by allocating authorities to the first stage set and when the minimum of
+		// `LUCKY_PEERS / 2` is filled we start allocating to the second stage set.
+		let half_lucky = LUCKY_PEERS / 2;
+		let one_and_a_half_lucky = LUCKY_PEERS + half_lucky;
+		let mut n_authorities_added = 0;
+		for peer_id in shuffled_authorities {
+			if n_authorities_added < half_lucky {
+				first_stage_peers.insert(peer_id.clone());
+			} else if n_authorities_added < one_and_a_half_lucky {
+				second_stage_peers.insert(peer_id.clone());
+			} else {
+				break;
+			}
+
+			n_authorities_added += 1;
+		}
+
+		// fill up first and second sets with remaining peers (either full or authorities)
+		// prioritizing filling the first set over the second.
+		let n_second_stage_peers = LUCKY_PEERS.max((shuffled_peers.len() as f32).sqrt() as usize);
+		for (peer_id, info) in &shuffled_peers {
+			if info.roles.is_light() {
+				continue;
+			}
+
+			if first_stage_peers.len() < LUCKY_PEERS {
+				first_stage_peers.insert(peer_id.clone());
+				second_stage_peers.remove(peer_id);
+			} else if second_stage_peers.len() < n_second_stage_peers {
+				if !first_stage_peers.contains(peer_id) {
+					second_stage_peers.insert(peer_id.clone());
+				}
+			} else {
+				break;
+			}
+		}
+
+		// pick `LUCKY_PEERS` random light peers
+		let lucky_light_peers = shuffled_peers
+			.into_iter()
+			.filter_map(|(peer_id, info)| {
+				if info.roles.is_light() {
+					Some(peer_id)
 				} else {
 					None
 				}
 			})
+			.take(LUCKY_PEERS)
 			.collect();
 
-		let mut lucky_authorities: Vec<_> = self
-			.inner
-			.iter()
-			.filter_map(|(id, info)| {
-				if matches!(info.roles, ObservedRole::Authority) {
-					Some(id.clone())
-				} else {
-					None
-				}
-			})
-			.collect();
-
-		let num_non_authorities = ((lucky_peers.len() as f32).sqrt() as usize)
-			.max(MIN_LUCKY)
-			.min(lucky_peers.len());
-
-		let num_authorities = ((lucky_authorities.len() as f32).sqrt() as usize)
-			.max(MIN_LUCKY)
-			.min(lucky_authorities.len());
-
-		lucky_peers.partial_shuffle(&mut rand::thread_rng(), num_non_authorities);
-		lucky_peers.truncate(num_non_authorities);
-
-		lucky_authorities.partial_shuffle(&mut rand::thread_rng(), num_authorities);
-		lucky_authorities.truncate(num_authorities);
-
-		self.lucky_peers.clear();
-		self.lucky_peers.extend(lucky_peers.into_iter());
-
-		self.lucky_authorities.clear();
-		self.lucky_authorities.extend(lucky_authorities.into_iter());
+		self.first_stage_peers = first_stage_peers;
+		self.second_stage_peers = second_stage_peers;
+		self.lucky_light_peers = lucky_light_peers;
 	}
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) enum Action<H>  {
+pub(super) enum Action<H> {
 	// repropagate under given topic, to the given peers, applying cost/benefit to originator.
 	Keep(H, ReputationChange),
 	// discard and process.
@@ -1182,76 +1233,40 @@ impl<Block: BlockT> Inner<Block> {
 	/// The initial logic for filtering round messages follows the given state
 	/// transitions:
 	///
-	/// - State 0: not allowed to anyone (only if our local node is not an authority)
-	/// - State 1: allowed to random `sqrt(authorities)`
-	/// - State 2: allowed to all authorities
-	/// - State 3: allowed to random `sqrt(non-authorities)`
-	/// - State 4: allowed to all non-authorities
+	/// - State 1: allowed to LUCKY_PEERS random peers (where at least LUCKY_PEERS/2 are authorities)
+	/// - State 2: allowed to max(LUCKY_PEERS, sqrt(random peers)) (where at least LUCKY_PEERS are authorities)
+	/// - State 3: allowed to all peers
 	///
-	/// Transitions will be triggered on repropagation attempts by the
-	/// underlying gossip layer, which should happen every 30 seconds.
-	fn round_message_allowed<N>(&self, who: &PeerId, peer: &PeerInfo<N>) -> bool {
+	/// Transitions will be triggered on repropagation attempts by the underlying gossip layer.
+	fn round_message_allowed(&self, who: &PeerId) -> bool {
 		let round_duration = self.config.gossip_duration * ROUND_DURATION;
 		let round_elapsed = match self.local_view {
 			Some(ref local_view) => local_view.round_start.elapsed(),
 			None => return false,
 		};
 
-		if !self.config.local_role.is_authority()
-			&& round_elapsed < round_duration * PROPAGATION_ALL
-		{
-			// non-authority nodes don't gossip any messages right away. we
-			// assume that authorities (and sentries) are strongly connected, so
-			// it should be unnecessary for non-authorities to gossip all
-			// messages right away.
+		if self.config.local_role.is_light() {
 			return false;
 		}
 
-		match peer.roles {
-			ObservedRole::Authority => {
-				let authorities = self.peers.connected_authorities();
-
-				// the target node is an authority, on the first round duration we start by
-				// sending the message to only `sqrt(authorities)` (if we're
-				// connected to at least `MIN_LUCKY`).
-				if round_elapsed < round_duration * PROPAGATION_ALL_AUTHORITIES
-					&& authorities > MIN_LUCKY
-				{
-					self.peers.lucky_authorities.contains(who)
-				} else {
-					// otherwise we already went through the step above, so
-					// we won't filter the message and send it to all
-					// authorities for whom it is polite to do so
-					true
-				}
-			}
-			ObservedRole::Full => {
-				// the node is not an authority so we apply stricter filters
-				if round_elapsed >= round_duration * PROPAGATION_ALL {
-					// if we waited for 3 (or more) rounds
-					// then it is allowed to be sent to all peers.
-					true
-				} else if round_elapsed >= round_duration * PROPAGATION_SOME_NON_AUTHORITIES {
-					// otherwise we only send it to `sqrt(non-authorities)`.
-					self.peers.lucky_peers.contains(who)
-				} else {
-					false
-				}
-			}
-			ObservedRole::Light => {
-				// we never gossip round messages to light clients as they don't
-				// participate in the full grandpa protocol
-				false
-			}
+		if round_elapsed < round_duration.mul_f32(PROPAGATION_SOME) {
+			self.peers.first_stage_peers.contains(who)
+		} else if round_elapsed < round_duration.mul_f32(PROPAGATION_ALL) {
+			self.peers.first_stage_peers.contains(who)
+				|| self.peers.second_stage_peers.contains(who)
+		} else {
+			self.peers
+				.peer(who)
+				.map(|info| !info.roles.is_light())
+				.unwrap_or(false)
 		}
 	}
 
 	/// The initial logic for filtering global messages follows the given state
 	/// transitions:
 	///
-	/// - State 0: send to `sqrt(authorities)` ++ `sqrt(non-authorities)`.
-	/// - State 1: send to all authorities
-	/// - State 2: send to all non-authorities
+	/// - State 1: allowed to max(LUCKY_PEERS, sqrt(peers)) (where at least LUCKY_PEERS are authorities)
+	/// - State 2: allowed to all peers
 	///
 	/// We are more lenient with global messages since there should be a lot
 	/// less global messages than round messages (just commits), and we want
@@ -1260,49 +1275,23 @@ impl<Block: BlockT> Inner<Block> {
 	///
 	/// Transitions will be triggered on repropagation attempts by the
 	/// underlying gossip layer, which should happen every 30 seconds.
-	fn global_message_allowed<N>(&self, who: &PeerId, peer: &PeerInfo<N>) -> bool {
+	fn global_message_allowed(&self, who: &PeerId) -> bool {
 		let round_duration = self.config.gossip_duration * ROUND_DURATION;
 		let round_elapsed = match self.local_view {
 			Some(ref local_view) => local_view.round_start.elapsed(),
 			None => return false,
 		};
 
-		match peer.roles {
-			ObservedRole::Authority => {
-				let authorities = self.peers.connected_authorities();
+		if self.config.local_role.is_light() {
+			return false;
+		}
 
-				// the target node is an authority, on the first round duration we start by
-				// sending the message to only `sqrt(authorities)` (if we're
-				// connected to at least `MIN_LUCKY`).
-				if round_elapsed < round_duration * PROPAGATION_ALL_AUTHORITIES
-					&& authorities > MIN_LUCKY
-				{
-					self.peers.lucky_authorities.contains(who)
-				} else {
-					// otherwise we already went through the step above, so
-					// we won't filter the message and send it to all
-					// authorities for whom it is polite to do so
-					true
-				}
-			}
-			ObservedRole::Full | ObservedRole::Light => {
-				let non_authorities = self.peers.connected_full();
-
-				// the target node is not an authority, on the first and second
-				// round duration we start by sending the message to only
-				// `sqrt(non_authorities)` (if we're connected to at least
-				// `MIN_LUCKY`).
-				if round_elapsed < round_duration * PROPAGATION_SOME_NON_AUTHORITIES
-					&& non_authorities > MIN_LUCKY
-				{
-					self.peers.lucky_peers.contains(who)
-				} else {
-					// otherwise we already went through the step above, so
-					// we won't filter the message and send it to all
-					// non-authorities for whom it is polite to do so
-					true
-				}
-			}
+		if round_elapsed < round_duration.mul_f32(PROPAGATION_ALL) {
+			self.peers.first_stage_peers.contains(who)
+				|| self.peers.second_stage_peers.contains(who)
+				|| self.peers.lucky_light_peers.contains(who)
+		} else {
+			true
 		}
 	}
 }
@@ -1529,9 +1518,12 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 		self.inner.write().peers.peer_disconnected(who);
 	}
 
-	fn validate(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, data: &[u8])
-		-> sc_network_gossip::ValidationResult<Block::Hash>
-	{
+	fn validate(
+		&self,
+		context: &mut dyn ValidatorContext<Block>,
+		who: &PeerId,
+		data: &[u8],
+	) -> sc_network_gossip::ValidationResult<Block::Hash> {
 		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
 		// not with lock held!
@@ -1560,9 +1552,9 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 		}
 	}
 
-	fn message_allowed<'a>(&'a self)
-		-> Box<dyn FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a>
-	{
+	fn message_allowed<'a>(
+		&'a self,
+	) -> Box<dyn FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a> {
 		let (inner, do_rebroadcast) = {
 			use parking_lot::RwLockWriteGuard;
 
@@ -1598,12 +1590,12 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 			if let MessageIntent::Broadcast = intent {
 				if maybe_round.is_some() {
-					if !inner.round_message_allowed(who, peer) {
+					if !inner.round_message_allowed(who) {
 						// early return if the vote message isn't allowed at this stage.
 						return false;
 					}
 				} else {
-					if !inner.global_message_allowed(who, peer) {
+					if !inner.global_message_allowed(who) {
 						// early return if the global message isn't allowed at this stage.
 						return false;
 					}
@@ -2391,7 +2383,7 @@ mod tests {
 	}
 
 	#[test]
-	fn progressively_gossips_to_more_peers() {
+	fn progressively_gossips_to_more_peers_as_round_duration_increases() {
 		let mut config = config();
 		config.gossip_duration = Duration::from_secs(300); // Set to high value to prevent test race
 		let round_duration = config.gossip_duration * ROUND_DURATION;
@@ -2414,14 +2406,26 @@ mod tests {
 		full_nodes.resize_with(30, || PeerId::random());
 
 		for i in 0..30 {
-			val.inner.write().peers.new_peer(authorities[i].clone(), ObservedRole::Authority);
-			val.inner.write().peers.new_peer(full_nodes[i].clone(), ObservedRole::Full);
+			val.inner
+				.write()
+				.peers
+				.new_peer(authorities[i].clone(), ObservedRole::Authority);
+
+			val.inner
+				.write()
+				.peers
+				.new_peer(full_nodes[i].clone(), ObservedRole::Full);
 		}
 
-		let test = |num_round, peers| {
+		let test = |rounds_elapsed, peers| {
 			// rewind n round durations
-			val.inner.write().local_view.as_mut().unwrap().round_start =
-				Instant::now() - round_duration * num_round;
+			val.inner.write().local_view.as_mut().unwrap().round_start = Instant::now() -
+				Duration::from_millis(
+					(round_duration.as_millis() as f32 * rounds_elapsed) as u64,
+				);
+
+			val.inner.write().peers.reshuffle();
+
 			let mut message_allowed = val.message_allowed();
 
 			move || {
@@ -2454,121 +2458,119 @@ mod tests {
 			sum / n
 		}
 
-		// on the first attempt we will only gossip to `sqrt(authorities)`,
-		// which should average out to 5 peers after a couple of trials
-		assert_eq!(trial(test(1, &authorities)), 5);
+		let all_peers = authorities
+			.iter()
+			.chain(full_nodes.iter())
+			.cloned()
+			.collect();
 
-		// on the second (and subsequent attempts) we should gossip to all
-		// authorities we're connected to.
-		assert_eq!(trial(test(2, &authorities)), 30);
-		assert_eq!(trial(test(3, &authorities)), 30);
+		// on the first attempt we will only gossip to 4 peers, either
+		// authorities or full nodes, but we'll guarantee that half of those
+		// are authorities
+		assert!(trial(test(1.0, &authorities)) >= LUCKY_PEERS / 2);
+		assert_eq!(trial(test(1.0, &all_peers)), LUCKY_PEERS);
 
-		// we should only gossip to non-authorities after the third attempt
-		assert_eq!(trial(test(1, &full_nodes)), 0);
-		assert_eq!(trial(test(2, &full_nodes)), 0);
-
-		// and only to `sqrt(non-authorities)`
-		assert_eq!(trial(test(3, &full_nodes)), 5);
-
-		// only on the fourth attempt should we gossip to all non-authorities
-		assert_eq!(trial(test(4, &full_nodes)), 30);
-	}
-
-	#[test]
-	fn only_restricts_gossip_to_authorities_after_a_minimum_threshold() {
-		let (val, _) = GossipValidator::<Block>::new(
-			config(),
-			voter_set_state(),
-			None,
-			None,
+		// after more than 1.5 round durations have elapsed we should gossip to
+		// `sqrt(peers)` we're connected to, but we guarantee that at least 4 of
+		// those peers are authorities (plus the `LUCKY_PEERS` from the previous
+		// stage)
+		assert!(trial(test(PROPAGATION_SOME * 1.1, &authorities)) >= LUCKY_PEERS);
+		assert_eq!(
+			trial(test(2.0, &all_peers)),
+			LUCKY_PEERS + (all_peers.len() as f64).sqrt() as usize,
 		);
 
-		// the validator start at set id 0
-		val.note_set(SetId(0), Vec::new(), |_, _| {});
-
-		let mut authorities = Vec::new();
-		for _ in 0..5 {
-			let peer_id = PeerId::random();
-			val.inner.write().peers.new_peer(peer_id.clone(), ObservedRole::Authority);
-			authorities.push(peer_id);
-		}
-
-		let mut message_allowed = val.message_allowed();
-
-		// since we're only connected to 5 authorities, we should never restrict
-		// sending of gossip messages, and instead just allow them to all
-		// non-authorities on the first attempt.
-		for authority in &authorities {
-			assert!(
-				message_allowed(
-					authority,
-					MessageIntent::Broadcast,
-					&crate::communication::round_topic::<Block>(1, 0),
-					&[],
-				)
-			);
-		}
+		// after 3 rounds durations we should gossip to all peers we are
+		// connected to
+		assert_eq!(trial(test(PROPAGATION_ALL * 1.1, &all_peers)), all_peers.len());
 	}
 
 	#[test]
-	fn non_authorities_never_gossip_messages_on_first_round_duration() {
-		let mut config = config();
-		config.gossip_duration = Duration::from_secs(300); // Set to high value to prevent test race
-		config.local_role = Role::Full;
+	fn never_gossips_round_messages_to_light_clients() {
+		let config = config();
 		let round_duration = config.gossip_duration * ROUND_DURATION;
-
 		let (val, _) = GossipValidator::<Block>::new(config, voter_set_state(), None, None);
 
-		// the validator start at set id 0
+		// the validator starts at set id 0
 		val.note_set(SetId(0), Vec::new(), |_, _| {});
 
-		let mut authorities = Vec::new();
-		for _ in 0..100 {
-			let peer_id = PeerId::random();
-			val.inner.write().peers.new_peer(peer_id.clone(), ObservedRole::Authority);
-			authorities.push(peer_id);
-		}
+		// add a new light client as peer
+		let light_peer = PeerId::random();
 
-		{
-			let mut message_allowed = val.message_allowed();
-			// since our node is not an authority we should **never** gossip any
-			// messages on the first attempt.
-			for authority in &authorities {
-				assert!(
-					!message_allowed(
-						authority,
-						MessageIntent::Broadcast,
-						&crate::communication::round_topic::<Block>(1, 0),
-						&[],
-					)
-				);
-			}
-		}
+		val.inner
+			.write()
+			.peers
+			.new_peer(light_peer.clone(), ObservedRole::Light);
 
-		{
-			val.inner.write().local_view.as_mut().unwrap().round_start =
-				Instant::now() - round_duration * 4;
-			let mut message_allowed = val.message_allowed();
-			// on the fourth round duration we should allow messages to authorities
-			// (on the second we would do `sqrt(authorities)`)
-			for authority in &authorities {
-				assert!(
-					message_allowed(
-						authority,
-						MessageIntent::Broadcast,
-						&crate::communication::round_topic::<Block>(1, 0),
-						&[],
-					)
-				);
-			}
-		}
+		assert!(!val.message_allowed()(
+			&light_peer,
+			MessageIntent::Broadcast,
+			&crate::communication::round_topic::<Block>(1, 0),
+			&[],
+		));
+
+		// we reverse the round start time so that the elapsed time is higher
+		// (which should lead to more peers getting the message)
+		val.inner.write().local_view.as_mut().unwrap().round_start =
+			Instant::now() - round_duration * 10;
+
+		// even after the round has been going for 10 round durations we will never
+		// gossip to light clients
+		assert!(!val.message_allowed()(
+			&light_peer,
+			MessageIntent::Broadcast,
+			&crate::communication::round_topic::<Block>(1, 0),
+			&[],
+		));
+
+		// update the peer state and local state wrt commits
+		val.inner
+			.write()
+			.peers
+			.update_peer_state(
+				&light_peer,
+				NeighborPacket {
+					round: Round(1),
+					set_id: SetId(0),
+					commit_finalized_height: 1,
+				},
+			)
+			.unwrap();
+
+		val.note_commit_finalized(Round(1), SetId(0), 2, |_, _| {});
+
+		let commit = {
+			let commit = finality_grandpa::CompactCommit {
+				target_hash: H256::random(),
+				target_number: 2,
+				precommits: Vec::new(),
+				auth_data: Vec::new(),
+			};
+
+			crate::communication::gossip::GossipMessage::<Block>::Commit(
+				crate::communication::gossip::FullCommitMessage {
+					round: Round(2),
+					set_id: SetId(0),
+					message: commit,
+				},
+			)
+			.encode()
+		};
+
+		// global messages are gossiped to light clients though
+		assert!(val.message_allowed()(
+			&light_peer,
+			MessageIntent::Broadcast,
+			&crate::communication::global_topic::<Block>(0),
+			&commit,
+		));
 	}
 
 	#[test]
 	fn only_gossip_commits_to_peers_on_same_set() {
 		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 
-		// the validator start at set id 1
+		// the validator starts at set id 1
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
 
 		// add a new peer at set id 1
