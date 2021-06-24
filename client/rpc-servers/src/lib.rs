@@ -46,7 +46,6 @@ mod inner {
 		RpcModule
 	};
 
-
 	/// Type alias for http server
 	pub type HttpServer = HttpStopHandle;
 	/// Type alias for ws server
