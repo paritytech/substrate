@@ -120,7 +120,7 @@ fn test_once() {
 				// If we generate 2, adjust a random reputation.
 				2 => {
 					if let Some(id) = known_nodes.iter().choose(&mut rng) {
-						let val = Uniform::new_inclusive(i32::min_value(), i32::MAX)
+						let val = Uniform::new_inclusive(i32::MIN, i32::MAX)
 							.sample(&mut rng);
 						peerset_handle.report_peer(id.clone(), ReputationChange::new(val, ""));
 					}

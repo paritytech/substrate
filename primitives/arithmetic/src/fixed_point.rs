@@ -640,7 +640,7 @@ macro_rules! implement_fixed {
 				};
 
 				// Min value fits.
-				assert_eq!(from_i129::<i128>(a), Some(i128::min_value()));
+				assert_eq!(from_i129::<i128>(a), Some(i128::MIN));
 
 				let a = I129 {
 					value: i128::MAX as u128 + 1,
@@ -677,13 +677,13 @@ macro_rules! implement_fixed {
 				let b = -1i32;
 
 				// Pos + Neg => Min.
-				assert_eq!(to_bound::<_, _, i32>(a, b), i32::min_value());
+				assert_eq!(to_bound::<_, _, i32>(a, b), i32::MIN);
 
 				let a = -1i32;
 				let b = 1i32;
 
 				// Neg + Pos => Min.
-				assert_eq!(to_bound::<_, _, i32>(a, b), i32::min_value());
+				assert_eq!(to_bound::<_, _, i32>(a, b), i32::MIN);
 
 				let a = 1i32;
 				let b = -1i32;
@@ -1092,29 +1092,29 @@ macro_rules! implement_fixed {
 
 				if $name::SIGNED {
 					// Min - 1.
-					assert_eq!(a.checked_mul_int((i128::min_value() + 1) / 2), Some(i128::min_value() + 2));
+					assert_eq!(a.checked_mul_int((i128::MIN + 1) / 2), Some(i128::MIN + 2));
 					// Min.
-					assert_eq!(a.checked_mul_int(i128::min_value() / 2), Some(i128::min_value()));
+					assert_eq!(a.checked_mul_int(i128::MIN / 2), Some(i128::MIN));
 					// Min + 1 => None.
-					assert_eq!(a.checked_mul_int(i128::min_value() / 2 - 1), None);
+					assert_eq!(a.checked_mul_int(i128::MIN / 2 - 1), None);
 
 					let b = $name::saturating_from_rational(1, -2);
 					assert_eq!(b.checked_mul_int(42i128), Some(-21));
 					assert_eq!(b.checked_mul_int(u128::MAX), None);
 					assert_eq!(b.checked_mul_int(i128::MAX), Some(i128::MAX / -2));
-					assert_eq!(b.checked_mul_int(i128::min_value()), Some(i128::min_value() / -2));
+					assert_eq!(b.checked_mul_int(i128::MIN), Some(i128::MIN / -2));
 				}
 
 				let a = $name::saturating_from_rational(1, 2);
 				assert_eq!(a.checked_mul_int(42i128), Some(21));
 				assert_eq!(a.checked_mul_int(i128::MAX), Some(i128::MAX / 2));
-				assert_eq!(a.checked_mul_int(i128::min_value()), Some(i128::min_value() / 2));
+				assert_eq!(a.checked_mul_int(i128::MIN), Some(i128::MIN / 2));
 
 				let c = $name::saturating_from_integer(255);
 				assert_eq!(c.checked_mul_int(2i8), None);
 				assert_eq!(c.checked_mul_int(2i128), Some(510));
 				assert_eq!(c.checked_mul_int(i128::MAX), None);
-				assert_eq!(c.checked_mul_int(i128::min_value()), None);
+				assert_eq!(c.checked_mul_int(i128::MIN), None);
 			}
 
 			#[test]
@@ -1128,30 +1128,30 @@ macro_rules! implement_fixed {
 				assert_eq!(a.saturating_mul_int(i128::MAX / 2 + 1), i128::MAX);
 
 				// Min - 1.
-				assert_eq!(a.saturating_mul_int((i128::min_value() + 1) / 2), i128::min_value() + 2);
+				assert_eq!(a.saturating_mul_int((i128::MIN + 1) / 2), i128::MIN + 2);
 				// Min.
-				assert_eq!(a.saturating_mul_int(i128::min_value() / 2), i128::min_value());
+				assert_eq!(a.saturating_mul_int(i128::MIN / 2), i128::MIN);
 				// Min + 1 => saturates to min.
-				assert_eq!(a.saturating_mul_int(i128::min_value() / 2 - 1), i128::min_value());
+				assert_eq!(a.saturating_mul_int(i128::MIN / 2 - 1), i128::MIN);
 
 				if $name::SIGNED {
 					let b = $name::saturating_from_rational(1, -2);
 					assert_eq!(b.saturating_mul_int(42i32), -21);
 					assert_eq!(b.saturating_mul_int(i128::MAX), i128::MAX / -2);
-					assert_eq!(b.saturating_mul_int(i128::min_value()), i128::min_value() / -2);
-					assert_eq!(b.saturating_mul_int(u128::MAX), u128::min_value());
+					assert_eq!(b.saturating_mul_int(i128::MIN), i128::MIN / -2);
+					assert_eq!(b.saturating_mul_int(u128::MAX), u128::MIN);
 				}
 
 				let a = $name::saturating_from_rational(1, 2);
 				assert_eq!(a.saturating_mul_int(42i32), 21);
 				assert_eq!(a.saturating_mul_int(i128::MAX), i128::MAX / 2);
-				assert_eq!(a.saturating_mul_int(i128::min_value()), i128::min_value() / 2);
+				assert_eq!(a.saturating_mul_int(i128::MIN), i128::MIN / 2);
 
 				let c = $name::saturating_from_integer(255);
 				assert_eq!(c.saturating_mul_int(2i8), i8::MAX);
-				assert_eq!(c.saturating_mul_int(-2i8), i8::min_value());
+				assert_eq!(c.saturating_mul_int(-2i8), i8::MIN);
 				assert_eq!(c.saturating_mul_int(i128::MAX), i128::MAX);
-				assert_eq!(c.saturating_mul_int(i128::min_value()), i128::min_value());
+				assert_eq!(c.saturating_mul_int(i128::MIN), i128::MIN);
 			}
 
 			#[test]
@@ -1232,13 +1232,13 @@ macro_rules! implement_fixed {
 					// Not executed by unsigned inners.
 					assert_eq!(a.checked_div_int(0.saturating_sub(2)), Some(0.saturating_sub(inner_max / (2 * accuracy))));
 					assert_eq!(a.checked_div_int(0.saturating_sub(inner_max / accuracy)), Some(0.saturating_sub(1)));
-					assert_eq!(b.checked_div_int(i128::min_value()), Some(0));
+					assert_eq!(b.checked_div_int(i128::MIN), Some(0));
 					assert_eq!(b.checked_div_int(inner_min / accuracy), Some(1));
 					assert_eq!(b.checked_div_int(1i8), None);
 					assert_eq!(b.checked_div_int(0.saturating_sub(2)), Some(0.saturating_sub(inner_min / (2 * accuracy))));
 					assert_eq!(b.checked_div_int(0.saturating_sub(inner_min / accuracy)), Some(0.saturating_sub(1)));
-					assert_eq!(c.checked_div_int(i128::min_value()), Some(0));
-					assert_eq!(d.checked_div_int(i32::min_value()), Some(0));
+					assert_eq!(c.checked_div_int(i128::MIN), Some(0));
+					assert_eq!(d.checked_div_int(i32::MIN), Some(0));
 				}
 
 				assert_eq!(b.checked_div_int(2), Some(inner_min / (2 * accuracy)));
@@ -1304,10 +1304,10 @@ macro_rules! implement_fixed {
 				assert_eq!($name::one().saturating_mul_acc_int(42i8), 2 * 42i8);
 
 				assert_eq!($name::one().saturating_mul_acc_int(i128::MAX), i128::MAX);
-				assert_eq!($name::one().saturating_mul_acc_int(i128::min_value()), i128::min_value());
+				assert_eq!($name::one().saturating_mul_acc_int(i128::MIN), i128::MIN);
 
 				assert_eq!($name::one().saturating_mul_acc_int(u128::MAX / 2), u128::MAX - 1);
-				assert_eq!($name::one().saturating_mul_acc_int(u128::min_value()), u128::min_value());
+				assert_eq!($name::one().saturating_mul_acc_int(u128::MIN), u128::MIN);
 
 				if $name::SIGNED {
 					let a = $name::saturating_from_rational(-1, 2);

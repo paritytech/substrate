@@ -499,16 +499,16 @@ mod threshold_compare_tests {
 
 	#[test]
 	fn saturating_mul_works() {
-		assert_eq!(Saturating::saturating_mul(2, i32::min_value()), i32::min_value());
+		assert_eq!(Saturating::saturating_mul(2, i32::MIN), i32::MIN);
 		assert_eq!(Saturating::saturating_mul(2, i32::MAX), i32::MAX);
 	}
 
 	#[test]
 	fn saturating_pow_works() {
-		assert_eq!(Saturating::saturating_pow(i32::min_value(), 0), 1);
+		assert_eq!(Saturating::saturating_pow(i32::MIN, 0), 1);
 		assert_eq!(Saturating::saturating_pow(i32::MAX, 0), 1);
-		assert_eq!(Saturating::saturating_pow(i32::min_value(), 3), i32::min_value());
-		assert_eq!(Saturating::saturating_pow(i32::min_value(), 2), i32::MAX);
+		assert_eq!(Saturating::saturating_pow(i32::MIN, 3), i32::MIN);
+		assert_eq!(Saturating::saturating_pow(i32::MIN, 2), i32::MAX);
 		assert_eq!(Saturating::saturating_pow(i32::MAX, 2), i32::MAX);
 	}
 }

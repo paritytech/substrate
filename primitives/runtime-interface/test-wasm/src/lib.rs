@@ -230,7 +230,7 @@ wasm_export_functions! {
 			assert_eq!(*val, test_api::get_and_return_u128(*val));
 		}
 
-		for val in &[i128::MAX, i128::min_value(), 1i128, 5000i128, u64::MAX as i128] {
+		for val in &[i128::MAX, i128::MIN, 1i128, 5000i128, u64::MAX as i128] {
 			assert_eq!(*val, test_api::get_and_return_i128(*val));
 		}
 	}
