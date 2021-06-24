@@ -1714,16 +1714,19 @@ pub mod pallet {
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			// If this error is reached, we need to adjust the `MinValidatorBond` and start calling `chill_other`.
-			// Until then, we explicitly block new validators to protect the runtime.
-			if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
-				ensure!(CounterForValidators::<T>::get() < max_validators, Error::<T>::TooManyValidators);
-			}
-
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
-
 			let stash = &ledger.stash;
+
+			// Only check limits if they are not already a validator.
+			if !Validators::<T>::contains_key(stash) {
+				// If this error is reached, we need to adjust the `MinValidatorBond` and start calling `chill_other`.
+				// Until then, we explicitly block new validators to protect the runtime.
+				if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
+					ensure!(CounterForValidators::<T>::get() < max_validators, Error::<T>::TooManyValidators);
+				}
+			}
+
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs);
 			Ok(())
@@ -1755,16 +1758,19 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			// If this error is reached, we need to adjust the `MinNominatorBond` and start calling `chill_other`.
-			// Until then, we explicitly block new nominators to protect the runtime.
-			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
-				ensure!(CounterForNominators::<T>::get() < max_nominators, Error::<T>::TooManyNominators);
-			}
-
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
-
 			let stash = &ledger.stash;
+
+			// Only check limits if they are not already a nominator.
+			if !Nominators::<T>::contains_key(stash) {
+				// If this error is reached, we need to adjust the `MinNominatorBond` and start calling `chill_other`.
+				// Until then, we explicitly block new nominators to protect the runtime.
+				if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
+					ensure!(CounterForNominators::<T>::get() < max_nominators, Error::<T>::TooManyNominators);
+				}
+			}
+
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
 

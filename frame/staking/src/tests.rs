@@ -4147,30 +4147,45 @@ mod election_data_provider {
 			assert_ok!(Staking::update_staking_limits(Origin::root(), 10, 10, Some(max), Some(max)));
 
 			// can create `max - validator_count` validators
-			assert_ok!(testing_utils::create_validators::<Test>(max - validator_count, 100));
+			let mut some_existing_validator = AccountId::default();
+			for i in 0 .. max - validator_count {
+				let (_, controller) = testing_utils::create_stash_controller::<Test>(
+					i + 10_000_000, 100, RewardDestination::Controller,
+				).unwrap();
+				assert_ok!(Staking::validate(Origin::signed(controller), ValidatorPrefs::default()));
+				some_existing_validator = controller;
+			}
 
 			// but no more
 			let (_, last_validator) = testing_utils::create_stash_controller::<Test>(
 				1337, 100, RewardDestination::Controller,
 			).unwrap();
+
 			assert_noop!(
 				Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()),
 				Error::<Test>::TooManyValidators,
 			);
 
 			// same with nominators
+			let mut some_existing_nominator = AccountId::default();
 			for i in 0 .. max - nominator_count {
 				let (_, controller) = testing_utils::create_stash_controller::<Test>(
-					i + 10_000_000, 100, RewardDestination::Controller,
+					i + 20_000_000, 100, RewardDestination::Controller,
 				).unwrap();
 				assert_ok!(Staking::nominate(Origin::signed(controller), vec![1]));
+				some_existing_nominator = controller;
 			}
 
 			// one more is too many
 			let (_, last_nominator) = testing_utils::create_stash_controller::<Test>(
-				20_000_000, 100, RewardDestination::Controller,
+				30_000_000, 100, RewardDestination::Controller,
 			).unwrap();
 			assert_noop!(Staking::nominate(Origin::signed(last_nominator), vec![1]), Error::<Test>::TooManyNominators);
+
+			// Re-nominate works fine
+			assert_ok!(Staking::nominate(Origin::signed(some_existing_nominator), vec![1]));
+			// Re-validate works fine
+			assert_ok!(Staking::validate(Origin::signed(some_existing_validator), ValidatorPrefs::default()));
 
 			// No problem when we set to `None` again
 			assert_ok!(Staking::update_staking_limits(Origin::root(), 10, 10, None, None));
