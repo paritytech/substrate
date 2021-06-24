@@ -291,7 +291,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 	) -> Self {
-		let extended =  D::ExtendHostFunctions::host_functions();
+		let extended = D::ExtendHostFunctions::host_functions();
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions()
 			.into_iter()
 			// filter out any host function overrides provided.
