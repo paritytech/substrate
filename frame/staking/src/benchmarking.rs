@@ -620,7 +620,11 @@ benchmarks! {
 		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
 		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), ValidatorPrefs::default())?;
 		Staking::<T>::update_staking_limits(
-			RawOrigin::Root.into(), BalanceOf::<T>::max_value(), BalanceOf::<T>::max_value(), None, None,
+			RawOrigin::Root.into(),
+			BalanceOf::<T>::max_value(),
+			BalanceOf::<T>::max_value(),
+			Some(0),
+			Some(0),
 		)?;
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), controller.clone())

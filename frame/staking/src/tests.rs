@@ -4095,8 +4095,15 @@ mod election_data_provider {
 				assert_noop!(Staking::chill_other(Origin::signed(1), 2), Error::<Test>::CannotChillOther);
 				assert_noop!(Staking::chill_other(Origin::signed(1), 4), Error::<Test>::CannotChillOther);
 
-				// Change the minimum bond
+				// Change the minimum bond... but no limits.
 				assert_ok!(Staking::update_staking_limits(Origin::root(), 1_500, 2_000, None, None));
+
+				// Still can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1), 2), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1), 4), Error::<Test>::CannotChillOther);
+
+				// Add limits
+				assert_ok!(Staking::update_staking_limits(Origin::root(), 1_500, 2_000, Some(0), Some(0)));
 
 				// Users can now be chilled
 				assert_ok!(Staking::chill_other(Origin::signed(1), 2));
