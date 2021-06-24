@@ -26,9 +26,6 @@ use sp_io::hashing::twox_128;
 /// This new prefix must be the same as the one set in construct_runtime. For safety, use
 /// `PalletInfo` to get it, as:
 /// `<Runtime as frame_system::Config>::PalletInfo::name::<CollectivePallet>`.
-///
-/// The old storage prefix, `Instance1Collective` or `Instance2Collective` is hardcoded in the
-/// migration code.
 pub fn migrate<
 	T: frame_system::Config,
 	P: GetPalletVersion,
