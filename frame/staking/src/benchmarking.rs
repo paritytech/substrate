@@ -96,6 +96,14 @@ pub fn create_validator_with_nominators<T: Config>(
 
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
+	assert_eq!(
+		VoterList::<T>::decode_len().unwrap_or_default() as u32,
+		CounterForNominators::<T>::get() + CounterForValidators::<T>::get(),
+		"ensure storage has been mutated coherently",
+	);
+	assert_ne!(CounterForValidators::<T>::get(), 0);
+	assert_ne!(CounterForNominators::<T>::get(), 0);
+	assert_ne!(VoterList::<T>::decode_len().unwrap_or_default(), 0);
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {

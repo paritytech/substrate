@@ -73,6 +73,14 @@ fn current_bag_for<T: Config>(id: &AccountIdOf<T>) -> Option<BagIdx> {
 pub struct VoterList<T: Config>(PhantomData<T>);
 
 impl<T: Config> VoterList<T> {
+	/// Remove all data associated with the voter list from storage.
+	pub fn clear() {
+		crate::VoterCount::<T>::kill();
+		crate::VoterBagFor::<T>::remove_all(None);
+		crate::VoterBags::<T>::remove_all(None);
+		crate::VoterNodes::<T>::remove_all(None);
+	}
+
 	/// Decode the length of the voter list.
 	pub fn decode_len() -> Option<usize> {
 		crate::VoterCount::<T>::try_get().ok().map(|n| n.saturated_into())
