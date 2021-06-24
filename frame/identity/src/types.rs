@@ -18,8 +18,7 @@
 use codec::{Encode, Decode};
 use enumflags2::BitFlags;
 use frame_support::{
-    parameter_types,
-    traits::{Get, MaxEncodedLen},
+    traits::{ConstU32, Get, MaxEncodedLen},
     BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use sp_std::prelude::*;
@@ -30,10 +29,6 @@ use sp_runtime::{
 };
 use super::*;
 
-parameter_types! {
-	pub const MaxDataSize: u32 = 32;
-}
-
 /// Either underlying data blob if it is at most 32 bytes, or a hash of it. If the data is greater
 /// than 32-bytes then it will be truncated when encoding.
 ///
@@ -43,7 +38,7 @@ pub enum Data {
 	/// No data here.
 	None,
 	/// The data is stored directly.
-	Raw(BoundedVec<u8, MaxDataSize>),
+	Raw(BoundedVec<u8, ConstU32<32>>),
 	/// Only the Blake2 hash of the data is stored. The preimage of the hash may be retrieved
 	/// through some hash-lookup service.
 	BlakeTwo256([u8; 32]),
