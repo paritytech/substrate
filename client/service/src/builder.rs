@@ -682,7 +682,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		)
 	};
 
-	// TODO(niklasad1): the will block the current thread until the servers have been started
+	// TODO(niklasad1): this will block the current thread until the servers have been started
 	// we could spawn it in the background but then errors can be handled or a channel or something
 	// must be passed around to be checked somewhere else.
 	let rpc = futures::executor::block_on(start_rpc_servers(&config, gen_rpc_module))?;
