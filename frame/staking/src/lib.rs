@@ -2975,6 +2975,12 @@ impl<T: Config> Pallet<T> {
 		maybe_max_len: Option<usize>,
 		voter_count: usize,
 	) -> Vec<VotingDataOf<T>> {
+		debug_assert_eq!(
+			voter_count,
+			VoterList::<T>::decode_len().unwrap_or_default(),
+			"voter_count must be accurate",
+		);
+
 		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
 
 		let weight_of = Self::slashable_balance_of_fn();
