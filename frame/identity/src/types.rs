@@ -171,7 +171,7 @@ pub enum IdentityField {
 
 impl MaxEncodedLen for IdentityField {
 	fn max_encoded_len() -> usize {
-		8
+		u64::max_encoded_len()
 	}
 }
 
