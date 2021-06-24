@@ -4083,31 +4083,54 @@ mod election_data_provider {
 			.min_nominator_bond(1_000)
 			.min_validator_bond(1_500)
 			.build_and_execute(|| {
-				// Nominator
-				assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
-				assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
+				for i in 0 .. 15 {
+					let a = 4 * i;
+					let b = 4 * i + 1;
+					let c = 4 * i + 2;
+					let d = 4 * i + 3;
+					Balances::make_free_balance_be(&a, 100_000);
+					Balances::make_free_balance_be(&b, 100_000);
+					Balances::make_free_balance_be(&c, 100_000);
+					Balances::make_free_balance_be(&d, 100_000);
 
-				// Validator
-				assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
-				assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
+					// Nominator
+					assert_ok!(Staking::bond(Origin::signed(a), b, 1000, RewardDestination::Controller));
+					assert_ok!(Staking::nominate(Origin::signed(b), vec![1]));
+
+					// Validator
+					assert_ok!(Staking::bond(Origin::signed(c), d, 1500, RewardDestination::Controller));
+					assert_ok!(Staking::validate(Origin::signed(d), ValidatorPrefs::default()));
+				}
 
 				// Can't chill these users
-				assert_noop!(Staking::chill_other(Origin::signed(1), 2), Error::<Test>::CannotChillOther);
-				assert_noop!(Staking::chill_other(Origin::signed(1), 4), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 
 				// Change the minimum bond... but no limits.
 				assert_ok!(Staking::update_staking_limits(Origin::root(), 1_500, 2_000, None, None));
 
 				// Still can't chill these users
-				assert_noop!(Staking::chill_other(Origin::signed(1), 2), Error::<Test>::CannotChillOther);
-				assert_noop!(Staking::chill_other(Origin::signed(1), 4), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 
 				// Add limits
-				assert_ok!(Staking::update_staking_limits(Origin::root(), 1_500, 2_000, Some(0), Some(0)));
+				assert_ok!(Staking::update_staking_limits(Origin::root(), 1_500, 2_000, Some(10), Some(10)));
 
-				// Users can now be chilled
-				assert_ok!(Staking::chill_other(Origin::signed(1), 2));
-				assert_ok!(Staking::chill_other(Origin::signed(1), 4));
+				// 16 people total because tests start with 1 active one
+				assert_eq!(CounterForNominators::<Test>::get(), 16);
+				assert_eq!(CounterForValidators::<Test>::get(), 16);
+
+				// Users can now be chilled down to 7 people, so we try to remove 9 of them (starting with 16)
+				for i in 6 .. 15 {
+					let b = 4 * i + 1;
+					let d = 4 * i + 3;
+					assert_ok!(Staking::chill_other(Origin::signed(1337), b));
+					assert_ok!(Staking::chill_other(Origin::signed(1337), d));
+				}
+
+				// Cant go lower.
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 			})
 	}
 

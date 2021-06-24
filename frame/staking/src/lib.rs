@@ -2331,7 +2331,6 @@ pub mod pallet {
 				} else {
 					Zero::zero()
 				};
-
 				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
 			}
 
