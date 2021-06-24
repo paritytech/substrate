@@ -54,7 +54,6 @@ pub mod offchain;
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
-pub mod random_number_generator;
 mod runtime_string;
 mod multiaddress;
 pub mod runtime_logger;
