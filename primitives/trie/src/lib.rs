@@ -211,7 +211,7 @@ pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, tri
 	root: &TrieHash<L>,
 	key: &[u8]
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	Ok(TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Read a value from the trie with given Query.
@@ -225,7 +225,7 @@ pub fn read_trie_value_with<
 	key: &[u8],
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	Ok(TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Determine the empty trie root.
@@ -317,7 +317,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(&*db, keyspace);
-	Ok(TrieDB::<L>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	TrieDB::<L>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Read a value from the child trie with given query.
@@ -336,7 +336,7 @@ pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=D
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(&*db, keyspace);
-	Ok(TrieDB::<L>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	TrieDB::<L>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// `HashDB` implementation that append a encoded prefix (unique id bytes) in addition to the

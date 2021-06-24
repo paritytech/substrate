@@ -27,8 +27,10 @@ use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
 use log::error;
 use pubsub::PubSubMetadata;
 
+const MEGABYTE: usize = 1024 * 1024;
+
 /// Maximal payload accepted by RPC servers.
-pub const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
+pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
@@ -85,7 +87,10 @@ mod inner {
 		thread_pool_size: Option<usize>,
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
+		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<http::Server> {
+		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
+			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 		http::ServerBuilder::new(io)
 			.threads(thread_pool_size.unwrap_or(HTTP_THREADS))
 			.health_api(("/health", "system_health"))
@@ -96,7 +101,7 @@ mod inner {
 				http::RestApi::Unsecure
 			})
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
-			.max_request_body_size(MAX_PAYLOAD)
+			.max_request_body_size(max_request_body_size)
 			.start_http(addr)
 	}
 
@@ -120,14 +125,19 @@ mod inner {
 	/// Start WS server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ws<M: pubsub::PubSubMetadata + From<jsonrpc_core::futures::sync::mpsc::Sender<String>>> (
+	pub fn start_ws<
+		M: pubsub::PubSubMetadata + From<jsonrpc_core::futures::sync::mpsc::Sender<String>>,
+	>(
 		addr: &std::net::SocketAddr,
 		max_connections: Option<usize>,
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
+		maybe_max_payload_mb: Option<usize>,
 	) -> io::Result<ws::Server> {
+		let rpc_max_payload = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
+			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
-			.max_payload(MAX_PAYLOAD)
+			.max_payload(rpc_max_payload)
 			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 			.allowed_origins(map_cors(cors))
 			.allowed_hosts(hosts_filtering(cors.is_some()))
