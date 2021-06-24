@@ -637,6 +637,15 @@ benchmarks! {
 	verify {
 		assert!(!Validators::<T>::contains_key(controller));
 	}
+
+	rebag {
+		let caller = whitelisted_caller();
+		let (stash, _controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
+
+		// TODO: figure out what's the worst case scenario for this call (lots of other users in
+		// VoterList?) and arrange for that to be the case
+
+	}: _(RawOrigin::Signed(caller), stash.clone())
 }
 
 #[cfg(test)]
