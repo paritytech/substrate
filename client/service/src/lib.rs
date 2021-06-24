@@ -297,19 +297,23 @@ async fn build_network_future<
 // TODO(niklasad1): WsSocket server is not fully "closeable" at the moment.
 mod waiting {
 	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
+
 	impl Drop for HttpServer {
 		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				futures::executor::block_on(server.wait_for_stop())
+			if let Some(mut server) = self.0.take() {
+				futures::executor::block_on(server.stop());
+				futures::executor::block_on(server.wait_for_stop());
 			}
 		}
 	}
 
 	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
+
 	impl Drop for WsServer {
 		fn drop(&mut self) {
-			if let Some(server) = self.0.take() {
-				futures::executor::block_on(server.wait_for_stop())
+			if let Some(mut server) = self.0.take() {
+				futures::executor::block_on(server.stop());
+				futures::executor::block_on(server.wait_for_stop());
 			}
 		}
 	}
