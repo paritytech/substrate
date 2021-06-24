@@ -484,9 +484,9 @@ pub mod pallet {
 				).saturating_add(proposal.get_dispatch_info().weight) // P1
 			} else {
 				T::WeightInfo::propose_proposed(
-				*length_bound, // B
-				T::MaxMembers::get(), // M
-				T::MaxProposals::get(), // P2
+					*length_bound, // B
+					T::MaxMembers::get(), // M
+					T::MaxProposals::get(), // P2
 				)
 			},
 			DispatchClass::Operational
