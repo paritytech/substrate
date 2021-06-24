@@ -109,7 +109,7 @@ mod inner {
 		std::thread::spawn(move || {
 			let rt = tokio::runtime::Builder::new_multi_thread()
 				.worker_threads(worker_threads.unwrap_or(HTTP_THREADS))
-				.thread_name("substrate jsonrpc http server")
+				.thread_name("substrate jsonrpc ws server")
 				.enable_all()
 				.build()
 				.unwrap();
