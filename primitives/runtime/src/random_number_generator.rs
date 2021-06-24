@@ -108,7 +108,7 @@ impl<Hashing: Hash> RandomNumberGenerator<Hashing> {
 #[cfg(test)]
 mod tests {
 	use super::RandomNumberGenerator;
-    use crate::traits::{Hash, BlakeTwo256};
+	use crate::traits::{Hash, BlakeTwo256};
 
 	#[test]
 	fn does_not_panic_on_max() {
