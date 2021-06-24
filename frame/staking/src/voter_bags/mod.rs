@@ -48,11 +48,9 @@ pub const N_BAGS: BagIdx = 200;
 ///
 /// Bags are arranged such that `bags[0]` is the largest bag, and `bags[N_BAGS-1]` is the smallest.
 fn notional_bag_for(weight: VoteWeight) -> BagIdx {
-	let raw_bag = match THRESHOLDS.binary_search(&weight) {
-		Ok(bag) => bag,
-		Err(bag) => bag,
-	} as BagIdx;
-	N_BAGS - raw_bag
+	let raw_bag =
+		THRESHOLDS.partition_point(|&threshold| weight > threshold) as BagIdx;
+	N_BAGS - raw_bag - 1
 }
 
 /// Find the actual bag containing the current voter.
