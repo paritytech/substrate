@@ -682,11 +682,13 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		)
 	};
 
-	// TODO: use handle here and let the service spawn the server.
-	let rpc = start_rpc_servers(&config, gen_rpc_module)?;
+	// TODO(niklasad1): the will block the current thread until the servers have been started
+	// we could spawn it in the background but then errors can be handled or a channel or something
+	// must be passed around to be checked somewhere else.
+	let rpc = futures::executor::block_on(start_rpc_servers(&config, gen_rpc_module))?;
 
 	// NOTE(niklasad1): dummy type for now.
-	let rpc_handlers = RpcHandlers;
+	let noop_rpc_handlers = RpcHandlers;
 	// This is used internally, so don't restrict access to unsafe RPC
 	// let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
 	//     sc_rpc::DenyUnsafe::No,
@@ -702,9 +704,10 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	));
 
 	// NOTE(niklasad1): we spawn jsonrpsee in seperate thread now.
-	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
+	// this will not shutdown the server.
+	task_manager.keep_alive((config.base_path, rpc));
 
-	Ok(rpc_handlers)
+	Ok(noop_rpc_handlers)
 }
 
 async fn transaction_notifications<TBl, TExPool>(
