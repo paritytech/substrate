@@ -19,19 +19,21 @@
 
 #![cfg(test)]
 
-use crate as treasury;
-use super::*;
 use std::cell::RefCell;
-use frame_support::{
-	assert_noop, assert_ok, parameter_types,
-	traits::OnInitialize, PalletId
-};
 
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+
+use frame_support::{
+	assert_noop, assert_ok, parameter_types,
+	traits::OnInitialize, PalletId
+};
+
+use crate as treasury;
+use super::*;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
