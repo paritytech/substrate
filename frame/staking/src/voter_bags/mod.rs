@@ -185,22 +185,32 @@ impl<T: Config> VoterList<T> {
 	pub fn update_position_for(
 		mut node: Node<T>,
 		weight_of: impl Fn(&AccountIdOf<T>) -> VoteWeight,
-	) -> bool {
-		let was_misplaced = node.is_misplaced(&weight_of);
-		if was_misplaced {
+	) -> Option<(BagIdx, BagIdx)> {
+		node.is_misplaced(&weight_of).then(move || {
+			let old_idx = node.bag_idx;
+
 			// clear the old bag head/tail pointers as necessary
 			if let Some(mut bag) = Bag::<T>::get(node.bag_idx) {
 				bag.remove_node(&node);
 				bag.put();
+			} else {
+				debug_assert!(false, "every node must have an extant bag associated with it");
+				crate::log!(
+					error,
+					"Node for staker {:?} did not have a bag; VoterBags is in an inconsistent state",
+					node.voter.id,
+				);
 			}
 
 			// put the voter into the appropriate new bag
-			node.bag_idx = notional_bag_for(weight_of(&node.voter.id));
+			let new_idx = notional_bag_for(weight_of(&node.voter.id));
+			node.bag_idx = new_idx;
 			let mut bag = Bag::<T>::get_or_make(node.bag_idx);
 			bag.insert_node(node);
 			bag.put();
-		}
-		was_misplaced
+
+			(old_idx, new_idx)
+		})
 	}
 }
 

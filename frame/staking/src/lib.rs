@@ -314,7 +314,7 @@ use sp_staking::{
 };
 use frame_system::{ensure_signed, ensure_root, pallet_prelude::*, offchain::SendTransactionTypes};
 use frame_election_provider_support::{ElectionProvider, VoteWeight, Supports, data_provider};
-use voter_bags::{VoterList, VoterType};
+use voter_bags::{BagIdx, VoterList, VoterType};
 pub use weights::WeightInfo;
 pub use pallet::*;
 
@@ -1360,6 +1360,10 @@ pub mod pallet {
 		Kicked(T::AccountId, T::AccountId),
 		/// The election failed. No new era is planned.
 		StakingElectionFailed,
+		/// Attempted to rebag an account.
+		///
+		/// If the second parameter is not `None`, it is the `(from, to)` tuple of bag indices.
+		Rebag(T::AccountId, Option<(BagIdx, BagIdx)>),
 	}
 
 	#[pallet::error]
@@ -2362,6 +2366,34 @@ pub mod pallet {
 			}
 
 			Self::chill_stash(&stash);
+			Ok(())
+		}
+
+		/// Declare that some `stash` has, through rewards or penalties, sufficiently changed its
+		/// stake that it should properly fall into a different bag than its current position.
+		///
+		/// This will adjust its position into the appropriate bag. This will affect its position
+		/// among the nominator/validator set once the snapshot is prepared for the election.
+		///
+		/// Anyone can call this function about any stash.
+		//
+		// TODO: benchmark
+		#[pallet::weight(0)]
+		pub fn rebag(
+			origin: OriginFor<T>,
+			stash: AccountIdOf<T>,
+		) -> DispatchResult {
+			ensure_signed(origin)?;
+
+			let weight_of = Self::slashable_balance_of_fn();
+			// if no voter at that node, don't do anything.
+			// the caller just wasted the fee to call this.
+			let moved = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {
+				VoterList::update_position_for(node, weight_of)
+			});
+
+			Self::deposit_event(Event::<T>::Rebag(stash, moved));
+
 			Ok(())
 		}
 	}
