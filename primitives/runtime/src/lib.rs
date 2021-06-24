@@ -85,8 +85,6 @@ pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use sp_arithmetic::biguint;
 
-pub use random_number_generator::RandomNumberGenerator;
-
 pub use either::Either;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
