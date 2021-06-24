@@ -438,7 +438,7 @@ impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 /// Constants used into trie simplification codec.
 mod trie_constants {
 	pub const EMPTY_TRIE: u8 = 0;
-	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
+	pub const NIBBLE_SIZE_BOUND: usize = u16::MAX as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
 	pub const BRANCH_WITH_MASK: u8 = 0b_11 << 6;
