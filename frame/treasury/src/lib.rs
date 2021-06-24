@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Treasury Module
+//! # Treasury Pallet
 //!
-//! The Treasury module provides a "pot" of funds that can be managed by stakeholders in the system
+//! The Treasury pallet provides a "pot" of funds that can be managed by stakeholders in the system
 //! and a structure for making spending proposals from this pot.
 //!
 //! - [`Config`]
@@ -25,7 +25,7 @@
 //!
 //! ## Overview
 //!
-//! The Treasury Module itself provides the pot to store funds, and a means for stakeholders to
+//! The Treasury Pallet itself provides the pot to store funds, and a means for stakeholders to
 //! propose, approve, and deny expenditures. The chain will need to provide a method (e.g.
 //! inflation, fees) for collecting funds.
 //!
@@ -40,7 +40,7 @@
 //!   approved.
 //! - **Deposit:** Funds that a proposer must lock when making a proposal. The deposit will be
 //!   returned or slashed if the proposal is approved or rejected respectively.
-//! - **Pot:** Unspent funds accumulated by the treasury module.
+//! - **Pot:** Unspent funds accumulated by the treasury pallet.
 //!
 //! ## Interface
 //!
@@ -53,7 +53,7 @@
 //!
 //! ## GenesisConfig
 //!
-//! The Treasury module depends on the [`GenesisConfig`].
+//! The Treasury pallet depends on the [`GenesisConfig`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -140,7 +140,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
-		/// The treasury's module id, used for deriving its sovereign account ID.
+		/// The treasury's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 

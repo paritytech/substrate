@@ -363,7 +363,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
+				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -417,7 +417,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
+				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -440,7 +440,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
+				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {

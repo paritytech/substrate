@@ -146,7 +146,7 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
-type TreasuryError = pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>;
+type TreasuryError = pallet_treasury::Error::<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -268,7 +268,7 @@ fn reject_already_rejected_spend_proposal_fails() {
 fn reject_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(Treasury::reject_proposal(Origin::root(), 0),
-		pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>::InvalidIndex);
+		pallet_treasury::Error::<Test, _>::InvalidIndex);
 	});
 }
 
@@ -457,7 +457,7 @@ fn close_bounty_works() {
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
 		assert_eq!(Bounties::bounties(0), None);
-		assert!(!pallet_treasury::Proposals::<Test>::contains_key(0));
+		assert!(!pallet_treasury::Proposals::<Test, _>::contains_key(0));
 
 		assert_eq!(Bounties::bounty_descriptions(0), None);
 	});
