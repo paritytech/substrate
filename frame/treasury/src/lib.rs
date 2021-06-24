@@ -140,10 +140,6 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
-		/// The treasury's pallet id, used for deriving its sovereign account ID.
-		#[pallet::constant]
-		type PalletId: Get<PalletId>;
-
 		/// The staking balance.
 		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
@@ -172,9 +168,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type SpendPeriod: Get<Self::BlockNumber>;
 
-		///	Percentage of spare funds (if any) that are burnt per spend period.
+		/// Percentage of spare funds (if any) that are burnt per spend period.
 		#[pallet::constant]
 		type Burn: Get<Permill>;
+
+		/// The treasury's module id, used for deriving its sovereign account ID.
+		#[pallet::constant]
+		type PalletId: Get<PalletId>;
 
 		/// Handler for the unbalanced decrease when treasury funds are burned.
 		type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
