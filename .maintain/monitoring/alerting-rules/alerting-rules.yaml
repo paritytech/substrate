@@ -47,8 +47,8 @@ groups:
     # Under the assumption of an average block production of 6 seconds,
     # "best" and "finalized" being more than 10 blocks apart would imply
     # more than a 1 minute delay between block production and finalization.
-    expr: '(polkadot_block_height_number{status="best"} - ignoring(status)
-    polkadot_block_height_number{status="finalized"}) > 10'
+    expr: '(polkadot_block_height{status="best"} - ignoring(status)
+    polkadot_block_height{status="finalized"}) > 10'
     for: 8m
     labels:
       severity: critical

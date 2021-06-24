@@ -259,7 +259,7 @@ fn partial_encode(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
 	if number_nibble_encoded > 0 {
 		output.push(nibble_ops::pad_right((partial.0).1));
 	}
-	output.extend_from_slice(&partial.1[..]);
+	output.extend_from_slice(partial.1);
 	output
 }
 
@@ -272,8 +272,8 @@ const BITMAP_LENGTH: usize = 2;
 pub(crate) struct Bitmap(u16);
 
 impl Bitmap {
-	pub fn decode(data: &[u8]) -> Result<Self, Error> {
-		Ok(Bitmap(u16::decode(&mut &data[..])?))
+	pub fn decode(mut data: &[u8]) -> Result<Self, Error> {
+		Ok(Bitmap(u16::decode(&mut data)?))
 	}
 
 	pub fn value_at(&self, i: usize) -> bool {

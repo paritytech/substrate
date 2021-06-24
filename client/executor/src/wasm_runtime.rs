@@ -177,7 +177,7 @@ impl RuntimeCache {
 
 	/// Prepares a WASM module instance and executes given function for it.
 	///
-	/// This uses internal cache to find avaiable instance or create a new one.
+	/// This uses internal cache to find available instance or create a new one.
 	/// # Parameters
 	///
 	/// `code` - Provides external code or tells the executor to fetch it from storage.
@@ -196,7 +196,7 @@ impl RuntimeCache {
 	///
 	/// `f` - Function to execute.
 	///
-	/// # Returns result of `f` wrapped in an additonal result.
+	/// # Returns result of `f` wrapped in an additional result.
 	/// In case of failure one of two errors can be returned:
 	///
 	/// `Err::InvalidCode` is returned for runtime code issues.
@@ -337,7 +337,7 @@ pub fn create_wasm_runtime_with_code(
 	}
 }
 
-fn decode_version(version: &[u8]) -> Result<RuntimeVersion, WasmError> {
+fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 	let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut &version[..])
 		.map_err(|_|
 				 WasmError::Instantiation(
@@ -347,7 +347,7 @@ fn decode_version(version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 
 	let core_api_id = sp_core::hashing::blake2_64(b"Core");
 	if v.has_api_with(&core_api_id, |v| v >= 3) {
-		sp_api::RuntimeVersion::decode(&mut &version[..])
+		sp_api::RuntimeVersion::decode(&mut version)
 			.map_err(|_|
 				WasmError::Instantiation("failed to decode \"Core_version\" result".into())
 			)
@@ -367,9 +367,7 @@ fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
 			<[u8; RUNTIME_API_INFO_SIZE]>::try_from(chunk)
 				.map(sp_api::deserialize_runtime_api_info)
 				.map_err(|_| {
-					WasmError::Other(format!(
-						"a clipped runtime api info declaration"
-					))
+					WasmError::Other("a clipped runtime api info declaration".to_owned())
 				})
 		})
 		.collect::<Result<Vec<_>, WasmError>>()
@@ -383,15 +381,15 @@ fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
 pub fn read_embedded_version(
 	blob: &RuntimeBlob,
 ) -> Result<Option<RuntimeVersion>, WasmError> {
-	if let Some(version_section) = blob.custom_section_contents("runtime_version") {
+	if let Some(mut version_section) = blob.custom_section_contents("runtime_version") {
 		// We do not use `decode_version` here because the runtime_version section is not supposed
 		// to ever contain a legacy version. Apart from that `decode_version` relies on presence
 		// of a special API in the `apis` field to treat the input as a non-legacy version. However
 		// the structure found in the `runtime_version` always contain an empty `apis` field. Therefore
-		// the version read will be mistakingly treated as an legacy one.
-		let mut decoded_version = sp_api::RuntimeVersion::decode(&mut &version_section[..])
+		// the version read will be mistakenly treated as an legacy one.
+		let mut decoded_version = sp_api::RuntimeVersion::decode(&mut version_section)
 			.map_err(|_|
-				WasmError::Instantiation("failed to decode verison section".into())
+				WasmError::Instantiation("failed to decode version section".into())
 			)?;
 
 		// Don't stop on this and check if there is a special section that encodes all runtime APIs.
