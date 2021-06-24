@@ -226,11 +226,11 @@ wasm_export_functions! {
 	}
 
 	fn test_u128_i128_as_parameter_and_return_value() {
-		for val in &[u128::max_value(), 1u128, 5000u128, u64::max_value() as u128] {
+		for val in &[u128::MAX, 1u128, 5000u128, u64::MAX as u128] {
 			assert_eq!(*val, test_api::get_and_return_u128(*val));
 		}
 
-		for val in &[i128::max_value(), i128::min_value(), 1i128, 5000i128, u64::max_value() as i128] {
+		for val in &[i128::MAX, i128::min_value(), 1i128, 5000i128, u64::MAX as i128] {
 			assert_eq!(*val, test_api::get_and_return_i128(*val));
 		}
 	}
