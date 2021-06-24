@@ -498,8 +498,8 @@ fn post_conditions() {
 fn check_count() {
 	let nominator_count = Nominators::<Test>::iter().count() as u32;
 	let validator_count = Validators::<Test>::iter().count() as u32;
-	assert_eq!(nominator_count, CurrentNominatorsCount::<Test>::get());
-	assert_eq!(validator_count, CurrentValidatorsCount::<Test>::get());
+	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
+	assert_eq!(validator_count, CounterForValidators::<Test>::get());
 }
 
 fn check_ledgers() {

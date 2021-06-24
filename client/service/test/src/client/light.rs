@@ -272,7 +272,7 @@ fn local_state_is_created_when_genesis_state_is_available() {
 	);
 	let mut op = backend.begin_operation().unwrap();
 	op.set_block_data(header0, None, None, NewBlockState::Final).unwrap();
-	op.reset_storage(Default::default()).unwrap();
+	op.set_genesis_state(Default::default(), true).unwrap();
 	backend.commit_operation(op).unwrap();
 
 	match backend.state_at(BlockId::Number(0)).unwrap() {
