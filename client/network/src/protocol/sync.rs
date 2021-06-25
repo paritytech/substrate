@@ -295,6 +295,8 @@ pub enum PeerSyncState<B: BlockT> {
 	DownloadingJustification(B::Hash),
 	/// Downloading state.
 	DownloadingState,
+	/// Downloading warp block.
+	DownloadingWarp,
 }
 
 impl<B: BlockT> PeerSyncState<B> {
@@ -631,15 +633,13 @@ impl<B: BlockT> ChainSync<B> {
 				if let SyncMode::Warp = &self.mode {
 					// TODO: wait for 3 peers
 					if self.warp_sync.is_none() {
-						let number = best_number;
-						let hash = best_hash;
+						let number = best_number - 16u32.into();
 						log::debug!(
 							target: "sync",
-							"Starting warp state sync for #{} ({})",
+							"Starting warp state sync for #{}",
 							number,
-							hash,
 						);
-						self.warp_sync = Some(WarpSync::new(self.client.clone(), hash, number));
+						self.warp_sync = Some(WarpSync::new(self.client.clone(), number));
 					}
 				}
 				// If we are at genesis, just start downloading.
@@ -804,14 +804,19 @@ impl<B: BlockT> ChainSync<B> {
 	/// Get an iterator over all block requests of all peers.
 	pub fn block_requests(&mut self) -> impl Iterator<Item = (&PeerId, BlockRequest<B>)> + '_ {
 		if let Some(warp_sync) = &self.warp_sync {
+			if self.peers.iter().any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarp) {
+				// Only one pending warp request is allowed.
+				return Either::Left(Either::Left(std::iter::empty()))
+			}
 			if let Some(request) = warp_sync.next_block_request() {
 				// Find a peer that can handle the request.
-				let peer = self.peers.iter().find_map(move |(id, peer)| {
+				let peer = self.peers.iter_mut().find_map(move |(id, peer)| {
 					if !peer.state.is_available() {
 						return None
 					}
 
 					if peer.best_number >= warp_sync.target_block_number() {
+						peer.state = PeerSyncState::DownloadingWarp;
 						Some((id, peer.best_number))
 					} else {
 						None
@@ -938,6 +943,9 @@ impl<B: BlockT> ChainSync<B> {
 		}
 		if let Some(sync) = &self.warp_sync {
 			if let Some(request) = sync.next_state_request() {
+				if sync.is_complete() {
+					return None;
+				}
 				for (id, peer) in self.peers.iter_mut() {
 					if peer.state.is_available() && peer.best_number >= sync.target_block_number() {
 						trace!(target: "sync", "New StateRequest for {}", id);
@@ -964,6 +972,9 @@ impl<B: BlockT> ChainSync<B> {
 		response: BlockResponse<B>
 	) -> Result<OnBlockData<B>, BadPeer> {
 		if let Some(sync) = &mut self.warp_sync {
+			if let Some(peer) = self.peers.get_mut(who) {
+				peer.state = PeerSyncState::Available;
+			}
 			let result = sync.import_block(response);
 			return match result {
 				warp::ImportResult::Continue(_) => {
@@ -1128,6 +1139,7 @@ impl<B: BlockT> ChainSync<B> {
 						PeerSyncState::Available
 						| PeerSyncState::DownloadingJustification(..)
 						| PeerSyncState::DownloadingState
+						| PeerSyncState::DownloadingWarp
 							=> Vec::new()
 					}
 				} else {
@@ -1383,7 +1395,7 @@ impl<B: BlockT> ChainSync<B> {
 						self.mode = SyncMode::Full;
 						output.extend(self.restart());
 					}
-					let warp_sync_complete = self.state_sync.as_ref().map_or(false, |s| s.target() == hash);
+					let warp_sync_complete = self.warp_sync.as_ref().map_or(false, |s| s.target_block_hash() == hash);
 					if warp_sync_complete {
 						info!(
 							target: "sync",
@@ -1923,6 +1935,13 @@ impl<B: BlockT> ChainSync<B> {
 			log::warn!(
 				target: "sync",
 				"Can't use fast sync mode with a partially synced database. Reverting to full sync mode."
+			);
+			self.mode = SyncMode::Full;
+		}
+		if matches!(self.mode, SyncMode::Warp) && info.finalized_state.is_some() {
+			log::warn!(
+				target: "sync",
+				"Can't use warp sync mode with a partially synced database. Reverting to full sync mode."
 			);
 			self.mode = SyncMode::Full;
 		}

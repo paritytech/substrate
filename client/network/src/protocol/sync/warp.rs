@@ -42,10 +42,10 @@ pub struct WarpSync<B: BlockT> {
 
 impl<B: BlockT> WarpSync<B> {
 	///  Create a new instance.
-	pub fn new(client: Arc<dyn Client<B>>, target_hash: B::Hash, target_num: NumberFor<B>) -> Self {
+	pub fn new(client: Arc<dyn Client<B>>, target_num: NumberFor<B>) -> Self {
 		WarpSync {
 			client,
-			target_hash,
+			target_hash: Default::default(),
 			target_num,
 			phase: Phase::Block,
 		}
@@ -80,10 +80,7 @@ impl<B: BlockT> WarpSync<B> {
 						return ImportResult::BadResponse;
 					}
 				};
-				if header.hash() != self.target_hash {
-					log::debug!( target: "sync", "Bad header in the response");
-					return ImportResult::BadResponse;
-				}
+				self.target_hash = header.hash();
 				let state_sync = StateSync::new(self.client.clone(), header, false);
 				let request = state_sync.next_request();
 				self.phase = Phase::State(state_sync);
@@ -106,7 +103,7 @@ impl<B: BlockT> WarpSync<B> {
 			Phase::Block => Some(message::generic::BlockRequest {
 				id: 0,
 				fields: message::BlockAttributes::HEADER,
-				from: message::FromBlock::Hash(self.target_hash),
+				from: message::FromBlock::Number(self.target_num),
 				to: None,
 				direction: message::Direction::Ascending,
 				max: Some(1)
@@ -121,6 +118,11 @@ impl<B: BlockT> WarpSync<B> {
 			Phase::Block => None,
 			Phase::State(sync) => Some(sync.next_request())
 		}
+	}
+
+	/// Return target block hash.
+	pub fn target_block_hash(&self) -> B::Hash {
+		self.target_hash.clone()
 	}
 
 	/// Return target block number.

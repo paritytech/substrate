@@ -63,7 +63,7 @@ use futures::{
 use log::{debug, error, info};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
-	LockImportRun, BlockchainEvents, CallExecutor,
+	LockImportRun, BlockchainEvents, CallExecutor, StorageProvider,
 	ExecutionStrategy, Finalizer, TransactionFor, ExecutorProvider,
 };
 use parity_scale_codec::{Decode, Encode};
@@ -341,6 +341,7 @@ pub trait ClientForGrandpa<Block, BE>:
 	+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
 	+ BlockchainEvents<Block> + ProvideRuntimeApi<Block> + ExecutorProvider<Block>
 	+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
+	+ StorageProvider<Block, BE>
 	where
 		BE: Backend<Block>,
 		Block: BlockT,
@@ -353,7 +354,8 @@ impl<Block, BE, T> ClientForGrandpa<Block, BE> for T
 		T: LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
 			+ BlockchainEvents<Block> + ProvideRuntimeApi<Block> + ExecutorProvider<Block>
-			+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>,
+			+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
+			+ StorageProvider<Block, BE>,
 {}
 
 /// Something that one can ask to do a block sync request.
