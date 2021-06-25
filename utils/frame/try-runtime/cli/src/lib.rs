@@ -25,13 +25,14 @@ use sc_executor::NativeExecutor;
 use sc_service::NativeExecutionDispatch;
 use sc_chain_spec::ChainSpec;
 use sp_state_machine::StateMachine;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 use sp_core::{
 	offchain::{
 		OffchainWorkerExt, OffchainDbExt, TransactionPoolExt,
-		testing::{TestOffchainExt, TestTransactionPoolExt}
+		testing::{TestOffchainExt, TestTransactionPoolExt},
 	},
 	storage::{StorageData, StorageKey, well_known_keys},
+	hashing::twox_128,
 };
 use sp_keystore::{KeystoreExt, testing::KeyStore};
 use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig, rpc_api};
@@ -45,6 +46,8 @@ pub enum Command {
 	OnRuntimeUpgrade(OnRuntimeUpgradeCmd),
 	/// Execute "OffchainWorkerApi_offchain_worker" against the given runtime state.
 	OffchainWorker(OffchainWorkerCmd),
+	/// Execute "Core_execute_block" using the given block and the runtime state of the parent block.
+	ExecuteBlock(ExecuteBlockCmd),
 }
 
 #[derive(Debug, Clone, structopt::StructOpt)]
@@ -55,17 +58,14 @@ pub struct OnRuntimeUpgradeCmd {
 
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub struct OffchainWorkerCmd {
-	/// Hash of the block whose header to use to execute the offchain worker.
-	#[structopt(short, long, multiple = false, parse(try_from_str = parse::hash))]
-	pub header_at: String,
-
 	#[structopt(subcommand)]
 	pub state: State,
+}
 
-	/// Whether or not to overwrite the code from state with the code from
-	/// the specified chain spec.
-	#[structopt(long)]
-	pub overwrite_code: bool,
+#[derive(Debug, Clone, structopt::StructOpt)]
+pub struct ExecuteBlockCmd {
+	#[structopt(subcommand)]
+	pub state: State,
 }
 
 #[derive(Debug, Clone, structopt::StructOpt)]
@@ -99,6 +99,46 @@ pub struct SharedParams {
 	/// sc_service::Configuration.default_heap_pages.
 	#[structopt(long)]
 	pub heap_pages: Option<u64>,
+
+	/// The block hash at which to read state. This is required for execute-block, offchain-worker,
+	/// or any command that used the live subcommand.
+	#[structopt(
+		short,
+		long,
+		multiple = false,
+		parse(try_from_str = parse::hash),
+		required_ifs(
+			&[("command", "offchain-worker"), ("command", "execute-block"), ("subcommand", "live")]
+		)
+	)]
+	block_at: String,
+
+	/// Whether or not to overwrite the code from state with the code from
+	/// the specified chain spec.
+	#[structopt(long)]
+	pub overwrite_code: bool,
+
+	/// The url to connect to.
+	// TODO having this a shared parm is a temporary hack; the url is used just
+	// to get the header/block. We should try and get that out of state, OR allow
+	// the user to feed in a header/block via file.
+	// https://github.com/paritytech/substrate/issues/9027
+	#[structopt(short, long, default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
+	url: String,
+}
+
+impl SharedParams {
+	/// Get the configured value of `block_at`, interpreted as the hash type of `Block`.
+	pub fn block_at<Block>(&self) -> sc_cli::Result<Block::Hash>
+	where
+		Block: BlockT,
+		<Block as BlockT>::Hash: FromStr,
+		<<Block as BlockT>::Hash as FromStr>::Err: Debug,
+	{
+		self.block_at
+			.parse::<<Block as BlockT>::Hash>()
+			.map_err(|e| format!("Could not parse block hash: {:?}", e).into())
+	}
 }
 
 /// Various commands to try out against runtime state at a specific block.
@@ -114,11 +154,10 @@ pub struct TryRuntimeCmd {
 /// The source of runtime state to try operations against.
 #[derive(Debug, Clone, structopt::StructOpt)]
 pub enum State {
-	/// Use a state snapshot as the source of runtime state. NOTE: for the offchain-worker command this
-	/// is only partially supported at the moment and you must have a relevant archive node exposed on
-	/// localhost:9944 in order to query the block header.
-	// TODO https://github.com/paritytech/substrate/issues/9027
+	/// Use a state snapshot as the source of runtime state. NOTE: for the offchain-worker and
+	/// execute-block command this is only partially supported and requires a archive node url.
 	Snap {
+		#[structopt(short, long)]
 		snapshot_path: PathBuf,
 	},
 
@@ -128,25 +167,16 @@ pub enum State {
 		#[structopt(short, long)]
 		snapshot_path: Option<PathBuf>,
 
-		/// The block hash at which to connect.
-		/// Will be latest finalized head if not provided.
-		#[structopt(short, long, multiple = false, parse(try_from_str = parse::hash))]
-		block_at: Option<String>,
-
 		/// The modules to scrape. If empty, entire chain state will be scraped.
 		#[structopt(short, long, require_delimiter = true)]
 		modules: Option<Vec<String>>,
-
-		/// The url to connect to.
-		#[structopt(default_value = "ws://localhost:9944", parse(try_from_str = parse::url))]
-		url: String,
-	},
+	}
 }
 
 async fn on_runtime_upgrade<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: OnRuntimeUpgradeCmd,
-	config: Configuration
+	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT,
@@ -158,11 +188,7 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
-	let heap_pages = if shared.heap_pages.is_some() {
-		shared.heap_pages
-	} else {
-		config.default_heap_pages
-	};
+	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
@@ -180,22 +206,22 @@ where
 				}))
 			},
 			State::Live {
-				url,
 				snapshot_path,
-				block_at,
 				modules
 			} => Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
-				transport: url.to_owned().into(),
+				transport: shared.url.to_owned().into(),
 				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 				modules: modules.to_owned().unwrap_or_default(),
-				at: block_at.as_ref()
-					.map(|b| b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))).transpose()?,
+				at: Some(shared.block_at::<Block>()?),
 				..Default::default()
 			})),
 		};
 
 		let (code_key, code) = extract_code(config.chain_spec)?;
-		builder.inject(&[(code_key, code)]).build().await?
+		builder
+			.inject_key_value(&[(code_key, code)])
+			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat())
+			.build().await?
 	};
 
 	let encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
@@ -211,10 +237,10 @@ where
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade' due to {:?}", e))?;
+	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {:?}", e))?;
 
 	let (weight, total_weight) = <(u64, u64) as Decode>::decode(&mut &*encoded_result)
-		.map_err(|e| format!("failed to decode output due to {:?}", e))?;
+		.map_err(|e| format!("failed to decode output: {:?}", e))?;
 	log::info!(
 		"TryRuntime_on_runtime_upgrade executed without errors. Consumed weight = {}, total weight = {} ({})",
 		weight,
@@ -229,7 +255,7 @@ async fn offchain_worker<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: OffchainWorkerCmd,
 	config: Configuration,
-)-> sc_cli::Result<()>
+) -> sc_cli::Result<()>
 where
 	Block: BlockT,
 	Block::Hash: FromStr,
@@ -241,11 +267,7 @@ where
 {
 	let wasm_method = shared.wasm_method;
 	let execution = shared.execution;
-	let heap_pages = if shared.heap_pages.is_some() {
-		shared.heap_pages
-	} else {
-		config.default_heap_pages
-	};
+	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
@@ -255,47 +277,43 @@ where
 		max_runtime_instances,
 	);
 
-	let (mode, url) = match command.state {
+	let mode = match command.state {
 			State::Live {
-				url,
 				snapshot_path,
-				block_at,
 				modules
 			} => {
+				let at = shared.block_at::<Block>()?;
 				let online_config = OnlineConfig {
-					transport: url.to_owned().into(),
+					transport: shared.url.to_owned().into(),
 					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 					modules: modules.to_owned().unwrap_or_default(),
-					at: block_at.as_ref()
-						.map(|b| b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))).transpose()?,
+					at: Some(at),
 					..Default::default()
 				};
 
-				(Mode::Online(online_config), url)
+				Mode::Online(online_config)
 			},
 			State::Snap { snapshot_path } => {
-				// TODO This is a temporary hack; the url is used just to get the header. We should try
-				// and get the header out of state, OR use an arbitrary header if thats ok, OR allow
-				// the user to feed in a header via file.
-				// https://github.com/paritytech/substrate/issues/9027
-				// This assumes you have a node running on local host default
-				let url = "ws://127.0.0.1:9944".to_string();
 				let mode = Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				});
 
-				(mode, url)
+				mode
 			}
 	};
-	let builder = Builder::<Block>::new().mode(mode);
-	let mut ext = if command.overwrite_code {
+	let builder = Builder::<Block>::new()
+		.mode(mode)
+		.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
+	let mut ext = if shared.overwrite_code {
 		let (code_key, code) = extract_code(config.chain_spec)?;
-		builder.inject(&[(code_key, code)]).build().await?
+		builder.inject_key_value(&[(code_key, code)]).build().await?
 	} else {
-		builder.build().await?
+		builder
+			.inject_hashed_key(well_known_keys::CODE)
+			.build()
+			.await?
 	};
 
-	// register externality extensions in order to provide host interface for OCW to the runtime.
 	let (offchain, _offchain_state) = TestOffchainExt::new();
 	let (pool, _pool_state) = TestTransactionPoolExt::new();
 	ext.register_extension(OffchainDbExt::new(offchain.clone()));
@@ -303,10 +321,8 @@ where
 	ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
-	let header_hash: Block::Hash = command.header_at
-		.parse()
-		.map_err(|e| format!("Could not parse header hash: {:?}", e))?;
-	let header = rpc_api::get_header::<Block, _>(url, header_hash).await?;
+	let header_hash = shared.block_at::<Block>()?;
+	let header = rpc_api::get_header::<Block, _>(shared.url, header_hash).await?;
 
 	let _ = StateMachine::<_, _, NumberFor<Block>, _>::new(
 		&ext.backend,
@@ -321,9 +337,112 @@ where
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'OffchainWorkerApi_offchain_worker' due to {:?}", e))?;
+	.map_err(|e| format!("failed to execute 'OffchainWorkerApi_offchain_worker':  {:?}", e))?;
 
 	log::info!("OffchainWorkerApi_offchain_worker executed without errors.");
+
+	Ok(())
+}
+
+async fn execute_block<Block, ExecDispatch>(
+	shared: SharedParams,
+	command: ExecuteBlockCmd,
+	config: Configuration,
+) -> sc_cli::Result<()>
+where
+	Block: BlockT + serde::de::DeserializeOwned,
+	Block::Hash: FromStr,
+	<Block::Hash as FromStr>::Err: Debug,
+	NumberFor<Block>: FromStr,
+	<NumberFor<Block> as FromStr>::Err: Debug,
+	ExecDispatch: NativeExecutionDispatch + 'static,
+{
+	let wasm_method = shared.wasm_method;
+	let execution = shared.execution;
+	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
+
+	let mut changes = Default::default();
+	let max_runtime_instances = config.max_runtime_instances;
+	let executor = NativeExecutor::<ExecDispatch>::new(
+		wasm_method.into(),
+		heap_pages,
+		max_runtime_instances,
+	);
+
+	let block_hash = shared.block_at::<Block>()?;
+	let block: Block = rpc_api::get_block::<Block, _>(shared.url.clone(), block_hash).await?;
+
+	let mode = match command.state {
+		State::Snap { snapshot_path } => {
+			let mode = Mode::Offline(OfflineConfig {
+				state_snapshot: SnapshotConfig::new(snapshot_path),
+			});
+
+			mode
+		},
+		State::Live { snapshot_path, modules } => {
+			let parent_hash = block.header().parent_hash();
+
+			let mode = Mode::Online(OnlineConfig {
+				transport: shared.url.to_owned().into(),
+				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
+				modules: modules.to_owned().unwrap_or_default(),
+				at: Some(parent_hash.to_owned()),
+				..Default::default()
+			});
+
+			mode
+		}
+	};
+
+	let ext = {
+		let builder = Builder::<Block>::new()
+			.mode(mode)
+			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat());
+		let mut ext = if shared.overwrite_code {
+			let (code_key, code) = extract_code(config.chain_spec)?;
+			builder.inject_key_value(&[(code_key, code)]).build().await?
+		} else {
+			builder
+				.inject_hashed_key(well_known_keys::CODE)
+				.build()
+				.await?
+		};
+
+		// register externality extensions in order to provide host interface for OCW to the
+		// runtime.
+		let (offchain, _offchain_state) = TestOffchainExt::new();
+		let (pool, _pool_state) = TestTransactionPoolExt::new();
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
+		ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
+		ext.register_extension(TransactionPoolExt::new(pool));
+
+		ext
+	};
+
+	// A digest item gets added when the runtime is processing the block, so we need to pop
+	// the last one to be consistent with what a gossiped block would contain.
+	let (mut header, extrinsics) = block.deconstruct();
+	header.digest_mut().pop();
+	let block = Block::new(header, extrinsics);
+
+	let _encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
+		&ext.backend,
+		None,
+		&mut changes,
+		&executor,
+		"Core_execute_block",
+		block.encode().as_ref(),
+		ext.extensions,
+		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
+		sp_core::testing::TaskExecutor::new(),
+	)
+	.execute(execution.into())
+	.map_err(|e| format!("failed to execute 'Core_execute_block': {:?}", e))?;
+	debug_assert!(_encoded_result == vec![1]);
+
+	log::info!("Core_execute_block executed without errors.");
 
 	Ok(())
 }
@@ -331,7 +450,7 @@ where
 impl TryRuntimeCmd {
 	pub async fn run<Block, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
-		Block: BlockT,
+		Block: BlockT + serde::de::DeserializeOwned,
 		Block::Header: serde::de::DeserializeOwned,
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
@@ -345,6 +464,9 @@ impl TryRuntimeCmd {
 			}
 			Command::OffchainWorker(cmd) => {
 				offchain_worker::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
+			}
+			Command::ExecuteBlock(cmd) => {
+				execute_block::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
 			}
 		}
 	}
@@ -363,7 +485,7 @@ impl CliConfiguration for TryRuntimeCmd {
 	}
 }
 
-/// Extract `:code` from the given chain spec and return as `StorageData` along with the 
+/// Extract `:code` from the given chain spec and return as `StorageData` along with the
 /// corresponding `StorageKey`.
 fn extract_code(spec: Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
 	let genesis_storage = spec.build_storage()?;

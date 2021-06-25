@@ -1547,7 +1547,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 				cache_size: 1024,
 			},
 		},
-		u64::max_value(),
+		u64::MAX,
 	).unwrap());
 
 	let mut client = TestClientBuilder::with_backend(backend).build();
@@ -1751,7 +1751,7 @@ fn returns_status_for_pruned_blocks() {
 				cache_size: 1024,
 			},
 		},
-		u64::max_value(),
+		u64::MAX,
 	).unwrap());
 
 	let mut client = TestClientBuilder::with_backend(backend).build();

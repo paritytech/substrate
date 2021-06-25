@@ -33,7 +33,7 @@ fn taylor_term(k: u32, y_num: u128, y_den: u128) -> u32 {
 /// * result represents a per-million output of log2
 pub fn log2(p: u32, q: u32) -> u32 {
 	assert!(p >= q); // keep p/q bound to [1, inf)
-	assert!(p <= u32::max_value()/2);
+	assert!(p <= u32::MAX/2);
 
 	// This restriction should not be mandatory. But function is only tested and used for this.
 	assert!(p <= 1_000_000);
