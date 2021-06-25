@@ -50,7 +50,7 @@ pub const N_BAGS: BagIdx = 200;
 fn notional_bag_for(weight: VoteWeight) -> BagIdx {
 	let raw_bag =
 		THRESHOLDS.partition_point(|&threshold| weight > threshold) as BagIdx;
-	N_BAGS - raw_bag - 1
+	N_BAGS - 1 - raw_bag
 }
 
 /// Find the actual bag containing the current voter.
@@ -102,7 +102,7 @@ impl<T: Config> VoterList<T> {
 		// if this is an update operation we can complete this easily and cheaply
 		if !Node::<T>::update_voter_type_for(account_id, voter_type) {
 			// otherwise, we need to insert from scratch
-			let weight_of = Pallet::<T>::slashable_balance_of_fn();
+			let weight_of = Pallet::<T>::weight_of_fn();
 			let voter = Voter { id: account_id.clone(), voter_type };
 			Self::insert(voter, weight_of);
 		}
@@ -337,8 +337,9 @@ pub struct Node<T: Config> {
 	prev: Option<AccountIdOf<T>>,
 	next: Option<AccountIdOf<T>>,
 
+	/// The bag index is not stored in storage, but injected during all fetch operations.
 	#[codec(skip)]
-	bag_idx: BagIdx,
+	pub(crate) bag_idx: BagIdx,
 }
 
 impl<T: Config> Node<T> {
@@ -440,6 +441,16 @@ impl<T: Config> Node<T> {
 			node.put();
 		}
 		existed
+	}
+
+	/// Get the index of the bag that this node _should_ be in, given its vote weight.
+	///
+	/// This is a helper intended only for benchmarking and should not be used in production.
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn proper_bag_for(&self) -> BagIdx {
+		let weight_of = crate::Pallet::<T>::weight_of_fn();
+		let current_weight = weight_of(&self.voter.id);
+		notional_bag_for(current_weight)
 	}
 }
 

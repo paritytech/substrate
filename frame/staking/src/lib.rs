@@ -2385,10 +2385,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 
-			let weight_of = Self::slashable_balance_of_fn();
 			// if no voter at that node, don't do anything.
 			// the caller just wasted the fee to call this.
 			let moved = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {
+				let weight_of = Self::weight_of_fn();
 				VoterList::update_position_for(node, weight_of)
 			});
 
@@ -2418,7 +2418,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This prevents call sites from repeatedly requesting `total_issuance` from backend. But it is
 	/// important to be only used while the total issuance is not changing.
-	pub fn slashable_balance_of_fn() -> Box<dyn Fn(&AccountIdOf<T>) -> VoteWeight> {
+	pub fn weight_of_fn() -> Box<dyn Fn(&AccountIdOf<T>) -> VoteWeight> {
 		// NOTE: changing this to unboxed `impl Fn(..)` return type and the pallet will still
 		// compile, while some types in mock fail to resolve.
 		let issuance = T::Currency::total_issuance();
@@ -3015,7 +3015,7 @@ impl<T: Config> Pallet<T> {
 
 		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
 
-		let weight_of = Self::slashable_balance_of_fn();
+		let weight_of = Self::weight_of_fn();
 		// collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 

@@ -639,13 +639,67 @@ benchmarks! {
 	}
 
 	rebag {
+		// The most expensive case for this call:
+		//
+		// - It doesn't matter where in the origin bag the stash lies; the number of reads and
+		//   writes is constant. We can use the case that the stash is the only one in the origin
+		//   bag, for simplicity.
+		// - The destination bag is not empty, because then we need to update the `next` pointer
+		//   of the previous node in addition to the work we do otherwise.
+
+		// Clean up any existing state.
+		clear_validators_and_nominators::<T>();
+
+		use crate::voter_bags::{Bag, Node};
+
+		// stash and controller control the node account, which is a validator for simplicity of setup
+		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
+
+		let prefs = ValidatorPrefs::default();
+		whitelist_account!(controller);
+		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), prefs)?;
+
+		// create another validator with 3x the stake
+		create_validators::<T>(1, 300)?;
+
+		// update the stash account's value/weight
+		T::Currency::deposit_into_existing(&stash, T::Currency::minimum_balance() * 200_u32.into())?;
+
+		// verify preconditions
+		let weight_of = Staking::<T>::weight_of_fn();
+		let node = Node::<T>::from_id(&stash).ok_or("node not found for stash")?;
+		assert!(
+			node.is_misplaced(&weight_of),
+			"rebagging only makes sense when a node is misplaced",
+		);
+		assert_eq!(
+			{
+				let origin_bag = Bag::<T>::get(node.bag_idx).ok_or("origin bag not found")?;
+				origin_bag.iter().count()
+			},
+			1,
+			"stash should be the only node in origin bag",
+		);
+		assert_ne!(
+			{
+				let destination_bag = Bag::<T>::get(node.proper_bag_for()).ok_or("destination bag not found")?;
+				destination_bag.iter().count()
+			},
+			0,
+			"destination bag should not be empty",
+		);
+		drop(node);
+
+		// caller will call rebag
 		let caller = whitelisted_caller();
-		let (stash, _controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-
-		// TODO: figure out what's the worst case scenario for this call (lots of other users in
-		// VoterList?) and arrange for that to be the case
-
+		// ensure it's distinct from the other accounts
+		assert_ne!(caller, stash);
+		assert_ne!(caller, controller);
 	}: _(RawOrigin::Signed(caller), stash.clone())
+	verify {
+		let node = Node::<T>::from_id(&stash).ok_or("node not found for stash")?;
+		assert!(!node.is_misplaced(&weight_of), "node must be in proper place after rebag");
+	}
 }
 
 #[cfg(test)]
