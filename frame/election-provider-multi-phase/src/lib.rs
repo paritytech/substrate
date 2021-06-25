@@ -1246,7 +1246,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Checks the feasibility of a solution.
-	fn feasibility_check(
+	pub fn feasibility_check(
 		solution: RawSolution<CompactOf<T>>,
 		compute: ElectionCompute,
 	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
