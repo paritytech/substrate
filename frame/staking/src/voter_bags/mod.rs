@@ -390,7 +390,7 @@ impl<T: Config> Node<T> {
 			VoterType::Validator => Some((
 				self.voter.id.clone(),
 				weight_of(&self.voter.id),
-				vec![self.voter.id.clone()],
+				sp_std::vec![self.voter.id.clone()],
 			)),
 			VoterType::Nominator => {
 				let Nominations { submitted_in, mut targets, .. } =
@@ -446,7 +446,7 @@ impl<T: Config> Node<T> {
 	/// Get the index of the bag that this node _should_ be in, given its vote weight.
 	///
 	/// This is a helper intended only for benchmarking and should not be used in production.
-	#[cfg(feature = "runtime-benchmarks")]
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	pub fn proper_bag_for(&self) -> BagIdx {
 		let weight_of = crate::Pallet::<T>::weight_of_fn();
 		let current_weight = weight_of(&self.voter.id);
