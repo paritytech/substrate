@@ -5694,9 +5694,6 @@ dependencies = [
 name = "pallet-transaction-payment-rpc"
 version = "3.0.0"
 dependencies = [
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
  "jsonrpsee",
  "jsonrpsee-types",
  "pallet-transaction-payment-rpc-runtime-api",
