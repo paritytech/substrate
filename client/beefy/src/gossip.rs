@@ -14,16 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-/// The maximum number of live gossip rounds allowed, i.e. we will expire messages older than this.
 use codec::{Decode, Encode};
 use log::{debug, trace};
 use parking_lot::RwLock;
 
 use sc_network::PeerId;
-use sc_network_gossip::{
-	MessageIntent, ValidationResult as GossipValidationResult, Validator as GossipValidator,
-	ValidatorContext as GossipValidatorContext,
-};
+use sc_network_gossip::{MessageIntent, ValidationResult, Validator, ValidatorContext};
 
 use sp_runtime::traits::{Block, Hash, Header, NumberFor};
 
@@ -53,7 +49,7 @@ where
 /// rejected/expired.
 ///
 ///All messaging is handled in a single BEEFY global topic.
-pub(crate) struct BeefyGossipValidator<B>
+pub(crate) struct GossipValidator<B>
 where
 	B: Block,
 {
@@ -61,33 +57,34 @@ where
 	live_rounds: RwLock<Vec<NumberFor<B>>>,
 }
 
-impl<B> BeefyGossipValidator<B>
+impl<B> GossipValidator<B>
 where
 	B: Block,
 {
-	pub fn new() -> BeefyGossipValidator<B> {
-		BeefyGossipValidator {
+	pub fn new() -> GossipValidator<B> {
+		GossipValidator {
 			topic: topic::<B>(),
 			live_rounds: RwLock::new(Vec::new()),
 		}
 	}
 
-	/// Note a live voting round
+	/// Note a voting round.
 	///
-	/// This should be called, in order to keep tabs on `round`.
+	/// Noting `round` will keep `round` live.
+	///
+	/// We retain the [`MAX_LIVE_GOSSIP_ROUNDS`] most **recent** voting rounds as live.
+	/// As long as a voting round is live, it will be gossiped to peer nodes.
 	pub(crate) fn note_round(&self, round: NumberFor<B>) {
 		trace!(target: "beefy", "🥩 About to note round #{}", round);
 
-		let mut live_rounds = self.live_rounds.write();
+		let mut live = self.live_rounds.write();
 
-		// NOTE: ideally we'd use a VecDeque here, but currently binary search is only available on
-		// nightly for `VecDeque`.
-		while live_rounds.len() > MAX_LIVE_GOSSIP_ROUNDS {
-			let _ = live_rounds.remove(0);
+		if let Some(idx) = live.binary_search(&round).err() {
+			live.insert(idx, round);
 		}
 
-		if let Some(idx) = live_rounds.binary_search(&round).err() {
-			live_rounds.insert(idx, round);
+		if live.len() > MAX_LIVE_GOSSIP_ROUNDS {
+			let _ = live.remove(0);
 		}
 	}
 
@@ -96,26 +93,26 @@ where
 	}
 }
 
-impl<B> GossipValidator<B> for BeefyGossipValidator<B>
+impl<B> Validator<B> for GossipValidator<B>
 where
 	B: Block,
 {
 	fn validate(
 		&self,
-		_context: &mut dyn GossipValidatorContext<B>,
-		sender: &sc_network::PeerId,
+		_context: &mut dyn ValidatorContext<B>,
+		sender: &PeerId,
 		mut data: &[u8],
-	) -> GossipValidationResult<B::Hash> {
+	) -> ValidationResult<B::Hash> {
 		if let Ok(msg) = VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(&mut data) {
 			if BeefyKeystore::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
-				return GossipValidationResult::ProcessAndKeep(self.topic);
+				return ValidationResult::ProcessAndKeep(self.topic);
 			} else {
 				// TODO: report peer
 				debug!(target: "beefy", "🥩 Bad signature on message: {:?}, from: {:?}", msg, sender);
 			}
 		}
 
-		GossipValidationResult::Discard
+		ValidationResult::Discard
 	}
 
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
@@ -126,7 +123,7 @@ where
 				Err(_) => return true,
 			};
 
-			let expired = !BeefyGossipValidator::<B>::is_live(&live_rounds, msg.commitment.block_number);
+			let expired = !GossipValidator::<B>::is_live(&live_rounds, msg.commitment.block_number);
 
 			trace!(target: "beefy", "🥩 Message for round #{} expired: {}", msg.commitment.block_number, expired);
 
@@ -143,11 +140,100 @@ where
 				Err(_) => return true,
 			};
 
-			let allowed = BeefyGossipValidator::<B>::is_live(&live_rounds, msg.commitment.block_number);
+			let allowed = GossipValidator::<B>::is_live(&live_rounds, msg.commitment.block_number);
 
 			trace!(target: "beefy", "🥩 Message for round #{} allowed: {}", msg.commitment.block_number, allowed);
 
 			allowed
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{GossipValidator, MAX_LIVE_GOSSIP_ROUNDS};
+	use sc_network_test::Block;
+
+	#[test]
+	fn note_round_works() {
+		let gv = GossipValidator::<Block>::new();
+
+		gv.note_round(1u64);
+
+		let live = gv.live_rounds.read();
+		assert!(GossipValidator::<Block>::is_live(&live, 1u64));
+
+		drop(live);
+
+		gv.note_round(3u64);
+		gv.note_round(7u64);
+		gv.note_round(10u64);
+
+		let live = gv.live_rounds.read();
+
+		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+
+		assert!(!GossipValidator::<Block>::is_live(&live, 1u64));
+		assert!(GossipValidator::<Block>::is_live(&live, 3u64));
+		assert!(GossipValidator::<Block>::is_live(&live, 7u64));
+		assert!(GossipValidator::<Block>::is_live(&live, 10u64));
+	}
+
+	#[test]
+	fn keeps_most_recent_max_rounds() {
+		let gv = GossipValidator::<Block>::new();
+
+		gv.note_round(3u64);
+		gv.note_round(7u64);
+		gv.note_round(10u64);
+		gv.note_round(1u64);
+
+		let live = gv.live_rounds.read();
+
+		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+
+		assert!(GossipValidator::<Block>::is_live(&live, 3u64));
+		assert!(!GossipValidator::<Block>::is_live(&live, 1u64));
+
+		drop(live);
+
+		gv.note_round(23u64);
+		gv.note_round(15u64);
+		gv.note_round(20u64);
+		gv.note_round(2u64);
+
+		let live = gv.live_rounds.read();
+
+		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+
+		assert!(GossipValidator::<Block>::is_live(&live, 15u64));
+		assert!(GossipValidator::<Block>::is_live(&live, 20u64));
+		assert!(GossipValidator::<Block>::is_live(&live, 23u64));
+	}
+
+	#[test]
+	fn note_same_round_twice() {
+		let gv = GossipValidator::<Block>::new();
+
+		gv.note_round(3u64);
+		gv.note_round(7u64);
+		gv.note_round(10u64);
+
+		let live = gv.live_rounds.read();
+
+		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+
+		drop(live);
+
+		// note round #7 again -> should not change anything
+		gv.note_round(7u64);
+
+		let live = gv.live_rounds.read();
+
+		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+
+		assert!(GossipValidator::<Block>::is_live(&live, 3u64));
+		assert!(GossipValidator::<Block>::is_live(&live, 7u64));
+		assert!(GossipValidator::<Block>::is_live(&live, 10u64));
 	}
 }

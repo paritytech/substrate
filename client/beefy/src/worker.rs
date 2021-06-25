@@ -39,7 +39,7 @@ use beefy_primitives::{
 };
 
 use crate::{
-	gossip::{topic, BeefyGossipValidator},
+	gossip::{topic, GossipValidator},
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
@@ -55,7 +55,7 @@ where
 	pub key_store: BeefyKeystore,
 	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
 	pub gossip_engine: GossipEngine<B>,
-	pub gossip_validator: Arc<BeefyGossipValidator<B>>,
+	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub min_block_delta: u32,
 	pub metrics: Option<Metrics>,
 }
@@ -72,7 +72,7 @@ where
 	key_store: BeefyKeystore,
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
-	gossip_validator: Arc<BeefyGossipValidator<B>>,
+	gossip_validator: Arc<GossipValidator<B>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on
 	min_block_delta: u32,
 	metrics: Option<Metrics>,

@@ -116,7 +116,7 @@ where
 		prometheus_registry,
 	} = beefy_params;
 
-	let gossip_validator = Arc::new(gossip::BeefyGossipValidator::new());
+	let gossip_validator = Arc::new(gossip::GossipValidator::new());
 	let gossip_engine = GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
 
 	let metrics = prometheus_registry
