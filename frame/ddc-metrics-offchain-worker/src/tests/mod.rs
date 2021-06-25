@@ -13,7 +13,9 @@ use test_runtime::{
     Timestamp,
 };
 
-use crate::{CURRENT_PERIOD_MS, FINALIZE_METRIC_PERIOD, REPORT_METRICS_SELECTOR, REPORT_DDN_STATUS_SELECTOR};
+use crate::{
+    CURRENT_PERIOD_MS, FINALIZE_METRIC_PERIOD, REPORT_DDN_STATUS_SELECTOR, REPORT_METRICS_SELECTOR,
+};
 use codec::Encode;
 use hex_literal::hex;
 use sp_core::bytes::from_hex;
@@ -87,14 +89,8 @@ fn test_contract_api() {
         .unwrap();
 
     // Check the selector for report_ddn_status
-    let selector_report_ddn_status = from_hex(
-        report_ddn_status
-            .get("selector")
-            .unwrap()
-            .as_str()
-            .unwrap(),
-    )
-    .unwrap();
+    let selector_report_ddn_status =
+        from_hex(report_ddn_status.get("selector").unwrap().as_str().unwrap()).unwrap();
     assert_eq!(
         REPORT_DDN_STATUS_SELECTOR.to_vec(),
         selector_report_ddn_status
@@ -108,6 +104,7 @@ fn test_encode_report_metrics() {
         3 + (4 << 8),
         5 + (6 << 16),
         7 + (8 << 24),
+        9 + (16 << 24),
     );
     assert_eq!(
         call_data,
@@ -116,8 +113,9 @@ fn test_encode_report_metrics() {
             2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
             2, 2, 2, // 32 bytes, app_id
             3, 4, 0, 0, 0, 0, 0, 0, // 8 bytes, day_start_ms
-            5, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, stored_bytes
-            7, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, requests
+            5, 0, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, storage_bytes
+            7, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, wcu_used
+            9, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16 bytes, rcu_used
         ]
     );
 }
@@ -151,14 +149,18 @@ fn test_encode_report_ddn_status() {
         &String::from_utf8(vec![0, 1, 2, 3]).unwrap(),
         true,
     );
-    assert_eq!(call_data, [
-        REPORT_DDN_STATUS_SELECTOR.to_vec(), // Selector
-        vec![
-            16, // size of p2p_id
-            0, 1, 2, 3, // p2p_id
-            1 // is_online
-        ],
-    ].concat());
+    assert_eq!(
+        call_data,
+        [
+            REPORT_DDN_STATUS_SELECTOR.to_vec(), // Selector
+            vec![
+                16, // size of p2p_id
+                0, 1, 2, 3, // p2p_id
+                1  // is_online
+            ],
+        ]
+        .concat()
+    );
 }
 
 fn build_ext() -> sp_io::TestExternalities {
@@ -248,11 +250,6 @@ fn should_submit_signed_transaction_on_chain() {
             b"ddc-metrics-offchain-worker::sc_address",
             contract_id.as_ref(),
         );
-        sp_io::offchain::local_storage_set(
-            kind,
-            b"ddc-metrics-offchain-worker::ddc_url",
-            b"https://TEST_DDC",
-        );
 
         // Trigger the worker.
         DdcMetricsOffchainWorker::offchain_worker(0);
@@ -270,7 +267,7 @@ fn should_submit_signed_transaction_on_chain() {
             "00a2e826451b78afb99241b1331e7594526329225ff8937dbc62f43ec20d1830"
         ));
         let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 1 + 10, 2 + 20);
+            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 2 + 20, 0, 0);
         assert!(
             transactions[0].ends_with(&expected_call),
             "Expected a specific call to the report_metrics function"
@@ -281,21 +278,31 @@ fn should_submit_signed_transaction_on_chain() {
             "100ad4097b6e60700a5d5c5294cb6d663090ef5f547e84cc20ec6bcc7a552f13"
         ));
         let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 100, 200);
+            DdcMetricsOffchainWorker::encode_report_metrics(&app_id, INIT_DAY_MS, 200, 0, 0);
         assert!(
             transactions[1].ends_with(&expected_call),
             "Expected a specific call to the report_metrics function"
         );
 
-        let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".as_bytes(), INIT_DAY_MS, 101, 202);
+        let expected_call = DdcMetricsOffchainWorker::encode_report_metrics_ddn(
+            "12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS".to_string(),
+            INIT_DAY_MS,
+            2 + 200,
+            0,
+            0,
+        );
         assert!(
             transactions[2].ends_with(&expected_call),
             "Expected a specific call to the report_metrics_ddn function"
         );
 
-		let expected_call =
-            DdcMetricsOffchainWorker::encode_report_metrics_ddn("12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".as_bytes(), INIT_DAY_MS, 10, 20);
+        let expected_call = DdcMetricsOffchainWorker::encode_report_metrics_ddn(
+            "12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC".to_string(),
+            INIT_DAY_MS,
+            20,
+            0,
+            0,
+        );
         assert!(
             transactions[3].ends_with(&expected_call),
             "Expected a specific call to the report_metrics_ddn function"
@@ -380,27 +387,28 @@ fn deploy_contract() -> AccountId {
         &alice,
     );
 
-	pub const ADD_DDC_NODE_SELECTOR: [u8; 4] = hex!("11a9e1b9");
+    pub const ADD_DDC_NODE_SELECTOR: [u8; 4] = hex!("11a9e1b9");
 
-	let call_data_items = vec![
-		["12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "https://node-0.ddc.stage.cere.network"],
-		["12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "https://node-3.ddc.stage.cere.network"],
+    let call_data_items = vec![
+		["12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "/dns4/node-0.ddc.dev.cere.network/tcp/5000/p2p/12D3KooWB4SMhKK12ASU4qH1ZYh3pN9vsW9QbFTwkjZxUhTqmYaS", "https://node-0.ddc.stage.cere.network"],
+		["12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "/dns4/node-3.ddc.dev.cere.network/tcp/5000/p2p/12D3KooWJLuJEmtYf3bakUwe2q1uMcnbCBKRg7GkpG6Ws74Aq6NC", "https://node-3.ddc.stage.cere.network"],
 	];
 
-	for call_data_item in call_data_items {
-		let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
-		call_data_item[0].encode_to(&mut call_data);
-		call_data_item[1].encode_to(&mut call_data);
+    for call_data_item in call_data_items {
+        let mut call_data = ADD_DDC_NODE_SELECTOR.to_vec();
+        call_data_item[0].encode_to(&mut call_data);
+        call_data_item[1].encode_to(&mut call_data);
+        call_data_item[2].encode_to(&mut call_data);
 
-		let results = Contracts::call(
-			Origin::signed(alice.clone()),
-			contract_id.clone(),
-			0,
-			100_000_000_000,
-			call_data,
-		);
-		results.unwrap();
-	}
+        let results = Contracts::call(
+            Origin::signed(alice.clone()),
+            contract_id.clone(),
+            0,
+            100_000_000_000,
+            call_data,
+        );
+        results.unwrap();
+    }
 
     contract_id
 }

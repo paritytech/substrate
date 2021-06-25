@@ -7,7 +7,7 @@
 #[cfg(test)]
 mod tests;
 
-use alt_serde::{de::DeserializeOwned, Deserialize, Deserializer};
+use alt_serde::{de::DeserializeOwned, Deserialize};
 use codec::{Decode, Encode};
 use frame_support::traits::Get;
 use frame_support::{
@@ -43,47 +43,35 @@ pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
 pub const GET_ALL_DDC_NODES_SELECTOR: [u8; 4] = hex!("e6c98b60");
 pub const FINALIZE_METRIC_PERIOD: [u8; 4] = hex!("b269d557");
 
-// Specifying serde path as `alt_serde`
-// ref: https://serde.rs/container-attrs.html#crate
-#[derive(Deserialize, Default, Debug)]
-#[serde(crate = "alt_serde")]
-#[allow(non_snake_case)]
-struct NodeInfo {
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    id: Vec<u8>,
-    httpAddr: String,
-}
-
 #[derive(Encode, Decode)]
 pub struct DDCNode {
-    p2p_id: Vec<u8>,
-    url: Vec<u8>,
+    p2p_id: String,
+    p2p_addr: String,
+    url: String,
 }
 
-#[derive(Deserialize, Default, Debug)]
+struct Metric {
+    app_id: String,
+    storage_bytes: u128,
+    wcu_used: u128,
+    rcu_used: u128,
+}
+
+struct MetricDDN {
+    p2p_id: String,
+    storage_bytes: u128,
+    wcu_used: u128,
+    rcu_used: u128,
+}
+
+#[derive(Deserialize)]
 #[serde(crate = "alt_serde")]
 #[allow(non_snake_case)]
-struct MetricInfo {
+struct ApiMetric {
     appPubKey: String,
-    #[serde(deserialize_with = "de_string_to_bytes")]
-    partitionId: Vec<u8>,
-    bytes: u128,
-    requests: u128,
-}
-
-#[derive(Default, Debug)]
-struct DDNMetricInfo {
-	ddn_id: Vec<u8>,
-	bytes: u128,
-	requests: u128,
-}
-
-pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: &str = Deserialize::deserialize(de)?;
-    Ok(s.as_bytes().to_vec())
+    storageBytes: u128,
+    wcuUsed: u128,
+    rcuUsed: u128,
 }
 
 /// Defines application identifier for crypto keys of this module.
@@ -195,20 +183,21 @@ impl<T: Trait> Module<T> {
 
         let day_end_ms = day_start_ms + MS_PER_DAY;
 
-        let (aggregated_metrics, ddn_aggregated_metrics, offline_nodes) = Self::fetch_all_metrics(contract_address.clone(), day_start_ms)
-            .map_err(|err| {
+        let (aggregated_metrics, ddn_aggregated_metrics, offline_nodes) =
+            Self::fetch_all_metrics(contract_address.clone(), day_start_ms).map_err(|err| {
                 error!("[OCW] HTTP error occurred: {:?}", err);
                 "could not fetch metrics"
             })?;
 
         for offline_node in offline_nodes {
-            let p2p_id = String::from_utf8(offline_node.id).unwrap();
-            Self::report_ddn_status_to_sc(contract_address.clone(), &signer, &p2p_id, false).map_err(|err| {
+            let p2p_id = offline_node.p2p_id;
+            let contract_id = contract_address.clone();
+            Self::report_ddn_status_to_sc(contract_id, &signer, &p2p_id, false).map_err(|err| {
                 error!("[OCW] Contract error occurred: {:?}", err);
                 "could not submit report_ddn_status TX"
             })?;
         }
-    
+
         Self::send_metrics_to_sc(
             contract_address.clone(),
             &signer,
@@ -220,16 +209,16 @@ impl<T: Trait> Module<T> {
             "could not submit report_metrics TX"
         })?;
 
-		Self::send_metrics_ddn_to_sc(
-			contract_address.clone(),
-			&signer,
-			day_start_ms,
-			ddn_aggregated_metrics,
-		)
-		.map_err(|err| {
-			error!("[OCW] Contract error occurred: {:?}", err);
-			"could not submit report_metrics_ddn TX"
-		})?;
+        Self::send_metrics_ddn_to_sc(
+            contract_address.clone(),
+            &signer,
+            day_start_ms,
+            ddn_aggregated_metrics,
+        )
+        .map_err(|err| {
+            error!("[OCW] Contract error occurred: {:?}", err);
+            "could not submit report_metrics_ddn TX"
+        })?;
 
         let block_timestamp = sp_io::offchain::timestamp().unix_millis();
 
@@ -367,32 +356,35 @@ impl<T: Trait> Module<T> {
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         signer: &Signer<T::CST, T::AuthorityId>,
         day_start_ms: u64,
-        metrics: Vec<MetricInfo>,
+        metrics: Vec<Metric>,
     ) -> ResultStr<()> {
         info!("[OCW] Using Contract Address: {:?}", contract_id);
 
         for one_metric in metrics.iter() {
-            let app_id = Self::account_id_from_hex(&one_metric.appPubKey)?;
+            let app_id = Self::account_id_from_hex(&one_metric.app_id)?;
 
-            if one_metric.bytes == 0 && one_metric.requests == 0 {
+            if one_metric.storage_bytes == 0 && one_metric.wcu_used == 0 && one_metric.rcu_used == 0
+            {
                 continue;
             }
 
             let results = signer.send_signed_transaction(|account| {
                 info!(
-                    "[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?})",
+                    "[OCW] Sending transactions from {:?}: report_metrics({:?}, {:?}, {:?}, {:?}, {:?})",
                     account.id,
-                    one_metric.appPubKey,
+                    one_metric.app_id,
                     day_start_ms,
-                    one_metric.bytes,
-                    one_metric.requests
+                    one_metric.storage_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let call_data = Self::encode_report_metrics(
                     &app_id,
                     day_start_ms,
-                    one_metric.bytes,
-                    one_metric.requests,
+                    one_metric.storage_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let contract_id_unl =
@@ -417,34 +409,32 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-	fn send_metrics_ddn_to_sc(
+    fn send_metrics_ddn_to_sc(
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         signer: &Signer<T::CST, T::AuthorityId>,
         day_start_ms: u64,
-        metrics: Vec<DDNMetricInfo>,
+        metrics: Vec<MetricDDN>,
     ) -> ResultStr<()> {
         info!("[OCW] Using Contract Address: {:?}", contract_id);
 
         for one_metric in metrics.iter() {
-            if one_metric.bytes == 0 && one_metric.requests == 0 {
-                continue;
-            }
-
             let results = signer.send_signed_transaction(|account| {
                 info!(
-                    "[OCW] Sending transactions from {:?}: report_metrics_ddn({:?}, {:?}, {:?}, {:?})",
+                    "[OCW] Sending transactions from {:?}: report_metrics_ddn({:?}, {:?}, {:?}, {:?}, {:?})",
                     account.id,
-					one_metric.ddn_id,
+                    one_metric.p2p_id,
                     day_start_ms,
-                    one_metric.bytes,
-                    one_metric.requests
+                    one_metric.storage_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let call_data = Self::encode_report_metrics_ddn(
-                    &one_metric.ddn_id,
+                    one_metric.p2p_id.clone(),
                     day_start_ms,
-                    one_metric.bytes,
-                    one_metric.requests,
+                    one_metric.storage_bytes,
+                    one_metric.wcu_used,
+                    one_metric.rcu_used,
                 );
 
                 let contract_id_unl =
@@ -469,7 +459,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-	fn report_ddn_status_to_sc(
+    fn report_ddn_status_to_sc(
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         signer: &Signer<T::CST, T::AuthorityId>,
         p2p_id: &String,
@@ -480,9 +470,7 @@ impl<T: Trait> Module<T> {
         let results = signer.send_signed_transaction(|account| {
             info!(
                 "[OCW] Sending transactions from {:?}: report_ddn_status({:?}, {:?})",
-                account.id,
-                p2p_id,
-                is_online,
+                account.id, p2p_id, is_online,
             );
 
             let call_data = Self::encode_report_ddn_status(&p2p_id, is_online);
@@ -492,12 +480,7 @@ impl<T: Trait> Module<T> {
                     contract_id.clone(),
                 );
 
-            pallet_contracts::Call::call(
-                contract_id_unl,
-                0u32.into(),
-                100_000_000_000,
-                call_data,
-            )
+            pallet_contracts::Call::call(contract_id_unl, 0u32.into(), 100_000_000_000, call_data)
         });
 
         match &results {
@@ -511,39 +494,44 @@ impl<T: Trait> Module<T> {
     fn fetch_all_metrics(
         contract_id: <T::CT as frame_system::Trait>::AccountId,
         day_start_ms: u64,
-    ) -> ResultStr<(Vec<MetricInfo>, Vec<DDNMetricInfo>, Vec<NodeInfo>)> {
+    ) -> ResultStr<(Vec<Metric>, Vec<MetricDDN>, Vec<DDCNode>)> {
         let a_moment_ago_ms = sp_io::offchain::timestamp()
             .sub(Duration::from_millis(END_TIME_DELAY_MS))
             .unix_millis();
 
         let mut aggregated_metrics = MetricsAggregator::default();
-        let mut ddn_aggregated_metrics = DDnMetricsAggregator::default();
+        let mut ddn_aggregated_metrics = DDNMetricsAggregator::default();
 
         let nodes = Self::fetch_nodes(contract_id)?;
-        let mut offline_nodes: Vec<NodeInfo> = Vec::new();
+        let mut offline_nodes: Vec<DDCNode> = Vec::new();
 
         for node in nodes {
-            let metrics_of_node = match Self::fetch_node_metrics(&node.httpAddr, day_start_ms, a_moment_ago_ms) {
-                Ok(value) => value,
-                Err(_) => {
-                    offline_nodes.push(node);
-                    continue
-                },
-            };
+            let metrics_of_node =
+                match Self::fetch_node_metrics(&node.url, day_start_ms, a_moment_ago_ms) {
+                    Ok(value) => value,
+                    Err(_) => {
+                        offline_nodes.push(node);
+                        continue;
+                    }
+                };
 
-			ddn_aggregated_metrics.add(node.id.clone(), &metrics_of_node);
+            ddn_aggregated_metrics.add(node.p2p_id.clone(), &metrics_of_node);
 
-            for metrics in &metrics_of_node {
-                aggregated_metrics.add(metrics);
+            for metric in &metrics_of_node {
+                aggregated_metrics.add(metric);
             }
         }
 
-        Ok((aggregated_metrics.finish(), ddn_aggregated_metrics.finish(), offline_nodes))
+        Ok((
+            aggregated_metrics.finish(),
+            ddn_aggregated_metrics.finish(),
+            offline_nodes,
+        ))
     }
 
     fn fetch_nodes(
         contract_id: <T::CT as frame_system::Trait>::AccountId,
-    ) -> ResultStr<Vec<NodeInfo>> {
+    ) -> ResultStr<Vec<DDCNode>> {
         let call_data = Self::encode_get_all_ddc_nodes();
         let (exec_result, _gas_consumed) = pallet_contracts::Module::<T::CT>::bare_call(
             Default::default(),
@@ -567,23 +555,14 @@ impl<T: Trait> Module<T> {
         let ddc_nodes = Vec::<DDCNode>::decode(&mut data)
             .map_err(|_| "[OCW] error decoding get_all_ddc_nodes result")?;
 
-        let mut result = Vec::new();
-
-        for ddc_node in ddc_nodes.iter() {
-            result.push(NodeInfo {
-                id: ddc_node.p2p_id.clone(),
-                httpAddr: String::from_utf8(ddc_node.url.clone()).unwrap(),
-            });
-        }
-
-        Ok(result)
+        Ok(ddc_nodes)
     }
 
     fn fetch_node_metrics(
         node_url: &str,
         day_start_ms: u64,
         end_ms: u64,
-    ) -> ResultStr<Vec<MetricInfo>> {
+    ) -> ResultStr<Vec<Metric>> {
         let metrics_url = format!(
             "{}{}{}{}{}{}",
             node_url,
@@ -594,7 +573,17 @@ impl<T: Trait> Module<T> {
             end_ms / 1000
         );
 
-        Self::http_get_json(&metrics_url)
+        let metrics: Vec<ApiMetric> = Self::http_get_json(&metrics_url)?;
+
+        Ok(metrics
+            .into_iter()
+            .map(|data| Metric {
+                app_id: data.appPubKey,
+                storage_bytes: data.storageBytes,
+                wcu_used: data.wcuUsed,
+                rcu_used: data.rcuUsed,
+            })
+            .collect())
     }
 
     fn http_get_json<OUT: DeserializeOwned>(url: &str) -> ResultStr<OUT> {
@@ -665,37 +654,40 @@ impl<T: Trait> Module<T> {
     fn encode_report_metrics(
         app_id: &AccountId32,
         day_start_ms: u64,
-        stored_bytes: u128,
-        requests: u128,
+        storage_bytes: u128,
+        wcu_used: u128,
+        rcu_used: u128,
     ) -> Vec<u8> {
         let mut call_data = REPORT_METRICS_SELECTOR.to_vec();
         app_id.encode_to(&mut call_data);
         day_start_ms.encode_to(&mut call_data);
-        stored_bytes.encode_to(&mut call_data);
-        requests.encode_to(&mut call_data);
+        storage_bytes.encode_to(&mut call_data);
+        wcu_used.encode_to(&mut call_data);
+        rcu_used.encode_to(&mut call_data);
+
         call_data
     }
 
-	fn encode_report_metrics_ddn(
-        ddn_id: &[u8],
+    fn encode_report_metrics_ddn(
+        p2p_id: String,
         day_start_ms: u64,
-        stored_bytes: u128,
-        requests: u128,
+        storage_bytes: u128,
+        wcu_used: u128,
+        rcu_used: u128,
     ) -> Vec<u8> {
         let mut call_data = REPORT_METRICS_DDN_SELECTOR.to_vec();
-		ddn_id.encode_to(&mut call_data);
+        p2p_id.encode_to(&mut call_data);
         day_start_ms.encode_to(&mut call_data);
-        stored_bytes.encode_to(&mut call_data);
-        requests.encode_to(&mut call_data);
+        storage_bytes.encode_to(&mut call_data);
+        wcu_used.encode_to(&mut call_data);
+        rcu_used.encode_to(&mut call_data);
+
         call_data
     }
 
-	fn encode_report_ddn_status(
-        p2p_id: &String,
-        is_online: bool,
-    ) -> Vec<u8> {
+    fn encode_report_ddn_status(p2p_id: &String, is_online: bool) -> Vec<u8> {
         let mut call_data = REPORT_DDN_STATUS_SELECTOR.to_vec();
-		p2p_id.encode_to(&mut call_data);
+        p2p_id.encode_to(&mut call_data);
         is_online.encode_to(&mut call_data);
         call_data
     }
@@ -712,66 +704,72 @@ impl<T: Trait> Module<T> {
 }
 
 #[derive(Default)]
-struct MetricsAggregator(Vec<MetricInfo>);
+struct MetricsAggregator(Vec<Metric>);
 
 impl MetricsAggregator {
-    fn add(&mut self, metrics: &MetricInfo) {
+    fn add(&mut self, metric: &Metric) {
         let existing_pubkey_index = self
             .0
             .iter()
-            .position(|one_result_obj| metrics.appPubKey == one_result_obj.appPubKey);
+            .position(|one_result_obj| metric.app_id == one_result_obj.app_id);
 
         if existing_pubkey_index.is_none() {
             // New app.
-            let new_metric_obj = MetricInfo {
-                appPubKey: metrics.appPubKey.clone(),
-                partitionId: vec![], // Ignored in aggregates.
-                bytes: metrics.bytes,
-                requests: metrics.requests,
+            let new_metric_obj = Metric {
+                app_id: metric.app_id.clone(),
+                storage_bytes: metric.storage_bytes,
+                wcu_used: metric.wcu_used,
+                rcu_used: metric.rcu_used,
             };
             self.0.push(new_metric_obj);
         } else {
             // Add to metrics of an existing app.
-            self.0[existing_pubkey_index.unwrap()].requests += metrics.requests;
-            self.0[existing_pubkey_index.unwrap()].bytes += metrics.bytes;
+            self.0[existing_pubkey_index.unwrap()].storage_bytes += metric.storage_bytes;
+            self.0[existing_pubkey_index.unwrap()].wcu_used += metric.wcu_used;
+            self.0[existing_pubkey_index.unwrap()].rcu_used += metric.rcu_used;
         }
     }
 
-    fn finish(self) -> Vec<MetricInfo> {
+    fn finish(self) -> Vec<Metric> {
         self.0
     }
 }
 
 #[derive(Default)]
-struct DDnMetricsAggregator(Vec<DDNMetricInfo>);
+struct DDNMetricsAggregator(Vec<MetricDDN>);
 
-impl DDnMetricsAggregator {
-	fn add(&mut self, ddn_id: Vec<u8>, metrics: &Vec<MetricInfo>) {
-		let existing_pubkey_index = self
-			.0
-			.iter()
-			.position(|one_result_obj| ddn_id == one_result_obj.ddn_id);
+impl DDNMetricsAggregator {
+    fn add(&mut self, p2p_id: String, metrics: &Vec<Metric>) {
+        let existing_pubkey_index = self
+            .0
+            .iter()
+            .position(|one_result_obj| p2p_id == one_result_obj.p2p_id);
 
-		// Only if key does not exists - add new item, otherwise - skip
-		if existing_pubkey_index.is_none() {
-			let mut requests_sum = 0;
-			let mut bytes_sum = 0;
+        // Only if key does not exists - add new item, otherwise - skip
+        if existing_pubkey_index.is_none() {
+            let mut storage_bytes_sum = 0;
+            let mut wcu_used_sum = 0;
+            let mut rcu_used_sum = 0;
 
-			for metric_item in metrics.iter() {
-				requests_sum += metric_item.requests;
-				bytes_sum += metric_item.bytes;
-			}
+            for metric_item in metrics.iter() {
+                storage_bytes_sum += metric_item.storage_bytes;
+                wcu_used_sum += metric_item.wcu_used;
+                rcu_used_sum += metric_item.rcu_used;
+            }
 
-			let new_metric_obj = DDNMetricInfo {
-                ddn_id,
-                bytes: bytes_sum,
-                requests: requests_sum,
+            let new_metric_obj = MetricDDN {
+                p2p_id,
+                storage_bytes: storage_bytes_sum,
+                wcu_used: wcu_used_sum,
+                rcu_used: rcu_used_sum,
             };
-			self.0.push(new_metric_obj);
-		}
-	}
+            self.0.push(new_metric_obj);
+        }
+    }
 
-	fn finish(self) -> Vec<DDNMetricInfo> { self.0 }
+    fn finish(self) -> Vec<MetricDDN> {
+        self.0
+    }
 }
 
 // TODO: remove, or write meaningful events.
