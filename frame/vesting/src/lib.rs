@@ -104,8 +104,6 @@ mod vesting_info {
 			ensure!(!locked.is_zero() && !per_block.is_zero(), Error::<T>::InvalidScheduleParams);
 			let min_transfer: u32 = T::MinVestedTransfer::get().try_into().unwrap_or(u32::MAX);
 			let min_transfer = Balance::from(min_transfer);
-			// TODO - Do we want to enforce this here? This would keep from merging where sum of
-			// schedules is below MinVestedTransfer
 			ensure!(locked >= min_transfer, Error::<T>::AmountLow);
 			Ok(())
 		}
@@ -608,9 +606,6 @@ impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T> where
 {
 	type Moment = T::BlockNumber;
 	type Currency = T::Currency;
-
-	// TODO should we expose merge vesting schedules here? Its a bit dangerous because schedules
-	// need to be vested before being merged
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
