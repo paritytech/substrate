@@ -79,9 +79,9 @@ pub fn create_validator_with_nominators<T: Config>(
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0 .. upper_bound {
 		let (n_stash, n_controller) = if !dead {
-			create_stash_controller::<T>(u32::max_value() - i, 100, destination.clone())?
+			create_stash_controller::<T>(u32::MAX - i, 100, destination.clone())?
 		} else {
-			create_stash_and_dead_controller::<T>(u32::max_value() - i, 100, destination.clone())?
+			create_stash_and_dead_controller::<T>(u32::MAX - i, 100, destination.clone())?
 		};
 		if i < n {
 			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
@@ -456,7 +456,7 @@ benchmarks! {
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
 			ErasStartSessionIndex::<T>::insert(i, i);
 		}
-	}: _(RawOrigin::Root, EraIndex::zero(), u32::max_value())
+	}: _(RawOrigin::Root, EraIndex::zero(), u32::MAX)
 	verify {
 		assert_eq!(HistoryDepth::<T>::get(), 0);
 	}
@@ -607,13 +607,13 @@ benchmarks! {
 		RawOrigin::Root,
 		BalanceOf::<T>::max_value(),
 		BalanceOf::<T>::max_value(),
-		Some(u32::max_value()),
-		Some(u32::max_value())
+		Some(u32::MAX),
+		Some(u32::MAX)
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
-		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::max_value()));
-		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::max_value()));
+		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::MAX));
+		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::MAX));
 	}
 
 	chill_other {

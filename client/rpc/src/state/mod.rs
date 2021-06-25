@@ -182,6 +182,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
 	deny_unsafe: DenyUnsafe,
+	rpc_max_payload: Option<usize>,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
@@ -193,9 +194,11 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		Client::Api: Metadata<Block>,
 {
 	let child_backend = Box::new(
-		self::state_full::FullState::new(client.clone(), subscriptions.clone())
+		self::state_full::FullState::new(
+			client.clone(), subscriptions.clone(), rpc_max_payload
+		)
 	);
-	let backend = Box::new(self::state_full::FullState::new(client, subscriptions));
+	let backend = Box::new(self::state_full::FullState::new(client, subscriptions, rpc_max_payload));
 	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 

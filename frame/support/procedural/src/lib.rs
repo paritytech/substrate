@@ -384,7 +384,7 @@ pub fn derive_clone_no_bound(input: TokenStream) -> TokenStream {
 	clone_no_bound::derive_clone_no_bound(input)
 }
 
-/// Derive [`Debug`] but do not bound any generics. Docs are at `frame_support::DeriveNoBounds`.
+/// Derive [`Debug`] but do not bound any generics. Docs are at `frame_support::DebugNoBound`.
 #[proc_macro_derive(DebugNoBound)]
 pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
 	debug_no_bound::derive_debug_no_bound(input)
