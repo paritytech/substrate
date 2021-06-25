@@ -306,13 +306,6 @@ pub trait BenchmarkingConfig {
 	const DESIRED_TARGETS: [u32; 2];
 }
 
-impl BenchmarkingConfig for () {
-	const VOTERS: [u32; 2] = [4000, 6000];
-	const TARGETS: [u32; 2] = [1000, 1600];
-	const ACTIVE_VOTERS: [u32; 2] = [1000, 3000];
-	const DESIRED_TARGETS: [u32; 2] = [400, 800];
-}
-
 /// Current phase of the pallet.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum Phase<Bn> {
@@ -906,7 +899,7 @@ pub mod pallet {
 
 				let _ = Self::unsigned_pre_dispatch_checks(solution)
 					.map_err(|err| {
-						log!(error, "unsigned transaction validation failed due to {:?}", err);
+						log!(debug, "unsigned transaction validation failed due to {:?}", err);
 						err
 					})
 					.map_err(dispatch_error_to_invalid)?;

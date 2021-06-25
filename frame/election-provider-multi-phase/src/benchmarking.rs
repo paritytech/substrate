@@ -144,6 +144,30 @@ fn solution_with_size<T: Config>(
 	RawSolution { compact, score, round }
 }
 
+fn set_up_data_provider<T: Config>(v: u32, t: u32) {
+	// number of votes in snapshot.
+
+	T::DataProvider::clear();
+	log!(info, "setting up with voters = {} [degree = {}], targets = {}", v, T::DataProvider::MAXIMUM_VOTES_PER_VOTER, t);
+
+	// fill targets.
+	let mut targets = (0..t).map(|i| {
+		let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
+		T::DataProvider::add_target(target.clone());
+		target
+	}).collect::<Vec<_>>();
+	// we should always have enough voters to fill.
+	assert!(targets.len() > T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
+	targets.truncate(T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
+
+	// fill voters.
+	(0..v).for_each(|i| {
+		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
+		let weight = T::Currency::minimum_balance().saturated_into::<u64>() * 1000;
+		T::DataProvider::add_voter(voter, weight, targets.clone());
+	});
+}
+
 frame_benchmarking::benchmarks! {
 	on_initialize_nothing {
 		assert!(<MultiPhase<T>>::current_phase().is_off());
@@ -218,13 +242,40 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(<CurrentPhase<T>>::get(), <Phase<T::BlockNumber>>::Off);
 	}
 
-	#[extra]
-	create_snapshot {
+	// NOTE: this weight is not user anywhere, but should NOT be marked as #[extra] as its execution
+	// is vital to ensure memory-safety.
+	mine_solution_offchain_memory {
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot. Fixed to maximum.
+		let t  = T::BenchmarkingConfig::TARGETS[1];
+
+		T::DataProvider::clear();
+		set_up_data_provider(v, t);
+		<MultiPhase::<T>>::create_snapshot().unwrap();
+	}: {
+		<MultiPhase::<T>>::offchain_worker(1u32.into())
+	} verify {
+
+	}
+
+	// NOTE: this weight is not user anywhere, but should NOT be marked as #[extra] as its execution
+	// is vital to ensure memory-safety.
+	create_snapshot_memory {
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot. Fixed to maximum.
+		let t  = T::BenchmarkingConfig::TARGETS[1];
+
+		T::DataProvider::clear();
+		set_up_data_provider(v, t);
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
 		<MultiPhase::<T>>::create_snapshot().unwrap()
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().targets, t);
 	}
 
 	submit_unsigned {
@@ -253,6 +304,31 @@ frame_benchmarking::benchmarks! {
 		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
+	}
+
+	// This is checking a valid solution. The worse case is indeed a valid solution.
+	feasibility_check {
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot.
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
+		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// a subset of `v` component.
+		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		// number of desired targets. Must be a subset of `t` component.
+		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
+
+		let size = SolutionOrSnapshotSize { voters: v, targets: t };
+		let raw_solution = solution_with_size::<T>(size, a, d);
+
+		assert_eq!(raw_solution.compact.voter_count() as u32, a);
+		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
+
+		// encode the most significant storage item that needs to be decoded in the dispatch.
+		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
+	}: {
+		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
 	}
 
 	#[extra]
@@ -316,31 +392,6 @@ frame_benchmarking::benchmarks! {
 		log!(trace, "encoded size prediction = {}", encoded_size_of(index_assignments.as_slice()).unwrap());
 		log!(trace, "actual encoded size = {}", encoding.len());
 		assert!(encoding.len() <= desired_size);
-	}
-
-	// This is checking a valid solution. The worse case is indeed a valid solution.
-	feasibility_check {
-		// number of votes in snapshot.
-		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
-		// number of targets in snapshot.
-		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
-		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
-		// a subset of `v` component.
-		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
-		// number of desired targets. Must be a subset of `t` component.
-		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
-
-		let size = SolutionOrSnapshotSize { voters: v, targets: t };
-		let raw_solution = solution_with_size::<T>(size, a, d);
-
-		assert_eq!(raw_solution.compact.voter_count() as u32, a);
-		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
-
-		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
-	}: {
-		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
 	}
 }
 
