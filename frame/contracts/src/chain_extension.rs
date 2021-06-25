@@ -313,7 +313,7 @@ where
 	/// Reads and decodes a type with a dynamic size from contract memory.
 	///
 	/// Make sure to include `len` in your weight calculations.
-	pub fn read_as_unbounded<T: Decode + MaxEncodedLen>(&mut self, len: u32) -> Result<T> {
+	pub fn read_as_unbounded<T: Decode>(&mut self, len: u32) -> Result<T> {
 		self.inner.runtime.read_sandbox_memory_as_unbounded(self.inner.input_ptr, len)
 	}
 
