@@ -1186,11 +1186,11 @@ mod tests {
 			};
 			assert_eq!(
 				Pallet::<Runtime>::compute_fee(
-					<u32>::max_value(),
+					u32::MAX,
 					&dispatch_info,
-					<u64>::max_value()
+					u64::MAX
 				),
-				<u64>::max_value()
+				u64::MAX
 			);
 		});
 	}

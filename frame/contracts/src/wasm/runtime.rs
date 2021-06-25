@@ -550,7 +550,7 @@ where
 	/// length of the buffer located at `out_ptr`. If that buffer is large enough the actual
 	/// `buf.len()` is written to this location.
 	///
-	/// If `out_ptr` is set to the sentinel value of `u32::max_value()` and `allow_skip` is true the
+	/// If `out_ptr` is set to the sentinel value of `u32::MAX` and `allow_skip` is true the
 	/// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
 	/// output optional. For example to skip copying back the output buffer of an `seal_call`
 	/// when the caller is not interested in the result.
@@ -570,7 +570,7 @@ where
 		create_token: impl FnOnce(u32) -> Option<RuntimeCosts>,
 	) -> Result<(), DispatchError>
 	{
-		if allow_skip && out_ptr == u32::max_value() {
+		if allow_skip && out_ptr == u32::MAX {
 			return Ok(());
 		}
 
@@ -892,7 +892,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// The callees output buffer is copied to `output_ptr` and its length to `output_len_ptr`.
 	// The copy of the output buffer can be skipped by supplying the sentinel value
-	// of `u32::max_value()` to `output_ptr`.
+	// of `u32::MAX` to `output_ptr`.
 	//
 	// # Parameters
 	//
@@ -953,7 +953,7 @@ define_env!(Env, <E: Ext>,
 	// by the code hash. The address of this new account is copied to `address_ptr` and its length
 	// to `address_len_ptr`. The constructors output buffer is copied to `output_ptr` and its
 	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
-	// supplying the sentinel value of `u32::max_value()` to `output_ptr` or `address_ptr`.
+	// supplying the sentinel value of `u32::MAX` to `output_ptr` or `address_ptr`.
 	//
 	// After running the constructor it is verified that the contract account holds at
 	// least the subsistence threshold. If that is not the case the instantiation fails and

@@ -97,7 +97,7 @@ fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&A
 
 	let idx = *slot % (authorities.len() as u64);
 	assert!(
-		idx <= usize::max_value() as u64,
+		idx <= usize::MAX as u64,
 		"It is impossible to have a vector with length beyond the address space; qed",
 	);
 

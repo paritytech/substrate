@@ -150,7 +150,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	for j in 0 .. nominators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
 		let (_n_stash, n_controller) = create_stash_controller::<T>(
-			u32::max_value() - j,
+			u32::MAX - j,
 			balance_factor,
 			RewardDestination::Staked,
 		)?;
