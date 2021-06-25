@@ -1360,7 +1360,7 @@ impl<T: Config> Pallet<T> {
 		let mut digest = <Digest<T>>::get();
 
 		let extrinsics = (0..ExtrinsicCount::<T>::take().unwrap_or_default())
-			.map(ExtrinsicData::<T>::take)
+			.map(|i| ExtrinsicData::<T>::take(i).into())
 			.collect();
 		let extrinsics_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 
