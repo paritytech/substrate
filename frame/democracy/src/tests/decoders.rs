@@ -23,11 +23,11 @@ use frame_support::storage::{migration, unhashed};
 #[test]
 fn test_decode_compact_u32_at() {
 	new_test_ext().execute_with(|| {
-		let v = codec::Compact(u64::max_value());
+		let v = codec::Compact(u64::MAX);
 		migration::put_storage_value(b"test", b"", &[], v);
 		assert_eq!(decode_compact_u32_at(b"test"), None);
 
-		for v in vec![0, 10, u32::max_value()] {
+		for v in vec![0, 10, u32::MAX] {
 			let compact_v = codec::Compact(v);
 			unhashed::put(b"test", &compact_v);
 			assert_eq!(decode_compact_u32_at(b"test"), Some(v));
