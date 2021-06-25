@@ -647,45 +647,67 @@ benchmarks! {
 		// - The destination bag is not empty, because then we need to update the `next` pointer
 		//   of the previous node in addition to the work we do otherwise.
 
+		use crate::voter_bags::{Bag, Node};
+
+		let dbg_weight = |human: &str, account_id: &T::AccountId| {
+			let weight_of = Staking::<T>::weight_of_fn();
+			sp_runtime::print(human);
+			sp_runtime::print(weight_of(account_id));
+		};
+
+		let make_validator = |n: u32, balance_factor: u32| -> Result<(T::AccountId, T::AccountId), &'static str> {
+			let (stash, controller) = create_stash_controller::<T>(n, balance_factor, Default::default())?;
+			whitelist_account!(controller);
+
+			let prefs = ValidatorPrefs::default();
+			// bond the full value of the stash
+			Staking::<T>::bond_extra(RawOrigin::Signed(stash.clone()).into(), (!0_u32).into())?;
+			Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), prefs)?;
+
+			Ok((stash, controller))
+		};
+
 		// Clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
-		use crate::voter_bags::{Bag, Node};
 
-		// stash and controller control the node account, which is a validator for simplicity of setup
-		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
+		// stash controls the node account
+		let (stash, controller) = make_validator(USER_SEED, 100)?;
 
-		let prefs = ValidatorPrefs::default();
-		whitelist_account!(controller);
-		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), prefs)?;
+		dbg_weight("stash", &stash);
 
 		// create another validator with 3x the stake
-		create_validators::<T>(1, 300)?;
+		let (other_stash, _) = make_validator(USER_SEED + 1, 300)?;
+
+		dbg_weight("other stash", &other_stash);
 
 		// update the stash account's value/weight
-		T::Currency::deposit_into_existing(&stash, T::Currency::minimum_balance() * 200_u32.into())?;
+		T::Currency::make_free_balance_be(&stash, T::Currency::free_balance(&other_stash));
+		Staking::<T>::bond_extra(RawOrigin::Signed(stash.clone()).into(), (!0_u32).into())?;
+
+		dbg_weight("stash after deposit", &stash);
 
 		// verify preconditions
 		let weight_of = Staking::<T>::weight_of_fn();
 		let node = Node::<T>::from_id(&stash).ok_or("node not found for stash")?;
-		assert!(
+		ensure!(
 			node.is_misplaced(&weight_of),
 			"rebagging only makes sense when a node is misplaced",
 		);
-		assert_eq!(
+		ensure!(
 			{
 				let origin_bag = Bag::<T>::get(node.bag_idx).ok_or("origin bag not found")?;
-				origin_bag.iter().count()
+				origin_bag.iter().count() == 1
 			},
-			1,
 			"stash should be the only node in origin bag",
 		);
-		assert_ne!(
+		let other_node = Node::<T>::from_id(&other_stash).ok_or("node not found for other_stash")?;
+		ensure!(!other_node.is_misplaced(&weight_of), "other stash balance never changed");
+		ensure!(
 			{
 				let destination_bag = Bag::<T>::get(node.proper_bag_for()).ok_or("destination bag not found")?;
-				destination_bag.iter().count()
+				destination_bag.iter().count() != 0
 			},
-			0,
 			"destination bag should not be empty",
 		);
 		drop(node);
@@ -693,12 +715,12 @@ benchmarks! {
 		// caller will call rebag
 		let caller = whitelisted_caller();
 		// ensure it's distinct from the other accounts
-		assert_ne!(caller, stash);
-		assert_ne!(caller, controller);
+		ensure!(caller != stash, "caller must not be the same as the stash");
+		ensure!(caller != controller, "caller must not be the same as the controller");
 	}: _(RawOrigin::Signed(caller), stash.clone())
 	verify {
 		let node = Node::<T>::from_id(&stash).ok_or("node not found for stash")?;
-		assert!(!node.is_misplaced(&weight_of), "node must be in proper place after rebag");
+		ensure!(!node.is_misplaced(&weight_of), "node must be in proper place after rebag");
 	}
 }
 
