@@ -416,8 +416,8 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		transaction_pool,
 		task_manager: &mut task_manager,
 		on_demand: Some(on_demand),
+		// TODO: (dp) remove
 		rpc_extensions_builder: Box::new(|_, _| ()),
-		// TODO: (dp) implement
 		rpsee_builder: Box::new(|_, _| RpcModule::new(())),
 		config,
 		client,
