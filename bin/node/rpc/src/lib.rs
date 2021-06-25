@@ -85,7 +85,6 @@ pub struct GrandpaDeps<B> {
 }
 
 /// Full client dependencies.
-// pub struct FullDeps<C, P, SC, B> {
 pub struct FullDeps<C, P> {
 	/// The client instance to use.
 	pub client: Arc<C>,
@@ -111,9 +110,6 @@ pub fn create_full<C, P>(
 	C::Api: BabeApi<Block>,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
-	// SC: SelectChain<Block> +'static,
-	// B: sc_client_api::Backend<Block> + Send + Sync + 'static,
-	// B::State: sc_client_api::backend::StateBackend<sp_runtime::traits::HashFor<Block>>,
 {
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
