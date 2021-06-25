@@ -30,10 +30,8 @@ use sp_npos_elections::{
 	assignment_staked_to_ratio_normalized, is_score_better, seq_phragmen,
 };
 use sp_runtime::{
-	DispatchError,
-	SaturatedConversion,
-	offchain::storage::StorageValueRef,
-	traits::TrailingZeroInput,
+	offchain::storage::{MutateStorageError, StorageValueRef},
+	traits::TrailingZeroInput, SaturatedConversion
 };
 use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec};
 
@@ -72,7 +70,7 @@ pub enum MinerError {
 	/// Submitting a transaction to the pool failed.
 	PoolSubmissionFailed,
 	/// The pre-dispatch checks failed for the mined solution.
-	PreDispatchChecksFailed(DispatchError),
+	PreDispatchChecksFailed(sp_runtime::DispatchError),
 	/// The solution generated from the miner is not feasible.
 	Feasibility(FeasibilityError),
 	/// Something went wrong fetching the lock.
@@ -104,9 +102,9 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
 	log!(debug, "saving a call to the offchain storage.");
 	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
-		Ok(Ok(_)) => Ok(()),
-		Ok(Err(_)) => Err(MinerError::FailedToStoreSolution),
-		Err(_) => {
+		Ok(_) => Ok(()),
+		Err(MutateStorageError::ConcurrentModification(_)) => Err(MinerError::FailedToStoreSolution),
+		Err(MutateStorageError::ValueFunctionFailed(_)) => {
 			// this branch should be unreachable according to the definition of
 			// `StorageValueRef::mutate`: that function should only ever `Err` if the closure we
 			// pass it returns an error. however, for safety in case the definition changes, we do
@@ -120,6 +118,7 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
 fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
 	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL)
 		.get()
+		.ok()
 		.flatten()
 		.ok_or(MinerError::NoStoredSolution)
 }
@@ -141,12 +140,9 @@ fn clear_offchain_repeat_frequency() {
 }
 
 /// `true` when OCW storage contains a solution
-///
-/// More precise than `restore_solution::<T>().is_ok()`; that invocation will return `false`
-/// if a solution exists but cannot be decoded, whereas this just checks whether an item is present.
 #[cfg(test)]
 fn ocw_solution_exists<T: Config>() -> bool {
-	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get::<Call<T>>().is_some()
+	matches!(StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get::<Call<T>>(), Ok(Some(_)))
 }
 
 impl<T: Config> Pallet<T> {
@@ -598,13 +594,13 @@ impl<T: Config> Pallet<T> {
 		let last_block = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 
 		let mutate_stat = last_block.mutate::<_, &'static str, _>(
-			|maybe_head: Option<Option<T::BlockNumber>>| {
+			|maybe_head: Result<Option<T::BlockNumber>, _>| {
 				match maybe_head {
-					Some(Some(head)) if now < head => Err("fork."),
-					Some(Some(head)) if now >= head && now <= head + threshold => {
+					Ok(Some(head)) if now < head => Err("fork."),
+					Ok(Some(head)) if now >= head && now <= head + threshold => {
 						Err("recently executed.")
 					}
-					Some(Some(head)) if now > head + threshold => {
+					Ok(Some(head)) if now > head + threshold => {
 						// we can run again now. Write the new head.
 						Ok(now)
 					}
@@ -618,11 +614,12 @@ impl<T: Config> Pallet<T> {
 
 		match mutate_stat {
 			// all good
-			Ok(Ok(_)) => Ok(()),
+			Ok(_) => Ok(()),
 			// failed to write.
-			Ok(Err(_)) => Err(MinerError::Lock("failed to write to offchain db.")),
+			Err(MutateStorageError::ConcurrentModification(_)) =>
+				Err(MinerError::Lock("failed to write to offchain db (concurrent modification).")),
 			// fork etc.
-			Err(why) => Err(MinerError::Lock(why)),
+			Err(MutateStorageError::ValueFunctionFailed(why)) => Err(MinerError::Lock(why)),
 		}
 	}
 
@@ -1015,7 +1012,7 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::mine_check_save_submit().unwrap_err(),
-				MinerError::PreDispatchChecksFailed(DispatchError::Module{
+				MinerError::PreDispatchChecksFailed(sp_runtime::DispatchError::Module{
 					index: 2,
 					error: 1,
 					message: Some("PreDispatchWrongWinnerCount"),
@@ -1144,15 +1141,15 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// initially, the lock is not set.
-			assert!(guard.get::<bool>().is_none());
+			assert!(guard.get::<bool>().unwrap().is_none());
 
 			// a successful a-z execution.
 			MultiPhase::offchain_worker(25);
 			assert_eq!(pool.read().transactions.len(), 1);
 
 			// afterwards, the lock is not set either..
-			assert!(guard.get::<bool>().is_none());
-			assert_eq!(last_block.get::<BlockNumber>().unwrap().unwrap(), 25);
+			assert!(guard.get::<bool>().unwrap().is_none());
+			assert_eq!(last_block.get::<BlockNumber>().unwrap(), Some(25));
 		});
 	}
 
@@ -1313,7 +1310,7 @@ mod tests {
 			// this ensures that when the resubmit window rolls around, we're ready to regenerate
 			// from scratch if necessary
 			let mut call_cache = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
-			assert!(matches!(call_cache.get::<Call<Runtime>>(), Some(Some(_call))));
+			assert!(matches!(call_cache.get::<Call<Runtime>>(), Ok(Some(_call))));
 			call_cache.clear();
 
 			// attempts to resubmit the tx after the threshold has expired

@@ -232,6 +232,30 @@ arg_enum! {
 	}
 }
 
+arg_enum! {
+	/// Syncing mode.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy)]
+	pub enum SyncMode {
+		// Full sync. Donwnload end verify all blocks.
+		Full,
+		// Download blocks without executing them. Download latest state with proofs.
+		Fast,
+		// Download blocks without executing them. Download latest state without proofs.
+		FastUnsafe,
+	}
+}
+
+impl Into<sc_network::config::SyncMode> for SyncMode {
+	fn into(self) -> sc_network::config::SyncMode {
+		match self {
+			SyncMode::Full => sc_network::config::SyncMode::Full,
+			SyncMode::Fast => sc_network::config::SyncMode::Fast { skip_proofs: false },
+			SyncMode::FastUnsafe => sc_network::config::SyncMode::Fast { skip_proofs: true },
+		}
+	}
+}
+
 /// Default value for the `--execution-syncing` parameter.
 pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
 /// Default value for the `--execution-import-block` parameter.

@@ -19,7 +19,7 @@
 //! bonding validators, nominators, and generating different types of solutions.
 
 use crate::*;
-use crate::Module as Staking;
+use crate::Pallet as Staking;
 use frame_benchmarking::account;
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
@@ -29,8 +29,10 @@ const SEED: u32 = 0;
 
 /// This function removes all validators and nominators from storage.
 pub fn clear_validators_and_nominators<T: Config>() {
-	Validators::<T>::remove_all();
-	Nominators::<T>::remove_all();
+	Validators::<T>::remove_all(None);
+	CounterForValidators::<T>::kill();
+	Nominators::<T>::remove_all(None);
+	CounterForNominators::<T>::kill();
 }
 
 /// Grab a funded user.
@@ -148,7 +150,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	for j in 0 .. nominators {
 		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
 		let (_n_stash, n_controller) = create_stash_controller::<T>(
-			u32::max_value() - j,
+			u32::MAX - j,
 			balance_factor,
 			RewardDestination::Staked,
 		)?;
@@ -166,12 +168,12 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), selected_validators)?;
 	}
 
-	ValidatorCount::put(validators);
+	ValidatorCount::<T>::put(validators);
 
 	Ok(validator_chosen)
 }
 
 /// get the current era.
 pub fn current_era<T: Config>() -> EraIndex {
-	<Module<T>>::current_era().unwrap_or(0)
+	<Pallet<T>>::current_era().unwrap_or(0)
 }

@@ -227,6 +227,8 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
+
+	fn block_indexed_body(&self, id: BlockId<Block>) -> Result<Option<Vec<Vec<u8>>>>;
 }
 
 /// Provides access to the optional cache.
@@ -267,12 +269,14 @@ pub struct Info<Block: BlockT> {
 	pub finalized_hash: Block::Hash,
 	/// Last finalized block number.
 	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	/// Last finalized state.
+	pub finalized_state: Option<(Block::Hash, <<Block as BlockT>::Header as HeaderT>::Number)>,
 	/// Number of concurrent leave forks.
 	pub number_leaves: usize
 }
 
 /// Block status.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockStatus {
 	/// Already in the blockchain.
 	InChain,
