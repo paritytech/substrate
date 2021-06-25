@@ -46,6 +46,7 @@ pub type TombstoneContractInfo<T> =
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account
 #[derive(Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub enum ContractInfo<T: Config> {
 	Alive(AliveContractInfo<T>),
 	Tombstone(TombstoneContractInfo<T>),

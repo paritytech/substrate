@@ -73,6 +73,7 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, DefaultNoBound, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct Schedule<T: Config> {
 	/// Describes the upper limits on various metrics.
 	pub limits: Limits,
@@ -175,6 +176,7 @@ impl Limits {
 ///    and dropping return values in order to maintain a valid module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct InstructionWeights<T: Config> {
 	/// Version of the instruction weights.
 	///
@@ -248,6 +250,7 @@ pub struct InstructionWeights<T: Config> {
 /// Describes the weight for each imported function that a contract is allowed to call.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_caller`.
 	pub caller: Weight,

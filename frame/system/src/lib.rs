@@ -161,7 +161,7 @@ pub mod pallet {
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: 'static + Eq + Clone + scale_info::TypeInfo { // todo: [AJ] see whether we really need this bound
+	pub trait Config: 'static + Eq + Clone {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
 		type BaseCallFilter: Filter<Self::Call>;
