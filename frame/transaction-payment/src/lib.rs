@@ -515,6 +515,7 @@ impl<T> Convert<Weight, BalanceOf<T>> for Pallet<T> where
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 
 impl<T: Config> ChargeTransactionPayment<T> where
@@ -565,7 +566,7 @@ impl<T: Config> ChargeTransactionPayment<T> where
 	}
 }
 
-impl<T: Config + TypeInfo> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
+impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "ChargeTransactionPayment<{:?}>", self.0)
