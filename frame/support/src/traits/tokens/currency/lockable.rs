@@ -99,6 +99,9 @@ pub trait VestingSchedule<AccountId> {
 
 	/// Remove a vesting schedule for a given account.
 	///
+	/// Parameter `schedule_index` is only applicable for implementations that
+	/// support multiple schedules.
+	///
 	/// NOTE: This doesn't alter the free balance of the account.
-	fn remove_vesting_schedule(who: &AccountId);
+	fn remove_vesting_schedule(who: &AccountId, schedule_index: Option<u32>) -> DispatchResult;
 }
