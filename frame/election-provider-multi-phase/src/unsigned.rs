@@ -30,8 +30,10 @@ use sp_npos_elections::{
 	assignment_staked_to_ratio_normalized, is_score_better, seq_phragmen,
 };
 use sp_runtime::{
+	DispatchError,
+	SaturatedConversion,
 	offchain::storage::{MutateStorageError, StorageValueRef},
-	traits::TrailingZeroInput, SaturatedConversion
+	traits::TrailingZeroInput,
 };
 use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec};
 

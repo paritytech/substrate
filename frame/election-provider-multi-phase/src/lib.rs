@@ -266,13 +266,15 @@ pub mod helpers;
 
 const LOG_TARGET: &'static str = "runtime::election-provider";
 
-pub mod unsigned;
 pub mod signed;
+pub mod unsigned;
 pub mod weights;
 
+pub use signed::{
+	BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf, SignedSubmission, SignedSubmissionOf,
+	SignedSubmissions, SubmissionIndicesOf,
+};
 pub use weights::WeightInfo;
-
-pub use signed::{SignedSubmission, BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
 
 /// The compact solution type used by this crate.
 pub type CompactOf<T> = <T as Config>::CompactSolution;
@@ -413,7 +415,7 @@ impl Default for ElectionCompute {
 ///
 /// Such a solution should never become effective in anyway before being checked by the
 /// `Pallet::feasibility_check`
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, PartialOrd, Ord)]
 pub struct RawSolution<C> {
 	/// Compact election edges.
 	pub compact: C,
@@ -586,8 +588,15 @@ pub mod pallet {
 		type MinerMaxWeight: Get<Weight>;
 
 		/// Maximum number of signed submissions that can be queued.
+		///
+		/// It is best to avoid adjusting this during an election, as it impacts downstream data
+		/// structures. In particular, `SignedSubmissionIndices<T>` is bounded on this value. If you
+		/// update this value during an election, you _must_ ensure that
+		/// `SignedSubmissionIndices.len()` is less than or equal to the new value. Otherwise,
+		/// attempts to submit new solutions may cause a runtime panic.
 		#[pallet::constant]
 		type SignedMaxSubmissions: Get<u32>;
+
 		/// Maximum weight of a signed solution.
 		///
 		/// This should probably be similar to [`Config::MinerMaxWeight`].
@@ -601,15 +610,18 @@ pub mod pallet {
 		/// Base deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositBase: Get<BalanceOf<Self>>;
+
 		/// Per-byte deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositByte: Get<BalanceOf<Self>>;
+
 		/// Per-weight deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
 		/// Handler for the rewards.
 		type RewardHandler: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
@@ -629,6 +641,7 @@ pub mod pallet {
 			+ Eq
 			+ Clone
 			+ sp_std::fmt::Debug
+			+ Ord
 			+ CompactSolution;
 
 		/// Accuracy used for fallback on-chain election.
@@ -686,11 +699,20 @@ pub mod pallet {
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
-					// Determine if followed by signed or not.
+					// our needs vary according to whether or not the unsigned phase follows a signed phase
 					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed {
-						// Followed by a signed phase: close the signed phase, no need for snapshot.
-						// TODO: proper weight https://github.com/paritytech/substrate/pull/7910.
-						(false, true, Weight::zero())
+						// there was previously a signed phase: close the signed phase, no need for snapshot.
+						//
+						// Notes:
+						//
+						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This is
+						//     a guard against the case that `elect` is called prematurely. This adds
+						//     a small amount of overhead, but that is unfortunately unavoidable.
+						let (_success, weight) = Self::finalize_signed_phase();
+						// In the future we can consider disabling the unsigned phase if the signed
+						// phase completes successfully, but for now we're enabling it unconditionally
+						// as a defensive measure.
+						(false, true, weight)
 					} else {
 						// No signed phase: create a new snapshot, definitely `enable` the unsigned
 						// phase.
@@ -862,6 +884,78 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Submit a solution for the signed phase.
+		///
+		/// The dispatch origin fo this call must be __signed__.
+		///
+		/// The solution is potentially queued, based on the claimed score and processed at the end
+		/// of the signed phase.
+		///
+		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
+		/// might be rewarded, slashed, or get all or a part of the deposit back.
+		///
+		/// # <weight>
+		/// Queue size must be provided as witness data.
+		/// # </weight>
+		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
+		pub fn submit(
+			origin: OriginFor<T>,
+			solution: RawSolution<CompactOf<T>>,
+			num_signed_submissions: u32,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			// ensure witness data is correct.
+			ensure!(
+				num_signed_submissions >= <SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
+				Error::<T>::SignedInvalidWitness,
+			);
+
+			// ensure solution is timely.
+			ensure!(Self::current_phase().is_signed(), Error::<T>::PreDispatchEarlySubmission);
+
+			// NOTE: this is the only case where having separate snapshot would have been better
+			// because could do just decode_len. But we can create abstractions to do this.
+
+			// build size. Note: this is not needed for weight calc, thus not input.
+			// unlikely to ever return an error: if phase is signed, snapshot will exist.
+			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
+
+			ensure!(
+				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
+				Error::<T>::SignedTooMuchWeight,
+			);
+
+			// create the submission
+			let reward = T::SignedRewardBase::get();
+			let deposit = Self::deposit_for(&solution, size);
+			let submission = SignedSubmission { who: who.clone(), deposit, reward, solution };
+
+			// insert the submission if the queue has space or it's better than the weakest
+			// eject the weakest if the queue was full
+			let mut signed_submissions = Self::signed_submissions();
+			let maybe_removed = signed_submissions
+				.insert(submission)
+				// it's an error if we failed to insert a submission: this indicates the queue was
+				// full but our solution had insufficient score to eject any solution
+				.ok_or(Error::<T>::SignedQueueFull)?;
+
+			// collect deposit. Thereafter, the function cannot fail.
+			T::Currency::reserve(&who, deposit)
+				.map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
+
+			let ejected_a_solution = maybe_removed.is_some();
+			// if we had to remove the weakest solution, unreserve its deposit
+			if let Some(removed) = maybe_removed {
+				let _remainder = T::Currency::unreserve(&removed.who, removed.deposit);
+				debug_assert!(_remainder.is_zero());
+			}
+
+			signed_submissions.put();
+			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
+			Ok(())
+		}
+
 		/// Set a solution in the queue, to be handed out to the client of this pallet in the next
 		/// call to `ElectionProvider::elect`.
 		///
@@ -923,18 +1017,18 @@ pub mod pallet {
 		SignedQueueFull,
 		/// The origin failed to pay the deposit.
 		SignedCannotPayDeposit,
-		/// witness data to dispatchable is invalid.
+		/// Witness data to dispatchable is invalid.
 		SignedInvalidWitness,
 		/// The signed submission consumes too much weight
 		SignedTooMuchWeight,
 		/// OCW submitted solution for wrong round
 		OcwCallWrongEra,
-		/// The call is now allowed at this point.
-		CallNotAllowed,
 		/// Snapshot metadata should exist but didn't.
 		MissingSnapshotMetadata,
 		/// `Self::insert_submission` returned an invalid index.
 		InvalidSubmissionIndex,
+		/// The call is not allowed at this point.
+		CallNotAllowed,
 	}
 
 	#[pallet::origin]
@@ -1036,14 +1130,44 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
-	/// Sorted (worse -> best) list of unchecked, signed solutions.
+	// The following storage items collectively comprise `SignedSubmissions<T>`, and should never be
+	// accessed independently. Instead, get `Self::signed_submissions()`, modify it as desired, and
+	// then do `signed_submissions.put()` when you're done with it.
+
+	/// The next index to be assigned to an incoming signed submission.
+	///
+	/// Every accepted submission is assigned a unique index; that index is bound to that particular
+	/// submission for the duration of the election. On election finalization, the next index is
+	/// reset to 0.
+	///
+	/// We can't just use `SignedSubmissionIndices.len()`, because that's a bounded set; past its
+	/// capacity, it will simply saturate. We can't just iterate over `SignedSubmissionsMap`,
+	/// because iteration is slow. Instead, we store the value here.
 	#[pallet::storage]
-	#[pallet::getter(fn signed_submissions)]
-	pub type SignedSubmissions<T: Config> = StorageValue<
-		_,
-		Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
-		ValueQuery,
-	>;
+	pub(crate) type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
+
+	/// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
+	/// `SignedSubmissions`.
+	///
+	/// We never need to process more than a single signed submission at a time. Signed submissions
+	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access
+	/// them one at a time instead of reading and decoding all of them at once.
+	#[pallet::storage]
+	pub(crate) type SignedSubmissionIndices<T: Config> =
+		StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
+
+	/// Unchecked, signed solutions.
+	///
+	/// Together with `SubmissionIndices`, this stores a bounded set of `SignedSubmissions` while
+	/// allowing us to keep only a single one in memory at a time.
+	///
+	/// Twox note: the key of the map is an auto-incrementing index which users cannot inspect or
+	/// affect; we shouldn't need a cryptographically secure hasher.
+	#[pallet::storage]
+	pub(crate) type SignedSubmissionsMap<T: Config> =
+		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, ValueQuery>;
+
+	// `SignedSubmissions` items end here.
 
 	/// The minimum score that each 'untrusted' solution must attain in order to be considered
 	/// feasible.
@@ -1280,7 +1404,7 @@ impl<T: Config> Pallet<T> {
 	/// 3. Clear all snapshot data.
 	fn rotate_round() {
 		// Inc round.
-		<Round<T>>::mutate(|r| *r = *r + 1);
+		<Round<T>>::mutate(|r| *r += 1);
 
 		// Phase is off now.
 		<CurrentPhase<T>>::put(Phase::Off);
@@ -1752,7 +1876,7 @@ mod tests {
 
 			// an unexpected call to elect.
 			roll_to(20);
-			MultiPhase::elect().unwrap();
+			assert!(MultiPhase::elect().is_ok());
 
 			// all storage items must be cleared.
 			assert_eq!(MultiPhase::round(), 2);

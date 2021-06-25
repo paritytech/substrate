@@ -19,14 +19,26 @@
 
 use crate::{
 	CompactOf, Config, ElectionCompute, Pallet, RawSolution, ReadySolution, SolutionOrSnapshotSize,
-	Weight, WeightInfo, QueuedSolution, SignedSubmissions,
+	Weight, WeightInfo, QueuedSolution, SignedSubmissionsMap, SignedSubmissionIndices,
+	SignedSubmissionNextIndex,
 };
 use codec::{Encode, Decode, HasCompact};
-use frame_support::traits::{Currency, Get, OnUnbalanced, ReservableCurrency};
+use frame_support::{
+	storage::bounded_btree_map::BoundedBTreeMap,
+	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+	DebugNoBound,
+};
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_npos_elections::{is_score_better, CompactSolution};
-use sp_runtime::{Perbill, RuntimeDebug, traits::{Saturating, Zero}};
-use sp_std::{cmp::Ordering, vec::Vec};
+use sp_npos_elections::{is_score_better, CompactSolution, ElectionScore};
+use sp_runtime::{
+	RuntimeDebug,
+	traits::{Saturating, Zero},
+};
+use sp_std::{
+	cmp::Ordering,
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	ops::Deref,
+};
 
 /// A raw, unchecked signed submission.
 ///
@@ -43,6 +55,38 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
 	pub solution: RawSolution<CompactSolution>,
 }
 
+impl<AccountId, Balance, CompactSolution> Ord
+	for SignedSubmission<AccountId, Balance, CompactSolution>
+where
+	AccountId: Ord,
+	Balance: Ord + HasCompact,
+	CompactSolution: Ord,
+	RawSolution<CompactSolution>: Ord,
+{
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.solution
+			.score
+			.cmp(&other.solution.score)
+			.then_with(|| self.solution.cmp(&other.solution))
+			.then_with(|| self.deposit.cmp(&other.deposit))
+			.then_with(|| self.reward.cmp(&other.reward))
+			.then_with(|| self.who.cmp(&other.who))
+	}
+}
+
+impl<AccountId, Balance, CompactSolution> PartialOrd
+	for SignedSubmission<AccountId, Balance, CompactSolution>
+where
+	AccountId: Ord,
+	Balance: Ord + HasCompact,
+	CompactSolution: Ord,
+	RawSolution<CompactSolution>: Ord,
+{
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
 pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
@@ -51,8 +95,235 @@ pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+pub type SignedSubmissionOf<T> =
+	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, CompactOf<T>>;
+
+pub type SubmissionIndicesOf<T> =
+	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
+
+/// Mask type which pretends to be a set of `SignedSubmissionOf<T>`, while in fact delegating to the
+/// actual implementations in `SignedSubmissionIndices<T>`, `SignedSubmissionsMap<T>`, and
+/// `SignedSubmissionNextIndex<T>`.
+#[cfg_attr(feature = "std", derive(DebugNoBound))]
+pub struct SignedSubmissions<T: Config> {
+	indices: SubmissionIndicesOf<T>,
+	next_idx: u32,
+	insertion_overlay: BTreeMap<u32, SignedSubmissionOf<T>>,
+	deletion_overlay: BTreeSet<u32>,
+}
+
+impl<T: Config> SignedSubmissions<T> {
+	/// Get the signed submissions from storage.
+	pub fn get() -> Self {
+		let submissions = SignedSubmissions {
+			indices: SignedSubmissionIndices::<T>::get(),
+			next_idx: SignedSubmissionNextIndex::<T>::get(),
+			insertion_overlay: BTreeMap::new(),
+			deletion_overlay: BTreeSet::new(),
+		};
+		// validate that the stored state is sane
+		debug_assert!(submissions.indices.values().copied().max().map_or(
+			true,
+			|max_idx| submissions.next_idx > max_idx,
+		));
+		submissions
+	}
+
+	/// Put the signed submissions back into storage.
+	pub fn put(mut self) {
+		// validate that we're going to write only sane things to storage
+		debug_assert!(self.insertion_overlay.keys().copied().max().map_or(
+			true,
+			|max_idx| self.next_idx > max_idx,
+		));
+		debug_assert!(self.indices.values().copied().max().map_or(
+			true,
+			|max_idx| self.next_idx > max_idx,
+		));
+
+		SignedSubmissionIndices::<T>::put(self.indices);
+		SignedSubmissionNextIndex::<T>::put(self.next_idx);
+		for key in self.deletion_overlay {
+			self.insertion_overlay.remove(&key);
+			SignedSubmissionsMap::<T>::remove(key);
+		}
+		for (key, value) in self.insertion_overlay {
+			SignedSubmissionsMap::<T>::insert(key, value);
+		}
+	}
+
+	/// Get the submission at a particular index.
+	fn get_submission(&self, idx: u32) -> Option<SignedSubmissionOf<T>> {
+		if self.deletion_overlay.contains(&idx) {
+			// Note: can't actually remove the item from the insertion overlay (if present)
+			// because we don't want to use `&mut self` here. There may be some kind of
+			// `RefCell` optimization possible here in the future.
+			None
+		} else {
+			self.insertion_overlay
+				.get(&idx)
+				.cloned()
+				.or_else(|| SignedSubmissionsMap::<T>::try_get(idx).ok())
+		}
+	}
+
+	/// Perform three operations:
+	///
+	/// - Remove a submission (identified by score)
+	/// - Insert a new submission (identified by score and insertion index)
+	/// - Return the weakest submission
+	///
+	/// Note: in the case that `weakest_score` is not present in `self.indices`, this will return
+	/// `None` without inserting the new submission and without further notice.
+	///
+	/// Note: this does not enforce any ordering relation between the submission removed and that
+	/// inserted.
+	///
+	/// Note: this doesn't insert into `insertion_overlay`, the optional new insertion must be
+	/// inserted into  `insertion_overlay` to keep the variable `self` in a valid state.
+	fn swap_out_submission(
+		&mut self,
+		remove_score: ElectionScore,
+		insert: Option<(ElectionScore, u32)>,
+	) -> Option<SignedSubmissionOf<T>> {
+		let remove_idx = self.indices.remove(&remove_score)?;
+		if let Some((insert_score, insert_idx)) = insert {
+			self.indices
+				.try_insert(insert_score, insert_idx)
+				.expect("just removed an item, we must be under capacity; qed");
+		}
+
+		self.insertion_overlay.remove(&remove_idx).or_else(|| {
+			(!self.deletion_overlay.contains(&remove_idx)).then(|| {
+				self.deletion_overlay.insert(remove_idx);
+				SignedSubmissionsMap::<T>::try_get(remove_idx).ok()
+			}).flatten()
+		})
+	}
+
+	/// Iterate through the set of signed submissions in order of increasing score.
+	pub fn iter(&self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
+		self.indices.iter().filter_map(move |(_score, &idx)| {
+			let maybe_submission = self.get_submission(idx);
+			if maybe_submission.is_none() {
+				log!(
+					error,
+					"SignedSubmissions internal state is invalid (idx {}); \
+					there is a logic error in code handling signed solution submissions",
+					idx,
+				)
+			}
+			maybe_submission
+		})
+	}
+
+	/// Empty the set of signed submissions, returning an iterator of signed submissions in
+	/// arbitrary order.
+	///
+	/// Note that if the iterator is dropped without consuming all elements, not all may be removed
+	/// from the underlying `SignedSubmissionsMap`, putting the storages into an invalid state.
+	///
+	/// Note that, like `put`, this function consumes `Self` and modifies storage.
+	fn drain(mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
+		SignedSubmissionIndices::<T>::kill();
+		SignedSubmissionNextIndex::<T>::kill();
+		let insertion_overlay = sp_std::mem::take(&mut self.insertion_overlay);
+		SignedSubmissionsMap::<T>::drain()
+			.filter(move |(k, _v)| !self.deletion_overlay.contains(k))
+			.map(|(_k, v)| v)
+			.chain(insertion_overlay.into_iter().map(|(_k, v)| v))
+	}
+
+	/// Decode the length of the signed submissions without actually reading the entire struct into
+	/// memory.
+	///
+	/// Note that if you hold an instance of `SignedSubmissions`, this function does _not_
+	/// track its current length. This only decodes what is currently stored in memory.
+	pub fn decode_len() -> Option<usize> {
+		SignedSubmissionIndices::<T>::decode_len()
+	}
+
+	/// Insert a new signed submission into the set.
+	///
+	/// The outer `Option` of the return value indicates whether a solution was inserted. In the
+	/// case that nothing was inserted, nothing is ever removed.
+	///
+	/// The inner `Option` of the return value contains the submission which was removed, if any.
+	///
+	/// In the event that the new submission is not better than the current weakest according
+	/// to `is_score_better`, we do not change anything.
+	pub fn insert(
+		&mut self,
+		submission: SignedSubmissionOf<T>,
+	) -> Option<Option<SignedSubmissionOf<T>>> {
+		// verify the expectation that we never reuse an index
+		debug_assert!(!self.indices.values().any(|&idx| idx == self.next_idx));
+
+		let weakest = match self.indices.try_insert(submission.solution.score, self.next_idx) {
+			Ok(Some(prev_idx)) => {
+				// a submission of equal score was already present in the set;
+				// no point editing the actual backing map as we know that the newer solution can't
+				// be better than the old. However, we do need to put the old value back.
+				self.indices
+					.try_insert(submission.solution.score, prev_idx)
+					.expect("didn't change the map size; qed");
+				return None;
+			}
+			Ok(None) => {
+				// successfully inserted into the set; no need to take out weakest member
+				None
+			}
+			Err((insert_score, insert_idx)) => {
+				// could not insert into the set because it is full.
+				// note that we short-circuit return here in case the iteration produces `None`.
+				// If there wasn't a weakest entry to remove, then there must be a capacity of 0,
+				// which means that we can't meaningfully proceed.
+				let weakest_score = match self.indices.iter().next() {
+					None => return None,
+					Some((score, _)) => *score,
+				};
+				let threshold = T::SolutionImprovementThreshold::get();
+
+				// if we haven't improved on the weakest score, don't change anything.
+				if !is_score_better(insert_score, weakest_score, threshold) {
+					return None;
+				}
+
+				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
+			}
+		};
+
+		// we've taken out the weakest, so update the storage map and the next index
+		debug_assert!(!self.insertion_overlay.contains_key(&self.next_idx));
+		self.insertion_overlay.insert(self.next_idx, submission);
+		debug_assert!(!self.deletion_overlay.contains(&self.next_idx));
+		self.next_idx += 1;
+		Some(weakest)
+	}
+
+	/// Remove the signed submission with the highest score from the set.
+	pub fn pop_last(&mut self) -> Option<SignedSubmissionOf<T>> {
+		let (score, _) = self.indices.iter().rev().next()?;
+		// deref in advance to prevent mutable-immutable borrow conflict
+		let score = *score;
+		self.swap_out_submission(score, None)
+	}
+}
+
+impl<T: Config> Deref for SignedSubmissions<T> {
+	type Target = SubmissionIndicesOf<T>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.indices
+	}
+}
 
 impl<T: Config> Pallet<T> {
+	/// `Self` accessor for `SignedSubmission<T>`.
+	pub fn signed_submissions() -> SignedSubmissions<T> {
+		SignedSubmissions::<T>::get()
+	}
+
 	/// Finish the signed phase. Process the signed submissions from best to worse until a valid one
 	/// is found, rewarding the best one and slashing the invalid ones along the way.
 	///
@@ -61,22 +332,18 @@ impl<T: Config> Pallet<T> {
 	/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
 	/// [`QueuedSolution`].
 	pub fn finalize_signed_phase() -> (bool, Weight) {
-		let mut all_submissions: Vec<SignedSubmission<_, _, _>> = <SignedSubmissions<T>>::take();
+		let mut all_submissions = Self::signed_submissions();
 		let mut found_solution = false;
 		let mut weight = T::DbWeight::get().reads(1);
 
-		// Reverse the ordering of submissions: previously it was ordered such that high-scoring
-		// solutions have low indices. Now, the code flows more cleanly if high-scoring solutions
-		// have high indices.
-		all_submissions.reverse();
+		let SolutionOrSnapshotSize { voters, targets } =
+			Self::snapshot_metadata().unwrap_or_default();
 
-		while let Some(best) = all_submissions.pop() {
+		while let Some(best) = all_submissions.pop_last() {
 			let SignedSubmission { solution, who, deposit, reward } = best;
 			let active_voters = solution.compact.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
-				let SolutionOrSnapshotSize { voters, targets } =
-					Self::snapshot_metadata().unwrap_or_default();
 				let desired_targets = Self::desired_targets().unwrap_or_default();
 				T::WeightInfo::feasibility_check(
 					voters,
@@ -112,12 +379,15 @@ impl<T: Config> Pallet<T> {
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
 		let discarded = all_submissions.len();
-		for not_processed in all_submissions {
-			let SignedSubmission { who, deposit, .. } = not_processed;
+		for SignedSubmission { who, deposit, .. } in all_submissions.drain() {
 			let _remaining = T::Currency::unreserve(&who, deposit);
 			weight = weight.saturating_add(T::DbWeight::get().writes(1));
 			debug_assert!(_remaining.is_zero());
-		};
+		}
+
+		debug_assert!(!SignedSubmissionIndices::<T>::exists());
+		debug_assert!(!SignedSubmissionNextIndex::<T>::exists());
+		debug_assert!(SignedSubmissionsMap::<T>::iter().next().is_none());
 
 		log!(debug, "closed signed phase, found solution? {}, discarded {}", found_solution, discarded);
 		(found_solution, weight)
@@ -157,72 +427,6 @@ impl<T: Config> Pallet<T> {
 		T::SlashHandler::on_unbalanced(negative_imbalance);
 	}
 
-	/// Insert a solution into the queue while maintaining an ordering by solution quality.
-	///
-	/// Solutions are ordered in reverse: strong solutions have low indices.
-	///
-	/// If insertion was successful, `Some(index)` is returned where index is the
-	/// index of the newly inserted item.
-	///
-	/// Note: this function maintains the invariant that `queue.len() <= T::SignedMaxSubmissions`.
-	/// In the event that insertion would violate that invariant, the weakest element is dropped.
-	///
-	/// Invariant: The returned index is always a valid index in `queue` and can safely be used to
-	/// inspect the newly inserted element.
-	pub fn insert_submission(
-		who: &T::AccountId,
-		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
-		solution: RawSolution<CompactOf<T>>,
-		size: SolutionOrSnapshotSize,
-	) -> Option<usize> {
-		// Let's ensure that our input is valid.
-		let max_submissions = T::SignedMaxSubmissions::get();
-		debug_assert!(queue.len() as u32 <= max_submissions);
-
-		let threshold = T::SolutionImprovementThreshold::get();
-		// this insertion logic is a bit unusual in that a new solution which beats an existing
-		// solution by less than the threshold is sorted as "greater" than the existing solution.
-		// this means that the produced ordering depends on the order of insertion, and that
-		// attempts to produce a total ordering using this comparitor are highly unstable.
-		//
-		// this ordering prioritizes earlier solutions over slightly better later ones.
-		let insertion_position = queue.binary_search_by(|s| {
-			if is_score_better::<Perbill>(
-				solution.score,
-				s.solution.score,
-				threshold,
-			) {
-				Ordering::Greater
-			} else {
-				Ordering::Less
-			}
-		}).expect_err("comparitor function never returns Ordering::Equal; qed");
-
-		// if this solution is the worst one so far and the queue is full, don't insert
-		if insertion_position == queue.len() && queue.len() as u32 >= max_submissions {
-			return None;
-		}
-
-		// add to the designated spot. If the length is too much, remove one.
-		let reward = T::SignedRewardBase::get();
-		let deposit = Self::deposit_for(&solution, size);
-		let submission =
-			SignedSubmission { who: who.clone(), deposit, reward, solution };
-		queue.insert(insertion_position, submission);
-
-		// Remove the weakest if queue is overflowing.
-		// This doesn't adjust insertion_position: in the event that it might have, we'd have short-
-		// circuited above.
-		if queue.len() as u32 > max_submissions {
-			if let Some(SignedSubmission { who, deposit, .. }) = queue.pop() {
-				let _remainder = T::Currency::unreserve(&who, deposit);
-				debug_assert!(_remainder.is_zero());
-			}
-		}
-		debug_assert!(queue.len() as u32 <= max_submissions);
-		Some(insertion_position)
-	}
-
 	/// The feasibility weight of the given raw solution.
 	pub fn feasibility_weight_of(
 		solution: &RawSolution<CompactOf<T>>,
@@ -236,7 +440,7 @@ impl<T: Config> Pallet<T> {
 		)
 	}
 
-	/// Collect sufficient deposit to store this solution this chain.
+	/// Collect a sufficient deposit to store this solution.
 	///
 	/// The deposit is composed of 3 main elements:
 	///
@@ -268,7 +472,7 @@ mod tests {
 			SignedMaxSubmissions, SignedMaxWeight,
 		},
 	};
-	use frame_support::{dispatch::DispatchResult, assert_noop, assert_ok};
+	use frame_support::{dispatch::DispatchResult, assert_noop, assert_storage_noop, assert_ok};
 
 	fn submit_with_witness(
 		origin: Origin,
@@ -325,7 +529,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(balances(&99), (95, 5));
-			assert_eq!(MultiPhase::signed_submissions().first().unwrap().deposit, 5);
+			assert_eq!(MultiPhase::signed_submissions().iter().next().unwrap().deposit, 5);
 		})
 	}
 
@@ -409,6 +613,7 @@ mod tests {
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
+
 			// weaker.
 			let solution = RawSolution { score: [4, 0, 0], ..Default::default() };
 
@@ -433,10 +638,10 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![9, 8, 7, 6, 5]
+				vec![5, 6, 7, 8, 9]
 			);
 
 			// better.
@@ -446,16 +651,16 @@ mod tests {
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![20, 9, 8, 7, 6]
+				vec![6, 7, 8, 9, 20]
 			);
 		})
 	}
 
 	#[test]
-	fn weakest_is_removed_if_better_provided_wont_remove_self() {
+	fn replace_weakest_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_signed());
@@ -471,10 +676,10 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![9, 8, 7, 6, 4],
+				vec![4, 6, 7, 8, 9],
 			);
 
 			// better.
@@ -484,10 +689,10 @@ mod tests {
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![9, 8, 7, 6, 5],
+				vec![5, 6, 7, 8, 9],
 			);
 		})
 	}
@@ -529,10 +734,10 @@ mod tests {
 			}
 			assert_eq!(
 				MultiPhase::signed_submissions()
-					.into_iter()
+					.iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![7, 6, 5]
+				vec![5, 6, 7]
 			);
 
 			// 5 is not accepted. This will only cause processing with no benefit.
@@ -541,49 +746,6 @@ mod tests {
 				submit_with_witness(Origin::signed(99), solution),
 				Error::<Runtime>::SignedQueueFull,
 			);
-		})
-	}
-
-	#[test]
-	fn solutions_are_always_sorted() {
-		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
-			let scores = || {
-				MultiPhase::signed_submissions()
-					.into_iter()
-					.map(|s| s.solution.score[0])
-					.collect::<Vec<_>>()
-			};
-
-			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let solution = RawSolution { score: [5, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![5]);
-
-			let solution = RawSolution { score: [8, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![8, 5]);
-
-			let solution = RawSolution { score: [3, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![8, 5, 3]);
-
-			let solution = RawSolution { score: [6, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![8, 6, 5]);
-
-			let solution = RawSolution { score: [6, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![8, 6, 6]);
-
-			let solution = RawSolution { score: [10, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![10, 8, 6]);
-
-			let solution = RawSolution { score: [12, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![12, 10, 8]);
 		})
 	}
 
@@ -600,23 +762,25 @@ mod tests {
 			assert_eq!(balances(&99), (100, 0));
 			assert_eq!(balances(&999), (100, 0));
 			assert_eq!(balances(&9999), (100, 0));
-			let mut solution = raw_solution();
+			let solution = raw_solution();
 
 			// submit a correct one.
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
 			// make the solution invalidly better and submit. This ought to be slashed.
-			solution.score[0] += 1;
-			assert_ok!(submit_with_witness(Origin::signed(999), solution.clone()));
+			let mut solution_999 = solution.clone();
+			solution_999.score[0] += 1;
+			assert_ok!(submit_with_witness(Origin::signed(999), solution_999));
 
 			// make the solution invalidly worse and submit. This ought to be suppressed and
 			// returned.
-			solution.score[0] -= 1;
-			assert_ok!(submit_with_witness(Origin::signed(9999), solution));
+			let mut solution_9999 = solution.clone();
+			solution_9999.score[0] -= 1;
+			assert_ok!(submit_with_witness(Origin::signed(9999), solution_9999));
 
 			assert_eq!(
 				MultiPhase::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
-				vec![999, 99, 9999]
+				vec![9999, 99, 999]
 			);
 
 			// _some_ good solution was stored.
@@ -659,6 +823,85 @@ mod tests {
 				submit_with_witness(Origin::signed(99), solution),
 				Error::<Runtime>::SignedTooMuchWeight,
 			);
+		})
+	}
+
+	#[test]
+	fn insufficient_deposit_doesnt_store_submission() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			let solution = raw_solution();
+
+			assert_eq!(balances(&123), (0, 0));
+			assert_noop!(
+				submit_with_witness(Origin::signed(123), solution),
+				Error::<Runtime>::SignedCannotPayDeposit,
+			);
+
+			assert_eq!(balances(&123), (0, 0));
+		})
+	}
+
+	// given a full queue, and a solution which _should_ be allowed in, but the proposer of this
+	// new solution has insufficient deposit, we should not modify storage at all
+	#[test]
+	fn insufficient_deposit_with_full_queue_works_properly() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			for s in 0..SignedMaxSubmissions::get() {
+				// score is always getting better
+				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			}
+
+			// this solution has a higher score than any in the queue
+			let solution = RawSolution {
+				score: [(5 + SignedMaxSubmissions::get()).into(), 0, 0],
+				..Default::default()
+			};
+
+			assert_eq!(balances(&123), (0, 0));
+			assert_noop!(
+				submit_with_witness(Origin::signed(123), solution),
+				Error::<Runtime>::SignedCannotPayDeposit,
+			);
+
+			assert_eq!(balances(&123), (0, 0));
+		})
+	}
+
+	#[test]
+	fn finalize_signed_phase_is_idempotent_given_no_submissions() {
+		ExtBuilder::default().build_and_execute(|| {
+			for block_number in 0..25 {
+				roll_to(block_number);
+
+				assert_eq!(SignedSubmissions::<Runtime>::decode_len().unwrap_or_default(), 0);
+				assert_storage_noop!(MultiPhase::finalize_signed_phase());
+			}
+		})
+	}
+
+	#[test]
+	fn finalize_signed_phase_is_idempotent_given_submissions() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			let solution = raw_solution();
+
+			// submit a correct one.
+			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+
+			// _some_ good solution was stored.
+			assert!(MultiPhase::finalize_signed_phase().0);
+
+			// calling it again doesn't change anything
+			assert_storage_noop!(MultiPhase::finalize_signed_phase());
 		})
 	}
 }
