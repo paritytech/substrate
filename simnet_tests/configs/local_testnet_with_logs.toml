@@ -1,0 +1,4 @@
+[nodes]
+alice = { extra-args = ["--alice", "-l babe=trace"], validator = true }
+bob = { extra-args = ["--bob", "-l babe=trace"], validator = true }
+charlie = { extra-args = ["--charlie", "-l babe=trace"], validator = true }
