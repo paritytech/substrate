@@ -126,17 +126,17 @@ pub fn create_full<C, P, SC, B>(
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_mmr_rpc::{MmrApi, Mmr};
-	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
+	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApiRemoveMe};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	let FullDeps {
 		client,
 		pool,
 		select_chain: _, // TODO: (dp) remove from FullDeps
-		chain_spec,// TODO: (dp) remove
+		chain_spec: _chain_spec,// TODO: (dp) remove
 		deny_unsafe,
-		babe,// TODO: (dp) remove
-		grandpa, // TODO: (dp) remove
+		babe: _babe,// TODO: (dp) remove
+		grandpa: _grandpa, // TODO: (dp) remove
 	} = deps;
 
 	io.extend_with(
@@ -152,7 +152,7 @@ pub fn create_full<C, P, SC, B>(
 		MmrApi::to_delegate(Mmr::new(client.clone()))
 	);
 	io.extend_with(
-		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
+		TransactionPaymentApiRemoveMe::to_delegate(TransactionPayment::new(client.clone()))
 	);
 
 	io

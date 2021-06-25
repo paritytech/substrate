@@ -21,7 +21,11 @@ use std::sync::Arc;
 use std::convert::TryInto;
 use codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
-use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
+use jsonrpsee_types::error::Error as JsonRpseeError;
+use jsonrpsee_types::error::CallError;
+use jsonrpsee::RpcModule;
+// TODO: (dp) remove
+use jsonrpc_core::{Error as RpcError, ErrorCode, Result as OldResult};
 use jsonrpc_derive::rpc;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay}};
 use sp_api::ProvideRuntimeApi;
@@ -31,20 +35,97 @@ use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, Runti
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
 
+/// Provides RPC methods for interacting with Babe.
+pub struct TransactionPaymentRpc<C, Block, Balance> {
+	/// Shared reference to the client.
+	client: Arc<C>,
+	_block_marker: std::marker::PhantomData<Block>,
+	_balance_marker: std::marker::PhantomData<Balance>,
+}
+
+impl<C, Block, Balance> TransactionPaymentRpc<C, Block, Balance>
+where
+	Block: BlockT,
+	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
+	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex> + Send + Sync + 'static,
+{
+	/// Creates a new instance of the BabeRpc handler.
+	pub fn new(
+		client: Arc<C>,
+	) -> Self {
+		Self { client, _block_marker: Default::default(), _balance_marker: Default::default() }
+	}
+
+	/// Convert this [`TransactionPaymentRpc`] to an [`RpcModule`].
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut module = RpcModule::new(self);
+		module.register_method::<RuntimeDispatchInfo<Balance>, _>("payment_queryInfo", |params, trx_payment| {
+			let (encoded_xt, at): (Bytes, Option<<Block as BlockT>::Hash>) = params.parse()?;
+
+			let api = trx_payment.client.runtime_api();
+			let at = BlockId::hash(at.unwrap_or_else(|| trx_payment.client.info().best_hash));
+
+			let encoded_len = encoded_xt.len() as u32;
+
+			let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
+				.map_err(|codec_err| CallError::Failed(Box::new(codec_err)))?;
+			api
+				.query_info(&at, uxt, encoded_len)
+				.map_err(|api_err| CallError::Failed(Box::new(api_err)))
+		})?;
+
+		module.register_method("payment_queryFeeDetails", |params, trx_payment| {
+			let (encoded_xt, at): (Bytes, Option<<Block as BlockT>::Hash>) = params.parse()?;
+
+			let api = trx_payment.client.runtime_api();
+			let at = BlockId::hash(at.unwrap_or_else(|| trx_payment.client.info().best_hash));
+
+			let encoded_len = encoded_xt.len() as u32;
+
+			let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt)
+				.map_err(|codec_err| CallError::Failed(Box::new(codec_err)))?;
+			let fee_details = api.query_fee_details(&at, uxt, encoded_len)
+				.map_err(|api_err| CallError::Failed(Box::new(api_err)))?;
+
+			let try_into_rpc_balance = |value: Balance| {
+				value
+					.try_into()
+					.map_err(|_try_err| CallError::InvalidParams)
+			};
+
+			Ok(FeeDetails {
+				inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {
+					Some(InclusionFee {
+						base_fee: try_into_rpc_balance(inclusion_fee.base_fee)?,
+						len_fee: try_into_rpc_balance(inclusion_fee.len_fee)?,
+						adjusted_weight_fee: try_into_rpc_balance(inclusion_fee.adjusted_weight_fee)?,
+					})
+				} else {
+					None
+				},
+				tip: Default::default(),
+			})
+		})?;
+
+		Ok(module)
+	}
+}
+
 #[rpc]
-pub trait TransactionPaymentApi<BlockHash, ResponseType> {
+pub trait TransactionPaymentApiRemoveMe<BlockHash, ResponseType> {
 	#[rpc(name = "payment_queryInfo")]
 	fn query_info(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>
-	) -> Result<ResponseType>;
+	) -> OldResult<ResponseType>;
 	#[rpc(name = "payment_queryFeeDetails")]
 	fn query_fee_details(
 		&self,
 		encoded_xt: Bytes,
 		at: Option<BlockHash>
-	) -> Result<FeeDetails<NumberOrHex>>;
+	) -> OldResult<FeeDetails<NumberOrHex>>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -60,6 +141,7 @@ impl<C, P> TransactionPayment<C, P> {
 	}
 }
 
+// TODO: (dp) used?
 /// Error type of this RPC api.
 pub enum Error {
 	/// The transaction was not decodable.
@@ -68,6 +150,7 @@ pub enum Error {
 	RuntimeError,
 }
 
+// TODO: (dp) used?
 impl From<Error> for i64 {
 	fn from(e: Error) -> i64 {
 		match e {
@@ -77,7 +160,7 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, Balance> TransactionPaymentApi<
+impl<C, Block, Balance> TransactionPaymentApiRemoveMe<
 	<Block as BlockT>::Hash,
 	RuntimeDispatchInfo<Balance>,
 > for TransactionPayment<C, Block>
@@ -91,7 +174,7 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<<Block as BlockT>::Hash>
-	) -> Result<RuntimeDispatchInfo<Balance>> {
+	) -> OldResult<RuntimeDispatchInfo<Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -116,7 +199,7 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<FeeDetails<NumberOrHex>> {
+	) -> OldResult<FeeDetails<NumberOrHex>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
