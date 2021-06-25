@@ -8141,9 +8141,6 @@ dependencies = [
 name = "sc-sync-state-rpc"
 version = "0.9.0"
 dependencies = [
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
  "jsonrpsee",
  "jsonrpsee-types",
  "sc-chain-spec",

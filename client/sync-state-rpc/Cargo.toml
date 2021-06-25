@@ -14,9 +14,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 thiserror = "1.0.21"
-jsonrpc-core = "15.0"
-jsonrpc-core-client = "15.0"
-jsonrpc-derive = "15.0"
 jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
 jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
 sc-chain-spec = { version = "3.0.0", path = "../chain-spec" }

@@ -133,18 +133,11 @@ pub fn create_full<C, P, SC, B>(
 		client,
 		pool,
 		select_chain: _, // TODO: (dp) remove from FullDeps
-		chain_spec,
+		chain_spec,// TODO: (dp) remove
 		deny_unsafe,
-		babe,
-		grandpa,
+		babe,// TODO: (dp) remove
+		grandpa, // TODO: (dp) remove
 	} = deps;
-
-	let BabeDeps {
-		shared_epoch_changes,
-		..
-	} = babe;
-
-	let GrandpaDeps { shared_authority_set, .. } = grandpa;
 
 	io.extend_with(
 		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
@@ -160,18 +153,6 @@ pub fn create_full<C, P, SC, B>(
 	);
 	io.extend_with(
 		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
-	);
-
-	io.extend_with(
-		sc_sync_state_rpc::SyncStateRpcApiRemoveMe::to_delegate(
-			sc_sync_state_rpc::SyncStateRpcHandlerRemoveMe::new(
-				chain_spec,
-				client,
-				shared_authority_set,
-				shared_epoch_changes,
-				deny_unsafe,
-			)
-		)
 	);
 
 	io
