@@ -294,13 +294,35 @@ async fn build_network_future<
 
 #[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
-// TODO(niklasad1): not supported yet.
-mod waiting {}
+// TODO(niklasad1): WsSocket server is not fully "closeable" at the moment.
+mod waiting {
+	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
+
+	impl Drop for HttpServer {
+		fn drop(&mut self) {
+			if let Some(mut server) = self.0.take() {
+				futures::executor::block_on(server.stop());
+				futures::executor::block_on(server.wait_for_stop());
+			}
+		}
+	}
+
+	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
+
+	impl Drop for WsServer {
+		fn drop(&mut self) {
+			if let Some(mut server) = self.0.take() {
+				futures::executor::block_on(server.stop());
+				futures::executor::block_on(server.wait_for_stop());
+			}
+		}
+	}
+}
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 /// Once this is called, no more methods can be added to the server.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<R>(
+async fn start_rpc_servers<R>(
 	config: &Configuration,
 	gen_rpc_module: R,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
@@ -317,7 +339,7 @@ where
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module.clone(),
-	);
+	).await?;
 
 	let ws = sc_rpc_server::start_ws(
 		ws_addr,
@@ -326,7 +348,7 @@ where
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module,
-	);
+	).await?;
 
 	Ok(Box::new((http, ws)))
 }
