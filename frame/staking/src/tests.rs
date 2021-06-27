@@ -4102,6 +4102,14 @@ mod election_data_provider {
 					assert_ok!(Staking::validate(Origin::signed(d), ValidatorPrefs::default()));
 				}
 
+				// To chill other users, we need to:
+				// * Set a minimum bond amount
+				// * Set a limit
+				// * Set a threshold
+				//
+				// If any of these are missing, we do not have enough information to allow the
+				// `chill_other` to succeed from one user to another.
+
 				// Can't chill these users
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
@@ -4113,7 +4121,21 @@ mod election_data_provider {
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 
-				// Add limits
+				// Add limits, but no threshold
+				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, Some(10), Some(10), None));
+
+				// Still can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+
+				// Add threshold, but no limits
+				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None, Some(Percent::from_percent(0))));
+
+				// Still can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+
+				// Add threshold and limits
 				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, Some(10), Some(10), Some(Percent::from_percent(75))));
 
 				// 16 people total because tests start with 1 active one
