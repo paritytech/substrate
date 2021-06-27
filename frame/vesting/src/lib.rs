@@ -334,14 +334,7 @@ pub mod pallet {
 		)]
 		pub fn vest(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?; // TODO make do_vest
-			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, Filter::Zero);
-			if let Some(vesting) = maybe_vesting {
-				Vesting::<T>::insert(&who, vesting);
-			} else {
-				Vesting::<T>::remove(&who);
-			}
-			Ok(())
+			Self::do_vest(who)
 		}
 
 		/// Unlock any vested funds of a `target` account.
@@ -368,14 +361,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let who = T::Lookup::lookup(target)?;
-			let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
-			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, Filter::Zero);
-			if let Some(vesting) = maybe_vesting {
-				Vesting::<T>::insert(&who, vesting);
-			} else {
-				Vesting::<T>::remove(&who);
-			}
-			Ok(())
+			Self::do_vest(who)
 		}
 
 		/// Create a vested transfer.
@@ -638,6 +624,19 @@ impl<T: Config> Pallet<T> {
 			Some(still_vesting)
 		}
 	}
+
+	/// Unlock any vested funds of `who`.
+	fn do_vest(who: T::AccountId) -> DispatchResult {
+		let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
+		let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, Filter::Zero);
+		if let Some(vesting) = maybe_vesting {
+			Vesting::<T>::insert(&who, vesting);
+		} else {
+			Vesting::<T>::remove(&who);
+		}
+
+		Ok(())
+	}
 }
 
 impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T>
@@ -662,7 +661,7 @@ where
 
 	/// Adds a vesting schedule to a given account.
 	///
-	/// If there already `MaxVestingSchedules`, an `Err` is returned and nothing
+	/// If there already `MaxVestingSchedules`, an Error is returned and nothing
 	/// is updated.
 	///
 	/// On success, a linearly reducing amount of funds will be locked. In order to realise any
