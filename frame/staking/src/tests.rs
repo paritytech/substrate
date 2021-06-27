@@ -4107,14 +4107,14 @@ mod election_data_provider {
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 
 				// Change the minimum bond... but no limits.
-				assert_ok!(Staking::update_staking_limits(Origin::root(), 1_500, 2_000, None, None, None));
+				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None, None));
 
 				// Still can't chill these users
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 
 				// Add limits
-				assert_ok!(Staking::update_staking_limits(Origin::root(), 1_500, 2_000, Some(10), Some(10), Some(Percent::from_percent(75))));
+				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, Some(10), Some(10), Some(Percent::from_percent(75))));
 
 				// 16 people total because tests start with 1 active one
 				assert_eq!(CounterForNominators::<Test>::get(), 16);
@@ -4144,7 +4144,7 @@ mod election_data_provider {
 
 			// Change the maximums
 			let max = 10;
-			assert_ok!(Staking::update_staking_limits(Origin::root(), 10, 10, Some(max), Some(max), Some(Percent::from_percent(0))));
+			assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, Some(max), Some(max), Some(Percent::from_percent(0))));
 
 			// can create `max - validator_count` validators
 			let mut some_existing_validator = AccountId::default();
@@ -4188,7 +4188,7 @@ mod election_data_provider {
 			assert_ok!(Staking::validate(Origin::signed(some_existing_validator), ValidatorPrefs::default()));
 
 			// No problem when we set to `None` again
-			assert_ok!(Staking::update_staking_limits(Origin::root(), 10, 10, None, None, None));
+			assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None, None));
 			assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 			assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
 		})

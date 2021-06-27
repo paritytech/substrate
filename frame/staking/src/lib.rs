@@ -2278,8 +2278,8 @@ pub mod pallet {
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
 		/// to kick people under the new limits, `chill_other` should be called.
-		#[pallet::weight(T::WeightInfo::update_staking_limits())]
-		pub fn update_staking_limits(
+		#[pallet::weight(T::WeightInfo::set_staking_limits())]
+		pub fn set_staking_limits(
 			origin: OriginFor<T>,
 			min_nominator_bond: BalanceOf<T>,
 			min_validator_bond: BalanceOf<T>,

@@ -601,7 +601,7 @@ benchmarks! {
 		assert_eq!(targets.len() as u32, v);
 	}
 
-	update_staking_limits {
+	set_staking_limits {
 		// This function always does the same thing... just write to 4 storage items.
 	}: _(
 		RawOrigin::Root,
@@ -621,7 +621,7 @@ benchmarks! {
 	chill_other {
 		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
 		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), ValidatorPrefs::default())?;
-		Staking::<T>::update_staking_limits(
+		Staking::<T>::set_staking_limits(
 			RawOrigin::Root.into(),
 			BalanceOf::<T>::max_value(),
 			BalanceOf::<T>::max_value(),
