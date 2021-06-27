@@ -1960,8 +1960,8 @@ fn phragmen_should_not_overflow() {
 #[test]
 fn reward_validator_slashing_validator_does_not_overflow() {
 	ExtBuilder::default().build_and_execute(|| {
-		let stake = u64::max_value() as Balance * 2;
-		let reward_slash = u64::max_value() as Balance * 2;
+		let stake = u64::MAX as Balance * 2;
+		let reward_slash = u64::MAX as Balance * 2;
 
 		// Assert multiplication overflows in balance arithmetic.
 		assert!(stake.checked_mul(reward_slash).is_none());
@@ -3995,7 +3995,7 @@ mod election_data_provider {
 			);
 
 			Staking::force_no_eras(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::max_value());
+			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
 
 			Staking::force_new_era_always(Origin::root()).unwrap();
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
