@@ -78,9 +78,8 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError,
+		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError, BlockNumberProvider,
 	},
-	offchain::storage_lock::BlockNumberProvider,
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
