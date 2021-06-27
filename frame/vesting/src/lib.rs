@@ -176,6 +176,27 @@ mod vesting_info {
 	}
 }
 
+/// The indexes of vesting schedules to remove from an accounts vesting schedule collection.
+enum Filter {
+	/// Do not filter out any schedules.
+	Zero,
+	/// Filter out 1 schedule.
+	One(usize),
+	/// Filter out 2 schedules.
+	Two((usize, usize)),
+}
+
+impl Filter {
+	/// Wether or not the filter says the schedule index should be removed.
+	fn should_remove(&self, index: &usize) -> bool {
+		match self {
+			Self::Zero => false,
+			Self::One(index1) => index1 == index,
+			Self::Two((index1, index2)) => index1 == index || index2 == index,
+		}
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -313,8 +334,8 @@ pub mod pallet {
 		)]
 		pub fn vest(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
-			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, vec![]);
+			let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?; // TODO make do_vest
+			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, Filter::Zero);
 			if let Some(vesting) = maybe_vesting {
 				Vesting::<T>::insert(&who, vesting);
 			} else {
@@ -341,11 +362,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get())
 			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get()))
 		)]
-		pub fn vest_other(origin: OriginFor<T>, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		pub fn vest_other(
+			origin: OriginFor<T>,
+			target: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let who = T::Lookup::lookup(target)?;
 			let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
-			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, vec![]);
+			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, Filter::Zero);
 			if let Some(vesting) = maybe_vesting {
 				Vesting::<T>::insert(&who, vesting);
 			} else {
@@ -454,7 +478,7 @@ pub mod pallet {
 			// schedules that may be ending at this block.
 			let schedule1 = vesting[schedule1_index];
 			let schedule2 = vesting[schedule2_index];
-			let filter = vec![schedule1_index, schedule2_index];
+			let filter = Filter::Two((schedule1_index, schedule2_index));
 			// The length of vesting decreases by 2 here since we filter out 2 schedules. So we know
 			// below we have the space to insert the merged schedule.
 			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, filter);
@@ -581,7 +605,7 @@ impl<T: Config> Pallet<T> {
 	fn update_lock_and_schedules(
 		who: T::AccountId,
 		vesting: BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>,
-		filter: Vec<usize>,
+		filter: Filter,
 	) -> Option<BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>> {
 		let now = <frame_system::Pallet<T>>::block_number();
 
@@ -589,10 +613,10 @@ impl<T: Config> Pallet<T> {
 		let still_vesting = vesting
 			.into_iter()
 			.enumerate()
-			.filter_map(|(i, schedule)| {
+			.filter_map(|(index, schedule)| {
 				let locked_now = schedule.locked_at::<T::BlockNumberToBalance>(now);
 				total_locked_now = total_locked_now.saturating_add(locked_now);
-				if locked_now.is_zero() || filter.contains(&i) {
+				if locked_now.is_zero() || filter.should_remove(&index) {
 					None
 				} else {
 					Some(schedule)
@@ -660,7 +684,7 @@ where
 		let mut vesting = if let Some(v) = Self::vesting(who) { v } else { BoundedVec::default() };
 		ensure!(vesting.try_push(vesting_schedule).is_ok(), Error::<T>::AtMaxVestingSchedules);
 
-		if let Some(v) = Self::update_lock_and_schedules(who.clone(), vesting, vec![]) {
+		if let Some(v) = Self::update_lock_and_schedules(who.clone(), vesting, Filter::Zero) {
 			Vesting::<T>::insert(&who, v);
 		} else {
 			Vesting::<T>::remove(&who);
@@ -675,9 +699,9 @@ where
 				schedule_index < T::MaxVestingSchedules::get(),
 				Error::<T>::ScheduleIndexOutOfBounds
 			);
-			vec![schedule_index as usize]
+			Filter::One(schedule_index as usize)
 		} else {
-			vec![]
+			Filter::Zero
 		};
 		let vesting = Self::vesting(who).ok_or(Error::<T>::NotVesting)?;
 		if let Some(v) = Self::update_lock_and_schedules(who.clone(), vesting, filter) {
