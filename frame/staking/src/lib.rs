@@ -1216,6 +1216,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
+	/// The threshold for when users can start calling `chill_other` for other validators / nominators.
+	/// The threshold is compared to the actual number of validators / nominators (`CountFor*`) in
+	/// the system compared to the configured max (`Max*Count`).
+	#[pallet::storage]
+	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub history_depth: u32,
@@ -2279,25 +2285,35 @@ pub mod pallet {
 			min_validator_bond: BalanceOf<T>,
 			max_nominator_count: Option<u32>,
 			max_validator_count: Option<u32>,
+			threshold: Option<Percent>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			MinNominatorBond::<T>::set(min_nominator_bond);
 			MinValidatorBond::<T>::set(min_validator_bond);
 			MaxNominatorsCount::<T>::set(max_nominator_count);
 			MaxValidatorsCount::<T>::set(max_validator_count);
+			ChillThreshold::<T>::set(threshold);
 			Ok(())
 		}
 
-		/// Declare a `controller` as having no desire to either validator or nominate.
+		/// Declare a `controller` to stop participating as either a validator or nominator.
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_, but can be called by anyone.
 		///
 		/// If the caller is the same as the controller being targeted, then no further checks are
-		/// enforced. However, this call can also be made by an third party user who witnesses that
-		/// the limits for number of validators or nominators is near the threshold (75%), and that
-		/// this controller does not satisfy the minimum bond requirements to be in their role.
+		/// enforced, and this function behaves just like `chill`.
+		///
+		/// If the caller is different than the controller being targeted, the following conditions
+		/// must be met:
+		/// * A `ChillThreshold` must be set and checked which defines how close to the max
+		///   nominators or validators we must reach before users can start chilling one-another.
+		/// * A `MaxNominatorCount` and `MaxValidatorCount` must be set which is used to determine
+		///   how close we are to the threshold.
+		/// * A `MinNominatorBond` and `MinValidatorBond` must be set and checked, which determines
+		///   if this is a person that should be chilled because they have not met the threshold
+		///   bond required.
 		///
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
@@ -2314,29 +2330,32 @@ pub mod pallet {
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = ledger.stash;
 
-			// If the caller is not the controller, we first check that we are near our threshold
-			// limit, and then we also check that the minimum bond requirements are not satisfied,
-			// and thus we are justified to chill this user.
+			// In order for one user to chill another user, the following conditions must be met:
+			// * A `ChillThreshold` is set which defines how close to the max nominators or
+			//   validators we must reach before users can start chilling one-another.
+			// * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
+			//   we are to the threshold.
+			// * A `MinNominatorBond` and `MinValidatorBond` which is the final condition checked to
+			//   determine this is a person that should be chilled because they have not met the
+			//   threshold bond required.
 			//
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
 			if caller != controller {
+				let threshold = ChillThreshold::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
 				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
 					let max_nominator_count = MaxNominatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
 					let current_nominator_count = CounterForNominators::<T>::get();
-					// Safe for up to hundreds of millions of users.
-					let ratio = current_nominator_count.saturating_mul(100u32) / max_nominator_count.max(1u32);
-					ensure!(ratio > 75, Error::<T>::CannotChillOther);
+					ensure!(threshold * max_nominator_count < current_nominator_count, Error::<T>::CannotChillOther);
 					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&stash) {
 					let max_validator_count = MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
 					let current_validator_count = CounterForValidators::<T>::get();
-					// Safe for up to hundreds of millions of users.
-					let ratio = current_validator_count.saturating_mul(100u32) / max_validator_count.max(1u32);
-					ensure!(ratio > 75, Error::<T>::CannotChillOther);
+					ensure!(threshold * max_validator_count < current_validator_count, Error::<T>::CannotChillOther);
 					MinValidatorBond::<T>::get()
 				} else {
 					Zero::zero()
 				};
+
 				ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
 			}
 

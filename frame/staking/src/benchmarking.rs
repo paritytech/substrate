@@ -608,12 +608,14 @@ benchmarks! {
 		BalanceOf::<T>::max_value(),
 		BalanceOf::<T>::max_value(),
 		Some(u32::max_value()),
-		Some(u32::max_value())
+		Some(u32::max_value()),
+		Some(Percent::max_value())
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::max_value()));
 		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::max_value()));
+		assert_eq!(ChillThreshold::<T>::get(), Some(Percent::from_percent(100)));
 	}
 
 	chill_other {
@@ -625,6 +627,7 @@ benchmarks! {
 			BalanceOf::<T>::max_value(),
 			Some(0),
 			Some(0),
+			Some(Percent::from_percent(0))
 		)?;
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), controller.clone())
