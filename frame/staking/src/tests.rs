@@ -4050,12 +4050,18 @@ mod election_data_provider {
 				// 500 is not enough for any role
 				assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
 				assert_noop!(Staking::nominate(Origin::signed(4), vec![1]), Error::<Test>::InsufficientBond);
-				assert_noop!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()), Error::<Test>::InsufficientBond);
+				assert_noop!(
+					Staking::validate(Origin::signed(4), ValidatorPrefs::default()),
+					Error::<Test>::InsufficientBond,
+				);
 
 				// 1000 is enough for nominator
 				assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
 				assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
-				assert_noop!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()), Error::<Test>::InsufficientBond);
+				assert_noop!(
+					Staking::validate(Origin::signed(4), ValidatorPrefs::default()),
+					Error::<Test>::InsufficientBond,
+				);
 
 				// 1500 is enough for validator
 				assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
@@ -4129,14 +4135,18 @@ mod election_data_provider {
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 
 				// Add threshold, but no limits
-				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None, Some(Percent::from_percent(0))));
+				assert_ok!(Staking::set_staking_limits(
+					Origin::root(), 1_500, 2_000, None, None, Some(Percent::from_percent(0))
+				));
 
 				// Still can't chill these users
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
 				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 
 				// Add threshold and limits
-				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, Some(10), Some(10), Some(Percent::from_percent(75))));
+				assert_ok!(Staking::set_staking_limits(
+					Origin::root(), 1_500, 2_000, Some(10), Some(10), Some(Percent::from_percent(75))
+				));
 
 				// 16 people total because tests start with 1 active one
 				assert_eq!(CounterForNominators::<Test>::get(), 16);
@@ -4166,7 +4176,9 @@ mod election_data_provider {
 
 			// Change the maximums
 			let max = 10;
-			assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, Some(max), Some(max), Some(Percent::from_percent(0))));
+			assert_ok!(Staking::set_staking_limits(
+				Origin::root(), 10, 10, Some(max), Some(max), Some(Percent::from_percent(0))
+			));
 
 			// can create `max - validator_count` validators
 			let mut some_existing_validator = AccountId::default();
