@@ -379,7 +379,10 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get()))]
+		#[pallet::weight(
+			T::WeightInfo::last_vested_transfer(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::first_vested_transfer(MaxLocksOf::<T>::get()))
+		)]
 		pub fn vested_transfer(
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -406,7 +409,10 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get()))]
+		#[pallet::weight(
+			T::WeightInfo::first_force_vested_transfer(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::last_force_vested_transfer(MaxLocksOf::<T>::get()))
+		)]
 		pub fn force_vested_transfer(
 			origin: OriginFor<T>,
 			source: <T::Lookup as StaticLookup>::Source,
