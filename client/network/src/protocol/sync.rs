@@ -105,7 +105,7 @@ mod rep {
 
 	/// Reputation change when a peer sent us a status message with a different
 	/// genesis than us.
-	pub const GENESIS_MISMATCH: Rep = Rep::new(i32::min_value(), "Genesis mismatch");
+	pub const GENESIS_MISMATCH: Rep = Rep::new(i32::MIN, "Genesis mismatch");
 
 	/// Reputation change for peers which send us a block with an incomplete header.
 	pub const INCOMPLETE_HEADER: Rep = Rep::new(-(1 << 20), "Incomplete header");

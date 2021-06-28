@@ -278,7 +278,7 @@ impl<'a> OneOrMany<DispatchClass> for &'a [DispatchClass] {
 
 /// Primitives related to priority management of Frame.
 pub mod priority {
-	/// The starting point of all Operational transactions. 3/4 of u64::max_value().
+	/// The starting point of all Operational transactions. 3/4 of u64::MAX.
 	pub const LIMIT: u64 = 13_835_058_055_282_163_711_u64;
 
 	/// Wrapper for priority of different dispatch classes.
