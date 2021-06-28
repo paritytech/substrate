@@ -35,7 +35,6 @@
 // --output=./frame/vesting/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
-
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
@@ -50,8 +49,10 @@ pub trait WeightInfo {
 	fn vest_other_unlocked(l: u32, ) -> Weight;
 	fn first_vested_transfer(l: u32, ) -> Weight;
 	fn last_vested_transfer(l: u32, ) -> Weight;
-	fn first_force_vested_transfer(l: u32, ) -> Weight;
-	fn last_force_vested_transfer(l: u32, ) -> Weight;
+	fn first_force_vested_transfer(l: u32) -> Weight;
+	fn last_force_vested_transfer(l: u32) -> Weight;
+	fn unlocking_merge_schedules(l: u32) -> Weight;
+	fn not_unlocking_merge_schedules(l: u32) -> Weight;
 }
 
 /// Weights for pallet_vesting using the Substrate node and recommended hardware.
@@ -64,6 +65,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+
 	fn vest_unlocked(l: u32, ) -> Weight {
 		(45_650_000 as Weight)
 			// Standard Error: 12_000
@@ -71,6 +73,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
+
 	fn vest_other_locked(l: u32, ) -> Weight {
 		(42_273_000 as Weight)
 			// Standard Error: 15_000
@@ -78,6 +81,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
+
 	fn vest_other_unlocked(l: u32, ) -> Weight {
 		(45_324_000 as Weight)
 			// Standard Error: 12_000
@@ -85,6 +89,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
+
 	fn first_vested_transfer(l: u32, ) -> Weight {
 		(98_812_000 as Weight)
 			// Standard Error: 13_000
@@ -92,6 +97,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
+
 	fn last_vested_transfer(l: u32, ) -> Weight {
 		(98_812_000 as Weight)
 			// Standard Error: 13_000
@@ -99,6 +105,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
+
 	fn first_force_vested_transfer(l: u32, ) -> Weight {
 		(98_812_000 as Weight)
 			// Standard Error: 13_000
@@ -106,7 +113,24 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
-	fn last_force_vested_transfer(l: u32, ) -> Weight {
+
+	fn last_force_vested_transfer(l: u32) -> Weight {
+		(98_812_000 as Weight)
+			// Standard Error: 13_000
+			.saturating_add((139_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+	}
+
+	fn unlocking_merge_schedules(l: u32) -> Weight {
+		(98_812_000 as Weight)
+			// Standard Error: 13_000
+			.saturating_add((139_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+	}
+
+	fn not_unlocking_merge_schedules(l: u32) -> Weight {
 		(98_812_000 as Weight)
 			// Standard Error: 13_000
 			.saturating_add((139_000 as Weight).saturating_mul(l as Weight))
@@ -124,6 +148,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
+
 	fn vest_unlocked(l: u32, ) -> Weight {
 		(45_650_000 as Weight)
 			// Standard Error: 12_000
@@ -131,6 +156,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
+
 	fn vest_other_locked(l: u32, ) -> Weight {
 		(42_273_000 as Weight)
 			// Standard Error: 15_000
@@ -138,6 +164,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
+
 	fn vest_other_unlocked(l: u32, ) -> Weight {
 		(45_324_000 as Weight)
 			// Standard Error: 12_000
@@ -145,6 +172,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
+
 	fn first_vested_transfer(l: u32, ) -> Weight {
 		(45_324_000 as Weight)
 			// Standard Error: 12_000
@@ -152,6 +180,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
+
 	fn last_vested_transfer(l: u32, ) -> Weight {
 		(45_324_000 as Weight)
 			// Standard Error: 12_000
@@ -159,6 +188,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
+
 	fn first_force_vested_transfer(l: u32, ) -> Weight {
 		(45_324_000 as Weight)
 			// Standard Error: 12_000
@@ -166,7 +196,24 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	fn last_force_vested_transfer(l: u32, ) -> Weight {
+
+	fn last_force_vested_transfer(l: u32) -> Weight {
+		(45_324_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((214_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+	}
+
+	fn unlocking_merge_schedules(l: u32) -> Weight {
+		(45_324_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((214_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+	}
+
+	fn not_unlocking_merge_schedules(l: u32) -> Weight {
 		(45_324_000 as Weight)
 			// Standard Error: 12_000
 			.saturating_add((214_000 as Weight).saturating_mul(l as Weight))

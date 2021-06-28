@@ -428,13 +428,13 @@ pub mod pallet {
 		/// the current block will be used as the schedule start.
 		///
 		/// NOTE: If `schedule1_index == schedule2_index` this is a no-op.
-		/// NOTE: This will vest all schedules through the current block prior to merging.
+		/// NOTE: This will unlock all schedules through the current block prior to merging.
 		/// NOTE: If both schedules have ended by the current block, no new schedule will be created.
 		///
 		/// Merged schedule attributes:
-		/// starting_block: `MAX(schedule1.starting_block, scheduled2.starting_block, current_block)`
-		/// ending_block: `MAX(schedule1.ending_block, schedule2.ending_block)`
-		/// locked: `schedule1.locked_at(current_block) + schedule2.locked_at(current_block)`
+		/// starting_block: `MAX(schedule1.starting_block, scheduled2.starting_block, current_block)`.
+		/// ending_block: `MAX(schedule1.ending_block, schedule2.ending_block)`.
+		/// locked: `schedule1.locked_at(current_block) + schedule2.locked_at(current_block)`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -447,7 +447,10 @@ pub mod pallet {
 		///     - Reads: TODO
 		///     - Writes: TODO
 		/// # </weight>
-		#[pallet::weight(123)] // TODO
+		#[pallet::weight(
+			T::WeightInfo::not_unlocking_merge_schedules(MaxLocksOf::<T>::get())
+			.max(T::WeightInfo::unlocking_merge_schedules(MaxLocksOf::<T>::get()))
+		)]
 		pub fn merge_schedules(
 			origin: OriginFor<T>,
 			schedule1_index: u32,
@@ -471,9 +474,12 @@ pub mod pallet {
 			let schedule1 = vesting[schedule1_index];
 			let schedule2 = vesting[schedule2_index];
 			let filter = Filter::Two((schedule1_index, schedule2_index));
+
 			// The length of vesting decreases by 2 here since we filter out 2 schedules. So we know
-			// below we have the space to insert the merged schedule.
+			// below we have the space to insert the new, merged schedule.
 			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, filter);
+
+			// We can't fail from here on because we have potentially removed two schedules.
 
 			let now = <frame_system::Pallet<T>>::block_number();
 			if let Some(s) = Self::merge_vesting_info(now, schedule1, schedule2) {
@@ -1455,7 +1461,6 @@ mod tests {
 				)
 				.unwrap();
 				Vesting::vested_transfer(Some(4).into(), 2, sched1).unwrap();
-				assert_eq!(Vesting::vesting(&2).unwrap().len(), 2);
 				assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1]);
 
 				// Got to half way through the second schedule where both schedules are actively vesting
@@ -1649,11 +1654,6 @@ mod tests {
 	}
 
 	#[test]
-	fn merge_schedules_with_zero_values_does_not_create_new_schedules() {
-		ExtBuilder::default().existential_deposit(256).build().execute_with(|| {});
-	}
-
-	#[test]
 	fn merge_vesting_info_handles_per_block_0() {
 		// Faulty schedules with an infinite duration (per_block == 0) can be merged to create
 		// a schedule that vest 1 per_block (helpful for faulty legacy schedules)
@@ -1672,7 +1672,8 @@ mod tests {
 					sched1.locked_at::<Identity>(cur_block);
 				let merged_sched = VestingInfo::try_new::<Test>(
 					merged_locked,
-					1, // Merged schedule will have a per_block of 1
+					// Merged schedule will have a per_block of 1, which corrects existing schedules.
+					1,
 					10,
 				)
 				.unwrap();
@@ -1805,22 +1806,22 @@ mod tests {
 					Error::<Test>::ScheduleIndexOutOfBounds
 				);
 
-			// Enough schedules to merge but an index is non-existent
-			Vesting::vested_transfer(Some(3).into(), 2, sched0).unwrap();
-			assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched0]);
-			assert_noop!(
-				Vesting::merge_schedules(Some(2).into(), 0, 2),
-				Error::<Test>::ScheduleIndexOutOfBounds
-			);
+				// Enough schedules to merge but an index is non-existent
+				Vesting::vested_transfer(Some(3).into(), 2, sched0).unwrap();
+				assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched0]);
+				assert_noop!(
+					Vesting::merge_schedules(Some(2).into(), 0, 2),
+					Error::<Test>::ScheduleIndexOutOfBounds
+				);
 
-			// Index >= max allowed schedules
-			let max_schedules = <Test as Config>::MaxVestingSchedules::get();
-			Vesting::vested_transfer(Some(4).into(), 2, sched0).unwrap();
-			assert_eq!(Vesting::vesting(&2).unwrap().len(), max_schedules as usize);
-			assert_noop!(
-				Vesting::merge_schedules(Some(2).into(), 0, max_schedules),
-				Error::<Test>::ScheduleIndexOutOfBounds
-			);
+				// Index >= max allowed schedules
+				let max_schedules = <Test as Config>::MaxVestingSchedules::get();
+				Vesting::vested_transfer(Some(4).into(), 2, sched0).unwrap();
+				assert_eq!(Vesting::vesting(&2).unwrap().len(), max_schedules as usize);
+				assert_noop!(
+					Vesting::merge_schedules(Some(2).into(), 0, max_schedules),
+					Error::<Test>::ScheduleIndexOutOfBounds
+				);
 
 				// Essentially a noop with no errors if indexes are the same.
 				let cur_scheds = Vesting::vesting(&2);
