@@ -525,6 +525,11 @@ impl<T: Config> ChargeTransactionPayment<T> where
 		Self(fee)
 	}
 
+	/// Public accessor to get the amount of the tip that will be applied.
+	pub fn tip_amount(&self) -> BalanceOf<T> {
+		self.0
+	}
+
 	fn withdraw_fee(
 		&self,
 		who: &T::AccountId,
