@@ -264,6 +264,7 @@ fn common_config(semantics: &Semantics) -> wasmtime::Config {
 	config.wasm_multi_value(false);
 	config.wasm_multi_memory(false);
 	config.wasm_module_linking(false);
+	config.wasm_threads(false);
 
 	config
 }
