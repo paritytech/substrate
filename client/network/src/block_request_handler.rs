@@ -318,7 +318,11 @@ impl<B: BlockT> BlockRequestHandler<B> {
 						break;
 					}
 				}
-			} else if get_indexed_body {
+			} else {
+				Vec::new()
+			};
+
+			let indexed_body =  if get_indexed_body {
 				match self.client.block_indexed_body(&BlockId::Hash(hash))? {
 					Some(transactions) => transactions,
 					None => {
@@ -343,6 +347,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				justification,
 				is_empty_justification,
 				justifications,
+				indexed_body,
 			};
 
 			total_size += block_data.body.len();

@@ -973,7 +973,8 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		light_client_request_protocol_config,
 	};
 
-	// Force fast sync when storage chain mode is enabled
+	// Storage chains don't keep full block history and can't be synced in full mode.
+	// Force fast sync when storage chain mode is enabled.
 	if matches!(config.transaction_storage, TransactionStorageMode::StorageChain) {
 		network_params.network_config.sync_mode = SyncMode::Fast {
 			storage_chain_mode: true,

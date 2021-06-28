@@ -604,7 +604,7 @@ impl<B: BlockT> Protocol<B> {
 					None
 				},
 				indexed_body: if request.fields.contains(message::BlockAttributes::INDEXED_BODY) {
-					Some(block_data.body)
+					Some(block_data.indexed_body)
 				} else {
 					None
 				},
