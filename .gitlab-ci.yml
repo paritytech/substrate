@@ -433,7 +433,7 @@ check-polkadot-companion-status:
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
   script:
-    - ./.maintain/gitlab/check_companion_build.sh "$COMPANION_ORG" "$COMPANION_REPO" "$COMPANION_BUILD"
+    - ./.maintain/gitlab/check_companion_build.sh "$COMPANION_ORG" "$COMPANION_REPO" "$COMPANION_BUILD" "$COMPANION_DEPENDENCY"
   after_script:
     - cd "$COMPANION_REPO" && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
@@ -443,6 +443,7 @@ check-polkadot-companion-build:
   variables:
     COMPANION_ORG: paritytech
     COMPANION_REPO: polkadot
+    COMPANION_DEPENDENCY: paritytech/grandpa-bridge-gadget
   allow_failure: true
 
 check-cumulus-companion-build:
@@ -451,8 +452,7 @@ check-cumulus-companion-build:
     COMPANION_ORG: paritytech
     COMPANION_REPO: cumulus
     COMPANION_BUILD: "cargo check"
-  script:
-    - ./.maintain/gitlab/check_companion_build.sh "$COMPANION_ORG" "$COMPANION_REPO" "$COMPANION_BUILD" paritytech/polkadot
+    COMPANION_DEPENDENCY: paritytech/polkadot
   allow_failure: true
 
 check-beefy-companion-build:

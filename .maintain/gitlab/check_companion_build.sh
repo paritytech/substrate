@@ -9,8 +9,18 @@
 #
 # $ORGANISATION and $REPO are set using $1 and $2. You can also specify a custom
 # build command with $3
-# So invoke this script like:
-# ./check_companion_build.sh paritytech polkadot 'cargo test --release'
+# The Every argument after $3 is for specifying *additional* dependencies this
+# project has that depend on substrate, which might also have companion PRs.
+
+# Example: Cumulus relies on both substrate and polkadot. If this substrate PR
+# requires a companion build on polkadot, when we are testing that cumulus builds
+# with this commit of substrate, we *also* need to clone & patch polkadot, and tell
+# cumulus to use this cloned+patched version, else the build is guaranteed to fail
+# (since it doesn't have the changes to polkadot that were required in the polkadot
+# companion PR)
+
+# So invoke this script like (arguments in [] indicate optional arguments)
+# ./check_companion_build.sh paritytech cumulus ['cargo test --release'] [paritytech/polkadot]
 
 set -e
 
