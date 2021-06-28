@@ -964,12 +964,12 @@ pub mod pallet {
 	/// invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
-	pub type Invulnerables<T: Config> = StorageValue<_, Vec<AccountIdOf<T>>, ValueQuery>;
+	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
 	#[pallet::storage]
 	#[pallet::getter(fn bonded)]
-	pub type Bonded<T: Config> = StorageMap<_, Twox64Concat, AccountIdOf<T>, AccountIdOf<T>>;
+	pub type Bonded<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::AccountId>;
 
 	/// The minimum active bond to become and maintain the role of a nominator.
 	#[pallet::storage]
@@ -984,8 +984,8 @@ pub mod pallet {
 	#[pallet::getter(fn ledger)]
 	pub type Ledger<T: Config> = StorageMap<
 		_,
-		Blake2_128Concat, AccountIdOf<T>,
-		StakingLedger<AccountIdOf<T>, BalanceOf<T>>,
+		Blake2_128Concat, T::AccountId,
+		StakingLedger<T::AccountId, BalanceOf<T>>,
 	>;
 
 	/// Where the reward payment should be made. Keyed by stash.
@@ -993,8 +993,8 @@ pub mod pallet {
 	#[pallet::getter(fn payee)]
 	pub type Payee<T: Config> = StorageMap<
 		_,
-		Twox64Concat, AccountIdOf<T>,
-		RewardDestination<AccountIdOf<T>>,
+		Twox64Concat, T::AccountId,
+		RewardDestination<T::AccountId>,
 		ValueQuery,
 	>;
 
@@ -1003,7 +1003,7 @@ pub mod pallet {
 	/// When updating this storage item, you must also update the `CounterForValidators`.
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
-	pub type Validators<T: Config> = StorageMap<_, Twox64Concat, AccountIdOf<T>, ValidatorPrefs, ValueQuery>;
+	pub type Validators<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, ValidatorPrefs, ValueQuery>;
 
 	/// A tracker to keep count of the number of items in the `Validators` map.
 	#[pallet::storage]
@@ -1020,7 +1020,7 @@ pub mod pallet {
 	/// When updating this storage item, you must also update the `CounterForNominators`.
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
-	pub type Nominators<T: Config> = StorageMap<_, Twox64Concat, AccountIdOf<T>, Nominations<AccountIdOf<T>>>;
+	pub type Nominators<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
 
 	/// A tracker to keep count of the number of items in the `Nominators` map.
 	#[pallet::storage]
@@ -1067,8 +1067,8 @@ pub mod pallet {
 	pub type ErasStakers<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat, EraIndex,
-		Twox64Concat, AccountIdOf<T>,
-		Exposure<AccountIdOf<T>, BalanceOf<T>>,
+		Twox64Concat, T::AccountId,
+		Exposure<T::AccountId, BalanceOf<T>>,
 		ValueQuery,
 	>;
 
@@ -1088,8 +1088,8 @@ pub mod pallet {
 	pub type ErasStakersClipped<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat, EraIndex,
-		Twox64Concat, AccountIdOf<T>,
-		Exposure<AccountIdOf<T>, BalanceOf<T>>,
+		Twox64Concat, T::AccountId,
+		Exposure<T::AccountId, BalanceOf<T>>,
 		ValueQuery,
 	>;
 
@@ -1104,7 +1104,7 @@ pub mod pallet {
 	pub type ErasValidatorPrefs<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat, EraIndex,
-		Twox64Concat, AccountIdOf<T>,
+		Twox64Concat, T::AccountId,
 		ValidatorPrefs,
 		ValueQuery,
 	>;
@@ -1123,7 +1123,7 @@ pub mod pallet {
 	pub type ErasRewardPoints<T: Config> = StorageMap<
 		_,
 		Twox64Concat, EraIndex,
-		EraRewardPoints<AccountIdOf<T>>,
+		EraRewardPoints<T::AccountId>,
 		ValueQuery,
 	>;
 
@@ -1156,7 +1156,7 @@ pub mod pallet {
 	pub type UnappliedSlashes<T: Config> = StorageMap<
 		_,
 		Twox64Concat, EraIndex,
-		Vec<UnappliedSlash<AccountIdOf<T>, BalanceOf<T>>>,
+		Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>,
 		ValueQuery,
 	>;
 
@@ -1173,7 +1173,7 @@ pub mod pallet {
 	pub(crate) type ValidatorSlashInEra<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat, EraIndex,
-		Twox64Concat, AccountIdOf<T>,
+		Twox64Concat, T::AccountId,
 		(Perbill, BalanceOf<T>),
 	>;
 
@@ -1182,20 +1182,20 @@ pub mod pallet {
 	pub(crate) type NominatorSlashInEra<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat, EraIndex,
-		Twox64Concat, AccountIdOf<T>,
+		Twox64Concat, T::AccountId,
 		BalanceOf<T>,
 	>;
 
 	/// Slashing spans for stash accounts.
 	#[pallet::storage]
-	pub(crate) type SlashingSpans<T: Config> = StorageMap<_, Twox64Concat, AccountIdOf<T>, slashing::SlashingSpans>;
+	pub(crate) type SlashingSpans<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
 
 	/// Records information about the maximum slash of a stash within a slashing span,
 	/// as well as how much reward has been paid out.
 	#[pallet::storage]
 	pub(crate) type SpanSlash<T: Config> = StorageMap<
 		_,
-		Twox64Concat, (AccountIdOf<T>, slashing::SpanIndex),
+		Twox64Concat, (T::AccountId, slashing::SpanIndex),
 		slashing::SpanRecord<BalanceOf<T>>,
 		ValueQuery,
 	>;
@@ -1264,7 +1264,7 @@ pub mod pallet {
 		pub history_depth: u32,
 		pub validator_count: u32,
 		pub minimum_validator_count: u32,
-		pub invulnerables: Vec<AccountIdOf<T>>,
+		pub invulnerables: Vec<T::AccountId>,
 		pub force_era: Forcing,
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
@@ -1336,17 +1336,17 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(AccountIdOf<T> = "AccountId", BalanceOf<T> = "Balance")]
+	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	pub enum Event<T: Config> {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
 		/// \[era_index, validator_payout, remainder\]
 		EraPayout(EraIndex, BalanceOf<T>, BalanceOf<T>),
 		/// The staker has been rewarded by this amount. \[stash, amount\]
-		Reward(AccountIdOf<T>, BalanceOf<T>),
+		Reward(T::AccountId, BalanceOf<T>),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		/// \[validator, amount\]
-		Slash(AccountIdOf<T>, BalanceOf<T>),
+		Slash(T::AccountId, BalanceOf<T>),
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed. \[session_index\]
 		OldSlashingReportDiscarded(SessionIndex),
@@ -1356,12 +1356,12 @@ pub mod pallet {
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
 		/// it will not be emitted for staking rewards when they are added to stake.
-		Bonded(AccountIdOf<T>, BalanceOf<T>),
+		Bonded(T::AccountId, BalanceOf<T>),
 		/// An account has unbonded this amount. \[stash, amount\]
-		Unbonded(AccountIdOf<T>, BalanceOf<T>),
+		Unbonded(T::AccountId, BalanceOf<T>),
 		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
 		/// from the unlocking queue. \[stash, amount\]
-		Withdrawn(AccountIdOf<T>, BalanceOf<T>),
+		Withdrawn(T::AccountId, BalanceOf<T>),
 		/// A nominator has been kicked from a validator. \[nominator, stash\]
 		Kicked(T::AccountId, T::AccountId),
 		/// The election failed. No new era is planned.
@@ -1504,7 +1504,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] value: BalanceOf<T>,
-			payee: RewardDestination<AccountIdOf<T>>,
+			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
@@ -1830,7 +1830,7 @@ pub mod pallet {
 				} else {
 					Err(Error::<T>::BadTarget.into())
 				}))
-				.collect::<result::Result<Vec<AccountIdOf<T>>, _>>()?;
+				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
 			let nominations = Nominations {
 				targets,
@@ -1889,7 +1889,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_payee())]
 		pub fn set_payee(
 			origin: OriginFor<T>,
-			payee: RewardDestination<AccountIdOf<T>>,
+			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -2039,7 +2039,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_invulnerables(invulnerables.len() as u32))]
 		pub fn set_invulnerables(
 			origin: OriginFor<T>,
-			invulnerables: Vec<AccountIdOf<T>>,
+			invulnerables: Vec<T::AccountId>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(invulnerables);
@@ -2059,7 +2059,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
 		pub fn force_unstake(
 			origin: OriginFor<T>,
-			stash: AccountIdOf<T>,
+			stash: T::AccountId,
 			num_slashing_spans: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
@@ -2161,7 +2161,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxNominatorRewardedPerValidator::get()))]
 		pub fn payout_stakers(
 			origin: OriginFor<T>,
-			validator_stash: AccountIdOf<T>,
+			validator_stash: T::AccountId,
 			era: EraIndex,
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
@@ -2262,7 +2262,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::reap_stash(*num_slashing_spans))]
 		pub fn reap_stash(
 			_origin: OriginFor<T>,
-			stash: AccountIdOf<T>,
+			stash: T::AccountId,
 			num_slashing_spans: u32,
 		) -> DispatchResult {
 			let at_minimum = T::Currency::total_balance(&stash) == T::Currency::minimum_balance();
@@ -2293,7 +2293,7 @@ pub mod pallet {
 
 			for nom_stash in who.into_iter()
 				.map(T::Lookup::lookup)
-				.collect::<Result<Vec<AccountIdOf<T>>, _>>()?
+				.collect::<Result<Vec<T::AccountId>, _>>()?
 				.into_iter()
 			{
 				Nominators::<T>::mutate(&nom_stash, |maybe_nom| if let Some(ref mut nom) = maybe_nom {
@@ -2437,14 +2437,14 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
-	pub fn slashable_balance_of(stash: &AccountIdOf<T>) -> BalanceOf<T> {
+	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
 	/// Internal impl of [`Self::slashable_balance_of`] that returns [`VoteWeight`].
 	pub fn slashable_balance_of_vote_weight(
-		stash: &AccountIdOf<T>,
+		stash: &T::AccountId,
 		issuance: BalanceOf<T>,
 	) -> VoteWeight {
 		T::CurrencyToVote::to_vote(Self::slashable_balance_of(stash), issuance)
@@ -2454,16 +2454,16 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This prevents call sites from repeatedly requesting `total_issuance` from backend. But it is
 	/// important to be only used while the total issuance is not changing.
-	pub fn weight_of_fn() -> Box<dyn Fn(&AccountIdOf<T>) -> VoteWeight> {
+	pub fn weight_of_fn() -> Box<dyn Fn(&T::AccountId) -> VoteWeight> {
 		// NOTE: changing this to unboxed `impl Fn(..)` return type and the pallet will still
 		// compile, while some types in mock fail to resolve.
 		let issuance = T::Currency::total_issuance();
-		Box::new(move |who: &AccountIdOf<T>| -> VoteWeight {
+		Box::new(move |who: &T::AccountId| -> VoteWeight {
 			Self::slashable_balance_of_vote_weight(who, issuance)
 		})
 	}
 
-	fn do_payout_stakers(validator_stash: AccountIdOf<T>, era: EraIndex) -> DispatchResultWithPostInfo {
+	fn do_payout_stakers(validator_stash: T::AccountId, era: EraIndex) -> DispatchResultWithPostInfo {
 		// Validate input data
 		let current_era = CurrentEra::<T>::get().ok_or(
 			Error::<T>::InvalidEraToReward.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
@@ -2579,8 +2579,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will also update the stash lock.
 	fn update_ledger(
-		controller: &AccountIdOf<T>,
-		ledger: &StakingLedger<AccountIdOf<T>, BalanceOf<T>>
+		controller: &T::AccountId,
+		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>
 	) {
 		T::Currency::set_lock(
 			STAKING_ID,
@@ -2599,7 +2599,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
-	fn make_payout(stash: &AccountIdOf<T>, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
+	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
 		let dest = Self::payee(stash);
 		match dest {
 			RewardDestination::Controller => Self::bonded(stash)
@@ -2893,8 +2893,8 @@ impl<T: Config> Pallet<T> {
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
-		supports: Supports<AccountIdOf<T>>,
-	) -> Vec<(AccountIdOf<T>, Exposure<AccountIdOf<T>, BalanceOf<T>>)> {
+		supports: Supports<T::AccountId>,
+	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
 			T::CurrencyToVote::to_currency(e, total_issuance)
@@ -2923,7 +2923,7 @@ impl<T: Config> Pallet<T> {
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(AccountIdOf<T>, Exposure<_, _>)>>()
+			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -2933,7 +2933,7 @@ impl<T: Config> Pallet<T> {
 	/// This is called:
 	/// - after a `withdraw_unbonded()` call that frees all of a stash's bonded balance.
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
-	fn kill_stash(stash: &AccountIdOf<T>, num_slashing_spans: u32) -> DispatchResult {
+	fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
 		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
 
 		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
@@ -2991,7 +2991,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
 	pub fn reward_by_ids(
-		validators_points: impl IntoIterator<Item = (AccountIdOf<T>, u32)>
+		validators_points: impl IntoIterator<Item = (T::AccountId, u32)>
 	) {
 		if let Some(active_era) = Self::active_era() {
 			<ErasRewardPoints<T>>::mutate(active_era.index, |era_rewards| {
@@ -3014,8 +3014,8 @@ impl<T: Config> Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn add_era_stakers(
 		current_era: EraIndex,
-		controller: AccountIdOf<T>,
-		exposure: Exposure<AccountIdOf<T>, BalanceOf<T>>,
+		controller: T::AccountId,
+		exposure: Exposure<T::AccountId, BalanceOf<T>>,
 	) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
 	}
@@ -3112,7 +3112,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config>
-	frame_election_provider_support::ElectionDataProvider<AccountIdOf<T>, BlockNumberFor<T>>
+	frame_election_provider_support::ElectionDataProvider<T::AccountId, BlockNumberFor<T>>
 	for Pallet<T>
 {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
@@ -3184,8 +3184,8 @@ impl<T: Config>
 
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn put_snapshot(
-		voters: Vec<(AccountIdOf<T>, VoteWeight, Vec<AccountIdOf<T>>)>,
-		targets: Vec<AccountIdOf<T>>,
+		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {
 		use sp_std::convert::TryFrom;
@@ -3259,12 +3259,12 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> historical::SessionManager<AccountIdOf<T>, Exposure<AccountIdOf<T>, BalanceOf<T>>>
+impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>>
 	for Pallet<T>
 {
 	fn new_session(
 		new_index: SessionIndex,
-	) -> Option<Vec<(AccountIdOf<T>, Exposure<AccountIdOf<T>, BalanceOf<T>>)>> {
+	) -> Option<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>> {
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
@@ -3302,14 +3302,14 @@ impl<T: Config> historical::SessionManager<AccountIdOf<T>, Exposure<AccountIdOf<
 /// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
 /// * 2 points to the block producer for each reference to a previously unreferenced uncle, and
 /// * 1 point to the producer of each referenced uncle block.
-impl<T> pallet_authorship::EventHandler<AccountIdOf<T>, T::BlockNumber> for Pallet<T>
+impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Pallet<T>
 where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
-	fn note_author(author: AccountIdOf<T>) {
+	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
 	}
-	fn note_uncle(author: AccountIdOf<T>, _age: T::BlockNumber) {
+	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
 		Self::reward_by_ids(vec![
 			(<pallet_authorship::Pallet<T>>::author(), 2),
 			(author, 1)
@@ -3321,8 +3321,8 @@ where
 /// if any.
 pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> Convert<AccountIdOf<T>, Option<AccountIdOf<T>>> for StashOf<T> {
-	fn convert(controller: AccountIdOf<T>) -> Option<AccountIdOf<T>> {
+impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
+	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
 		<Pallet<T>>::ledger(&controller).map(|l| l.stash)
 	}
 }
@@ -3334,10 +3334,10 @@ impl<T: Config> Convert<AccountIdOf<T>, Option<AccountIdOf<T>>> for StashOf<T> {
 /// `active_era`. It can differ from the latest planned exposure in `current_era`.
 pub struct ExposureOf<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> Convert<AccountIdOf<T>, Option<Exposure<AccountIdOf<T>, BalanceOf<T>>>>
+impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
 	for ExposureOf<T>
 {
-	fn convert(validator: AccountIdOf<T>) -> Option<Exposure<AccountIdOf<T>, BalanceOf<T>>> {
+	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
 		<Pallet<T>>::active_era()
 			.map(|active_era| <Pallet<T>>::eras_stakers(active_era.index, &validator))
 	}
@@ -3345,7 +3345,7 @@ impl<T: Config> Convert<AccountIdOf<T>, Option<Exposure<AccountIdOf<T>, BalanceO
 
 /// This is intended to be used with `FilterHistoricalOffences`.
 impl<T: Config>
-	OnOffenceHandler<AccountIdOf<T>, pallet_session::historical::IdentificationTuple<T>, Weight>
+	OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>, Weight>
 	for Pallet<T>
 where
 	T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
@@ -3362,7 +3362,7 @@ where
 {
 	fn on_offence(
 		offenders: &[OffenceDetails<
-			AccountIdOf<T>,
+			T::AccountId,
 			pallet_session::historical::IdentificationTuple<T>,
 		>],
 		slash_fraction: &[Perbill],
