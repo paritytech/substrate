@@ -70,7 +70,7 @@ pub trait WeightInfo {
 	fn new_era(v: u32, n: u32, ) -> Weight;
 	fn get_npos_voters(v: u32, n: u32, s: u32, ) -> Weight;
 	fn get_npos_targets(v: u32, ) -> Weight;
-	fn update_staking_limits() -> Weight;
+	fn set_staking_limits() -> Weight;
 	fn chill_other() -> Weight;
 }
 
@@ -252,7 +252,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
 	}
-	fn update_staking_limits() -> Weight {
+	fn set_staking_limits() -> Weight {
 		(5_028_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
@@ -440,7 +440,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(v as Weight)))
 	}
-	fn update_staking_limits() -> Weight {
+	fn set_staking_limits() -> Weight {
 		(5_028_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
