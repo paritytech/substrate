@@ -250,7 +250,7 @@ pub mod generic {
 		pub header: Option<Header>,
 		/// Block body if requested.
 		pub body: Option<Vec<Extrinsic>>,
-		/// Block body if requested.
+		/// Block body indexed transactions if requested.
 		pub indexed_body: Option<Vec<Vec<u8>>>,
 		/// Block receipt if requested.
 		pub receipt: Option<Vec<u8>>,
