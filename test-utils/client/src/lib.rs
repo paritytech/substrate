@@ -159,13 +159,14 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 	}
 
 	/// Set the execution strategy that should be used by all contexts.
-	pub fn set_execution_strategy(mut self, execution_config: ExecutionConfig) -> Self {
+	pub fn set_execution_strategy(mut self, execution_strategy: ExecutionStrategy) -> Self {
 		self.execution_configs = ExecutionConfigs {
-			syncing: execution_config,
-			importing: execution_config,
-			block_construction: execution_config,
-			offchain_worker: execution_config,
-			other: execution_config,
+			// NOTE: we set the context to consensus for all of them.
+			syncing: execution_strategy.in_consensus(),
+			importing: execution_strategy.in_consensus(),
+			block_construction: execution_strategy.in_consensus(),
+			offchain_worker: execution_strategy.in_consensus(),
+			other: execution_strategy.in_consensus(),
 		};
 		self
 	}

@@ -333,7 +333,7 @@ mod execution {
 	pub struct ExecutionManager<F> {
 		/// The strategy of the execution's runtime.
 		pub strategy: ExecutionStrategyWithHandler<F>,
-		/// The context at which the aforementioned strategy is being used.
+		/// The context in which the aforementioned strategy is being used.
 		pub context: ExecutionContext,
 	}
 

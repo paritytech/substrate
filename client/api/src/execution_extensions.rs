@@ -37,7 +37,7 @@ use sp_state_machine::{ExecutionManager, ExecutionStrategy, ExecutionConfig, Def
 use sp_externalities::Extensions;
 use parking_lot::RwLock;
 
-/// Execution strategies settings.
+/// Execution configurations, per operation type.
 #[derive(Debug, Clone)]
 pub struct ExecutionConfigs {
 	/// Execution config used when syncing.

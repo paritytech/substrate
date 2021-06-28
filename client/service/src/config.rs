@@ -24,14 +24,20 @@ pub use sc_client_db::{
 };
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{
-	ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig,
-	SetConfig, NonDefaultSetConfig, TransportConfig,
-	RequestResponseConfig, IncomingRequest, OutgoingResponse,
+	ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig, SetConfig,
+	NonDefaultSetConfig, TransportConfig, RequestResponseConfig, IncomingRequest, OutgoingResponse,
 };
 pub use sc_executor::WasmExecutionMethod;
-pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy, ExecutionConfigs};
+pub use sc_client_api::execution_extensions::ExecutionConfigs;
 
-use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
+use std::{
+	io,
+	future::Future,
+	path::{PathBuf, Path},
+	pin::Pin,
+	net::SocketAddr,
+	sync::Arc,
+};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::ChainSpec;
 use sp_core::crypto::SecretString;
@@ -79,7 +85,7 @@ pub struct Configuration {
 	/// over on-chain runtimes when the spec version matches. Set to `None` to
 	/// disable overrides (default).
 	pub wasm_runtime_overrides: Option<PathBuf>,
-	/// Execution strategies.
+	/// Execution configurations.
 	pub execution_configs: ExecutionConfigs,
 	/// RPC over HTTP binding address. `None` if disabled.
 	pub rpc_http: Option<SocketAddr>,
