@@ -191,11 +191,11 @@ impl WasmExecutor {
 
 	/// Perform a call into the given runtime.
 	///
-	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be isntantiated with the
+	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be instantiated with the
 	/// parameters this `WasmExecutor` was initialized with.
 	///
-	/// In case of problems with during creation of the runtime or instantation, a `Err` is returned.
-	/// that describes the message.
+	/// In case of problems with during creation of the runtime or instantiation, a `Err` is
+	/// returned. that describes the message.
 	#[doc(hidden)] // We use this function for tests across multiple crates.
 	pub fn uncached_call(
 		&self,
@@ -266,8 +266,8 @@ impl sp_core::traits::ReadRuntimeVersion for WasmExecutor {
 	}
 }
 
-/// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
-/// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
+/// A generic `CodeExecutor` implementation that uses a delegate `D` to determine wasm code
+/// equivalence and dispatch to native code when possible, falling back on `WasmExecutor` when not.
 pub struct NativeExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: std::marker::PhantomData<D>,
@@ -283,7 +283,6 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// # Parameters
 	///
 	/// `fallback_method` - Method used to execute fallback Wasm code.
-	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	pub fn new(
@@ -489,6 +488,12 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool) {
+		trace!(
+			target: "executor",
+			"call({}) [use_native = {}]",
+			method,
+			use_native,
+		);
 		let mut used_native = false;
 		let result = self.wasm.with_instance(
 			runtime_code,

@@ -317,19 +317,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Set the number of pages in the WebAssembly environment's heap.
-		///
-		/// Two separate heap page limits can be set, one for offchain context and one for consensus
-		/// context.
+		/// Set the number of pages in the consensus WebAssembly environment's heap.
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
-		pub fn set_heap_pages(
-			origin: OriginFor<T>,
-			consensus: u64,
-			offchain: u64,
-		) -> DispatchResultWithPostInfo {
+		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &consensus.encode());
-			storage::unhashed::put_raw(well_known_keys::OFFCHAIN_HEAP_PAGES, &offchain.encode());
+			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 			Ok(().into())
 		}
 
@@ -474,6 +466,14 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let hash = T::Hashing::hash(&remark[..]);
 			Self::deposit_event(Event::Remarked(who, hash));
+			Ok(().into())
+		}
+
+		/// Set the number of pages in the offchain WebAssembly environment's heap.
+		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
+		pub fn set_heap_pages_offchain(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			storage::unhashed::put_raw(well_known_keys::OFFCHAIN_HEAP_PAGES, &pages.encode());
 			Ok(().into())
 		}
 	}
