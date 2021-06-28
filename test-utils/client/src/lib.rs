@@ -80,6 +80,7 @@ pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
+	no_genesis: bool,
 }
 
 impl<Block: BlockT, Executor, G: GenesisInit> Default
@@ -120,6 +121,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 			fork_blocks: None,
 			bad_blocks: None,
 			enable_offchain_indexing_api: false,
+			no_genesis: false,
 		}
 	}
 
@@ -184,6 +186,12 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 		self
 	}
 
+	/// Disable writing genesis.
+	pub fn set_no_genesis(mut self) -> Self {
+		self.no_genesis = true;
+		self
+	}
+
 	/// Build the test client with the given native executor.
 	pub fn build_with_executor<RuntimeApi>(
 		self,
@@ -229,6 +237,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 			None,
 			ClientConfig {
 				offchain_indexing_api: self.enable_offchain_indexing_api,
+				no_genesis: self.no_genesis,
 				..Default::default()
 			},
 		).expect("Creates new client");
@@ -241,7 +250,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 
 impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	Block,
-	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+	client::LocalCallExecutor<Block, Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
@@ -252,7 +261,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	) -> (
 		client::Client<
 			Backend,
-			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+			client::LocalCallExecutor<Block, Backend, NativeExecutor<E>>,
 			Block,
 			RuntimeApi
 		>,

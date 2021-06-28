@@ -16,14 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use parity_wasm::elements::{DataSegment, Module as RawModule, deserialize_buffer, serialize};
-
+use pwasm_utils::{
+	parity_wasm::elements::{
+		DataSegment, Module, deserialize_buffer, serialize, Internal,
+	},
+	export_mutable_globals,
+};
 use crate::error::WasmError;
 
 /// A bunch of information collected from a WebAssembly module.
 #[derive(Clone)]
 pub struct RuntimeBlob {
-	raw_module: RawModule,
+	raw_module: Module,
 }
 
 impl RuntimeBlob {
@@ -42,7 +46,7 @@ impl RuntimeBlob {
 	///
 	/// Returns `Err` if the wasm code cannot be deserialized.
 	pub fn new(wasm_code: &[u8]) -> Result<Self, WasmError> {
-		let raw_module: RawModule = deserialize_buffer(wasm_code)
+		let raw_module: Module = deserialize_buffer(wasm_code)
 			.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:?}", e)))?;
 		Ok(Self { raw_module })
 	}
@@ -74,7 +78,16 @@ impl RuntimeBlob {
 
 	/// Perform an instrumentation that makes sure that the mutable globals are exported.
 	pub fn expose_mutable_globals(&mut self) {
-		pwasm_utils::export_mutable_globals(&mut self.raw_module, "exported_internal_global");
+		export_mutable_globals(&mut self.raw_module, "exported_internal_global");
+	}
+
+	/// Perform an instrumentation that makes sure that a specific function `entry_point` is exported
+	pub fn entry_point_exists(&self, entry_point: &str) -> bool {
+		self.raw_module.export_section().map(|e| {
+			e.entries()
+			.iter()
+			.any(|e| matches!(e.internal(), Internal::Function(_)) && e.field() == entry_point)
+		}).unwrap_or_default()
 	}
 
 	/// Returns an iterator of all globals which were exported by [`expose_mutable_globals`].
@@ -87,7 +100,7 @@ impl RuntimeBlob {
 			.map(|es| es.entries())
 			.unwrap_or(&[]);
 		exports.iter().filter_map(|export| match export.internal() {
-			parity_wasm::elements::Internal::Global(_)
+			Internal::Global(_)
 				if export.field().starts_with("exported_internal_global") =>
 			{
 				Some(export.field())
@@ -112,7 +125,7 @@ impl RuntimeBlob {
 	}
 
 	/// Destructure this structure into the underlying parity-wasm Module.
-	pub fn into_inner(self) -> RawModule {
+	pub fn into_inner(self) -> Module {
 		self.raw_module
 	}
 }

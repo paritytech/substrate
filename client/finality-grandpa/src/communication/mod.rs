@@ -117,7 +117,7 @@ impl LocalIdKeystore {
 	}
 
 	/// Returns a reference to the keystore.
-	fn keystore(&self) -> SyncCryptoStorePtr{
+	fn keystore(&self) -> SyncCryptoStorePtr {
 		(self.0).1.clone()
 	}
 }

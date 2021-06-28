@@ -29,8 +29,11 @@ use sp_core::{
 	offchain::{self, OffchainWorkerExt, TransactionPoolExt, OffchainDbExt},
 };
 use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
-use sp_runtime::{generic::BlockId, traits};
-use sp_state_machine::{ExecutionStrategy, ExecutionConfig, ExecutionManager, DefaultHandler};
+use sp_runtime::{
+	generic::BlockId,
+	traits,
+};
+use sp_state_machine::{ExecutionManager, ExecutionStrategy, ExecutionConfig, DefaultHandler};
 use sp_externalities::Extensions;
 use parking_lot::RwLock;
 

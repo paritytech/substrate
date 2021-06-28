@@ -45,7 +45,7 @@ use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
 
 /// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES: u64 = 1024;
+const DEFAULT_HEAP_PAGES: u64 = 2048;
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
 ///
@@ -291,7 +291,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 	) -> Self {
-		let extended =  D::ExtendHostFunctions::host_functions();
+		let extended = D::ExtendHostFunctions::host_functions();
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions()
 			.into_iter()
 			// filter out any host function overrides provided.

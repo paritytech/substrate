@@ -24,6 +24,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../suppor
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 pallet-timestamp = { version = "3.0.0", default-features = false, path = "../timestamp" }
 sp-trie = { version = "3.0.0", optional = true, default-features = false, path = "../../primitives/trie" }
+log = { version = "0.4.0", default-features = false }
 impl-trait-for-tuples = "0.2.1"
 
 [dev-dependencies]
@@ -44,5 +45,6 @@ std = [
 	"sp-staking/std",
 	"pallet-timestamp/std",
 	"sp-trie/std",
+	"log/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

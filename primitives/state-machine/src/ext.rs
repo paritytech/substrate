@@ -32,7 +32,7 @@ use sp_externalities::{
 };
 use codec::{Decode, Encode, EncodeAppend};
 
-use sp_std::{fmt, any::{Any, TypeId}, vec::Vec, vec, boxed::Box};
+use sp_std::{fmt, any::{Any, TypeId}, vec::Vec, vec, boxed::Box, cmp::Ordering};
 use crate::{warn, trace, log_error};
 #[cfg(feature = "std")]
 use crate::changes_trie::State as ChangesTrieState;
@@ -323,16 +323,37 @@ where
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		let next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		let next_overlay_key_change = self.overlay.next_storage_key_change(key);
+		let mut next_backend_key = self.backend.next_storage_key(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let mut overlay_changes = self.overlay.iter_after(key).peekable();
 
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_storage_key(&overlay_key.0[..])
+		match (&next_backend_key, overlay_changes.peek()) {
+			(_, None) => next_backend_key,
+			(Some(_), Some(_)) => {
+				while let Some(overlay_key) = overlay_changes.next() {
+					let cmp = next_backend_key.as_deref().map(|v| v.cmp(&overlay_key.0));
+
+					// If `backend_key` is less than the `overlay_key`, we found out next key.
+					if cmp == Some(Ordering::Less) {
+						return next_backend_key
+					} else if overlay_key.1.value().is_some() {
+						// If there exists a value for the `overlay_key` in the overlay
+						// (aka the key is still valid), it means we have found our next key.
+						return Some(overlay_key.0.to_vec())
+					} else if cmp == Some(Ordering::Equal) {
+						// If the `backend_key` and `overlay_key` are equal, it means that we need
+						// to search for the next backend key, because the overlay has overwritten
+						// this key.
+						next_backend_key = self.backend.next_storage_key(
+							&overlay_key.0,
+						).expect(EXT_NOT_ALLOWED_TO_FAIL);
+					}
+				}
+
+				next_backend_key
+			},
+			(None, Some(_)) => {
+				// Find the next overlay key that has a value attached.
+				overlay_changes.find_map(|k| k.1.value().as_ref().map(|_| k.0.to_vec()))
 			},
 		}
 	}
@@ -342,24 +363,43 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
-		let next_backend_key = self.backend
+		let mut next_backend_key = self.backend
 			.next_child_storage_key(child_info, key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
-		let next_overlay_key_change = self.overlay.next_child_storage_key_change(
+		let mut overlay_changes = self.overlay.child_iter_after(
 			child_info.storage_key(),
 			key
-		);
+		).peekable();
 
-		match (next_backend_key, next_overlay_key_change) {
-			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
-			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
-				Some(overlay_key.0.to_vec())
-			} else {
-				self.next_child_storage_key(
-					child_info,
-					&overlay_key.0[..],
-				)
+		match (&next_backend_key, overlay_changes.peek()) {
+			(_, None) => next_backend_key,
+			(Some(_), Some(_)) => {
+				while let Some(overlay_key) = overlay_changes.next() {
+					let cmp = next_backend_key.as_deref().map(|v| v.cmp(&overlay_key.0));
+
+					// If `backend_key` is less than the `overlay_key`, we found out next key.
+					if cmp == Some(Ordering::Less) {
+						return next_backend_key
+					} else if overlay_key.1.value().is_some() {
+						// If there exists a value for the `overlay_key` in the overlay
+						// (aka the key is still valid), it means we have found our next key.
+						return Some(overlay_key.0.to_vec())
+					} else if cmp == Some(Ordering::Equal) {
+						// If the `backend_key` and `overlay_key` are equal, it means that we need
+						// to search for the next backend key, because the overlay has overwritten
+						// this key.
+						next_backend_key = self.backend.next_child_storage_key(
+							child_info,
+							&overlay_key.0,
+						).expect(EXT_NOT_ALLOWED_TO_FAIL);
+					}
+				}
+
+				next_backend_key
+			},
+			(None, Some(_)) => {
+				// Find the next overlay key that has a value attached.
+				overlay_changes.find_map(|k| k.1.value().as_ref().map(|_| k.0.to_vec()))
 			},
 		}
 	}
@@ -420,36 +460,10 @@ where
 		let _guard = guard();
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
-		let mut num_deleted: u32 = 0;
-
-		if let Some(limit) = limit {
-			let mut all_deleted = true;
-			self.backend.apply_to_child_keys_while(child_info, |key| {
-				if num_deleted == limit {
-					all_deleted = false;
-					return false;
-				}
-				if let Some(num) = num_deleted.checked_add(1) {
-					num_deleted = num;
-				} else {
-					all_deleted = false;
-					return false;
-				}
-				self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				true
-			});
-			(all_deleted, num_deleted)
-		} else {
-			self.backend.apply_to_child_keys_while(child_info, |key| {
-				num_deleted = num_deleted.saturating_add(1);
-				self.overlay.set_child_storage(child_info, key.to_vec(), None);
-				true
-			});
-			(true, num_deleted)
-		}
+		self.limit_remove_from_backend(Some(child_info), None, limit)
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8]) {
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> (bool, u32) {
 		trace!(target: "state", "{:04x}: ClearPrefix {}",
 			self.id,
 			HexDisplay::from(&prefix),
@@ -458,21 +472,20 @@ where
 
 		if sp_core::storage::well_known_keys::starts_with_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part or contains of child storage key");
-			return;
+			return (false, 0);
 		}
 
 		self.mark_dirty();
 		self.overlay.clear_prefix(prefix);
-		self.backend.for_keys_with_prefix(prefix, |key| {
-			self.overlay.set_storage(key.to_vec(), None);
-		});
+		self.limit_remove_from_backend(None, Some(prefix), limit)
 	}
 
 	fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-	) {
+		limit: Option<u32>,
+	) -> (bool, u32) {
 		trace!(target: "state", "{:04x}: ClearChildPrefix({}) {}",
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
@@ -482,9 +495,7 @@ where
 
 		self.mark_dirty();
 		self.overlay.clear_child_prefix(child_info, prefix);
-		self.backend.for_child_keys_with_prefix(child_info, prefix, |key| {
-			self.overlay.set_child_storage(child_info, key.to_vec(), None);
-		});
+		self.limit_remove_from_backend(Some(child_info), Some(prefix), limit)
 	}
 
 	fn storage_append(
@@ -589,33 +600,34 @@ where
 		}
 	}
 
-	fn storage_index_transaction(&mut self, index: u32, offset: u32) {
+	fn storage_index_transaction(&mut self, index: u32, hash: &[u8], size: u32) {
 		trace!(
 			target: "state",
-			"{:04x}: IndexTransaction ({}): [{}..]",
+			"{:04x}: IndexTransaction ({}): {}, {} bytes",
 			self.id,
 			index,
-			offset,
+			HexDisplay::from(&hash),
+			size,
 		);
 		self.overlay.add_transaction_index(IndexOperation::Insert {
 			extrinsic: index,
-			offset,
+			hash: hash.to_vec(),
+			size,
 		});
 	}
 
 	/// Renew existing piece of data storage.
-	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8], size: u32) {
+	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8]) {
 		trace!(
 			target: "state",
-			"{:04x}: RenewTransactionIndex ({}) {} bytes",
+			"{:04x}: RenewTransactionIndex ({}): {}",
 			self.id,
+			index,
 			HexDisplay::from(&hash),
-			size,
 		);
 		self.overlay.add_transaction_index(IndexOperation::Renew {
 			extrinsic: index,
 			hash: hash.to_vec(),
-			size
 		});
 	}
 
@@ -625,7 +637,7 @@ where
 	}
 
 	#[cfg(feature = "std")]
-	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
+	fn storage_changes_root(&mut self, mut parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.changes_trie_transaction_storage_root {
 			trace!(
@@ -641,7 +653,7 @@ where
 			let root = self.overlay.changes_trie_root(
 				self.backend,
 				self.changes_trie_state.as_ref(),
-				Decode::decode(&mut &parent_hash[..]).map_err(|e|
+				Decode::decode(&mut parent_hash).map_err(|e|
 					trace!(
 						target: "state",
 						"Failed to decode changes root parent hash: {}",
@@ -682,7 +694,7 @@ where
 			self.overlay.rollback_transaction().expect(BENCHMARKING_FN);
 		}
 		self.overlay.drain_storage_changes(
-			&self.backend,
+			self.backend,
 			#[cfg(feature = "std")]
 			None,
 			Default::default(),
@@ -700,7 +712,7 @@ where
 			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
 		}
 		let changes = self.overlay.drain_storage_changes(
-			&self.backend,
+			self.backend,
 			#[cfg(feature = "std")]
 			None,
 			Default::default(),
@@ -736,6 +748,57 @@ where
 
 	fn proof_size(&self) -> Option<u32> {
 		self.backend.proof_size()
+	}
+}
+
+impl<'a, H, N, B> Ext<'a, H, N, B>
+where
+	H: Hasher,
+	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>,
+	N: crate::changes_trie::BlockNumber,
+{
+	fn limit_remove_from_backend(
+		&mut self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		limit: Option<u32>,
+	) -> (bool, u32) {
+		let mut num_deleted: u32 = 0;
+
+		if let Some(limit) = limit {
+			let mut all_deleted = true;
+			self.backend.apply_to_keys_while(child_info, prefix, |key| {
+				if num_deleted == limit {
+					all_deleted = false;
+					return false;
+				}
+				if let Some(num) = num_deleted.checked_add(1) {
+					num_deleted = num;
+				} else {
+					all_deleted = false;
+					return false;
+				}
+				if let Some(child_info) = child_info {
+					self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				} else {
+					self.overlay.set_storage(key.to_vec(), None);
+				}
+				true
+			});
+			(all_deleted, num_deleted)
+		} else {
+			self.backend.apply_to_keys_while(child_info, prefix, |key| {
+				num_deleted = num_deleted.saturating_add(1);
+				if let Some(child_info) = child_info {
+					self.overlay.set_child_storage(child_info, key.to_vec(), None);
+				} else {
+					self.overlay.set_storage(key.to_vec(), None);
+				}
+				true
+			});
+			(true, num_deleted)
+		}
 	}
 }
 
@@ -972,6 +1035,34 @@ mod tests {
 	}
 
 	#[test]
+	fn next_storage_key_works_with_a_lot_empty_values_in_overlay() {
+		let mut cache = StorageTransactionCache::default();
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_storage(vec![20], None);
+		overlay.set_storage(vec![21], None);
+		overlay.set_storage(vec![22], None);
+		overlay.set_storage(vec![23], None);
+		overlay.set_storage(vec![24], None);
+		overlay.set_storage(vec![25], None);
+		overlay.set_storage(vec![26], None);
+		overlay.set_storage(vec![27], None);
+		overlay.set_storage(vec![28], None);
+		overlay.set_storage(vec![29], None);
+		let backend = Storage {
+			top: map![
+				vec![30] => vec![30]
+			],
+			children_default: map![]
+		}.into();
+
+		let ext = TestExt::new(&mut overlay, &mut cache, &backend, None, None);
+
+		assert_eq!(ext.next_storage_key(&[5]), Some(vec![30]));
+
+		drop(ext);
+	}
+
+	#[test]
 	fn next_child_storage_key_works() {
 		let child_info = ChildInfo::new_default(b"Child1");
 		let child_info = &child_info;
@@ -1086,14 +1177,14 @@ mod tests {
 		not_under_prefix.extend(b"path");
 		ext.set_storage(not_under_prefix.clone(), vec![10]);
 
-		ext.clear_prefix(&[]);
-		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		ext.clear_prefix(&[], None);
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4], None);
 		let mut under_prefix = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
 		under_prefix.extend(b"path");
-		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4]);
+		ext.clear_prefix(&well_known_keys::CHILD_STORAGE_KEY_PREFIX[..4], None);
 		assert_eq!(ext.child_storage(child_info, &[30]), Some(vec![40]));
 		assert_eq!(ext.storage(not_under_prefix.as_slice()), Some(vec![10]));
-		ext.clear_prefix(&not_under_prefix[..5]);
+		ext.clear_prefix(&not_under_prefix[..5], None);
 		assert_eq!(ext.storage(not_under_prefix.as_slice()), None);
 	}
 

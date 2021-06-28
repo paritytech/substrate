@@ -51,7 +51,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), remark_message)
 
 	set_heap_pages {
-	}: _(RawOrigin::Root, Default::default())
+	}: _(RawOrigin::Root, Default::default(), Default::default())
 
 	// `set_code` was not benchmarked because it is pretty hard to come up with a real
 	// Wasm runtime to test the upgrade with. But this is okay because we will make
