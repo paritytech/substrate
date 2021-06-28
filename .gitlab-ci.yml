@@ -319,7 +319,7 @@ test-linux-stable:                 &test-linux
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
-    - time cargo test -p frame-support-test --features=conditional-storage --manifest-path frame/support/test/Cargo.toml # does not reuse cache 1 min 44 sec
+    - time cargo test -p frame-support-test --features=conditional-storage --manifest-path frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 

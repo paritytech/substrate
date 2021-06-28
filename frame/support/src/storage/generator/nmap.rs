@@ -196,11 +196,11 @@ where
 		unhashed::kill(&Self::storage_n_map_final_key::<K, _>(key));
 	}
 
-	fn remove_prefix<KP>(partial_key: KP)
+	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		K: HasKeyPrefix<KP>,
 	{
-		unhashed::kill_prefix(&Self::storage_n_map_partial_key(partial_key));
+		unhashed::kill_prefix(&Self::storage_n_map_partial_key(partial_key), limit)
 	}
 
 	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V>
@@ -431,6 +431,26 @@ mod test_iterators {
 		);
 		*last += 1;
 		prefix
+	}
+
+	#[test]
+	fn n_map_double_map_identical_key() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			NMap::insert((1, 2), 50);
+			let key_hash = NMap::hashed_key_for((1, 2));
+
+			{
+				crate::generate_storage_alias!(Test, NMap => DoubleMap<
+					(u16, crate::Blake2_128Concat),
+					(u32, crate::Twox64Concat),
+					u64
+				>);
+
+				let value = NMap::get(1, 2).unwrap();
+				assert_eq!(value, 50);
+				assert_eq!(NMap::hashed_key_for(1, 2), key_hash);
+			}
+		});
 	}
 
 	#[test]

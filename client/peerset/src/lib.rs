@@ -45,7 +45,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnbounded
 pub use libp2p::PeerId;
 
 /// We don't accept nodes whose reputation is under this value.
-const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
+const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);
 /// Reputation change for a node when we get disconnected from it.
 const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// Amount of time between the moment we disconnect from a node and the moment we remove it from
@@ -107,7 +107,7 @@ impl ReputationChange {
 
 	/// New reputation change that forces minimum possible reputation.
 	pub const fn new_fatal(reason: &'static str) -> ReputationChange {
-		ReputationChange { value: i32::min_value(), reason }
+		ReputationChange { value: i32::MIN, reason }
 	}
 }
 
@@ -444,6 +444,8 @@ impl Peerset {
 					set_id: SetId(set_index),
 					peer_id: peer.into_peer_id(),
 				});
+
+				self.alloc_slots(SetId(set_index));
 			}
 		}
 	}
@@ -523,6 +525,14 @@ impl Peerset {
 				peersstate::Peer::NotConnected(n) => n,
 				peersstate::Peer::Connected(_) => continue,
 			};
+
+			// Don't connect to nodes with an abysmal reputation, even if they're reserved.
+			// This is a rather opinionated behaviour, and it wouldn't be fundamentally wrong to
+			// remove that check. If necessary, the peerset should be refactored to give more
+			// control over what happens in that situation.
+			if entry.reputation() < BANNED_THRESHOLD {
+				break;
+			}
 
 			match entry.try_outgoing() {
 				Ok(conn) => self.message_queue.push_back(Message::Connect {

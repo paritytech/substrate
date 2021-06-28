@@ -42,20 +42,20 @@ pub trait CurrencyToVote<B> {
 
 /// An implementation of `CurrencyToVote` tailored for chain's that have a balance type of u128.
 ///
-/// The factor is the `(total_issuance / u64::max()).max(1)`, represented as u64. Let's look at the
+/// The factor is the `(total_issuance / u64::MAX).max(1)`, represented as u64. Let's look at the
 /// important cases:
 ///
-/// If the chain's total issuance is less than u64::max(), this will always be 1, which means that
+/// If the chain's total issuance is less than u64::MAX, this will always be 1, which means that
 /// the factor will not have any effect. In this case, any account's balance is also less. Thus,
 /// both of the conversions are basically an `as`; Any balance can fit in u64.
 ///
-/// If the chain's total issuance is more than 2*u64::max(), then a factor might be multiplied and
+/// If the chain's total issuance is more than 2*u64::MAX, then a factor might be multiplied and
 /// divided upon conversion.
 pub struct U128CurrencyToVote;
 
 impl U128CurrencyToVote {
 	fn factor(issuance: u128) -> u128 {
-		(issuance / u64::max_value() as u128).max(1)
+		(issuance / u64::MAX as u128).max(1)
 	}
 }
 
