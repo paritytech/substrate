@@ -224,7 +224,8 @@ pub mod pallet {
 		>;
 
 		/// The aggregated event type of the runtime.
-		type Event: Parameter + Member + From<Event<Self>> + Debug + IsType<<Self as frame_system::Config>::Event>;
+		type Event: Parameter + Member + From<Event<Self>> + Debug + MaxEncodedLen
+			+ IsType<<Self as frame_system::Config>::Event>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
@@ -602,8 +603,13 @@ pub mod pallet {
 	/// no notification will be triggered thus the event might be lost.
 	#[pallet::storage]
 	#[pallet::getter(fn event_topics)]
-	pub(super) type EventTopics<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery>;
+	pub(super) type EventTopics<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::Hash,
+		WeakBoundedVec<(T::BlockNumber, EventIndex), ConstU32<100_000>>,
+		ValueQuery,
+	>;
 
 	/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 	#[pallet::storage]
