@@ -649,19 +649,14 @@ benchmarks! {
 
 		use crate::voter_bags::{Bag, Node};
 
-		let dbg_weight = |human: &str, account_id: &T::AccountId| {
-			let weight_of = Staking::<T>::weight_of_fn();
-			sp_runtime::print(human);
-			sp_runtime::print(weight_of(account_id));
-		};
-
 		let make_validator = |n: u32, balance_factor: u32| -> Result<(T::AccountId, T::AccountId), &'static str> {
 			let (stash, controller) = create_stash_controller::<T>(n, balance_factor, Default::default())?;
 			whitelist_account!(controller);
 
 			let prefs = ValidatorPrefs::default();
 			// bond the full value of the stash
-			Staking::<T>::bond_extra(RawOrigin::Signed(stash.clone()).into(), (!0_u32).into())?;
+			let free_balance = T::Currency::free_balance(&stash);
+			Staking::<T>::bond_extra(RawOrigin::Signed(stash.clone()).into(), free_balance)?;
 			Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), prefs)?;
 
 			Ok((stash, controller))
@@ -674,18 +669,13 @@ benchmarks! {
 		// stash controls the node account
 		let (stash, controller) = make_validator(USER_SEED, 100)?;
 
-		dbg_weight("stash", &stash);
-
 		// create another validator with 3x the stake
 		let (other_stash, _) = make_validator(USER_SEED + 1, 300)?;
 
-		dbg_weight("other stash", &other_stash);
-
 		// update the stash account's value/weight
-		T::Currency::make_free_balance_be(&stash, T::Currency::free_balance(&other_stash));
-		Staking::<T>::bond_extra(RawOrigin::Signed(stash.clone()).into(), (!0_u32).into())?;
-
-		dbg_weight("stash after deposit", &stash);
+		let other_free_balance = T::Currency::free_balance(&other_stash);
+		T::Currency::make_free_balance_be(&stash, other_free_balance);
+		Staking::<T>::bond_extra(RawOrigin::Signed(stash.clone()).into(), other_free_balance)?;
 
 		// verify preconditions
 		let weight_of = Staking::<T>::weight_of_fn();
