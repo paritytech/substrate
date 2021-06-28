@@ -525,8 +525,8 @@ impl<T: Config> ChargeTransactionPayment<T> where
 		Self(fee)
 	}
 
-	/// Public accessor to get the amount of the tip that will be applied.
-	pub fn tip_amount(&self) -> BalanceOf<T> {
+	/// Returns the tip as being choosen by the transaction sender.
+	pub fn tip(&self) -> BalanceOf<T> {
 		self.0
 	}
 
