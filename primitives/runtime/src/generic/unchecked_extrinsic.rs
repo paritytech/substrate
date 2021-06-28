@@ -20,6 +20,7 @@
 use sp_std::{fmt, prelude::*};
 use sp_io::hashing::blake2_256;
 use codec::{Decode, Encode, EncodeLike, Input, Error};
+use scale_info::{build::Fields, TypeInfo, Type, Path};
 use crate::{
 	traits::{
 		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
@@ -48,21 +49,22 @@ where
 	pub function: Call,
 }
 
-// todo: [AJ] remove this manual impl once the top level runtime Call implements TypeInfo...
-// ...which it should be able to once all pallets are converted to frame v2 macros and all types have
-// scale_info support. It does mean for now that we won't have enough metadata to decode the raw
-// UncheckedExtrinsic bytes until all Pallet Calls are converted.
-impl<Address, Call, Signature, Extra> scale_info::TypeInfo for UncheckedExtrinsic<Address, Call, Signature, Extra>
+/// Manual [`TypeInfo`] implementation because of custom encoding. The data is a valid encoded
+/// `Vec<u8>`, but requires some logic to extract the signature and payload.
+///
+/// See [`UncheckedExtrinsic::encode`] and [`UncheckedExtrinsic::decode`].
+impl<Address, Call, Signature, Extra> TypeInfo
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
-	Extra: SignedExtension + scale_info::TypeInfo,
+	Extra: SignedExtension + TypeInfo
 {
-	type Identity = ();
+	type Identity = UncheckedExtrinsic<(), (), (), Extra>;
 
-	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
-		scale_info::Type::builder()
-			.path(scale_info::Path::new("UncheckedExtrinsic", module_path!()))
-			// dummy impl because we can't bound `Call` type param to `TypeInfo` yet (see above todo
-			.composite(scale_info::build::Fields::unit())
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("UncheckedExtrinsic", module_path!()))
+			.docs(&["UncheckedExtrinsic raw bytes, requires custom decoding routine"])
+			.composite(Fields::unnamed().field(|f| f.ty::<Vec<u8>>()))
 	}
 }
 
