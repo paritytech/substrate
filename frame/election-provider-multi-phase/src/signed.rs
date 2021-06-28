@@ -254,11 +254,6 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Insert a new signed submission into the set.
 	///
-	/// The outer `Option` of the return value indicates whether a solution was inserted. In the
-	/// case that nothing was inserted, nothing is ever removed.
-	///
-	/// The inner `Option` of the return value contains the submission which was removed, if any.
-	///
 	/// In the event that the new submission is not better than the current weakest according
 	/// to `is_score_better`, we do not change anything.
 	pub fn insert(
