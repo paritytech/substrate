@@ -43,7 +43,8 @@ use tracing_subscriber::{
 /// type of log remain time
 pub type Remain = i64;
 
-type Layers<S> = tracing_subscriber::fmt::Layer<S, DefaultFields, EventFormat<ChronoLocal>, BoxMakeWriter>;
+type Layers<S> = tracing_subscriber::fmt::Layer<S, DefaultFields, EventFormat<ChronoLocal>,
+				 BoxMakeWriter>;
 
 /// Log segmentation type
 pub enum RotationKind {
@@ -101,9 +102,12 @@ impl<S> RotationLayer<S>
 		let prefix_clone = prefix.clone();
 		let file_appender =
 			match kind {
-				Some(RotationKind::Minute) => BoxMakeWriter::new(move || tracing_appender::rolling::minutely(dir.clone(), prefix.clone())),
-				Some(RotationKind::Hour) => BoxMakeWriter::new(move || tracing_appender::rolling::hourly(dir.clone(), prefix.clone())),
-				_ => BoxMakeWriter::new(move || tracing_appender::rolling::daily(dir.clone(), prefix.clone())),
+				Some(RotationKind::Minute) => BoxMakeWriter::new(move
+					|| tracing_appender::rolling::minutely(dir.clone(), prefix.clone())),
+				Some(RotationKind::Hour) => BoxMakeWriter::new(move
+					|| tracing_appender::rolling::hourly(dir.clone(), prefix.clone())),
+				_ => BoxMakeWriter::new(move ||
+					tracing_appender::rolling::daily(dir.clone(), prefix.clone())),
 			};
 		let event_format = EventFormat {
 			timer: ChronoLocal::with_format("%Y-%m-%d %H:%M:%S%.3f".to_string()),
@@ -138,8 +142,10 @@ impl<S> RotationLayer<S>
 
 	fn parse_str_to_utc(&self, s: &str) -> ParseResult<DateTime<Utc>> {
 		return match self.kind {
-			Some(RotationKind::Daily) => Utc.datetime_from_str(format!("{}-{}-{}", s, "00", "00").as_str(), "%Y-%m-%d-%H-%M"),
-			Some(RotationKind::Hour) => Utc.datetime_from_str(format!("{}-{}", s, "00").as_str(), "%Y-%m-%d-%H-%M"),
+			Some(RotationKind::Daily) => Utc.datetime_from_str(
+				format!("{}-{}-{}", s, "00", "00").as_str(), "%Y-%m-%d-%H-%M"),
+			Some(RotationKind::Hour) => Utc.datetime_from_str(
+				format!("{}-{}", s, "00").as_str(), "%Y-%m-%d-%H-%M"),
 			_ => Utc.datetime_from_str(s, "%Y-%m-%d-%H-%M")
 		};
 	}
@@ -159,12 +165,14 @@ impl<S> Default for RotationLayer<S>
 			dup_to_stdout: false,
 		};
 		let (dir, prefix) = ("log", "log");
-		let file_appender = BoxMakeWriter::new(move || tracing_appender::rolling::daily(dir, prefix));
+		let file_appender = BoxMakeWriter::new(move ||
+			tracing_appender::rolling::daily(dir, prefix));
 		let rotation = tracing_subscriber::fmt::Layer::new()
 			.with_writer(file_appender).event_format(event_format);
 		RotationLayer {
 			remain: 10,
-			old_expire_time: Mutex::new(Utc.datetime_from_str("2000-01-01-00-00", "%Y-%m-%d-%H-%M").unwrap()),
+			old_expire_time: Mutex::new(Utc.datetime_from_str(
+				"2000-01-01-00-00", "%Y-%m-%d-%H-%M").unwrap()),
 			dir: dir.to_owned(),
 			prefix: prefix.to_owned(),
 			inner: rotation,
@@ -225,9 +233,8 @@ impl<S> Layer<S> for RotationLayer<S>
 				let paths = paths
 					.filter_map(|p| p.ok())
 					.map(
-						|p|
-							(p.file_name().into_string().unwrap_or_default(),
-							 p.path().into_os_string().into_string().unwrap_or_default())
+						|p|(p.file_name().into_string().unwrap_or_default(),
+							 		p.path().into_os_string().into_string().unwrap_or_default())
 					)
 					.filter(|(f, _)| f.starts_with(prefix))
 					.map(

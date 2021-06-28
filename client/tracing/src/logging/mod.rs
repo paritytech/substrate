@@ -99,12 +99,12 @@ fn prepare_subscriber<N, E, F, W>(
 	) -> SubscriberBuilder<N, E, F, W>,
 	rotation: RotationBuilder,
 ) -> Result<impl Subscriber + for<'a> LookupSpan<'a>>
-	where
-		N: for<'writer> FormatFields<'writer> + 'static,
-		E: FormatEvent<Registry, N> + 'static,
-		W: MakeWriter + 'static,
-		F: layer::Layer<Formatter<N, E, W>> + Send + Sync + 'static,
-		FmtLayer<Registry, N, E, W>: layer::Layer<Registry> + Send + Sync + 'static,
+where
+	N: for<'writer> FormatFields<'writer> + 'static,
+	E: FormatEvent<Registry, N> + 'static,
+	W: MakeWriter + 'static,
+	F: layer::Layer<Formatter<N, E, W>> + Send + Sync + 'static,
+	FmtLayer<Registry, N, E, W>: layer::Layer<Registry> + Send + Sync + 'static,
 {
 	// Accept all valid directives and print invalid ones
 	fn parse_user_directives(mut env_filter: EnvFilter, dirs: &str) -> Result<EnvFilter> {
