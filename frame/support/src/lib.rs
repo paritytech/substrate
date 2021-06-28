@@ -90,7 +90,7 @@ use sp_runtime::TypeId;
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
-#[derive(Debug, PartialEq, Eq, Clone, scale_info::TypeInfo)] // todo: [AJ] remove this TypeInfo derive once we support skip
+#[derive(Debug, PartialEq, Eq, Clone, scale_info::TypeInfo)]
 pub enum Never {}
 
 /// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
