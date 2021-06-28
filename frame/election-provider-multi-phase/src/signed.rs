@@ -168,7 +168,7 @@ impl<T: Config> SignedSubmissions<T> {
 	///
 	/// - Remove a submission (identified by score)
 	/// - Insert a new submission (identified by score and insertion index)
-	/// - Return the weakest submission
+	/// - Return the submission which was removed.
 	///
 	/// Note: in the case that `weakest_score` is not present in `self.indices`, this will return
 	/// `None` without inserting the new submission and without further notice.
