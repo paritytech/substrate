@@ -425,7 +425,7 @@ mod test {
 		fn pallet_prefix() -> &'static str {
 			"test"
 		}
-		const STORAGE_PREFIX: &'static str = "foo";
+		const STORAGE_PREFIX: &'static str = "Foo";
 	}
 
 	struct ADefault;
@@ -447,7 +447,7 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
 			k.extend(&twox_128(b"test"));
-			k.extend(&twox_128(b"foo"));
+			k.extend(&twox_128(b"Foo"));
 			k.extend(&3u16.blake2_128_concat());
 			assert_eq!(A::hashed_key_for((&3,)).to_vec(), k);
 
@@ -459,6 +459,16 @@ mod test {
 			assert_eq!(A::contains_key((3,)), true);
 			assert_eq!(A::get((3,)), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 10);
+
+			{
+				crate::generate_storage_alias!(test, Foo => NMap<
+					(u16, Blake2_128Concat),
+					u32
+				>);
+
+				assert_eq!(Foo::contains_key((3,)), true);
+				assert_eq!(Foo::get((3,)), Some(10));
+			}
 
 			A::swap::<Key<Blake2_128Concat, u16>, _, _>((3,), (2,));
 			assert_eq!(A::contains_key((3,)), false);
@@ -577,7 +587,7 @@ mod test {
 				AValueQueryWithAnOnEmpty::MODIFIER,
 				StorageEntryModifier::Default
 			);
-			assert_eq!(A::NAME, "foo");
+			assert_eq!(A::NAME, "Foo");
 			assert_eq!(
 				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
 				98u32.encode()
@@ -619,7 +629,7 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
 			k.extend(&twox_128(b"test"));
-			k.extend(&twox_128(b"foo"));
+			k.extend(&twox_128(b"Foo"));
 			k.extend(&3u16.blake2_128_concat());
 			k.extend(&30u8.twox_64_concat());
 			assert_eq!(A::hashed_key_for((3, 30)).to_vec(), k);
@@ -763,7 +773,7 @@ mod test {
 				AValueQueryWithAnOnEmpty::MODIFIER,
 				StorageEntryModifier::Default
 			);
-			assert_eq!(A::NAME, "foo");
+			assert_eq!(A::NAME, "Foo");
 			assert_eq!(
 				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
 				98u32.encode()
@@ -846,7 +856,7 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
 			k.extend(&twox_128(b"test"));
-			k.extend(&twox_128(b"foo"));
+			k.extend(&twox_128(b"Foo"));
 			k.extend(&1u16.blake2_128_concat());
 			k.extend(&10u16.blake2_128_concat());
 			k.extend(&100u16.twox_64_concat());
@@ -998,7 +1008,7 @@ mod test {
 				AValueQueryWithAnOnEmpty::MODIFIER,
 				StorageEntryModifier::Default
 			);
-			assert_eq!(A::NAME, "foo");
+			assert_eq!(A::NAME, "Foo");
 			assert_eq!(
 				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
 				98u32.encode()

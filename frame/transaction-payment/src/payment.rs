@@ -1,15 +1,18 @@
 ///! Traits and default implementation for paying transaction fees.
+
 use crate::Config;
+
 use codec::FullCodec;
-use frame_support::{
-	traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReasons},
-	unsigned::TransactionValidityError,
-};
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf, Saturating, Zero},
 	transaction_validity::InvalidTransaction,
 };
 use sp_std::{fmt::Debug, marker::PhantomData};
+
+use frame_support::{
+	traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReasons},
+	unsigned::TransactionValidityError,
+};
 
 type NegativeImbalanceOf<C, T> =
 	<C as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
@@ -47,7 +50,7 @@ pub trait OnChargeTransaction<T: Config> {
 	) -> Result<(), TransactionValidityError>;
 }
 
-/// Implements the transaction payment for a module implementing the `Currency`
+/// Implements the transaction payment for a pallet implementing the `Currency`
 /// trait (eg. the pallet_balances) using an unbalance handler (implementing
 /// `OnUnbalanced`).
 ///
