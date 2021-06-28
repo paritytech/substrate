@@ -25,7 +25,6 @@ use sp_runtime::{
 	generic::BlockId,
 };
 use futures::prelude::*;
-use sc_transaction_pool::txpool;
 use sp_consensus::{
 	self, BlockImport, Environment, Proposer, ForkChoiceStrategy,
 	BlockImportParams, BlockOrigin, ImportResult, SelectChain, StateAction,
@@ -35,12 +34,13 @@ use std::collections::HashMap;
 use std::time::Duration;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sp_transaction_pool::TransactionPool;
 
 /// max duration for creating a proposal in secs
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: txpool::ChainApi, CIDP> {
+pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P, CIDP> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -51,7 +51,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P:
 	/// sender to report errors/success to the rpc.
 	pub sender: rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
 	/// transaction pool
-	pub pool: Arc<txpool::Pool<P>>,
+	pub pool: Arc<P>,
 	/// header backend
 	pub client: Arc<C>,
 	/// Environment trait object for creating a proposer
@@ -90,13 +90,13 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 	C: HeaderBackend<B> + ProvideRuntimeApi<B>,
 	E: Environment<B>,
 	E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
-	P: txpool::ChainApi<Block = B>,
+	P: TransactionPool<Block = B>,
 	SC: SelectChain<B>,
 	TransactionFor<C, B>: 'static,
 	CIDP: CreateInherentDataProviders<B, ()>,
 {
 	let future = async {
-		if pool.validated_pool().status().ready == 0 && !create_empty {
+		if pool.status().ready == 0 && !create_empty {
 			return Err(Error::EmptyTransactionPool);
 		}
 
