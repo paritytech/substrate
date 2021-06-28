@@ -169,7 +169,7 @@ fn struct_def(
 		);
 		quote!{
 			#compact_impl
-			#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::scale_info::TypeInfo)] // todo: [AJ] manually generate TypeInfo here instead
+			#[derive(Default, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, _npos::scale_info::TypeInfo)] // todo: [AJ] manually generate TypeInfo here instead
 		}
 	} else {
 		// automatically derived.
