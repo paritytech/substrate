@@ -451,6 +451,8 @@ check-cumulus-companion-build:
     COMPANION_ORG: paritytech
     COMPANION_REPO: cumulus
     COMPANION_BUILD: "cargo check"
+  script:
+    - ./.maintain/gitlab/check_companion_build.sh "$COMPANION_ORG" "$COMPANION_REPO" "$COMPANION_BUILD" paritytech/polkadot
   allow_failure: true
 
 check-beefy-companion-build:

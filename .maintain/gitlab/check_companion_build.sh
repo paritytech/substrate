@@ -17,15 +17,10 @@ set -e
 ORGANISATION=$1
 REPO=$2
 BUILDSTRING=${3:-cargo test --workspace --release}
-
-github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
-# use github api v3 in order to access the data without authentication
-github_header="Authorization: token ${GITHUB_PR_TOKEN}"
+DEPS=("${@:4}")
 
 boldprint () { printf "|\n| \033[1m%s\033[0m\n|\n" "${@}"; }
 boldcat () { printf "|\n"; while read -r l; do printf "| \033[1m%s\033[0m\n" "${l}"; done; printf "|\n" ; }
-
-
 
 boldcat <<-EOT
 
@@ -66,20 +61,8 @@ cd "$REPO"
 if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
-
-  pr_data_file="$(mktemp)"
-  # get the last reference to a pr in the target repo
-  curl -sSL -H "${github_header}" -o "${pr_data_file}" \
-    "${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME}"
-
-  pr_body="$(sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p' "${pr_data_file}")"
-
-  pr_companion="$(echo "${pr_body}" | sed -n -r \
-      -e "s;^.*[Cc]ompanion.*${ORGANISATION}/${REPO}#([0-9]+).*$;\1;p" \
-      -e "s;^.*[Cc]ompanion.*https://github.com/${ORGANISATION}/${REPO}/pull/([0-9]+).*$;\1;p" \
-    | tail -n 1)"
-
-  if [ "${pr_companion}" ]
+  pr_companion="$(get_companion "paritytech/substrate" "$CI_COMMIT_REF_NAME" "$ORGANISATION/$REPO")"
+  if [ "$pr_companion" ]
   then
     boldprint "companion pr specified/detected: #${pr_companion}"
     git fetch origin "refs/pull/${pr_companion}/head:pr/${pr_companion}"
@@ -88,10 +71,33 @@ then
   else
     boldprint "no companion branch found - building ${REPO}:master"
   fi
-  rm -f "${pr_data_file}"
+
+  # If this repo has any additional dependencies, we should check whether they
+  # are mentioned as companions as well, and patch to use that if so
+  # Note: Will only work with repos supported by diener
+  declare -A diener_commands
+  diener_commands=()
+  diener_commands["paritytech/polkadot"]='--polkadot'
+  diener_commands["paritytech/substrate"]='--substrate'
+  diener_commands["paritytech/grandpa-bridge-gadget"]='--beefy'
+
+  for dep in "${DEPS[@]}"; do
+    dep_companion="$(get_companion "paritytech/substrate" "$CI_COMMIT_REF_NAME" "$dep")"
+    if [ "$dep_companion" ]; then
+      echo "Companion PR found for $dep, need to patch $REPO to use that"
+      git clone --depth 20 "https://github.com/$dep.git" "$dep"
+      git -C "$dep" fetch origin "refs/pull/${dep_companion}/head:pr/${dep_companion}"
+      git -C "$dep" checkout "pr/${dep_companion}"
+      git -C "$dep" merge origin/master
+      diener patch --crates-to-patch "$dep" "${diener_commands[$dep]}" --path "Cargo.toml"
+    fi
+
+  done
+
 else
   boldprint "this is not a pull request - building ${REPO}:master"
 fi
+
 
 # Patch polkadot, substrate or beefy deps as required
 declare -A match_arg
@@ -116,6 +122,7 @@ while IFS= read -r cargo_lock; do
 done < <(find . -name Cargo.lock)
 
 for patch_arg in "${!patch_args[@]}"; do
+  echo "patching $patch_arg"
   diener patch --crates-to-patch ../ "$patch_arg" --path Cargo.toml
 done
 
