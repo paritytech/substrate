@@ -1471,7 +1471,7 @@ pub trait BlockNumberProvider {
 	/// current block number.
 	///
 	/// In case of using crate `sp_runtime` with the crate `frame-system`,
-	/// system, it is already implemented for
+	/// it is already implemented for
 	/// `frame_system::Pallet<T: Config>` as:
 	///
 	/// ```ignore
