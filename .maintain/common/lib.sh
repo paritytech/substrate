@@ -2,6 +2,18 @@
 
 api_base="https://api.github.com/repos"
 
+
+set_github_token(){
+  # These will exist if the function is called in Gitlab.
+  # If the function's called in Github, we should have GITHUB_ACCESS_TOKEN set
+  # already.
+  if [ -n "$GITHUB_RELEASE_TOKEN" ]; then
+    GITHUB_TOKEN="$GITHUB_RELEASE_TOKEN"
+  elif [ -n "$GITHUB_PR_TOKEN" ]; then
+    GITHUB_TOKEN="$GITHUB_PR_TOKEN"
+  fi
+}
+
 # Function to take 2 git tags/commits and get any lines from commit messages
 # that contain something that looks like a PR reference: e.g., (#1234)
 sanitised_git_logs(){
@@ -66,15 +78,7 @@ has_label(){
   repo="$1"
   pr_id="$2"
   label="$3"
-
-  # These will exist if the function is called in Gitlab.
-  # If the function's called in Github, we should have GITHUB_ACCESS_TOKEN set
-  # already.
-  if [ -n "$GITHUB_RELEASE_TOKEN" ]; then
-    GITHUB_TOKEN="$GITHUB_RELEASE_TOKEN"
-  elif [ -n "$GITHUB_PR_TOKEN" ]; then
-    GITHUB_TOKEN="$GITHUB_PR_TOKEN"
-  fi
+  set_github_token
 
   out=$(curl -H "Authorization: token $GITHUB_TOKEN" -s "$api_base/$repo/pulls/$pr_id")
   [ -n "$(echo "$out" | tr -d '\r\n' | jq ".labels | .[] | select(.name==\"$label\")")" ]
@@ -122,8 +126,9 @@ get_companion() {
   origin_repo="$1"
   pr_num="$2"
   companion_repo="$3"
-  github_header="Authorization: token ${GITHUB_PR_TOKEN}"
   pr_data_file="$(mktemp)"
+  set_github_token
+  github_header="Authorization: token ${GITHUB_TOKEN}"
   # get the last reference to a pr in the target repo
   curl -sSL -H "${github_header}" -o "${pr_data_file}" \
     "${api_base}/$origin_repo/pulls/$pr_num"

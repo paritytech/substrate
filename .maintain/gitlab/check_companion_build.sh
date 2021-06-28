@@ -22,6 +22,7 @@ ORGANISATION=$1
 REPO=$2
 BUILDSTRING=${3:-cargo test --workspace --release}
 DEPS=("${@:4}")
+SUBSTRATE_DIR="$(pwd)"
 
 boldprint () { printf "|\n| \033[1m%s\033[0m\n|\n" "${@}"; }
 boldcat () { printf "|\n"; while read -r l; do printf "| \033[1m%s\033[0m\n" "${l}"; done; printf "|\n" ; }
@@ -94,6 +95,9 @@ then
       git -C "$dep" checkout "pr/${dep_companion}"
       git -C "$dep" merge origin/master
       diener patch --crates-to-patch "$dep" "${diener_commands[$dep]}" --path "Cargo.toml"
+      # then tell this version of the dependency to use this version of substrate
+      # bit hacky at the moment since it assums any dependency will also depend on substrate
+      diener patch --crates-to-patch "$SUBSTRATE_DIR" --substrate --path "$dep/Cargo.toml"
     fi
 
   done
@@ -102,33 +106,6 @@ else
   boldprint "this is not a pull request - building ${REPO}:master"
 fi
 
-
-# Patch polkadot, substrate or beefy deps as required
-declare -A match_arg
-match_arg=()
-match_arg["--substrate"]='source = "git+https://github.com/paritytech/substrate?'
-match_arg["--polkadot"]='source = "git+https://github.com/paritytech/polkadot?'
-match_arg["--beefy"]='source = "git+https://github.com/paritytech/parity-bridges-gadget?'
-
-declare -A patch_args
-patch_args=()
-
-# For each Cargo.lock
-while IFS= read -r cargo_lock; do
-  # If the Cargo.lock has a dependency, we patch with diener
-  for patch_arg in "${!match_arg[@]}"; do
-    if grep -q "${match_arg[$patch_arg]}" "$cargo_lock" ; then
-      echo "marking $patch_arg as patchable"
-      patch_args["$patch_arg"]='true'
-      echo "patching $patch_arg"
-    fi
-  done
-done < <(find . -name Cargo.lock)
-
-for patch_arg in "${!patch_args[@]}"; do
-  echo "patching $patch_arg"
-  diener patch --crates-to-patch ../ "$patch_arg" --path Cargo.toml
-done
-
+diener patch --crates-to-patch ".." --substrate --path "Cargo.toml"
 # Test pr or master branch with this Substrate commit.
 eval "$BUILDSTRING"
