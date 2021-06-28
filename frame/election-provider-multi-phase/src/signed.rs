@@ -49,8 +49,6 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
 	pub who: AccountId,
 	/// The deposit reserved for storing this solution.
 	pub deposit: Balance,
-	/// The reward that should be given to this solution, if chosen the as the final one.
-	pub reward: Balance,
 	/// The raw solution itself.
 	pub solution: RawSolution<CompactSolution>,
 }
@@ -69,7 +67,6 @@ where
 			.cmp(&other.solution.score)
 			.then_with(|| self.solution.cmp(&other.solution))
 			.then_with(|| self.deposit.cmp(&other.deposit))
-			.then_with(|| self.reward.cmp(&other.reward))
 			.then_with(|| self.who.cmp(&other.who))
 	}
 }
@@ -339,8 +336,10 @@ impl<T: Config> Pallet<T> {
 		let SolutionOrSnapshotSize { voters, targets } =
 			Self::snapshot_metadata().unwrap_or_default();
 
+		let reward = T::SignedRewardBase::get();
+
 		while let Some(best) = all_submissions.pop_last() {
-			let SignedSubmission { solution, who, deposit, reward } = best;
+			let SignedSubmission { solution, who, deposit} = best;
 			let active_voters = solution.compact.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.

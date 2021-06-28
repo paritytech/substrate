@@ -927,9 +927,8 @@ pub mod pallet {
 			);
 
 			// create the submission
-			let reward = T::SignedRewardBase::get();
 			let deposit = Self::deposit_for(&solution, size);
-			let submission = SignedSubmission { who: who.clone(), deposit, reward, solution };
+			let submission = SignedSubmission { who: who.clone(), deposit, solution };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
