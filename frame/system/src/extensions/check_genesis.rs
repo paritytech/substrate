@@ -25,9 +25,10 @@ use sp_runtime::{
 
 /// Genesis hash check to provide replay protection between different networks.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-pub struct CheckGenesis<T: Config + TypeInfo + Send + Sync>(sp_std::marker::PhantomData<T>);
+#[scale_info(skip_type_params(T))]
+pub struct CheckGenesis<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config + Send + Sync + scale_info::TypeInfo> sp_std::fmt::Debug for CheckGenesis<T> {
+impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckGenesis<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckGenesis")
@@ -46,7 +47,7 @@ impl<T: Config + TypeInfo + Send + Sync> CheckGenesis<T> {
 	}
 }
 
-impl<T: Config + TypeInfo + Send + Sync> SignedExtension for CheckGenesis<T> {
+impl<T: Config + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Config>::Call;
 	type AdditionalSigned = T::Hash;
