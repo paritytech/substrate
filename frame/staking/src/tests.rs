@@ -4050,12 +4050,18 @@ mod election_data_provider {
 				// 500 is not enough for any role
 				assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
 				assert_noop!(Staking::nominate(Origin::signed(4), vec![1]), Error::<Test>::InsufficientBond);
-				assert_noop!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()), Error::<Test>::InsufficientBond);
+				assert_noop!(
+					Staking::validate(Origin::signed(4), ValidatorPrefs::default()),
+					Error::<Test>::InsufficientBond,
+				);
 
 				// 1000 is enough for nominator
 				assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
 				assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
-				assert_noop!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()), Error::<Test>::InsufficientBond);
+				assert_noop!(
+					Staking::validate(Origin::signed(4), ValidatorPrefs::default()),
+					Error::<Test>::InsufficientBond,
+				);
 
 				// 1500 is enough for validator
 				assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
@@ -4083,24 +4089,80 @@ mod election_data_provider {
 			.min_nominator_bond(1_000)
 			.min_validator_bond(1_500)
 			.build_and_execute(|| {
-				// Nominator
-				assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
-				assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
+				for i in 0 .. 15 {
+					let a = 4 * i;
+					let b = 4 * i + 1;
+					let c = 4 * i + 2;
+					let d = 4 * i + 3;
+					Balances::make_free_balance_be(&a, 100_000);
+					Balances::make_free_balance_be(&b, 100_000);
+					Balances::make_free_balance_be(&c, 100_000);
+					Balances::make_free_balance_be(&d, 100_000);
 
-				// Validator
-				assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
-				assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
+					// Nominator
+					assert_ok!(Staking::bond(Origin::signed(a), b, 1000, RewardDestination::Controller));
+					assert_ok!(Staking::nominate(Origin::signed(b), vec![1]));
+
+					// Validator
+					assert_ok!(Staking::bond(Origin::signed(c), d, 1500, RewardDestination::Controller));
+					assert_ok!(Staking::validate(Origin::signed(d), ValidatorPrefs::default()));
+				}
+
+				// To chill other users, we need to:
+				// * Set a minimum bond amount
+				// * Set a limit
+				// * Set a threshold
+				//
+				// If any of these are missing, we do not have enough information to allow the
+				// `chill_other` to succeed from one user to another.
 
 				// Can't chill these users
-				assert_noop!(Staking::chill_other(Origin::signed(1), 2), Error::<Test>::CannotChillOther);
-				assert_noop!(Staking::chill_other(Origin::signed(1), 4), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 
-				// Change the minimum bond
-				assert_ok!(Staking::update_staking_limits(Origin::root(), 1_500, 2_000, None, None));
+				// Change the minimum bond... but no limits.
+				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None, None));
 
-				// Users can now be chilled
-				assert_ok!(Staking::chill_other(Origin::signed(1), 2));
-				assert_ok!(Staking::chill_other(Origin::signed(1), 4));
+				// Still can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+
+				// Add limits, but no threshold
+				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, Some(10), Some(10), None));
+
+				// Still can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+
+				// Add threshold, but no limits
+				assert_ok!(Staking::set_staking_limits(
+					Origin::root(), 1_500, 2_000, None, None, Some(Percent::from_percent(0))
+				));
+
+				// Still can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+
+				// Add threshold and limits
+				assert_ok!(Staking::set_staking_limits(
+					Origin::root(), 1_500, 2_000, Some(10), Some(10), Some(Percent::from_percent(75))
+				));
+
+				// 16 people total because tests start with 1 active one
+				assert_eq!(CounterForNominators::<Test>::get(), 16);
+				assert_eq!(CounterForValidators::<Test>::get(), 16);
+
+				// Users can now be chilled down to 7 people, so we try to remove 9 of them (starting with 16)
+				for i in 6 .. 15 {
+					let b = 4 * i + 1;
+					let d = 4 * i + 3;
+					assert_ok!(Staking::chill_other(Origin::signed(1337), b));
+					assert_ok!(Staking::chill_other(Origin::signed(1337), d));
+				}
+
+				// Cant go lower.
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
 			})
 	}
 
@@ -4114,36 +4176,53 @@ mod election_data_provider {
 
 			// Change the maximums
 			let max = 10;
-			assert_ok!(Staking::update_staking_limits(Origin::root(), 10, 10, Some(max), Some(max)));
+			assert_ok!(Staking::set_staking_limits(
+				Origin::root(), 10, 10, Some(max), Some(max), Some(Percent::from_percent(0))
+			));
 
 			// can create `max - validator_count` validators
-			assert_ok!(testing_utils::create_validators::<Test>(max - validator_count, 100));
+			let mut some_existing_validator = AccountId::default();
+			for i in 0 .. max - validator_count {
+				let (_, controller) = testing_utils::create_stash_controller::<Test>(
+					i + 10_000_000, 100, RewardDestination::Controller,
+				).unwrap();
+				assert_ok!(Staking::validate(Origin::signed(controller), ValidatorPrefs::default()));
+				some_existing_validator = controller;
+			}
 
 			// but no more
 			let (_, last_validator) = testing_utils::create_stash_controller::<Test>(
 				1337, 100, RewardDestination::Controller,
 			).unwrap();
+
 			assert_noop!(
 				Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()),
 				Error::<Test>::TooManyValidators,
 			);
 
 			// same with nominators
+			let mut some_existing_nominator = AccountId::default();
 			for i in 0 .. max - nominator_count {
 				let (_, controller) = testing_utils::create_stash_controller::<Test>(
-					i + 10_000_000, 100, RewardDestination::Controller,
+					i + 20_000_000, 100, RewardDestination::Controller,
 				).unwrap();
 				assert_ok!(Staking::nominate(Origin::signed(controller), vec![1]));
+				some_existing_nominator = controller;
 			}
 
 			// one more is too many
 			let (_, last_nominator) = testing_utils::create_stash_controller::<Test>(
-				20_000_000, 100, RewardDestination::Controller,
+				30_000_000, 100, RewardDestination::Controller,
 			).unwrap();
 			assert_noop!(Staking::nominate(Origin::signed(last_nominator), vec![1]), Error::<Test>::TooManyNominators);
 
+			// Re-nominate works fine
+			assert_ok!(Staking::nominate(Origin::signed(some_existing_nominator), vec![1]));
+			// Re-validate works fine
+			assert_ok!(Staking::validate(Origin::signed(some_existing_validator), ValidatorPrefs::default()));
+
 			// No problem when we set to `None` again
-			assert_ok!(Staking::update_staking_limits(Origin::root(), 10, 10, None, None));
+			assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None, None));
 			assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 			assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
 		})
