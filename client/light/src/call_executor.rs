@@ -139,7 +139,7 @@ where
 				changes,
 				None,
 				initialize_block,
-				ExecutionConfig::new_consensus(ExecutionStrategy::NativeWhenPossible).get_manager(), // TODO: why are we not using the given manager.
+				ExecutionConfig::new_consensus(ExecutionStrategy::NativeWhenPossible).get_manager(),
 				native_call,
 				recorder,
 				extensions,
@@ -273,7 +273,7 @@ where
 	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_backend);
 	let runtime_code = backend_runtime_code
-		.runtime_code(sp_state_machine::ExecutionContext::Consensus) // TODO: ? which one is it, and I should get this maybe from `E`.
+		.runtime_code(sp_state_machine::ExecutionContext::Consensus)
 		.map_err(|_e| ClientError::RuntimeCodeMissing)?;
 
 	execution_proof_check_on_trie_backend::<H, Header::Number, _, _>(

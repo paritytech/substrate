@@ -80,9 +80,9 @@ where
 		})
 	}
 
-	/// Check if local runtime code overrides are enabled and one is available
-	/// for the given `BlockId`. If yes, return it; otherwise return the same
-	/// `RuntimeCode` instance that was passed.
+	/// Check if local runtime code overrides are enabled and one is available for the given
+	/// `BlockId`. If yes, return it; otherwise return the same `RuntimeCode` instance that was
+	/// passed.
 	fn check_override<'a>(
 		&'a self,
 		onchain_code: RuntimeCode<'a>,
@@ -143,7 +143,7 @@ where
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		strategy: sp_state_machine::ExecutionConfig,
+		config: sp_state_machine::ExecutionConfig,
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
@@ -153,7 +153,7 @@ where
 		let state = self.backend.state_at(*id)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code = state_runtime_code
-			.runtime_code(strategy.context)
+			.runtime_code(config.context)
 			.map_err(sp_blockchain::Error::RuntimeCode)?;
 		let runtime_code = self.check_override(runtime_code, id)?;
 
@@ -168,7 +168,7 @@ where
 			&runtime_code,
 			self.spawn_handle.clone(),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-			strategy.get_manager(),
+			config.get_manager(),
 			None,
 		)?;
 

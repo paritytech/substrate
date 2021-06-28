@@ -261,8 +261,10 @@ macro_rules! generate_config_const {
 	($( $role:ident => $strategy:ident, $context:ident ),*) => {
 		paste::paste! {
 			$(
-				pub const [<DEFAULT_STRATEGY_ $role:snake:upper>]: ExecutionStrategy = ExecutionStrategy::$strategy;
-				pub const [<DEFAULT_CONTEXT_ $role:snake:upper>]: ExecutionContext = ExecutionContext::$context;
+				pub const [<DEFAULT_STRATEGY_ $role:snake:upper>]: ExecutionStrategy
+					= ExecutionStrategy::$strategy;
+				pub const [<DEFAULT_CONTEXT_ $role:snake:upper>]: ExecutionContext
+					= ExecutionContext::$context;
 			)*
 		}
 	};

@@ -92,7 +92,8 @@ impl BenchmarkCmd {
 				self.extra,
 			).encode(),
 			extensions,
-			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code(sp_state_machine::ExecutionContext::Offchain)?,
+			&sp_state_machine::backend::BackendRuntimeCode::new(&state)
+				.runtime_code(sp_state_machine::ExecutionContext::Offchain)?,
 			sp_core::testing::TaskExecutor::new(),
 		)
 		.execute(sp_state_machine::ExecutionConfig::new_offchain(strategy.into()))

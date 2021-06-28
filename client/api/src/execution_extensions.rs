@@ -54,7 +54,6 @@ pub struct ExecutionConfigs {
 
 impl Default for ExecutionConfigs {
 	fn default() -> ExecutionConfigs {
-		// TODO: this should use our defaults consts.
 		ExecutionConfigs {
 			syncing: ExecutionStrategy::NativeElseWasm.in_consensus(),
 			importing: ExecutionStrategy::NativeElseWasm.in_consensus(),

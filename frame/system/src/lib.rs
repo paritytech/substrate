@@ -322,7 +322,11 @@ pub mod pallet {
 		/// Two separate heap page limits can be set, one for offchain context and one for consensus
 		/// context.
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
-		pub fn set_heap_pages(origin: OriginFor<T>, consensus: u64, offchain: u64) -> DispatchResultWithPostInfo {
+		pub fn set_heap_pages(
+			origin: OriginFor<T>,
+			consensus: u64,
+			offchain: u64,
+		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &consensus.encode());
 			storage::unhashed::put_raw(well_known_keys::OFFCHAIN_HEAP_PAGES, &offchain.encode());
