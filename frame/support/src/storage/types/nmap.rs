@@ -26,9 +26,9 @@ use crate::{
 		},
 		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength, StoragePrefixedMap,
 	},
-	traits::{Get, GetDefault, StorageInstance, StorageInfo, MaxEncodedLen},
+	traits::{Get, GetDefault, StorageInstance, StorageInfo},
 };
-use codec::{Decode, Encode, EncodeLike, FullCodec};
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_runtime::SaturatedConversion;
 use sp_std::prelude::*;
