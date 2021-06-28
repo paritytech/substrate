@@ -933,11 +933,13 @@ pub mod pallet {
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
 			let mut signed_submissions = Self::signed_submissions();
-			let maybe_removed = signed_submissions
-				.insert(submission)
+			let maybe_removed = match signed_submissions.insert(submission) {
 				// it's an error if we failed to insert a submission: this indicates the queue was
 				// full but our solution had insufficient score to eject any solution
-				.ok_or(Error::<T>::SignedQueueFull)?;
+				signed::InsertResult::NotInserted => return Err(Error::<T>::SignedQueueFull.into()),
+				signed::InsertResult::Inserted => None,
+				signed::InsertResult::InsertedEjecting(weakest) => Some(weakest),
+			};
 
 			// collect deposit. Thereafter, the function cannot fail.
 			T::Currency::reserve(&who, deposit)

@@ -98,6 +98,18 @@ pub type SignedSubmissionOf<T> =
 pub type SubmissionIndicesOf<T> =
 	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
 
+/// Outcome of [`SignedSubmissions::insert`].
+pub enum InsertResult<T: Config> {
+	/// The submission was not inserted because the queue was full and the submission had
+	/// insufficient score to eject a prior solution from the queue.
+	NotInserted,
+	/// The submission was inserted successfully without ejecting a solution.
+	Inserted,
+	/// The submission was inserted successfully. As the queue was full, this operation ejected a
+	/// prior solution, contained in this variant.
+	InsertedEjecting(SignedSubmissionOf<T>),
+}
+
 /// Mask type which pretends to be a set of `SignedSubmissionOf<T>`, while in fact delegating to the
 /// actual implementations in `SignedSubmissionIndices<T>`, `SignedSubmissionsMap<T>`, and
 /// `SignedSubmissionNextIndex<T>`.
@@ -252,7 +264,7 @@ impl<T: Config> SignedSubmissions<T> {
 	pub fn insert(
 		&mut self,
 		submission: SignedSubmissionOf<T>,
-	) -> Option<Option<SignedSubmissionOf<T>>> {
+	) -> InsertResult<T> {
 		// verify the expectation that we never reuse an index
 		debug_assert!(!self.indices.values().any(|&idx| idx == self.next_idx));
 
@@ -264,7 +276,7 @@ impl<T: Config> SignedSubmissions<T> {
 				self.indices
 					.try_insert(submission.solution.score, prev_idx)
 					.expect("didn't change the map size; qed");
-				return None;
+				return InsertResult::NotInserted;
 			}
 			Ok(None) => {
 				// successfully inserted into the set; no need to take out weakest member
@@ -276,14 +288,14 @@ impl<T: Config> SignedSubmissions<T> {
 				// If there wasn't a weakest entry to remove, then there must be a capacity of 0,
 				// which means that we can't meaningfully proceed.
 				let weakest_score = match self.indices.iter().next() {
-					None => return None,
+					None => return InsertResult::NotInserted,
 					Some((score, _)) => *score,
 				};
 				let threshold = T::SolutionImprovementThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
 				if !is_score_better(insert_score, weakest_score, threshold) {
-					return None;
+					return InsertResult::NotInserted;
 				}
 
 				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
@@ -295,7 +307,10 @@ impl<T: Config> SignedSubmissions<T> {
 		self.insertion_overlay.insert(self.next_idx, submission);
 		debug_assert!(!self.deletion_overlay.contains(&self.next_idx));
 		self.next_idx += 1;
-		Some(weakest)
+		match weakest {
+			Some(weakest) => InsertResult::InsertedEjecting(weakest),
+			None => InsertResult::Inserted,
+		}
 	}
 
 	/// Remove the signed submission with the highest score from the set.
