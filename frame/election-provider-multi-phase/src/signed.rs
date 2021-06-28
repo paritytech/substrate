@@ -406,6 +406,9 @@ impl<T: Config> Pallet<T> {
 		// write this ready solution.
 		<QueuedSolution<T>>::put(ready_solution);
 
+		// emit reward event
+		Self::deposit_event(crate::Event::Rewarded(who.clone()));
+
 		// unreserve deposit.
 		let _remaining = T::Currency::unreserve(who, deposit);
 		debug_assert!(_remaining.is_zero());
@@ -421,6 +424,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Infallible
 	pub fn finalize_signed_phase_reject_solution(who: &T::AccountId, deposit: BalanceOf<T>) {
+		Self::deposit_event(crate::Event::Slashed(who.clone()));
 		let (negative_imbalance, _remaining) = T::Currency::slash_reserved(who, deposit);
 		debug_assert!(_remaining.is_zero());
 		T::SlashHandler::on_unbalanced(negative_imbalance);
