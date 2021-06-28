@@ -100,7 +100,8 @@ impl TypeId for PalletId {
 }
 
 /// Generate a new type alias for [`storage::types::StorageValue`],
-/// [`storage::types::StorageMap`] and [`storage::types::StorageDoubleMap`].
+/// [`storage::types::StorageMap`], [`storage::types::StorageDoubleMap`]
+/// and [`storage::types::StorageNMap`].
 ///
 /// Useful for creating a *storage-like* struct for test and migrations.
 ///
@@ -154,6 +155,18 @@ macro_rules! generate_storage_alias {
 			>;
 		}
 	};
+	($pallet:ident, $name:ident => NMap<$(($key:ty, $hasher:ty),)+ $value:ty>) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			type $name = $crate::storage::types::StorageNMap<
+				[<$name Instance>],
+				(
+					$( $crate::storage::types::Key<$hasher, $key>, )+
+				),
+				$value,
+			>;
+		}
+	};
 	($pallet:ident, $name:ident => Value<$value:ty>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -189,6 +202,22 @@ macro_rules! generate_storage_alias {
 				$hasher1,
 				$key2,
 				$hasher2,
+				$value,
+			>;
+		}
+	};
+	(
+		$pallet:ident,
+		$name:ident<$t:ident : $bounds:tt> => NMap<$(($key:ty, $hasher:ty),)+ $value:ty>
+	) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			#[allow(type_alias_bounds)]
+			type $name<$t : $bounds> = $crate::storage::types::StorageNMap<
+				[<$name Instance>],
+				(
+					$( $crate::storage::types::Key<$hasher, $key>, )+
+				),
 				$value,
 			>;
 		}
