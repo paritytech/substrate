@@ -884,6 +884,29 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Set a solution in the queue, to be handed out to the client of this pallet in the next
+		/// call to `ElectionProvider::elect`.
+		///
+		/// This can only be set by `T::ForceOrigin`, and only when the phase is `Emergency`.
+		///
+		/// The solution is not checked for any feasibility and is assumed to be trustworthy, as any
+		/// feasibility check itself can in principle cause the election process to fail (due to
+		/// memory/weight constrains).
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn set_emergency_election_result(
+			origin: OriginFor<T>,
+			solution: ReadySolution<T::AccountId>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
+
+			// Note: we don't `rotate_round` at this point; the next call to
+			// `ElectionProvider::elect` will succeed and take care of that.
+
+			<QueuedSolution<T>>::put(solution);
+			Ok(())
+		}
+
 		/// Submit a solution for the signed phase.
 		///
 		/// The dispatch origin fo this call must be __signed__.
@@ -954,29 +977,6 @@ pub mod pallet {
 
 			signed_submissions.put();
 			Self::deposit_event(Event::SolutionStored(ElectionCompute::Signed, ejected_a_solution));
-			Ok(())
-		}
-
-		/// Set a solution in the queue, to be handed out to the client of this pallet in the next
-		/// call to `ElectionProvider::elect`.
-		///
-		/// This can only be set by `T::ForceOrigin`, and only when the phase is `Emergency`.
-		///
-		/// The solution is not checked for any feasibility and is assumed to be trustworthy, as any
-		/// feasibility check itself can in principle cause the election process to fail (due to
-		/// memory/weight constrains).
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn set_emergency_election_result(
-			origin: OriginFor<T>,
-			solution: ReadySolution<T::AccountId>,
-		) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin)?;
-			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
-
-			// Note: we don't `rotate_round` at this point; the next call to
-			// `ElectionProvider::elect` will succeed and take care of that.
-
-			<QueuedSolution<T>>::put(solution);
 			Ok(())
 		}
 	}
