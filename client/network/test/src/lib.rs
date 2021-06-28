@@ -810,6 +810,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
+			warp_sync: None,
 		}).unwrap();
 
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
@@ -904,6 +905,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
+			warp_sync: None,
 		}).unwrap();
 
 		self.mut_peers(|peers| {

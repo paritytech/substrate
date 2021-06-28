@@ -250,7 +250,7 @@ impl<'a, E: Epoch> From<&'a PersistedEpoch<E>> for PersistedEpochHeader<E> {
 }
 
 /// Persisted epoch header stored in ForkTree.
-#[derive(Encode, Decode, PartialEq, Eq, Debug)]
+#[derive(Encode, Decode, PartialEq, Eq)]
 pub enum PersistedEpochHeader<E: Epoch> {
 	/// Genesis persisted epoch header. epoch_0, epoch_1.
 	Genesis(EpochHeader<E>, EpochHeader<E>),

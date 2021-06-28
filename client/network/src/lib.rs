@@ -261,6 +261,7 @@ pub mod block_request_handler;
 pub mod bitswap;
 pub mod light_client_requests;
 pub mod state_request_handler;
+pub mod warp_request_handler;
 pub mod config;
 pub mod error;
 pub mod gossip;
