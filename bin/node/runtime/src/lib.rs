@@ -33,7 +33,7 @@ use frame_support::{
 	},
 	traits::{
 		Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, LockIdentifier,
-		U128CurrencyToVote, MaxEncodedLen,
+		U128CurrencyToVote,
 	},
 };
 use frame_system::{
@@ -41,7 +41,7 @@ use frame_system::{
 	limits::{BlockWeights, BlockLength}
 };
 use frame_support::{traits::InstanceFilter, PalletId};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use sp_core::{
 	crypto::KeyTypeId,
 	u32_trait::{_1, _2, _3, _4, _5},

@@ -19,7 +19,6 @@ use frame_support::{
 	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
 	traits::{
 		GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade, GetPalletVersion, OnGenesis,
-		MaxEncodedLen,
 	},
 	dispatch::{UnfilteredDispatchable, Parameter},
 	storage::unhashed,
@@ -48,10 +47,10 @@ impl From<SomeType6> for u64 { fn from(_t: SomeType6) -> Self { 0u64 } }
 pub struct SomeType7;
 impl From<SomeType7> for u64 { fn from(_t: SomeType7) -> Self { 0u64 } }
 
-pub trait SomeAssociation1 { type _1: Parameter + MaxEncodedLen; }
+pub trait SomeAssociation1 { type _1: Parameter + codec::MaxEncodedLen; }
 impl SomeAssociation1 for u64 { type _1 = u64; }
 
-pub trait SomeAssociation2 { type _2: Parameter + MaxEncodedLen; }
+pub trait SomeAssociation2 { type _2: Parameter + codec::MaxEncodedLen; }
 impl SomeAssociation2 for u64 { type _2 = u64; }
 
 #[frame_support::pallet]
