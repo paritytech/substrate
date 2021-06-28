@@ -16,7 +16,7 @@ set -e
 
 ORGANISATION=$1
 REPO=$2
-BUILDSTRING=${3:-cargo test --all --release}
+BUILDSTRING=${3:-cargo test --workspace --release}
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 # use github api v3 in order to access the data without authentication
@@ -100,16 +100,24 @@ match_arg["--substrate"]='source = "git+https://github.com/paritytech/substrate?
 match_arg["--polkadot"]='source = "git+https://github.com/paritytech/polkadot?'
 match_arg["--beefy"]='source = "git+https://github.com/paritytech/parity-bridges-gadget?'
 
+declare -A patch_args
+patch_args=()
+
 # For each Cargo.lock
 while IFS= read -r cargo_lock; do
   # If the Cargo.lock has a dependency, we patch with diener
   for patch_arg in "${!match_arg[@]}"; do
     if grep -q "${match_arg[$patch_arg]}" "$cargo_lock" ; then
+      echo "marking $patch_arg as patchable"
+      patch_args["$patch_arg"]='true'
       echo "patching $patch_arg"
-      diener patch --crates-to-patch ../ "$patch_arg" --path Cargo.toml
     fi
   done
 done < <(find . -name Cargo.lock)
+
+for patch_arg in "${!patch_args[@]}"; do
+  diener patch --crates-to-patch ../ "$patch_arg" --path Cargo.toml
+done
 
 # Test pr or master branch with this Substrate commit.
 eval "$BUILDSTRING"
