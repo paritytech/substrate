@@ -14,6 +14,10 @@
 
 set -e
 
+# Include the common functions library
+#shellcheck source=../common/lib.sh
+. "$(dirname "${0}")/../common/lib.sh"
+
 ORGANISATION=$1
 REPO=$2
 BUILDSTRING=${3:-cargo test --workspace --release}
