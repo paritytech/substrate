@@ -2352,16 +2352,25 @@ macro_rules! __impl_error_metadata {
 			#[doc(hidden)]
 			#[allow(dead_code)]
 			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
-				let ty = $crate::scale_info::meta_type::<$error_type>();
-				// If no error type is declared, `&'static str` is the default error type
-				// todo: [AJ] can this be done rather by the macro? Not an expert with the declarative macros.
-				if ty == $crate::scale_info::meta_type::<&'static str>() {
-					None
-				} else {
-					Some($crate::metadata::PalletErrorMetadata {
-						ty: $crate::scale_info::meta_type::<$error_type>()
-					})
-				}
+				Some($crate::metadata::PalletErrorMetadata {
+					ty: $crate::scale_info::meta_type::<$error_type>()
+				})
+			}
+		}
+	};
+	(
+		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
+		{ $( $other_where_bounds:tt )* }
+		{ &'static str }
+		$($rest:tt)*
+	) => {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
+			#[doc(hidden)]
+			#[allow(dead_code)]
+			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
+				None
 			}
 		}
 	};
