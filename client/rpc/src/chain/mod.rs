@@ -175,15 +175,18 @@ where
 			chain.block_hash(hash).map_err(rpc_err)
 		})?;
 
+		rpc_module.register_alias("chain_getHead", "chain_getBlockHash")?;
+
 		rpc_module.register_method("chain_getFinalizedHead", |_, chain| {
 			chain.finalized_head().map_err(rpc_err)
 		})?;
+
+		rpc_module.register_alias("chain_getFinalisedHead", "chain_getFinalizedHead")?;
 
 		rpc_module.register_subscription("chain_subscribeAllHeads", "chain_unsubscribeAllHeads", |_params, sink, ctx| {
 			ctx.backend.subscribe_all_heads(sink).map_err(Into::into)
 		})?;
 
-		// TODO(niklasad1): aliases for method names.
 		rpc_module.register_subscription("chain_subscribeNewHead", "chain_unsubscribeNewHead", |_params, sink, ctx| {
 			ctx.backend.subscribe_new_heads(sink).map_err(Into::into)
 		})?;
@@ -191,6 +194,11 @@ where
 		rpc_module.register_subscription("chain_subscribeFinalizedHeads", "chain_unsubscribeFinalizedHeads", |_params, sink, ctx| {
 			ctx.backend.subscribe_finalized_heads(sink).map_err(Into::into)
 		})?;
+
+		rpc_module.register_alias("chain_subscribeNewHeads", "chain_subscribeNewHead")?;
+		rpc_module.register_alias("chain_unsubscribeNewHeads", "chain_unsubscribeNewHead")?;
+		rpc_module.register_alias("chain_subscribeFinalisedHeads", "chain_subscribeFinalizedHeads")?;
+		rpc_module.register_alias("chain_unsubscribeFinalisedHeads", "chain_unsubscribeFinalizedHeads")?;
 
 		Ok(rpc_module)
 	}

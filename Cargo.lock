@@ -2959,7 +2959,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#26b061360791c08c5ddde9663bf7de60a4bdb89c"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c93b1e7a4640ae60a0e89b2e7344ea37e631e080"
 dependencies = [
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
@@ -2973,7 +2973,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#26b061360791c08c5ddde9663bf7de60a4bdb89c"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c93b1e7a4640ae60a0e89b2e7344ea37e631e080"
 dependencies = [
  "async-trait",
  "fnv",
@@ -2991,7 +2991,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#26b061360791c08c5ddde9663bf7de60a4bdb89c"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c93b1e7a4640ae60a0e89b2e7344ea37e631e080"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3012,7 +3012,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#26b061360791c08c5ddde9663bf7de60a4bdb89c"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c93b1e7a4640ae60a0e89b2e7344ea37e631e080"
 dependencies = [
  "Inflector",
  "proc-macro-crate 1.0.0",
@@ -3024,7 +3024,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#26b061360791c08c5ddde9663bf7de60a4bdb89c"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c93b1e7a4640ae60a0e89b2e7344ea37e631e080"
 dependencies = [
  "async-trait",
  "beef",
@@ -3041,7 +3041,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#26b061360791c08c5ddde9663bf7de60a4bdb89c"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c93b1e7a4640ae60a0e89b2e7344ea37e631e080"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3059,7 +3059,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#26b061360791c08c5ddde9663bf7de60a4bdb89c"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c93b1e7a4640ae60a0e89b2e7344ea37e631e080"
 dependencies = [
  "async-trait",
  "fnv",
@@ -3082,7 +3082,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#26b061360791c08c5ddde9663bf7de60a4bdb89c"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#c93b1e7a4640ae60a0e89b2e7344ea37e631e080"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -4239,6 +4239,7 @@ dependencies = [
  "frame-system",
  "futures 0.3.15",
  "hex-literal",
+ "jsonrpsee",
  "libp2p-wasm-ext",
  "log",
  "nix",
@@ -4269,10 +4270,12 @@ dependencies = [
  "sc-client-db",
  "sc-consensus",
  "sc-consensus-babe",
+ "sc-consensus-babe-rpc",
  "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-consensus-uncles",
  "sc-finality-grandpa",
+ "sc-finality-grandpa-rpc",
  "sc-finality-grandpa-warp-sync",
  "sc-keystore",
  "sc-network",
@@ -4381,6 +4384,8 @@ name = "node-rpc"
 version = "2.0.0"
 dependencies = [
  "jsonrpc-core",
+ "jsonrpsee-types",
+ "jsonrpsee-ws-server",
  "node-primitives",
  "pallet-contracts-rpc",
  "pallet-mmr-rpc",
@@ -4507,6 +4512,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "jsonrpc-core",
+ "jsonrpsee",
  "node-template-runtime",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
@@ -7245,6 +7251,7 @@ dependencies = [
 name = "sc-consensus"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "parking_lot 0.11.1",
  "sc-client-api",
  "sp-blockchain",
@@ -7359,6 +7366,8 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
+ "jsonrpsee",
+ "jsonrpsee-types",
  "sc-consensus",
  "sc-consensus-babe",
  "sc-consensus-epochs",
@@ -7641,6 +7650,8 @@ dependencies = [
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "jsonrpc-pubsub",
+ "jsonrpsee-types",
+ "jsonrpsee-ws-server",
  "lazy_static",
  "log",
  "parity-scale-codec",
@@ -7980,6 +7991,7 @@ dependencies = [
 name = "sc-rpc-server"
 version = "3.0.0"
 dependencies = [
+ "futures-channel",
  "jsonrpsee",
  "log",
  "serde",
@@ -8056,6 +8068,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-state-machine",
+ "sp-storage",
  "sp-tracing",
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
@@ -8742,6 +8755,7 @@ name = "sp-api-test"
 version = "2.0.1"
 dependencies = [
  "criterion",
+ "futures 0.3.15",
  "log",
  "parity-scale-codec",
  "rustversion",
@@ -9984,6 +9998,8 @@ dependencies = [
  "frame-system",
  "futures 0.3.15",
  "jsonrpc-core",
+ "jsonrpsee-types",
+ "jsonrpsee-ws-server",
  "log",
  "sc-basic-authorship",
  "sc-cli",
@@ -10601,9 +10617,9 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.22.3"
+version = "0.22.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec051edf7f0fc9499a2cb0947652cab2148b9d7f61cee7605e312e9f970dacaf"
+checksum = "cd81fe0c8bc2b528a51c9d2c31dae4483367a26a723a3c9a4a8120311d7774e3"
 dependencies = [
  "hash-db",
  "hashbrown",
@@ -10698,6 +10714,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-externalities",
+ "sp-io",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",

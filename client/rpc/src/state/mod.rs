@@ -173,7 +173,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	executor: Arc<SubscriptionTaskExecutor>,
 	deny_unsafe: DenyUnsafe,
 	rpc_max_payload: Option<usize>,
-) -> (State<Block, Client>, ChildState<Block, Client>)
+) -> (StateApi<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
@@ -189,7 +189,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	let backend = Box::new(
 		self::state_full::FullState::new(client.clone(), executor, rpc_max_payload)
 	);
-	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
+	(StateApi { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// Create new state API that works on light node.
@@ -199,7 +199,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 	deny_unsafe: DenyUnsafe,
-) -> (State<Block, Client>, ChildState<Block, Client>)
+) -> (StateApi<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
@@ -223,19 +223,19 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 			fetcher,
 	));
 	(
-		State { backend, deny_unsafe },
+		StateApi { backend, deny_unsafe },
 		ChildState { backend: child_backend }
 	)
 }
 
 /// State API with subscriptions support.
-pub struct State<Block, Client> {
+pub struct StateApi<Block, Client> {
 	backend: Box<dyn StateBackend<Block, Client>>,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
 }
 
-impl<Block, Client> State<Block, Client>
+impl<Block, Client> StateApi<Block, Client>
 	where
 		Block: BlockT + 'static,
 		Client: BlockchainEvents<Block> + CallApiAt<Block> + HeaderBackend<Block>
@@ -255,6 +255,8 @@ impl<Block, Client> State<Block, Client>
 				state.backend.call(block, method, data).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
+
+		module.register_alias("state_callAt", "state_call")?;
 
 		module.register_async_method("state_getKeys", |params, state| {
 			let (key_prefix, block) = match params.parse() {
@@ -296,6 +298,8 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
+		module.register_alias("state_getKeysPagedAt", "state_getKeysPaged")?;
+
 		module.register_async_method("state_getStorage", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
@@ -305,6 +309,8 @@ impl<Block, Client> State<Block, Client>
 				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
+
+		module.register_alias("state_getStorageAt", "state_getStorage")?;
 
 		module.register_async_method("state_getStorageHash", |params, state| {
 			let (key, block) = match params.parse() {
@@ -316,6 +322,8 @@ impl<Block, Client> State<Block, Client>
 			}.boxed()
 		})?;
 
+		module.register_alias("state_getStorageHashAt", "state_getStorageHash")?;
+
 		module.register_async_method("state_getStorageSize", |params, state| {
 			let (key, block) = match params.parse() {
 				Ok(params) => params,
@@ -325,6 +333,8 @@ impl<Block, Client> State<Block, Client>
 				state.backend.storage_size(block, key).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
+
+		module.register_alias("state_getStorageSizeAt", "state_getStorageSize")?;
 
 		module.register_async_method("state_getMetadata", |params, state| {
 			let maybe_block = params.one().ok();
@@ -340,6 +350,8 @@ impl<Block, Client> State<Block, Client>
 				state.backend.runtime_version(at).await.map_err(to_jsonrpsee_call_error)
 			}.boxed()
 		})?;
+
+		module.register_alias("chain_getRuntimeVersion", "state_getRuntimeVersion")?;
 
 		module.register_async_method("state_queryStorage", |params, state| {
 			let (keys, from, to) = match params.parse() {
@@ -395,6 +407,9 @@ impl<Block, Client> State<Block, Client>
 				ctx.backend.subscribe_runtime_version(sink).map_err(Into::into)
 		})?;
 
+		module.register_alias("chain_subscribeRuntimeVersion", "state_subscribeRuntimeVersion")?;
+		module.register_alias("chain_unsubscribeRuntimeVersion", "state_unsubscribeRuntimeVersion")?;
+
 		module.register_subscription(
 			"state_subscribeStorage",
 			"state_unsubscribeStorage",
@@ -402,6 +417,7 @@ impl<Block, Client> State<Block, Client>
 				let keys = params.one::<Option<Vec<StorageKey>>>()?;
 				ctx.backend.subscribe_storage(sink, keys).map_err(Into::into)
 		})?;
+
 
 		Ok(module)
 	}
@@ -531,6 +547,7 @@ fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
 }
 
+// TODO: (dp) make available to other code?
 fn to_jsonrpsee_call_error(err: Error) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(err))
 }

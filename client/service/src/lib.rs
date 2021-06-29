@@ -294,17 +294,40 @@ async fn build_network_future<
 
 #[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
-// TODO(niklasad1): not supported yet.
-mod waiting {}
+// TODO(niklasad1): WsSocket server is not fully "closeable" at the moment.
+mod waiting {
+	pub struct HttpServer(pub Option<sc_rpc_server::HttpServer>);
+
+	impl Drop for HttpServer {
+		fn drop(&mut self) {
+			if let Some(mut server) = self.0.take() {
+				futures::executor::block_on(server.stop());
+				futures::executor::block_on(server.wait_for_stop());
+			}
+		}
+	}
+
+	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
+
+	impl Drop for WsServer {
+		fn drop(&mut self) {
+			if let Some(mut server) = self.0.take() {
+				futures::executor::block_on(server.stop());
+				futures::executor::block_on(server.wait_for_stop());
+			}
+		}
+	}
+}
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
+/// Once this is called, no more methods can be added to the server.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<R>(
+async fn start_rpc_servers<R>(
 	config: &Configuration,
-	mut gen_rpc_module: R,
+	gen_rpc_module: R,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
 where
-	R: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>,
+	R: FnOnce(sc_rpc::DenyUnsafe) -> RpcModule<()>,
 {
 	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
 	let ws_addr = config.rpc_ws.unwrap_or_else(|| "127.0.0.1:9944".parse().unwrap());
@@ -316,7 +339,7 @@ where
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module.clone(),
-	);
+	).await?;
 
 	let ws = sc_rpc_server::start_ws(
 		ws_addr,
@@ -325,7 +348,7 @@ where
 		config.rpc_cors.as_ref(),
 		config.rpc_max_payload,
 		module,
-	);
+	).await?;
 
 	Ok(Box::new((http, ws)))
 }
@@ -485,13 +508,14 @@ mod tests {
 			client.clone(),
 		);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
-		let best = longest_chain.best_chain().unwrap();
+		let best = block_on(longest_chain.best_chain()).unwrap();
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
-		}.into_signed_tx();
+		}
+		.into_signed_tx();
 		block_on(pool.submit_one(
 			&BlockId::hash(best.hash()), source, transaction.clone()),
 		).unwrap();

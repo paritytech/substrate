@@ -22,8 +22,6 @@
 
 // mod middleware;
 
-use std::io;
-
 const MEGABYTE: usize = 1024 * 1024;
 
 /// Maximal payload accepted by RPC servers.
@@ -41,37 +39,62 @@ pub use self::inner::*;
 #[cfg(not(target_os = "unknown"))]
 mod inner {
 	use super::*;
-	use jsonrpsee::{ws_server::WsServerBuilder, http_server::HttpServerBuilder, RpcModule};
+	use futures_channel::oneshot;
+	use jsonrpsee::{
+		ws_server::{WsServerBuilder, WsStopHandle},
+		http_server::{HttpServerBuilder, HttpStopHandle},
+		RpcModule
+	};
+
+	/// Type alias for http server
+	pub type HttpServer = HttpStopHandle;
+	/// Type alias for ws server
+	pub type WsServer = HttpStopHandle;
 
 	/// Start HTTP server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	// TODO: return handle here.
-	pub fn start_http<M: Send + Sync + 'static>(
+	pub async fn start_http<M: Send + Sync + 'static>(
 		addr: std::net::SocketAddr,
 		worker_threads: Option<usize>,
 		_cors: Option<&Vec<String>>,
 		maybe_max_payload_mb: Option<usize>,
 		module: RpcModule<M>,
-	) -> io::Result<()>  {
+	) -> Result<HttpStopHandle, String>  {
 
+		let (tx, rx) = oneshot::channel::<Result<HttpStopHandle, String>>();
 		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
+
 		std::thread::spawn(move || {
-			let rt = tokio::runtime::Builder::new_multi_thread()
+			let rt = match tokio::runtime::Builder::new_multi_thread()
 				.worker_threads(worker_threads.unwrap_or(HTTP_THREADS))
 				.thread_name("substrate jsonrpc http server")
 				.enable_all()
 				.build()
-				.unwrap();
+			{
+				Ok(rt) => rt,
+				Err(e) => {
+					let _ = tx.send(Err(e.to_string()));
+					return;
+				}
+			};
 
 			rt.block_on(async move {
-				let mut server = HttpServerBuilder::default()
+				let mut server = match HttpServerBuilder::default()
 					.max_request_body_size(max_request_body_size as u32)
 					.build(addr)
-					.unwrap();
+				{
+					Ok(server) => server,
+					Err(e) => {
+						let _ = tx.send(Err(e.to_string()));
+						return;
+					}
+				};
 
-				server.register_module(module).unwrap();
+				let handle = server.stop_handle();
+
+				server.register_module(module).expect("infallible already checked; qed");
 				let mut methods_api = RpcModule::new(());
 				let mut methods = server.method_names();
 				methods.sort();
@@ -81,48 +104,63 @@ mod inner {
 						"version": 1,
 						"methods": methods,
 					}))
-				}).unwrap();
+				}).expect("infallible all other methods have their own address space; qed");
 
 				server.register_module(methods_api).unwrap();
+				let _ = tx.send(Ok(handle));
 				let _ = server.start().await;
 			});
 		});
 
-		Ok(())
+		rx.await.unwrap_or(Err("Channel closed".to_string()))
 	}
 
 	/// Start WS server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ws<M: Send + Sync + 'static>(
+	pub async fn start_ws<M: Send + Sync + 'static>(
 		addr: std::net::SocketAddr,
 		worker_threads: Option<usize>,
 		max_connections: Option<usize>,
 		_cors: Option<&Vec<String>>,
 		maybe_max_payload_mb: Option<usize>,
 		module: RpcModule<M>,
-	) -> io::Result<()> {
+	) -> Result<WsStopHandle, String> {
+		let (tx, rx) = oneshot::channel::<Result<WsStopHandle, String>>();
 		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 		let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
 
 		std::thread::spawn(move || {
-			let rt = tokio::runtime::Builder::new_multi_thread()
+			let rt = match tokio::runtime::Builder::new_multi_thread()
 				.worker_threads(worker_threads.unwrap_or(HTTP_THREADS))
-				.thread_name("substrate jsonrpc http server")
+				.thread_name("substrate jsonrpc ws server")
 				.enable_all()
 				.build()
-				.unwrap();
+			{
+				Ok(rt) => rt,
+				Err(e) => {
+					let _ = tx.send(Err(e.to_string()));
+					return;
+				}
+			};
 
 			rt.block_on(async move {
-				let mut server = WsServerBuilder::default()
+				let mut server = match WsServerBuilder::default()
 					.max_request_body_size(max_request_body_size as u32)
 					.max_connections(max_connections as u64)
 					.build(addr)
 					.await
-					.unwrap();
+				{
+					Ok(server) => server,
+					Err(e) => {
+						let _ = tx.send(Err(e.to_string()));
+						return;
+					}
+				};
 
-				server.register_module(module).unwrap();
+				let handle = server.stop_handle();
+				server.register_module(module).expect("infallible already checked; qed");
 				let mut methods_api = RpcModule::new(());
 				let mut methods = server.method_names();
 				methods.sort();
@@ -132,14 +170,15 @@ mod inner {
 						"version": 1,
 						"methods": methods,
 					}))
-				}).unwrap();
+				}).expect("infallible all other methods have their own address space; qed");
 
 				server.register_module(methods_api).unwrap();
-
+				let _ = tx.send(Ok(handle));
 				let _ = server.start().await;
 			});
 		});
-		Ok(())
+
+		rx.await.unwrap_or(Err("Channel closed".to_string()))
 	}
 
 	// TODO: CORS and host filtering.
