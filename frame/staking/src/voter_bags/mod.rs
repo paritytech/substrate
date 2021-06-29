@@ -21,7 +21,7 @@
 //! - It's efficient to iterate over the top* N voters by stake, where the precise ordering of
 //!   voters doesn't particularly matter.
 
-mod thresholds;
+pub mod thresholds;
 
 use thresholds::THRESHOLDS;
 use crate::{
