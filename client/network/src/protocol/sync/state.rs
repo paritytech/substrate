@@ -22,6 +22,7 @@ use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sc_client_api::StorageProof;
 use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
 use crate::chain::{Client, ImportedState};
+use smallvec::SmallVec;
 use super::StateDownloadProgress;
 
 /// State sync support.
@@ -32,7 +33,7 @@ pub struct StateSync<B: BlockT> {
 	target_block: B::Hash,
 	target_header: B::Header,
 	target_root: B::Hash,
-	last_key: Vec<u8>,
+	last_key: SmallVec<[Vec<u8>; 2]>,
 	state: Vec<(Vec<u8>, Vec<u8>)>,
 	complete: bool,
 	client: Arc<dyn Client<B>>,
@@ -58,7 +59,7 @@ impl<B: BlockT> StateSync<B> {
 			target_block: target.hash(),
 			target_root: target.state_root().clone(),
 			target_header: target,
-			last_key: Vec::default(),
+			last_key: SmallVec::default(),
 			state: Vec::default(),
 			complete: false,
 			imported_bytes: 0,
@@ -99,7 +100,7 @@ impl<B: BlockT> StateSync<B> {
 			let (values, complete) = match self.client.verify_range_proof(
 				self.target_root,
 				proof,
-				&self.last_key
+				&self.last_key[..],
 			) {
 				Err(e) => {
 					log::debug!(

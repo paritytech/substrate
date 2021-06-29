@@ -24,6 +24,17 @@ use sp_runtime::{
 use crate::{StorageProof, ChangesProof};
 use sp_storage::{ChildInfo, StorageKey, PrefixedStorageKey};
 
+
+/// Multiple key value state.
+/// States are ordered by root storage key.
+pub struct KeyValueStates(Vec<KeyValueState>);
+
+/// A key value state.
+pub struct KeyValueState {
+	parent_storage_key: Option<Vec<u8>>,
+	key_values: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
 /// Interface for providing block proving utilities.
 pub trait ProofProvider<Block: BlockT> {
 	/// Reads storage value at a given block + key, returning read proof.
@@ -71,12 +82,15 @@ pub trait ProofProvider<Block: BlockT> {
 		key: &StorageKey,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 
-	/// Given a `BlockId` iterate over all storage values starting at `start_key` exclusively,
-	/// building proofs until size limit is reached. Returns combined proof and the number of collected keys.
+	/// Given a `BlockId` iterate over all storage values starting at `start_keys`.
+	/// `start_keys` contain current parsed location of storage roots and
+	/// at last level the value to start at exclusively.
+	/// Proofs is build until size limit is reached.
+	/// Returns combined proof and the numbers of collected keys.
 	fn read_proof_collection(
 		&self,
 		id: &BlockId<Block>,
-		start_key: &[u8],
+		start_keys: &[&Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<(StorageProof, u32)>;
 
@@ -95,6 +109,6 @@ pub trait ProofProvider<Block: BlockT> {
 		&self,
 		root: Block::Hash,
 		proof: StorageProof,
-		start_key: &[u8],
-	) -> sp_blockchain::Result<(Vec<(Vec<u8>, Vec<u8>)>, bool)>;
+		start_keys: &[&Vec<u8>],
+	) -> sp_blockchain::Result<(KeyValueStates, bool)>;
 }

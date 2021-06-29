@@ -1399,19 +1399,20 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		&self,
 		root: Block::Hash,
 		proof: StorageProof,
-		start_key: &[u8],
-	) -> sp_blockchain::Result<(Vec<(Vec<u8>, Vec<u8>)>, bool)> {
-		Ok(read_range_proof_check::<HashFor<Block>>(
+		start_key: &[&Vec<u8>],
+	) -> sp_blockchain::Result<(Vec<Vec<(Vec<u8>, Vec<u8>)>>, bool)> {
+		let state = read_range_proof_check::<HashFor<Block>>(
 				root,
 				proof,
 				None,
 				None,
 				None,
 				Some(start_key),
-		)?)
+		)?;
+
+		Ok(state)
 	}
 }
-
 
 impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Block, RA>
 	where
