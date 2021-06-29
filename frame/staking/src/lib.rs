@@ -308,11 +308,11 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Percent, Perbill, RuntimeDebug, DispatchError,
+	DispatchError, Perbill, Percent, RuntimeDebug,
 	curve::PiecewiseLinear,
 	traits::{
-		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
-		AtLeast32BitUnsigned, Bounded,
+		AtLeast32BitUnsigned, Bounded, CheckedSub, Convert, SaturatedConversion, Saturating,
+		StaticLookup, UniqueSaturatedInto, Zero,
 	},
 };
 use sp_staking::{
@@ -1012,7 +1012,7 @@ pub mod pallet {
 		/// A type sufficient to distinguish between all voter bags.
 		///
 		/// For 256 bags or fewer, `u8` suffices.
-		type BagIdx: Copy + Eq + Ord + codec::Codec + MaxEncodedLen;
+		type BagIdx: Copy + Eq + Ord + codec::Codec + MaxEncodedLen + Bounded + UniqueSaturatedInto<usize>;
 	}
 
 	#[pallet::extra_constants]
@@ -1550,14 +1550,24 @@ pub mod pallet {
 
 		fn integrity_test() {
 			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(||
+				sp_io::TestExternalities::new_empty().execute_with(|| {
 					assert!(
 						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
 						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
 						T::SlashDeferDuration::get(),
 						T::BondingDuration::get(),
-					)
-				);
+					);
+
+					assert!(
+						T::VoterBagThresholds::get().windows(2).all(|window| window[1] > window[0]),
+						"Voter bag thresholds must strictly increase",
+					);
+
+					assert!(
+						T::BagIdx::max_value().saturated_into() >= T::VoterBagThresholds::get().len(),
+						"BagIdx must be sufficient to uniquely identify every bag",
+					);
+				});
 			}
 		}
 	}

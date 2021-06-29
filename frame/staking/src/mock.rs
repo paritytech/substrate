@@ -243,6 +243,10 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 }
 
+parameter_types! {
+	pub const VoterBagThresholds: &'static [VoteWeight] = &crate::voter_bags::thresholds::THRESHOLDS;
+}
+
 impl Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
@@ -263,6 +267,8 @@ impl Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
+	type VoterBagThresholds = VoterBagThresholds;
+	type BagIdx = u8;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
