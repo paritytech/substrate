@@ -431,9 +431,9 @@ pub mod pallet {
 		/// NOTE: If both schedules have ended by the current block, no new schedule will be created.
 		///
 		/// Merged schedule attributes:
-		/// starting_block: `MAX(schedule1.starting_block, scheduled2.starting_block, current_block)`.
-		/// ending_block: `MAX(schedule1.ending_block, schedule2.ending_block)`.
-		/// locked: `schedule1.locked_at(current_block) + schedule2.locked_at(current_block)`.
+		/// - `starting_block`: `MAX(schedule1.starting_block, scheduled2.starting_block, current_block)`.
+		/// - `ending_block`: `MAX(schedule1.ending_block, schedule2.ending_block)`.
+		/// - `locked`: `schedule1.locked_at(current_block) + schedule2.locked_at(current_block)`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
