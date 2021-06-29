@@ -346,6 +346,9 @@ pub fn write_results(
 	Ok(())
 }
 
+// This function looks at the keys touched during the benchmark, and the storage info we collected
+// from the pallets, and creates comments with information about the storage keys touched during
+// each benchmark.
 fn add_storage_comments(
 	comments: &mut Vec<String>,
 	results: &[BenchmarkResults],
@@ -358,16 +361,17 @@ fn add_storage_comments(
 
 	for result in results {
 		for key in &result.keys {
+			// skip keys which are whitelisted
+			if key.3 { continue; }
 			// Check if we have knowledge of this key, and remove it from the hashmap
 			// so we only make a comment on it once.
 			if let Some(key_info) = storage_info_map.remove(&key.0[0..32]) {
 				let comment = format!(
-					"Storage: {} {} (r:{} w:{}, {})",
+					"Storage: {} {} (r:{} w:{})",
 					String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
 					String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
 					key.1,
 					key.2,
-					key.3,
 				);
 				comments.push(comment)
 			}

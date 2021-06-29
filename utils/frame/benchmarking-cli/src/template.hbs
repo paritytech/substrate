@@ -20,6 +20,9 @@ use sp_std::marker::PhantomData;
 pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 	{{~#each benchmarks as |benchmark|}}
+	{{~#each benchmark.comments as |comment|}}
+	// {{comment}}
+	{{~/each}}
 	fn {{benchmark.name~}}
 	(
 		{{~#each benchmark.components as |c| ~}}
