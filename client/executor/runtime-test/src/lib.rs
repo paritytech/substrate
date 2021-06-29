@@ -286,9 +286,9 @@ sp_core::wasm_export_functions! {
 		run().is_some()
 	}
 
-	// Just some test to make sure that `sc-allocator-primitives` compiles on `no_std`.
+	// Just some test to make sure that `sc-allocator` compiles on `no_std`.
 	fn test_sc_allocator_primitive_compiles() {
-		sc_allocator_primitives::FreeingBumpHeapAllocator::new(0);
+		sc_allocator::FreeingBumpHeapAllocator::new(0);
 	}
 
 	fn test_enter_span() -> u64 {

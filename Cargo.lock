@@ -6992,7 +6992,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-allocator-primitives"
+name = "sc-allocator"
 version = "3.0.0"
 dependencies = [
  "log",
@@ -7083,7 +7083,6 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "sc-chain-spec-derive",
- "sc-chain-spec-primitives",
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-finality-grandpa",
@@ -7104,14 +7103,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "sc-chain-spec-primitives"
-version = "3.0.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -7522,7 +7513,7 @@ dependencies = [
  "derive_more",
  "parity-scale-codec",
  "pwasm-utils",
- "sc-allocator-primitives",
+ "sc-allocator",
  "sp-core",
  "sp-maybe-compressed-blob",
  "sp-serializer",
@@ -7537,7 +7528,7 @@ version = "0.9.0"
 dependencies = [
  "log",
  "parity-scale-codec",
- "sc-allocator-primitives",
+ "sc-allocator",
  "sc-executor-common",
  "sp-core",
  "sp-runtime-interface",
@@ -7555,7 +7546,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-wasm 0.42.2",
- "sc-allocator-primitives",
+ "sc-allocator",
  "sc-executor-common",
  "scoped-tls",
  "sp-core",
@@ -7904,7 +7895,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-block-builder",
- "sc-chain-spec-primitives",
+ "sc-chain-spec",
  "sc-cli",
  "sc-client-api",
  "sc-executor",
@@ -7945,7 +7936,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "sc-chain-spec-primitives",
+ "sc-chain-spec",
  "serde",
  "serde_json",
  "sp-core",
@@ -7977,7 +7968,7 @@ dependencies = [
 name = "sc-runtime-test"
 version = "2.0.0"
 dependencies = [
- "sc-allocator-primitives",
+ "sc-allocator",
  "sp-core",
  "sp-io",
  "sp-runtime",
