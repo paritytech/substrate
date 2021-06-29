@@ -6,7 +6,7 @@ edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "RPC interface for the transaction payment module."
+description = "RPC interface for the transaction payment pallet."
 readme = "README.md"
 
 [package.metadata.docs.rs]
@@ -17,9 +17,10 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-derive = "15.1.0"
+
+sp-api = { version = "3.0.0", path = "../../../primitives/api" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-rpc = { version = "3.0.0", path = "../../../primitives/rpc" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 pallet-transaction-payment-rpc-runtime-api = { version = "3.0.0", path = "./runtime-api" }

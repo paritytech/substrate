@@ -59,7 +59,7 @@ use crate::{
 	wasm::{Runtime, RuntimeCosts},
 };
 use codec::Decode;
-use frame_support::weights::Weight;
+use frame_support::{weights::Weight, traits::MaxEncodedLen};
 use sp_runtime::DispatchError;
 use sp_std::{
 	marker::PhantomData,
@@ -300,18 +300,21 @@ where
 		Ok(())
 	}
 
-	/// Reads `in_len` from contract memory and scale decodes it.
+	/// Reads and decodes a type with a size fixed at compile time from contract memory.
 	///
 	/// This function is secure and recommended for all input types of fixed size
 	/// as long as the cost of reading the memory is included in the overall already charged
 	/// weight of the chain extension. This should usually be the case when fixed input types
-	/// are used. Non fixed size types (like everything using `Vec`) usually need to use
-	/// [`in_len()`](Self::in_len) in order to properly charge the necessary weight.
-	pub fn read_as<T: Decode>(&mut self) -> Result<T> {
-		self.inner.runtime.read_sandbox_memory_as(
-			self.inner.input_ptr,
-			self.inner.input_len,
-		)
+	/// are used.
+	pub fn read_as<T: Decode + MaxEncodedLen>(&mut self) -> Result<T> {
+		self.inner.runtime.read_sandbox_memory_as(self.inner.input_ptr)
+	}
+
+	/// Reads and decodes a type with a dynamic size from contract memory.
+	///
+	/// Make sure to include `len` in your weight calculations.
+	pub fn read_as_unbounded<T: Decode>(&mut self, len: u32) -> Result<T> {
+		self.inner.runtime.read_sandbox_memory_as_unbounded(self.inner.input_ptr, len)
 	}
 
 	/// The length of the input as passed in as `input_len`.
