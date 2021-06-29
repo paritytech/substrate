@@ -522,7 +522,16 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://polkafoundry.com"
-  	        },
+  	},
+		{
+			"prefix": 101,
+			"network": "origintrail-parachain",
+			"displayName": "OriginTrail Parachain",
+			"symbols": ["TRAC"],
+			"decimals": [18],
+			"standardAccount": "secp256k1",
+			"website": "https://origintrail.io"
+		},
 		{
 			"prefix": 252,
 			"network": "social-network",

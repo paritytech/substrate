@@ -59,7 +59,7 @@ use crate::{
 	wasm::{Runtime, RuntimeCosts},
 };
 use codec::Decode;
-use frame_support::weights::Weight;
+use frame_support::{weights::Weight, traits::MaxEncodedLen};
 use sp_runtime::DispatchError;
 use sp_std::{
 	marker::PhantomData,
@@ -300,18 +300,21 @@ where
 		Ok(())
 	}
 
-	/// Reads `in_len` from contract memory and scale decodes it.
+	/// Reads and decodes a type with a size fixed at compile time from contract memory.
 	///
 	/// This function is secure and recommended for all input types of fixed size
 	/// as long as the cost of reading the memory is included in the overall already charged
 	/// weight of the chain extension. This should usually be the case when fixed input types
-	/// are used. Non fixed size types (like everything using `Vec`) usually need to use
-	/// [`in_len()`](Self::in_len) in order to properly charge the necessary weight.
-	pub fn read_as<T: Decode>(&mut self) -> Result<T> {
-		self.inner.runtime.read_sandbox_memory_as(
-			self.inner.input_ptr,
-			self.inner.input_len,
-		)
+	/// are used.
+	pub fn read_as<T: Decode + MaxEncodedLen>(&mut self) -> Result<T> {
+		self.inner.runtime.read_sandbox_memory_as(self.inner.input_ptr)
+	}
+
+	/// Reads and decodes a type with a dynamic size from contract memory.
+	///
+	/// Make sure to include `len` in your weight calculations.
+	pub fn read_as_unbounded<T: Decode>(&mut self, len: u32) -> Result<T> {
+		self.inner.runtime.read_sandbox_memory_as_unbounded(self.inner.input_ptr, len)
 	}
 
 	/// The length of the input as passed in as `input_len`.
@@ -334,7 +337,7 @@ where
 	///
 	/// If the contract supplied buffer is smaller than the passed `buffer` an `Err` is returned.
 	/// If `allow_skip` is set to true the contract is allowed to skip the copying of the buffer
-	/// by supplying the guard value of `u32::max_value()` as `out_ptr`. The
+	/// by supplying the guard value of `u32::MAX` as `out_ptr`. The
 	/// `weight_per_byte` is only charged when the write actually happens and is not skipped or
 	/// failed due to a too small output buffer.
 	pub fn write(
