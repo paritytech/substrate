@@ -25,8 +25,8 @@ mod thresholds;
 
 use thresholds::THRESHOLDS;
 use crate::{
-	AccountIdOf, Config, Nominations, Nominators, Pallet, VoteWeight, VoterBagFor, VotingDataOf,
-	slashing::SlashingSpans,
+	AccountIdOf, Config, Nominations, Nominators, Pallet, Validators, VoteWeight, VoterBagFor,
+	VotingDataOf, slashing::SlashingSpans,
 };
 use codec::{Encode, Decode};
 use frame_support::DefaultNoBound;
@@ -79,6 +79,23 @@ impl<T: Config> VoterList<T> {
 		crate::VoterBagFor::<T>::remove_all(None);
 		crate::VoterBags::<T>::remove_all(None);
 		crate::VoterNodes::<T>::remove_all(None);
+	}
+
+	/// Regenerate voter data from the `Nominators` and `Validators` storage items.
+	///
+	/// This is expensive and should only ever be performed during a migration, never during
+	/// consensus.
+	pub fn regenerate() {
+		Self::clear();
+
+		let nominators_iter = Nominators::<T>::iter().map(|(id, _)| Voter::nominator(id));
+		let validators_iter = Validators::<T>::iter().map(|(id, _)| Voter::validator(id));
+		let weight_of = Pallet::<T>::weight_of_fn();
+
+		Self::insert_many(
+			nominators_iter.chain(validators_iter),
+			weight_of,
+		);
 	}
 
 	/// Decode the length of the voter list.
@@ -462,6 +479,22 @@ pub struct Voter<AccountId> {
 	pub id: AccountId,
 	/// Whether the voter is a validator or nominator
 	pub voter_type: VoterType,
+}
+
+impl<AccountId> Voter<AccountId> {
+	pub fn nominator(id: AccountId) -> Self {
+		Self {
+			id,
+			voter_type: VoterType::Nominator,
+		}
+	}
+
+	pub fn validator(id: AccountId) -> Self {
+		Self {
+			id,
+			voter_type: VoterType::Validator,
+		}
+	}
 }
 
 pub type VoterOf<T> = Voter<AccountIdOf<T>>;
