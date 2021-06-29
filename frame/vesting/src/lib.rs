@@ -110,6 +110,7 @@ mod vesting_info {
 
 		/// Instantiate a new `VestingInfo` without param validation. Useful for
 		/// mocking bad inputs in testing.
+		#[cfg(test)]
 		pub fn unsafe_new(
 			locked: Balance,
 			per_block: Balance,
@@ -118,7 +119,7 @@ mod vesting_info {
 			VestingInfo { locked, per_block, starting_block }
 		}
 
-		/// Locked amount at genesis.
+		/// Locked amount at schedule creation.
 		pub fn locked(&self) -> Balance {
 			self.locked
 		}
@@ -143,20 +144,17 @@ mod vesting_info {
 			let vested_block_count = n.saturating_sub(self.starting_block);
 			let vested_block_count = BlockNumberToBalance::convert(vested_block_count);
 			// Return amount that is still locked in vesting
-			let maybe_balance = vested_block_count.checked_mul(&self.per_block);
-			if let Some(balance) = maybe_balance {
-				self.locked.saturating_sub(balance)
-			} else {
-				Zero::zero()
-			}
+			vested_block_count.checked_mul(&self.per_block)
+                .map(|balance| self.locked.saturating_sub(balance))
+                .unwrap_or(Zero::zero())
 		}
 
-		/// Block number at which the schedule ends
+		/// Block number at which the schedule ends.
 		pub fn ending_block<BlockNumberToBalance: Convert<BlockNumber, Balance>>(&self) -> Balance {
 			let starting_block = BlockNumberToBalance::convert(self.starting_block);
 			let duration = if self.per_block > self.locked {
 				// If `per_block` is bigger than `locked`, the schedule will end
-				// the block after starting
+				// the block after starting.
 				1u32.into()
 			} else if self.per_block.is_zero() {
 				// Check for div by 0 errors, which should only be from legacy
@@ -183,16 +181,16 @@ enum Filter {
 	/// Filter out 1 schedule.
 	One(usize),
 	/// Filter out 2 schedules.
-	Two((usize, usize)),
+	Two(usize, usize),
 }
 
 impl Filter {
-	/// Wether or not the filter says the schedule index should be removed.
+	/// Whether or not the filter says the schedule index should be removed.
 	fn should_remove(&self, index: &usize) -> bool {
 		match self {
 			Self::Zero => false,
 			Self::One(index1) => index1 == index,
-			Self::Two((index1, index2)) => index1 == index || index2 == index,
+			Self::Two(index1, index2) => index1 == index || index2 == index,
 		}
 	}
 }
@@ -469,7 +467,7 @@ pub mod pallet {
 			// schedules that may be ending at this block.
 			let schedule1 = *vesting.get(schedule1_index).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
 			let schedule2 = *vesting.get(schedule2_index).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
-			let filter = Filter::Two((schedule1_index, schedule2_index));
+			let filter = Filter::Two(schedule1_index, schedule2_index);
 
 			// The length of vesting decreases by 2 here since we filter out 2 schedules. Thus we know
 			// below that we can safely insert the new merged schedule.
@@ -489,7 +487,7 @@ pub mod pallet {
 				));
 				Vesting::<T>::insert(&who, vesting);
 			} else if maybe_vesting.is_some() {
-				Vesting::<T>::insert(&who, maybe_vesting.unwrap());
+				Vesting::<T>::insert(&who, maybe_vesting.expect("checked above; qed"));
 			} else {
 				Vesting::<T>::remove(&who);
 			}
