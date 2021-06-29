@@ -704,17 +704,11 @@ where
 		Ok(())
 	}
 
-	/// Remove a vesting schedule for a given account.
+	/// Remove a vesting schedule for a given account. Will error if `schedule_index` is `None`.
 	fn remove_vesting_schedule(who: &T::AccountId, schedule_index: Option<u32>) -> DispatchResult {
-		let filter = if let Some(schedule_index) = schedule_index {
-			ensure!(
-				schedule_index < T::MaxVestingSchedules::get(),
-				Error::<T>::ScheduleIndexOutOfBounds
-			);
-			Filter::One(schedule_index as usize)
-		} else {
-			Filter::Zero
-		};
+		let schedule_index = schedule_index.ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
+		let filter = Filter::One(schedule_index as usize);
+
 		let vesting = Self::vesting(who).ok_or(Error::<T>::NotVesting)?;
 		if let Some(v) = Self::update_lock_and_schedules(who.clone(), vesting, filter) {
 			Vesting::<T>::insert(&who, v);
