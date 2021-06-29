@@ -9,8 +9,12 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 
-	let genesis_config_macro_ident = syn::Ident::new(
+	let genesis_config_def_macro_ident = syn::Ident::new(
 		&format!("__is_genesis_config_defined_{}", count),
+		proc_macro2::Span::call_site(),
+	);
+	let genesis_config_std_macro_ident = syn::Ident::new(
+		&format!("__is_std_defined_for_genesis_{}", count),
 		proc_macro2::Span::call_site(),
 	);
 	let event_macro_ident = syn::Ident::new(
@@ -39,11 +43,18 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 		pub mod __substrate_genesis_config_check {
 			#[macro_export]
 			#[doc(hidden)]
-			macro_rules! #genesis_config_macro_ident {
+			macro_rules! #genesis_config_def_macro_ident {
+				($pallet_name:ident) => {};
+			}
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #genesis_config_std_macro_ident {
 				($pallet_name:ident) => {};
 			}
 			#[doc(hidden)]
-			pub use #genesis_config_macro_ident as is_genesis_config_defined;
+			pub use #genesis_config_def_macro_ident as is_genesis_config_defined;
+			#[doc(hidden)]
+			pub use #genesis_config_std_macro_ident as is_std_enabled_for_genesis;
 		}
 
 		#[doc(hidden)]
