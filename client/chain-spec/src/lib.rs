@@ -115,7 +115,7 @@ pub use chain_spec::{
 };
 pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
-pub use sp_chain_spec::{Properties, ChainType};
+pub use sc_chain_spec_primitives::{Properties, ChainType};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sp_runtime::BuildStorage;

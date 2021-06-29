@@ -7083,6 +7083,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "sc-chain-spec-derive",
+ "sc-chain-spec-primitives",
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-finality-grandpa",
@@ -7090,7 +7091,6 @@ dependencies = [
  "sc-telemetry",
  "serde",
  "serde_json",
- "sp-chain-spec",
  "sp-consensus-babe",
  "sp-core",
  "sp-runtime",
@@ -7104,6 +7104,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "sc-chain-spec-primitives"
+version = "3.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -7896,6 +7904,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-block-builder",
+ "sc-chain-spec-primitives",
  "sc-cli",
  "sc-client-api",
  "sc-executor",
@@ -7907,7 +7916,6 @@ dependencies = [
  "serde_json",
  "sp-api",
  "sp-blockchain",
- "sp-chain-spec",
  "sp-core",
  "sp-io",
  "sp-keystore",
@@ -7937,9 +7945,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.11.1",
+ "sc-chain-spec-primitives",
  "serde",
  "serde_json",
- "sp-chain-spec",
  "sp-core",
  "sp-rpc",
  "sp-runtime",
@@ -8826,14 +8834,6 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "thiserror",
-]
-
-[[package]]
-name = "sp-chain-spec"
-version = "3.0.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]
