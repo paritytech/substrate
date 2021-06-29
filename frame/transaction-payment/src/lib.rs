@@ -525,6 +525,11 @@ impl<T: Config> ChargeTransactionPayment<T> where
 		Self(fee)
 	}
 
+	/// Returns the tip as being choosen by the transaction sender.
+	pub fn tip(&self) -> BalanceOf<T> {
+		self.0
+	}
+
 	fn withdraw_fee(
 		&self,
 		who: &T::AccountId,

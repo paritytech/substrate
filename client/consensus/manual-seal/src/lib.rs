@@ -274,7 +274,7 @@ mod tests {
 		AccountKeyring::*,
 		TestClientBuilder,
 	};
-	use sc_transaction_pool::{BasicPool, RevalidationType, txpool::Options};
+	use sc_transaction_pool::{BasicPool, RevalidationType, Options};
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;
