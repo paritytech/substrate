@@ -46,27 +46,34 @@
 
 mod benchmarking;
 #[cfg(test)]
+mod mock;
+#[cfg(test)]
 mod tests;
 
 pub mod weights;
 
-use sp_std::prelude::*;
-use sp_std::fmt::Debug;
-use codec::{Encode, Decode};
-use sp_runtime::{RuntimeDebug, traits::{
-	StaticLookup, Zero, AtLeast32BitUnsigned, MaybeSerializeDeserialize, Convert
-}};
-use frame_support::{ensure, pallet_prelude::*};
-use frame_support::traits::{
-	Currency, LockableCurrency, VestingSchedule, WithdrawReasons, LockIdentifier,
-	ExistenceRequirement, Get,
+use codec::{Decode, Encode};
+use frame_support::{
+	ensure,
+	pallet_prelude::*,
+	traits::{
+		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule,
+		WithdrawReasons,
+	},
 };
-use frame_system::{ensure_signed, ensure_root, pallet_prelude::*};
-pub use weights::WeightInfo;
+use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 pub use pallet::*;
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Convert, MaybeSerializeDeserialize, StaticLookup, Zero},
+	RuntimeDebug,
+};
+use sp_std::{fmt::Debug, prelude::*};
+pub use weights::WeightInfo;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type MaxLocksOf<T> = <<T as Config>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type MaxLocksOf<T> =
+	<<T as Config>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
 
