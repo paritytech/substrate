@@ -85,7 +85,9 @@ impl<T: Config> VoterList<T> {
 	///
 	/// This is expensive and should only ever be performed during a migration, never during
 	/// consensus.
-	pub fn regenerate() {
+	///
+	/// Returns the number of voters migrated.
+	pub fn regenerate() -> u32 {
 		Self::clear();
 
 		let nominators_iter = Nominators::<T>::iter().map(|(id, _)| Voter::nominator(id));
@@ -95,7 +97,7 @@ impl<T: Config> VoterList<T> {
 		Self::insert_many(
 			nominators_iter.chain(validators_iter),
 			weight_of,
-		);
+		)
 	}
 
 	/// Decode the length of the voter list.
@@ -127,7 +129,7 @@ impl<T: Config> VoterList<T> {
 
 	/// Insert a new voter into the appropriate bag in the voter list.
 	pub fn insert(voter: VoterOf<T>, weight_of: impl Fn(&T::AccountId) -> VoteWeight) {
-		Self::insert_many(sp_std::iter::once(voter), weight_of)
+		Self::insert_many(sp_std::iter::once(voter), weight_of);
 	}
 
 	/// Insert several voters into the appropriate bags in the voter list.
@@ -136,7 +138,7 @@ impl<T: Config> VoterList<T> {
 	pub fn insert_many(
 		voters: impl IntoIterator<Item = VoterOf<T>>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
-	) {
+	) -> u32 {
 		let mut bags = BTreeMap::new();
 		let mut count = 0;
 
@@ -152,6 +154,7 @@ impl<T: Config> VoterList<T> {
 		}
 
 		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_add(count));
+		count
 	}
 
 	/// Remove a voter (by id) from the voter list.

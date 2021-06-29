@@ -748,16 +748,46 @@ enum Releases {
 	V5_0_0, // blockable validators.
 	V6_0_0, // removal of all storage associated with offchain phragmen.
 	V7_0_0, // keep track of number of nominators / validators in map
+	V8_0_0, // VoterList and efficient semi-sorted iteration
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V7_0_0
+		Releases::V8_0_0
 	}
 }
 
 pub mod migrations {
 	use super::*;
+
+	pub mod v8 {
+		use super::*;
+
+		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
+			ensure!(StorageVersion::<T>::get() == Releases::V7_0_0, "must upgrade linearly");
+			ensure!(VoterList::<T>::decode_len().unwrap_or_default() == 0, "voter list already exists");
+			Ok(())
+		}
+
+		pub fn migrate<T: Config>() -> Weight {
+			log!(info, "Migrating staking to Releases::V8_0_0");
+
+			let migrated = VoterList::<T>::regenerate();
+
+			StorageVersion::<T>::put(Releases::V8_0_0);
+			log!(
+				info,
+				"Completed staking migration to Releases::V8_0_0 with {} voters migrated",
+				migrated,
+			);
+
+			// TODO: this is a pretty rough estimate, improve it
+			T::DbWeight::get().reads_writes(
+				migrated.into(),
+				(migrated * 3).into(),
+			)
+		}
+	}
 
 	pub mod v7 {
 		use super::*;
