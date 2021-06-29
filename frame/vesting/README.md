@@ -15,8 +15,8 @@ equivalent to the amount remaining to be vested. This is done through a dispatch
 either `vest` (in typical case where the sender is calling on their own behalf) or `vest_other`
 in case the sender is calling on another account's behalf.
 
-A user can have multiple vesting schedules, which are capped by an upper bound. With an upper bound
->= 2, users can merge 2 schedules.
+A user can have multiple vesting schedules, which are capped by an upper bound.
+With an upper bound >= 2, users can merge 2 schedules.
 ## Interface
 
 This module implements the `VestingSchedule` trait.
@@ -31,4 +31,5 @@ This module implements the `VestingSchedule` trait.
 
 [`Call`]: ./enum.Call.html
 [`Config`]: ./trait.Config.html
+
 License: Apache-2.0
