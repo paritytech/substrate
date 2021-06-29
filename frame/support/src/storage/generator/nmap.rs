@@ -434,6 +434,26 @@ mod test_iterators {
 	}
 
 	#[test]
+	fn n_map_double_map_identical_key() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			NMap::insert((1, 2), 50);
+			let key_hash = NMap::hashed_key_for((1, 2));
+
+			{
+				crate::generate_storage_alias!(Test, NMap => DoubleMap<
+					(u16, crate::Blake2_128Concat),
+					(u32, crate::Twox64Concat),
+					u64
+				>);
+
+				let value = NMap::get(1, 2).unwrap();
+				assert_eq!(value, 50);
+				assert_eq!(NMap::hashed_key_for(1, 2), key_hash);
+			}
+		});
+	}
+
+	#[test]
 	fn n_map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			// All map iterator

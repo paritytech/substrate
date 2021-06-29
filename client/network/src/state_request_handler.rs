@@ -42,7 +42,7 @@ mod rep {
 	use super::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
-	pub const SAME_REQUEST: Rep = Rep::new(i32::min_value(), "Same state request multiple times");
+	pub const SAME_REQUEST: Rep = Rep::new(i32::MIN, "Same state request multiple times");
 }
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.

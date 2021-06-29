@@ -149,7 +149,6 @@ pub fn new_partial(
 	let backend2 = backend.clone();
 	// Babe stuff
 	let select_chain2 = select_chain.clone();
-	let select_chain3 = select_chain.clone();
 	let sync_keystore = keystore_container.sync_keystore().clone();
 	let client2 = client.clone();
 	let babe_link2 = babe_link.clone();
@@ -171,7 +170,7 @@ pub fn new_partial(
 			babe_link.epoch_changes().clone(),
 			sync_keystore,
 			babe_link.config().clone(),
-			select_chain3,
+			select_chain2,
 			deny_unsafe,
 		).into_rpc_module().expect("TODO: error handling");
 		// TODO: add other rpc modules here
@@ -185,47 +184,14 @@ pub fn new_partial(
 
 	// TODO: (dp) remove this when all APIs are ported.
 	let (rpc_extensions_builder, rpc_setup) = {
-		let (_, grandpa_link, babe_link) = &import_setup;
-
-		let justification_stream = grandpa_link.justification_stream();
-		let shared_authority_set = grandpa_link.shared_authority_set().clone();
-		let shared_voter_state = grandpa::SharedVoterState::empty();
-		// TODO: why do we make a clone here and then one more clone for the GrandpaDeps?
-		let rpc_setup = shared_voter_state.clone();
-
-		let finality_proof_provider = grandpa::FinalityProofProvider::new_for_service(
-			backend.clone(),
-			Some(shared_authority_set.clone()),
-		);
-
-		let babe_config = babe_link.config().clone();
-		let shared_epoch_changes = babe_link.epoch_changes().clone();
-
+		let rpc_setup = grandpa::SharedVoterState::empty();
 		let client = client.clone();
 		let pool = transaction_pool.clone();
-		let select_chain = select_chain2.clone();
-		let keystore = keystore_container.sync_keystore();
-		let chain_spec = config.chain_spec.cloned_box();
-
-		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
+		let rpc_extensions_builder = move |deny_unsafe, _subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
 				pool: pool.clone(),
-				select_chain: select_chain.clone(),
-				chain_spec: chain_spec.cloned_box(),
 				deny_unsafe,
-				babe: node_rpc::BabeDeps {
-					babe_config: babe_config.clone(),
-					shared_epoch_changes: shared_epoch_changes.clone(),
-					keystore: keystore.clone(),
-				},
-				grandpa: node_rpc::GrandpaDeps {
-					shared_voter_state: shared_voter_state.clone(),
-					shared_authority_set: shared_authority_set.clone(),
-					justification_stream: justification_stream.clone(),
-					subscription_executor,
-					finality_provider: finality_proof_provider.clone(),
-				},
 			};
 
 			node_rpc::create_full(deps)
@@ -625,8 +591,8 @@ pub fn new_light_base(
 		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
+			// TODO: (dp) remove
 			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
-			// TODO: (dp) figure out what we should do for light clients
 			rpsee_builder: Box::new(|_, _| RpcModule::new(())),
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
