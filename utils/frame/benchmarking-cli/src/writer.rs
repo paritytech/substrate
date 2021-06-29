@@ -59,6 +59,7 @@ struct BenchmarkData {
 	component_weight: Vec<ComponentSlope>,
 	component_reads: Vec<ComponentSlope>,
 	component_writes: Vec<ComponentSlope>,
+	comments: Vec<String>,
 }
 
 // This forwards some specific metadata from the `BenchmarkCmd`
@@ -159,6 +160,9 @@ fn get_benchmark_data(
 	batch: &BenchmarkBatch,
 	analysis_choice: &AnalysisChoice,
 ) -> BenchmarkData {
+	// You can use this to put any additional comments with the benchmarking output.
+	let comments = Vec::<String>::new();
+
 	// Analyze benchmarks to get the linear regression.
 	let analysis_function = match analysis_choice {
 		AnalysisChoice::MinSquares => Analysis::min_squares_iqr,
@@ -229,6 +233,9 @@ fn get_benchmark_data(
 		})
 		.collect::<Vec<_>>();
 
+	// We add additional comments showing which storage items were touched.
+	// TODO
+
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
 		components,
@@ -238,6 +245,7 @@ fn get_benchmark_data(
 		component_weight: used_extrinsic_time,
 		component_reads: used_reads,
 		component_writes: used_writes,
+		comments,
 	}
 }
 
@@ -422,6 +430,7 @@ mod test {
 					writes: (base + slope * i).into(),
 					repeat_writes: 0,
 					proof_size: 0,
+					keys: vec![],
 				}
 			)
 		}
