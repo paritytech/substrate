@@ -292,7 +292,6 @@ pub fn new_full_base(
 			client: client.clone(),
 			keystore: keystore_container.sync_keystore(),
 			network: network.clone(),
-			rpc_extensions_builder: Box::new(rpc_extensions_builder),
 			rpsee_builder: Box::new(rpsee_builder),
 			transaction_pool: transaction_pool.clone(),
 			task_manager: &mut task_manager,
@@ -585,14 +584,11 @@ pub fn new_light_base(
 		pool: transaction_pool.clone(),
 	};
 
-	let rpc_extensions = node_rpc::create_light(light_deps);
-
 	let rpc_handlers =
 		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
-			// TODO: (dp) remove
-			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
+			// TODO(niklasad1): implement.
 			rpsee_builder: Box::new(|_, _| RpcModule::new(())),
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),

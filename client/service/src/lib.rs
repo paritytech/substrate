@@ -54,7 +54,7 @@ pub use self::builder::{
 	spawn_tasks, build_network, build_offchain_workers,
 	BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
 	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
-	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
+	TFullCallExecutor, TLightCallExecutor,
 };
 pub use config::{
 	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
@@ -65,7 +65,7 @@ pub use sc_chain_spec::{
 	NoExtension, ChainType,
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
-pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
+pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
@@ -368,7 +368,7 @@ fn start_rpc_servers<
 /// the HTTP or WebSockets server).
 #[derive(Clone)]
 pub struct RpcSession {
-	metadata: sc_rpc::Metadata,
+	metadata: (),
 }
 
 impl RpcSession {
@@ -380,7 +380,7 @@ impl RpcSession {
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
 	pub fn new(sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
 		RpcSession {
-			metadata: sender.into(),
+			metadata: (),
 		}
 	}
 }

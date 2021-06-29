@@ -113,7 +113,8 @@ where
 	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
 	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
-		let get_nonce = || {
+		todo!();
+		/*let get_nonce = || {
 			let api = self.client.runtime_api();
 			let best = self.client.info().best_hash;
 			let at = BlockId::hash(best);
@@ -127,11 +128,12 @@ where
 			Ok(adjust_nonce(&*self.pool, account, nonce))
 		};
 
-		Box::new(result(get_nonce()))
+		Box::new(result(get_nonce()))*/
 	}
 
 	fn dry_run(&self, extrinsic: Bytes, at: Option<<Block as traits::Block>::Hash>) -> FutureResult<Bytes> {
-		if let Err(err) = self.deny_unsafe.check_if_safe() {
+		todo!();
+		/*if let Err(err) = self.deny_unsafe.check_if_safe() {
 			return Box::new(rpc_future::err(err.into()));
 		}
 
@@ -159,7 +161,7 @@ where
 		};
 
 
-		Box::new(result(dry_run()))
+		Box::new(result(dry_run()))*/
 	}
 }
 
@@ -200,7 +202,8 @@ where
 	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
 	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
-		let best_hash = self.client.info().best_hash;
+		todo!();
+		/*let best_hash = self.client.info().best_hash;
 		let best_id = BlockId::hash(best_hash);
 		let future_best_header = future_header(&*self.remote_blockchain, &*self.fetcher, best_id);
 		let fetcher = self.fetcher.clone();
@@ -229,15 +232,16 @@ where
 		let pool = self.pool.clone();
 		let future_nonce = future_nonce.map(move |nonce| adjust_nonce(&*pool, account, nonce));
 
-		Box::new(future_nonce)
+		Box::new(future_nonce)*/
 	}
 
 	fn dry_run(&self, _extrinsic: Bytes, _at: Option<<Block as traits::Block>::Hash>) -> FutureResult<Bytes> {
-		Box::new(result(Err(RpcError {
-			code: ErrorCode::MethodNotFound,
-			message: "Unable to dry run extrinsic.".into(),
-			data: None,
-		})))
+		todo!();
+		// Box::new(result(Err(RpcError {
+		//     code: ErrorCode::MethodNotFound,
+		//     message: "Unable to dry run extrinsic.".into(),
+		//     data: None,
+		// })))
 	}
 }
 

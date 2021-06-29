@@ -204,7 +204,7 @@ members = [
 	"utils/frame/try-runtime/cli",
 	# TODO(niklasad1): port this to jsonrpsee
 	# "utils/frame/rpc/support",
-	# "utils/frame/rpc/system",
+	"utils/frame/rpc/system",
 	"utils/prometheus",
 	"utils/wasm-builder",
 	# temp deps
