@@ -17,20 +17,29 @@
 
 //! Substrate runtime api
 //!
-//! The Substrate runtime api is the crucial interface between the node and the runtime.
-//! Every call that goes into the runtime is done with a runtime api. The runtime apis are not fixed.
-//! Every Substrate user can define its own apis with
-//! [`decl_runtime_apis`](macro.decl_runtime_apis.html) and implement them in
-//! the runtime with [`impl_runtime_apis`](macro.impl_runtime_apis.html).
+//! The Substrate runtime api is the interface between the node and the runtime. There isn't a fixed
+//! set of runtime apis, instead it is up to the user to declare and implement these runtime apis.
+//! The declaration of a runtime api is normally done outside of a runtime, while the implementation
+//! of it has to be done in the runtime. We provide the [`decl_runtime_apis!`] macro for declaring
+//! a runtime api and the [`impl_runtime_apis!`] for implementing them. The macro docs provide more
+//! information on how to use them and what kind of attributes we support.
 //!
-//! Every Substrate runtime needs to implement the [`Core`] runtime api. This api provides the basic
-//! functionality that every runtime needs to export.
+//! It is required that each runtime implements at least the [`Core`] runtime api. This runtime api
+//! provides all the core functions that Substrate expects from a runtime.
 //!
-//! Besides the macros and the [`Core`] runtime api, this crates provides the [`Metadata`] runtime
-//! api, the [`ApiExt`] trait, the [`CallApiAt`] trait and the [`ConstructRuntimeApi`] trait.
+//! # Versioning
 //!
-//! On a meta level this implies, the client calls the generated API from the client perspective.
+//! Runtime apis support versioning. Each runtime api itself has a version attached. It is also
+//! supported to change function signatures or names in a non-breaking way. For more information on
+//! versioning check the [`decl_runtime_apis!`] macro.
 //!
+//! All runtime apis and their versions are returned as part of the [`RuntimeVersion`]. This can be
+//! used to check which runtime api version is currently provided by the on-chain runtime.
+//!
+//! # Testing
+//!
+//! For testing we provide the [`mock_impl_runtime_apis!`] macro that lets you implement a runtime
+//! api for a mocked object to use it in tests.
 //!
 //! # Logging
 //!
@@ -43,6 +52,17 @@
 //! that this feature instructs `log` and `tracing` to disable logging at compile time by setting
 //! the `max_level_off` feature for these crates. So, you should not enable this feature for a
 //! native build as otherwise the node will not output any log messages.
+//!
+//! # How does it work?
+//!
+//! Each runtime api is declared as a trait with functions. When compiled to WASM, each implemented
+//! runtime api function is exported as a function with the following naming scheme
+//! `${TRAIT_NAME}_${FUNCTION_NAME}`. Such a function has the following signature
+//! `(ptr: *u8, length: u32) -> u64`. It takes a pointer to an `u8` array and its length as an
+//! argument. This `u8` array is expected to be the SCALE encoded parameters of the function as
+//! defined in the trait. The return value is an `u64` that represents `length << 32 | pointer` of an
+//! `u8` array. This return value `u8` array contains the SCALE encoded return value as defined by
+//! the trait function. The macros take care to encode the parameters and to decode the return value.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -99,7 +119,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// to the client side and the runtime side. This generic parameter is usable by the user.
 ///
 /// For implementing these macros you should use the
-/// [`impl_runtime_apis!`](macro.impl_runtime_apis.html) macro.
+/// [`impl_runtime_apis!`] macro.
 ///
 /// # Example
 ///
