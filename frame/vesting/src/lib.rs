@@ -487,8 +487,8 @@ pub mod pallet {
 					s.starting_block(),
 				));
 				Vesting::<T>::insert(&who, vesting);
-			} else if maybe_vesting.is_some() {
-				Vesting::<T>::insert(&who, maybe_vesting.expect("checked above; qed"));
+			} else if let Some(vesting) = maybe_vesting {
+				Vesting::<T>::insert(&who, vesting);
 			} else {
 				Vesting::<T>::remove(&who);
 			}
