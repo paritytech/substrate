@@ -291,7 +291,7 @@ pub mod pallet {
 		/// An \[account\] has become fully vested. No further vesting can happen.
 		VestingCompleted(T::AccountId),
 		/// 2 vesting schedules where successfully merged together.
-		///\[locked, per_block, starting_block\]
+		/// \[locked, per_block, starting_block\]
 		VestingMergeSuccess(BalanceOf<T>, BalanceOf<T>, T::BlockNumber),
 	}
 
@@ -422,8 +422,8 @@ pub mod pallet {
 		}
 
 		/// Merge two vesting schedules together, creating a new vesting schedule that unlocks over
-		/// highest possible start and end blocks. If both schedules have already started the current 
-		/// block will be used as the schedule start; with the caveat that if one schedule is finishes by 
+		/// highest possible start and end blocks. If both schedules have already started the current
+		/// block will be used as the schedule start; with the caveat that if one schedule is finishes by
 		/// the current block, the other will be treated as the new merged schedule, unmodified.
 		///
 		/// NOTE: If `schedule1_index == schedule2_index` this is a no-op.
@@ -439,13 +439,6 @@ pub mod pallet {
 		///
 		/// - `schedule1_index`: index of the first schedule to merge.
 		/// - `schedule2_index`: index of the second schedule to merge.
-		///
-		/// # <weight>
-		/// - `O(1)`.
-		/// - DbWeight: TODO Reads, TODO Writes
-		///     - Reads: TODO
-		///     - Writes: TODO
-		/// # </weight>
 		#[pallet::weight(
 			T::WeightInfo::not_unlocking_merge_schedules(MaxLocksOf::<T>::get())
 			.max(T::WeightInfo::unlocking_merge_schedules(MaxLocksOf::<T>::get()))
@@ -509,15 +502,16 @@ impl<T: Config> Pallet<T> {
 		let schedule2_ending_block = schedule2.ending_block::<T::BlockNumberToBalance>();
 		let now_as_balance = T::BlockNumberToBalance::convert(now);
 
-		if schedule1_ending_block <= now_as_balance && schedule2_ending_block <= now_as_balance {
-			// If both schedules hav ended, we don't merge and exit early.
-			return None;
-		} else if schedule1_ending_block <= now_as_balance {
+		// Check if one or both schedules have ended.
+		match (schedule1_ending_block <= now_as_balance, schedule2_ending_block <= now_as_balance) {
+			// If both schedules have ended, we don't merge and exit early.
+			(true, true) => return None,
 			// If one schedule has ended, we treat the one that has not ended as the new
 			// merged schedule.
-			return Some(schedule2);
-		} else if schedule2_ending_block <= now_as_balance {
-			return Some(schedule1);
+			(true, false) => return Some(schedule2),
+			(false, true) => return Some(schedule1),
+			// If neither schedule has ended don't exit early.
+			_ => {},
 		}
 
 		let locked = schedule1
