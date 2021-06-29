@@ -39,7 +39,6 @@ use futures::prelude::*;
 use sp_state_machine::StorageProof;
 
 pub mod block_validation;
-pub mod offline_tracker;
 pub mod error;
 pub mod block_import;
 mod select_chain;
@@ -50,7 +49,8 @@ mod metrics;
 pub use self::error::Error;
 pub use block_import::{
 	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, ForkChoiceStrategy,
-	ImportResult, ImportedAux, JustificationImport, JustificationSyncLink,
+	ImportResult, ImportedAux, ImportedState, JustificationImport, JustificationSyncLink,
+	StateAction, StorageChanges,
 };
 pub use select_chain::SelectChain;
 pub use sp_state_machine::Backend as StateBackend;

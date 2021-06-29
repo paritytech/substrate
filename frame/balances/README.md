@@ -2,9 +2,9 @@
 
 The Balances module provides functionality for handling accounts and balances.
 
-- [`balances::Trait`](https://docs.rs/pallet-balances/latest/pallet_balances/trait.Trait.html)
-- [`Call`](https://docs.rs/pallet-balances/latest/pallet_balances/enum.Call.html)
-- [`Module`](https://docs.rs/pallet-balances/latest/pallet_balances/struct.Module.html)
+- [`Config`](https://docs.rs/pallet-balances/latest/pallet_balances/pallet/trait.Config.html)
+- [`Call`](https://docs.rs/pallet-balances/latest/pallet_balances/pallet/enum.Call.html)
+- [`Pallet`](https://docs.rs/pallet-balances/latest/pallet_balances/pallet/struct.Pallet.html)
 
 ## Overview
 
@@ -113,7 +113,7 @@ fn update_ledger<T: Config>(
 
 ## Genesis config
 
-The Balances module depends on the [`GenesisConfig`](https://docs.rs/pallet-balances/latest/pallet_balances/struct.GenesisConfig.html).
+The Balances module depends on the [`GenesisConfig`](https://docs.rs/pallet-balances/latest/pallet_balances/pallet/struct.GenesisConfig.html).
 
 ## Assumptions
 

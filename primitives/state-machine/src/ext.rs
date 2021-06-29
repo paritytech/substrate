@@ -637,7 +637,7 @@ where
 	}
 
 	#[cfg(feature = "std")]
-	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
+	fn storage_changes_root(&mut self, mut parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.changes_trie_transaction_storage_root {
 			trace!(
@@ -653,7 +653,7 @@ where
 			let root = self.overlay.changes_trie_root(
 				self.backend,
 				self.changes_trie_state.as_ref(),
-				Decode::decode(&mut &parent_hash[..]).map_err(|e|
+				Decode::decode(&mut parent_hash).map_err(|e|
 					trace!(
 						target: "state",
 						"Failed to decode changes root parent hash: {}",

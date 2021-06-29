@@ -373,6 +373,18 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		}
 	}
 
+	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+		allow_missing: bool,
+	) -> Result<bool, Self::Error> {
+		self.state.borrow().as_ref().ok_or_else(state_err)?
+			.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
+	}
+
 	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: Option<&ChildInfo>,

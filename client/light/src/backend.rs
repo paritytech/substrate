@@ -321,7 +321,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, input: Storage) -> ClientResult<Block::Hash> {
+	fn set_genesis_state(&mut self, input: Storage, commit: bool) -> ClientResult<Block::Hash> {
 		check_genesis_storage(&input)?;
 
 		// changes trie configuration
@@ -347,9 +347,15 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 		let storage_update = InMemoryBackend::from(storage);
 		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
-		self.storage_update = Some(storage_update);
+		if commit {
+			self.storage_update = Some(storage_update);
+		}
 
 		Ok(storage_root)
+	}
+
+	fn reset_storage(&mut self, _input: Storage) -> ClientResult<Block::Hash> {
+		Err(ClientError::NotAvailableOnLightClient)
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> ClientResult<()>
@@ -458,6 +464,22 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => state.for_key_values_with_prefix(prefix, action),
 			GenesisOrUnavailableState::Unavailable => (),
+		}
+	}
+
+	fn apply_to_key_values_while<A: FnMut(Vec<u8>, Vec<u8>) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		action: A,
+		allow_missing: bool,
+	) -> ClientResult<bool> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				Ok(state.apply_to_key_values_while(child_info, prefix, start_at, action, allow_missing)
+					.expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
 
