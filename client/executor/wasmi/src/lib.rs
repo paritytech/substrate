@@ -18,7 +18,7 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-use std::{cell::RefCell, ops::Range, rc::Rc, str, sync::Arc};
+use std::{cell::{Ref, RefCell}, ops::Range, rc::Rc, str, sync::Arc};
 use wasmi::{
 	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
 	RuntimeValue::{I32, I64, self}, TableRef, memory_units::Pages,
@@ -30,10 +30,11 @@ use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance, InvokeMethod};
+use sc_executor_common::{util::BufferProvider, wasm_runtime::{WasmModule, WasmInstance, InvokeMethod}};
 use sc_executor_common::{
 	error::{Error, WasmError},
 	sandbox,
+	util,
 };
 
 use sc_executor_common::runtime_blob::{RuntimeBlob, DataSegmentsSnapshot};
@@ -133,18 +134,6 @@ impl FunctionContext for FunctionExecutor {
 	}
 }
 
-// TODO Move to executor common and deduplicate code
-/// Construct a range from an offset to a data length after the offset.
-/// Returns None if the end of the range would exceed some maximum offset.
-pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
-	let end = offset.checked_add(len)?;
-	if end <= max {
-		Some(offset..end)
-	} else {
-		None
-	}
-}
-
 impl Sandbox for FunctionExecutor {
 	fn memory_get(
 		&mut self,
@@ -175,25 +164,33 @@ impl Sandbox for FunctionExecutor {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				sandboxed_memory.with_direct_access(|sandboxed_memory| {
-					let len = buf_len as usize;
+				sandboxed_memory.with_direct_access(|source_proxy| {
+					dest_proxy
+						.transfer(source_proxy, val_ptr.into(), offset as usize, val_len as usize)
+						.map_err(|e| e.to_string())
+						.map(|_| sandbox_primitives::ERR_OK)
 
-					let src_range = match checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
 
-					let memory_size: wasmi::memory_units::Bytes = self.inner.memory.current_size().into();
-					let dst_range = match checked_range(buf_ptr.into(), len, memory_size.0) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
+					// todo!()
 
-					self.inner.memory.with_direct_access_mut(|dst_buffer| {
-						dst_buffer[dst_range].copy_from_slice(&sandboxed_memory[src_range]);
-					});
+					// let len = buf_len as usize;
 
-					Ok(sandbox_primitives::ERR_OK)
+					// let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
+					// 	Some(range) => range,
+					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					// };
+
+					// let memory_size: wasmi::memory_units::Bytes = self.inner.memory.current_size().into();
+					// let dst_range = match util::checked_range(buf_ptr.into(), len, memory_size.0) {
+					// 	Some(range) => range,
+					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					// };
+
+					// self.inner.memory.with_direct_access_mut(|dst_buffer| {
+					// 	dst_buffer[dst_range].copy_from_slice(&sandboxed_memory[src_range]);
+					// });
+
+					// Ok(sandbox_primitives::ERR_OK)
 				})
 			}
 		}
@@ -229,25 +226,31 @@ impl Sandbox for FunctionExecutor {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
-					let len = val_len as usize;
+				sandboxed_memory.with_direct_access_mut(|dest_proxy| {
 
-					let memory_size: wasmi::memory_units::Bytes = self.inner.memory.current_size().into();
-					let src_range = match checked_range(val_ptr.into(), len, memory_size.0) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
+					dest_proxy
+						.transfer(self.inner.memory, val_ptr.into(), offset as usize, val_len as usize)
+						.map_err(|e| e.to_string())
+						.map(|_| sandbox_primitives::ERR_OK)
 
-					let dst_range = match checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
+					// let len = val_len as usize;
 
-					self.inner.memory.with_direct_access(|src_buffer| {
-						sandboxed_memory[dst_range].copy_from_slice(&src_buffer[src_range]);
-					});
+					// let memory_size: wasmi::memory_units::Bytes = self.inner.memory.current_size().into();
+					// let src_range = match util::checked_range(val_ptr.into(), len, memory_size.0) {
+					// 	Some(range) => range,
+					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					// };
 
-					Ok(sandbox_primitives::ERR_OK)
+					// let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
+					// 	Some(range) => range,
+					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					// };
+
+					// self.inner.memory.with_direct_access(|src_buffer| {
+					// 	sandboxed_memory[dst_range].copy_from_slice(&src_buffer[src_range]);
+					// });
+
+					// Ok(sandbox_primitives::ERR_OK)
 				})
 			}
 		}

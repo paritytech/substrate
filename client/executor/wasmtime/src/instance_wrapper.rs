@@ -19,7 +19,7 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use crate::util;
+use crate::util::{from_wasmtime_val, into_wasmtime_val};
 use crate::imports::Imports;
 
 use std::{slice, marker};
@@ -27,6 +27,7 @@ use sc_executor_common::{
 	error::{Error, Result},
 	runtime_blob,
 	wasm_runtime::InvokeMethod,
+	util::checked_range,
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
 use wasmtime::{Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
@@ -326,7 +327,7 @@ impl InstanceWrapper {
 			// we give up the reference before returning from this function.
 			let memory = self.memory_as_slice();
 
-			let range = util::checked_range(source_addr.into(), dest.len(), memory.len())
+			let range = checked_range(source_addr.into(), dest.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
 			dest.copy_from_slice(&memory[range]);
 			Ok(())
@@ -342,7 +343,7 @@ impl InstanceWrapper {
 			// we give up the reference before returning from this function.
 			let memory = self.memory_as_slice_mut();
 
-			let range = util::checked_range(dest_addr.into(), data.len(), memory.len())
+			let range = checked_range(dest_addr.into(), data.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
 			&mut memory[range].copy_from_slice(data);
 			Ok(())
@@ -431,11 +432,11 @@ impl runtime_blob::InstanceGlobals for InstanceWrapper {
 	}
 
 	fn get_global_value(&self, global: &Self::Global) -> Value {
-		util::from_wasmtime_val(global.get())
+		from_wasmtime_val(global.get())
 	}
 
 	fn set_global_value(&self, global: &Self::Global, value: Value) {
-		global.set(util::into_wasmtime_val(value)).expect(
+		global.set(into_wasmtime_val(value)).expect(
 			"the value is guaranteed to be of the same value; the global is guaranteed to be mutable; qed",
 		);
 	}

@@ -20,12 +20,11 @@
 //! required for execution of host.
 
 use crate::instance_wrapper::InstanceWrapper;
-use crate::util;
 use std::{cell::RefCell, rc::Rc};
 use log::trace;
 use codec::{Encode, Decode};
 use sp_allocator::FreeingBumpHeapAllocator;
-use sc_executor_common::error::Result;
+use sc_executor_common::{error::Result, util};
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
@@ -204,27 +203,29 @@ impl Sandbox for HostState {
 			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
 				sandboxed_memory.with_direct_access(|sandboxed_memory| {
-					let len = buf_len as usize;
+					todo!()
 
-					let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
+					// let len = buf_len as usize;
 
-					let supervisor_mem_size = self.inner.instance.memory_size() as usize;
-					let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
+					// let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
+					// 	Some(range) => range,
+					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					// };
 
-					self.inner.instance
-						.write_memory_from(
-							Pointer::new(dst_range.start as u32),
-							&sandboxed_memory[src_range],
-						)
-						.expect("ranges are checked above; write can't fail; qed");
+					// let supervisor_mem_size = self.inner.instance.memory_size() as usize;
+					// let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
+					// 	Some(range) => range,
+					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					// };
 
-					Ok(sandbox_primitives::ERR_OK)
+					// self.inner.instance
+					// 	.write_memory_from(
+					// 		Pointer::new(dst_range.start as u32),
+					// 		&sandboxed_memory[src_range],
+					// 	)
+					// 	.expect("ranges are checked above; write can't fail; qed");
+
+					// Ok(sandbox_primitives::ERR_OK)
 				})
 			}
 		}
@@ -272,28 +273,34 @@ impl Sandbox for HostState {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
-					let len = val_len as usize;
-					let supervisor_mem_size = self.inner.instance.memory_size() as usize;
+				sandboxed_memory.with_direct_access_mut(|dest_proxy| {
 
-					let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
+					dest_proxy
+						.transfer(source, val_ptr.into(), offset as usize, val_len as usize)
+						.map_err(|e| e.to_string())
+						.map(|_| sandbox_primitives::ERR_OK)
 
-					let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
+					// let len = val_len as usize;
+					// let supervisor_mem_size = self.inner.instance.memory_size() as usize;
 
-					self.inner.instance
-						.read_memory_into(
-							Pointer::new(src_range.start as u32),
-							&mut sandboxed_memory[dst_range],
-						)
-						.expect("ranges are checked above; read can't fail; qed");
+					// let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
+					// 	Some(range) => range,
+					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					// };
 
-					Ok(sandbox_primitives::ERR_OK)
+					// let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
+					// 	Some(range) => range,
+					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+					// };
+
+					// self.inner.instance
+					// 	.read_memory_into(
+					// 		Pointer::new(src_range.start as u32),
+					// 		&mut sandboxed_memory[dst_range],
+					// 	)
+					// 	.expect("ranges are checked above; read can't fail; qed");
+
+					// Ok(sandbox_primitives::ERR_OK)
 				})
 			}
 		}
