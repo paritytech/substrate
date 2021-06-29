@@ -30,7 +30,7 @@ use sp_rpc::number::NumberOrHex;
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 
-/// Provides RPC methods for interacting with Babe.
+/// Provides RPC methods to query a dispatchable's class, weight and fee.
 pub struct TransactionPaymentRpc<C, Block, Balance> {
 	/// Shared reference to the client.
 	client: Arc<C>,
@@ -45,16 +45,15 @@ where
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
 	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex> + Send + Sync + 'static,
 {
-	/// Creates a new instance of the BabeRpc handler.
-	pub fn new(
-		client: Arc<C>,
-	) -> Self {
+	/// Creates a new instance of the TransactionPaymentRpc helper.
+	pub fn new(client: Arc<C>) -> Self {
 		Self { client, _block_marker: Default::default(), _balance_marker: Default::default() }
 	}
 
 	/// Convert this [`TransactionPaymentRpc`] to an [`RpcModule`].
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
 		let mut module = RpcModule::new(self);
+
 		module.register_method::<RuntimeDispatchInfo<Balance>, _>("payment_queryInfo", |params, trx_payment| {
 			let (encoded_xt, at): (Bytes, Option<<Block as BlockT>::Hash>) = params.parse()?;
 

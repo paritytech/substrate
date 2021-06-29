@@ -123,6 +123,7 @@ pub fn create_full<C, P>(
 		deny_unsafe,
 	} = deps;
 
+	// TODO: (dp) remove
 	io.extend_with(
 		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
 	);
