@@ -20,7 +20,7 @@
 
 use sc_consensus_babe::{Epoch, authorship, Config};
 use futures::{FutureExt as _, TryFutureExt as _};
-use jsonrpsee_types::error::{Error as JsonRpseeError};
+use jsonrpsee_types::error::Error as JsonRpseeError;
 use jsonrpsee::RpcModule;
 
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};

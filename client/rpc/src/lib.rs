@@ -27,6 +27,7 @@ use rpc::futures::future::{Executor, ExecuteError, Future};
 use sp_core::traits::SpawnNamed;
 use std::sync::Arc;
 pub use sc_rpc_api::{DenyUnsafe, Metadata};
+// TODO: (dp) remove
 pub use rpc::IoHandlerExtension as RpcExtension;
 
 pub mod author;
