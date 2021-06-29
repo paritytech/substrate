@@ -54,7 +54,7 @@ pub use self::builder::{
 	spawn_tasks, build_network, build_offchain_workers,
 	BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
 	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
-	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
+	TFullCallExecutor, TLightCallExecutor,
 };
 pub use config::{
 	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
@@ -66,7 +66,6 @@ pub use sc_chain_spec::{
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
-pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
@@ -301,8 +300,8 @@ mod waiting {
 	impl Drop for HttpServer {
 		fn drop(&mut self) {
 			if let Some(mut server) = self.0.take() {
-				futures::executor::block_on(server.stop());
-				futures::executor::block_on(server.wait_for_stop());
+				let _ = futures::executor::block_on(server.stop());
+				let _ = futures::executor::block_on(server.wait_for_stop());
 			}
 		}
 	}
@@ -312,8 +311,8 @@ mod waiting {
 	impl Drop for WsServer {
 		fn drop(&mut self) {
 			if let Some(mut server) = self.0.take() {
-				futures::executor::block_on(server.stop());
-				futures::executor::block_on(server.wait_for_stop());
+				let _ = futures::executor::block_on(server.stop());
+				let _ = futures::executor::block_on(server.wait_for_stop());
 			}
 		}
 	}
@@ -356,8 +355,7 @@ where
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
 fn start_rpc_servers<
-	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
-	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+	H: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>
 >(
 	_: &Configuration,
 	_: H,
@@ -370,7 +368,7 @@ fn start_rpc_servers<
 /// the HTTP or WebSockets server).
 #[derive(Clone)]
 pub struct RpcSession {
-	metadata: sc_rpc::Metadata,
+	metadata: (),
 }
 
 impl RpcSession {
@@ -382,7 +380,7 @@ impl RpcSession {
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
 	pub fn new(sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
 		RpcSession {
-			metadata: sender.into(),
+			metadata: (),
 		}
 	}
 }

@@ -78,69 +78,6 @@ use sc_client_api::{
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 use jsonrpsee::RpcModule;
 
-/// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
-/// This is useful since at service definition time we don't know whether the
-/// specific interface where the RPC extension will be exposed is safe or not.
-/// This trait allows us to lazily build the RPC extension whenever we bind the
-/// service to an interface.
-// TODO: (dp) remove
-pub trait RpcExtensionBuilder {
-	/// The type of the RPC extension that will be built.
-	type Output: sc_rpc::RpcExtension<sc_rpc::Metadata>;
-
-	/// Returns an instance of the RPC extension for a particular `DenyUnsafe`
-	/// value, e.g. the RPC extension might not expose some unsafe methods.
-	fn build(
-		&self,
-		deny: sc_rpc::DenyUnsafe,
-		subscription_executor: SubscriptionTaskExecutor,
-	) -> Self::Output;
-}
-
-impl<F, R> RpcExtensionBuilder for F where
-	F: Fn(sc_rpc::DenyUnsafe, SubscriptionTaskExecutor) -> R,
-	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-{
-	type Output = R;
-
-	fn build(
-		&self,
-		deny: sc_rpc::DenyUnsafe,
-		subscription_executor: SubscriptionTaskExecutor,
-	) -> Self::Output {
-		(*self)(deny, subscription_executor)
-	}
-}
-
-/// A utility struct for implementing an `RpcExtensionBuilder` given a cloneable
-/// `RpcExtension`, the resulting builder will simply ignore the provided
-/// `DenyUnsafe` instance and return a static `RpcExtension` instance.
-// TODO: (dp) remove
-pub struct NoopRpcExtensionBuilder<R>(pub R);
-
-impl<R> RpcExtensionBuilder for NoopRpcExtensionBuilder<R> where
-	R: Clone + sc_rpc::RpcExtension<sc_rpc::Metadata>,
-{
-	type Output = R;
-
-	fn build(
-		&self,
-		_deny: sc_rpc::DenyUnsafe,
-		_subscription_executor: SubscriptionTaskExecutor,
-	) -> Self::Output {
-		self.0.clone()
-	}
-}
-
-impl<R> From<R> for NoopRpcExtensionBuilder<R> where
-	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-{
-	fn from(e: R) -> NoopRpcExtensionBuilder<R> {
-		NoopRpcExtensionBuilder(e)
-	}
-}
-
-
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExecDisp> = Client<
 	TFullBackend<TBl>,
@@ -502,7 +439,7 @@ pub fn new_client<E, Block, RA>(
 }
 
 /// Parameters to pass into `build`.
-pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
+pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, Backend> {
 	/// The service configuration.
 	pub config: Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
@@ -517,10 +454,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub on_demand: Option<Arc<OnDemand<TBl>>>,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
-	/// A RPC extension builder. Use `NoopRpcExtensionBuilder` if you just want to pass in the
-	/// extensions directly.
-	// TODO: (dp) remove before merge
-	pub rpc_extensions_builder: Box<dyn RpcExtensionBuilder<Output = TRpc> + Send>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
 	pub rpsee_builder: Box<dyn FnOnce(sc_rpc::DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 	/// An optional, shared remote blockchain instance. Used for light clients.
@@ -565,8 +498,8 @@ pub fn build_offchain_workers<TBl, TCl>(
 }
 
 /// Spawn the tasks that are required to run a node.
-pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
-	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
+pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
+	params: SpawnTasksParams<TBl, TCl, TExPool, TBackend>,
 ) -> Result<RpcHandlers, Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
@@ -583,7 +516,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> +
 			MallocSizeOfWasm + 'static,
-		TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>
 {
 	let SpawnTasksParams {
 		mut config,
@@ -593,8 +525,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		backend,
 		keystore,
 		transaction_pool,
-		// TODO: (dp) remove. this closure is where extra RPCs are passed in, e.g. grandpa.
-		rpc_extensions_builder: _,
 		rpsee_builder,
 		remote_blockchain,
 		network,

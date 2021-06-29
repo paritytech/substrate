@@ -95,12 +95,13 @@ pub struct FullDeps<C, P> {
 }
 
 /// A IO handler that uses all Full RPC extensions.
-pub type IoHandler = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
+pub type IoHandler = jsonrpc_core::IoHandler<()>;
 
 /// Instantiate all Full RPC extensions.
+// TODO(niklasad1): replace these.
 pub fn create_full<C, P>(
 	deps: FullDeps<C, P>,
-) -> jsonrpc_core::IoHandler<sc_rpc_api::Metadata> where
+) -> jsonrpc_core::IoHandler<()> where
 	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + AuxStore +
 		HeaderMetadata<Block, Error=BlockChainError> + Sync + Send + 'static,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
@@ -139,14 +140,14 @@ pub fn create_full<C, P>(
 }
 
 /// Instantiate all Light RPC extensions.
-pub fn create_light<C, P, M, F>(
+// TODO(niklasad1): replace these.
+pub fn create_light<C, P, F>(
 	deps: LightDeps<C, F, P>,
-) -> jsonrpc_core::IoHandler<M> where
+) -> jsonrpc_core::IoHandler<()> where
 	C: sp_blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	F: sc_client_api::light::Fetcher<Block> + 'static,
 	P: TransactionPool + 'static,
-	M: jsonrpc_core::Metadata + Default,
 {
 	use substrate_frame_rpc_system::{LightSystem, SystemApi};
 

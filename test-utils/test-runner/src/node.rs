@@ -180,7 +180,6 @@ impl<T: ChainInfo> Node<T> {
 				keystore,
 				on_demand: None,
 				transaction_pool: transaction_pool.clone(),
-				rpc_extensions_builder: Box::new(move |_, _| jsonrpc_core::IoHandler::default()),
 				rpsee_builder: Box::new(|_, _| jsonrpsee_ws_server::RpcModule::new(())),
 				remote_blockchain: None,
 				network,
