@@ -428,7 +428,8 @@ pub mod pallet {
 		///
 		/// NOTE: If `schedule1_index == schedule2_index` this is a no-op.
 		/// NOTE: This will unlock all schedules through the current block prior to merging.
-		/// NOTE: If both schedules have ended by the current block, no new schedule will be created.
+		/// NOTE: If both schedules have ended by the current block, no new schedule will be created
+		/// and both will be removed.
 		///
 		/// Merged schedule attributes:
 		/// - `starting_block`: `MAX(schedule1.starting_block, scheduled2.starting_block, current_block)`.
