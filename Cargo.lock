@@ -8137,6 +8137,7 @@ dependencies = [
 name = "sc-sync-state-rpc"
 version = "0.9.0"
 dependencies = [
+ "anyhow",
  "jsonrpsee",
  "jsonrpsee-types",
  "sc-chain-spec",
@@ -8145,7 +8146,6 @@ dependencies = [
  "sc-consensus-epochs",
  "sc-finality-grandpa",
  "sc-rpc-api",
- "serde_json",
  "sp-blockchain",
  "sp-runtime",
  "thiserror",

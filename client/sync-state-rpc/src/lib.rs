@@ -25,7 +25,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_blockchain::HeaderBackend;
 use std::sync::Arc;
 use sp_runtime::generic::BlockId;
-use jsonrpsee_types::error::Error as JsonRpseeError;
+use jsonrpsee_types::error::{Error as JsonRpseeError, CallError};
 use jsonrpsee::RpcModule;
 
 type SharedAuthoritySet<TBl> =
@@ -40,35 +40,6 @@ enum Error<Block: BlockT> {
 
 	#[error("Failed to load the block weight for block {0:?}")]
 	LoadingBlockWeightFailed(<Block as BlockT>::Hash),
-}
-
-// TODO: (dp) we should re-export CallError from the `jsonrpsee` façade crate. And maybe add a `From` impl for `serde_json::Error` as well?
-impl<Block: BlockT> From<Error<Block>> for jsonrpsee::types::error::CallError {
-	fn from(error: Error<Block>) -> Self {
-		Self::Failed(Box::new(error))
-	}
-}
-
-// TODO: (dp) `sc_chain_spec::ChainSpec::as_json` returns `Result<String, String>` which is super annoying to work with
-// (our CallError doesn't have something that can take a String, which is good imo) but seems to be done on purpose, so
-// not going to mess with it. This here is a super-hack though and if we do need it, it has to be moved somewhere where
-// it makes sense.
-/// Wraps an owned `String` and implements the `Error` trait for it.
-#[derive(Debug)]
-struct StringError {
-    error: String
-}
-
-impl std::error::Error for StringError {
-    fn description(&self) -> &str {
-        &self.error
-    }
-}
-
-impl std::fmt::Display for StringError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Error: {}", self.error)
-    }
 }
 
 /// An api for sync state RPC calls.
@@ -103,19 +74,14 @@ where
 		let mut module = RpcModule::new(self);
 
 		// Returns the json-serialized chainspec running the node, with a sync state.
-		module.register_method::<jsonrpsee::types::JsonValue, _>("sync_state_genSyncSpec", |params, sync_state| {
+		module.register_method("sync_state_genSyncSpec", |params, sync_state| {
 			sync_state.deny_unsafe.check_if_safe()?;
 
 			let raw = params.one()?;
+			let current_sync_state = sync_state.build_sync_state().map_err(|e| CallError::Failed(Box::new(e)))?;
 			let mut chain_spec = sync_state.chain_spec.cloned_box();
-			let current_sync_state = sync_state.build_sync_state()?;
 			chain_spec.set_light_sync_state(current_sync_state.to_serializable());
-			let string = chain_spec.as_json(raw).map_err(|error| {
-				let string_err = StringError { error };
-				jsonrpsee::types::error::CallError::Failed(Box::new(string_err))
-			})?;
-
-			serde_json::from_str(&string).map_err(|json_err| jsonrpsee::types::error::CallError::Failed(Box::new(json_err)))
+			chain_spec.as_json(raw).map_err(|e| CallError::Failed(anyhow::anyhow!(e).into()))
 		})?;
 		Ok(module)
 	}
