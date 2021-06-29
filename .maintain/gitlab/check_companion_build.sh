@@ -9,7 +9,7 @@
 #
 # $ORGANISATION and $REPO are set using $1 and $2. You can also specify a custom
 # build command with $3
-# The Every argument after $3 is for specifying *additional* dependencies this
+# Every argument after $3 is for specifying *additional* dependencies this
 # project has that depend on substrate, which might also have companion PRs.
 
 # Example: Cumulus relies on both substrate and polkadot. If this substrate PR
@@ -88,7 +88,8 @@ then
   fi
 
   # If this repo has any additional dependencies, we should check whether they
-  # are mentioned as companions as well, and patch to use that if so
+  # are mentioned as companions as well. If they are, we patch this repo to
+  # use that companion build as well. See example at top of this script
   # Note: Will only work with repos supported by diener
   declare -A diener_commands
   diener_commands=()
@@ -104,10 +105,10 @@ then
       git -C "$dep" fetch origin "refs/pull/${dep_companion}/head:pr/${dep_companion}"
       git -C "$dep" checkout "pr/${dep_companion}"
       git -C "$dep" merge origin/master
-      diener patch --crates-to-patch "$dep" "${diener_commands[$dep]}" --path "Cargo.toml"
-      # then tell this version of the dependency to use this version of substrate
-      # bit hacky at the moment since it assums any dependency will also depend on substrate
+      # Tell this dependency to use the version of substrate in this PR
       diener patch --crates-to-patch "$SUBSTRATE_DIR" --substrate --path "$dep/Cargo.toml"
+      # then we tell this repository to point at our locally cloned dependency
+      diener patch --crates-to-patch "$dep" "${diener_commands[$dep]}" --path "Cargo.toml"
     fi
 
   done
@@ -116,6 +117,7 @@ else
   boldprint "this is not a pull request - building ${REPO}:master"
 fi
 
-diener patch --crates-to-patch ".." --substrate --path "Cargo.toml"
 # Test pr or master branch with this Substrate commit.
+diener patch --crates-to-patch ".." --substrate --path "Cargo.toml"
+
 eval "$BUILDSTRING"
