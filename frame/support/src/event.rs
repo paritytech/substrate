@@ -471,7 +471,7 @@ macro_rules! impl_outer_event {
 				}
 			)*
 		}
-		$crate::__impl_outer_event_json_metadata!(
+		$crate::__impl_outer_event_metadata!(
 			$runtime;
 			$name;
 			$(
@@ -485,15 +485,14 @@ macro_rules! impl_outer_event {
 
 #[macro_export]
 #[doc(hidden)]
-// todo: [AJ] rename/refactor?
-macro_rules! __impl_outer_event_json_metadata {
+macro_rules! __impl_outer_event_metadata {
 	(
 		$runtime:ident;
 		$event_name:ident;
 		$( $module_name:ident::Event < $( $generic_params:path ),* > $( $instance:ident )?, )*;
 	) => {
 		impl $runtime {
-			$crate::__impl_outer_event_json_metadata! {
+			$crate::__impl_outer_event_metadata! {
 				@DECL_MODULE_EVENT_FNS
 				$( $module_name < $( $generic_params ),* > $( $instance )? ; )*
 			}
