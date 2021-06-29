@@ -457,23 +457,18 @@ pub mod pallet {
 			schedule1_index: u32,
 			schedule2_index: u32,
 		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
 			if schedule1_index == schedule2_index {
 				return Ok(());
 			};
-			let who = ensure_signed(origin)?;
 			let schedule1_index = schedule1_index as usize;
 			let schedule2_index = schedule2_index as usize;
 			let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
-			let len = vesting.len();
-			ensure!(
-				schedule1_index < len && schedule2_index < len,
-				Error::<T>::ScheduleIndexOutOfBounds
-			);
 
 			// The schedule index is based off of the schedule ordering prior to filtering out any
 			// schedules that may be ending at this block.
-			let schedule1 = vesting[schedule1_index];
-			let schedule2 = vesting[schedule2_index];
+			let schedule1 = *vesting.get(schedule1_index).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
+			let schedule2 = *vesting.get(schedule2_index).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
 			let filter = Filter::Two((schedule1_index, schedule2_index));
 
 			// The length of vesting decreases by 2 here since we filter out 2 schedules. Thus we know
