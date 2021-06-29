@@ -2412,9 +2412,7 @@ pub mod pallet {
 		/// among the nominator/validator set once the snapshot is prepared for the election.
 		///
 		/// Anyone can call this function about any stash.
-		//
-		// TODO: benchmark
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::rebag())]
 		pub fn rebag(
 			origin: OriginFor<T>,
 			stash: AccountIdOf<T>,
