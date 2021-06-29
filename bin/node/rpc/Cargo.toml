@@ -12,8 +12,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 jsonrpc-core = "15.1.0"
-jsonrpsee-ws-server = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-jsonrpsee-error-trait" }
-jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-jsonrpsee-error-trait" }
+jsonrpsee-ws-server = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
+jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 pallet-contracts-rpc = { version = "3.0.0", path = "../../../frame/contracts/rpc/" }
 pallet-mmr-rpc = { version = "3.0.0", path = "../../../frame/merkle-mountain-range/rpc/" }
