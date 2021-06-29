@@ -80,7 +80,7 @@ sc-authority-discovery = { version = "0.9.0",  path = "../../../client/authority
 sc-finality-grandpa-warp-sync = { version = "0.9.0", path = "../../../client/finality-grandpa-warp-sync", optional = true }
 
 sc-finality-grandpa-rpc = { version = "0.9.0", path = "../../../client/finality-grandpa/rpc" }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "na-jsonrpsee-error-trait", features = ["server"] }
 
 # frame dependencies
 pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }

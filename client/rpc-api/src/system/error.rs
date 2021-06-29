@@ -19,7 +19,7 @@
 //! System RPC module errors.
 
 use crate::system::helpers::Health;
-use jsonrpc_core as rpc;
+use jsonrpsee_types::{to_json_raw_value, error::CallError};
 use serde::Serialize;
 
 /// System RPC Result type.
@@ -38,19 +38,19 @@ pub enum Error {
 impl std::error::Error for Error {}
 
 /// Base code for all system errors.
-const BASE_ERROR: i64 = 2000;
+const BASE_ERROR: i32 = 2000;
 
-impl From<Error> for rpc::Error {
+impl From<Error> for CallError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::NotHealthy(ref h) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: format!("{}", e),
-				data: serde_json::to_value(h).ok(),
+			Error::NotHealthy(ref h) => Self::Custom {
+				code: BASE_ERROR + 1,
+				message: e.to_string(),
+				data: to_json_raw_value(&h).ok(),
 			},
-			Error::MalformattedPeerArg(ref e) => rpc::Error {
-				code :rpc::ErrorCode::ServerError(BASE_ERROR + 2),
-				message: e.clone(),
+			Error::MalformattedPeerArg(e) => Self::Custom {
+				code: BASE_ERROR + 2,
+				message: e,
 				data: None,
 			}
 		}
