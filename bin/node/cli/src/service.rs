@@ -38,6 +38,8 @@ use sc_consensus_babe::SlotProportion;
 use jsonrpsee::RpcModule;
 use sc_finality_grandpa_rpc::GrandpaRpc;
 use sc_consensus_babe_rpc::BabeRpc;
+use sc_sync_state_rpc::SyncStateRpc;
+use pallet_transaction_payment_rpc::TransactionPaymentRpc;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -152,6 +154,9 @@ pub fn new_partial(
 	let sync_keystore = keystore_container.sync_keystore().clone();
 	let client2 = client.clone();
 	let babe_link2 = babe_link.clone();
+	// SyncState
+	let chain_spec = config.chain_spec.cloned_box();
+	let shared_epoch_changes = babe_link.epoch_changes().clone();
 
 	let rpsee_builder = move |deny_unsafe, executor| -> RpcModule<()> {
 		let grandpa_rpc = GrandpaRpc::new(
@@ -161,22 +166,32 @@ pub fn new_partial(
 			justification_stream,
 			grandpa::FinalityProofProvider::new_for_service(
 				backend2,
-				Some(shared_authority_set),
+				Some(shared_authority_set.clone()),
 			),
 		).into_rpc_module().expect("TODO: error handling");
 
 		let babe_rpc = BabeRpc::new(
-			client2,
+			client2.clone(),
 			babe_link.epoch_changes().clone(),
 			sync_keystore,
 			babe_link.config().clone(),
 			select_chain2,
 			deny_unsafe,
 		).into_rpc_module().expect("TODO: error handling");
+		let sync_state_rpc = SyncStateRpc::new(
+			chain_spec,
+			client2.clone(),
+			shared_authority_set.clone(),
+			shared_epoch_changes,
+			deny_unsafe,
+		).into_rpc_module().expect("TODO: error handling");
+		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
 		// TODO: add other rpc modules here
 		let mut module = RpcModule::new(());
 		module.merge(grandpa_rpc).expect("TODO: error handling");
 		module.merge(babe_rpc).expect("TODO: error handling");
+		module.merge(sync_state_rpc).expect("TODO: error handling");
+		module.merge(transaction_payment_rpc).expect("TODO: error handling");
 		module
 	};
 

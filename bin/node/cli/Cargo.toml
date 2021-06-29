@@ -35,6 +35,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "2.0.0" }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
 serde = { version = "1.0.102", features = ["derive"] }
 futures = { version = "0.3.9", features = ["compat"] }
 hex-literal = "0.3.1"
@@ -78,9 +79,8 @@ sc-tracing = { version = "3.0.0", path = "../../../client/tracing" }
 sc-telemetry = { version = "3.0.0", path = "../../../client/telemetry" }
 sc-authority-discovery = { version = "0.9.0",  path = "../../../client/authority-discovery" }
 sc-finality-grandpa-warp-sync = { version = "0.9.0", path = "../../../client/finality-grandpa-warp-sync", optional = true }
-
 sc-finality-grandpa-rpc = { version = "0.9.0", path = "../../../client/finality-grandpa/rpc" }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
+sc-sync-state-rpc = { version = "0.9.0", path = "../../../client/sync-state-rpc" }
 
 # frame dependencies
 pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
@@ -94,6 +94,7 @@ pallet-im-online = { version = "3.0.0", default-features = false, path = "../../
 pallet-authority-discovery = { version = "3.0.0", path = "../../../frame/authority-discovery" }
 pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
 pallet-grandpa = { version = "3.1.0", path = "../../../frame/grandpa" }
+pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/transaction-payment/rpc/" }
 
 # node-specific dependencies
 node-runtime = { version = "2.0.0", path = "../runtime" }
