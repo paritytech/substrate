@@ -1,0 +1,39 @@
+name: Run tests with latest version of DDC Smart Contract
+on:
+  repository_dispatch:
+    types: DDC_SMART_CONTRACT_VERSION_TRIGGER
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@v3
+        with:
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+      - name: Free space
+        run: df -h
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - name: Run tests with latest version of smart contract
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          DDC_SMART_CONTRACT_VERSION: ${{ github.event.client_payload.DDC_SMART_CONTRACT_VERSION }}
+        run: |
+          echo "DDC_SMART_CONTRACT_VERSION::$DDC_SMART_CONTRACT_VERSION"
+          docker build --build-arg ECR_REGISTRY=$ECR_REGISTRY --build-arg DDC_SMART_CONTRACT_VERSION=$DDC_SMART_CONTRACT_VERSION -f Dockerfile.tests -t pos-network-node:test .
+      - name: Free space
+        run: df -h
