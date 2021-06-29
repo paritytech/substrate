@@ -64,7 +64,7 @@ pub struct BenchmarkResults {
 	pub writes: u32,
 	pub repeat_writes: u32,
 	pub proof_size: u32,
-	pub keys: Vec<(Vec<u8>, u32, u32)>,
+	pub keys: Vec<(Vec<u8>, u32, u32, bool)>,
 }
 
 /// Configuration used to setup and run runtime benchmarks.
@@ -167,7 +167,7 @@ pub trait Benchmarking {
 		self.set_whitelist(whitelist);
 	}
 
-	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32)> {
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
 		self.get_read_and_written_keys()
 	}
 

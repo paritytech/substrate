@@ -750,7 +750,7 @@ where
 		self.backend.proof_size()
 	}
 
-	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32)> {
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
 		self.backend.get_read_and_written_keys()
 	}
 }

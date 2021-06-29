@@ -540,9 +540,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		*self.whitelist.borrow_mut() = new;
 	}
 
-	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32)> {
-		self.main_key_tracker.borrow().iter().map(|(key, value)| -> (Vec<u8>, u32, u32) {
-			(key.to_vec(), value.reads, value.writes)
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
+		self.main_key_tracker.borrow().iter().map(|(key, value)| -> (Vec<u8>, u32, u32, bool) {
+			(key.to_vec(), value.reads, value.writes, value.whitelisted)
 		}).collect::<Vec<_>>()
 	}
 

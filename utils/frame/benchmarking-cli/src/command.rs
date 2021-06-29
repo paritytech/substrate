@@ -203,15 +203,16 @@ impl CliConfiguration for BenchmarkCmd {
 	}
 }
 
-fn match_keys(keys: &[(Vec<u8>, u32, u32)], storage_info: &HashMap<[u8; 32], &StorageInfo>) {
-	println!("info: {:x?}", storage_info);
+fn match_keys(keys: &[(Vec<u8>, u32, u32, bool)], storage_info: &HashMap<[u8; 32], &StorageInfo>) {
 	for key in keys {
-		println!("key: {:x?}", &key.0);
 		if let Some(key_info) = storage_info.get(&key.0[0..32]) {
 			println!(
-				"Match! {} {}",
+				"Match! {} {} (r:{} w:{}, {})",
 				String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
 				String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
+				key.1,
+				key.2,
+				key.3,
 			)
 		}
 	}

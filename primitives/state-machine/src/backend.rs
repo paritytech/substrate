@@ -269,7 +269,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// Extend storage info for benchmarking db
-	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32)> {
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
 		unimplemented!()
 	}
 }
