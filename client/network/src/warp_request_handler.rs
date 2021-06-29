@@ -26,10 +26,8 @@ use sp_finality_grandpa::{SetId, AuthorityList};
 use std::time::Duration;
 use std::sync::Arc;
 
-/// Scale-encided warp sync proof response
+/// Scale-encoded warp sync proof response.
 pub struct EncodedProof(pub Vec<u8>);
-/// Scale-encided warp sync proof
-pub struct EncodedJustification(pub Vec<u8>);
 
 /// Warp sync request
 #[derive(Encode, Decode, Debug)]
@@ -45,7 +43,7 @@ pub enum VerificationResult<Block: BlockT> {
 	/// Proof is valid, but the target was not reached.
 	Partial(SetId, AuthorityList, Block::Hash),
 	/// Target finality is proved.
-	Complete(SetId, AuthorityList),
+	Complete(SetId, AuthorityList, Block::Header),
 }
 
 /// Warp sync backend. Handles retrieveing and verifying warp sync proofs.
@@ -58,9 +56,9 @@ pub trait WarpSyncProvider<B: BlockT>: Send + Sync {
 		proof: &EncodedProof,
 		set_id: SetId,
 		authorities: AuthorityList,
-		target_header: &B::Header,
-		target_justification: &EncodedJustification,
 	) -> Result<VerificationResult<B>, String>;
+	/// Get current list of authorities. This is supposed to be genesis authorities when starting sync.
+	fn current_authorities(&self) -> AuthorityList;
 }
 
 /// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing incoming requests.

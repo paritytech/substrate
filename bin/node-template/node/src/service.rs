@@ -148,7 +148,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	}
 
 	config.network.extra_sets.push(sc_finality_grandpa::grandpa_peers_set_config());
-	let warp_sync = Arc::new(sc_finality_grandpa::proof::NetworkProvider::new(
+	let warp_sync = Arc::new(sc_finality_grandpa::warp_proof::NetworkProvider::new(
 		backend.clone(),
 		grandpa_link.shared_authority_set().clone(),
 	));
@@ -376,7 +376,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		},
 	)?;
 
-	let warp_sync = Arc::new(sc_finality_grandpa::proof::NetworkProvider::new(
+	let warp_sync = Arc::new(sc_finality_grandpa::warp_proof::NetworkProvider::new(
 		backend.clone(),
 		grandpa_link.shared_authority_set().clone(),
 	));

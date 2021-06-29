@@ -297,8 +297,6 @@ pub enum PeerSyncState<B: BlockT> {
 	DownloadingJustification(B::Hash),
 	/// Downloading state.
 	DownloadingState,
-	/// Downloading warp block.
-	DownloadingWarpBlock,
 	/// Downloading warp proof.
 	DownloadingWarpProof,
 }
@@ -327,6 +325,40 @@ pub struct StateDownloadProgress {
 	pub size: u64,
 }
 
+
+/// Reported warp sync phase.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum WarpSyncPhase {
+	/// Waiting for peers to connect.
+	AwaitingPeers,
+	/// Downloading and verifying grandpa warp proofs.
+	DownloadingWarpProofs,
+	/// Downloading state data.
+	DownloadingState,
+	/// Importing state.
+	ImportingState,
+}
+
+impl fmt::Display for WarpSyncPhase {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			WarpSyncPhase::AwaitingPeers => write!(f, "Waiting for peers"),
+			WarpSyncPhase::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
+			WarpSyncPhase::DownloadingState => write!(f, "Downloading state"),
+			WarpSyncPhase::ImportingState => write!(f, "Importing state"),
+		}
+	}
+}
+
+/// Reported warp sync progress.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct WarpSyncProgress {
+	/// Estimated download percentage.
+	pub phase: WarpSyncPhase,
+	/// Total bytes downloaded so far.
+	pub total_bytes: u64,
+}
+
 /// Syncing status and statistics.
 #[derive(Clone)]
 pub struct Status<B: BlockT> {
@@ -341,7 +373,7 @@ pub struct Status<B: BlockT> {
 	/// State sync status in progress, if any.
 	pub state_sync: Option<StateDownloadProgress>,
 	/// Warp sync in progress, if any.
-	pub warp_sync: Option<StateDownloadProgress>,
+	pub warp_sync: Option<WarpSyncProgress>,
 }
 
 /// A peer did not behave as expected and should be reported.
@@ -363,8 +395,6 @@ pub enum OnBlockData<B: BlockT> {
 	Import(BlockOrigin, Vec<IncomingBlock<B>>),
 	/// A new block request needs to be made to the given peer.
 	Request(PeerId, BlockRequest<B>),
-	/// Block is processed internally and no furter action is requried.
-	Ignore,
 }
 
 impl<B: BlockT> OnBlockData<B> {
@@ -391,7 +421,7 @@ pub enum OnStateData<B: BlockT> {
 /// Result of [`ChainSync::on_warp_sync_data`].
 #[derive(Debug)]
 pub enum OnWarpSyncData<B: BlockT> {
-	/// The block and state that should be imported.
+	/// Warp proof request is issued.
 	WarpProofRequest(PeerId, warp::WarpProofRequest<B>),
 	/// A new state request needs to be made to the given peer.
 	StateRequest(PeerId, StateRequest)
@@ -583,13 +613,21 @@ impl<B: BlockT> ChainSync<B> {
 				SyncState::Idle
 			};
 
+		let warp_sync_progress = match (&self.warp_sync, &self.mode) {
+			(None, SyncMode::Warp) => Some(WarpSyncProgress {
+				phase: WarpSyncPhase::AwaitingPeers,
+				total_bytes: 0
+			}),
+			(Some(sync), _) => Some(sync.progress()),
+			_ => None,
+		};
 		Status {
 			state: sync_state,
 			best_seen_block: best_seen,
 			num_peers: self.peers.len() as u32,
 			queued_blocks: self.queue_blocks.len() as u32,
 			state_sync: self.state_sync.as_ref().map(|s| s.progress()),
-			warp_sync: self.warp_sync.as_ref().map(|s| s.progress()),
+			warp_sync: warp_sync_progress,
 		}
 	}
 
@@ -648,14 +686,9 @@ impl<B: BlockT> ChainSync<B> {
 				if let SyncMode::Warp = &self.mode {
 					// TODO: wait for 3 peers
 					if self.warp_sync.is_none() {
-						let number = best_number - 16u32.into();
-						log::debug!(
-							target: "sync",
-							"Starting warp state sync for #{}",
-							number,
-						);
+						log::debug!(target: "sync", "Starting warp state sync.");
 						if let Some(provider) = &self.warp_sync_provider {
-							self.warp_sync = Some(WarpSync::new(self.client.clone(), provider.clone(), number));
+							self.warp_sync = Some(WarpSync::new(self.client.clone(), provider.clone()));
 						}
 					}
 				}
@@ -820,45 +853,12 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Get an iterator over all block requests of all peers.
 	pub fn block_requests(&mut self) -> impl Iterator<Item = (&PeerId, BlockRequest<B>)> + '_ {
-		if let Some(warp_sync) = &self.warp_sync {
-			if self.peers.iter().any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpBlock) {
-				// Only one pending warp request is allowed.
-				return Either::Left(Either::Left(std::iter::empty()))
-			}
-			if let Some(request) = warp_sync.next_block_request() {
-				// Find a peer that can handle the request.
-				let peer = self.peers.iter_mut().find_map(move |(id, peer)| {
-					if !peer.state.is_available() {
-						return None
-					}
-
-					if peer.best_number >= warp_sync.target_block_number() {
-						peer.state = PeerSyncState::DownloadingWarpBlock;
-						Some((id, peer.best_number))
-					} else {
-						None
-					}
-				});
-				if let Some((peer, best_num)) = peer {
-					trace!(
-						target: "sync",
-						"New warp block request for {}, (best:{}, target:{}) {:?}",
-						peer,
-						best_num,
-						warp_sync.target_block_number(),
-						request,
-					);
-					return Either::Left(Either::Right(std::iter::once((peer, request))));
-				}
-			}
-			return Either::Left(Either::Left(std::iter::empty()))
-		}
-		if self.pending_requests.is_empty() || self.state_sync.is_some() {
-			return Either::Left(Either::Left(std::iter::empty()))
+		if self.pending_requests.is_empty() || self.state_sync.is_some() || self.warp_sync.is_some() {
+			return Either::Left(std::iter::empty())
 		}
 		if self.queue_blocks.len() > MAX_IMPORTING_BLOCKS {
 			trace!(target: "sync", "Too many blocks in the queue.");
-			return Either::Left(Either::Left(std::iter::empty()))
+			return Either::Left(std::iter::empty())
 		}
 		let major_sync = self.status().state == SyncState::Downloading;
 		let attrs = self.required_block_attributes();
@@ -1011,19 +1011,6 @@ impl<B: BlockT> ChainSync<B> {
 		request: Option<BlockRequest<B>>,
 		response: BlockResponse<B>
 	) -> Result<OnBlockData<B>, BadPeer> {
-		if let Some(sync) = &mut self.warp_sync {
-			if let Some(peer) = self.peers.get_mut(who) {
-				peer.state = PeerSyncState::Available;
-			}
-			let result = sync.import_block(response);
-			return match result {
-				warp::WarpBlockImportResult::WarpProofRequest(_) => {
-					trace!(target: "sync", "Successfully imported warp header from {}", who);
-					Ok(OnBlockData::Ignore)
-				},
-				warp::WarpBlockImportResult::BadResponse => Err(BadPeer(who.clone(), rep::NO_BLOCK)),
-			}
-		}
 		self.downloaded_blocks += response.blocks.len();
 		let new_blocks: Vec<IncomingBlock<B>> =
 			if let Some(peer) = self.peers.get_mut(who) {
@@ -1179,7 +1166,6 @@ impl<B: BlockT> ChainSync<B> {
 						| PeerSyncState::DownloadingJustification(..)
 						| PeerSyncState::DownloadingState
 						| PeerSyncState::DownloadingWarpProof
-						| PeerSyncState::DownloadingWarpBlock
 							=> Vec::new()
 					}
 				} else {
@@ -1470,7 +1456,7 @@ impl<B: BlockT> ChainSync<B> {
 						info!(
 							target: "sync",
 							"Warp sync is complete ({} MiB), restarting block sync.",
-							self.warp_sync.as_ref().map_or(0, |s| s.progress().size / (1024 * 1024)),
+							self.warp_sync.as_ref().map_or(0, |s| s.progress().total_bytes / (1024 * 1024)),
 						);
 						self.warp_sync = None;
 						self.mode = SyncMode::Full;

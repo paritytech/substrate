@@ -462,6 +462,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			total_bytes_inbound: self.total_bytes_inbound(),
 			total_bytes_outbound: self.total_bytes_outbound(),
 			state_sync: status.state_sync,
+			warp_sync: status.warp_sync,
 		}
 	}
 

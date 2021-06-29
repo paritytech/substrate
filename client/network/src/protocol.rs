@@ -674,7 +674,6 @@ impl<B: BlockT> Protocol<B> {
 				Ok(sync::OnBlockData::Request(peer, req)) => {
 					self.prepare_block_request(peer, req)
 				}
-				Ok(sync::OnBlockData::Ignore) => CustomMessageOutcome::None,
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -1012,7 +1011,6 @@ impl<B: BlockT> Protocol<B> {
 			Ok(sync::OnBlockData::Request(peer, req)) => {
 				self.prepare_block_request(peer, req)
 			},
-			Ok(sync::OnBlockData::Ignore) => CustomMessageOutcome::None,
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);

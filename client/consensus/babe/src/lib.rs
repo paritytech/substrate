@@ -1309,7 +1309,7 @@ impl<Block, Client, Inner> BabeBlockImport<Block, Client, Inner> where
 		let number = *block.header.number();
 
 		block.fork_choice = Some(ForkChoiceStrategy::Custom(true));
-		// Reset block weight
+		// Reset block weight.
 		aux_schema::write_block_weight(
 			hash,
 			0,

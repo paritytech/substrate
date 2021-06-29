@@ -642,7 +642,7 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		&self.inner
 	}
 
-	/// Reset to explicit specified pair of epochs.
+	/// Reset to a specified pair of epochs, as if they were announced at blocks `parent_hash` and `hash`.
 	pub fn reset(&mut self, parent_hash: Hash, hash: Hash, number: Number, current: E, next: E) {
 		self.inner = ForkTree::new();
 		self.epochs.clear();

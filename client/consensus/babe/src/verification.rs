@@ -219,7 +219,6 @@ fn check_secondary_plain_header<B: BlockT>(
 
 	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 
-	println!("CHECKING EPOCH {}, slot={}", epoch.epoch_index, pre_digest.slot);
 	if expected_author != author {
 		return Err(Error::InvalidAuthor(expected_author.clone(), author.clone()));
 	}
@@ -248,7 +247,6 @@ fn check_secondary_vrf_header<B: BlockT>(
 
 	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 
-	println!("CHECKING SEC EPOCH {}, slot={}", epoch.epoch_index, pre_digest.slot);
 	if expected_author != author {
 		return Err(Error::InvalidAuthor(expected_author.clone(), author.clone()));
 	}

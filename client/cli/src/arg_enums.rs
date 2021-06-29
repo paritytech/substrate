@@ -243,7 +243,7 @@ arg_enum! {
 		Fast,
 		// Download blocks without executing them. Download latest state without proofs.
 		FastUnsafe,
-		// Download the latest state
+		// Prove finality and download the latest state.
 		Warp,
 	}
 }

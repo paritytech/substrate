@@ -455,6 +455,7 @@ where
 		}
 	}
 
+	/// Import whole new state and reset authority set.
 	async fn import_state(
 		&mut self,
 		mut block: BlockImportParams<Block, TransactionFor<Client, Block>>,

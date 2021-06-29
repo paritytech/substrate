@@ -1525,6 +1525,7 @@ impl<Block: BlockT> Backend<Block> {
 				let cache = operation.old_state.into_cache_changes();
 
 				if finalized {
+					// TODO: ensure best chain contains this block.
 					self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
 					self.note_finalized(
 						&mut transaction,
