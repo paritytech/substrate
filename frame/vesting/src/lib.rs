@@ -66,6 +66,7 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 type MaxLocksOf<T> = <<T as Config>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
+const LOG_TARGET: &'static str = "runtime::vesting";
 
 // Module to enforce private fields on `VestingInfo`
 mod vesting_info {
@@ -471,8 +472,14 @@ pub mod pallet {
 			let now = <frame_system::Pallet<T>>::block_number();
 			if let Some(s) = Self::merge_vesting_info(now, schedule1, schedule2) {
 				let mut vesting = maybe_vesting.unwrap_or_default();
-				// It shouldn't be possible for this to fail because we removed 2 schedules above.
-				ensure!(vesting.try_push(s).is_ok(), Error::<T>::AtMaxVestingSchedules);
+				if let Err(_) = vesting.try_push(s) {
+					// It shouldn't be possible for this to fail because we removed 2 schedules above.
+					log::warn!(
+						target: LOG_TARGET,
+						"faulty logic led to attempting to add too many vesting schedules",
+					);
+					return Err(Error::<T>::AtMaxVestingSchedules.into());
+				}
 				Self::deposit_event(Event::<T>::VestingMergeSuccess(
 					s.locked(),
 					s.per_block(),
