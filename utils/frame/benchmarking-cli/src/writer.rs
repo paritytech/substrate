@@ -26,8 +26,11 @@ use serde::Serialize;
 use inflector::Inflector;
 
 use crate::BenchmarkCmd;
-use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis, AnalysisChoice, RegressionModel};
+use frame_benchmarking::{
+	BenchmarkBatch, BenchmarkSelector, Analysis, AnalysisChoice, RegressionModel, BenchmarkResults,
+};
 use sp_runtime::traits::Zero;
+use frame_support::traits::StorageInfo;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const TEMPLATE: &str = include_str!("./template.hbs");
@@ -109,6 +112,7 @@ fn io_error(s: &str) -> std::io::Error {
 // ```
 fn map_results(
 	batches: &[BenchmarkBatch],
+	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
@@ -124,7 +128,7 @@ fn map_results(
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
-		let benchmark_data = get_benchmark_data(batch, analysis_choice);
+		let benchmark_data = get_benchmark_data(batch, storage_info, analysis_choice);
 		pallet_benchmarks.push(benchmark_data);
 
 		// Check if this is the end of the iterator
@@ -158,10 +162,11 @@ fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item=u128> +
 // Analyze and return the relevant results for a given benchmark.
 fn get_benchmark_data(
 	batch: &BenchmarkBatch,
+	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> BenchmarkData {
 	// You can use this to put any additional comments with the benchmarking output.
-	let comments = Vec::<String>::new();
+	let mut comments = Vec::<String>::new();
 
 	// Analyze benchmarks to get the linear regression.
 	let analysis_function = match analysis_choice {
@@ -234,7 +239,7 @@ fn get_benchmark_data(
 		.collect::<Vec<_>>();
 
 	// We add additional comments showing which storage items were touched.
-	// TODO
+	add_storage_comments(&mut comments, &batch.results, storage_info);
 
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
@@ -252,6 +257,7 @@ fn get_benchmark_data(
 // Create weight file from benchmark data and Handlebars template.
 pub fn write_results(
 	batches: &[BenchmarkBatch],
+	storage_info: &[StorageInfo],
 	path: &PathBuf,
 	cmd: &BenchmarkCmd,
 ) -> Result<(), std::io::Error> {
@@ -306,7 +312,7 @@ pub fn write_results(
 	handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
 	// Organize results by pallet into a JSON map
-	let all_results = map_results(batches, &analysis_choice)?;
+	let all_results = map_results(batches, storage_info, &analysis_choice)?;
 	for ((pallet, instance), results) in all_results.iter() {
 		let mut file_path = path.clone();
 		// If a user only specified a directory...
@@ -338,6 +344,35 @@ pub fn write_results(
 			.map_err(|e| io_error(&e.to_string()))?;
 	}
 	Ok(())
+}
+
+fn add_storage_comments(
+	comments: &mut Vec<String>,
+	results: &[BenchmarkResults],
+	storage_info: &[StorageInfo],
+) {
+	let mut storage_info_map = HashMap::new();
+	storage_info.iter().for_each(|info| {
+		storage_info_map.insert(info.prefix, info);
+	});
+
+	for result in results {
+		for key in &result.keys {
+			// Check if we have knowledge of this key, and remove it from the hashmap
+			// so we only make a comment on it once.
+			if let Some(key_info) = storage_info_map.remove(&key.0[0..32]) {
+				let comment = format!(
+					"Storage: {} {} (r:{} w:{}, {})",
+					String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
+					String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
+					key.1,
+					key.2,
+					key.3,
+				);
+				comments.push(comment)
+			}
+		}
+	}
 }
 
 // Add an underscore after every 3rd character, i.e. a separator for large numbers.
@@ -484,11 +519,15 @@ mod test {
 
 	#[test]
 	fn map_results_works() {
-		let mapped_results = map_results(&[
-			test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
-			test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
-			test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
-		], &AnalysisChoice::default()).unwrap();
+		let mapped_results = map_results(
+			&[
+				test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
+				test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
+				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
+			],
+			&[],
+			&AnalysisChoice::default(),
+		).unwrap();
 
 		let first_benchmark = &mapped_results.get(
 			&("first_pallet".to_string(), "instance".to_string())

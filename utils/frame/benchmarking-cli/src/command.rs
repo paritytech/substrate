@@ -31,7 +31,7 @@ use sp_keystore::{
 	SyncCryptoStorePtr, KeystoreExt,
 	testing::KeyStore,
 };
-use std::{fmt::Debug, sync::Arc, collections::HashMap};
+use std::{fmt::Debug, sync::Arc};
 
 impl BenchmarkCmd {
 	/// Runs the command and benchmarks the chain.
@@ -106,13 +106,8 @@ impl BenchmarkCmd {
 
 		match results {
 			Ok((batches, storage_info)) => {
-				let mut storage_info_map = HashMap::new();
-				storage_info.iter().for_each(|info| {
-					storage_info_map.insert(info.prefix, info);
-				});
-
 				if let Some(output_path) = &self.output {
-					crate::writer::write_results(&batches, output_path, self)?;
+					crate::writer::write_results(&batches, &storage_info, output_path, self)?;
 				}
 
 				for batch in batches.into_iter() {
@@ -137,7 +132,6 @@ impl BenchmarkCmd {
 						print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes\n");
 						// Print the values
 						batch.results.iter().for_each(|result| {
-							match_keys(&result.keys, &storage_info_map);
 
 							let parameters = &result.components;
 							parameters.iter().for_each(|param| print!("{:?},", param.1));
@@ -200,20 +194,5 @@ impl CliConfiguration for BenchmarkCmd {
 			Some(ref chain) => chain.clone(),
 			None => "dev".into(),
 		})
-	}
-}
-
-fn match_keys(keys: &[(Vec<u8>, u32, u32, bool)], storage_info: &HashMap<[u8; 32], &StorageInfo>) {
-	for key in keys {
-		if let Some(key_info) = storage_info.get(&key.0[0..32]) {
-			println!(
-				"Match! {} {} (r:{} w:{}, {})",
-				String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
-				String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
-				key.1,
-				key.2,
-				key.3,
-			)
-		}
 	}
 }
