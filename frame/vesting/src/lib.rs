@@ -686,7 +686,7 @@ where
 		}
 
 		let vesting_schedule = VestingInfo::try_new::<T>(locked, per_block, starting_block)?;
-		let mut vesting = if let Some(v) = Self::vesting(who) { v } else { BoundedVec::default() };
+		let mut vesting = Self::vesting(who).unwrap_or_default();
 		ensure!(vesting.try_push(vesting_schedule).is_ok(), Error::<T>::AtMaxVestingSchedules);
 
 		if let Some(v) = Self::update_lock_and_schedules(who.clone(), vesting, Filter::Zero) {
