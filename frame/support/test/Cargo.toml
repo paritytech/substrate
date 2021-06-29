@@ -25,6 +25,7 @@ pretty_assertions = "0.6.1"
 rustversion = "1.0.0"
 frame-metadata = { version = "13.0.0", default-features = false, path = "../../metadata" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../system" }
+test-pallet = { package = "frame-support-test-pallet", default-features = false, path = "pallet" }
 
 [features]
 default = ["std"]

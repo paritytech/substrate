@@ -1898,6 +1898,7 @@ version = "3.0.0"
 dependencies = [
  "frame-metadata",
  "frame-support",
+ "frame-support-test-pallet",
  "frame-system",
  "parity-scale-codec",
  "pretty_assertions 0.6.1",
@@ -1909,6 +1910,18 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "trybuild",
+]
+
+[[package]]
+name = "frame-support-test-pallet"
+version = "3.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
