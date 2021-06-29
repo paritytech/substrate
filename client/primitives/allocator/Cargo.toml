@@ -1,5 +1,5 @@
 [package]
-name = "sp-allocator"
+name = "sc-allocator-primitives"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -7,7 +7,7 @@ license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Collection of allocator implementations."
-documentation = "https://docs.rs/sp-allocator"
+documentation = "https://docs.rs/sc-allocator-primitives"
 readme = "README.md"
 
 [package.metadata.docs.rs]
