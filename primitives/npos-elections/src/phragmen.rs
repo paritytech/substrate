@@ -33,7 +33,7 @@ use sp_std::prelude::*;
 
 /// The denominator used for loads. Since votes are collected as u64, the smallest ratio that we
 /// might collect is `1/approval_stake` where approval stake is the sum of votes. Hence, some number
-/// bigger than u64::max_value() is needed. For maximum accuracy we simply use u128;
+/// bigger than u64::MAX is needed. For maximum accuracy we simply use u128;
 const DEN: ExtendedBalance = ExtendedBalance::max_value();
 
 /// Execute sequential phragmen with potentially some rounds of `balancing`. The return type is list

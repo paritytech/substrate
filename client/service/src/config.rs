@@ -32,7 +32,7 @@ pub use sc_executor::WasmExecutionMethod;
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 
 use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
-pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
+pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sc_chain_spec::ChainSpec;
 use sp_core::crypto::SecretString;
 pub use sc_telemetry::TelemetryEndpoints;
@@ -95,6 +95,8 @@ pub struct Configuration {
 	pub rpc_cors: Option<Vec<String>>,
 	/// RPC methods to expose (by default only a safe subset or all of them).
 	pub rpc_methods: RpcMethods,
+	/// Maximum payload of rpc request/responses.
+	pub rpc_max_payload: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
