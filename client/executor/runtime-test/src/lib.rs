@@ -211,7 +211,6 @@ sp_core::wasm_export_functions! {
 		code
 	}
 
-
 	fn test_sandbox_get_global_val(code: Vec<u8>) -> i64 {
 		let env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		let instance = if let Ok(i) = sp_sandbox::Instance::new(&code, &env_builder, &mut ()) {
