@@ -510,7 +510,7 @@ impl<T: Config> Pallet<T> {
 		let now_as_balance = T::BlockNumberToBalance::convert(now);
 
 		if schedule1_ending_block <= now_as_balance && schedule2_ending_block <= now_as_balance {
-			// If both schedules hav ended, we don't merge and exit early.
+			// If both schedules have ended, we don't merge and exit early.
 			return None;
 		} else if schedule1_ending_block <= now_as_balance {
 			// If one schedule has ended, we treat the one that has not ended as the new
