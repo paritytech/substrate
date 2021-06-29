@@ -310,7 +310,7 @@ pub mod pallet {
 		/// At least one of the indexes is out of bounds of the vesting schedules.
 		ScheduleIndexOutOfBounds,
 		/// Failed to create a new schedule because the parameters where invalid. i.e. `per_block` or
-		/// `locked` was a 0.
+		/// `locked` was 0.
 		InvalidScheduleParams,
 	}
 
@@ -423,9 +423,10 @@ pub mod pallet {
 			Self::do_vested_transfer(source, target, schedule)
 		}
 
-		/// Merge two vesting schedules together, creating a new vesting schedule that vests over
-		/// that finishes at the highest start and end blocks. If both schedules have already started
-		/// the current block will be used as the schedule start.
+		/// Merge two vesting schedules together, creating a new vesting schedule that unlocks over
+		/// highest possible start and end blocks. If both schedules have already started the current 
+		/// block will be used as the schedule start; with the caveat that if one schedule is finishes by 
+		/// the current block, the other will be treated as the new merged schedule, unmodified.
 		///
 		/// NOTE: If `schedule1_index == schedule2_index` this is a no-op.
 		/// NOTE: This will unlock all schedules through the current block prior to merging.
@@ -438,8 +439,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// - `schedule1_index`: TODO
-		/// - `schedule2_index`: TODO
+		/// - `schedule1_index`: index of the first schedule to merge.
+		/// - `schedule2_index`: index of the second schedule to merge.
 		///
 		/// # <weight>
 		/// - `O(1)`.
@@ -475,8 +476,8 @@ pub mod pallet {
 			let schedule2 = vesting[schedule2_index];
 			let filter = Filter::Two((schedule1_index, schedule2_index));
 
-			// The length of vesting decreases by 2 here since we filter out 2 schedules. So we know
-			// below we have the space to insert the new, merged schedule.
+			// The length of vesting decreases by 2 here since we filter out 2 schedules. Thus we know
+			// below that we can safely insert the new merged schedule.
 			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, filter);
 
 			// We can't fail from here on because we have potentially removed two schedules.
