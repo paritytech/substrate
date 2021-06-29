@@ -33,3 +33,6 @@ Kubernetes cluster can be local, spawned with
 [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
 or an instance living in the 
 [cloud](https://github.com/paritytech/gurke/blob/main/docs/How-to-setup-access-to-gke-k8s-cluster.md) 
+
+
+### [Here is link to barcamp presenation of simnet](https://www.crowdcast.io/e/ph49xu01)
