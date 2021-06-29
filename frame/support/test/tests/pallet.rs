@@ -1169,46 +1169,64 @@ fn test_storage_info() {
 		Example::storage_info(),
 		vec![
 			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"ValueWhereClause".to_vec(),
 				prefix: prefix(b"Example", b"ValueWhereClause"),
 				max_values: Some(1),
 				max_size: Some(8),
 			},
 			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Value".to_vec(),
 				prefix: prefix(b"Example", b"Value"),
 				max_values: Some(1),
 				max_size: Some(4),
 			},
 			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Value2".to_vec(),
 				prefix: prefix(b"Example", b"Value2"),
 				max_values: Some(1),
 				max_size: Some(8),
 			},
 			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Map".to_vec(),
 				prefix: prefix(b"Example", b"Map"),
 				max_values: None,
 				max_size: Some(3 + 16),
 			},
 			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Map2".to_vec(),
 				prefix: prefix(b"Example", b"Map2"),
 				max_values: Some(3),
 				max_size: Some(6 + 8),
 			},
 			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"DoubleMap".to_vec(),
 				prefix: prefix(b"Example", b"DoubleMap"),
 				max_values: None,
 				max_size: Some(7 + 16 + 8),
 			},
 			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"DoubleMap2".to_vec(),
 				prefix: prefix(b"Example", b"DoubleMap2"),
 				max_values: Some(5),
 				max_size: Some(14 + 8 + 16),
 			},
 			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"NMap".to_vec(),
 				prefix: prefix(b"Example", b"NMap"),
 				max_values: None,
 				max_size: Some(5 + 16),
 			},
 			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"NMap2".to_vec(),
 				prefix: prefix(b"Example", b"NMap2"),
 				max_values: Some(11),
 				max_size: Some(14 + 8 + 16),
@@ -1216,6 +1234,8 @@ fn test_storage_info() {
 			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
+					pallet_name: b"Example",
+					storage_name: b"ConditionalValue",
 					prefix: prefix(b"Example", b"ConditionalValue"),
 					max_values: Some(1),
 					max_size: Some(4),
@@ -1224,6 +1244,8 @@ fn test_storage_info() {
 			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
+					pallet_name: b"Example",
+					storage_name: b"ConditionalMap",
 					prefix: prefix(b"Example", b"ConditionalMap"),
 					max_values: Some(12),
 					max_size: Some(6 + 8),
@@ -1232,6 +1254,8 @@ fn test_storage_info() {
 			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
+					pallet_name: b"Example",
+					storage_name: b"ConditionalDoubleMap",
 					prefix: prefix(b"Example", b"ConditionalDoubleMap"),
 					max_values: None,
 					max_size: Some(7 + 16 + 8),
@@ -1240,6 +1264,8 @@ fn test_storage_info() {
 			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
+					pallet_name: b"Example",
+					storage_name: b"ConditionalNMap",
 					prefix: prefix(b"Example", b"ConditionalNMap"),
 					max_values: None,
 					max_size: Some(7 + 16 + 8),
