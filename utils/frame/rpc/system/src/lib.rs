@@ -21,6 +21,8 @@ use std::sync::Arc;
 
 use codec::{self, Codec, Decode, Encode};
 use sc_client_api::light::{future_header, RemoteBlockchain, Fetcher, RemoteCallRequest};
+use jsonrpsee::RpcModule;
+use jsonrpsee_types::Error as JsonRpseeError;
 use jsonrpc_core::{
 	Error as RpcError, ErrorCode,
 	futures::future::{self as rpc_future,result, Future},
@@ -45,6 +47,35 @@ pub use self::gen_client::Client as SystemClient;
 
 /// Future that resolves to account nonce.
 pub type FutureResult<T> = Box<dyn Future<Item = T, Error = RpcError> + Send>;
+
+/// System RPC methods.
+pub struct SystemRpc {}
+impl SystemRpc {
+	pub fn new() -> Self {
+		Self {}
+	}
+
+	/// Convert this [`SystemRpc`] to an [`RpcModule`].
+	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
+		let mut module = RpcModule::new(self);
+
+		// Returns the next valid index (aka nonce) for given account.
+		//
+		// This method takes into consideration all pending transactions
+		// currently in the pool and if no transactions are found in the pool
+		// it fallbacks to query the index from the runtime (aka. state nonce).
+		module.register_method("system_accountNextIndex", |params, trx_payment| {
+			Ok(())
+		})?;
+
+		// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
+		module.register_method("system_dryRun", |params, trx_payment| {
+			Ok(())
+		})?;
+
+		Ok(module)
+	}
+}
 
 /// System RPC methods.
 #[rpc]

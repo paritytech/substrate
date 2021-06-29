@@ -95,6 +95,7 @@ pallet-authority-discovery = { version = "3.0.0", path = "../../../frame/authori
 pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
 pallet-grandpa = { version = "3.1.0", path = "../../../frame/grandpa" }
 pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/transaction-payment/rpc/" }
+substrate-frame-rpc-system = { version = "3.0.0", path = "../../../utils/frame/rpc/system/" }
 
 # node-specific dependencies
 node-runtime = { version = "2.0.0", path = "../runtime" }

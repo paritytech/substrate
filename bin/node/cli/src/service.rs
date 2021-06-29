@@ -40,6 +40,7 @@ use sc_finality_grandpa_rpc::GrandpaRpc;
 use sc_consensus_babe_rpc::BabeRpc;
 use sc_sync_state_rpc::SyncStateRpc;
 use pallet_transaction_payment_rpc::TransactionPaymentRpc;
+use substrate_frame_rpc_system::SystemRpc;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -186,12 +187,14 @@ pub fn new_partial(
 			deny_unsafe,
 		).into_rpc_module().expect("TODO: error handling");
 		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
+		let system_rpc = SystemRpc::new().into_rpc_module().expect("TODO: error handling");
 		// TODO: add other rpc modules here
 		let mut module = RpcModule::new(());
 		module.merge(grandpa_rpc).expect("TODO: error handling");
 		module.merge(babe_rpc).expect("TODO: error handling");
 		module.merge(sync_state_rpc).expect("TODO: error handling");
 		module.merge(transaction_payment_rpc).expect("TODO: error handling");
+		module.merge(system_rpc).expect("TODO: error handling");
 		module
 	};
 
