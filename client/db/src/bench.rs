@@ -541,8 +541,25 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
-		self.main_key_tracker.borrow().iter().map(|(key, value)| -> (Vec<u8>, u32, u32, bool) {
-			(key.to_vec(), value.reads, value.writes, value.whitelisted)
+		// We only track at the level of a key-prefix and not whitelisted for now for memory size.
+		// TODO: Refactor to enable full storage key transparency, where we can remove the
+		// `prefix_key_tracker`.
+		let mut prefix_key_tracker = HashMap::<[u8; 32], (u32, u32, bool)>::new();
+		self.main_key_tracker.borrow().iter().for_each(|(key, value): (&Vec<u8>, &KeyTracker)| {
+			if !value.whitelisted {
+				let mut prefix = [0u8; 32];
+				prefix[0..32].copy_from_slice(&key[0..32]);
+				if let Some(tracker) = prefix_key_tracker.get_mut(&prefix) {
+						tracker.0 += value.reads;
+						tracker.1 += value.writes;
+				} else {
+					prefix_key_tracker.insert(prefix, (value.reads, value.writes, value.whitelisted));
+				}
+			}
+		});
+
+		prefix_key_tracker.iter().map(|(key, value)| -> (Vec<u8>, u32, u32, bool) {
+				(key.to_vec(), value.0, value.1, value.2)
 		}).collect::<Vec<_>>()
 	}
 
