@@ -66,7 +66,6 @@ pub use sc_chain_spec::{
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
@@ -301,8 +300,8 @@ mod waiting {
 	impl Drop for HttpServer {
 		fn drop(&mut self) {
 			if let Some(mut server) = self.0.take() {
-				futures::executor::block_on(server.stop());
-				futures::executor::block_on(server.wait_for_stop());
+				let _ = futures::executor::block_on(server.stop());
+				let _ = futures::executor::block_on(server.wait_for_stop());
 			}
 		}
 	}
@@ -312,8 +311,8 @@ mod waiting {
 	impl Drop for WsServer {
 		fn drop(&mut self) {
 			if let Some(mut server) = self.0.take() {
-				futures::executor::block_on(server.stop());
-				futures::executor::block_on(server.wait_for_stop());
+				let _ = futures::executor::block_on(server.stop());
+				let _ = futures::executor::block_on(server.wait_for_stop());
 			}
 		}
 	}
@@ -356,8 +355,7 @@ where
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
 fn start_rpc_servers<
-	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
-	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+	H: FnMut(sc_rpc::DenyUnsafe) -> RpcModule<()>
 >(
 	_: &Configuration,
 	_: H,
