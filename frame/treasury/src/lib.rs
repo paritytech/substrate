@@ -81,6 +81,7 @@ use sp_runtime::{
 use frame_support::weights::{Weight, DispatchClass};
 use frame_support::traits::EnsureOrigin;
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 use frame_system::ensure_signed;
 pub use weights::WeightInfo;
 
@@ -133,7 +134,7 @@ pub trait Config<I=DefaultInstance>: frame_system::Config {
 	type SpendFunds: SpendFunds<Self, I>;
 
 	/// The maximum number of approvals that can wait in the spending queue.
-	type MaxApprovals: Get<u32> + scale_info::TypeInfo; // todo: [AJ] see if we can remove this bound for Get storages
+	type MaxApprovals: Get<u32> + TypeInfo;
 }
 
 /// A trait to allow the Treasury Pallet to spend it's funds for other purposes.
@@ -163,7 +164,7 @@ pub type ProposalIndex = u32;
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
 	proposer: AccountId,
