@@ -866,34 +866,37 @@ mod tests {
 
 	#[test]
 	fn check_vesting_status() {
-		ExtBuilder::default().existential_deposit(256).build().execute_with(|| {
-			let user1_free_balance = Balances::free_balance(&1);
-			let user2_free_balance = Balances::free_balance(&2);
-			let user12_free_balance = Balances::free_balance(&12);
-			assert_eq!(user1_free_balance, 256 * 10); // Account 1 has free balance
-			assert_eq!(user2_free_balance, 256 * 20); // Account 2 has free balance
-			assert_eq!(user12_free_balance, 256 * 10); // Account 12 has free balance
-			let user1_vesting_schedule = VestingInfo::try_new::<Test>(
-				256 * 5,
-				128, // Vesting over 10 blocks
-				0,
-			)
-			.unwrap();
-			let user2_vesting_schedule = VestingInfo::try_new::<Test>(
-				256 * 20,
-				256, // Vesting over 20 blocks
-				10,
-			)
-			.unwrap();
-			let user12_vesting_schedule = VestingInfo::try_new::<Test>(
-				256 * 5,
-				64, // Vesting over 20 blocks
-				10,
-			)
-			.unwrap();
-			assert_eq!(Vesting::vesting(&1).unwrap(), vec![user1_vesting_schedule]); // Account 1 has a vesting schedule
-			assert_eq!(Vesting::vesting(&2).unwrap(), vec![user2_vesting_schedule]); // Account 2 has a vesting schedule
-			assert_eq!(Vesting::vesting(&12).unwrap(), vec![user12_vesting_schedule]); // Account 12 has a vesting schedule
+		ExtBuilder::default()
+			.existential_deposit(256)
+			.build()
+			.execute_with(|| {
+				let user1_free_balance = Balances::free_balance(&1);
+				let user2_free_balance = Balances::free_balance(&2);
+				let user12_free_balance = Balances::free_balance(&12);
+				assert_eq!(user1_free_balance, 256 * 10); // Account 1 has free balance
+				assert_eq!(user2_free_balance, 256 * 20); // Account 2 has free balance
+				assert_eq!(user12_free_balance, 256 * 10); // Account 12 has free balance
+				let user1_vesting_schedule = VestingInfo::try_new::<Test>(
+					256 * 5,
+					128, // Vesting over 10 blocks
+					0,
+				)
+				.unwrap();
+				let user2_vesting_schedule = VestingInfo::try_new::<Test>(
+					256 * 20,
+					256, // Vesting over 20 blocks
+					10,
+				)
+				.unwrap();
+				let user12_vesting_schedule = VestingInfo::try_new::<Test>(
+					256 * 5,
+					64, // Vesting over 20 blocks
+					10,
+				)
+				.unwrap();
+				assert_eq!(Vesting::vesting(&1).unwrap(), vec![user1_vesting_schedule]); // Account 1 has a vesting schedule
+				assert_eq!(Vesting::vesting(&2).unwrap(), vec![user2_vesting_schedule]); // Account 2 has a vesting schedule
+				assert_eq!(Vesting::vesting(&12).unwrap(), vec![user12_vesting_schedule]); // Account 12 has a vesting schedule
 
 				// Account 1 has only 128 units vested from their illiquid 256 * 5 units at block 1
 				assert_eq!(Vesting::vesting_balance(&1), Some(128 * 9));
