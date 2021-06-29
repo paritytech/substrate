@@ -669,7 +669,7 @@ where
 
 	/// Adds a vesting schedule to a given account.
 	///
-	/// If there already `MaxVestingSchedules`, an Error is returned and nothing
+	/// If there are already `MaxVestingSchedules`, an Error is returned and nothing
 	/// is updated.
 	///
 	/// On success, a linearly reducing amount of funds will be locked. In order to realise any
