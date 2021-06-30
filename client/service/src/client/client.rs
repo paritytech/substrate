@@ -1416,6 +1416,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 			parent_storages: Vec::new(),
 			key_values: Vec::new(),
 		}, false)];
+
 		loop {
 			let mut entries = Vec::new();
 			let mut complete = true;
@@ -1456,16 +1457,16 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 				current_key = next_key;
 			}
 			if let Some(child) = switch_child_key.take() {
+				result[0].0.key_values.extend(entries.into_iter());
 				current_child = Some(child_info(&child)?);
 				current_key = Vec::new();
 			} else if let Some(child) = current_child.take() {
+				current_key = child.into_prefixed_storage_key().into_inner();
 				result.push((KeyValueState {
 					parent_storages: vec![current_key.clone()],
 					key_values: entries,
 				}, complete));
-				if complete {
-					current_key = child.into_prefixed_storage_key().into_inner();
-				} else {
+				if !complete {
 					break;
 				}
 			} else {

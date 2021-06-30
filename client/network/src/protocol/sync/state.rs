@@ -24,6 +24,7 @@ use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
 use crate::chain::{Client, ImportedState};
 use smallvec::SmallVec;
 use std::collections::HashMap;
+use sp_core::storage::well_known_keys;
 use super::StateDownloadProgress;
 
 /// State sync support.
@@ -127,18 +128,26 @@ impl<B: BlockT> StateSync<B> {
 
 			for values in values.0 {
 				use std::collections::hash_map::Entry;
+				let key_values = if values.parent_storages.len() == 0 {
+					// skip all child key root (will be recalculated on import)
+					values.key_values.into_iter()
+						.filter(|key_value| !well_known_keys::is_child_storage_key(key_value.0.as_slice()))
+						.collect()
+				} else {
+					values.key_values
+				};
 				match self.state.entry(values.parent_storages) {
 					Entry::Occupied(mut entry) => {
-						for (key, value) in values.key_values {
+						for (key, value) in key_values {
 							self.imported_bytes += key.len() as u64;
 							entry.get_mut().push((key, value))
 						}
 					},
 					Entry::Vacant(entry) => {
-						for (key, _value) in values.key_values.iter() {
+						for (key, _value) in key_values.iter() {
 							self.imported_bytes += key.len() as u64;
 						}
-						entry.insert(values.key_values);
+						entry.insert(key_values);
 					},
 				}
 			}
@@ -161,10 +170,14 @@ impl<B: BlockT> StateSync<B> {
 					}
 					complete = false;
 				}
+				let is_top = state.parent_storages.len() == 0;
 				let entry = self.state.entry(state.parent_storages).or_default();
 				for StateEntry { key, value } in state.entries {
-					self.imported_bytes += key.len() as u64;
-					entry.push((key, value))
+					// Skip all child key root (will be recalculated on import).
+					if !(is_top && well_known_keys::is_child_storage_key(key.as_slice())) {
+						self.imported_bytes += key.len() as u64;
+						entry.push((key, value))
+					}
 				}
 			}
 			complete
