@@ -13,7 +13,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-allocator = { version = "3.0.0", default-features = false, path = "../../../primitives/allocator" }
+sc-allocator = { version = "3.0.0", default-features = false, path = "../../allocator" }
 sp-core = { version = "3.0.0", default-features = false, path = "../../../primitives/core" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
@@ -27,7 +27,7 @@ substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builde
 [features]
 default = [ "std" ]
 std = [
-	"sp-allocator/std",
+	"sc-allocator/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
