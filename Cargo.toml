@@ -277,7 +277,5 @@ zeroize = { opt-level = 3 }
 panic = "unwind"
 
 [patch.crates-io]
-parity-util-mem = { git = "https://github.com/paritytech/parity-common" }
-primitive-types = { git = "https://github.com/paritytech/parity-common" }
-scale-info = { git = "https://github.com/paritytech/scale-info", branch = "aj-substrate" }
+primitive-types = { git = "https://github.com/paritytech/parity-common", branch = "aj-update-scale-info" }
 finality-grandpa = { git = "https://github.com/paritytech/finality-grandpa", branch = "aj-scale-info" }

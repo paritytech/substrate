@@ -1679,7 +1679,7 @@ dependencies = [
 [[package]]
 name = "finality-grandpa"
 version = "0.14.1"
-source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info#520e638ca4375ee6268b04b1d84de89c060c4f5d"
+source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info#177760823e17b3582986b6c0f2fa1d3b90b474ef"
 dependencies = [
  "either",
  "futures 0.3.15",
@@ -1695,7 +1695,7 @@ dependencies = [
 [[package]]
 name = "fixed-hash"
 version = "0.7.0"
-source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
 dependencies = [
  "byteorder",
  "rand 0.8.3",
@@ -1826,7 +1826,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "14.0.0"
-source = "git+https://github.com/paritytech/frame-metadata?branch=main#78d3456e4f057d808e78163c2f4954f32b071000"
+source = "git+https://github.com/paritytech/frame-metadata?branch=main#32584873b4fc87044869bd55aa6908feb1d0084d"
 dependencies = [
  "cfg-if 1.0.0",
  "parity-scale-codec",
@@ -2709,7 +2709,7 @@ dependencies = [
 [[package]]
 name = "impl-codec"
 version = "0.5.0"
-source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -2726,7 +2726,7 @@ dependencies = [
 [[package]]
 name = "impl-serde"
 version = "0.3.1"
-source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
 dependencies = [
  "serde",
 ]
@@ -5879,12 +5879,13 @@ dependencies = [
 [[package]]
 name = "parity-util-mem"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "664a8c6b8e62d8f9f2f937e391982eb433ab285b4cd9545b342441e04a906e42"
 dependencies = [
  "cfg-if 1.0.0",
  "hashbrown",
  "impl-trait-for-tuples",
- "parity-util-mem-derive 0.1.0 (git+https://github.com/paritytech/parity-common)",
+ "parity-util-mem-derive",
  "parking_lot 0.11.1",
  "primitive-types",
  "smallvec 1.6.1",
@@ -5896,16 +5897,6 @@ name = "parity-util-mem-derive"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f557c32c6d268a07c921471619c0295f5efad3a0e76d4f97a05c091a51d110b2"
-dependencies = [
- "proc-macro2",
- "syn",
- "synstructure",
-]
-
-[[package]]
-name = "parity-util-mem-derive"
-version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -6338,14 +6329,13 @@ dependencies = [
 [[package]]
 name = "primitive-types"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
 dependencies = [
  "fixed-hash",
  "impl-codec",
- "impl-serde 0.3.1 (git+https://github.com/paritytech/parity-common)",
- "parity-scale-codec",
+ "impl-serde 0.3.1 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
  "scale-info",
- "uint 0.9.0 (git+https://github.com/paritytech/parity-common)",
+ "uint 0.9.0 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
 ]
 
 [[package]]
@@ -8162,7 +8152,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-util-mem",
- "parity-util-mem-derive 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-util-mem-derive",
  "parking_lot 0.11.1",
  "sc-client-api",
  "sp-core",
@@ -8311,9 +8301,11 @@ dependencies = [
 
 [[package]]
 name = "scale-info"
-version = "0.6.0"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#91799c7cfa2db7b8d8c8c11da4bc3c4d71a50e27"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc96e61bb609c3ff7fd758e3b3b78a0d07797b942bdd88140c9078ccf7df700b"
 dependencies = [
+ "bitvec",
  "cfg-if 1.0.0",
  "derive_more",
  "parity-scale-codec",
@@ -8323,8 +8315,9 @@ dependencies = [
 
 [[package]]
 name = "scale-info-derive"
-version = "0.4.0"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#91799c7cfa2db7b8d8c8c11da4bc3c4d71a50e27"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "777bae32436ada4e11677dc898a8a3f82f7792942022b0b127ba62049d36d26f"
 dependencies = [
  "proc-macro-crate 1.0.0",
  "proc-macro2",
@@ -10827,7 +10820,7 @@ dependencies = [
 [[package]]
 name = "uint"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/parity-common#7c2a9b28e266d0b0adbad4869e2559500fad4859"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
 dependencies = [
  "byteorder",
  "crunchy",
