@@ -1294,14 +1294,14 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Kill everything created by [`Pallet::create_snapshot`].
-	pub(crate) fn kill_snapshot() {
+	pub fn kill_snapshot() {
 		<Snapshot<T>>::kill();
 		<SnapshotMetadata<T>>::kill();
 		<DesiredTargets<T>>::kill();
 	}
 
 	/// Checks the feasibility of a solution.
-	fn feasibility_check(
+	pub fn feasibility_check(
 		solution: RawSolution<CompactOf<T>>,
 		compute: ElectionCompute,
 	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
