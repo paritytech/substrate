@@ -508,7 +508,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	// Create a new `VestingInfo`, based off of two other `VestingInfo`s.
-	// NOTE: We assume both schedules have been vested up through the current block.
+	// NOTE: We assume both schedules have had funds unlocked up through the current block.
 	fn merge_vesting_info(
 		now: T::BlockNumber,
 		schedule1: VestingInfo<BalanceOf<T>, T::BlockNumber>,
