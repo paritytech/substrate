@@ -65,7 +65,7 @@ use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 pub use pallet::*;
 use sp_runtime::{
 	traits::{
-		AtLeast32BitUnsigned, CheckedDiv, Convert, MaybeSerializeDeserialize, Saturating,
+		AtLeast32BitUnsigned, CheckedDiv, Convert, MaybeSerializeDeserialize, One, Saturating,
 		StaticLookup, Zero,
 	},
 	RuntimeDebug,
@@ -121,17 +121,6 @@ mod vesting_info {
 			Ok(self)
 		}
 
-		/// Instantiate a new `VestingInfo` without param modification. Useful for
-		/// mocking bad inputs in testing.
-		#[cfg(test)]
-		pub fn unsafe_new(
-			locked: Balance,
-			per_block: Balance,
-			starting_block: BlockNumber,
-		) -> VestingInfo<Balance, BlockNumber> {
-			VestingInfo { locked, per_block, starting_block }
-		}
-
 		/// Locked amount at schedule creation.
 		pub fn locked(&self) -> Balance {
 			self.locked
@@ -157,9 +146,10 @@ mod vesting_info {
 			let vested_block_count = n.saturating_sub(self.starting_block);
 			let vested_block_count = BlockNumberToBalance::convert(vested_block_count);
 			// Return amount that is still locked in vesting
-			vested_block_count.checked_mul(&self.per_block)
-                .map(|balance| self.locked.saturating_sub(balance))
-                .unwrap_or(Zero::zero())
+			vested_block_count
+				.checked_mul(&self.per_block)
+				.map(|to_unlock| self.locked.saturating_sub(to_unlock))
+				.unwrap_or(Zero::zero())
 		}
 
 		/// Block number at which the schedule ends.
@@ -168,7 +158,7 @@ mod vesting_info {
 			let duration = if self.per_block > self.locked {
 				// If `per_block` is bigger than `locked`, the schedule will end
 				// the block after starting.
-				1u32.into()
+				One::one()
 			} else if self.per_block.is_zero() {
 				// Check for div by 0 errors, which should only be from legacy
 				// vesting schedules since new ones are validated for this.
@@ -177,7 +167,7 @@ mod vesting_info {
 				let has_remainder = !(self.locked % self.per_block).is_zero();
 				let maybe_duration = self.locked / self.per_block;
 				if has_remainder {
-					maybe_duration + 1u32.into()
+					maybe_duration + One::one()
 				} else {
 					maybe_duration
 				}

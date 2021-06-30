@@ -298,21 +298,21 @@ fn vested_transfer_correctly_fails() {
 
 		// Fails due to too low transfer amount.
 		let new_vesting_schedule_too_low =
-			VestingInfo::unsafe_new(<Test as Config>::MinVestedTransfer::get() - 1, 64, 10);
+			VestingInfo::new::<Test>(<Test as Config>::MinVestedTransfer::get() - 1, 64, 10);
 		assert_noop!(
 			Vesting::vested_transfer(Some(3).into(), 4, new_vesting_schedule_too_low),
 			Error::<Test>::AmountLow,
 		);
 
 		// `per_block` is 0, which would result in a schedule with infinite duration.
-		let schedule_per_block_0 = VestingInfo::unsafe_new(256, 0, 10);
+		let schedule_per_block_0 = VestingInfo::new::<Test>(256, 0, 10);
 		assert_noop!(
 			Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_per_block_0),
 			Error::<Test>::InvalidScheduleParams,
 		);
 
 		// `locked` is 0.
-		let schedule_locked_0 = VestingInfo::unsafe_new(0, 1, 10);
+		let schedule_locked_0 = VestingInfo::new::<Test>(0, 1, 10);
 		assert_noop!(
 			Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_locked_0),
 			Error::<Test>::AmountLow,

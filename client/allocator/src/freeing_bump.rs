@@ -66,14 +66,9 @@
 //!   75% (`(3N + ε) / 2 / 2N`) meaning that around 25% of the space in allocation will be wasted.
 //!   This is more pronounced (in terms of absolute heap amounts) with larger allocation sizes.
 
-use sp_std::{
-	convert::{TryFrom, TryInto},
-	mem,
-	ops::{Index, IndexMut, Range},
-};
-use sp_wasm_interface::{Pointer, WordSize};
-
 use crate::Error;
+use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
+use sp_wasm_interface::{Pointer, WordSize};
 
 /// The minimal alignment guaranteed by this allocator.
 ///
@@ -226,8 +221,9 @@ impl Link {
 /// |            0 | next element link |
 /// +--------------+-------------------+
 /// ```
-/// 
+///
 /// ## Occupied header
+///
 /// ```ignore
 /// 64             32                  0
 //  +--------------+-------------------+
@@ -301,7 +297,9 @@ struct FreeLists {
 impl FreeLists {
 	/// Creates the free empty lists.
 	fn new() -> Self {
-		Self { heads: [Link::Nil; N_ORDERS] }
+		Self {
+			heads: [Link::Nil; N_ORDERS]
+		}
 	}
 
 	/// Replaces a given link for the specified order and returns the old one.
@@ -314,7 +312,6 @@ impl FreeLists {
 
 impl Index<Order> for FreeLists {
 	type Output = Link;
-
 	fn index(&self, index: Order) -> &Link {
 		&self.heads[index.0 as usize]
 	}
@@ -371,7 +368,7 @@ impl FreeingBumpHeapAllocator {
 		size: WordSize,
 	) -> Result<Pointer<u8>, Error> {
 		if self.poisoned {
-			return Err(error("the allocator has been poisoned"));
+			return Err(error("the allocator has been poisoned"))
 		}
 
 		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
@@ -395,7 +392,11 @@ impl FreeingBumpHeapAllocator {
 			}
 			Link::Nil => {
 				// Corresponding free list is empty. Allocate a new item.
-				Self::bump(&mut self.bumper, order.size() + HEADER_SIZE, mem.size())?
+				Self::bump(
+					&mut self.bumper,
+					order.size() + HEADER_SIZE,
+					mem.size(),
+				)?
 			}
 		};
 
@@ -417,13 +418,9 @@ impl FreeingBumpHeapAllocator {
 	///
 	/// - `mem` - a slice representing the linear memory on which this allocator operates.
 	/// - `ptr` - pointer to the allocated chunk
-	pub fn deallocate<M: Memory + ?Sized>(
-		&mut self,
-		mem: &mut M,
-		ptr: Pointer<u8>,
-	) -> Result<(), Error> {
+	pub fn deallocate<M: Memory + ?Sized>(&mut self, mem: &mut M, ptr: Pointer<u8>) -> Result<(), Error> {
 		if self.poisoned {
-			return Err(error("the allocator has been poisoned"));
+			return Err(error("the allocator has been poisoned"))
 		}
 
 		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
@@ -494,7 +491,6 @@ impl Memory for [u8] {
 			.expect("[u8] slice of length 8 must be convertible to [u8; 8]");
 		Ok(u64::from_le_bytes(bytes))
 	}
-
 	fn write_le_u64(&mut self, ptr: u32, val: u64) -> Result<(), Error> {
 		let range =
 			heap_range(ptr, 8, self.len()).ok_or_else(|| error("write out of heap bounds"))?;
@@ -502,7 +498,6 @@ impl Memory for [u8] {
 		self[range].copy_from_slice(&bytes[..]);
 		Ok(())
 	}
-
 	fn size(&self) -> u32 {
 		u32::try_from(self.len()).expect("size of Wasm linear memory is <2^32; qed")
 	}
@@ -512,7 +507,7 @@ fn heap_range(offset: u32, length: u32, heap_len: usize) -> Option<Range<usize>>
 	let start = offset as usize;
 	let end = offset.checked_add(length)? as usize;
 	if end <= heap_len {
-		Some(start .. end)
+		Some(start..end)
 	} else {
 		None
 	}
@@ -682,7 +677,7 @@ mod tests {
 
 		// then
 		match ptr.unwrap_err() {
-			Error::AllocatorOutOfSpace => {}
+			Error::AllocatorOutOfSpace => {},
 			e => panic!("Expected allocator out of space error, got: {:?}", e),
 		}
 	}
@@ -701,7 +696,7 @@ mod tests {
 		// then
 		// there is no room for another half page incl. its 8 byte prefix
 		match ptr2.unwrap_err() {
-			Error::AllocatorOutOfSpace => {}
+			Error::AllocatorOutOfSpace => {},
 			e => panic!("Expected allocator out of space error, got: {:?}", e),
 		}
 	}
@@ -730,7 +725,7 @@ mod tests {
 
 		// then
 		match ptr.unwrap_err() {
-			Error::RequestedAllocationTooLarge => {}
+			Error::RequestedAllocationTooLarge => {},
 			e => panic!("Expected allocation size too large error, got: {:?}", e),
 		}
 	}
@@ -762,7 +757,7 @@ mod tests {
 
 		// then
 		match ptr.unwrap_err() {
-			Error::AllocatorOutOfSpace => {}
+			Error::AllocatorOutOfSpace => {},
 			e => panic!("Expected allocator out of space error, got: {:?}", e),
 		}
 	}
@@ -803,7 +798,7 @@ mod tests {
 		let mut heap = FreeingBumpHeapAllocator::new(19);
 
 		// when
-		for _ in 1 .. 10 {
+		for _ in 1..10 {
 			let ptr = heap.allocate(&mut mem[..], 42).unwrap();
 			heap.deallocate(&mut mem[..], ptr).unwrap();
 		}
@@ -855,11 +850,11 @@ mod tests {
 		let mut heap = FreeingBumpHeapAllocator::new(0);
 
 		// Allocate and free some pointers
-		let ptrs = (0 .. 4).map(|_| heap.allocate(&mut mem[..], 8).unwrap()).collect::<Vec<_>>();
+		let ptrs = (0..4).map(|_| heap.allocate(&mut mem[..], 8).unwrap()).collect::<Vec<_>>();
 		ptrs.into_iter().for_each(|ptr| heap.deallocate(&mut mem[..], ptr).unwrap());
 
 		// Second time we should be able to allocate all of them again.
-		let _ = (0 .. 4).map(|_| heap.allocate(&mut mem[..], 8).unwrap()).collect::<Vec<_>>();
+		let _ = (0..4).map(|_| heap.allocate(&mut mem[..], 8).unwrap()).collect::<Vec<_>>();
 	}
 
 	#[test]
