@@ -153,26 +153,28 @@ mod vesting_info {
 		}
 
 		/// Block number at which the schedule ends.
-		pub fn ending_block<BlockNumberToBalance: Convert<BlockNumber, Balance>>(&self) -> Balance {
+		pub fn ending_block<BlockNumberToBalance: Convert<BlockNumber, Balance>, T: Config>(
+			&self,
+		) -> Result<Balance, DispatchError> {
 			let starting_block = BlockNumberToBalance::convert(self.starting_block);
-			let duration = if self.per_block > self.locked {
+			let duration = if self.per_block >= self.locked {
 				// If `per_block` is bigger than `locked`, the schedule will end
 				// the block after starting.
 				One::one()
 			} else if self.per_block.is_zero() {
 				// Check for div by 0 errors, which should only be from legacy
 				// vesting schedules since new ones are validated for this.
-				self.locked
+				return Err(Error::<T>::InfiniteSchedule.into());
 			} else {
-				let has_remainder = !(self.locked % self.per_block).is_zero();
-				let maybe_duration = self.locked / self.per_block;
-				if has_remainder {
-					maybe_duration + One::one()
-				} else {
-					maybe_duration
-				}
+				self.locked / self.per_block +
+					if (self.locked % self.per_block).is_zero() {
+						One::one()
+					} else {
+						Zero::zero()
+					}
 			};
-			starting_block.saturating_add(duration)
+
+			Ok(starting_block.saturating_add(duration))
 		}
 	}
 }
@@ -314,6 +316,9 @@ pub mod pallet {
 		/// Failed to create a new schedule because the parameters where invalid. i.e. `per_block` or
 		/// `locked` was 0.
 		InvalidScheduleParams,
+		/// An existing schedule was encountered that contained a `per_block` of 0, thus rendering
+		/// it unable to ever unlock funds.
+		InfiniteSchedule,
 	}
 
 	#[pallet::call]
@@ -370,7 +375,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// - `target`: The account that should be transferred the vested funds.
+		/// - `target`: The account receiving the vested funds.
 		/// - `schedule`: The vesting schedule attached to the transfer.
 		///
 		/// Emits `VestingCreated`.
@@ -474,7 +479,7 @@ pub mod pallet {
 			// We can't fail from here on because we have potentially removed two schedules.
 
 			let now = <frame_system::Pallet<T>>::block_number();
-			if let Some(s) = Self::merge_vesting_info(now, schedule1, schedule2) {
+			if let Some(s) = Self::merge_vesting_info(now, schedule1, schedule2)? {
 				let mut vesting = maybe_vesting.unwrap_or_default();
 				if let Err(_) = vesting.try_push(s) {
 					// It shouldn't be possible for this to fail because we removed 2 schedules above.
@@ -508,21 +513,21 @@ impl<T: Config> Pallet<T> {
 		now: T::BlockNumber,
 		schedule1: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 		schedule2: VestingInfo<BalanceOf<T>, T::BlockNumber>,
-	) -> Option<VestingInfo<BalanceOf<T>, T::BlockNumber>> {
-		let schedule1_ending_block = schedule1.ending_block::<T::BlockNumberToBalance>();
-		let schedule2_ending_block = schedule2.ending_block::<T::BlockNumberToBalance>();
+	) -> Result<Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>, DispatchError> {
+		let schedule1_ending_block = schedule1.ending_block::<T::BlockNumberToBalance, T>()?;
+		let schedule2_ending_block = schedule2.ending_block::<T::BlockNumberToBalance, T>()?;
 		let now_as_balance = T::BlockNumberToBalance::convert(now);
 
 		// Check if one or both schedules have ended.
 		match (schedule1_ending_block <= now_as_balance, schedule2_ending_block <= now_as_balance) {
 			// If both schedules have ended, we don't merge and exit early.
-			(true, true) => return None,
+			(true, true) => return Ok(None),
 			// If one schedule has ended, we treat the one that has not ended as the new
 			// merged schedule.
-			(true, false) => return Some(schedule2),
-			(false, true) => return Some(schedule1),
+			(true, false) => return Ok(Some(schedule2)),
+			(false, true) => return Ok(Some(schedule1)),
 			// If neither schedule has ended don't exit early.
-			_ => {},
+			_ => {}
 		}
 
 		let locked = schedule1
@@ -530,31 +535,33 @@ impl<T: Config> Pallet<T> {
 			.saturating_add(schedule2.locked_at::<T::BlockNumberToBalance>(now));
 		// This shouldn't happen because we know at least one ending block is greater than now.
 		if locked.is_zero() {
-			return None;
+			return Ok(None);
 		}
 
 		let ending_block = schedule1_ending_block.max(schedule2_ending_block);
 		let starting_block = now.max(schedule1.starting_block()).max(schedule2.starting_block());
 		let duration =
 			ending_block.saturating_sub(T::BlockNumberToBalance::convert(starting_block));
-		let per_block = if duration.is_zero() {
-			// The logic of `ending_block` guarantees that each schedule ends at least a block
-			// after it starts and since we take the max starting and ending_block we should never
-			// get here
-			locked
-		} else if duration > locked {
+		let per_block = if duration > locked {
 			// This would mean we have a per_block of less than 1, which should not be not possible
 			// because when we create the new schedule is at most the same duration as the longest,
 			// but never greater.
-			1u32.into()
+			One::one()
 		} else {
-			locked.checked_div(&duration)?
+			match locked.checked_div(&duration) {
+				// The logic of `ending_block` guarantees that each schedule ends at least a block
+				// after it starts and since we take the max starting and ending_block we should never
+				// get here
+				None => locked,
+				Some(per_block) => per_block,
+			}
 		};
 
 		// At this point inputs have been validated, so this should always be `Some`.
 		let schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
 		debug_assert!(schedule.validate::<T>().is_ok());
-		Some(schedule)
+
+		Ok(Some(schedule))
 	}
 
 	// Execute a vested transfer from `source` to `target` with the given `schedule`.
