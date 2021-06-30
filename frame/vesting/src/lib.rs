@@ -575,12 +575,7 @@ impl<T: Config> Pallet<T> {
 
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
-		if let Some(len) = Vesting::<T>::decode_len(&target) {
-			ensure!(
-				len < T::MaxVestingSchedules::get() as usize,
-				Error::<T>::AtMaxVestingSchedules
-			);
-		}
+		ensure!(Vesting::<T>::decode_len(&target).unwrap_or_default() < T::MaxVestingSchedules::get() as usize);
 
 		T::Currency::transfer(
 			&source,
