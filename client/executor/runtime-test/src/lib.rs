@@ -226,11 +226,9 @@ sp_core::wasm_export_functions! {
 		}
 	}
 
-
 	fn test_offchain_index_set() {
 		sp_io::offchain_index::set(b"k", b"v");
 	}
-
 
 	fn test_offchain_local_storage() -> bool {
 		let kind = sp_core::offchain::StorageKind::PERSISTENT;
