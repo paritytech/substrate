@@ -25,13 +25,16 @@ pub mod thresholds;
 
 use thresholds::THRESHOLDS;
 use crate::{
-	AccountIdOf, Config, Nominations, Nominators, Pallet, VoteWeight, VoterBagFor, VotingDataOf,
-	slashing::SlashingSpans,
+	AccountIdOf, Config, Nominations, Nominators, Pallet, Validators, VoteWeight, VoterBagFor,
+	VotingDataOf, slashing::SlashingSpans,
 };
 use codec::{Encode, Decode};
 use frame_support::DefaultNoBound;
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
+
+/// [`Voter`] parametrized by [`Config`] instead of by `AccountId`.
+pub type VoterOf<T> = Voter<AccountIdOf<T>>;
 
 /// Index type for a bag.
 pub type BagIdx = u8;
@@ -81,6 +84,25 @@ impl<T: Config> VoterList<T> {
 		crate::VoterNodes::<T>::remove_all(None);
 	}
 
+	/// Regenerate voter data from the `Nominators` and `Validators` storage items.
+	///
+	/// This is expensive and should only ever be performed during a migration, never during
+	/// consensus.
+	///
+	/// Returns the number of voters migrated.
+	pub fn regenerate() -> u32 {
+		Self::clear();
+
+		let nominators_iter = Nominators::<T>::iter().map(|(id, _)| Voter::nominator(id));
+		let validators_iter = Validators::<T>::iter().map(|(id, _)| Voter::validator(id));
+		let weight_of = Pallet::<T>::weight_of_fn();
+
+		Self::insert_many(
+			nominators_iter.chain(validators_iter),
+			weight_of,
+		)
+	}
+
 	/// Decode the length of the voter list.
 	pub fn decode_len() -> Option<usize> {
 		crate::VoterCount::<T>::try_get().ok().map(|n| n.saturated_into())
@@ -110,7 +132,7 @@ impl<T: Config> VoterList<T> {
 
 	/// Insert a new voter into the appropriate bag in the voter list.
 	pub fn insert(voter: VoterOf<T>, weight_of: impl Fn(&T::AccountId) -> VoteWeight) {
-		Self::insert_many(sp_std::iter::once(voter), weight_of)
+		Self::insert_many(sp_std::iter::once(voter), weight_of);
 	}
 
 	/// Insert several voters into the appropriate bags in the voter list.
@@ -119,7 +141,7 @@ impl<T: Config> VoterList<T> {
 	pub fn insert_many(
 		voters: impl IntoIterator<Item = VoterOf<T>>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
-	) {
+	) -> u32 {
 		let mut bags = BTreeMap::new();
 		let mut count = 0;
 
@@ -135,6 +157,7 @@ impl<T: Config> VoterList<T> {
 		}
 
 		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_add(count));
+		count
 	}
 
 	/// Remove a voter (by id) from the voter list.
@@ -464,7 +487,21 @@ pub struct Voter<AccountId> {
 	pub voter_type: VoterType,
 }
 
-pub type VoterOf<T> = Voter<AccountIdOf<T>>;
+impl<AccountId> Voter<AccountId> {
+	pub fn nominator(id: AccountId) -> Self {
+		Self {
+			id,
+			voter_type: VoterType::Nominator,
+		}
+	}
+
+	pub fn validator(id: AccountId) -> Self {
+		Self {
+			id,
+			voter_type: VoterType::Validator,
+		}
+	}
+}
 
 /// Type of voter.
 ///

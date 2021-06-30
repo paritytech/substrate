@@ -100,6 +100,13 @@
 //!
 //! An account can become a nominator via the [`nominate`](Call::nominate) call.
 //!
+//! #### Voting
+//!
+//! Staking is closely related to elections; actual validators are chosen from among all potential
+//! validators by election by the potential validators and nominators. To reduce use of the phrase
+//! "potential validators and nominators", we often use the term **voters**, who are simply
+//! the union of potential validators and nominators.
+//!
 //! #### Rewards and Slash
 //!
 //! The **reward and slashing** procedure is the core of the Staking pallet, attempting to _embrace
@@ -748,16 +755,45 @@ enum Releases {
 	V5_0_0, // blockable validators.
 	V6_0_0, // removal of all storage associated with offchain phragmen.
 	V7_0_0, // keep track of number of nominators / validators in map
+	V8_0_0, // VoterList and efficient semi-sorted iteration
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V7_0_0
+		Releases::V8_0_0
 	}
 }
 
 pub mod migrations {
 	use super::*;
+
+	pub mod v8 {
+		use super::*;
+
+		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
+			ensure!(StorageVersion::<T>::get() == Releases::V7_0_0, "must upgrade linearly");
+			ensure!(VoterList::<T>::decode_len().unwrap_or_default() == 0, "voter list already exists");
+			Ok(())
+		}
+
+		pub fn migrate<T: Config>() -> Weight {
+			log!(info, "Migrating staking to Releases::V8_0_0");
+
+			let migrated = VoterList::<T>::regenerate();
+
+			StorageVersion::<T>::put(Releases::V8_0_0);
+			log!(
+				info,
+				"Completed staking migration to Releases::V8_0_0 with {} voters migrated",
+				migrated,
+			);
+
+			T::WeightInfo::regenerate(
+				CounterForValidators::<T>::get(),
+				CounterForNominators::<T>::get(),
+			).saturating_add(T::DbWeight::get().reads(2))
+		}
+	}
 
 	pub mod v7 {
 		use super::*;
@@ -1419,10 +1455,8 @@ pub mod pallet {
 		Kicked(T::AccountId, T::AccountId),
 		/// The election failed. No new era is planned.
 		StakingElectionFailed,
-		/// Attempted to rebag an account.
-		///
-		/// If the second parameter is not `None`, it is the `(from, to)` tuple of bag indices.
-		Rebag(T::AccountId, Option<(BagIdx, BagIdx)>),
+		/// Moved an account from one bag to another. \[who, from, to\].
+		Rebagged(T::AccountId, BagIdx, BagIdx),
 	}
 
 	#[pallet::error]
@@ -1650,8 +1684,9 @@ pub mod pallet {
 				// Last check: the new active amount of ledger must be more than ED.
 				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
-				Self::deposit_event(Event::<T>::Bonded(stash, extra));
+				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 				Self::update_ledger(&controller, &ledger);
+				Self::do_rebag(&stash);
 			}
 			Ok(())
 		}
@@ -2481,16 +2516,7 @@ pub mod pallet {
 			stash: AccountIdOf<T>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
-
-			// if no voter at that node, don't do anything.
-			// the caller just wasted the fee to call this.
-			let moved = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {
-				let weight_of = Self::weight_of_fn();
-				VoterList::update_position_for(node, weight_of)
-			});
-
-			Self::deposit_event(Event::<T>::Rebag(stash, moved));
-
+			Pallet::<T>::do_rebag(&stash);
 			Ok(())
 		}
 	}
@@ -3137,6 +3163,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Nominators::<T>::insert(who, nominations);
 		VoterList::<T>::insert_as(who, VoterType::Nominator);
+		debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -3146,6 +3173,7 @@ impl<T: Config> Pallet<T> {
 			Nominators::<T>::remove(who);
 			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
 			VoterList::<T>::remove(who);
+			debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
 		}
 	}
 
@@ -3159,6 +3187,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Validators::<T>::insert(who, prefs);
 		VoterList::<T>::insert_as(who, VoterType::Validator);
+		debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
 	}
 
 	/// This function will remove a validator from the `Validators` storage map,
@@ -3168,7 +3197,24 @@ impl<T: Config> Pallet<T> {
 			Validators::<T>::remove(who);
 			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
 			VoterList::<T>::remove(who);
+			debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
 		}
+	}
+
+	/// Move a stash account from one bag to another, depositing an event on success.
+	///
+	/// If the stash changed bags, returns `Some((from, to))`.
+	pub fn do_rebag(stash: &T::AccountId) -> Option<(BagIdx, BagIdx)> {
+		// if no voter at that node, don't do anything.
+		// the caller just wasted the fee to call this.
+		let maybe_movement = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {
+			let weight_of = Self::weight_of_fn();
+			VoterList::update_position_for(node, weight_of)
+		});
+		if let Some((from, to)) = maybe_movement {
+			Self::deposit_event(Event::<T>::Rebagged(stash.clone(), from, to));
+		};
+		maybe_movement
 	}
 }
 

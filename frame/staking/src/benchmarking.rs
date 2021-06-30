@@ -103,7 +103,6 @@ pub fn create_validator_with_nominators<T: Config>(
 	);
 	assert_ne!(CounterForValidators::<T>::get(), 0);
 	assert_ne!(CounterForNominators::<T>::get(), 0);
-	assert_ne!(VoterList::<T>::decode_len().unwrap_or_default(), 0);
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
@@ -672,7 +671,6 @@ benchmarks! {
 		// Clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
-
 		// stash controls the node account
 		let (stash, controller) = make_validator(USER_SEED, 100)?;
 
@@ -680,9 +678,18 @@ benchmarks! {
 		let (other_stash, _) = make_validator(USER_SEED + 1, 300)?;
 
 		// update the stash account's value/weight
+		//
+		// note that we have to manually update the ledger; if we were to just call
+		// `Staking::<T>::bond_extra`, then it would implicitly rebag. We want to separate that step
+		// so we can measure it in isolation.
 		let other_free_balance = T::Currency::free_balance(&other_stash);
 		T::Currency::make_free_balance_be(&stash, other_free_balance);
-		Staking::<T>::bond_extra(RawOrigin::Signed(stash.clone()).into(), other_free_balance)?;
+		let controller = Staking::<T>::bonded(&stash).ok_or("stash had no controller")?;
+		let mut ledger = Staking::<T>::ledger(&controller).ok_or("controller had no ledger")?;
+		let extra = other_free_balance.checked_sub(&ledger.total).ok_or("balance did not increase")?;
+		ledger.total += extra;
+		ledger.active += extra;
+		Staking::<T>::update_ledger(&controller, &ledger);
 
 		// verify preconditions
 		let weight_of = Staking::<T>::weight_of_fn();
@@ -718,6 +725,28 @@ benchmarks! {
 	verify {
 		let node = Node::<T>::from_id(&stash).ok_or("node not found for stash")?;
 		ensure!(!node.is_misplaced(&weight_of), "node must be in proper place after rebag");
+	}
+
+	regenerate {
+		// number of validator intention.
+		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
+		// number of nominator intention.
+		let n in (MAX_NOMINATORS / 2) .. MAX_NOMINATORS;
+
+		clear_validators_and_nominators::<T>();
+		ensure!(
+			create_validators_with_nominators_for_era::<T>(
+				v,
+				n,
+				T::MAX_NOMINATIONS as usize,
+				true,
+				None,
+			).is_ok(),
+			"creating validators and nominators failed",
+		);
+	}: {
+		let migrated = VoterList::<T>::regenerate();
+		ensure!(v + n == migrated, "didn't migrate right amount of voters");
 	}
 }
 
