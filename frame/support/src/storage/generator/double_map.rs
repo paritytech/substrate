@@ -340,9 +340,9 @@ impl<
 	G::Hasher1: ReversibleStorageHasher,
 	G::Hasher2: ReversibleStorageHasher
 {
-	type KeyPrefixIterator = KeyPrefixIterator<K2>;
+	type PartialKeyIterator = KeyPrefixIterator<K2>;
 	type PrefixIterator = PrefixIterator<(K2, V)>;
-	type KeyIterator = KeyPrefixIterator<(K1, K2)>;
+	type FullKeyIterator = KeyPrefixIterator<(K1, K2)>;
 	type Iterator = PrefixIterator<(K1, K2, V)>;
 
 	fn iter_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator {
@@ -358,9 +358,9 @@ impl<
 		}
 	}
 
-	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::KeyPrefixIterator {
+	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::PartialKeyIterator {
 		let prefix = G::storage_double_map_final_key1(k1);
-		Self::KeyPrefixIterator {
+		Self::PartialKeyIterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
@@ -393,9 +393,9 @@ impl<
 		}
 	}
 
-	fn iter_keys() -> Self::KeyIterator {
+	fn iter_keys() -> Self::FullKeyIterator {
 		let prefix = G::prefix_hash();
-		Self::KeyIterator {
+		Self::FullKeyIterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,

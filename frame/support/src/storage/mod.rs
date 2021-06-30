@@ -343,13 +343,13 @@ pub trait IterableStorageDoubleMap<
 	V: FullCodec
 >: StorageDoubleMap<K1, K2, V> {
 	/// The type that iterates over all `key2`.
-	type KeyPrefixIterator: Iterator<Item = K2>;
+	type PartialKeyIterator: Iterator<Item = K2>;
 
 	/// The type that iterates over all `(key2, value)`.
 	type PrefixIterator: Iterator<Item = (K2, V)>;
 
 	/// The type that iterates over all `(key1, key2)`.
-	type KeyIterator: Iterator<Item = (K1, K2)>;
+	type FullKeyIterator: Iterator<Item = (K1, K2)>;
 
 	/// The type that iterates over all `(key1, key2, value)`.
 	type Iterator: Iterator<Item = (K1, K2, V)>;
@@ -362,7 +362,7 @@ pub trait IterableStorageDoubleMap<
 	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
 	/// order. If you add or remove values whose first key is `k1` to the map while doing this,
 	/// you'll get undefined results.
-	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::KeyPrefixIterator;
+	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::PartialKeyIterator;
 
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order. If you add elements with first key `k1` to the map while doing this,
@@ -375,7 +375,7 @@ pub trait IterableStorageDoubleMap<
 	
 	/// Enumerate all keys `k1` and `k2` in the map in no particular order. If you add or remove
 	/// values to the map while doing this, you'll get undefined results.
-	fn iter_keys() -> Self::KeyIterator;
+	fn iter_keys() -> Self::FullKeyIterator;
 
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
