@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{Def, expand::merge_where_clauses, parse::helper::get_doc_literals};
+use crate::pallet::{Def, expand::merge_where_clauses};
+use frame_support_procedural_tools::get_doc_literals;
 
 /// * Add derive trait on Pallet
 /// * Implement GetPalletVersion on Pallet

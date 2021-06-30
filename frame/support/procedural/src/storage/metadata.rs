@@ -17,6 +17,7 @@
 
 //! Implementation of `storage_metadata` on module structure, used by construct_runtime.
 
+use frame_support_procedural_tools::get_doc_literals;
 use proc_macro2::TokenStream;
 use quote::quote;
 use super::{DeclStorageDefExt, StorageLineDefExt, StorageLineTypeDef};
@@ -164,15 +165,7 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 			default_byte_getter_struct_instance,
 		) = default_byte_getter(scrate, line, def);
 
-		let mut docs = TokenStream::new();
-		for attr in line.attrs.iter().filter_map(|v| v.parse_meta().ok()) {
-			if let syn::Meta::NameValue(meta) = attr {
-				if meta.path.is_ident("doc") {
-					let lit = meta.lit;
-					docs.extend(quote!(#lit,));
-				}
-			}
-		}
+		let docs = get_doc_literals(&line.attrs);
 
 		let entry = quote! {
 			#scrate::metadata::StorageEntryMetadata {
@@ -180,7 +173,7 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 				modifier: #modifier,
 				ty: #ty,
 				default: #default_byte_getter_struct_instance.default_byte(),
-				documentation: #scrate::scale_info::prelude::vec![ #docs ],
+				documentation: #scrate::scale_info::prelude::vec![ #( #docs ),* ],
 			},
 		};
 

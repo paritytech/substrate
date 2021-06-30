@@ -44,6 +44,7 @@ parity-util-mem = { version = "0.9.0", default-features = false, features = ["pr
 [features]
 default = ["std"]
 std = [
+	"metadata-docs",
 	"once_cell",
 	"serde",
 	"scale-info/std",
@@ -60,6 +61,10 @@ std = [
 	"frame-support-procedural/std",
 	"log/std",
 	"max-encoded-len/std",
+]
+metadata-docs = [
+	"frame-support-procedural/metadata-docs",
+	"scale-info/docs"
 ]
 runtime-benchmarks = []
 try-runtime = []
