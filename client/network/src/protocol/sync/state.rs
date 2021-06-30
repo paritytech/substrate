@@ -155,7 +155,12 @@ impl<B: BlockT> StateSync<B> {
 			complete
 		} else {
 			let mut complete = true;
-			self.last_key.clear();
+			if self.last_key.len() == 2 && response.entries[0].entries.len() == 0 {
+				// empty parent is possible when all batch is into child.
+				self.last_key.pop();
+			} else {
+				self.last_key.clear();
+			}
 			for state in response.entries {
 				log::debug!(
 					target: "sync",
