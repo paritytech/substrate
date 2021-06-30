@@ -17,15 +17,13 @@
 
 //! Generated voter bag thresholds.
 
-use super::N_BAGS;
-
 /// Ratio between adjacent bags;
 #[cfg(any(test, feature = "std"))]
 #[allow(unused)]
 pub const CONSTANT_RATIO: f64 = 1.2483305489016119;
 
 /// Upper thresholds for each bag.
-pub const THRESHOLDS: [u64; N_BAGS as usize] = [
+pub const THRESHOLDS: [u64; 200] = [
     1,
     2,
     3,
