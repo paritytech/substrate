@@ -387,6 +387,15 @@ where
 		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_prefix(k1)
 	}
 
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
+	/// order.
+	///
+	/// If you add or remove values whose first key is `k1` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_key_prefix(k1: impl EncodeLike<Key1>) -> crate::storage::KeyPrefixIterator<Key2> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_key_prefix(k1)
+	}
+
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order.
 	///
@@ -396,6 +405,15 @@ where
 		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::drain_prefix(k1)
 	}
 
+	/// Remove all elements from the map with first key `k1` and iterate through the second key
+	/// `k2` in no particular order.
+	///
+	/// If you add elements with first key `k1` to the map while doing this, you'll get undefined
+	/// results.
+	pub fn drain_key_prefix(k1: impl EncodeLike<Key1>) -> crate::storage::KeyPrefixIterator<Key2> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::drain_key_prefix(k1)
+	}
+
 	/// Enumerate all elements in the map in no particular order.
 	///
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
@@ -403,11 +421,26 @@ where
 		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter()
 	}
 
+	/// Enumerate all keys `k1` and `k2` in the map in no particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<(Key1, Key2)> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_keys()
+	}
+
 	/// Remove all elements from the map and iterate through them in no particular order.
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
 	pub fn drain() -> crate::storage::PrefixIterator<(Key1, Key2, Value)> {
 		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::drain()
+	}
+
+	/// Remove all elements from the map and iterate through the keys `k1` and `k2` in no
+	/// particular order.
+	///
+	/// If you add elements to the map while doing this, you'll get undefined results.
+	pub fn drain_keys() -> crate::storage::KeyPrefixIterator<(Key1, Key2)> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::drain_keys()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.

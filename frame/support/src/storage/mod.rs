@@ -314,14 +314,24 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// The type that iterates over all `(key, value)`.
 	type Iterator: Iterator<Item = (K, V)>;
+	/// The type that itereates over all `key`s.
+	type KeyIterator: Iterator<Item = K>;
 
 	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
 	/// this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
+	/// Enumerate all keys in the map in no particular order, skipping over the elements. If you
+	/// alter the map while doing this, you'll get undefined results.
+	fn iter_keys() -> Self::KeyIterator;
+
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
+
+	/// Remove all elements from the map and iterate through only the keys in no particular order.
+	/// If you add elements to the map while doing this. you'll get undefined results.
+	fn drain_keys() -> Self::KeyIterator;
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
@@ -336,8 +346,14 @@ pub trait IterableStorageDoubleMap<
 	K2: FullCodec,
 	V: FullCodec
 >: StorageDoubleMap<K1, K2, V> {
+	/// The type that iterates over all `key2`.
+	type KeyPrefixIterator: Iterator<Item = K2>;
+
 	/// The type that iterates over all `(key2, value)`.
 	type PrefixIterator: Iterator<Item = (K2, V)>;
+
+	/// The type that iterates over all `(key1, key2)`.
+	type KeyIterator: Iterator<Item = (K1, K2)>;
 
 	/// The type that iterates over all `(key1, key2, value)`.
 	type Iterator: Iterator<Item = (K1, K2, V)>;
@@ -347,18 +363,37 @@ pub trait IterableStorageDoubleMap<
 	/// results.
 	fn iter_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
 
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
+	/// order. If you add or remove values whose first key is `k1` to the map while doing this,
+	/// you'll get undefined results.
+	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::KeyPrefixIterator;
+
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order. If you add elements with first key `k1` to the map while doing this,
 	/// you'll get undefined results.
 	fn drain_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
 
+	/// Remove all elements from the map with the same first key `k1` and iterate through the
+	/// second key `k2` in no particular order. If you add elements with first key `k1` to the map
+	/// while doing this, you'll get undefined results.
+	fn drain_key_prefix(k1: impl EncodeLike<K1>) -> Self::KeyPrefixIterator;
+
 	/// Enumerate all elements in the map in no particular order. If you add or remove values to
 	/// the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
+	
+	/// Enumerate all keys `k1` and `k2` in the map in no particular order. If you add or remove
+	/// values to the map while doing this, you'll get undefined results.
+	fn iter_keys() -> Self::KeyIterator;
 
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
+
+	/// Remove all elements from the map and iterate through the first and second keys `k1`, `k2`
+	/// in no particular order. If you add elements to the map while doing this, you'll get
+	/// undefined results.
+	fn drain_keys() -> Self::KeyIterator;
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
@@ -370,7 +405,10 @@ pub trait IterableStorageDoubleMap<
 /// A strongly-typed map with arbitrary number of keys in storage whose keys and values can be
 /// iterated over.
 pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageNMap<K, V> {
-	/// The type that iterates over all `(key1, (key2, (key3, ... (keyN, ()))), value)` tuples
+	/// The type that iterates over all `(key1, key2, key3, ... keyN)` tuples.
+	type KeyIterator: Iterator<Item = K::Key>;
+
+	/// The type that iterates over all `(key1, key2, key3, ... keyN), value)` tuples.
 	type Iterator: Iterator<Item = (K::Key, V)>;
 
 	/// Enumerate all elements in the map with prefix key `kp` in no particular order. If you add or
@@ -379,19 +417,39 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	fn iter_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where K: HasReversibleKeyPrefix<KP>;
 
+	/// Enumerate all suffix keys in the map with prefix key `kp` in no particular order. If you
+	/// add or remove values whose prefix is `kp` to the map while doing this, you'll get undefined
+	/// results.
+	fn iter_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where K: HasReversibleKeyPrefix<KP>;
+
 	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
 	/// particular order. If you add elements with prefix key `kp` to the map while doing this,
 	/// you'll get undefined results.
 	fn drain_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where K: HasReversibleKeyPrefix<KP>;
 
+	/// Remove all elements from the map with prefix key `kp` and iterate through the suffix keys
+	/// in no particular order. If you add elements with prefix key `kp` to the map while doing
+	/// this, you'll get undefined results.
+	fn drain_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where K: HasReversibleKeyPrefix<KP>;
+
 	/// Enumerate all elements in the map in no particular order. If you add or remove values to
 	/// the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
+	/// Enumerate all keys in the map in no particular order. If you add or remove values to the
+	/// map while doing this, you'll get undefined results.
+	fn iter_keys() -> Self::KeyIterator;
+
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
+
+	/// Remove all elements from the map and iterate through the keys in no particular order. If
+	/// you add elements to the map while doing this, you'll get undefined results.
+	fn drain_keys() -> Self::KeyIterator;
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
@@ -722,6 +780,61 @@ impl<T> Iterator for PrefixIterator<T> {
 								e,
 							);
 							continue
+						}
+					};
+
+					Some(item)
+				}
+				None => None,
+			}
+		}
+	}
+}
+
+/// Iterate over a prefix and decode raw_key into `T`.
+///
+/// If any decoding fails it skips it and continues to the next key.
+pub struct KeyPrefixIterator<T> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	/// If true then value are removed while iterating
+	drain: bool,
+	/// Function that take `raw_key_without_prefix` and decode `T`.
+	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
+	closure: fn(&[u8]) -> Result<T, codec::Error>,
+}
+
+impl<T> KeyPrefixIterator<T> {
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(mut self) -> Self {
+		self.drain = true;
+		self
+	}
+}
+
+impl<T> Iterator for KeyPrefixIterator<T> {
+	type Item = T;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		loop {
+			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+			break match maybe_next {
+				Some(next) => {
+					self.previous_key = next;
+					if self.drain {
+						unhashed::kill(&self.previous_key);
+					}
+					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+					let item = match (self.closure)(raw_key_without_prefix) {
+						Ok(item) => item,
+						Err(e) => {
+							log::error!(
+								"key failed to decode at {:?}: {:?}",
+								self.previous_key,
+								e,
+							);
+							continue;
 						}
 					};
 

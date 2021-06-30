@@ -20,7 +20,7 @@ use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
 use crate::{
-	storage::{self, unhashed, StorageAppend, PrefixIterator},
+	storage::{self, unhashed, KeyPrefixIterator, StorageAppend, PrefixIterator},
 	Never, hash::{StorageHasher, Twox128, ReversibleStorageHasher},
 };
 
@@ -140,6 +140,7 @@ impl<
 	G::Hasher: ReversibleStorageHasher
 {
 	type Iterator = PrefixIterator<(K, V)>;
+	type KeyIterator = KeyPrefixIterator<K>;
 
 	/// Enumerate all elements in the map.
 	fn iter() -> Self::Iterator {
@@ -155,11 +156,30 @@ impl<
 		}
 	}
 
+	/// Enumerate all keys in the map.
+	fn iter_keys() -> Self::KeyIterator {
+		let prefix = G::prefix_hash();
+		KeyPrefixIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: |raw_key_without_prefix| {
+				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
+				K::decode(&mut key_material)
+			}
+		}
+	}
+
 	/// Enumerate all elements in the map.
 	fn drain() -> Self::Iterator {
 		let mut iterator = Self::iter();
 		iterator.drain = true;
 		iterator
+	}
+
+	/// Enumerate all keys in the map.
+	fn drain_keys() -> Self::KeyIterator {
+		Self::iter_keys().drain()
 	}
 
 	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(mut f: F) {
@@ -377,6 +397,8 @@ mod test_iterators {
 			}
 
 			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)]);
+
+			assert_eq!(Map::iter_keys().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
 
 			assert_eq!(Map::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
 
