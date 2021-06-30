@@ -33,6 +33,9 @@ use frame_support::DefaultNoBound;
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
+/// [`Voter`] parametrized by [`Config`] instead of by `AccountId`.
+pub type VoterOf<T> = Voter<AccountIdOf<T>>;
+
 /// Index type for a bag.
 pub type BagIdx = u8;
 
@@ -499,8 +502,6 @@ impl<AccountId> Voter<AccountId> {
 		}
 	}
 }
-
-pub type VoterOf<T> = Voter<AccountIdOf<T>>;
 
 /// Type of voter.
 ///
