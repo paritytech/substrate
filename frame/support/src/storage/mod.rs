@@ -795,29 +795,24 @@ impl<T> Iterator for KeyPrefixIterator<T> {
 		loop {
 			let maybe_next = sp_io::storage::next_key(&self.previous_key)
 				.filter(|n| n.starts_with(&self.prefix));
-			break match maybe_next {
-				Some(next) => {
-					self.previous_key = next;
-					if self.drain {
-						unhashed::kill(&self.previous_key);
-					}
-					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
-					let item = match (self.closure)(raw_key_without_prefix) {
-						Ok(item) => item,
-						Err(e) => {
-							log::error!(
-								"key failed to decode at {:?}: {:?}",
-								self.previous_key,
-								e,
-							);
-							continue;
-						}
-					};
 
-					Some(item)
+			if let Some(next) = maybe_next {
+				self.previous_key = next;
+				if self.drain {
+					unhashed::kill(&self.previous_key);
 				}
-				None => None,
+				let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+
+				match (self.closure)(raw_key_without_prefix) {
+					Ok(item) => return Some(item),
+					Err(e) => {
+						log::error!("key failed to decode at {:?}: {:?}", self.previous_key, e);
+						continue;
+					}
+				}
 			}
+
+			return None;
 		}
 	}
 }
