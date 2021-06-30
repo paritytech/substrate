@@ -47,11 +47,11 @@ pub trait SystemApi<Hash, Number> {
 
 	/// Get the chain's type.
 	#[rpc(name = "system_chainType")]
-	fn system_type(&self) -> SystemResult<sp_chain_spec::ChainType>;
+	fn system_type(&self) -> SystemResult<sc_chain_spec::ChainType>;
 
 	/// Get a custom set of properties as a JSON object, defined in the chain spec.
 	#[rpc(name = "system_properties")]
-	fn system_properties(&self) -> SystemResult<sp_chain_spec::Properties>;
+	fn system_properties(&self) -> SystemResult<sc_chain_spec::Properties>;
 
 	/// Return health status of the node.
 	///
