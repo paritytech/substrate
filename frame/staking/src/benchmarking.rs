@@ -719,6 +719,28 @@ benchmarks! {
 		let node = Node::<T>::from_id(&stash).ok_or("node not found for stash")?;
 		ensure!(!node.is_misplaced(&weight_of), "node must be in proper place after rebag");
 	}
+
+	regenerate {
+		// number of validator intention.
+		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
+		// number of nominator intention.
+		let n in (MAX_NOMINATORS / 2) .. MAX_NOMINATORS;
+
+		clear_validators_and_nominators::<T>();
+		ensure!(
+			create_validators_with_nominators_for_era::<T>(
+				v,
+				n,
+				T::MAX_NOMINATIONS as usize,
+				true,
+				None,
+			).is_ok(),
+			"creating validators and nominators failed",
+		);
+	}: {
+		let migrated = VoterList::<T>::regenerate();
+		ensure!(v + n == migrated, "didn't migrate right amount of voters");
+	}
 }
 
 #[cfg(test)]

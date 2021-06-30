@@ -781,11 +781,10 @@ pub mod migrations {
 				migrated,
 			);
 
-			// TODO: this is a pretty rough estimate, improve it
-			T::DbWeight::get().reads_writes(
-				migrated.into(),
-				(migrated * 3).into(),
-			)
+			T::WeightInfo::regenerate(
+				CounterForValidators::<T>::get(),
+				CounterForNominators::<T>::get(),
+			).saturating_add(T::DbWeight::get().reads(2))
 		}
 	}
 
