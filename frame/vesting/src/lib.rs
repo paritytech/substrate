@@ -424,8 +424,8 @@ pub mod pallet {
 
 		/// Merge two vesting schedules together, creating a new vesting schedule that unlocks over
 		/// highest possible start and end blocks. If both schedules have already started the current
-		/// block will be used as the schedule start; with the caveat that if one schedule is finishes by
-		/// the current block, the other will be treated as the new merged schedule, unmodified.
+		/// block will be used as the schedule start; with the caveat that if one schedule is finished
+		/// by the current block, the other will be treated as the new merged schedule, unmodified.
 		///
 		/// NOTE: If `schedule1_index == schedule2_index` this is a no-op.
 		/// NOTE: This will unlock all schedules through the current block prior to merging.
@@ -700,10 +700,8 @@ where
 	}
 
 	/// Remove a vesting schedule for a given account. Will error if `schedule_index` is `None`.
-	fn remove_vesting_schedule(who: &T::AccountId, schedule_index: Option<u32>) -> DispatchResult {
-		let schedule_index = schedule_index.ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
+	fn remove_vesting_schedule(who: &T::AccountId, schedule_index: u32) -> DispatchResult {
 		let filter = Filter::One(schedule_index as usize);
-
 		let vesting = Self::vesting(who).ok_or(Error::<T>::NotVesting)?;
 		if let Some(v) = Self::update_lock_and_schedules(who.clone(), vesting, filter) {
 			Vesting::<T>::insert(&who, v);

@@ -103,5 +103,5 @@ pub trait VestingSchedule<AccountId> {
 	/// support multiple schedules.
 	///
 	/// NOTE: This doesn't alter the free balance of the account.
-	fn remove_vesting_schedule(who: &AccountId, schedule_index: Option<u32>) -> DispatchResult;
+	fn remove_vesting_schedule(who: &AccountId, schedule_index: u32) -> DispatchResult;
 }
