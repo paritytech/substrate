@@ -312,7 +312,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		AtLeast32BitUnsigned, Bounded, CheckedSub, Convert, SaturatedConversion, Saturating,
-		StaticLookup, UniqueSaturatedInto, Zero,
+		StaticLookup, Zero,
 	},
 };
 use sp_staking::{
@@ -321,7 +321,7 @@ use sp_staking::{
 };
 use frame_system::{ensure_signed, ensure_root, pallet_prelude::*, offchain::SendTransactionTypes};
 use frame_election_provider_support::{ElectionProvider, VoteWeight, Supports, data_provider};
-use voter_bags::{BagIdx, VoterList, VoterType};
+use voter_bags::{VoterList, VoterType};
 pub use weights::WeightInfo;
 pub use pallet::*;
 
@@ -1008,11 +1008,6 @@ pub mod pallet {
 		/// regenerated.
 		#[pallet::constant]
 		type VoterBagThresholds: Get<&'static [VoteWeight]>;
-
-		/// A type sufficient to distinguish between all voter bags.
-		///
-		/// For 256 bags or fewer, `u8` suffices.
-		type BagIdx: Copy + Eq + Ord + codec::Codec + MaxEncodedLen + Bounded + UniqueSaturatedInto<usize>;
 	}
 
 	#[pallet::extra_constants]
@@ -1311,6 +1306,8 @@ pub mod pallet {
 	// The next storage items collectively comprise the voter bags: a composite data structure
 	// designed to allow efficient iteration of the top N voters by stake, mostly. See
 	// `mod voter_bags` for details.
+	//
+	// In each of these items, voter bags are indexed by their upper weight threshold.
 
 	/// How many voters are registered.
 	#[pallet::storage]
@@ -1321,21 +1318,25 @@ pub mod pallet {
 	/// This may not be the appropriate bag for the voter's weight if they have been rewarded or
 	/// slashed.
 	#[pallet::storage]
-	pub(crate) type VoterBagFor<T: Config> = StorageMap<_, Twox64Concat, AccountIdOf<T>, voter_bags::BagIdx>;
+	pub(crate) type VoterBagFor<T: Config> = StorageMap<_, Twox64Concat, AccountIdOf<T>, VoteWeight>;
 
-	/// The head and tail of each bag of voters.
+	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
+	/// mainly exists to store head and tail pointers to the appropriate nodes.
 	#[pallet::storage]
 	pub(crate) type VoterBags<T: Config> = StorageMap<
 		_,
-		Twox64Concat, voter_bags::BagIdx,
+		Twox64Concat, VoteWeight,
 		voter_bags::Bag<T>,
 	>;
 
-	/// The nodes comprising each bag.
+	/// Voter nodes store links forward and back within their respective bags, the stash id, and
+	/// whether the voter is a validator or nominator.
+	///
+	/// There is nothing in this map directly identifying to which bag a particular node belongs.
+	/// However, the `Node` data structure has helpers which can provide that information.
 	#[pallet::storage]
-	pub(crate) type VoterNodes<T: Config> = StorageDoubleMap<
+	pub(crate) type VoterNodes<T: Config> = StorageMap<
 		_,
-		Twox64Concat, voter_bags::BagIdx,
 		Twox64Concat, AccountIdOf<T>,
 		voter_bags::Node<T>,
 	>;
@@ -1456,7 +1457,7 @@ pub mod pallet {
 		/// The election failed. No new era is planned.
 		StakingElectionFailed,
 		/// Moved an account from one bag to another. \[who, from, to\].
-		Rebagged(T::AccountId, BagIdx, BagIdx),
+		Rebagged(T::AccountId, VoteWeight, VoteWeight),
 	}
 
 	#[pallet::error]
@@ -1561,11 +1562,6 @@ pub mod pallet {
 					assert!(
 						T::VoterBagThresholds::get().windows(2).all(|window| window[1] > window[0]),
 						"Voter bag thresholds must strictly increase",
-					);
-
-					assert!(
-						T::BagIdx::max_value().saturated_into() >= T::VoterBagThresholds::get().len(),
-						"BagIdx must be sufficient to uniquely identify every bag",
 					);
 				});
 			}
@@ -3204,7 +3200,7 @@ impl<T: Config> Pallet<T> {
 	/// Move a stash account from one bag to another, depositing an event on success.
 	///
 	/// If the stash changed bags, returns `Some((from, to))`.
-	pub fn do_rebag(stash: &T::AccountId) -> Option<(BagIdx, BagIdx)> {
+	pub fn do_rebag(stash: &T::AccountId) -> Option<(VoteWeight, VoteWeight)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
 		let maybe_movement = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {

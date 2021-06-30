@@ -23,41 +23,37 @@
 
 pub mod thresholds;
 
-use thresholds::THRESHOLDS;
 use crate::{
 	AccountIdOf, Config, Nominations, Nominators, Pallet, Validators, VoteWeight, VoterBagFor,
 	VotingDataOf, slashing::SlashingSpans,
 };
 use codec::{Encode, Decode};
-use frame_support::DefaultNoBound;
+use frame_support::{DefaultNoBound, traits::Get};
 use sp_runtime::SaturatedConversion;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
 /// [`Voter`] parametrized by [`Config`] instead of by `AccountId`.
 pub type VoterOf<T> = Voter<AccountIdOf<T>>;
 
-/// Index type for a bag.
-pub type BagIdx = u8;
-
-/// How many bags there are
-pub const N_BAGS: BagIdx = 200;
-
-/// Given a certain vote weight, which bag should this voter contain?
+/// Given a certain vote weight, which bag should contain this voter?
 ///
-/// Bags are separated by fixed thresholds. To the extent possible, each threshold is a constant
-/// small multiple of the one before it. That ratio is [`thresholds::CONSTANT_RATIO`]. The exception
-/// are the smallest bags, which are each at least 1 greater than the previous, and the largest bag,
-/// which is defined as `u64::MAX`.
+/// Bags are identified by their upper threshold; the value returned by this function is guaranteed
+/// to be a member of `T::VoterBagThresholds`.
 ///
-/// Bags are arranged such that `bags[0]` is the largest bag, and `bags[N_BAGS-1]` is the smallest.
-fn notional_bag_for(weight: VoteWeight) -> BagIdx {
-	let raw_bag =
-		THRESHOLDS.partition_point(|&threshold| weight > threshold) as BagIdx;
-	N_BAGS - 1 - raw_bag
+/// This is used instead of a simpler scheme, such as the index within `T::VoterBagThresholds`,
+/// because in the event that bags are inserted or deleted, the number of affected voters which need
+/// to be migrated is smaller.
+///
+/// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
+/// function behaves as if it does.
+fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
+	let thresholds = T::VoterBagThresholds::get();
+	let idx = thresholds.partition_point(|&threshold| weight > threshold);
+	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
 }
 
-/// Find the actual bag containing the current voter.
-fn current_bag_for<T: Config>(id: &AccountIdOf<T>) -> Option<BagIdx> {
+/// Find the upper threshold of the actual bag containing the current voter.
+fn current_bag_for<T: Config>(id: &AccountIdOf<T>) -> Option<VoteWeight> {
 	VoterBagFor::<T>::try_get(id).ok()
 }
 
@@ -110,10 +106,13 @@ impl<T: Config> VoterList<T> {
 
 	/// Iterate over all nodes in all bags in the voter list.
 	///
-	/// Note that this exhaustively attempts to try all possible bag indices. Full iteration can be
-	/// expensive; it's recommended to limit the number of items with `.take(n)`.
+	/// Full iteration can be expensive; it's recommended to limit the number of items with `.take(n)`.
 	pub fn iter() -> impl Iterator<Item = Node<T>> {
-		(0..=BagIdx::MAX).filter_map(|bag_idx| Bag::get(bag_idx)).flat_map(|bag| bag.iter())
+		T::VoterBagThresholds::get()
+			.iter()
+			.copied()
+			.filter_map(Bag::get)
+			.flat_map(|bag| bag.iter())
 	}
 
 	/// Insert a new voter into the appropriate bag in the voter list.
@@ -147,7 +146,7 @@ impl<T: Config> VoterList<T> {
 
 		for voter in voters.into_iter() {
 			let weight = weight_of(&voter.id);
-			let bag = notional_bag_for(weight);
+			let bag = notional_bag_for::<T>(weight);
 			bags.entry(bag).or_insert_with(|| Bag::<T>::get_or_make(bag)).insert(voter);
 			count += 1;
 		}
@@ -180,11 +179,11 @@ impl<T: Config> VoterList<T> {
 			count += 1;
 
 			// clear the bag head/tail pointers as necessary
-			let bag = bags.entry(node.bag_idx).or_insert_with(|| Bag::<T>::get_or_make(node.bag_idx));
+			let bag = bags.entry(node.bag_upper).or_insert_with(|| Bag::<T>::get_or_make(node.bag_upper));
 			bag.remove_node(&node);
 
 			// now get rid of the node itself
-			crate::VoterNodes::<T>::remove(node.bag_idx, voter_id);
+			crate::VoterNodes::<T>::remove(voter_id);
 			crate::VoterBagFor::<T>::remove(voter_id);
 		}
 
@@ -208,12 +207,12 @@ impl<T: Config> VoterList<T> {
 	pub fn update_position_for(
 		mut node: Node<T>,
 		weight_of: impl Fn(&AccountIdOf<T>) -> VoteWeight,
-	) -> Option<(BagIdx, BagIdx)> {
+	) -> Option<(VoteWeight, VoteWeight)> {
 		node.is_misplaced(&weight_of).then(move || {
-			let old_idx = node.bag_idx;
+			let old_idx = node.bag_upper;
 
 			// clear the old bag head/tail pointers as necessary
-			if let Some(mut bag) = Bag::<T>::get(node.bag_idx) {
+			if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
 				bag.remove_node(&node);
 				bag.put();
 			} else {
@@ -226,9 +225,9 @@ impl<T: Config> VoterList<T> {
 			}
 
 			// put the voter into the appropriate new bag
-			let new_idx = notional_bag_for(weight_of(&node.voter.id));
-			node.bag_idx = new_idx;
-			let mut bag = Bag::<T>::get_or_make(node.bag_idx);
+			let new_idx = notional_bag_for::<T>(weight_of(&node.voter.id));
+			node.bag_upper = new_idx;
+			let mut bag = Bag::<T>::get_or_make(node.bag_upper);
 			bag.insert_node(node);
 			bag.put();
 
@@ -250,36 +249,40 @@ pub struct Bag<T: Config> {
 	tail: Option<AccountIdOf<T>>,
 
 	#[codec(skip)]
-	bag_idx: BagIdx,
+	bag_upper: VoteWeight,
 }
 
 impl<T: Config> Bag<T> {
-	/// Get a bag by idx.
-	pub fn get(bag_idx: BagIdx) -> Option<Bag<T>> {
-		crate::VoterBags::<T>::try_get(bag_idx).ok().map(|mut bag| {
-			bag.bag_idx = bag_idx;
+	/// Get a bag by its upper vote weight.
+	pub fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
+		debug_assert!(
+			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			"it is a logic error to attempt to get a bag which is not in the thresholds list"
+		);
+		crate::VoterBags::<T>::try_get(bag_upper).ok().map(|mut bag| {
+			bag.bag_upper = bag_upper;
 			bag
 		})
 	}
 
-	/// Get a bag by idx or make it, appropriately initialized.
-	pub fn get_or_make(bag_idx: BagIdx) -> Bag<T> {
-		Self::get(bag_idx).unwrap_or(Bag { bag_idx, ..Default::default() })
+	/// Get a bag by its upper vote weight or make it, appropriately initialized.
+	pub fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
+		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
 	}
 
 	/// Put the bag back into storage.
 	pub fn put(self) {
-		crate::VoterBags::<T>::insert(self.bag_idx, self);
+		crate::VoterBags::<T>::insert(self.bag_upper, self);
 	}
 
 	/// Get the head node in this bag.
 	pub fn head(&self) -> Option<Node<T>> {
-		self.head.as_ref().and_then(|id| Node::get(self.bag_idx, id))
+		self.head.as_ref().and_then(|id| Node::get(self.bag_upper, id))
 	}
 
 	/// Get the tail node in this bag.
 	pub fn tail(&self) -> Option<Node<T>> {
-		self.tail.as_ref().and_then(|id| Node::get(self.bag_idx, id))
+		self.tail.as_ref().and_then(|id| Node::get(self.bag_upper, id))
 	}
 
 	/// Iterate over the nodes in this bag.
@@ -299,7 +302,7 @@ impl<T: Config> Bag<T> {
 			voter,
 			prev: None,
 			next: None,
-			bag_idx: self.bag_idx,
+			bag_upper: self.bag_upper,
 		});
 	}
 
@@ -329,7 +332,7 @@ impl<T: Config> Bag<T> {
 		}
 		self.tail = Some(id.clone());
 
-		crate::VoterBagFor::<T>::insert(id, self.bag_idx);
+		crate::VoterBagFor::<T>::insert(id, self.bag_upper);
 	}
 
 	/// Remove a voter node from this bag.
@@ -362,14 +365,14 @@ pub struct Node<T: Config> {
 
 	/// The bag index is not stored in storage, but injected during all fetch operations.
 	#[codec(skip)]
-	pub(crate) bag_idx: BagIdx,
+	pub(crate) bag_upper: VoteWeight,
 }
 
 impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
-	pub fn get(bag_idx: BagIdx, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
-		crate::VoterNodes::<T>::try_get(&bag_idx, account_id).ok().map(|mut node| {
-			node.bag_idx = bag_idx;
+	pub fn get(bag_upper: VoteWeight, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
+		crate::VoterNodes::<T>::try_get(account_id).ok().map(|mut node| {
+			node.bag_upper = bag_upper;
 			node
 		})
 	}
@@ -385,12 +388,12 @@ impl<T: Config> Node<T> {
 
 	/// Get a node by account id, assuming it's in the same bag as this node.
 	pub fn in_bag(&self, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
-		Self::get(self.bag_idx, account_id)
+		Self::get(self.bag_upper, account_id)
 	}
 
 	/// Put the node back into storage.
 	pub fn put(self) {
-		crate::VoterNodes::<T>::insert(self.bag_idx, self.voter.id.clone(), self);
+		crate::VoterNodes::<T>::insert(self.voter.id.clone(), self);
 	}
 
 	/// Get the previous node in the bag.
@@ -448,7 +451,7 @@ impl<T: Config> Node<T> {
 
 	/// `true` when this voter is in the wrong bag.
 	pub fn is_misplaced(&self, weight_of: impl Fn(&T::AccountId) -> VoteWeight) -> bool {
-		notional_bag_for(weight_of(&self.voter.id)) != self.bag_idx
+		notional_bag_for::<T>(weight_of(&self.voter.id)) != self.bag_upper
 	}
 
 	/// Update the voter type associated with a particular node by id.
@@ -470,7 +473,7 @@ impl<T: Config> Node<T> {
 	///
 	/// This is a helper intended only for benchmarking and should not be used in production.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
-	pub fn proper_bag_for(&self) -> BagIdx {
+	pub fn proper_bag_for(&self) -> VoteWeight {
 		let weight_of = crate::Pallet::<T>::weight_of_fn();
 		let current_weight = weight_of(&self.voter.id);
 		notional_bag_for(current_weight)
