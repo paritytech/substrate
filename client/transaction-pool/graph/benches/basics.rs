@@ -51,9 +51,9 @@ fn to_tag(nonce: u64, from: AccountId) -> Tag {
 
 impl ChainApi for TestApi {
 	type Block = Block;
-	type Error = sp_transaction_pool::error::Error;
-	type ValidationFuture = Ready<sp_transaction_pool::error::Result<TransactionValidity>>;
-	type BodyFuture = Ready<sp_transaction_pool::error::Result<Option<Vec<Extrinsic>>>>;
+	type Error = sc_transaction_pool_primitives::error::Error;
+	type ValidationFuture = Ready<sc_transaction_pool_primitives::error::Result<TransactionValidity>>;
+	type BodyFuture = Ready<sc_transaction_pool_primitives::error::Result<Option<Vec<Extrinsic>>>>;
 
 	fn validate_transaction(
 		&self,

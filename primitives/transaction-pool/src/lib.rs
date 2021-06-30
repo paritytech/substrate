@@ -21,13 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod runtime_api;
-#[cfg(feature = "std")]
-pub mod error;
-#[cfg(feature = "std")]
-mod pool;
-
-#[cfg(feature = "std")]
-pub use pool::*;
 
 pub use sp_runtime::transaction_validity::{
 	TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,

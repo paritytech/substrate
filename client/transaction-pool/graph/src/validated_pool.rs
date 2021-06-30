@@ -29,7 +29,7 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionTag as Tag, ValidTransaction, TransactionSource},
 };
-use sp_transaction_pool::{error, PoolStatus};
+use sc_transaction_pool_primitives::{error, PoolStatus};
 use wasm_timer::Instant;
 use futures::channel::mpsc::{channel, Sender};
 use retain_mut::RetainMut;

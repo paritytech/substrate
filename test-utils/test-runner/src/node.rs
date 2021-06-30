@@ -41,7 +41,7 @@ use sp_runtime::{generic::UncheckedExtrinsic, traits::NumberFor};
 use sp_session::SessionKeys;
 use sp_state_machine::Ext;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use sp_transaction_pool::TransactionPool;
+use sc_transaction_pool_primitives::TransactionPool;
 
 use crate::{ChainInfo, utils::logger};
 use log::LevelFilter;

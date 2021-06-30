@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::*;
-use sp_transaction_pool::TransactionStatus;
+use sc_transaction_pool_primitives::TransactionStatus;
 use futures::executor::{block_on, block_on_stream};
 use sp_runtime::{
 	generic::BlockId,
@@ -938,7 +938,7 @@ fn should_not_accept_old_signatures() {
 	assert_matches::assert_matches!(
 		block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())),
 		Err(error::Error::Pool(
-			sp_transaction_pool::error::Error::InvalidTransaction(InvalidTransaction::BadProof)
+			sc_transaction_pool_primitives::error::Error::InvalidTransaction(InvalidTransaction::BadProof)
 		)),
 		"Should be invalid transaction with bad proof",
 	);

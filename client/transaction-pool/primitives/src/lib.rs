@@ -17,6 +17,8 @@
 
 //! Transaction pool primitives types & Runtime API.
 
+pub mod error;
+
 use std::{
 	collections::HashMap,
 	hash::Hash,
@@ -28,9 +30,9 @@ use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
-	transaction_validity::{
-		TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,
-	},
+};
+pub use sp_runtime::transaction_validity::{
+	TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,
 };
 
 /// Transaction pool status.

@@ -43,7 +43,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero, Header as HeaderT},
 };
 use sp_core::traits::SpawnEssentialNamed;
-use sp_transaction_pool::{
+use sc_transaction_pool_primitives::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 	TransactionSource,
@@ -420,7 +420,7 @@ where
 	}
 }
 
-impl<Block, Client> sp_transaction_pool::LocalTransactionPool
+impl<Block, Client> sc_transaction_pool_primitives::LocalTransactionPool
 	for BasicPool<FullChainApi<Client, Block>, Block>
 where
 	Block: BlockT,
@@ -438,7 +438,7 @@ where
 	fn submit_local(
 		&self,
 		at: &BlockId<Self::Block>,
-		xt: sp_transaction_pool::LocalTransactionFor<Self>,
+		xt: sc_transaction_pool_primitives::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
 		use sc_transaction_graph::ValidatedTransaction;
 		use sp_runtime::traits::SaturatedConversion;

@@ -62,6 +62,7 @@ members = [
 	"client/tracing/proc-macro",
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
+	"client/transaction-pool/primitives",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",

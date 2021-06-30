@@ -37,7 +37,7 @@ use sp_runtime::transaction_validity::{
 	TransactionPriority as Priority,
 	TransactionSource as Source,
 };
-use sp_transaction_pool::{error, PoolStatus, InPoolTransaction};
+use sc_transaction_pool_primitives::{error, PoolStatus, InPoolTransaction};
 
 use crate::future::{FutureTransactions, WaitingTransaction};
 use crate::ready::ReadyTransactions;
