@@ -1397,8 +1397,8 @@ pub mod pallet {
 		StakingElectionFailed,
 		/// Attempted to rebag an account.
 		///
-		/// If the second parameter is not `None`, it is the `(from, to)` tuple of bag indices.
-		Rebag(T::AccountId, Option<(BagIdx, BagIdx)>),
+		/// Contents: `who, from, to`.
+		Rebagged(T::AccountId, BagIdx, BagIdx),
 	}
 
 	#[pallet::error]
@@ -2450,12 +2450,12 @@ pub mod pallet {
 
 			// if no voter at that node, don't do anything.
 			// the caller just wasted the fee to call this.
-			let moved = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {
+			if let Some((from, to)) = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {
 				let weight_of = Self::weight_of_fn();
 				VoterList::update_position_for(node, weight_of)
-			});
-
-			Self::deposit_event(Event::<T>::Rebag(stash, moved));
+			}) {
+				Self::deposit_event(Event::<T>::Rebagged(stash, from, to));
+			};
 
 			Ok(())
 		}
