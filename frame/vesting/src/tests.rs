@@ -344,8 +344,15 @@ fn vested_transfer_correctly_fails() {
 			// `per_block` is 0, which would result in a schedule with infinite duration.
 			let schedule_per_block_0 = VestingInfo::new::<Test>(256, 0, 10);
 			assert_noop!(
-				Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_per_block_0),
-				Error::<Test>::InvalidScheduleParams,
+				Vesting::vested_transfer(Some(3).into(), 4, schedule_per_block_0),
+				Error::<Test>::InfiniteSchedule,
+			);
+
+			// `locked / per_block > BlockNumber::max_value()`
+			let schedule_duration_gt_max_blocknumber = VestingInfo::new::<Test>(u64::MAX, 1, 10);
+			assert_noop!(
+				Vesting::vested_transfer(Some(3).into(), 4, schedule_duration_gt_max_blocknumber),
+				Error::<Test>::InfiniteSchedule,
 			);
 
 			// `locked` is 0.
@@ -490,7 +497,14 @@ fn force_vested_transfer_correctly_fails() {
 			let schedule_per_block_0 = VestingInfo::new::<Test>(256, 0, 10);
 			assert_noop!(
 				Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_per_block_0),
-				Error::<Test>::InvalidScheduleParams,
+				Error::<Test>::InfiniteSchedule,
+			);
+
+			// `locked / per_block > BlockNumber::max_value()`
+			let schedule_duration_gt_max_blocknumber = VestingInfo::new::<Test>(u64::MAX, 1, 10);
+			assert_noop!(
+				Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_duration_gt_max_blocknumber),
+				Error::<Test>::InfiniteSchedule,
 			);
 
 			// `locked` is 0.
@@ -957,7 +971,7 @@ fn merge_vesting_errors_with_per_block_0() {
 			1, // Vesting over 512 blocks.
 			10,
 		);
-		assert_eq!(sched1.ending_block::<Identity, Test>(), Ok(512u32 + 10));
+		assert_eq!(sched1.ending_block::<Identity, Test>(), Ok(512u64 + 10));
 
 		assert_eq!(
 			Vesting::merge_vesting_info(5, sched0, sched1),
@@ -967,35 +981,40 @@ fn merge_vesting_errors_with_per_block_0() {
 }
 
 #[test]
-fn vesting_info_validation_works() {
+fn vesting_info_validate_and_correct_works() {
 	let min_transfer = <Test as Config>::MinVestedTransfer::get();
 	// Does not check for min transfer.
-	match VestingInfo::new::<Test>(min_transfer - 1, 1u64, 10u64).validate::<Test>() {
+	match VestingInfo::new::<Test>(min_transfer - 1, 1u64, 10u64).validate::<Identity, Test>() {
 		Ok(_) => (),
 		_ => panic!(),
 	}
 
 	// `locked` cannot be 0.
-	match VestingInfo::new::<Test>(0, 1u64, 10u64).validate::<Test>() {
+	match VestingInfo::new::<Test>(0, 1u64, 10u64).validate::<Identity, Test>() {
 		Err(Error::<Test>::InvalidScheduleParams) => (),
 		_ => panic!(),
 	}
 
 	// `per_block` cannot be 0.
-	match VestingInfo::new::<Test>(min_transfer + 1, 0u64, 10u64).validate() {
-		Err(Error::<Test>::InvalidScheduleParams) => (),
+	match VestingInfo::new::<Test>(min_transfer + 1, 0u64, 10u64).validate::<Identity, Test>() {
+		Err(Error::<Test>::InfiniteSchedule) => (),
+		_ => panic!(),
+	}
+
+	// `locked / per_block` cannot be bigger than BlockNumber::max_value`
+	match VestingInfo::new::<Test>(u64::MAX, 1u64, 10u64).validate::<Identity, Test>() {
+		Err(Error::<Test>::InfiniteSchedule) => (),
 		_ => panic!(),
 	}
 
 	// With valid inputs it does not error and does not modify the inputs.
-	assert_eq!(
-		VestingInfo::new::<Test>(min_transfer, 1u64, 10u64).validate::<Test>().unwrap(),
-		VestingInfo::new::<Test>(min_transfer, 1u64, 10u64)
-	);
+	let valid = VestingInfo::new::<Test>(min_transfer, 1u64, 10u64);
+	assert_ok!(valid.validate::<Identity, Test>());
+	assert_eq!(valid.correct(), VestingInfo::new::<Test>(min_transfer, 1u64, 10u64));
 
 	// `per_block` is never bigger than `locked`.
 	assert_eq!(
-		VestingInfo::new::<Test>(256u64, 256 * 2u64, 10u64).validate::<Test>().unwrap(),
+		VestingInfo::new::<Test>(256u64, 256 * 2u64, 10u64).correct(),
 		VestingInfo::new::<Test>(256u64, 256u64, 10u64)
 	);
 }

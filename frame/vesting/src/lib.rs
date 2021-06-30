@@ -65,8 +65,8 @@ use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 pub use pallet::*;
 use sp_runtime::{
 	traits::{
-		AtLeast32BitUnsigned, CheckedDiv, Convert, MaybeSerializeDeserialize, One, Saturating,
-		StaticLookup, Zero,
+		AtLeast32BitUnsigned, Bounded, CheckedDiv, Convert, MaybeSerializeDeserialize, One,
+		Saturating, StaticLookup, Zero,
 	},
 	RuntimeDebug,
 };
@@ -96,8 +96,10 @@ mod vesting_info {
 		starting_block: BlockNumber,
 	}
 
-	impl<Balance: AtLeast32BitUnsigned + Copy, BlockNumber: AtLeast32BitUnsigned + Copy>
-		VestingInfo<Balance, BlockNumber>
+	impl<Balance, BlockNumber> VestingInfo<Balance, BlockNumber>
+	where
+		Balance: AtLeast32BitUnsigned + Copy,
+		BlockNumber: AtLeast32BitUnsigned + Copy + Bounded,
 	{
 		/// Instantiate a new `VestingInfo`.
 		pub fn new<T: Config>(
@@ -109,16 +111,26 @@ mod vesting_info {
 		}
 
 		/// Validate parameters for `VestingInfo`. Note that this does not check
-		/// against `MinVestedTransfer` or the current block. Additionally it
-		/// will correct `per_block` if it is greater than `locked`.
-		pub fn validate<T: Config>(mut self) -> Result<Self, Error<T>> {
-			ensure!(
-				!self.locked.is_zero() && !self.per_block.is_zero(),
-				Error::<T>::InvalidScheduleParams
-			);
+		/// against `MinVestedTransfer` or the current block.
+		pub fn validate<BlockNumberToBalance: Convert<BlockNumber, Balance>, T: Config>(
+			&self,
+		) -> Result<(), Error<T>> {
+			ensure!(!self.locked.is_zero(), Error::<T>::InvalidScheduleParams);
+
+			let max_block = BlockNumberToBalance::convert(BlockNumber::max_value());
+			match self.locked.checked_div(&self.per_block) {
+				None => return Err(Error::<T>::InfiniteSchedule), // `per_block` is 0
+				Some(duration) => ensure!(duration < max_block, Error::<T>::InfiniteSchedule),
+			};
+
+			Ok(())
+		}
+
+		/// Potentially correct the `per_block` of a schedule. Typically called after `validate`.
+		pub fn correct(mut self) -> Self {
 			self.per_block =
 				if self.per_block > self.locked { self.locked } else { self.per_block };
-			Ok(self)
+			self
 		}
 
 		/// Locked amount at schedule creation.
@@ -168,9 +180,11 @@ mod vesting_info {
 			} else {
 				self.locked / self.per_block +
 					if (self.locked % self.per_block).is_zero() {
-						One::one()
-					} else {
 						Zero::zero()
+					} else {
+						// `per_block` does not perfectly divide `locked`, so we need an extra block to
+						// unlock some amount less than per_block
+						One::one()
 					}
 			};
 
@@ -272,8 +286,8 @@ pub mod pallet {
 				let locked = balance.saturating_sub(liquid);
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
-				let vesting_info = VestingInfo::new::<T>(locked, per_block, begin)
-					.validate::<T>()
+				let vesting_info = VestingInfo::new::<T>(locked, per_block, begin);
+				vesting_info.validate::<T::BlockNumberToBalance, T>()
 					.expect("Invalid VestingInfo params at genesis");
 
 				Vesting::<T>::try_append(who, vesting_info)
@@ -313,11 +327,10 @@ pub mod pallet {
 		AmountLow,
 		/// At least one of the indexes is out of bounds of the vesting schedules.
 		ScheduleIndexOutOfBounds,
-		/// Failed to create a new schedule because the parameters where invalid. i.e. `per_block` or
-		/// `locked` was 0.
+		/// Failed to create a new schedule because some parameters where invalid. e.g. `locked` was 0.
 		InvalidScheduleParams,
-		/// An existing schedule was encountered that contained a `per_block` of 0, thus rendering
-		/// it unable to ever unlock funds.
+		/// A schedule contained a `per_block` of 0 or `locked / per_block > BlockNumber::max_value()`,
+		/// thus rendering it unable to ever fully unlock funds.
 		InfiniteSchedule,
 	}
 
@@ -535,6 +548,10 @@ impl<T: Config> Pallet<T> {
 			.saturating_add(schedule2.locked_at::<T::BlockNumberToBalance>(now));
 		// This shouldn't happen because we know at least one ending block is greater than now.
 		if locked.is_zero() {
+			log::warn!(
+				target: LOG_TARGET,
+				"merge_vesting_info validation checks failed to catch a locked of 0"
+			);
 			return Ok(None);
 		}
 
@@ -559,7 +576,7 @@ impl<T: Config> Pallet<T> {
 
 		// At this point inputs have been validated, so this should always be `Some`.
 		let schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
-		debug_assert!(schedule.validate::<T>().is_ok());
+		debug_assert!(schedule.validate::<T::BlockNumberToBalance, T>().is_ok());
 
 		Ok(Some(schedule))
 	}
@@ -571,11 +588,16 @@ impl<T: Config> Pallet<T> {
 		schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 	) -> DispatchResult {
 		ensure!(schedule.locked() > T::MinVestedTransfer::get(), Error::<T>::AmountLow);
-		let schedule = schedule.validate::<T>()?;
+		schedule.validate::<T::BlockNumberToBalance, T>()?;
+		let schedule = schedule.correct();
 
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
-		ensure!(Vesting::<T>::decode_len(&target).unwrap_or_default() < T::MaxVestingSchedules::get() as usize);
+		ensure!(
+			Vesting::<T>::decode_len(&target).unwrap_or_default() <
+				T::MaxVestingSchedules::get() as usize,
+			Error::<T>::AtMaxVestingSchedules
+		);
 
 		T::Currency::transfer(
 			&source,
