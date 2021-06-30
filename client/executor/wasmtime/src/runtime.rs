@@ -18,28 +18,23 @@
 
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
-use std::{
-	path::{Path, PathBuf},
-	rc::Rc,
-	sync::Arc,
-};
+use crate::host::HostState;
+use crate::imports::{Imports, resolve_imports};
+use crate::instance_wrapper::{InstanceWrapper, EntryPoint};
+use crate::state_holder;
 
-use sc_allocator::FreeingBumpHeapAllocator;
+use std::{path::PathBuf, rc::Rc};
+use std::sync::Arc;
+use std::path::Path;
 use sc_executor_common::{
 	error::{Result, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob},
-	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
+	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
 };
+use sc_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
-use sp_wasm_interface::{Function, Pointer, Value, WordSize};
+use sp_wasm_interface::{Function, Pointer, WordSize, Value};
 use wasmtime::{Engine, Store};
-
-use crate::{
-	host::HostState,
-	imports::{resolve_imports, Imports},
-	instance_wrapper::{EntryPoint, InstanceWrapper},
-	state_holder,
-};
 
 enum Strategy {
 	FastInstanceReuse {
