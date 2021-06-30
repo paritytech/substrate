@@ -19,8 +19,9 @@
 //! Substrate system API helpers.
 
 use std::fmt;
-use serde::{Serialize, Deserialize};
-use sc_chain_spec::{Properties, ChainType};
+
+use sc_chain_spec::{ChainType, Properties};
+use serde::{Deserialize, Serialize};
 
 /// Running node's static details.
 #[derive(Clone, Debug)]

@@ -19,17 +19,20 @@
 //! This module defines `HostState` and `HostContext` structs which provide logic and state
 //! required for execution of host.
 
-use crate::instance_wrapper::InstanceWrapper;
-use crate::util;
 use std::{cell::RefCell, rc::Rc};
+
+use codec::{Decode, Encode};
 use log::trace;
-use codec::{Encode, Decode};
 use sc_allocator::FreeingBumpHeapAllocator;
-use sc_executor_common::error::Result;
-use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
+use sc_executor_common::{
+	error::Result,
+	sandbox::{self, SandboxCapabilities, SupervisorFuncIndex},
+};
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use wasmtime::{Func, Val};
+
+use crate::{instance_wrapper::InstanceWrapper, util};
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
