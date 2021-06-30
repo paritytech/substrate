@@ -1402,9 +1402,7 @@ pub mod pallet {
 		Kicked(T::AccountId, T::AccountId),
 		/// The election failed. No new era is planned.
 		StakingElectionFailed,
-		/// Attempted to rebag an account.
-		///
-		/// Contents: `who, from, to`.
+		/// Moved an account from one bag to another. \[who, from, to\].
 		Rebagged(T::AccountId, BagIdx, BagIdx),
 	}
 
@@ -1623,8 +1621,9 @@ pub mod pallet {
 				// Last check: the new active amount of ledger must be more than ED.
 				ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
-				Self::deposit_event(Event::<T>::Bonded(stash, extra));
+				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 				Self::update_ledger(&controller, &ledger);
+				Self::do_rebag(&stash);
 			}
 			Ok(())
 		}
@@ -2454,16 +2453,7 @@ pub mod pallet {
 			stash: AccountIdOf<T>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
-
-			// if no voter at that node, don't do anything.
-			// the caller just wasted the fee to call this.
-			if let Some((from, to)) = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {
-				let weight_of = Self::weight_of_fn();
-				VoterList::update_position_for(node, weight_of)
-			}) {
-				Self::deposit_event(Event::<T>::Rebagged(stash, from, to));
-			};
-
+			Pallet::<T>::do_rebag(&stash);
 			Ok(())
 		}
 	}
@@ -3146,6 +3136,22 @@ impl<T: Config> Pallet<T> {
 			VoterList::<T>::remove(who);
 			debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
 		}
+	}
+
+	/// Move a stash account from one bag to another, depositing an event on success.
+	///
+	/// If the stash changed bags, returns `Some((from, to))`.
+	pub fn do_rebag(stash: &T::AccountId) -> Option<(BagIdx, BagIdx)> {
+		// if no voter at that node, don't do anything.
+		// the caller just wasted the fee to call this.
+		let maybe_movement = voter_bags::Node::<T>::from_id(&stash).and_then(|node| {
+			let weight_of = Self::weight_of_fn();
+			VoterList::update_position_for(node, weight_of)
+		});
+		if let Some((from, to)) = maybe_movement {
+			Self::deposit_event(Event::<T>::Rebagged(stash.clone(), from, to));
+		};
+		maybe_movement
 	}
 }
 

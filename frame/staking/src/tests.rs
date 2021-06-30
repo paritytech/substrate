@@ -3874,12 +3874,13 @@ fn on_finalize_weight_is_nonzero() {
 #[test]
 fn test_rebag() {
 	use crate::{
-		testing_utils::{create_funded_user, create_stash_controller},
+		testing_utils::create_stash_controller,
 		voter_bags::{Bag, Node},
 	};
 	use frame_system::RawOrigin;
 
-	fn make_validator(n: u32, balance_factor: u32) -> Result<(AccountIdOf<Test>, AccountIdOf<Test>), &'static str> {
+	/// Make a validator and return its stash
+	fn make_validator(n: u32, balance_factor: u32) -> Result<AccountIdOf<Test>, &'static str> {
 		let (stash, controller) = create_stash_controller::<Test>(n, balance_factor, Default::default()).unwrap();
 
 		// Bond the full value of the stash
@@ -3894,30 +3895,18 @@ fn test_rebag() {
 			ValidatorPrefs::default(),
 		).unwrap();
 
-		Ok((stash, controller))
+		Ok(stash)
 	}
 
 	ExtBuilder::default().build_and_execute(|| {
 		// We want to have two validators: one, `stash`, is the one we will rebag.
 		// The other, `other_stash`, exists only so that the destination bag is not empty.
-		let (stash, controller) = make_validator(0, 100).unwrap();
-		let (other_stash, _) = make_validator(1, 300).unwrap();
-
-		// Update `stash`'s value to match `other_stash`, and bond extra to update its weight.
-		let new_balance = <Test as Config>::Currency::free_balance(&other_stash);
-		<Test as Config>::Currency::make_free_balance_be(&stash, new_balance);
-		Staking::bond_extra(
-			RawOrigin::Signed(stash.clone()).into(),
-			new_balance,
-		).unwrap();
+		let stash = make_validator(0, 100).unwrap();
+		let other_stash = make_validator(1, 300).unwrap();
 
 		// verify preconditions
 		let weight_of = Staking::weight_of_fn();
 		let node = Node::<Test>::from_id(&stash).unwrap();
-		assert!(
-			node.is_misplaced(&weight_of),
-			"rebagging only makes sense when a node is misplaced",
-		);
 		assert_eq!(
 			{
 				let origin_bag = Bag::<Test>::get(node.bag_idx).unwrap();
@@ -3937,18 +3926,18 @@ fn test_rebag() {
 			"destination bag should not be empty",
 		);
 
-		// Any unrelated person can call `rebag`, as long as they sign and pay the tx fee.
-		let caller = create_funded_user::<Test>("caller", 3, 100);
-		// ensure it's distinct from the other accounts
-		assert_ne!(caller, stash);
-		assert_ne!(caller, other_stash);
-		assert_ne!(caller, controller);
-
-		// call rebag
-		Pallet::<Test>::rebag(RawOrigin::Signed(caller).into(), stash.clone()).unwrap();
+		// Update `stash`'s value to match `other_stash`, and bond extra to update its weight.
+		//
+		// This implicitly calls rebag, so the user stays in the best bag they qualify for.
+		let new_balance = <Test as Config>::Currency::free_balance(&other_stash);
+		<Test as Config>::Currency::make_free_balance_be(&stash, new_balance);
+		Staking::bond_extra(
+			RawOrigin::Signed(stash.clone()).into(),
+			new_balance,
+		).unwrap();
 
 		// node should no longer be misplaced
-		// note that we have to refresh the node
+		// note that we refresh the node, in case the storage value has changed
 		let node = Node::<Test>::from_id(&stash).unwrap();
 		assert!(!node.is_misplaced(&weight_of), "node must be in proper place after rebag");
 	});

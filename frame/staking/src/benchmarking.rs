@@ -678,9 +678,18 @@ benchmarks! {
 		let (other_stash, _) = make_validator(USER_SEED + 1, 300)?;
 
 		// update the stash account's value/weight
+		//
+		// note that we have to manually update the ledger; if we were to just call
+		// `Staking::<T>::bond_extra`, then it would implicitly rebag. We want to separate that step
+		// so we can measure it in isolation.
 		let other_free_balance = T::Currency::free_balance(&other_stash);
 		T::Currency::make_free_balance_be(&stash, other_free_balance);
-		Staking::<T>::bond_extra(RawOrigin::Signed(stash.clone()).into(), other_free_balance)?;
+		let controller = Staking::<T>::bonded(&stash).ok_or("stash had no controller")?;
+		let mut ledger = Staking::<T>::ledger(&controller).ok_or("controller had no ledger")?;
+		let extra = other_free_balance.checked_sub(&ledger.total).ok_or("balance did not increase")?;
+		ledger.total += extra;
+		ledger.active += extra;
+		Staking::<T>::update_ledger(&controller, &ledger);
 
 		// verify preconditions
 		let weight_of = Staking::<T>::weight_of_fn();
