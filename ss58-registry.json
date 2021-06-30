@@ -329,7 +329,7 @@
 			"prefix": 36,
 			"network": "centrifuge",
 			"displayName": "Centrifuge Chain",
-			"symbols": ["RAD"],
+			"symbols": ["CFG"],
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://centrifuge.io/"
@@ -522,7 +522,7 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://polkafoundry.com"
-  	},
+		},
 		{
 			"prefix": 101,
 			"network": "origintrail-parachain",
@@ -531,6 +531,15 @@
 			"decimals": [18],
 			"standardAccount": "secp256k1",
 			"website": "https://origintrail.io"
+		},
+		{
+			"prefix": 136,
+			"network": "altair",
+			"displayName": "Altair",
+			"symbols": ["AIR"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://centrifuge.io/"
 		},
 		{
 			"prefix": 252,
