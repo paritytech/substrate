@@ -177,11 +177,6 @@ impl<
 		iterator
 	}
 
-	/// Enumerate all keys in the map.
-	fn drain_keys() -> Self::KeyIterator {
-		Self::iter_keys().drain()
-	}
-
 	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(mut f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();

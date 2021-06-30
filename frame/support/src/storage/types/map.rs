@@ -311,13 +311,6 @@ where
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::drain()
 	}
 
-	/// Remove all elements from the map and iterate through only the keys in no particular order.
-	///
-	/// If you add elements to the map while doing this, you'll get undefined results.
-	pub fn drain_keys() -> crate::storage::KeyPrefixIterator<Key> {
-		<Self as crate::storage::IterableStorageMap<Key, Value>>::drain_keys()
-	}
-
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	///
 	/// By returning `None` from `f` for an element, you'll remove it from the map.

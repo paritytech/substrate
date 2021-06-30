@@ -329,10 +329,6 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
 
-	/// Remove all elements from the map and iterate through only the keys in no particular order.
-	/// If you add elements to the map while doing this. you'll get undefined results.
-	fn drain_keys() -> Self::KeyIterator;
-
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
@@ -373,11 +369,6 @@ pub trait IterableStorageDoubleMap<
 	/// you'll get undefined results.
 	fn drain_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
 
-	/// Remove all elements from the map with the same first key `k1` and iterate through the
-	/// second key `k2` in no particular order. If you add elements with first key `k1` to the map
-	/// while doing this, you'll get undefined results.
-	fn drain_key_prefix(k1: impl EncodeLike<K1>) -> Self::KeyPrefixIterator;
-
 	/// Enumerate all elements in the map in no particular order. If you add or remove values to
 	/// the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
@@ -389,11 +380,6 @@ pub trait IterableStorageDoubleMap<
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
-
-	/// Remove all elements from the map and iterate through the first and second keys `k1`, `k2`
-	/// in no particular order. If you add elements to the map while doing this, you'll get
-	/// undefined results.
-	fn drain_keys() -> Self::KeyIterator;
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
@@ -429,12 +415,6 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	fn drain_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where K: HasReversibleKeyPrefix<KP>;
 
-	/// Remove all elements from the map with prefix key `kp` and iterate through the suffix keys
-	/// in no particular order. If you add elements with prefix key `kp` to the map while doing
-	/// this, you'll get undefined results.
-	fn drain_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
-	where K: HasReversibleKeyPrefix<KP>;
-
 	/// Enumerate all elements in the map in no particular order. If you add or remove values to
 	/// the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
@@ -446,10 +426,6 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
-
-	/// Remove all elements from the map and iterate through the keys in no particular order. If
-	/// you add elements to the map while doing this, you'll get undefined results.
-	fn drain_keys() -> Self::KeyIterator;
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.

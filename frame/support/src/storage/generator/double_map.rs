@@ -377,10 +377,6 @@ impl<
 		iterator
 	}
 
-	fn drain_key_prefix(k1: impl EncodeLike<K1>) -> Self::KeyPrefixIterator {
-		Self::iter_key_prefix(k1).drain()
-	}
-
 	fn iter() -> Self::Iterator {
 		let prefix = G::prefix_hash();
 		Self::Iterator {
@@ -417,10 +413,6 @@ impl<
 		let mut iterator = Self::iter();
 		iterator.drain = true;
 		iterator
-	}
-
-	fn drain_keys() -> Self::KeyIterator {
-		Self::iter_keys().drain()
 	}
 
 	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(mut f: F) {

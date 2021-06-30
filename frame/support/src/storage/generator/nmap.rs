@@ -351,13 +351,6 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		iter
 	}
 
-	fn drain_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
-	where
-		K: HasReversibleKeyPrefix<KP>,
-	{
-		Self::iter_key_prefix(kp).drain()
-	}
-
 	fn iter() -> Self::Iterator {
 		let prefix = G::prefix_hash();
 		Self::Iterator {
@@ -388,10 +381,6 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		let mut iterator = Self::iter();
 		iterator.drain = true;
 		iterator
-	}
-
-	fn drain_keys() -> Self::KeyIterator {
-		Self::iter_keys().drain()
 	}
 
 	fn translate<O: Decode, F: FnMut(K::Key, O) -> Option<V>>(mut f: F) {
