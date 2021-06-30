@@ -305,9 +305,10 @@ macro_rules! __events_to_metadata {
 				arguments: $crate::scale_info::prelude::vec![
 					$( $( $crate::metadata::TypeSpec::new::<$param>(stringify!($param)) ),* )*
 				],
-				documentation: $crate::scale_info::prelude::vec![
-					$( $doc_attr ),*
-				],
+				#[cfg(feature = "metadata-docs")]
+				documentation: $crate::scale_info::prelude::vec![ $( $doc_attr ),* ],
+				#[cfg(not(feature = "metadata-docs"))]
+				documentation: $crate::scale_info::prelude::vec![],
 			};
 			$( $rest )*
 		)

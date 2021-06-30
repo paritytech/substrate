@@ -2473,7 +2473,10 @@ macro_rules! __impl_module_constants_metadata {
 							value: $default_byte_name::<$const_trait_instance $(, $const_instance)?>(
 								Default::default()
 							).default_byte(),
+							#[cfg(feature = "metadata-docs")]
 							documentation: $crate::scale_info::prelude::vec![ $( $doc_attr ),* ],
+							#[cfg(not(feature = "metadata-docs"))]
+							documentation: $crate::scale_info::prelude::vec![],
 						}
 					),*
 				]
@@ -2563,7 +2566,10 @@ macro_rules! __function_to_metadata {
 					}
 				),*
 			],
+			#[cfg(feature = "metadata-docs")]
 			documentation: $crate::scale_info::prelude::vec![ $( $fn_doc ),* ],
+			#[cfg(not(feature = "metadata-docs"))]
+			documentation: $crate::scale_info::prelude::vec![],
 		}
 	};
 
