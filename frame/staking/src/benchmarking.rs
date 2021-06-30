@@ -103,7 +103,6 @@ pub fn create_validator_with_nominators<T: Config>(
 	);
 	assert_ne!(CounterForValidators::<T>::get(), 0);
 	assert_ne!(CounterForNominators::<T>::get(), 0);
-	assert_ne!(VoterList::<T>::decode_len().unwrap_or_default(), 0);
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
