@@ -182,6 +182,7 @@ mod execution {
 		traits::{CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
 	};
 	use sp_externalities::Extensions;
+	use smallvec::SmallVec;
 
 
 	const PROOF_CLOSE_TRANSACTION: &str = "\
@@ -733,12 +734,90 @@ mod execution {
 
 	/// Multiple key value state.
 	/// States are ordered by root storage key.
+	#[derive(PartialEq, Eq, Clone)]
 	pub struct KeyValueStates(pub Vec<KeyValueState>);
 
 	/// A key value state.
+	#[derive(PartialEq, Eq, Clone)]
 	pub struct KeyValueState {
+		/// Storage key in parent states.
+		pub parent_storages: Vec<Vec<u8>>,
 		/// Pair of key and values from this state.
 		pub key_values: Vec<(Vec<u8>, Vec<u8>)>,
+	}
+
+	impl<I> From<I> for KeyValueStates
+		where I: IntoIterator<Item = (Vec<Vec<u8>>, Vec<(Vec<u8>, Vec<u8>)>)> 
+	{
+		fn from(b: I) -> Self {
+			let mut result = Vec::new();
+			for (parent_storages, key_values) in b.into_iter() {
+				result.push(KeyValueState {
+					parent_storages,
+					key_values,
+				})
+			}
+			KeyValueStates(result)
+		}
+	}
+
+	impl KeyValueStates {
+		/// Return total number of key values in states.
+		pub fn len(&self) -> usize {
+			self.0.iter().fold(0, |nb, state| nb + state.key_values.len())
+		}
+
+		/// Update last keys accessed from this state. This function expect
+		/// that `last` keys was resized to the `completed` size.
+		pub fn update_last_key(&self, completed: usize, last: &mut SmallVec<[Vec<u8>; 2]>) -> bool {
+			if completed == 0 || completed > MAX_NESTED_TRIE_DEPTH {
+				return false;
+			}
+			match completed {
+				1 => {
+					let top_last = self.0.get(0).and_then(|s| s.key_values.last().map(|kv| kv.0.clone()));
+					if let Some(top_last) = top_last {
+						match last.len() {
+							0 => {
+								last.push(top_last);
+								return true
+							},
+							2 => {
+								last.pop();
+							},
+							_ => (),
+						}
+						last[0] = top_last;
+						return true;
+					}
+				},
+				2 => {
+					let child_last = self.0.last().and_then(|s| s.key_values.last().map(|kv| kv.0.clone())); 
+					if let Some(child_last) = child_last {
+						match last.len() {
+							0 => {
+								let top_last = self.0.get(0).and_then(|s| s.key_values.last().map(|kv| kv.0.clone()));
+								if let Some(top_last) = top_last {
+									last.push(top_last)
+								} else {
+									return false;
+								}
+							},
+							2 => {
+								last[1] = child_last;
+								return true;
+							},
+							_ => (),
+						}
+
+						last.push(child_last);
+						return true;
+					}
+				},
+				_ => (),
+			}
+			false
+		}
 	}
 
 	/// Generate range storage read proof, with child tries
@@ -1107,6 +1186,7 @@ mod execution {
 		H::Out: Ord + Codec,
 	{
 		let mut result = vec![KeyValueState {
+			parent_storages: Default::default(),
 			key_values: Default::default(),
 		}];
 		if start_at.len() > MAX_NESTED_TRIE_DEPTH {
@@ -1122,6 +1202,7 @@ mod execution {
 		let completed = loop {
 			let (child_info, depth) = if let Some(storage_key) = child_key.as_ref() {
 				result.push(KeyValueState {
+					parent_storages: vec![storage_key.clone()],
 					key_values: Default::default(),
 				});
 				let storage_key = PrefixedStorageKey::new_ref(storage_key);
@@ -1871,7 +1952,7 @@ mod tests {
 	fn prove_range_with_child_works() {
 		let mut remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-		let mut start_at = Vec::new();
+		let mut start_at = smallvec::SmallVec::<[Vec<u8>; 2]>::new();
 		let trie_backend = remote_backend.as_trie_backend().unwrap();
 		let max_iter = 1000;
 		let mut nb_loop = 0;
@@ -1898,22 +1979,7 @@ mod tests {
 			if completed == 0 {
 				break;
 			}
-			let top_last = result.0.get(0).unwrap().key_values.last().map(|kv| kv.0.clone())
-				// iterate into a trie keep existing pointer
-				.unwrap_or_else(|| start_at.get(0).unwrap().clone().clone());
-			let last = result.0.last().unwrap().key_values.last().unwrap().0.clone(); 
-			if completed == 1 {
-				// assert_eq!(last, top_last); this does not stand due to inline value included in top
-				// proof.
-				start_at = vec![top_last];
-			} else if completed == 2 {
-				start_at = vec![
-					top_last,
-					last,
-				];
-			} else {
-				panic!("unsupported nested depth");
-			}
+			assert!(result.update_last_key(completed, &mut start_at));
 		}
 
 		assert_eq!(nb_loop, 10);

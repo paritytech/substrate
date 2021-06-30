@@ -23,6 +23,7 @@ use sc_client_api::StorageProof;
 use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
 use crate::chain::{Client, ImportedState};
 use smallvec::SmallVec;
+use std::collections::HashMap;
 use super::StateDownloadProgress;
 
 /// State sync support.
@@ -34,7 +35,7 @@ pub struct StateSync<B: BlockT> {
 	target_header: B::Header,
 	target_root: B::Hash,
 	last_key: SmallVec<[Vec<u8>; 2]>,
-	state: Vec<(Vec<u8>, Vec<u8>)>,
+	state: HashMap<Vec<Vec<u8>>, Vec<(Vec<u8>, Vec<u8>)>>,
 	complete: bool,
 	client: Arc<dyn Client<B>>,
 	imported_bytes: u64,
@@ -60,7 +61,7 @@ impl<B: BlockT> StateSync<B> {
 			target_root: target.state_root().clone(),
 			target_header: target,
 			last_key: SmallVec::default(),
-			state: Vec::default(),
+			state: HashMap::default(),
 			complete: false,
 			imported_bytes: 0,
 			skip_proof,
@@ -69,7 +70,8 @@ impl<B: BlockT> StateSync<B> {
 
 	///  Validate and import a state reponse.
 	pub fn import(&mut self, response: StateResponse) -> ImportResult<B> {
-		if response.entries.is_empty() && response.proof.is_empty() && !response.complete {
+		if response.entries.is_empty() && response.proof.is_empty() {
+// TODO check from construction removing it is not an issue			&& !response.complete {
 			log::debug!(
 				target: "sync",
 				"Bad state response",
@@ -97,10 +99,10 @@ impl<B: BlockT> StateSync<B> {
 					return ImportResult::BadResponse;
 				}
 			};
-			let (values, complete) = match self.client.verify_range_proof(
+			let (values, completed) = match self.client.verify_range_proof(
 				self.target_root,
 				proof,
-				&self.last_key[..],
+				self.last_key.as_slice(),
 			) {
 				Err(e) => {
 					log::debug!(
@@ -114,38 +116,65 @@ impl<B: BlockT> StateSync<B> {
 			};
 			log::debug!(target: "sync", "Imported with {} keys", values.len());
 
-			if let Some(last) = values.last().map(|(k, _)| k) {
-				self.last_key = last.clone();
-			}
-
-			for (key, value) in values {
-				self.imported_bytes += key.len() as u64;
-				self.state.push((key, value))
+			let complete = if completed == 0 {
+				true
+			} else {
+				if !values.update_last_key(completed, &mut self.last_key) {
+					log::debug!(target: "sync", "Error updating key cursor, depth: {}", completed);
+					return ImportResult::BadResponse;
+				}
+				false
 			};
+
+			for values in values.0 {
+				use std::collections::hash_map::Entry;
+				match self.state.entry(values.parent_storages) {
+					Entry::Occupied(mut entry) => {
+						for (key, value) in values.key_values {
+							self.imported_bytes += key.len() as u64;
+							entry.get_mut().push((key, value))
+						}
+					},
+					Entry::Vacant(entry) => {
+						for (key, _value) in values.key_values.iter() {
+							self.imported_bytes += key.len() as u64;
+						}
+						entry.insert(values.key_values);
+					},
+				}
+			}
 			self.imported_bytes += proof_size;
 			complete
 		} else {
-			log::debug!(
-				target: "sync",
-				"Importing state from {:?} to {:?}",
-				response.entries.last().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
-				response.entries.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
-			);
+			let mut complete = true;
+			self.last_key.clear();
+			for state in response.entries {
+				log::debug!(
+					target: "sync",
+					"Importing state from {:?} to {:?}",
+					state.entries.last().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
+					state.entries.first().map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key)),
+				);
 
-			if let Some(e) = response.entries.last() {
-				self.last_key = e.key.clone();
+				if !state.complete {
+					if let Some(e) = state.entries.last() {
+						self.last_key.push(e.key.clone());
+					}
+					complete = false;
+				}
+				let entry = self.state.entry(state.parent_storages).or_default();
+				for StateEntry { key, value } in state.entries {
+					self.imported_bytes += key.len() as u64;
+					entry.push((key, value))
+				}
 			}
-			for StateEntry { key, value } in response.entries {
-				self.imported_bytes += (key.len() + value.len()) as u64;
-				self.state.push((key, value))
-			}
-			response.complete
+			complete
 		};
 		if complete {
 			self.complete = true;
 			ImportResult::Import(self.target_block.clone(), self.target_header.clone(), ImportedState {
 				block: self.target_block.clone(),
-				state: std::mem::take(&mut self.state)
+				state: std::mem::take(&mut self.state).into(),
 			})
 		} else {
 			ImportResult::Continue(self.next_request())
@@ -156,7 +185,7 @@ impl<B: BlockT> StateSync<B> {
 	pub fn next_request(&self) -> StateRequest {
 		StateRequest {
 			block: self.target_block.encode(),
-			start: self.last_key.clone(),
+			start: self.last_key.clone().into_vec(),
 			no_proof: self.skip_proof,
 		}
 	}
@@ -178,7 +207,8 @@ impl<B: BlockT> StateSync<B> {
 
 	/// Returns state sync estimated progress.
 	pub fn progress(&self) -> StateDownloadProgress {
-		let percent_done = (*self.last_key.get(0).unwrap_or(&0u8) as u32) * 100 / 256;
+		let cursor = *self.last_key.get(0).and_then(|last| last.get(0)).unwrap_or(&0u8);
+		let percent_done =  cursor as u32 * 100 / 256;
 		StateDownloadProgress {
 			percentage: percent_done,
 			size: self.imported_bytes,

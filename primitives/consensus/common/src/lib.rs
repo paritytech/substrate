@@ -53,7 +53,7 @@ pub use block_import::{
 	StateAction, StorageChanges,
 };
 pub use select_chain::SelectChain;
-pub use sp_state_machine::Backend as StateBackend;
+pub use sp_state_machine::{Backend as StateBackend, KeyValueStates};
 pub use import_queue::DefaultImportQueue;
 pub use sp_inherents::InherentData;
 

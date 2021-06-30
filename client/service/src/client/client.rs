@@ -30,7 +30,10 @@ use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
 	convert_hash,
-	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
+	storage::{
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey,
+		StorageData, StorageKey, StorageChild,
+	},
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
 #[cfg(feature="test-helpers")]
@@ -52,7 +55,8 @@ use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
-	prove_range_read_with_size, read_range_proof_check,
+	prove_range_read_with_child_with_size, read_range_proof_check_with_child,
+	KeyValueStates, KeyValueState, MAX_NESTED_TRIE_DEPTH,
 };
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
@@ -801,10 +805,31 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						Some((main_sc, child_sc))
 					}
 					sp_consensus::StorageChanges::Import(changes) => {
-						let storage = sp_storage::Storage {
-							top: changes.state.into_iter().collect(),
-							children_default: Default::default(),
-						};
+						let mut storage = sp_storage::Storage::default();
+						for state in changes.state.0.into_iter() {
+							if state.parent_storages.len() == 0 {
+								for (key, value) in state.key_values.into_iter() {
+									storage.top.insert(key, value);
+								}
+							} else if state.parent_storages.len() == 1 {
+								let storage_key = PrefixedStorageKey::new_ref(&state.parent_storages[0]);
+								let storage_key = match ChildType::from_prefixed_key(&storage_key) {
+									Some((ChildType::ParentKeyId, storage_key)) => storage_key,
+									None => return Err(Error::Backend("Invalid child storage key.".to_string())),
+								};
+								let entry = storage.children_default.entry(storage_key.to_vec())
+									.or_insert_with(|| StorageChild {
+										data: Default::default(),
+										child_info: ChildInfo::new_default(storage_key),
+									});
+								for (key, value) in state.key_values.into_iter() {
+									entry.data.insert(key, value);
+								}
+							}
+							if state.parent_storages.len() > 1 {
+								return Err(Error::InvalidState);
+							}
+						}
 
 						let state_root = operation.op.reset_storage(storage)?;
 						if state_root != *import_headers.post().state_root() {
@@ -1352,62 +1377,116 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 	fn read_proof_collection(
 		&self,
 		id: &BlockId<Block>,
-		start_key: &[u8],
+		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<(StorageProof, u32)> {
 		let state = self.state_at(id)?;
-		Ok(prove_range_read_with_size::<_, HashFor<Block>>(
+		Ok(prove_range_read_with_child_with_size::<_, HashFor<Block>>(
 				state,
-				None,
-				None,
 				size_limit,
-				Some(start_key)
+				start_key,
 		)?)
 	}
 
 	fn storage_collection(
 		&self,
 		id: &BlockId<Block>,
-		start_key: &[u8],
+		start_key: &[Vec<u8>],
 		size_limit: usize,
-	) -> sp_blockchain::Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	) -> sp_blockchain::Result<Vec<(KeyValueState, bool)>> {
+		if start_key.len() > MAX_NESTED_TRIE_DEPTH {
+			return Err(Error::Backend("Invalid start key.".to_string()));
+		}
 		let state = self.state_at(id)?;
-		let mut current_key = start_key.to_vec();
+		let child_info = |storage_key: &Vec<u8>| -> sp_blockchain::Result<ChildInfo> {
+			let storage_key = PrefixedStorageKey::new_ref(&storage_key);
+			match ChildType::from_prefixed_key(&storage_key) {
+				Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+				None => Err(Error::Backend("Invalid child storage key.".to_string())),
+			}
+		};
+		let mut current_child = if start_key.len() == 2 {
+			Some(child_info(start_key.get(0).expect("checked len"))?)
+		} else {
+			None
+		};
+		let mut current_key = start_key.last().map(Clone::clone).unwrap_or(Vec::new());
 		let mut total_size = 0;
-		let mut entries = Vec::new();
-		while let Some(next_key) = state
-			.next_storage_key(&current_key)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-		{
-			let value = state
-				.storage(next_key.as_ref())
-				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-				.unwrap_or_default();
-			let size = value.len() + next_key.len();
-			if total_size + size > size_limit && !entries.is_empty() {
+		let mut result = vec![(KeyValueState {
+			parent_storages: Vec::new(),
+			key_values: Vec::new(),
+		}, false)];
+		loop {
+			let mut entries = Vec::new();
+			let mut complete = true;
+			let mut switch_child_key = None;
+			while let Some(next_key) = if let Some(child) = current_child.as_ref() {
+				state
+					.next_child_storage_key(child, &current_key)
+					.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			} else {
+				state
+					.next_storage_key(&current_key)
+					.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			} {
+				let value = if let Some(child) = current_child.as_ref() {
+					state
+						.child_storage(child, next_key.as_ref())
+						.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+						.unwrap_or_default()
+				} else {
+					state
+						.storage(next_key.as_ref())
+						.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+						.unwrap_or_default()
+				};
+				let size = value.len() + next_key.len();
+				if total_size + size > size_limit && !entries.is_empty() {
+					complete = false;
+					break;
+				}
+				total_size += size;
+				entries.push((next_key.clone(), value));
+
+				if current_child.is_none()
+					&& sp_core::storage::well_known_keys::is_child_storage_key(next_key.as_slice()) {
+					switch_child_key = Some(next_key);
+					break;
+				}
+				current_key = next_key;
+			}
+			if let Some(child) = switch_child_key.take() {
+				current_child = Some(child_info(&child)?);
+				current_key = Vec::new();
+			} else if let Some(child) = current_child.take() {
+				result.push((KeyValueState {
+					parent_storages: vec![current_key.clone()],
+					key_values: entries,
+				}, complete));
+				if complete {
+					current_key = child.into_prefixed_storage_key().into_inner();
+				} else {
+					break;
+				}
+			} else {
+				result[0].0.key_values.extend(entries.into_iter());
+				result[0].1 = complete;
 				break;
 			}
-			total_size += size;
-			entries.push((next_key.clone(), value));
-			current_key = next_key;
 		}
-		Ok(entries)
-
+		Ok(result)
 	}
 
 	fn verify_range_proof(
 		&self,
 		root: Block::Hash,
 		proof: StorageProof,
-		start_key: &[&Vec<u8>],
-	) -> sp_blockchain::Result<(Vec<Vec<(Vec<u8>, Vec<u8>)>>, bool)> {
-		let state = read_range_proof_check::<HashFor<Block>>(
+		start_key: &[Vec<u8>],
+	) -> sp_blockchain::Result<(KeyValueStates, usize)> {
+		let state = read_range_proof_check_with_child::<HashFor<Block>>(
 				root,
 				proof,
-				None,
-				None,
-				None,
-				Some(start_key),
+				start_key,
 		)?;
 
 		Ok(state)

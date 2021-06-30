@@ -41,7 +41,7 @@ use sp_consensus::BlockOrigin;
 use parking_lot::RwLock;
 
 pub use sp_state_machine::Backend as StateBackend;
-pub use sp_consensus::ImportedState;
+pub use sp_consensus::{ImportedState, KeyValueStates};
 use std::marker::PhantomData;
 
 /// Extracts the state backend type for the given backend.
