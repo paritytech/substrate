@@ -3103,6 +3103,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Nominators::<T>::insert(who, nominations);
 		VoterList::<T>::insert_as(who, VoterType::Nominator);
+		debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -3112,6 +3113,7 @@ impl<T: Config> Pallet<T> {
 			Nominators::<T>::remove(who);
 			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
 			VoterList::<T>::remove(who);
+			debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
 		}
 	}
 
@@ -3125,6 +3127,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Validators::<T>::insert(who, prefs);
 		VoterList::<T>::insert_as(who, VoterType::Validator);
+		debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
 	}
 
 	/// This function will remove a validator from the `Validators` storage map,
@@ -3134,6 +3137,7 @@ impl<T: Config> Pallet<T> {
 			Validators::<T>::remove(who);
 			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
 			VoterList::<T>::remove(who);
+			debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
 		}
 	}
 }
