@@ -248,7 +248,6 @@ impl<B: BlockT> BenchmarkingState<B> {
 				true
 			},
 			Some(tracker) => {
-				let mut tracker = tracker.clone();
 				let should_log = if !tracker.has_been_read() {
 					read_write_tracker.add_read();
 					true
