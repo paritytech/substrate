@@ -671,7 +671,6 @@ benchmarks! {
 		// Clean up any existing state.
 		clear_validators_and_nominators::<T>();
 
-
 		// stash controls the node account
 		let (stash, controller) = make_validator(USER_SEED, 100)?;
 
