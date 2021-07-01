@@ -1243,18 +1243,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
 	}
-
-	/// Prepare in-memory header that is used in execution environment.
-	fn prepare_environment_block(&self, parent: &BlockId<Block>) -> sp_blockchain::Result<Block::Header> {
-		let parent_hash = self.backend.blockchain().expect_block_hash_from_id(parent)?;
-		Ok(<<Block as BlockT>::Header as HeaderT>::new(
-			self.backend.blockchain().expect_block_number_from_id(parent)? + One::one(),
-			Default::default(),
-			Default::default(),
-			parent_hash,
-			Default::default(),
-		))
-	}
 }
 
 impl<B, E, Block, RA> UsageProvider<Block> for Client<B, E, Block, RA> where
@@ -1313,10 +1301,8 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		)?;
 
 		let state = self.state_at(id)?;
-		let header = self.prepare_environment_block(id)?;
 		prove_execution(
 			state,
-			header,
 			&self.executor,
 			method,
 			call_data,
@@ -1782,12 +1768,10 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
-		C: CoreApi<Block>,
 	>(
 		&self,
-		params: CallApiAtParams<'a, Block, C, NC, B::State>,
+		params: CallApiAtParams<'a, Block, NC, B::State>,
 	) -> Result<NativeOrEncoded<R>, sp_api::ApiError> {
-		let core_api = params.core_api;
 		let at = params.at;
 
 		let (manager, extensions) = self.execution_extensions.manager_and_extensions(
@@ -1795,16 +1779,12 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 			params.context,
 		);
 
-		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
-			|| core_api
-				.initialize_block(at, &self.prepare_environment_block(at)?)
-				.map_err(Error::RuntimeApiError),
+		self.executor.contextual_call::<fn(_,_) -> _, _, _>(
 			at,
 			params.function,
 			&params.arguments,
 			params.overlayed_changes,
 			Some(params.storage_transaction_cache),
-			params.initialize_block,
 			manager,
 			params.native_call,
 			params.recorder,
