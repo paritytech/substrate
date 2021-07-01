@@ -54,12 +54,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:1)
 	// Storage: unknown [0x1cb6f36e027abb2091cfb5110ab5087f06155b3cd9a8c9e5e9a23fd5dc13a5ed] (r:1 w:0)
 	fn set() -> Weight {
-		(13_594_000 as Weight)
+		(14_223_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn on_finalize() -> Weight {
-		(5_955_000 as Weight)
+		(6_161_000 as Weight)
 	}
 }
 
@@ -68,11 +68,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:1)
 	// Storage: unknown [0x1cb6f36e027abb2091cfb5110ab5087f06155b3cd9a8c9e5e9a23fd5dc13a5ed] (r:1 w:0)
 	fn set() -> Weight {
-		(13_594_000 as Weight)
+		(14_223_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn on_finalize() -> Weight {
-		(5_955_000 as Weight)
+		(6_161_000 as Weight)
 	}
 }
