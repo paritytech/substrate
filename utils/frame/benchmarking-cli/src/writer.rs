@@ -355,16 +355,24 @@ fn add_storage_comments(
 	results: &[BenchmarkResults],
 	storage_info: &[StorageInfo],
 ) {
-	let mut storage_info_map = storage_info.iter().map(|info| (info.prefix, info))
+	let storage_info_map = storage_info.iter().map(|info| (info.prefix, info))
 		.collect::<HashMap<_, _>>();
+	// This tracks the keys we already identified, so we only generate a single comment.
+	let mut identified = HashMap::new();
 
 	for result in results {
 		for key in &result.keys {
 			// skip keys which are whitelisted
 			if key.3 { continue; }
-			// Check if we have knowledge of this key, and remove it from the hashmap
-			// so we only make a comment on it once.
-			match storage_info_map.remove(&key.0[0..32]) {
+			let prefix = &key.0[0..32];
+			if identified.contains_key(prefix) {
+				// skip adding comments for keys we already identified
+				continue;
+			} else {
+				// track newly identified keys
+				identified.insert(prefix, ());
+			}
+			match storage_info_map.get(prefix) {
 				Some(key_info) => {
 					let comment = format!(
 						"Storage: {} {} (r:{} w:{})",
