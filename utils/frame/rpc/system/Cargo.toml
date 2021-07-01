@@ -21,10 +21,6 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = { version = "0.3.4", features = ["compat"] }
 jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
 jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
-# TODO: (dp) remove
-jsonrpc-core = "15.1.0"
-jsonrpc-core-client = "15.1.0"
-jsonrpc-derive = "15.1.0"
 log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
 sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
