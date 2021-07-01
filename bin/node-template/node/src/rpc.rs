@@ -37,7 +37,7 @@ pub fn create_full<C, P>(
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 {
-	use substrate_frame_rpc_system::{FullSystem, SystemApi};
+	use substrate_frame_rpc_system::{FullSystemRemoveMe, SystemApiRemoveMe};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	let FullDeps {
@@ -47,7 +47,7 @@ pub fn create_full<C, P>(
 	} = deps;
 
 	io.extend_with(
-		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
+		SystemApiRemoveMe::to_delegate(FullSystemRemoveMe::new(client.clone(), pool, deny_unsafe))
 	);
 
 	// Extend this RPC with a custom API by using the following syntax.

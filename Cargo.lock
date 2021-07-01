@@ -9601,6 +9601,8 @@ dependencies = [
 name = "substrate-frame-rpc-system"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
+ "derive_more",
  "frame-system-rpc-runtime-api",
  "futures 0.3.15",
  "jsonrpc-core",
@@ -9614,6 +9616,7 @@ dependencies = [
  "sc-rpc-api",
  "sc-transaction-pool",
  "serde",
+ "serde_json",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",

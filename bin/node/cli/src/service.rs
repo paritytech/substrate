@@ -40,7 +40,7 @@ use sc_finality_grandpa_rpc::GrandpaRpc;
 use sc_consensus_babe_rpc::BabeRpc;
 use sc_sync_state_rpc::SyncStateRpc;
 use pallet_transaction_payment_rpc::TransactionPaymentRpc;
-use substrate_frame_rpc_system::SystemRpc;
+use substrate_frame_rpc_system::{SystemRpc, SystemRpcBackendFull};
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -49,6 +49,8 @@ type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
 type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
+/// Build and initialise an incomplete set of chain components and RPC modules needed to start a
+/// full client after further components are added.
 pub fn new_partial(
 	config: &Configuration,
 ) -> Result<sc_service::PartialComponents<
@@ -158,7 +160,8 @@ pub fn new_partial(
 	// SyncState
 	let chain_spec = config.chain_spec.cloned_box();
 	let shared_epoch_changes = babe_link.epoch_changes().clone();
-
+	// System
+	let transaction_pool2 = transaction_pool.clone();
 	let rpsee_builder = move |deny_unsafe, executor| -> RpcModule<()> {
 		let grandpa_rpc = GrandpaRpc::new(
 			executor,
@@ -187,7 +190,8 @@ pub fn new_partial(
 			deny_unsafe,
 		).into_rpc_module().expect("TODO: error handling");
 		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
-		let system_rpc = SystemRpc::new().into_rpc_module().expect("TODO: error handling");
+		let system_rpc_backend = SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
+		let system_rpc = SystemRpc::new(Box::new(system_rpc_backend)).into_rpc_module().expect("TODO: error handling");
 		// TODO: add other rpc modules here
 		let mut module = RpcModule::new(());
 		module.merge(grandpa_rpc).expect("TODO: error handling");
@@ -457,17 +461,13 @@ pub fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(
-	config: Configuration,
-) -> Result<TaskManager, ServiceError> {
+pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| {
 		task_manager
 	})
 }
 
-pub fn new_light_base(
-	mut config: Configuration,
-) -> Result<(
+pub fn new_light_base(mut config: Configuration) -> Result<(
 	TaskManager,
 	RpcHandlers,
 	Arc<LightClient>,
@@ -602,6 +602,7 @@ pub fn new_light_base(
 		pool: transaction_pool.clone(),
 	};
 
+	// TODO: (dp) implement rpsee builder here for all RPC modules available to the light client.
 	let rpc_handlers =
 		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),

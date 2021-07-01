@@ -112,7 +112,7 @@ pub fn create_full<C, P>(
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 {
-	use substrate_frame_rpc_system::{FullSystem, SystemApi};
+	use substrate_frame_rpc_system::{FullSystemRemoveMe, SystemApiRemoveMe};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_mmr_rpc::{MmrApi, Mmr};
 
@@ -125,7 +125,7 @@ pub fn create_full<C, P>(
 
 	// TODO: (dp) remove
 	io.extend_with(
-		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
+		SystemApiRemoveMe::to_delegate(FullSystemRemoveMe::new(client.clone(), pool, deny_unsafe))
 	);
 	// Making synchronous calls in light client freezes the browser currently,
 	// more context: https://github.com/paritytech/substrate/pull/3480
@@ -150,7 +150,7 @@ pub fn create_light<C, P, F>(
 	F: sc_client_api::light::Fetcher<Block> + 'static,
 	P: TransactionPool + 'static,
 {
-	use substrate_frame_rpc_system::{LightSystem, SystemApi};
+	use substrate_frame_rpc_system::{LightSystemRemoveMe, SystemApiRemoveMe};
 
 	let LightDeps {
 		client,
@@ -160,7 +160,7 @@ pub fn create_light<C, P, F>(
 	} = deps;
 	let mut io = jsonrpc_core::IoHandler::default();
 	io.extend_with(
-		SystemApi::<Hash, AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
+		SystemApiRemoveMe::<Hash, AccountId, Index>::to_delegate(LightSystemRemoveMe::new(client, remote_blockchain, fetcher, pool))
 	);
 
 	io
