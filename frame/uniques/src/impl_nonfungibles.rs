@@ -108,22 +108,22 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {
-	/// Returns the asset classes in existence.
+	/// Returns an iterator of the asset classes in existence.
 	fn classes() -> Box<dyn Iterator<Item = Self::ClassId>> {
 		Box::new(ClassMetadataOf::<T, I>::iter_keys())
 	}
 
-	/// Returns the instances of an asset `class` in existence.
+	/// Returns an iterator of the instances of an asset `class` in existence.
 	fn instances(class: &Self::ClassId) -> Box<dyn Iterator<Item = Self::InstanceId>> {
 		Box::new(InstanceMetadataOf::<T, I>::iter_key_prefix(class))
 	}
 
-	/// Returns the asset instances of all classes owned by `who`.
+	/// Returns an iterator of the asset instances of all classes owned by `who`.
 	fn owned(who: &T::AccountId) -> Box<dyn Iterator<Item = (Self::ClassId, Self::InstanceId)>> {
 		Box::new(Account::<T, I>::iter_key_prefix((who,)))
 	}
 
-	/// Returns the asset instances of `class` owned by `who`.
+	/// Returns an iterator of the asset instances of `class` owned by `who`.
 	fn owned_in_class(class: &Self::ClassId, who: &T::AccountId) -> Box<dyn Iterator<Item = Self::InstanceId>> {
 		Box::new(Account::<T, I>::iter_key_prefix((who, class)))
 	}
