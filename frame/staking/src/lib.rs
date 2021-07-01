@@ -3020,6 +3020,8 @@ impl<T: Config> Pallet<T> {
 
 	/// This function will remove a nominator from the `Nominators` storage map,
 	/// and keep track of the `CounterForNominators`.
+	///
+	/// Returns true if `who` was removed from `Nominators`, otherwise false.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
@@ -3043,6 +3045,8 @@ impl<T: Config> Pallet<T> {
 
 	/// This function will remove a validator from the `Validators` storage map,
 	/// and keep track of the `CounterForValidators`.
+	///
+	/// Returns true if `who` was removed from `Validators`, otherwise false.
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
