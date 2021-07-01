@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
-use sc_transaction_pool_primitives::TransactionPool;
+use sc_transaction_pool_api::TransactionPool;
 
 /// max duration for creating a proposal in secs
 pub const MAX_PROPOSAL_DURATION: u64 = 10;

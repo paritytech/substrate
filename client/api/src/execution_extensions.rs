@@ -37,7 +37,7 @@ use sp_state_machine::{ExecutionManager, DefaultHandler};
 pub use sp_state_machine::ExecutionStrategy;
 use sp_externalities::Extensions;
 use parking_lot::RwLock;
-use sc_transaction_pool_primitives::OffchainSubmitTransaction;
+use sc_transaction_pool_api::OffchainSubmitTransaction;
 
 /// Execution strategies settings.
 #[derive(Debug, Clone)]

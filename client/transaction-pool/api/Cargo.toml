@@ -1,5 +1,5 @@
 [package]
-name = "sc-transaction-pool-primitives"
+name = "sc-transaction-pool-api"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"

@@ -47,7 +47,7 @@ pub use self::{
 	rpc::{EngineCommand, CreatedBlock},
 };
 use sp_api::{ProvideRuntimeApi, TransactionFor};
-use sc_transaction_pool_primitives::TransactionPool;
+use sc_transaction_pool_api::TransactionPool;
 
 /// The `ConsensusEngineId` of Manual Seal.
 pub const MANUAL_SEAL_ENGINE_ID: ConsensusEngineId = [b'm', b'a', b'n', b'l'];
@@ -276,7 +276,7 @@ mod tests {
 	};
 	use sc_transaction_pool::{BasicPool, RevalidationType, Options};
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
-	use sc_transaction_pool_primitives::{TransactionPool, MaintainedTransactionPool, TransactionSource};
+	use sc_transaction_pool_api::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;
 	use sp_consensus::ImportedAux;
 	use sc_basic_authorship::ProposerFactory;
@@ -521,7 +521,7 @@ mod tests {
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
 		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
-		pool.maintain(sc_transaction_pool_primitives::ChainEvent::NewBestBlock {
+		pool.maintain(sc_transaction_pool_api::ChainEvent::NewBestBlock {
 			hash: header.hash(),
 			tree_route: None,
 		}).await;

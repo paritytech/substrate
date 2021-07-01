@@ -363,7 +363,7 @@ where
 mod tests {
 	use super::*;
 	use sc_transaction_graph::Pool;
-	use sc_transaction_pool_primitives::TransactionSource;
+	use sc_transaction_pool_api::TransactionSource;
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use futures::executor::block_on;
 	use substrate_test_runtime_client::AccountKeyring::*;

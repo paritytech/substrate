@@ -39,7 +39,7 @@ use sp_runtime::{
 	traits::NumberFor,
 	OpaqueExtrinsic,
 };
-use sc_transaction_pool_primitives::{
+use sc_transaction_pool_api::{
 	ImportNotificationStream,
 	PoolFuture,
 	PoolStatus,
@@ -198,7 +198,7 @@ impl From<OpaqueExtrinsic> for PoolTransaction {
 	}
 }
 
-impl sc_transaction_pool_primitives::InPoolTransaction for PoolTransaction {
+impl sc_transaction_pool_api::InPoolTransaction for PoolTransaction {
 	type Transaction = OpaqueExtrinsic;
 	type Hash = node_primitives::Hash;
 
@@ -224,11 +224,11 @@ impl sc_transaction_pool_primitives::InPoolTransaction for PoolTransaction {
 #[derive(Clone, Debug)]
 pub struct Transactions(Vec<Arc<PoolTransaction>>);
 
-impl sc_transaction_pool_primitives::TransactionPool for Transactions {
+impl sc_transaction_pool_api::TransactionPool for Transactions {
 	type Block = Block;
 	type Hash = node_primitives::Hash;
 	type InPoolTransaction = PoolTransaction;
-	type Error = sc_transaction_pool_primitives::error::Error;
+	type Error = sc_transaction_pool_api::error::Error;
 
 	/// Returns a future that imports a bunch of unverified transactions to the pool.
 	fn submit_at(

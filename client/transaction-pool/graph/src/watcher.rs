@@ -19,7 +19,7 @@
 //! Extrinsics status updates.
 
 use futures::Stream;
-use sc_transaction_pool_primitives::TransactionStatus;
+use sc_transaction_pool_api::TransactionStatus;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 /// Extrinsic watcher.

@@ -12,7 +12,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sp_block_builder::BlockBuilder;
 pub use sc_rpc_api::DenyUnsafe;
-use sc_transaction_pool_primitives::TransactionPool;
+use sc_transaction_pool_api::TransactionPool;
 
 
 /// Full client dependencies.

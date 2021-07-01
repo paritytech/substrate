@@ -29,7 +29,7 @@ use sp_runtime::traits::Member;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
-use sc_transaction_pool_primitives::error;
+use sc_transaction_pool_api::error;
 
 use crate::{
 	base_pool::Transaction,

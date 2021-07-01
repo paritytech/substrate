@@ -29,7 +29,7 @@ use sp_runtime::{
 		TransactionValidity, TransactionTag as Tag, TransactionValidityError, TransactionSource,
 	},
 };
-use sc_transaction_pool_primitives::error;
+use sc_transaction_pool_api::error;
 use wasm_timer::Instant;
 use futures::channel::mpsc::Receiver;
 
@@ -462,7 +462,7 @@ mod tests {
 	use parking_lot::Mutex;
 	use futures::executor::block_on;
 	use super::*;
-	use sc_transaction_pool_primitives::TransactionStatus;
+	use sc_transaction_pool_api::TransactionStatus;
 	use sp_runtime::{
 		traits::Hash,
 		transaction_validity::{ValidTransaction, InvalidTransaction, TransactionSource},

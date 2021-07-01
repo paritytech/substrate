@@ -28,7 +28,7 @@ sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
-sc-transaction-pool-primitives = { version = "3.0.0", path = "./primitives" }
+sc-transaction-pool-api = { version = "3.0.0", path = "./api" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-utils = { version = "3.0.0", path = "../../primitives/utils" }
 wasm-timer = "0.2"

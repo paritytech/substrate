@@ -236,7 +236,7 @@ mod tests {
 		DefaultTestClientBuilderExt, ClientBlockImportExt,
 	};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
-	use sc_transaction_pool_primitives::{TransactionPool, InPoolTransaction};
+	use sc_transaction_pool_api::{TransactionPool, InPoolTransaction};
 	use sp_consensus::BlockOrigin;
 	use sc_client_api::Backend as _;
 	use sc_block_builder::BlockBuilderProvider as _;
@@ -268,13 +268,13 @@ mod tests {
 		Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>
 	);
 
-	impl sc_transaction_pool_primitives::OffchainSubmitTransaction<Block> for TestPool {
+	impl sc_transaction_pool_api::OffchainSubmitTransaction<Block> for TestPool {
 		fn submit_at(
 			&self,
 			at: &BlockId<Block>,
 			extrinsic: <Block as traits::Block>::Extrinsic,
 		) -> Result<(), ()> {
-			let source = sc_transaction_pool_primitives::TransactionSource::Local;
+			let source = sc_transaction_pool_api::TransactionSource::Local;
 			futures::executor::block_on(self.0.submit_one(&at, source, extrinsic))
 				.map(|_| ())
 				.map_err(|_| ())

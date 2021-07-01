@@ -39,10 +39,10 @@ use futures::future::ready;
 
 /// Error type used by [`TestApi`].
 #[derive(Debug, derive_more::From, derive_more::Display)]
-pub struct Error(sc_transaction_pool_primitives::error::Error);
+pub struct Error(sc_transaction_pool_api::error::Error);
 
-impl sc_transaction_pool_primitives::error::IntoPoolError for Error {
-	fn into_pool_error(self) -> Result<sc_transaction_pool_primitives::error::Error, Self> {
+impl sc_transaction_pool_api::error::IntoPoolError for Error {
+	fn into_pool_error(self) -> Result<sc_transaction_pool_api::error::Error, Self> {
 		Ok(self.0)
 	}
 }
