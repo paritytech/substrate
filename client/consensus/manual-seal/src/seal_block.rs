@@ -40,7 +40,7 @@ use sc_transaction_pool_api::TransactionPool;
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P, CIDP> {
+pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, TP, CIDP> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -51,7 +51,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P,
 	/// sender to report errors/success to the rpc.
 	pub sender: rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
 	/// transaction pool
-	pub pool: Arc<P>,
+	pub pool: Arc<TP>,
 	/// header backend
 	pub client: Arc<C>,
 	/// Environment trait object for creating a proposer
@@ -67,7 +67,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P,
 }
 
 /// seals a new block with the given params
-pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
+pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 	SealBlockParams {
 		create_empty,
 		finalize,
@@ -80,7 +80,7 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 		create_inherent_data_providers,
 		consensus_data_provider: digest_provider,
 		mut sender,
-	}: SealBlockParams<'_, B, BI, SC, C, E, P, CIDP>,
+	}: SealBlockParams<'_, B, BI, SC, C, E, TP, CIDP>,
 ) where
 	B: BlockT,
 	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
@@ -90,7 +90,7 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 	C: HeaderBackend<B> + ProvideRuntimeApi<B>,
 	E: Environment<B>,
 	E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
-	P: TransactionPool<Block = B>,
+	TP: TransactionPool<Block = B>,
 	SC: SelectChain<B>,
 	TransactionFor<C, B>: 'static,
 	CIDP: CreateInherentDataProviders<B, ()>,

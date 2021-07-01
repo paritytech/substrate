@@ -94,7 +94,7 @@ pub fn import_queue<Block, Transaction>(
 }
 
 /// Params required to start the instant sealing authorship task.
-pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, P, SC, CS, CIDP> {
+pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, CS, CIDP> {
 	/// Block import instance for well. importing blocks.
 	pub block_import: BI,
 
@@ -105,7 +105,7 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, P, SC, CS
 	pub client: Arc<C>,
 
 	/// Shared reference to the transaction pool.
-	pub pool: Arc<P>,
+	pub pool: Arc<TP>,
 
 	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending commands to
 	/// the authorship task.
@@ -122,7 +122,7 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, P, SC, CS
 }
 
 /// Params required to start the manual sealing authorship task.
-pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, P, SC, CIDP> {
+pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, CIDP> {
 	/// Block import instance for well. importing blocks.
 	pub block_import: BI,
 
@@ -133,7 +133,7 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, P, SC, C
 	pub client: Arc<C>,
 
 	/// Shared reference to the transaction pool.
-	pub pool: Arc<P>,
+	pub pool: Arc<TP>,
 
 	/// SelectChain strategy.
 	pub select_chain: SC,
@@ -146,7 +146,7 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, P, SC, C
 }
 
 /// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, BI, CB, E, C, P, SC, CS, CIDP>(
+pub async fn run_manual_seal<B, BI, CB, E, C, TP, SC, CS, CIDP>(
 	ManualSealParams {
 		mut block_import,
 		mut env,
@@ -156,7 +156,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, P, SC, CS, CIDP>(
 		select_chain,
 		consensus_data_provider,
 		create_inherent_data_providers,
-	}: ManualSealParams<B, BI, E, C, P, SC, CS, CIDP>
+	}: ManualSealParams<B, BI, E, C, TP, SC, CS, CIDP>
 )
 	where
 		B: BlockT + 'static,
@@ -169,7 +169,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, P, SC, CS, CIDP>(
 		CS: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
 		TransactionFor<C, B>: 'static,
-		P: TransactionPool<Block = B>,
+		TP: TransactionPool<Block = B>,
 		CIDP: CreateInherentDataProviders<B, ()>,
 {
 	while let Some(command) = commands_stream.next().await {
@@ -215,7 +215,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, P, SC, CS, CIDP>(
 /// runs the background authorship task for the instant seal engine.
 /// instant-seal creates a new block for every transaction imported into
 /// the transaction pool.
-pub async fn run_instant_seal<B, BI, CB, E, C, P, SC, CIDP>(
+pub async fn run_instant_seal<B, BI, CB, E, C, TP, SC, CIDP>(
 	InstantSealParams {
 		block_import,
 		env,
@@ -224,7 +224,7 @@ pub async fn run_instant_seal<B, BI, CB, E, C, P, SC, CIDP>(
 		select_chain,
 		consensus_data_provider,
 		create_inherent_data_providers,
-	}: InstantSealParams<B, BI, E, C, P, SC, CIDP>
+	}: InstantSealParams<B, BI, E, C, TP, SC, CIDP>
 )
 	where
 		B: BlockT + 'static,
@@ -236,7 +236,7 @@ pub async fn run_instant_seal<B, BI, CB, E, C, P, SC, CIDP>(
 		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
 		SC: SelectChain<B> + 'static,
 		TransactionFor<C, B>: 'static,
-		P: TransactionPool<Block = B>,
+		TP: TransactionPool<Block = B>,
 		CIDP: CreateInherentDataProviders<B, ()>,
 {
 	// instant-seal creates blocks as soon as transactions are imported
