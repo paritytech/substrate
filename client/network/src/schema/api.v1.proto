@@ -73,7 +73,7 @@ message StateRequest {
 	// Block header hash.
 	bytes block = 1;
 	// Start from this key.
-	// Multiple key for nested state start.
+	// Multiple keys used for nested state start.
 	repeated bytes start = 2; // optional
 	// if 'true' indicates that response should contain raw key-values, rather than proof.
 	bool no_proof = 3;

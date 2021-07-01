@@ -116,14 +116,9 @@ impl<B: BlockT> StateSync<B> {
 			};
 			log::debug!(target: "sync", "Imported with {} keys", values.len());
 
-			let complete = if completed == 0 {
-				true
-			} else {
-				if !values.update_last_key(completed, &mut self.last_key) {
-					log::debug!(target: "sync", "Error updating key cursor, depth: {}", completed);
-					return ImportResult::BadResponse;
-				}
-				false
+			let complete = completed == 0;
+			if !complete && !values.update_last_key(completed, &mut self.last_key) {
+				log::debug!(target: "sync", "Error updating key cursor, depth: {}", completed);
 			};
 
 			for values in values.0 {
@@ -156,7 +151,7 @@ impl<B: BlockT> StateSync<B> {
 		} else {
 			let mut complete = true;
 			if self.last_key.len() == 2 && response.entries[0].entries.len() == 0 {
-				// empty parent is possible when all batch is into child.
+				// Unchanged parent trie key, keep old value.
 				self.last_key.pop();
 			} else {
 				self.last_key.clear();

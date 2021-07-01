@@ -74,9 +74,12 @@ pub trait ProofProvider<Block: BlockT> {
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 
 	/// Given a `BlockId` iterate over all storage values starting at `start_keys`.
-	/// `start_keys` contain current parsed location of storage roots and
+	/// Last `start_keys` element contains last accessed key value.
+	/// With multiple `start_keys`, first `start_keys` element is
+	/// the current storage key of of the last accessed child trie.
 	/// at last level the value to start at exclusively.
-	/// Proofs is build until size limit is reached.
+	/// Proofs is build until size limit is reached and always include at
+	/// least one key following `start_keys`.
 	/// Returns combined proof and the numbers of collected keys.
 	fn read_proof_collection(
 		&self,
@@ -86,7 +89,12 @@ pub trait ProofProvider<Block: BlockT> {
 	) -> sp_blockchain::Result<(StorageProof, u32)>;
 
 	/// Given a `BlockId` iterate over all storage values starting at `start_key`.
-	/// Returns collected keys and values. For each state indicate if state reach
+	/// Returns collected keys and values.
+	/// Returns the collected keys values content of the top trie followed by the
+	/// collected keys values of child tries.
+	/// Only child tries with their root part of the collected content or
+	/// related to `start_key` are attached.
+	/// For each collected state a boolean indicates if state reach
 	/// end.
 	fn storage_collection(
 		&self,
