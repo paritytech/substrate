@@ -29,6 +29,7 @@ use crate::BenchmarkCmd;
 use frame_benchmarking::{
 	BenchmarkBatch, BenchmarkSelector, Analysis, AnalysisChoice, RegressionModel, BenchmarkResults,
 };
+use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::Zero;
 use frame_support::traits::StorageInfo;
 
@@ -363,15 +364,26 @@ fn add_storage_comments(
 			if key.3 { continue; }
 			// Check if we have knowledge of this key, and remove it from the hashmap
 			// so we only make a comment on it once.
-			if let Some(key_info) = storage_info_map.remove(&key.0[0..32]) {
-				let comment = format!(
-					"Storage: {} {} (r:{} w:{})",
-					String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
-					String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
-					key.1,
-					key.2,
-				);
-				comments.push(comment)
+			match storage_info_map.remove(&key.0[0..32]) {
+				Some(key_info) => {
+					let comment = format!(
+						"Storage: {} {} (r:{} w:{})",
+						String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
+						String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
+						key.1,
+						key.2,
+					);
+					comments.push(comment)
+				},
+				None => {
+					let comment = format!(
+						"Storage: unknown [0x{}] (r:{} w:{})",
+						HexDisplay::from(&key.0),
+						key.1,
+						key.2,
+					);
+					comments.push(comment)
+				}
 			}
 		}
 	}
