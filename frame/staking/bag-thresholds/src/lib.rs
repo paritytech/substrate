@@ -22,16 +22,27 @@
 /// This macro can be thought of as a function with signature
 ///
 /// ```ignore
-/// pub const fn make_ratio(n: usize, bounds: impl std::ops::RangeBounds<VoteWeight>) -> f64;
+/// pub const fn make_ratio(n: usize, VoteWeight: Type, existential_weight: VoteWeight) -> f64;
 /// ```
+///
+/// - The argument `n` is how many divisions we're partitioning `VoteWeight` into.
+/// - `VoteWeight` is the type of the vote weight, and should typically be a typedef. It must have a
+///   `::MAX` attribute available.
+/// - `existential_weight` is the weight below which it's not worth examining a voter. Typically,
+///   this will be the result of some calculation involving the existential deposit for a chain's
+///   balance type.
 ///
 /// # Example:
 ///
 /// ```
 /// # use pallet_staking_voter_bag_thresholds::make_ratio;
 /// /// Constant ratio between bag items. Approx. `1.248`.
-/// const CONSTANT_RATIO: f64 = make_ratio!(200, ..);
+/// const CONSTANT_RATIO: f64 = make_ratio!(200, u64, 0);
 /// ```
+///
+/// # Calculation
+///
+/// The constant ratio is calculated per `exp(ln(VoteWeight::MAX - existential_weight) / n).
 #[proc_macro]
 pub fn make_ratio(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	todo!()
@@ -42,23 +53,37 @@ pub fn make_ratio(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// This macro can be thought of as a function with signature
 ///
 /// ```ignore
-/// pub const fn make_thresholds(n: usize, bounds: impl std::ops::RangeBounds<VoteWeight>) -> [VoteWeight; n];
+/// pub const fn make_thresholds(n: usize, VoteWeight: Type, existential_weight: VoteWeight) -> [VoteWeight; n];
 /// ```
+///
+/// - The argument `n` is how many divisions we're partitioning `VoteWeight` into.
+/// - `VoteWeight` is the type of the vote weight, and should typically be a typedef. It must have a
+///   `::MAX` attribute available.
+/// - `existential_weight` is the weight below which it's not worth examining a voter. Typically,
+///   this will be the result of some calculation involving the existential deposit for a chain's
+///   balance type.
 ///
 /// The output has these properties:
 ///
 /// - Its length is `n`.
-/// - Its first item respects `bounds.start_bound()`.
-/// - Its last item respects `bounds.end_bound()`.
+/// - Its first item is greater than or equal to `existential_weight`.
+/// - Its last item is equal to `VoteWeight::MAX`.
 /// - There exists a constant ratio (see [`make_ratio`]) called _ratio_.
 ///
-///   For all _k_, `output[k + 1] == (output[k] * ratio).round().min(output[k] + 1)`.
+///   For all _k_ in `0..(n-1)`, `output[k + 1] == (output[k] * ratio).round()`.
+///
+/// However, there are two exceptions to the ratio rule:
+///
+/// - As thresholds may not duplicate, if `(output[k] * ratio).round() == output[k]`, then `output[k
+///   + 1] == output[k] + 1`.
+/// - Due to the previous exception in combination with the requirement that the final item is equal
+///   to `VoteWeight::MAX`, the ratio of the final item may diverge from the common ratio.
 ///
 /// # Example:
 ///
 /// ```
 /// # use pallet_staking_voter_bag_thresholds::make_thresholds;
-/// const THRESHOLDS: &[u64] = &make_thresholds!(200, ..);
+/// const THRESHOLDS: [u64; 200] = &make_thresholds!(200, u64, 0);
 /// ```
 #[proc_macro]
 pub fn make_thresholds(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -70,10 +95,15 @@ pub fn make_thresholds(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
 /// This macro can be thought of as a function with signature
 ///
 /// ```ignore
-/// pub const fn edit_thresholds<const Old: usize, const New: usize>(
+/// pub const fn edit_thresholds<
+/// 	const Old: usize,
+/// 	const Inserting: usize,
+/// 	const Removing: usize,
+/// 	const New: usize,
+/// >(
 /// 	thresholds: [VoteWeight; Old],
-/// 	inserting: impl IntoIterator<Item = VoteWeight>,
-/// 	removing: impl IntoIterator<Item = VoteWeight>,
+/// 	inserting: [VoteWeight; Inserting],
+/// 	removing: [VoteWeight; Removing],
 /// ) -> [VoteWeight; New];
 /// ```
 ///
@@ -84,7 +114,7 @@ pub fn make_thresholds(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
 ///
 /// ```
 /// # use pallet_staking_voter_bag_thresholds::{edit_thresholds, make_thresholds};
-/// const THRESHOLDS: &[u64] = &edit_thresholds!(make_thresholds!(200, ..), [12345, 54321], []);
+/// const THRESHOLDS: &[u64] = &edit_thresholds!(make_thresholds!(200, u64, 0), [12345, 54321], []);
 /// ```
 #[proc_macro]
 pub fn edit_thresholds(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
