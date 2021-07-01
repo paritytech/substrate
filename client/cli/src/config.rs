@@ -372,6 +372,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Some(Vec::new()))
 	}
 
+	/// Get maximum RPC payload.
+	fn rpc_max_payload(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
 	/// Get the prometheus configuration (`None` if disabled)
 	///
 	/// By default this is `None`.
@@ -535,6 +540,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_http_threads: self.rpc_http_threads()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
+			rpc_max_payload: self.rpc_max_payload()?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
 			telemetry_endpoints,
 			telemetry_external_transport: self.telemetry_external_transport()?,

@@ -166,11 +166,11 @@ where
 	}
 
 	/// Remove all values under the first key.
-	pub fn remove_prefix<KP>(partial_key: KP)
+	pub fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		Key: HasKeyPrefix<KP>,
 	{
-		<Self as crate::storage::StorageNMap<Key, Value>>::remove_prefix(partial_key)
+		<Self as crate::storage::StorageNMap<Key, Value>>::remove_prefix(partial_key, limit)
 	}
 
 	/// Iterate over values that share the first key.
@@ -266,8 +266,8 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all() {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -318,6 +318,19 @@ where
 		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_prefix(kp)
 	}
 
+	/// Enumerate all suffix keys in the map with prefix key `kp` in no particular order.
+	///
+	/// If you add or remove values whose prefix key is `kp` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_key_prefix<KP>(
+		kp: KP,
+	) -> crate::storage::KeyPrefixIterator<<Key as HasKeyPrefix<KP>>::Suffix>
+	where
+		Key: HasReversibleKeyPrefix<KP>,
+	{
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_key_prefix(kp)
+	}
+
 	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
 	/// particular order.
 	///
@@ -337,6 +350,13 @@ where
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key::Key, Value)> {
 		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter()
+	}
+
+	/// Enumerate all keys in the map in no particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key::Key> {
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_keys()
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
@@ -423,7 +443,7 @@ mod test {
 		fn pallet_prefix() -> &'static str {
 			"test"
 		}
-		const STORAGE_PREFIX: &'static str = "foo";
+		const STORAGE_PREFIX: &'static str = "Foo";
 	}
 
 	struct ADefault;
@@ -445,7 +465,7 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
 			k.extend(&twox_128(b"test"));
-			k.extend(&twox_128(b"foo"));
+			k.extend(&twox_128(b"Foo"));
 			k.extend(&3u16.blake2_128_concat());
 			assert_eq!(A::hashed_key_for((&3,)).to_vec(), k);
 
@@ -457,6 +477,16 @@ mod test {
 			assert_eq!(A::contains_key((3,)), true);
 			assert_eq!(A::get((3,)), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 10);
+
+			{
+				crate::generate_storage_alias!(test, Foo => NMap<
+					(u16, Blake2_128Concat),
+					u32
+				>);
+
+				assert_eq!(Foo::contains_key((3,)), true);
+				assert_eq!(Foo::get((3,)), Some(10));
+			}
 
 			A::swap::<Key<Blake2_128Concat, u16>, _, _>((3,), (2,));
 			assert_eq!(A::contains_key((3,)), false);
@@ -546,7 +576,7 @@ mod test {
 
 			A::insert((3,), 10);
 			A::insert((4,), 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key((3,)), false);
 			assert_eq!(A::contains_key((4,)), false);
 
@@ -575,14 +605,14 @@ mod test {
 				AValueQueryWithAnOnEmpty::MODIFIER,
 				StorageEntryModifier::Default
 			);
-			assert_eq!(A::NAME, "foo");
+			assert_eq!(A::NAME, "Foo");
 			assert_eq!(
 				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
 				98u32.encode()
 			);
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3,)), None);
 			WithLen::append((0,), 10);
 			assert_eq!(WithLen::decode_len((0,)), Some(1));
@@ -617,7 +647,7 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
 			k.extend(&twox_128(b"test"));
-			k.extend(&twox_128(b"foo"));
+			k.extend(&twox_128(b"Foo"));
 			k.extend(&3u16.blake2_128_concat());
 			k.extend(&30u8.twox_64_concat());
 			assert_eq!(A::hashed_key_for((3, 30)).to_vec(), k);
@@ -720,7 +750,7 @@ mod test {
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key((3, 30)), false);
 			assert_eq!(A::contains_key((4, 40)), false);
 
@@ -761,14 +791,14 @@ mod test {
 				AValueQueryWithAnOnEmpty::MODIFIER,
 				StorageEntryModifier::Default
 			);
-			assert_eq!(A::NAME, "foo");
+			assert_eq!(A::NAME, "Foo");
 			assert_eq!(
 				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
 				98u32.encode()
 			);
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3, 30)), None);
 			WithLen::append((0, 100), 10);
 			assert_eq!(WithLen::decode_len((0, 100)), Some(1));
@@ -844,7 +874,7 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			let mut k: Vec<u8> = vec![];
 			k.extend(&twox_128(b"test"));
-			k.extend(&twox_128(b"foo"));
+			k.extend(&twox_128(b"Foo"));
 			k.extend(&1u16.blake2_128_concat());
 			k.extend(&10u16.blake2_128_concat());
 			k.extend(&100u16.twox_64_concat());
@@ -953,7 +983,7 @@ mod test {
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key((3, 30, 300)), false);
 			assert_eq!(A::contains_key((4, 40, 400)), false);
 
@@ -996,14 +1026,14 @@ mod test {
 				AValueQueryWithAnOnEmpty::MODIFIER,
 				StorageEntryModifier::Default
 			);
-			assert_eq!(A::NAME, "foo");
+			assert_eq!(A::NAME, "Foo");
 			assert_eq!(
 				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
 				98u32.encode()
 			);
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len((3, 30, 300)), None);
 			WithLen::append((0, 100, 1000), 10);
 			assert_eq!(WithLen::decode_len((0, 100, 1000)), Some(1));

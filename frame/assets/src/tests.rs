@@ -310,7 +310,7 @@ fn querying_total_supply_should_work() {
 		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 2), 19);
 		assert_eq!(Assets::balance(0, 3), 31);
-		assert_ok!(Assets::burn(Origin::signed(1), 0, 3, u64::max_value()));
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 3, u64::MAX));
 		assert_eq!(Assets::total_supply(0), 69);
 	});
 }
@@ -457,7 +457,7 @@ fn transferring_amount_more_than_available_balance_should_not_work() {
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 2), 50);
-		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::MAX));
 		assert_eq!(Assets::balance(0, 1), 0);
 		assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), Error::<Test>::BalanceLow);
 		assert_noop!(Assets::transfer(Origin::signed(2), 0, 1, 51), Error::<Test>::BalanceLow);
@@ -491,7 +491,7 @@ fn burning_asset_balance_with_positive_balance_should_work() {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
-		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::MAX));
 		assert_eq!(Assets::balance(0, 1), 0);
 	});
 }
@@ -502,7 +502,7 @@ fn burning_asset_balance_with_zero_balance_does_nothing() {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 2), 0);
-		assert_ok!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()));
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 2, u64::MAX));
 		assert_eq!(Assets::balance(0, 2), 0);
 		assert_eq!(Assets::total_supply(0), 100);
 	});

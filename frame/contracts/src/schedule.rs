@@ -300,17 +300,8 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_terminate`.
 	pub terminate: Weight,
 
-	/// Weight per byte of the terminated contract.
-	pub terminate_per_code_byte: Weight,
-
 	/// Weight of calling `seal_restore_to`.
 	pub restore_to: Weight,
-
-	/// Weight per byte of the restoring contract.
-	pub restore_to_per_caller_code_byte: Weight,
-
-	/// Weight per byte of the restored contract.
-	pub restore_to_per_tombstone_code_byte: Weight,
 
 	/// Weight per delta key supplied to `seal_restore_to`.
 	pub restore_to_per_delta: Weight,
@@ -354,9 +345,6 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_call`.
 	pub call: Weight,
 
-	/// Weight per byte of the called contract.
-	pub call_per_code_byte: Weight,
-
 	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
 	pub call_transfer_surcharge: Weight,
 
@@ -368,9 +356,6 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight of calling `seal_instantiate`.
 	pub instantiate: Weight,
-
-	/// Weight per byte of the instantiated contract.
-	pub instantiate_per_code_byte: Weight,
 
 	/// Weight per input byte supplied to `seal_instantiate`.
 	pub instantiate_per_input_byte: Weight,
@@ -588,11 +573,8 @@ impl<T: Config> Default for HostFnWeights<T> {
 			r#return: cost!(seal_return),
 			return_per_byte: cost_byte!(seal_return_per_kb),
 			terminate: cost!(seal_terminate),
-			terminate_per_code_byte: cost_byte!(seal_terminate_per_code_kb),
 			restore_to: cost!(seal_restore_to),
-			restore_to_per_caller_code_byte: cost_byte_args!(seal_restore_to_per_code_kb_delta, 1, 0, 0),
-			restore_to_per_tombstone_code_byte: cost_byte_args!(seal_restore_to_per_code_kb_delta, 0, 1, 0),
-			restore_to_per_delta: cost_batched_args!(seal_restore_to_per_code_kb_delta, 0, 0, 1),
+			restore_to_per_delta: cost_batched!(seal_restore_to_per_delta),
 			random: cost_batched!(seal_random),
 			deposit_event: cost_batched!(seal_deposit_event),
 			deposit_event_per_topic: cost_batched_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
@@ -606,15 +588,13 @@ impl<T: Config> Default for HostFnWeights<T> {
 			get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
 			transfer: cost_batched!(seal_transfer),
 			call: cost_batched!(seal_call),
-			call_per_code_byte: cost_byte_batched_args!(seal_call_per_code_transfer_input_output_kb, 1, 0, 0, 0),
-			call_transfer_surcharge: cost_batched_args!(seal_call_per_code_transfer_input_output_kb, 0, 1, 0, 0),
-			call_per_input_byte: cost_byte_batched_args!(seal_call_per_code_transfer_input_output_kb, 0, 0, 1, 0),
-			call_per_output_byte: cost_byte_batched_args!(seal_call_per_code_transfer_input_output_kb, 0, 0, 0, 1),
+			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_input_output_kb, 1, 0, 0),
+			call_per_input_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 1, 0),
+			call_per_output_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_per_code_byte: cost_byte_batched_args!(seal_instantiate_per_code_input_output_salt_kb, 1, 0, 0, 0),
-			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_code_input_output_salt_kb, 0, 1, 0, 0),
-			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_code_input_output_salt_kb, 0, 0, 1, 0),
-			instantiate_per_salt_byte: cost_byte_batched_args!(seal_instantiate_per_code_input_output_salt_kb, 0, 0, 0, 1),
+			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 1, 0, 0),
+			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 1, 0),
+			instantiate_per_salt_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 0, 1),
 			hash_sha2_256: cost_batched!(seal_hash_sha2_256),
 			hash_sha2_256_per_byte: cost_byte_batched!(seal_hash_sha2_256_per_kb),
 			hash_keccak_256: cost_batched!(seal_hash_keccak_256),
