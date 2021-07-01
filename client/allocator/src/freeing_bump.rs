@@ -495,7 +495,7 @@ impl Memory for [u8] {
 		let range =
 			heap_range(ptr, 8, self.len()).ok_or_else(|| error("write out of heap bounds"))?;
 		let bytes = val.to_le_bytes();
-		&mut self[range].copy_from_slice(&bytes[..]);
+		self[range].copy_from_slice(&bytes[..]);
 		Ok(())
 	}
 	fn size(&self) -> u32 {
