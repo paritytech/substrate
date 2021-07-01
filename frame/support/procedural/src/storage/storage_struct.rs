@@ -399,7 +399,101 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 				},
 			}
 		} else {
-			TokenStream::default()
+			// Implement `__partial_storage_info` which doesn't require MaxEncodedLen on keys and
+			// values.
+			match &line.storage_type {
+				StorageLineTypeDef::Simple(_) => {
+					quote!(
+						impl<#impl_trait> #scrate::traits::PartialStorageInfoTrait
+						for #storage_struct
+						#optional_storage_where_clause
+						{
+							fn partial_storage_info()
+								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
+							{
+								#scrate::sp_std::vec![
+									#scrate::traits::StorageInfo {
+										prefix: <
+											#storage_struct as #scrate::#storage_generator_trait
+										>::storage_value_final_key(),
+										max_values: Some(1),
+										max_size: None,
+									}
+								]
+							}
+						}
+					)
+				},
+				StorageLineTypeDef::Map(_) => {
+					quote!(
+						impl<#impl_trait> #scrate::traits::PartialStorageInfoTrait
+						for #storage_struct
+						#optional_storage_where_clause
+						{
+							fn partial_storage_info()
+								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
+							{
+								#scrate::sp_std::vec![
+									#scrate::traits::StorageInfo {
+										prefix: <
+											#storage_struct
+											as #scrate::storage::StoragePrefixedMap<#value_type>
+										>::final_prefix(),
+										max_values: #max_values,
+										max_size: None,
+									}
+								]
+							}
+						}
+					)
+				},
+				StorageLineTypeDef::DoubleMap(_) => {
+					quote!(
+						impl<#impl_trait> #scrate::traits::PartialStorageInfoTrait
+						for #storage_struct
+						#optional_storage_where_clause
+						{
+							fn partial_storage_info()
+								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
+							{
+								#scrate::sp_std::vec![
+									#scrate::traits::StorageInfo {
+										prefix: <
+											#storage_struct
+											as #scrate::storage::StoragePrefixedMap<#value_type>
+										>::final_prefix(),
+										max_values: #max_values,
+										max_size: None,
+									}
+								]
+							}
+						}
+					)
+				},
+				StorageLineTypeDef::NMap(_) => {
+					quote!(
+						impl<#impl_trait> #scrate::traits::PartialStorageInfoTrait
+						for #storage_struct
+						#optional_storage_where_clause
+						{
+							fn partial_storage_info()
+								-> #scrate::sp_std::vec::Vec<#scrate::traits::StorageInfo>
+							{
+								#scrate::sp_std::vec![
+									#scrate::traits::StorageInfo {
+										prefix: <
+											#storage_struct
+											as #scrate::storage::StoragePrefixedMap<#value_type>
+										>::final_prefix(),
+										max_values: #max_values,
+										max_size: None,
+									}
+								]
+							}
+						}
+					)
+				},
+			}
 		};
 
 		impls.extend(quote!(

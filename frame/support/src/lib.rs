@@ -1430,6 +1430,8 @@ pub mod pallet_prelude {
 /// If the attribute set_storage_max_encoded_len is set then the macro call
 /// [`traits::StorageInfoTrait`] for each storage in the implementation of
 /// [`traits::StorageInfoTrait`] for the pallet.
+/// Otherwise it implements [`traits::StorageInfoTrait`] for the pallet using the
+/// [`traits::PartialStorageInfoTrait`] implementation of storages.
 ///
 /// # Hooks: `#[pallet::hooks]` optional
 ///

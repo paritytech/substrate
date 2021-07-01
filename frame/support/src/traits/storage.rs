@@ -74,3 +74,11 @@ impl StorageInfoTrait for Tuple {
 		res
 	}
 }
+
+/// Similar to [`StorageInfoTrait`], a trait to give partial information about storage.
+///
+/// This is useful when a type can give some partial information with its generic parameter doesn't
+/// implement some bounds.
+pub trait PartialStorageInfoTrait {
+	fn partial_storage_info() -> Vec<StorageInfo>;
+}

@@ -228,6 +228,27 @@ where
 	}
 }
 
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Value, QueryKind, OnEmpty>
+	crate::traits::PartialStorageInfoTrait for
+	StorageValue<Prefix, Value, QueryKind, OnEmpty>
+where
+	Prefix: StorageInstance,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::hashed_key(),
+				max_values: Some(1),
+				max_size: None,
+			}
+		]
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
