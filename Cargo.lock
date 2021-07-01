@@ -97,6 +97,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "739f4a8db6605981345c5654f3a85b056ce52f37a39d34da03f25bf2151ea16e"
 
 [[package]]
+name = "ahash"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43bb833f0bf979d8475d38fbf09ed3b8a55e1885fe93ad3f93239fc6a4f17b98"
+dependencies = [
+ "getrandom 0.2.3",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1707,7 +1718,7 @@ dependencies = [
 [[package]]
 name = "fixed-hash"
 version = "0.7.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "byteorder",
  "rand 0.8.3",
@@ -2396,7 +2407,16 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
 dependencies = [
- "ahash",
+ "ahash 0.4.7",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash 0.7.4",
 ]
 
 [[package]]
@@ -2735,7 +2755,7 @@ dependencies = [
 [[package]]
 name = "impl-codec"
 version = "0.5.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -2752,7 +2772,7 @@ dependencies = [
 [[package]]
 name = "impl-serde"
 version = "0.3.1"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "serde",
 ]
@@ -2775,7 +2795,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "824845a0bf897a9042383849b02c1bc219c2383772efcd5c6f9766fa4b81aef3"
 dependencies = [
  "autocfg",
- "hashbrown",
+ "hashbrown 0.9.1",
  "serde",
 ]
 
@@ -3102,7 +3122,7 @@ dependencies = [
 [[package]]
 name = "kvdb"
 version = "0.10.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "parity-util-mem",
  "smallvec 1.6.1",
@@ -3111,7 +3131,7 @@ dependencies = [
 [[package]]
 name = "kvdb-memorydb"
 version = "0.10.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "kvdb",
  "parity-util-mem",
@@ -3121,7 +3141,7 @@ dependencies = [
 [[package]]
 name = "kvdb-rocksdb"
 version = "0.12.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "fs-swap",
  "kvdb",
@@ -3138,7 +3158,7 @@ dependencies = [
 [[package]]
 name = "kvdb-web"
 version = "0.10.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "futures 0.3.15",
  "js-sys",
@@ -3380,7 +3400,7 @@ dependencies = [
  "rand 0.7.3",
  "sha2 0.9.3",
  "smallvec 1.6.1",
- "uint 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uint 0.9.0",
  "unsigned-varint 0.7.0",
  "void",
  "wasm-timer",
@@ -3752,7 +3772,7 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f374d42cdfc1d7dbf3d3dec28afab2eb97ffbf43a3234d795b5986dbf4b90ba"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.9.1",
 ]
 
 [[package]]
@@ -3887,7 +3907,7 @@ version = "0.26.0"
 source = "git+https://github.com/paritytech/trie?branch=aj-update-parity-common#7d1265578a23e26de7a1e40e4f593a2c0562f9a9"
 dependencies = [
  "hash-db 0.15.2 (git+https://github.com/paritytech/trie?branch=aj-update-parity-common)",
- "hashbrown",
+ "hashbrown 0.9.1",
  "parity-util-mem",
 ]
 
@@ -5900,12 +5920,12 @@ dependencies = [
 [[package]]
 name = "parity-util-mem"
 version = "0.10.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "cfg-if 1.0.0",
- "hashbrown",
+ "hashbrown 0.11.2",
  "impl-trait-for-tuples",
- "parity-util-mem-derive 0.1.0 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
+ "parity-util-mem-derive 0.1.0 (git+https://github.com/paritytech/parity-common?branch=master)",
  "parking_lot 0.11.1",
  "primitive-types 0.10.0",
  "smallvec 1.6.1",
@@ -5926,7 +5946,7 @@ dependencies = [
 [[package]]
 name = "parity-util-mem-derive"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -6364,19 +6384,19 @@ checksum = "2415937401cb030a2a0a4d922483f945fa068f52a7dbb22ce0fe5f2b6f6adace"
 dependencies = [
  "fixed-hash 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "impl-codec 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "uint 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uint 0.9.0",
 ]
 
 [[package]]
 name = "primitive-types"
 version = "0.10.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
- "fixed-hash 0.7.0 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
- "impl-codec 0.5.0 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
- "impl-serde 0.3.1 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
+ "fixed-hash 0.7.0 (git+https://github.com/paritytech/parity-common?branch=master)",
+ "impl-codec 0.5.0 (git+https://github.com/paritytech/parity-common?branch=master)",
+ "impl-serde 0.3.1 (git+https://github.com/paritytech/parity-common?branch=master)",
  "scale-info",
- "uint 0.9.0 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
+ "uint 0.9.1",
 ]
 
 [[package]]
@@ -10700,7 +10720,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd81fe0c8bc2b528a51c9d2c31dae4483367a26a723a3c9a4a8120311d7774e3"
 dependencies = [
  "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "hashbrown",
+ "hashbrown 0.9.1",
  "log",
  "rustc-hex",
  "smallvec 1.6.1",
@@ -10851,8 +10871,8 @@ dependencies = [
 
 [[package]]
 name = "uint"
-version = "0.9.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+version = "0.9.1"
+source = "git+https://github.com/paritytech/parity-common?branch=master#075a34ee77b02f917ef350d3044acd95102ecc61"
 dependencies = [
  "byteorder",
  "crunchy",
