@@ -83,23 +83,23 @@ type MaxLocksOf<T> =
 const VESTING_ID: LockIdentifier = *b"vesting ";
 const LOG_TARGET: &'static str = "runtime::vesting";
 
-/// The indexes of vesting schedules to remove from an accounts vesting schedule collection.
-enum Filter {
-	/// Do not filter out any schedules.
-	Zero,
-	/// Filter out 1 schedule.
-	One(usize),
-	/// Filter out 2 schedules.
-	Two(usize, usize),
+/// Actions to take on a users `Vesting` storage entry.
+enum VestingAction {
+	/// Do not actively remove any schedules.
+	Passive,
+	/// Remove the schedules specified by the index.
+	Remove(usize),
+	/// Remove the two schedules, specified by index, so they can be merged.
+	Merge(usize, usize),
 }
 
-impl Filter {
+impl VestingAction {
 	/// Whether or not the filter says the schedule index should be removed.
 	fn should_remove(&self, index: &usize) -> bool {
 		match self {
-			Self::Zero => false,
-			Self::One(index1) => index1 == index,
-			Self::Two(index1, index2) => index1 == index || index2 == index,
+			Self::Passive => false,
+			Self::Remove(index1) => index1 == index,
+			Self::Merge(index1, index2) => index1 == index || index2 == index,
 		}
 	}
 }
@@ -200,9 +200,9 @@ pub mod pallet {
 		VestingUpdated(T::AccountId, BalanceOf<T>),
 		/// An \[account\] has become fully vested. No further vesting can happen.
 		VestingCompleted(T::AccountId),
-		/// 2 vesting schedules where successfully merged together.
+		/// 2 vesting schedules where successfully merged together and the merged schedule was added.
 		/// \[locked, per_block, starting_block\]
-		VestingMergeSuccess(BalanceOf<T>, BalanceOf<T>, T::BlockNumber),
+		MergedScheduleAdded(BalanceOf<T>, BalanceOf<T>, T::BlockNumber),
 	}
 
 	/// Error for the vesting pallet.
@@ -371,38 +371,53 @@ pub mod pallet {
 
 			// The schedule index is based off of the schedule ordering prior to filtering out any
 			// schedules that may be ending at this block.
-			let schedule1 = *vesting.get(schedule1_index).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
-			let schedule2 = *vesting.get(schedule2_index).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
-			let filter = Filter::Two(schedule1_index, schedule2_index);
+			let schedule1 =
+				*vesting.get(schedule1_index).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
+			let schedule2 =
+				*vesting.get(schedule2_index).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
+			let merge_action = VestingAction::Merge(schedule1_index, schedule2_index);
 
-			// The length of vesting decreases by 2 here since we filter out 2 schedules. Thus we know
+			// The length of vesting decreases by 2 here since wem filter out 2 schedules. Thus we know
 			// below that we can safely insert the new merged schedule.
-			let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, filter);
-
-			// We can't fail from here on because we have potentially removed two schedules.
+			let (mut schedules, mut locked_now) =
+				Self::report_schedule_updates(vesting, merge_action);
 
 			let now = <frame_system::Pallet<T>>::block_number();
-			if let Some(s) = Self::merge_vesting_info(now, schedule1, schedule2)? {
-				let mut vesting = maybe_vesting.unwrap_or_default();
-				if let Err(_) = vesting.try_push(s) {
-					// It shouldn't be possible for this to fail because we removed 2 schedules above.
+			if let Some(new_schedule) = Self::merge_vesting_info(now, schedule1, schedule2)? {
+				// Merging created a new schedule; so now we need to add it to the
+				// accounts vesting schedules,
+				if let Err(_) = schedules.try_push(new_schedule) {
+					// (It shouldn't be possible for this to fail because we removed 2 schedules above.)
 					log::warn!(
 						target: LOG_TARGET,
 						"faulty logic led to attempting to add too many vesting schedules",
 					);
 					return Err(Error::<T>::AtMaxVestingSchedules.into());
 				}
-				Self::deposit_event(Event::<T>::VestingMergeSuccess(
-					s.locked(),
-					s.per_block(),
-					s.starting_block(),
+				// (We use `locked_at` in case this is a schedule that started in the past.)
+				let new_schedule_locked = new_schedule.locked_at::<T::BlockNumberToBalance>(now);
+				// update the locked amount to reflect the schedule we just added,
+				locked_now = locked_now.saturating_add(new_schedule_locked);
+				// and deposit an event to show the new, new, merged schedule.
+				Self::deposit_event(Event::<T>::MergedScheduleAdded(
+					new_schedule.locked(),
+					new_schedule.per_block(),
+					new_schedule.starting_block(),
 				));
-				Vesting::<T>::insert(&who, vesting);
-			} else if let Some(vesting) = maybe_vesting {
-				Vesting::<T>::insert(&who, vesting);
-			} else {
-				Vesting::<T>::remove(&who);
-			}
+			} // In the None case there was no new schedule to account for.
+
+			debug_assert!(schedules.len() <= T::MaxVestingSchedules::get() as usize);
+			debug_assert!(
+				locked_now > Zero::zero() && schedules.len() > 0 ||
+					locked_now == Zero::zero() && schedules.len() == 0
+			);
+			if let Err(e) = Self::write_vesting(&who, schedules) {
+				// The write should not fail because that would mean their where too
+				// many schedules to start out with.
+				log::warn!(target: LOG_TARGET, "an account has too many vesting schedules",);
+				return e.into();
+			};
+			Self::write_lock(&who, locked_now);
 
 			Ok(())
 		}
@@ -508,27 +523,33 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// (Re)set or remove the pallet's currency lock on `who`'s account in accordance with their
-	/// current unvested amount and prune any vesting schedules that have completed.
+	/// Iterate through the schedules to track the current locked amount and
+	/// filter out completed and specified schedules.
 	///
-	/// NOTE: This will update the users lock, but will not read/write the `Vesting` storage item.
-	fn update_lock_and_schedules(
-		who: T::AccountId,
-		vesting: BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>,
-		filter: Filter,
-	) -> Option<BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>> {
+	/// Returns a tuple that consists of:
+	/// - bounded vec of vesting schedules, where completed schedules and those
+	/// specified by filter are remove.
+	/// - the amount locked at the current block number based on the given schedules.
+	///
+	/// NOTE: the amount locked does not include any schedules that are filtered out.
+	fn report_schedule_updates(
+		schedules: BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>,
+		action: VestingAction,
+	) -> (BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>, BalanceOf<T>)
+	{
 		let now = <frame_system::Pallet<T>>::block_number();
 
 		let mut total_locked_now: BalanceOf<T> = Zero::zero();
-		let still_vesting = vesting
+		let filtered_schedules = schedules
 			.into_iter()
 			.enumerate()
 			.filter_map(|(index, schedule)| {
 				let locked_now = schedule.locked_at::<T::BlockNumberToBalance>(now);
-				total_locked_now = total_locked_now.saturating_add(locked_now);
-				if locked_now.is_zero() || filter.should_remove(&index) {
+				if locked_now.is_zero() || action.should_remove(&index) {
 					None
 				} else {
+					// We track the locked amount only if the schedule is included.
+					total_locked_now = total_locked_now.saturating_add(locked_now);
 					Some(schedule)
 				}
 			})
@@ -536,28 +557,56 @@ impl<T: Config> Pallet<T> {
 			.try_into()
 			.expect("`BoundedVec` is created from another `BoundedVec` with same bound; q.e.d.");
 
+		(filtered_schedules, total_locked_now)
+	}
+
+	/// Write an accounts updated vesting lock to storage.
+	fn write_lock(who: &T::AccountId, total_locked_now: BalanceOf<T>) {
 		if total_locked_now.is_zero() {
-			T::Currency::remove_lock(VESTING_ID, &who);
-			Vesting::<T>::remove(&who);
-			Self::deposit_event(Event::<T>::VestingCompleted(who));
-			None
+			T::Currency::remove_lock(VESTING_ID, who);
+			Self::deposit_event(Event::<T>::VestingCompleted(who.clone()));
 		} else {
 			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
-			T::Currency::set_lock(VESTING_ID, &who, total_locked_now, reasons);
-			Self::deposit_event(Event::<T>::VestingUpdated(who, total_locked_now));
-			Some(still_vesting)
+			T::Currency::set_lock(VESTING_ID, who, total_locked_now, reasons);
+			Self::deposit_event(Event::<T>::VestingUpdated(who.clone(), total_locked_now));
+		};
+	}
+
+	/// Write an accounts updated vesting schedules to storage.
+	fn write_vesting(
+		who: &T::AccountId,
+		schedules: BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>,
+	) -> Result<(), DispatchError> {
+		if schedules.len() > T::MaxVestingSchedules::get() as usize {
+			return Err(Error::<T>::AtMaxVestingSchedules.into());
+		} else if schedules.len() == 0 {
+			Vesting::<T>::remove(&who);
+		} else {
+			Vesting::<T>::insert(who, schedules)
 		}
+
+		Ok(())
 	}
 
 	/// Unlock any vested funds of `who`.
 	fn do_vest(who: T::AccountId) -> DispatchResult {
-		let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
-		let maybe_vesting = Self::update_lock_and_schedules(who.clone(), vesting, Filter::Zero);
-		if let Some(vesting) = maybe_vesting {
-			Vesting::<T>::insert(&who, vesting);
-		} else {
-			Vesting::<T>::remove(&who);
-		}
+		let schedules = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
+
+		let (schedules, locked_now) =
+			Self::report_schedule_updates(schedules, VestingAction::Passive);
+		debug_assert!(schedules.len() <= T::MaxVestingSchedules::get() as usize);
+		debug_assert!(
+			locked_now > Zero::zero() && schedules.len() > 0 ||
+				locked_now == Zero::zero() && schedules.len() == 0
+		);
+
+		if let Err(e) = Self::write_vesting(&who, schedules) {
+			// The write should not fail because that would mean their where too
+			// many schedules to start out with.
+			log::warn!(target: LOG_TARGET, "an account has too many vesting schedules",);
+			return e.into();
+		};
+		Self::write_lock(&who, locked_now);
 
 		Ok(())
 	}
@@ -605,26 +654,50 @@ where
 		}
 
 		let vesting_schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
-		let mut vesting = Self::vesting(who).unwrap_or_default();
-		ensure!(vesting.try_push(vesting_schedule).is_ok(), Error::<T>::AtMaxVestingSchedules);
+		let mut schedules = Self::vesting(who).unwrap_or_default();
 
-		if let Some(v) = Self::update_lock_and_schedules(who.clone(), vesting, Filter::Zero) {
-			Vesting::<T>::insert(&who, v);
-		} else {
-			Vesting::<T>::remove(&who);
-		}
+		// NOTE: we must push the new schedule so that `report_schedule_updates`
+		// will give the correct new locked amount.
+		ensure!(schedules.try_push(vesting_schedule).is_ok(), Error::<T>::AtMaxVestingSchedules);
+
+		let (schedules, locked_now) =
+			Self::report_schedule_updates(schedules, VestingAction::Passive);
+		debug_assert!(schedules.len() <= T::MaxVestingSchedules::get() as usize);
+		debug_assert!(
+			locked_now > Zero::zero() && schedules.len() > 0 ||
+				locked_now == Zero::zero() && schedules.len() == 0
+		);
+
+		if let Err(e) = Self::write_vesting(&who, schedules) {
+			// The write should not fail because that would mean their where too
+			// many schedules to start out with.
+			log::warn!(target: LOG_TARGET, "an account has too many vesting schedules",);
+			return e.into();
+		};
+		Self::write_lock(who, locked_now);
+
 		Ok(())
 	}
 
 	/// Remove a vesting schedule for a given account. Will error if `schedule_index` is `None`.
 	fn remove_vesting_schedule(who: &T::AccountId, schedule_index: u32) -> DispatchResult {
-		let filter = Filter::One(schedule_index as usize);
-		let vesting = Self::vesting(who).ok_or(Error::<T>::NotVesting)?;
-		if let Some(v) = Self::update_lock_and_schedules(who.clone(), vesting, filter) {
-			Vesting::<T>::insert(&who, v);
-		} else {
-			Vesting::<T>::remove(&who);
+		let remove_action = VestingAction::Remove(schedule_index as usize);
+		let schedules = Self::vesting(who).ok_or(Error::<T>::NotVesting)?;
+
+		let (schedules, locked_now) = Self::report_schedule_updates(schedules, remove_action);
+		debug_assert!(schedules.len() <= T::MaxVestingSchedules::get() as usize);
+		debug_assert!(
+			locked_now > Zero::zero() && schedules.len() > 0 ||
+				locked_now == Zero::zero() && schedules.len() == 0
+		);
+
+		if let Err(e) = Self::write_vesting(&who, schedules) {
+			// The write should not fail because that would mean their where too
+			// many schedules to start out with.
+			log::warn!(target: LOG_TARGET, "an account has too many vesting schedules",);
+			return e.into();
 		};
+		Self::write_lock(who, locked_now);
 		Ok(())
 	}
 }
