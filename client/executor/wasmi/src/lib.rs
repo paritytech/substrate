@@ -30,11 +30,10 @@ use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sc_executor_common::{util::BufferProvider, wasm_runtime::{WasmModule, WasmInstance, InvokeMethod}};
+use sc_executor_common::{wasm_runtime::{WasmModule, WasmInstance, InvokeMethod}};
 use sc_executor_common::{
 	error::{Error, WasmError},
 	sandbox,
-	util,
 };
 
 use sc_executor_common::runtime_blob::{RuntimeBlob, DataSegmentsSnapshot};
@@ -164,34 +163,19 @@ impl Sandbox for FunctionExecutor {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				sandboxed_memory.with_direct_access(|source_proxy| {
-					dest_proxy
-						.transfer(source_proxy, val_ptr.into(), offset as usize, val_len as usize)
-						.map_err(|e| e.to_string())
-						.map(|_| sandbox_primitives::ERR_OK)
+				let len = buf_len as usize;
+				let mut buffer = vec![0; len];
 
+				if let Err(_) = sandboxed_memory.read_into(Pointer::new(offset as u32), &mut buffer) {
+					return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+				}
 
-					// todo!()
+				todo!();
+				// if let Err(_) = self.inner.instance.write_memory_from(buf_ptr, &buffer) {
+				// 	return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+				// }
 
-					// let len = buf_len as usize;
-
-					// let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
-					// 	Some(range) => range,
-					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					// };
-
-					// let memory_size: wasmi::memory_units::Bytes = self.inner.memory.current_size().into();
-					// let dst_range = match util::checked_range(buf_ptr.into(), len, memory_size.0) {
-					// 	Some(range) => range,
-					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					// };
-
-					// self.inner.memory.with_direct_access_mut(|dst_buffer| {
-					// 	dst_buffer[dst_range].copy_from_slice(&sandboxed_memory[src_range]);
-					// });
-
-					// Ok(sandbox_primitives::ERR_OK)
-				})
+				// Ok(sandbox_primitives::ERR_OK)
 			}
 		}
 
@@ -226,32 +210,7 @@ impl Sandbox for FunctionExecutor {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				sandboxed_memory.with_direct_access_mut(|dest_proxy| {
-
-					dest_proxy
-						.transfer(self.inner.memory, val_ptr.into(), offset as usize, val_len as usize)
-						.map_err(|e| e.to_string())
-						.map(|_| sandbox_primitives::ERR_OK)
-
-					// let len = val_len as usize;
-
-					// let memory_size: wasmi::memory_units::Bytes = self.inner.memory.current_size().into();
-					// let src_range = match util::checked_range(val_ptr.into(), len, memory_size.0) {
-					// 	Some(range) => range,
-					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					// };
-
-					// let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len() as usize) {
-					// 	Some(range) => range,
-					// 	None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					// };
-
-					// self.inner.memory.with_direct_access(|src_buffer| {
-					// 	sandboxed_memory[dst_range].copy_from_slice(&src_buffer[src_range]);
-					// });
-
-					// Ok(sandbox_primitives::ERR_OK)
-				})
+				todo!()
 			}
 		}
 	}

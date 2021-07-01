@@ -19,8 +19,6 @@
 //! Utilities used by all backends
 
 use std::ops::Range;
-use wasmi::MemoryRef;
-use crate::error::TransferError;
 
 /// Construct a range from an offset to a data length after the offset.
 /// Returns None if the end of the range would exceed some maximum offset.
@@ -33,112 +31,22 @@ pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usiz
 	}
 }
 
-pub unsafe trait BufferProvider {
-	/// Provide scoped read-only access to the underlying buffer
-	fn scoped_access<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R;
-}
-
-unsafe impl<'a> BufferProvider for MemoryRef {
-	fn scoped_access<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.with_direct_access(f)
-	}
-}
-
-struct WasmiBufferProxyMut {
-	memory: MemoryRef,
-}
-
-impl WasmiBufferProxyMut {
-	pub fn transfer(&mut self, source: impl BufferProvider, source_offset: usize, dest_offset: usize, len: usize) -> Result<(), TransferError> {
-		source.scoped_access(|source| {
-			self.memory.with_direct_access_mut(|dest| {
-				let src_range = checked_range(source_offset, len, source.len()).ok_or(TransferError::SourceTooSmall)?;
-				let dst_range = checked_range(dest_offset, len, dest.len()).ok_or(TransferError::DestTooSmall)?;
-
-				dest[dst_range].copy_from_slice(&source[src_range]);
-
-				Ok(())
-			})
-		})
-	}
-}
-
-/// Routines specific to Wasmer runtime. Since sandbox can be invoked from both
+// Routines specific to Wasmer runtime. Since sandbox can be invoked from both
 /// wasmi and wasmtime runtime executors, we need to have a way to deal with sanbox
 /// backends right from the start.
 #[cfg(feature = "wasmer-sandbox")]
 pub mod wasmer {
-	use std::{cell::{Ref, RefCell, RefMut}, rc::Rc};
-	use crate::{error::TransferError, util::checked_range};
-	use super::BufferProvider;
+	use std::{cell::{RefCell}, rc::Rc};
+	use error::Result;
+	use sp_wasm_interface::Pointer;
+	use crate::{error::{self, Error}, util::checked_range};
+	use std::convert::TryInto;
 
-	/// In order to enforce memory access protocol to the backend memory 
-	/// we wrap it with `RefCell` and provide a scoped access.
+	/// In order to enforce memory access protocol to the backend memory
+	/// we wrap it with `RefCell` and encapsulate all memory operations.
 	#[derive(Debug, Clone)]
 	pub struct MemoryRef {
 		buffer: Rc<RefCell<wasmer::Memory>>,
-	}
-
-	/// Represents a scoped right to read the associated memory
-	pub struct BufferProxy<'a> {
-		guard: Ref<'a, wasmer::Memory>,
-	}
-
-	impl<'a> BufferProxy<'a> {
-		/// Accept the ownership and created proxy object
-		pub fn new(guard: Ref<'a, wasmer::Memory>) -> Self {
-			Self {
-				guard,
-			}
-		}
-	}
-
-	/// Represents a scoped right to access the associated memory
-	pub struct BufferProxyMut<'a> {
-		guard: RefMut<'a, wasmer::Memory>,
-	}
-
-	impl<'a> BufferProxyMut<'a> {
-		/// Accept the ownership and created proxy object
-		pub fn new(guard: RefMut<'a, wasmer::Memory>) -> Self {
-			Self {
-				guard,
-			}
-		}
-
-		/// Copy the data between buffers at a specified location
-		pub fn transfer(&mut self, source: impl BufferProvider, source_offset: usize, dest_offset: usize, len: usize) -> Result<(), TransferError> {
-			source.scoped_access(|source| {
-				// This is safe because we construct the slice from the same parts as
-				// the memory region itself. We hold the lock to both of memory buffers,
-				// so we shouldn't have issues even if we'd try to borrow the memory twice.
-				let dest = unsafe {
-					let memory = &* self.guard;
-					core::slice::from_raw_parts_mut(memory.data_ptr(), memory.data_size() as usize)
-				};
-
-				let src_range = checked_range(source_offset, len, source.len()).ok_or(TransferError::SourceTooSmall)?;
-				let dst_range = checked_range(dest_offset, len, dest.len()).ok_or(TransferError::DestTooSmall)?;
-
-				dest[dst_range].copy_from_slice(&source[src_range]);
-
-				Ok(())
-			})
-		}
-	}
-
-	unsafe impl<'a> BufferProvider for BufferProxy<'a> {
-		fn scoped_access<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-			// This is safe because we construct the slice from the same parts as
-			// the memory region itself. We hold the lock to both of memory buffers,
-			// so we shouldn't have issues even if we'd try to borrow the memory twice.
-			let buffer = unsafe {
-				let memory = &* self.guard;
-				core::slice::from_raw_parts(memory.data_ptr(), memory.data_size() as usize)
-			};
-
-			f(buffer)
-		}
 	}
 
 	impl MemoryRef {
@@ -149,26 +57,84 @@ pub mod wasmer {
 			}
 		}
 
-		/// Provides direct access to the underlying memory buffer.
+		/// Returns linear memory of the wasm instance as a slice.
 		///
-		/// # Panics
+		/// # Safety
 		///
-		/// Any call that requires write access to memory made within
-		/// the closure will panic.
-		pub fn with_direct_access<R, F: FnOnce(&BufferProxy) -> R>(&self, f: F) -> R {
-			let buf = self.buffer.borrow();
-			f(&BufferProxy::new(buf))
+		/// Wasmer doesn't provide comprehensive documentation about the exact behavior of the data
+		/// pointer. If a dynamic style heap is used the base pointer of the heap can change. Since
+		/// growing, we cannot guarantee the lifetime of the returned slice reference.
+		unsafe fn memory_as_slice(memory: &wasmer::Memory) -> &[u8] {
+			let ptr = memory.data_ptr() as *const _;
+			let len: usize = memory
+				.data_size()
+				.try_into()
+				.expect("data size should fit into usize");
+
+			if len == 0 {
+				&[]
+			} else {
+				core::slice::from_raw_parts(ptr, len)
+			}
 		}
 
-		/// Provides direct mutable access to the underlying memory buffer.
+		/// Returns linear memory of the wasm instance as a slice.
 		///
-		/// # Panics
+		/// # Safety
 		///
-		/// Any calls that requires either read or write access to memory
-		/// made within the closure will panic. Proceed with caution.
-		pub fn with_direct_access_mut<R, F: FnOnce(&BufferProxyMut) -> R>(&self, f: F) -> R {
-			let buf = self.buffer.borrow_mut();
-			f(&BufferProxyMut::new(buf))
+		/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
+		/// returned it must be ensured that only one mutable and no shared references to memory exists
+		/// at the same time.
+		unsafe fn memory_as_slice_mut(memory: &wasmer::Memory) -> &mut [u8] {
+			let ptr = memory.data_ptr();
+			let len: usize = memory
+				.data_size()
+				.try_into()
+				.expect("data size should fit into usize");
+
+			if len == 0 {
+				&mut []
+			} else {
+				core::slice::from_raw_parts_mut(ptr, len)
+			}
+		}
+
+		/// Read data from a slice of memory into a destination buffer.
+		///
+		/// Returns an error if the read would go out of the memory bounds.
+		pub fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
+			unsafe {
+				let memory = self.buffer.borrow();
+
+				// This should be safe since we don't grow up memory while caching this reference and
+				// we give up the reference before returning from this function.
+				let source = Self::memory_as_slice(&memory);
+
+				let range = checked_range(source_addr.into(), destination.len(), source.len())
+					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+				destination.copy_from_slice(&source[range]);
+				Ok(())
+			}
+		}
+
+		/// Write data to a slice of memory.
+		///
+		/// Returns an error if the write would go out of the memory bounds.
+		pub fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
+			unsafe {
+				let memory = self.buffer.borrow_mut();
+
+				// This should be safe since we don't grow up memory while caching this reference and
+				// we give up the reference before returning from this function.
+				let destination = Self::memory_as_slice_mut(&memory);
+
+				let range = checked_range(dest_addr.into(), source.len(), destination.len())
+					.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
+
+				&mut destination[range].copy_from_slice(source);
+				Ok(())
+			}
 		}
 
 		/// Clone the underlying memory object
