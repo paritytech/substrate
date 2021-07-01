@@ -34,3 +34,5 @@ beefy-primitives = { path = "../beefy-primitives" }
 
 [dev-dependencies]
 sc-network-test = { git = "https://github.com/paritytech/substrate", branch = "master" }
+
+beefy-test = { path = "../beefy-test" }
