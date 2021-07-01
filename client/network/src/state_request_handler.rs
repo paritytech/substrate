@@ -35,7 +35,7 @@ use std::time::Duration;
 use std::hash::{Hasher, Hash};
 
 const LOG_TARGET: &str = "sync";
-const MAX_RESPONSE_BYTES: usize = 36; // Actual reponse may be bigger.
+const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024; // Actual reponse may be bigger.
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 
 mod rep {
