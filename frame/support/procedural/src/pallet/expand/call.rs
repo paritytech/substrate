@@ -231,16 +231,16 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#[doc(hidden)]
 			pub fn call_functions() -> #frame_support::metadata::PalletCallMetadata {
 				let ty = #frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>();
-				let calls = #frame_support::scale_info::prelude::vec![ #(
+				let calls = #frame_support::frame_support::sp_std::vec![ #(
 					#frame_support::metadata::FunctionMetadata {
 						name: stringify!(#fn_name),
-						arguments: #frame_support::scale_info::prelude::vec![ #(
+						arguments: #frame_support::frame_support::sp_std::vec![ #(
 							#frame_support::metadata::FunctionArgumentMetadata {
 								name: stringify!(#args_name),
 								ty: #frame_support::scale_info::meta_type::<#args_meta_type>(),
 							},
 						)* ],
-						documentation: #frame_support::scale_info::prelude::vec![ #( #fn_doc ),* ],
+						documentation: #frame_support::frame_support::sp_std::vec![ #( #fn_doc ),* ],
 					},
 				)* ];
 				#frame_support::metadata::PalletCallMetadata { ty, calls }

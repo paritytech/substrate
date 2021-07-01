@@ -302,13 +302,13 @@ macro_rules! __events_to_metadata {
 			$( $metadata, )*
 			$crate::metadata::EventMetadata {
 				name: stringify!($event),
-				arguments: $crate::scale_info::prelude::vec![
+				arguments: $crate::frame_support::sp_std::vec![
 					$( $( $crate::metadata::TypeSpec::new::<$param>(stringify!($param)) ),* )*
 				],
 				#[cfg(feature = "metadata-docs")]
-				documentation: $crate::scale_info::prelude::vec![ $( $doc_attr ),* ],
+				documentation: $crate::frame_support::sp_std::vec![ $( $doc_attr ),* ],
 				#[cfg(not(feature = "metadata-docs"))]
-				documentation: $crate::scale_info::prelude::vec![],
+				documentation: $crate::frame_support::sp_std::vec![],
 			};
 			$( $rest )*
 		)
@@ -316,7 +316,7 @@ macro_rules! __events_to_metadata {
 	(
 		$( $metadata:expr ),*;
 	) => {
-		$crate::scale_info::prelude::vec![ $( $metadata ),* ]
+		$crate::frame_support::sp_std::vec![ $( $metadata ),* ]
 	}
 }
 
