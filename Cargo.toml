@@ -108,6 +108,7 @@ members = [
 	"frame/session/benchmarking",
 	"frame/society",
 	"frame/staking",
+	"frame/staking/bag-thresholds",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
 	"frame/sudo",

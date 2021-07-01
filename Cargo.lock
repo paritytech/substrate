@@ -5531,6 +5531,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-staking-voter-bag-thresholds"
+version = "3.0.0"
+dependencies = [
+ "proc-macro-crate 1.0.0",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "pallet-sudo"
 version = "3.0.0"
 dependencies = [
