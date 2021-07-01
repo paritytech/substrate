@@ -334,7 +334,7 @@ mod tests {
 		let ext1 = new_transaction(1);
 		block_on(pool.submit_one(&BlockId::number(0), source, ext1)).unwrap();
 
-		let accounts = FullSystemRemoveMe::new(client, pool, DenyUnsafe::Yes);
+		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::Yes);
 
 		// when
 		let nonce = accounts.nonce(AccountKeyring::Alice.into());
@@ -358,7 +358,7 @@ mod tests {
 			client.clone(),
 		);
 
-		let accounts = FullSystemRemoveMe::new(client, pool, DenyUnsafe::Yes);
+		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::Yes);
 
 		// when
 		let res = accounts.dry_run(vec![].into(), None);
@@ -382,7 +382,7 @@ mod tests {
 			client.clone(),
 		);
 
-		let accounts = FullSystemRemoveMe::new(client, pool, DenyUnsafe::No);
+		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
 
 		let tx = Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -415,7 +415,7 @@ mod tests {
 			client.clone(),
 		);
 
-		let accounts = FullSystemRemoveMe::new(client, pool, DenyUnsafe::No);
+		let accounts = SystemRpcBackendFull::new(client, pool, DenyUnsafe::No);
 
 		let tx = Transfer {
 			from: AccountKeyring::Alice.into(),
