@@ -110,21 +110,21 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {
 	/// Returns the asset classes in existence.
 	fn classes() -> Vec<Self::ClassId> {
-		ClassMetadataOf::<T, I>::iter().map(|(k, _v)| k).collect()
+		ClassMetadataOf::<T, I>::iter_keys().collect()
 	}
 
 	/// Returns the instances of an asset `class` in existence.
 	fn instances(class: &Self::ClassId) -> Vec<Self::InstanceId> {
-		InstanceMetadataOf::<T, I>::iter_prefix(class).map(|(i, _v)| i).collect()
+		InstanceMetadataOf::<T, I>::iter_key_prefix(class).collect()
 	}
 
 	/// Returns the asset instances of all classes owned by `who`.
 	fn owned(who: &T::AccountId) -> Vec<(Self::ClassId, Self::InstanceId)> {
-		Account::<T, I>::iter_prefix((who,)).map(|(p, _v)| p).collect()
+		Account::<T, I>::iter_key_prefix((who,)).collect()
 	}
 
 	/// Returns the asset instances of `class` owned by `who`.
 	fn owned_in_class(class: &Self::ClassId, who: &T::AccountId) -> Vec<Self::InstanceId> {
-		Account::<T, I>::iter_prefix((who, class)).map(|(i, _v)| i).collect()
+		Account::<T, I>::iter_key_prefix((who, class)).collect()
 	}
 }
