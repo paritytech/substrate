@@ -19,7 +19,7 @@
 use std::sync::Arc;
 use codec::{Encode, Decode};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
-use sc_client_api::StorageProof;
+use sc_client_api::CompactProof;
 use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
 use crate::chain::{Client, ImportedState};
 use smallvec::SmallVec;
@@ -92,7 +92,7 @@ impl<B: BlockT> StateSync<B> {
 				response.proof.len(),
 			);
 			let proof_size = response.proof.len() as u64;
-			let proof = match StorageProof::decode(&mut response.proof.as_ref()) {
+			let proof = match CompactProof::decode(&mut response.proof.as_ref()) {
 				Ok(proof) => proof,
 				Err(e) => {
 					log::debug!(target: "sync", "Error decoding proof: {:?}", e);

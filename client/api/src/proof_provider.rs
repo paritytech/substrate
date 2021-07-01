@@ -21,7 +21,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT},
 };
-use crate::{StorageProof, ChangesProof};
+use crate::{StorageProof, ChangesProof, CompactProof};
 use sp_storage::{ChildInfo, StorageKey, PrefixedStorageKey};
 use sp_state_machine::{KeyValueStates, KeyValueState};
 
@@ -86,7 +86,7 @@ pub trait ProofProvider<Block: BlockT> {
 		id: &BlockId<Block>,
 		start_keys: &[Vec<u8>],
 		size_limit: usize,
-	) -> sp_blockchain::Result<(StorageProof, u32)>;
+	) -> sp_blockchain::Result<(CompactProof, u32)>;
 
 	/// Given a `BlockId` iterate over all storage values starting at `start_key`.
 	/// Returns collected keys and values.
@@ -109,7 +109,7 @@ pub trait ProofProvider<Block: BlockT> {
 	fn verify_range_proof(
 		&self,
 		root: Block::Hash,
-		proof: StorageProof,
+		proof: CompactProof,
 		start_keys: &[Vec<u8>],
 	) -> sp_blockchain::Result<(KeyValueStates, usize)>;
 }

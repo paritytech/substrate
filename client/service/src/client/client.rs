@@ -55,8 +55,8 @@ use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
-	prove_range_read_with_child_with_size, read_range_proof_check_with_child,
-	KeyValueStates, KeyValueState, MAX_NESTED_TRIE_DEPTH,
+	prove_range_read_with_child_with_size, KeyValueStates, KeyValueState,
+	read_range_proof_check_with_child_on_proving_backend, MAX_NESTED_TRIE_DEPTH,
 };
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
@@ -70,7 +70,7 @@ use sp_blockchain::{
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
-use sp_trie::StorageProof;
+use sp_trie::{StorageProof, CompactProof};
 use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
 	CallApiAtParams,
@@ -1379,13 +1379,18 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
-	) -> sp_blockchain::Result<(StorageProof, u32)> {
+	) -> sp_blockchain::Result<(CompactProof, u32)> {
 		let state = self.state_at(id)?;
-		Ok(prove_range_read_with_child_with_size::<_, HashFor<Block>>(
-				state,
-				size_limit,
-				start_key,
-		)?)
+		let root = state.storage_root(std::iter::empty()).0;
+
+		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
+			state,
+			size_limit,
+			start_key,
+		)?;
+		let proof = sp_trie::encode_compact::<sp_trie::Layout<HashFor<Block>>>(proof, root)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
+		Ok((proof, count))
 	}
 
 	fn storage_collection(
@@ -1481,12 +1486,20 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 	fn verify_range_proof(
 		&self,
 		root: Block::Hash,
-		proof: StorageProof,
+		proof: CompactProof,
 		start_key: &[Vec<u8>],
 	) -> sp_blockchain::Result<(KeyValueStates, usize)> {
-		let state = read_range_proof_check_with_child::<HashFor<Block>>(
-				root,
-				proof,
+		let mut db = sp_state_machine::MemoryDB::<HashFor<Block>>::new(&[]);
+		let _ = sp_trie::decode_compact::<sp_state_machine::Layout<HashFor<Block>>, _, _>(
+			&mut db,
+			proof.iter_compact_encoded_nodes(),
+			Some(&root),
+		).map_err(|e| {
+			sp_blockchain::Error::from_state(Box::new(e))
+		})?;
+		let proving_backend = sp_state_machine::TrieBackend::new(db, root);
+		let state = read_range_proof_check_with_child_on_proving_backend::<HashFor<Block>>(
+				&proving_backend,
 				start_key,
 		)?;
 
