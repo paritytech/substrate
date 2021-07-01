@@ -245,6 +245,23 @@ impl<B: BlockT> BenchmarkingState<B> {
 			}
 		}
 	}
+
+	// Return all the tracked storage keys among main and child trie.
+	fn all_trackers(&self) -> Vec<TrackedStorageKey> {
+		let mut all_trackers = Vec::new();
+
+		self.main_key_tracker.borrow().iter().for_each(|(_, tracker)| {
+			all_trackers.push(tracker.clone());
+		});
+
+		self.child_key_tracker.borrow().iter().for_each(|(_, child_tracker)| {
+			child_tracker.iter().for_each(|(_, tracker)| {
+				all_trackers.push(tracker.clone());
+			});
+		});
+
+		all_trackers
+	}
 }
 
 fn state_err() -> String {
@@ -459,7 +476,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		let mut writes = 0;
 		let mut repeat_writes = 0;
 
-		self.main_key_tracker.borrow().iter().for_each(|(_, tracker)| {
+		self.all_trackers().iter().for_each(|tracker| {
 			if !tracker.whitelisted {
 				if tracker.reads > 0 {
 					reads += 1;
@@ -493,10 +510,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		// TODO: Refactor to enable full storage key transparency, where we can remove the
 		// `prefix_key_tracker`.
 		let mut prefix_key_tracker = HashMap::<[u8; 32], (u32, u32, bool)>::new();
-		self.main_key_tracker.borrow().iter().for_each(|(key, tracker): (&Vec<u8>, &TrackedStorageKey)| {
+		self.all_trackers().iter().for_each(|tracker| {
 			if !tracker.whitelisted {
 				let mut prefix = [0u8; 32];
-				prefix[0..32].copy_from_slice(&key[0..32]);
+				prefix[0..32].copy_from_slice(&tracker.key[0..32]);
 				// each read / write of a specific key is counted at most one time, since
 				// additional reads / writes happen in the memory overlay.
 				let reads = tracker.reads.min(1);
