@@ -354,10 +354,8 @@ fn add_storage_comments(
 	results: &[BenchmarkResults],
 	storage_info: &[StorageInfo],
 ) {
-	let mut storage_info_map = HashMap::new();
-	storage_info.iter().for_each(|info| {
-		storage_info_map.insert(info.prefix, info);
-	});
+	let mut storage_info_map = storage_info.iter().map(|info| (info.prefix, info))
+		.collect::<HashMap<_, _>>();
 
 	for result in results {
 		for key in &result.keys {
