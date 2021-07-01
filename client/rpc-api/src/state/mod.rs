@@ -21,8 +21,4 @@
 pub mod error;
 pub mod helpers;
 
-use sp_core::Bytes;
-use sp_core::storage::{StorageKey, StorageData, StorageChangeSet};
-use sp_version::RuntimeVersion;
-
 pub use self::helpers::ReadProof;

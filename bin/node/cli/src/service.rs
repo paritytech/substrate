@@ -208,14 +208,8 @@ pub fn new_partial(
 	let (rpc_extensions_builder, rpc_setup) = {
 		let rpc_setup = grandpa::SharedVoterState::empty();
 		let client = client.clone();
-		let pool = transaction_pool.clone();
-		let rpc_extensions_builder = move |deny_unsafe, _subscription_executor| {
-			let deps = node_rpc::FullDeps {
-				client: client.clone(),
-				pool: pool.clone(),
-				deny_unsafe,
-			};
-
+		let rpc_extensions_builder = move |_deny_unsafe, _subscription_executor| {
+			let deps = node_rpc::FullDeps { client: client.clone() };
 			node_rpc::create_full(deps)
 		};
 
@@ -259,7 +253,7 @@ pub fn new_full_base(
 		select_chain,
 		transaction_pool,
 		other: (
-			rpc_extensions_builder,
+			_rpc_extensions_builder,
 			rpsee_builder,
 			import_setup,
 			rpc_setup,
@@ -594,13 +588,6 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 			network.clone(),
 		);
 	}
-
-	let light_deps = node_rpc::LightDeps {
-		remote_blockchain: backend.remote_blockchain(),
-		fetcher: on_demand.clone(),
-		client: client.clone(),
-		pool: transaction_pool.clone(),
-	};
 
 	// TODO: (dp) implement rpsee builder here for all RPC modules available to the light client.
 	let rpc_handlers =
