@@ -17,25 +17,19 @@
 
 //! System FRAME specific RPC methods.
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, fmt::Display};
 
 use codec::{self, Codec, Decode, Encode};
-use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
-use jsonrpsee::RpcModule;
-use jsonrpsee_types::{Error as JsonRpseeError, error::CallError as JsonRpseeCallError};
 use futures::{future, FutureExt};
-use sp_blockchain::{
-	HeaderBackend,
-	Error as ClientError
-};
-use sp_runtime::{
-	generic::BlockId,
-	traits,
-};
-use sp_core::{hexdisplay::HexDisplay, Bytes};
-use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-use sp_block_builder::BlockBuilder;
+use jsonrpsee::RpcModule;
+use jsonrpsee_types::{error::CallError, Error as JsonRpseeError};
+use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
 use sc_rpc_api::DenyUnsafe;
+use sp_block_builder::BlockBuilder;
+use sp_blockchain::{Error as ClientError, HeaderBackend};
+use sp_core::{hexdisplay::HexDisplay, Bytes};
+use sp_runtime::{generic::BlockId, traits};
+use sp_transaction_pool::{InPoolTransaction, TransactionPool};
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
@@ -46,9 +40,9 @@ pub struct SystemRpc<BlockHash, AccountId, Index> {
 
 impl<BlockHash, AccountId, Index> SystemRpc<BlockHash, AccountId, Index>
 where
-	AccountId: Clone + std::fmt::Display + Codec + traits::MaybeSerializeDeserialize + Send + 'static,
+	AccountId: Clone + Display + Codec + traits::MaybeSerializeDeserialize + Send + 'static,
 	BlockHash: Send + traits::MaybeSerializeDeserialize + 'static,
-	Index: Clone + std::fmt::Display + Codec + Send + Sync + traits::AtLeast32Bit + 'static + traits::MaybeSerialize,
+	Index: Clone + Display + Codec + Send + Sync + traits::AtLeast32Bit + traits::MaybeSerialize + 'static,
 {
 	pub fn new(backend: Box<dyn SystemRpcBackend<BlockHash, AccountId, Index>>) -> Self {
 		Self { backend }
@@ -69,21 +63,17 @@ where
 				Err(e) => return Box::pin(future::err(e)),
 			};
 
-			async move {
-				system.backend.nonce(account).await
-			}.boxed()
+			async move { system.backend.nonce(account).await }.boxed()
 		})?;
 
 		// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
 		module.register_async_method("system_dryRun", |params, system| {
 			let (extrinsic, at) = match params.parse() {
 				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e))
+				Err(e) => return Box::pin(future::err(e)),
 			};
 
-			async move {
-				system.backend.dry_run(extrinsic, at).await
-			}.boxed()
+			async move { system.backend.dry_run(extrinsic, at).await }.boxed()
 		})?;
 
 		module.register_alias("system_accountNextIndex", "account_nextIndex")?;
@@ -97,11 +87,11 @@ where
 #[async_trait::async_trait]
 pub trait SystemRpcBackend<BlockHash, AccountId, Index>: Send + Sync + 'static
 where
-	AccountId: Clone + std::fmt::Display + Codec,
-	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
+	AccountId: Clone + Display + Codec,
+	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeCallError>;
-	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> Result<Bytes, JsonRpseeCallError>;
+	async fn nonce(&self, account: AccountId) -> Result<Index, CallError>;
+	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> Result<Bytes, CallError>;
 }
 
 /// A full-client backend for [`SystemRpc`].
@@ -140,12 +130,19 @@ impl<Client, Pool, Fetcher, Block> SystemRpcBackendLight<Client, Pool, Fetcher, 
 		fetcher: Arc<Fetcher>,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	) -> Self {
-		SystemRpcBackendLight { client, pool, fetcher, remote_blockchain }
+		SystemRpcBackendLight {
+			client,
+			pool,
+			fetcher,
+			remote_blockchain,
+		}
 	}
 }
 
 #[async_trait::async_trait]
-impl<Client, Pool, Block, AccountId, Index> SystemRpcBackend<<Block as traits::Block>::Hash, AccountId, Index> for SystemRpcBackendFull<Client, Pool, Block>
+impl<Client, Pool, Block, AccountId, Index>
+	SystemRpcBackend<<Block as traits::Block>::Hash, AccountId, Index>
+	for SystemRpcBackendFull<Client, Pool, Block>
 where
 	Client: sp_api::ProvideRuntimeApi<Block>,
 	Client: HeaderBackend<Block>,
@@ -157,29 +154,37 @@ where
 	AccountId: Clone + std::fmt::Display + Codec + Send + 'static,
 	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeCallError> {
+	async fn nonce(&self, account: AccountId) -> Result<Index, CallError> {
 		let api = self.client.runtime_api();
 		let best = self.client.info().best_hash;
 		let at = BlockId::hash(best);
-		let nonce = api.account_nonce(&at, account.clone())
-			.map_err(|api_err| JsonRpseeCallError::Failed(Box::new(api_err)))?;
+		let nonce = api
+			.account_nonce(&at, account.clone())
+			.map_err(|api_err| CallError::Failed(Box::new(api_err)))?;
 		Ok(adjust_nonce(&*self.pool, account, nonce))
 	}
 
-	async fn dry_run(&self, extrinsic: Bytes, at: Option<<Block as traits::Block>::Hash>) -> Result<Bytes, JsonRpseeCallError> {
+	async fn dry_run(
+		&self,
+		extrinsic: Bytes,
+		at: Option<<Block as traits::Block>::Hash>,
+	) -> Result<Bytes, CallError> {
 		self.deny_unsafe.check_if_safe()?;
 		let api = self.client.runtime_api();
 		let at = BlockId::<Block>::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-		let uxt: <Block as traits::Block>::Extrinsic = Decode::decode(&mut &*extrinsic).map_err(|e| JsonRpseeCallError::Custom {
-			code: Error::DecodeError.into(),
-			message: "Unable to dry run extrinsic.".into(),
-			data: serde_json::value::to_raw_value(&e.to_string()).ok()
-		})?;
-		let result = api.apply_extrinsic(&at, uxt).map_err(|e| JsonRpseeCallError::Custom {
-			code: Error::RuntimeError.into(),
-			message: "Unable to dry run extrinsic".into(),
-			data: serde_json::value::to_raw_value(&e.to_string()).ok()
-		})?;
+		let uxt: <Block as traits::Block>::Extrinsic =
+			Decode::decode(&mut &*extrinsic).map_err(|e| CallError::Custom {
+				code: Error::DecodeError.into(),
+				message: "Unable to dry run extrinsic.".into(),
+				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
+			})?;
+		let result = api
+			.apply_extrinsic(&at, uxt)
+			.map_err(|e| CallError::Custom {
+				code: Error::RuntimeError.into(),
+				message: "Unable to dry run extrinsic".into(),
+				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
+			})?;
 		Ok(Encode::encode(&result).into())
 	}
 }
@@ -187,27 +192,28 @@ where
 #[async_trait::async_trait]
 impl<Client, Pool, Fetcher, Block, AccountId, Index>
 	SystemRpcBackend<<Block as traits::Block>::Hash, AccountId, Index>
-	for
-	SystemRpcBackendLight<Client, Pool, Fetcher, Block>
+	for SystemRpcBackendLight<Client, Pool, Fetcher, Block>
 where
 	Client: Send + Sync + 'static,
 	Client: HeaderBackend<Block>,
 	Pool: TransactionPool + 'static,
 	Fetcher: light::Fetcher<Block> + 'static,
 	Block: traits::Block,
-	AccountId: Clone + std::fmt::Display + Codec + Send + 'static,
-	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
+	AccountId: Clone + Display + Codec + Send + 'static,
+	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeCallError> {
+	async fn nonce(&self, account: AccountId) -> Result<Index, CallError> {
 		let best_hash = self.client.info().best_hash;
 		let best_id = BlockId::hash(best_hash);
 		let best_header = future_header(&*self.remote_blockchain, &*self.fetcher, best_id)
 			.await
-    		.map_err(|blockchain_err| JsonRpseeCallError::Failed(Box::new(blockchain_err)))?
+			.map_err(|blockchain_err| CallError::Failed(Box::new(blockchain_err)))?
 			.ok_or_else(|| ClientError::UnknownBlock(format!("{}", best_hash)))
-    		.map_err(|client_err| JsonRpseeCallError::Failed(Box::new(client_err)))?;
+			.map_err(|client_err| CallError::Failed(Box::new(client_err)))?;
 		let call_data = account.encode();
-		let nonce = self.fetcher.remote_call(RemoteCallRequest {
+		let nonce = self
+			.fetcher
+			.remote_call(RemoteCallRequest {
 				block: best_hash,
 				header: best_header,
 				method: "AccountNonceApi_account_nonce".into(),
@@ -215,16 +221,16 @@ where
 				retry_count: None,
 			})
 			.await
-			.map_err(|blockchain_err| JsonRpseeCallError::Failed(Box::new(blockchain_err)))?;
+			.map_err(|blockchain_err| CallError::Failed(Box::new(blockchain_err)))?;
 
 		let nonce: Index = Decode::decode(&mut &nonce[..])
-			.map_err(|codec_err| JsonRpseeCallError::Failed(Box::new(codec_err)))?;
+			.map_err(|codec_err| CallError::Failed(Box::new(codec_err)))?;
 
 		Ok(adjust_nonce(&*self.pool, account, nonce))
 	}
 
-	async fn dry_run(&self, _extrinsic: Bytes, _at: Option<<Block as traits::Block>::Hash>) -> Result<Bytes, JsonRpseeCallError> {
-		Err(JsonRpseeCallError::Custom {
+	async fn dry_run(&self, _extrinsic: Bytes, _at: Option<<Block as traits::Block>::Hash>) -> Result<Bytes, CallError> {
+		Err(CallError::Custom {
 			code: -32601, // TODO: (dp) We have this in jsonrpsee too somewhere. This is jsonrpsee::ErrorCode::MethodNotFound
 			message: "Not implemented for light clients".into(),
 			data: None,
@@ -256,11 +262,7 @@ impl From<Error> for i32 {
 
 /// Adjust account nonce from state, so that tx with the nonce will be
 /// placed after all ready txpool transactions.
-fn adjust_nonce<P, AccountId, Index>(
-	pool: &P,
-	account: AccountId,
-	nonce: Index,
-) -> Index
+fn adjust_nonce<P, AccountId, Index>(pool: &P, account: AccountId, nonce: Index) -> Index
 where
 	P: TransactionPool,
 	AccountId: Clone + std::fmt::Display + Encode,
