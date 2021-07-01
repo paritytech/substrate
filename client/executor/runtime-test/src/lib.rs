@@ -211,7 +211,6 @@ sp_core::wasm_export_functions! {
 		code
 	}
 
-
 	fn test_sandbox_get_global_val(code: Vec<u8>) -> i64 {
 		let env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		let instance = if let Ok(i) = sp_sandbox::Instance::new(&code, &env_builder, &mut ()) {
@@ -227,11 +226,9 @@ sp_core::wasm_export_functions! {
 		}
 	}
 
-
 	fn test_offchain_index_set() {
 		sp_io::offchain_index::set(b"k", b"v");
 	}
-
 
 	fn test_offchain_local_storage() -> bool {
 		let kind = sp_core::offchain::StorageKind::PERSISTENT;
@@ -284,11 +281,6 @@ sp_core::wasm_export_functions! {
 		};
 
 		run().is_some()
-	}
-
-	// Just some test to make sure that `sp-allocator` compiles on `no_std`.
-	fn test_sp_allocator_compiles() {
-		sp_allocator::FreeingBumpHeapAllocator::new(0);
 	}
 
 	fn test_enter_span() -> u64 {

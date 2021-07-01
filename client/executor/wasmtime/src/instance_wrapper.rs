@@ -340,7 +340,7 @@ impl InstanceWrapper {
 
 			let range = util::checked_range(address.into(), data.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
-			&mut memory[range].copy_from_slice(data);
+			memory[range].copy_from_slice(data);
 			Ok(())
 		}
 	}
@@ -351,7 +351,7 @@ impl InstanceWrapper {
 	/// to get more details.
 	pub fn allocate(
 		&self,
-		allocator: &mut sp_allocator::FreeingBumpHeapAllocator,
+		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
 		size: WordSize,
 	) -> Result<Pointer<u8>> {
 		unsafe {
@@ -368,7 +368,7 @@ impl InstanceWrapper {
 	/// Returns `Err` in case the given memory region cannot be deallocated.
 	pub fn deallocate(
 		&self,
-		allocator: &mut sp_allocator::FreeingBumpHeapAllocator,
+		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
 		ptr: Pointer<u8>,
 	) -> Result<()> {
 		unsafe {

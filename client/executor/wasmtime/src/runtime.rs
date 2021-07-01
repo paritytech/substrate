@@ -31,7 +31,7 @@ use sc_executor_common::{
 	runtime_blob::{DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob},
 	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
 };
-use sp_allocator::FreeingBumpHeapAllocator;
+use sc_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize, Value};
 use wasmtime::{Engine, Store};
