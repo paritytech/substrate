@@ -492,17 +492,19 @@ impl<T: Config> Pallet<T> {
 		target: <T::Lookup as StaticLookup>::Source,
 		schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 	) -> DispatchResult {
+		// Validate user inputs.
 		ensure!(schedule.locked() > T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 		schedule.validate::<T::BlockNumberToBalance, T>()?;
+
+		// Potentially correct `per_block` if its greater than locked.
 		let schedule = schedule.correct();
 
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
-		ensure!(
-			Vesting::<T>::decode_len(&target).unwrap_or_default() <
-				T::MaxVestingSchedules::get() as usize,
-			Error::<T>::AtMaxVestingSchedules
-		);
+
+		// Check we can add to this account prior to any storage writes. The schedule
+		// params are ignored so we just use 0s.
+		Self::can_add_vesting_schedule(&target, Zero::zero(), Zero::zero(), Zero::zero())?;
 
 		T::Currency::transfer(
 			&source,
@@ -675,6 +677,26 @@ where
 			return e.into();
 		};
 		Self::write_lock(who, locked_now);
+
+		Ok(())
+	}
+
+	// Ensure we can call `add_vesting_schedule` without error. This should always
+	// be updated in lockstep with `add_vesting_schedule`.
+	//
+	// NOTE: expects schedule param validation has been done due to different
+	// scenarios having varying requirements.
+	fn can_add_vesting_schedule(
+		who: &T::AccountId,
+		_locked: BalanceOf<T>,
+		_per_block: BalanceOf<T>,
+		_starting_block: T::BlockNumber,
+	) -> DispatchResult {
+		ensure!(
+			Vesting::<T>::decode_len(who).unwrap_or_default() <
+				T::MaxVestingSchedules::get() as usize,
+			Error::<T>::AtMaxVestingSchedules
+		);
 
 		Ok(())
 	}

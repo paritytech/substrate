@@ -97,6 +97,15 @@ pub trait VestingSchedule<AccountId> {
 		starting_block: Self::Moment,
 	) -> DispatchResult;
 
+	/// Checks if `add_vesting_schedule` would work against `who` and the given
+	/// schedule params.
+	fn can_add_vesting_schedule(
+		who: &AccountId,
+		locked: <Self::Currency as Currency<AccountId>>::Balance,
+		per_block: <Self::Currency as Currency<AccountId>>::Balance,
+		starting_block: Self::Moment,
+	) -> DispatchResult;
+
 	/// Remove a vesting schedule for a given account.
 	///
 	/// Parameter `schedule_index` is only applicable for implementations that
