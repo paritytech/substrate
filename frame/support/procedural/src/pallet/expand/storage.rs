@@ -177,7 +177,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 					modifier: <#full_ident as #frame_support::storage::StorageEntryMetadata>::MODIFIER,
 					ty: <#full_ident as #frame_support::storage::StorageEntryMetadata>::ty(),
 					default: <#full_ident as #frame_support::storage::StorageEntryMetadata>::default(),
-					documentation: #frame_support::frame_support::sp_std::vec![
+					documentation: #frame_support::sp_std::vec![
 						#( #docs, )*
 					],
 				}
@@ -346,7 +346,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						#frame_support::traits::PalletInfo
 					>::name::<#pallet_ident<#type_use_gen>>()
 						.expect("Every active pallet has a name in the runtime; qed"),
-					entries: #frame_support::frame_support::sp_std::vec![
+					entries: #frame_support::sp_std::vec![
 						#( #entries, )*
 					],
 				}
