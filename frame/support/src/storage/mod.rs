@@ -372,7 +372,7 @@ pub trait IterableStorageDoubleMap<
 	/// Enumerate all elements in the map in no particular order. If you add or remove values to
 	/// the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
-	
+
 	/// Enumerate all keys `k1` and `k2` in the map in no particular order. If you add or remove
 	/// values to the map while doing this, you'll get undefined results.
 	fn iter_keys() -> Self::FullKeyIterator;
@@ -1357,6 +1357,59 @@ mod test {
 				require_transaction();
 				TransactionOutcome::Rollback(())
 			});
+		});
+	}
+
+	#[test]
+	fn key_prefix_iterator_works() {
+		TestExternalities::default().execute_with(|| {
+			use crate::storage::generator::StorageMap;
+			use crate::hash::Twox64Concat;
+			struct MyStorageMap;
+			impl StorageMap<u64, u64> for MyStorageMap {
+				type Query = u64;
+				type Hasher = Twox64Concat;
+
+				fn module_prefix() -> &'static [u8] {
+					b"MyModule"
+				}
+
+				fn storage_prefix() -> &'static [u8] {
+					b"MyStorageMap"
+				}
+
+				fn from_optional_value_to_query(v: Option<u64>) -> Self::Query {
+					v.unwrap_or_default()
+				}
+
+				fn from_query_to_optional_value(v: Self::Query) -> Option<u64> {
+					Some(v)
+				}
+			}
+
+			let k = [twox_128(b"MyModule"), twox_128(b"MyStorageMap")].concat();
+			assert_eq!(MyStorageMap::prefix_hash().to_vec(), k);
+
+			// empty to start
+			assert!(MyStorageMap::iter_keys().collect::<Vec<_>>().is_empty());
+
+			MyStorageMap::insert(1, 10);
+			MyStorageMap::insert(2, 20);
+			MyStorageMap::insert(3, 30);
+			MyStorageMap::insert(4, 40);
+
+			// just looking
+			let mut keys = MyStorageMap::iter_keys().collect::<Vec<_>>();
+			keys.sort();
+			assert_eq!(keys, vec![1, 2, 3, 4]);
+
+			// draining the keys and values
+			let mut drained_keys = MyStorageMap::iter_keys().drain().collect::<Vec<_>>();
+			drained_keys.sort();
+			assert_eq!(drained_keys, vec![1, 2, 3, 4]);
+
+			// empty again
+			assert!(MyStorageMap::iter_keys().collect::<Vec<_>>().is_empty());
 		});
 	}
 
