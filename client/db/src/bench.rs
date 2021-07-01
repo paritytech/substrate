@@ -519,7 +519,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				let reads = tracker.reads.min(1);
 				let writes = tracker.writes.min(1);
 				if let Some(prefix_tracker) = prefix_key_tracker.get_mut(&prefix) {
-
 						prefix_tracker.0 += reads;
 						prefix_tracker.1 += writes;
 				} else {
