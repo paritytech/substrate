@@ -1,4 +1,4 @@
-error: `Pallet` does not have the std feature enabled, this will cause the `PalletConfig` type to be undefined.
+error: `Pallet` does not have the std feature enabled, this will cause the `test_pallet::GenesisConfig` type to be undefined.
   --> $DIR/no_std_genesis_config.rs:13:1
    |
 13 | / construct_runtime! {

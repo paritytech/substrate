@@ -66,7 +66,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 					#[macro_export]
 					#[doc(hidden)]
 					macro_rules! #std_macro_ident {
-						($pallet_name:ident) => {};
+						($pallet_name:ident, $pallet_path:expr) => {};
 					}
 
 					#[doc(hidden)]
@@ -123,13 +123,13 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 			#[macro_export]
 			#[doc(hidden)]
 			macro_rules! #std_macro_ident {
-				($pallet_name:ident) => {
+				($pallet_name:ident, $pallet_path:expr) => {
 					compile_error!(concat!(
 						"`",
 						stringify!($pallet_name),
 						"` does not have the std feature enabled, this will cause the `",
-						stringify!($pallet_name),
-						"Config` type to be undefined."
+						$pallet_path,
+						"::GenesisConfig` type to be undefined."
 					));
 				};
 			}
