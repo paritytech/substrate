@@ -277,4 +277,10 @@ panic = "unwind"
 
 [patch.crates-io]
 primitive-types = { git = "https://github.com/paritytech/parity-common", branch = "aj-update-scale-info" }
+parity-util-mem = { git = "https://github.com/paritytech/parity-common", branch = "aj-update-scale-info" }
+kvdb = { git = "https://github.com/paritytech/parity-common", branch = "aj-update-scale-info" }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", branch = "aj-update-scale-info" }
+kvdb-web = { git = "https://github.com/paritytech/parity-common", branch = "aj-update-scale-info" }
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", branch = "aj-update-scale-info" }
 finality-grandpa = { git = "https://github.com/paritytech/finality-grandpa", branch = "aj-scale-info" }
+memory-db = { git = "https://github.com/paritytech/trie", branch = "aj-update-parity-common" }

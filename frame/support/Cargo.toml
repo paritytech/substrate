@@ -39,7 +39,7 @@ log = { version = "0.4.14", default-features = false }
 assert_matches = "1.3.0"
 pretty_assertions = "0.6.1"
 frame-system = { version = "3.0.0", path = "../system" }
-parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 
 [features]
 default = ["std"]

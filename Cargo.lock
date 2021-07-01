@@ -1695,7 +1695,19 @@ dependencies = [
 [[package]]
 name = "fixed-hash"
 version = "0.7.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
+dependencies = [
+ "byteorder",
+ "rand 0.8.3",
+ "rustc-hex",
+ "static_assertions",
+]
+
+[[package]]
+name = "fixed-hash"
+version = "0.7.0"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "byteorder",
  "rand 0.8.3",
@@ -2365,6 +2377,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
 
 [[package]]
+name = "hash-db"
+version = "0.15.2"
+source = "git+https://github.com/paritytech/trie?branch=aj-update-parity-common#7d1265578a23e26de7a1e40e4f593a2c0562f9a9"
+
+[[package]]
 name = "hash256-std-hasher"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2709,7 +2726,16 @@ dependencies = [
 [[package]]
 name = "impl-codec"
 version = "0.5.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df170efa359aebdd5cb7fe78edcc67107748e4737bdca8a8fb40d15ea7a877ed"
+dependencies = [
+ "parity-scale-codec",
+]
+
+[[package]]
+name = "impl-codec"
+version = "0.5.0"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -2726,7 +2752,7 @@ dependencies = [
 [[package]]
 name = "impl-serde"
 version = "0.3.1"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "serde",
 ]
@@ -3049,7 +3075,7 @@ version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711adba9940a039f4374fc5724c0a5eaca84a2d558cce62256bfe26f0dbef05e"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash256-std-hasher",
  "tiny-keccak",
 ]
@@ -3075,9 +3101,8 @@ dependencies = [
 
 [[package]]
 name = "kvdb"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8891bd853eff90e33024195d79d578dc984c82f9e0715fcd2b525a0c19d52811"
+version = "0.10.0"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "parity-util-mem",
  "smallvec 1.6.1",
@@ -3085,9 +3110,8 @@ dependencies = [
 
 [[package]]
 name = "kvdb-memorydb"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30a0da8e08caf08d384a620ec19bb6c9b85c84137248e202617fb91881f25912"
+version = "0.10.0"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "kvdb",
  "parity-util-mem",
@@ -3096,9 +3120,8 @@ dependencies = [
 
 [[package]]
 name = "kvdb-rocksdb"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34446c373ccc494c2124439281c198c7636ccdc2752c06722bbffd56d459c1e4"
+version = "0.12.0"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "fs-swap",
  "kvdb",
@@ -3114,9 +3137,8 @@ dependencies = [
 
 [[package]]
 name = "kvdb-web"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb1e98ba343d0b35f9009a8844cd2b87fa3192f7e79033ac05b00aeae0f3b0b5"
+version = "0.10.0"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "futures 0.3.15",
  "js-sys",
@@ -3795,7 +3817,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "max-encoded-len-derive",
  "parity-scale-codec",
- "primitive-types",
+ "primitive-types 0.10.0",
  "rustversion",
  "trybuild",
 ]
@@ -3862,10 +3884,9 @@ dependencies = [
 [[package]]
 name = "memory-db"
 version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "814bbecfc0451fc314eeea34f05bbcd5b98a7ad7af37faee088b86a1e633f1d4"
+source = "git+https://github.com/paritytech/trie?branch=aj-update-parity-common#7d1265578a23e26de7a1e40e4f593a2c0562f9a9"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2 (git+https://github.com/paritytech/trie?branch=aj-update-parity-common)",
  "hashbrown",
  "parity-util-mem",
 ]
@@ -4129,7 +4150,7 @@ dependencies = [
  "derive_more",
  "fs_extra",
  "futures 0.3.15",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex",
  "kvdb",
  "kvdb-rocksdb",
@@ -5878,16 +5899,15 @@ dependencies = [
 
 [[package]]
 name = "parity-util-mem"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "664a8c6b8e62d8f9f2f937e391982eb433ab285b4cd9545b342441e04a906e42"
+version = "0.10.0"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "cfg-if 1.0.0",
  "hashbrown",
  "impl-trait-for-tuples",
- "parity-util-mem-derive",
+ "parity-util-mem-derive 0.1.0 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
  "parking_lot 0.11.1",
- "primitive-types",
+ "primitive-types 0.10.0",
  "smallvec 1.6.1",
  "winapi 0.3.9",
 ]
@@ -5897,6 +5917,16 @@ name = "parity-util-mem-derive"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f557c32c6d268a07c921471619c0295f5efad3a0e76d4f97a05c091a51d110b2"
+dependencies = [
+ "proc-macro2",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
+name = "parity-util-mem-derive"
+version = "0.1.0"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -6329,10 +6359,21 @@ dependencies = [
 [[package]]
 name = "primitive-types"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2415937401cb030a2a0a4d922483f945fa068f52a7dbb22ce0fe5f2b6f6adace"
 dependencies = [
- "fixed-hash",
- "impl-codec",
+ "fixed-hash 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-codec 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uint 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "primitive-types"
+version = "0.10.0"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
+dependencies = [
+ "fixed-hash 0.7.0 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
+ "impl-codec 0.5.0 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
  "impl-serde 0.3.1 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
  "scale-info",
  "uint 0.9.0 (git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info)",
@@ -6893,9 +6934,9 @@ dependencies = [
 
 [[package]]
 name = "rocksdb"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23d83c02c429044d58474eaf5ae31e062d0de894e21125b47437ec0edc1397e6"
+checksum = "c749134fda8bfc90d0de643d59bfc841dcb3ac8a1062e12b6754bd60235c48b3"
 dependencies = [
  "libc",
  "librocksdb-sys",
@@ -7219,7 +7260,7 @@ dependencies = [
  "derive_more",
  "fnv",
  "futures 0.3.15",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvdb",
  "kvdb-memorydb",
  "lazy_static",
@@ -7254,7 +7295,7 @@ name = "sc-client-db"
 version = "0.9.0"
 dependencies = [
  "blake2-rfc",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvdb",
  "kvdb-memorydb",
  "kvdb-rocksdb",
@@ -7770,7 +7811,7 @@ dependencies = [
 name = "sc-light"
 version = "3.0.0"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -7956,7 +7997,7 @@ dependencies = [
  "assert_matches",
  "futures 0.1.31",
  "futures 0.3.15",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core",
  "jsonrpc-pubsub",
  "lazy_static",
@@ -8058,7 +8099,7 @@ dependencies = [
  "futures 0.1.31",
  "futures 0.3.15",
  "futures-timer 3.0.2",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core",
  "jsonrpc-pubsub",
  "lazy_static",
@@ -8162,7 +8203,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-util-mem",
- "parity-util-mem-derive",
+ "parity-util-mem-derive 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.11.1",
  "sc-client-api",
  "sp-core",
@@ -8774,7 +8815,7 @@ dependencies = [
 name = "sp-api"
 version = "3.0.0"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "parity-scale-codec",
  "sp-api-proc-macro",
@@ -8853,7 +8894,7 @@ dependencies = [
  "integer-sqrt",
  "num-traits",
  "parity-scale-codec",
- "primitive-types",
+ "primitive-types 0.9.0",
  "rand 0.7.3",
  "scale-info",
  "serde",
@@ -8870,7 +8911,7 @@ dependencies = [
  "honggfuzz",
  "num-bigint",
  "num-traits",
- "primitive-types",
+ "primitive-types 0.9.0",
  "sp-arithmetic",
 ]
 
@@ -9034,7 +9075,7 @@ dependencies = [
  "dyn-clonable",
  "ed25519-dalek",
  "futures 0.3.15",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash256-std-hasher",
  "hex",
  "hex-literal",
@@ -9049,7 +9090,7 @@ dependencies = [
  "parity-util-mem",
  "parking_lot 0.11.1",
  "pretty_assertions 0.6.1",
- "primitive-types",
+ "primitive-types 0.10.0",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "regex",
@@ -9137,7 +9178,7 @@ name = "sp-io"
 version = "3.0.0"
 dependencies = [
  "futures 0.3.15",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
@@ -9298,7 +9339,7 @@ version = "3.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "primitive-types",
+ "primitive-types 0.10.0",
  "rustversion",
  "sp-core",
  "sp-externalities",
@@ -9413,7 +9454,7 @@ dependencies = [
 name = "sp-state-machine"
 version = "0.9.0"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal",
  "log",
  "num-traits",
@@ -9543,7 +9584,7 @@ name = "sp-trie"
 version = "3.0.0"
 dependencies = [
  "criterion",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal",
  "memory-db",
  "parity-scale-codec",
@@ -9825,7 +9866,7 @@ dependencies = [
  "async-trait",
  "futures 0.1.31",
  "futures 0.3.15",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex",
  "parity-scale-codec",
  "sc-client-api",
@@ -10643,7 +10684,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "568257edb909a5c532b1f4ab38ee6b5dedfbf8775be6a55a29020513ebe3e072"
 dependencies = [
  "criterion",
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "keccak-hasher",
  "memory-db",
  "parity-scale-codec",
@@ -10658,7 +10699,7 @@ version = "0.22.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd81fe0c8bc2b528a51c9d2c31dae4483367a26a723a3c9a4a8120311d7774e3"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown",
  "log",
  "rustc-hex",
@@ -10671,7 +10712,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "652931506d2c1244d7217a70b99f56718a7b4161b37f04e7cd868072a99f68cd"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -10680,7 +10721,7 @@ version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3161ba520ab28cd8e6b68e1126f1009f6e335339d1a73b978139011703264c8"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "keccak-hasher",
 ]
 
@@ -10811,7 +10852,7 @@ dependencies = [
 [[package]]
 name = "uint"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#8e5e7131f7b245196742ab125cf3c18ffccba408"
+source = "git+https://github.com/paritytech/parity-common?branch=aj-update-scale-info#d95576e3a77561a54e384a83136cd7aa25743683"
 dependencies = [
  "byteorder",
  "crunchy",
