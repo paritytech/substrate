@@ -982,7 +982,10 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(<T as frame_system::Config>::AccountId = "AccountId")]
+	#[pallet::metadata(
+		<T as frame_system::Config>::AccountId = "AccountId",
+		BalanceOf<T> = "Balance"
+	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
@@ -996,9 +999,9 @@ pub mod pallet {
 		/// election failed, `None`.
 		ElectionFinalized(Option<ElectionCompute>),
 		/// An account has been rewarded for their signed submission being finalized.
-		Rewarded(<T as frame_system::Config>::AccountId),
+		Rewarded(<T as frame_system::Config>::AccountId, BalanceOf<T>),
 		/// An account has been slashed for submitting an invalid signed submission.
-		Slashed(<T as frame_system::Config>::AccountId),
+		Slashed(<T as frame_system::Config>::AccountId, BalanceOf<T>),
 		/// The signed phase of the given round has started.
 		SignedPhaseStarted(u32),
 		/// The unsigned phase of the given round has started.
