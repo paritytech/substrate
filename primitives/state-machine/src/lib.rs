@@ -901,7 +901,7 @@ mod execution {
 				start_at_ref,
 				|key, _value| {
 					if first {
-						if start_at_ref.as_ref().map(|start| key.as_slice() > &start)
+						if start_at_ref.as_ref().map(|start| &key.as_slice() > start)
 							.unwrap_or(true) {
 							first = false;
 						}
@@ -1243,7 +1243,7 @@ mod execution {
 				start_at_ref,
 				|key, value| {
 					if first {
-						if start_at_ref.as_ref().map(|start| key.as_slice() > &start)
+						if start_at_ref.as_ref().map(|start| &key.as_slice() > start)
 							.unwrap_or(true) {
 							first = false;
 						}
