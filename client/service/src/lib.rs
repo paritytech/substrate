@@ -371,7 +371,7 @@ pub struct RpcSession {
 	metadata: (),
 }
 
-// TODO: (dp) safe to remove?
+// TODO: (dp) Should be safe to remove but has some scary fallout for util/browser we need to understand better.
 impl RpcSession {
 	/// Creates an RPC session.
 	///
