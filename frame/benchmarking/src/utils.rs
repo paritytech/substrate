@@ -146,11 +146,9 @@ pub trait Benchmarking {
 		match whitelist.iter_mut().find(|x| x.key == add.key) {
 			// If we already have this key in the whitelist, update to be the most constrained value.
 			Some(item) => {
-				*item = TrackedStorageKey {
-					key: add.key,
-					has_been_read: item.has_been_read || add.has_been_read,
-					has_been_written: item.has_been_written || add.has_been_written,
-				}
+				item.reads += add.reads;
+				item.writes += add.writes;
+				item.whitelisted = item.whitelisted || add.whitelisted;
 			},
 			// If the key does not exist, add it.
 			None => {

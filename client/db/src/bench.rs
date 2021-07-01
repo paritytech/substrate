@@ -66,38 +66,6 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	}
 }
 
-/// Track whether a specific key has already been read or written to.
-#[derive(Default, Clone, Copy)]
-pub struct KeyTracker {
-	reads: u32,
-	writes: u32,
-	whitelisted: bool,
-}
-
-impl KeyTracker {
-	fn new() -> Self {
-		Self::default()
-	}
-	fn has_been_read(&self) -> bool {
-		self.whitelisted || self.reads > 0u32 || self.has_been_written()
-	}
-	fn has_been_written(&self) -> bool {
-		self.whitelisted || self.writes > 0u32
-	}
-	fn add_read(&mut self) -> Self {
-		self.reads += 1;
-		*self
-	}
-	fn add_write(&mut self) -> Self {
-		self.writes += 1;
-		*self
-	}
-	fn whitelist(&mut self) -> Self {
-		self.whitelisted = true;
-		*self
-	}
-}
-
 /// A simple object that counts the reads and writes at the key level to the underlying state db.
 #[derive(Default, Clone, Copy, Debug)]
 pub struct ReadWriteTracker {
@@ -135,10 +103,10 @@ pub struct BenchmarkingState<B: BlockT> {
 	record: Cell<Vec<Vec<u8>>>,
 	shared_cache: SharedCache<B>, // shared cache is always empty
 	/// Key tracker for keys in the main trie.
-	main_key_tracker: RefCell<HashMap<Vec<u8>, KeyTracker>>,
+	main_key_tracker: RefCell<HashMap<Vec<u8>, TrackedStorageKey>>,
 	/// Key tracker for keys in a child trie.
 	/// Child trie are identified by their storage key (i.e. `ChildInfo::storage_key()`)
-	child_key_tracker: RefCell<HashMap<Vec<u8>, HashMap<Vec<u8>, KeyTracker>>>,
+	child_key_tracker: RefCell<HashMap<Vec<u8>, HashMap<Vec<u8>, TrackedStorageKey>>>,
 	read_write_tracker: RefCell<ReadWriteTracker>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
 	proof_recorder: Option<ProofRecorder<B::Hash>>,
@@ -216,7 +184,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let whitelist = self.whitelist.borrow();
 
 		whitelist.iter().for_each(|key| {
-			let whitelisted = KeyTracker::new().whitelist();
+			let mut whitelisted = TrackedStorageKey::new(key.key.clone());
+			whitelisted.whitelist();
 			main_key_tracker.insert(key.key.clone(), whitelisted);
 		});
 	}
@@ -242,13 +211,13 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 		let should_log = match key_tracker.get_mut(key) {
 			None => {
-				let has_been_read = KeyTracker::default().add_read();
+				let mut has_been_read = TrackedStorageKey::new(key.to_vec());
+				has_been_read.add_read();
 				key_tracker.insert(key.to_vec(), has_been_read);
 				read_write_tracker.add_read();
 				true
 			},
 			Some(tracker) => {
-				let mut tracker = tracker.clone();
 				let should_log = if !tracker.has_been_read() {
 					read_write_tracker.add_read();
 					true
@@ -289,7 +258,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 
 		let should_log = match key_tracker.get_mut(key) {
 			None => {
-				let has_been_written = KeyTracker::new().add_write();
+				let mut has_been_written = TrackedStorageKey::new(key.to_vec());
+				has_been_written.add_write();
 				key_tracker.insert(key.to_vec(), has_been_written);
 				read_write_tracker.add_write();
 				true
@@ -545,7 +515,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		// TODO: Refactor to enable full storage key transparency, where we can remove the
 		// `prefix_key_tracker`.
 		let mut prefix_key_tracker = HashMap::<[u8; 32], (u32, u32, bool)>::new();
-		self.main_key_tracker.borrow().iter().for_each(|(key, value): (&Vec<u8>, &KeyTracker)| {
+		self.main_key_tracker.borrow().iter().for_each(|(key, value): (&Vec<u8>, &TrackedStorageKey)| {
 			if !value.whitelisted {
 				let mut prefix = [0u8; 32];
 				prefix[0..32].copy_from_slice(&key[0..32]);

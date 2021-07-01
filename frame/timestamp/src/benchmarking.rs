@@ -35,8 +35,9 @@ benchmarks! {
 		let did_update_key = crate::DidUpdate::<T>::hashed_key().to_vec();
 		frame_benchmarking::benchmarking::add_to_whitelist(TrackedStorageKey {
 			key: did_update_key,
-			has_been_read: false,
-			has_been_written: true,
+			reads: 0,
+			writes: 1,
+			whitelisted: false,
 		});
 	}: _(RawOrigin::None, t.into())
 	verify {

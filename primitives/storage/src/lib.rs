@@ -45,17 +45,56 @@ impl AsRef<[u8]> for StorageKey {
 #[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]
 pub struct TrackedStorageKey {
 	pub key: Vec<u8>,
-	pub has_been_read: bool,
-	pub has_been_written: bool,
+	pub reads: u32,
+	pub writes: u32,
+	pub whitelisted: bool,
 }
 
-// Easily convert a key to a `TrackedStorageKey` that has been read and written to.
+impl TrackedStorageKey {
+	/// Create a default `TrackedStorageKey`
+	pub fn new(key: Vec<u8>) -> Self {
+		Self {
+			key,
+			reads: 0,
+			writes: 0,
+			whitelisted: false,
+		}
+	}
+	/// Check if this key has been "read", i.e. it exists in the memory overlay.
+	///
+	/// Can be true if the key has been read, has been written to, or has been
+	/// whitelisted.
+	pub fn has_been_read(&self) -> bool {
+		self.whitelisted || self.reads > 0u32 || self.has_been_written()
+	}
+	/// Check if this key has been "written", i.e. a new value will be committed to the database.
+	///
+	/// Can be true if the key has been written to, or has been whitelisted.
+	pub fn has_been_written(&self) -> bool {
+		self.whitelisted || self.writes > 0u32
+	}
+	/// Add a storage read to this key.
+	pub fn add_read(&mut self) {
+		self.reads += 1;
+	}
+	/// Add a storage write to this key.
+	pub fn add_write(&mut self) {
+		self.writes += 1;
+	}
+	/// Whitelist this key.
+	pub fn whitelist(&mut self) {
+		self.whitelisted = true;
+	}
+}
+
+// Easily convert a key to a `TrackedStorageKey` that has been whitelisted.
 impl From<Vec<u8>> for TrackedStorageKey {
 	fn from(key: Vec<u8>) -> Self {
 		Self {
 			key: key,
-			has_been_read: true,
-			has_been_written: true,
+			reads: 0,
+			writes: 0,
+			whitelisted: true,
 		}
 	}
 }
