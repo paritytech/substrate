@@ -56,7 +56,7 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 		#[doc(hidden)]
 		pub mod __substrate_origin_check {
 			#[doc(hidden)]
-			pub use #origin_macro_ident as is_origin_part_defined;
+			pub use #no_op_macro_ident as is_origin_part_defined;
 		}
 	).into()
 }
