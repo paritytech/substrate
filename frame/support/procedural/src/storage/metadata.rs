@@ -68,7 +68,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			quote!{
 				#scrate::metadata::StorageEntryType::NMap {
 					keys: #scrate::scale_info::meta_type::<#key_tuple>(),
-					hashers: #scrate::frame_support::sp_std::vec! [
+					hashers: #scrate::sp_std::vec! [
 						#( #scrate::metadata::StorageHasher::#hashers, )*
 					],
 					value: #scrate::scale_info::meta_type::<#value_type>(),
@@ -173,7 +173,7 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 				modifier: #modifier,
 				ty: #ty,
 				default: #default_byte_getter_struct_instance.default_byte(),
-				documentation: #scrate::frame_support::sp_std::vec![ #( #docs ),* ],
+				documentation: #scrate::sp_std::vec![ #( #docs ),* ],
 			},
 		};
 
@@ -192,7 +192,7 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 	let store_metadata = quote!(
 		#scrate::metadata::PalletStorageMetadata {
 			prefix: #prefix,
-			entries: #scrate::frame_support::sp_std::vec![ #entries ],
+			entries: #scrate::sp_std::vec![ #entries ],
 		}
 	);
 

@@ -66,7 +66,7 @@ pub fn expand_runtime_metadata(
 		impl #runtime {
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
 				#scrate::metadata::RuntimeMetadataLastVersion::new(
-					#scrate::frame_support::sp_std::vec![ #(#pallets),* ],
+					#scrate::sp_std::vec![ #(#pallets),* ],
 					#scrate::metadata::ExtrinsicMetadata {
 						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,

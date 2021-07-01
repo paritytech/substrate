@@ -2465,7 +2465,7 @@ macro_rules! __impl_module_constants_metadata {
 						}
 					}
 				)*
-				$crate::frame_support::sp_std::vec![
+				$crate::sp_std::vec![
 					$(
 						$crate::metadata::PalletConstantMetadata {
 							name: stringify!($name),
@@ -2474,9 +2474,9 @@ macro_rules! __impl_module_constants_metadata {
 								Default::default()
 							).default_byte(),
 							#[cfg(feature = "metadata-docs")]
-							documentation: $crate::frame_support::sp_std::vec![ $( $doc_attr ),* ],
+							documentation: $crate::sp_std::vec![ $( $doc_attr ),* ],
 							#[cfg(not(feature = "metadata-docs"))]
-							documentation: $crate::frame_support::sp_std::vec![],
+							documentation: $crate::sp_std::vec![],
 						}
 					),*
 				]
@@ -2539,7 +2539,7 @@ macro_rules! __functions_to_metadata{
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
 	) => {
-		$crate::frame_support::sp_std::vec![ $( $function_metadata ),* ]
+		$crate::sp_std::vec![ $( $function_metadata ),* ]
 	}
 }
 
@@ -2556,7 +2556,7 @@ macro_rules! __function_to_metadata {
 	) => {
 		$crate::metadata::FunctionMetadata {
 			name: stringify!($fn_name),
-			arguments: $crate::frame_support::sp_std::vec![
+			arguments: $crate::sp_std::vec![
 				$(
 					$crate::metadata::FunctionArgumentMetadata {
 						name: stringify!($param_name),
@@ -2567,9 +2567,9 @@ macro_rules! __function_to_metadata {
 				),*
 			],
 			#[cfg(feature = "metadata-docs")]
-			documentation: $crate::frame_support::sp_std::vec![ $( $fn_doc ),* ],
+			documentation: $crate::sp_std::vec![ $( $fn_doc ),* ],
 			#[cfg(not(feature = "metadata-docs"))]
-			documentation: $crate::frame_support::sp_std::vec![],
+			documentation: $crate::sp_std::vec![],
 		}
 	};
 
