@@ -284,3 +284,4 @@ kvdb-web = { git = "https://github.com/paritytech/parity-common", branch = "mast
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", branch = "master" }
 finality-grandpa = { git = "https://github.com/paritytech/finality-grandpa", branch = "aj-scale-info" }
 memory-db = { git = "https://github.com/paritytech/trie", branch = "aj-update-parity-common" }
+hash-db = { git = "https://github.com/paritytech/trie", branch = "aj-update-parity-common" }
