@@ -30,7 +30,7 @@ use crate::{
 use codec::{Encode, Decode};
 use frame_support::{DefaultNoBound, traits::Get};
 use sp_runtime::SaturatedConversion;
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
+use sp_std::{collections::{btree_map::BTreeMap, btree_set::BTreeSet}, marker::PhantomData};
 
 /// [`Voter`] parametrized by [`Config`] instead of by `AccountId`.
 pub type VoterOf<T> = Voter<AccountIdOf<T>>;
@@ -233,6 +233,94 @@ impl<T: Config> VoterList<T> {
 
 			(old_idx, new_idx)
 		})
+	}
+
+	/// Migrate the voter list from one set of thresholds to another.
+	///
+	/// This should only be called as part of an intentional migration; it's fairly expensive.
+	///
+	/// Returns the number of accounts affected.
+	///
+	/// Preconditions:
+	///
+	/// - `old_thresholds` is the previous list of thresholds.
+	/// - All `bag_upper` currently in storage are members of `old_thresholds`.
+	/// - `T::VoterBagThresholds` has already been updated.
+	///
+	/// Postconditions:
+	///
+	/// - All `bag_upper` currently in storage are members of `T::VoterBagThresholds`.
+	/// - No voter is changed unless required to by the difference between the old threshold list
+	///   and the new.
+	/// - Voters whose bags change at all are implicitly rebagged into the appropriate bag in the
+	///   new threshold set.
+	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
+		// we can't check all preconditions, but we can check one
+		debug_assert!(
+			crate::VoterBags::<T>::iter().all(|(threshold, _)| old_thresholds.contains(&threshold)),
+			"not all `bag_upper` currently in storage are members of `old_thresholds`",
+		);
+
+		let old_set: BTreeSet<_> = old_thresholds.iter().copied().collect();
+		let new_set: BTreeSet<_> = T::VoterBagThresholds::get().iter().copied().collect();
+
+		let mut affected_accounts = BTreeSet::new();
+		let mut affected_old_bags = BTreeSet::new();
+
+		// a new bag means that all accounts previously using the old bag's threshold must now
+		// be rebagged
+		for inserted_bag in new_set.difference(&old_set).copied() {
+			let affected_bag = notional_bag_for::<T>(inserted_bag);
+			if !affected_old_bags.insert(affected_bag) {
+				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
+				// no point iterating through bag 10 twice.
+				continue
+			}
+
+			if let Some(bag) = Bag::<T>::get(affected_bag) {
+				affected_accounts.extend(bag.iter().map(|node| node.voter));
+			}
+		}
+
+		// a removed bag means that all members of that bag must be rebagged
+		for removed_bag in old_set.difference(&new_set).copied() {
+			if !affected_old_bags.insert(removed_bag) {
+				continue
+			}
+
+			if let Some(bag) = Bag::<T>::get(removed_bag) {
+				affected_accounts.extend(bag.iter().map(|node| node.voter));
+			}
+		}
+
+		// migrate the
+		let weight_of = Pallet::<T>::weight_of_fn();
+		Self::remove_many(affected_accounts.iter().map(|voter| &voter.id));
+		let num_affected = Self::insert_many(affected_accounts.into_iter(), weight_of);
+
+		// we couldn't previously remove the old bags because both insertion and removal assume that
+		// it's always safe to add a bag if it's not present. Now that that's sorted, we can get rid
+		// of them.
+		//
+		// it's pretty cheap to iterate this again, because both sets are in-memory and require no
+		// lookups.
+		for removed_bag in old_set.difference(&new_set).copied() {
+			debug_assert!(
+				!VoterBagFor::<T>::iter().any(|(_voter, bag)| bag == removed_bag),
+				"no voter should be present in a removed bag",
+			);
+			crate::VoterBags::<T>::remove(removed_bag);
+		}
+
+		debug_assert!(
+			{
+				let thresholds = T::VoterBagThresholds::get();
+				crate::VoterBags::<T>::iter().all(|(threshold, _)| thresholds.contains(&threshold))
+			},
+			"all `bag_upper` in storage must be members of the new thresholds",
+		);
+
+		num_affected
 	}
 }
 
@@ -481,7 +569,7 @@ impl<T: Config> Node<T> {
 }
 
 /// Fundamental information about a voter.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Voter<AccountId> {
 	/// Account Id of this voter
@@ -509,7 +597,7 @@ impl<AccountId> Voter<AccountId> {
 /// Type of voter.
 ///
 /// Similar to [`crate::StakerStatus`], but somewhat more limited.
-#[derive(Clone, Copy, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Copy, Encode, Decode, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum VoterType {
 	Validator,
