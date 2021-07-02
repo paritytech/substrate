@@ -254,6 +254,7 @@ mod tests;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 use sp_runtime::{Percent, RuntimeDebug,
 	traits::{
 		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
