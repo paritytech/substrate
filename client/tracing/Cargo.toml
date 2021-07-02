@@ -43,5 +43,5 @@ sc-rpc-server =  { version = "3.0.0", path = "../rpc-servers" }
 wasm-timer = "0.2"
 
 [target.'cfg(target_os = "unknown")'.dependencies]
-wasm-bindgen = "0.2.73"
+wasm-bindgen = "0.2.67"
 web-sys = { version = "0.3.44", features = ["console"] }
