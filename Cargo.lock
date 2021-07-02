@@ -4171,6 +4171,7 @@ dependencies = [
  "pallet-grandpa",
  "pallet-im-online",
  "pallet-indices",
+ "pallet-mmr-rpc",
  "pallet-staking",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -4302,31 +4303,18 @@ name = "node-rpc"
 version = "2.0.0"
 dependencies = [
  "jsonrpc-core",
- "jsonrpsee-types",
- "jsonrpsee-ws-server",
  "node-primitives",
  "pallet-contracts-rpc",
- "pallet-mmr-rpc",
- "pallet-transaction-payment-rpc",
- "sc-chain-spec",
  "sc-client-api",
  "sc-consensus-babe",
- "sc-consensus-babe-rpc",
  "sc-consensus-epochs",
  "sc-finality-grandpa",
- "sc-finality-grandpa-rpc",
- "sc-keystore",
  "sc-rpc",
  "sc-rpc-api",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
- "sp-consensus",
- "sp-consensus-babe",
  "sp-keystore",
- "sp-runtime",
- "sp-transaction-pool",
- "substrate-frame-rpc-system",
 ]
 
 [[package]]
@@ -5226,9 +5214,8 @@ dependencies = [
 name = "pallet-mmr-rpc"
 version = "3.0.0"
 dependencies = [
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
+ "jsonrpsee",
+ "jsonrpsee-types",
  "pallet-mmr-primitives",
  "parity-scale-codec",
  "serde",
@@ -5236,7 +5223,6 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-core",
- "sp-rpc",
  "sp-runtime",
 ]
 

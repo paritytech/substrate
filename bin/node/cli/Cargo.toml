@@ -94,6 +94,7 @@ pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
 pallet-grandpa = { version = "3.1.0", path = "../../../frame/grandpa" }
 pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/transaction-payment/rpc/" }
 substrate-frame-rpc-system = { version = "3.0.0", path = "../../../utils/frame/rpc/system/" }
+pallet-mmr-rpc = { version = "3.0.0", path = "../../../frame/merkle-mountain-range/rpc/" }
 
 # node-specific dependencies
 node-runtime = { version = "2.0.0", path = "../runtime" }
