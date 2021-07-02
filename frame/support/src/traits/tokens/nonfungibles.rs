@@ -95,20 +95,18 @@ pub trait Inspect<AccountId> {
 
 /// Interface for enumerating assets in existence or owned by a given account over many collections
 /// of NFTs.
-///
-/// WARNING: These may be a heavy operations. Do not use when execution time is limited.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
-	/// Returns the asset classes in existence.
-	fn classes() -> Vec<Self::ClassId>;
+	/// Returns an iterator of the asset classes in existence.
+	fn classes() -> Box<dyn Iterator<Item = Self::ClassId>>;
 
-	/// Returns the instances of an asset `class` in existence.
-	fn instances(class: &Self::ClassId) -> Vec<Self::InstanceId>;
+	/// Returns an iterator of the instances of an asset `class` in existence.
+	fn instances(class: &Self::ClassId) -> Box<dyn Iterator<Item = Self::InstanceId>>;
 
-	/// Returns the asset instances of all classes owned by `who`.
-	fn owned(who: &AccountId) -> Vec<(Self::ClassId, Self::InstanceId)>;
+	/// Returns an iterator of the asset instances of all classes owned by `who`.
+	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = (Self::ClassId, Self::InstanceId)>>;
 
-	/// Returns the asset instances of `class` owned by `who`.
-	fn owned_in_class(class: &Self::ClassId, who: &AccountId) -> Vec<Self::InstanceId>;
+	/// Returns an iterator of the asset instances of `class` owned by `who`.
+	fn owned_in_class(class: &Self::ClassId, who: &AccountId) -> Box<dyn Iterator<Item = Self::InstanceId>>;
 }
 
 /// Trait for providing an interface for multiple classes of NFT-like assets which may be minted,
