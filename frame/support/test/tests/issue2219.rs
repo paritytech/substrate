@@ -18,6 +18,7 @@
 use frame_support::sp_runtime::generic;
 use frame_support::sp_runtime::traits::{BlakeTwo256, Verify};
 use frame_support::codec::{Encode, Decode};
+use frame_support::scale_info::TypeInfo;
 use sp_core::{H256, sr25519};
 use serde::{Serialize, Deserialize};
 

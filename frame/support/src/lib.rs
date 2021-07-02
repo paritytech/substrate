@@ -365,7 +365,7 @@ macro_rules! parameter_types {
 			}
 		}
 
-		impl $crate::TypeInfo for $name {
+		impl $crate::scale_info::TypeInfo for $name {
 			type Identity = Self;
 
 			fn type_info() -> $crate::scale_info::Type<$crate::scale_info::form::MetaForm> {
