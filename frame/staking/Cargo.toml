@@ -34,7 +34,9 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../b
 rand_chacha = { version = "0.2", default-features = false, optional = true }
 
 # Optional imports for making voter bags lists
+chrono = { version = "0.4.19", optional = true }
 git2 = { version = "0.13.20", default-features = false, optional = true }
+num-format = { version = "0.4.0", optional = true }
 
 [dev-dependencies]
 sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
@@ -74,7 +76,12 @@ runtime-benchmarks = [
 	"rand_chacha",
 ]
 try-runtime = ["frame-support/try-runtime"]
-make-bags = ["std", "git2"]
+make-bags = [
+	"chrono",
+	"git2",
+	"num-format",
+	"std",
+]
 
 [[bin]]
 name = "make_bags"
