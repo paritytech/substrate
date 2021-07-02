@@ -30,7 +30,7 @@ use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sc_executor_common::{wasm_runtime::{WasmModule, WasmInstance, InvokeMethod}};
+use sc_executor_common::{util::MemoryTransfer, wasm_runtime::{WasmModule, WasmInstance, InvokeMethod}};
 use sc_executor_common::{
 	error::{Error, WasmError},
 	sandbox,

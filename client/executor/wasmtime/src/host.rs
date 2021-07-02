@@ -23,6 +23,7 @@ use crate::instance_wrapper::InstanceWrapper;
 use std::{cell::RefCell, rc::Rc};
 use log::trace;
 use codec::{Encode, Decode};
+use sc_executor_common::util::MemoryTransfer;
 use sp_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{error::Result, util};
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};

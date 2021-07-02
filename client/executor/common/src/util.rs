@@ -19,6 +19,8 @@
 //! Utilities used by all backends
 
 use std::ops::Range;
+use sp_wasm_interface::Pointer;
+use crate::error::{Result, Error};
 
 /// Construct a range from an offset to a data length after the offset.
 /// Returns None if the end of the range would exceed some maximum offset.
@@ -28,6 +30,49 @@ pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usiz
 		Some(offset..end)
 	} else {
 		None
+	}
+}
+
+pub trait MemoryTransfer {
+	/// Read data from a slice of memory into a destination buffer.
+	///
+	/// Returns an error if the read would go out of the memory bounds.
+	fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()>;
+
+	/// Write data to a slice of memory.
+	///
+	/// Returns an error if the write would go out of the memory bounds.
+	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()>;
+}
+
+struct WasmiMemoryWrapper(wasmi::MemoryRef);
+
+impl WasmiMemoryWrapper {
+	/// Take ownership of the memory region and return a wrapper object
+	pub fn new(memory: wasmi::MemoryRef) -> Self {
+		Self(memory)
+	}
+}
+
+impl MemoryTransfer for WasmiMemoryWrapper {
+	fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
+		self.0.with_direct_access(|source| {
+			let range = checked_range(source_addr.into(), destination.len(), source.len())
+				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+			destination.copy_from_slice(&source[range]);
+			Ok(())
+		})
+	}
+
+	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
+		self.0.with_direct_access_mut(|destination| {
+			let range = checked_range(dest_addr.into(), source.len(), destination.len())
+				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
+
+			&mut destination[range].copy_from_slice(source);
+			Ok(())
+		})
 	}
 }
 
@@ -99,44 +144,6 @@ pub mod wasmer {
 			}
 		}
 
-		/// Read data from a slice of memory into a destination buffer.
-		///
-		/// Returns an error if the read would go out of the memory bounds.
-		pub fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
-			unsafe {
-				let memory = self.buffer.borrow();
-
-				// This should be safe since we don't grow up memory while caching this reference and
-				// we give up the reference before returning from this function.
-				let source = Self::memory_as_slice(&memory);
-
-				let range = checked_range(source_addr.into(), destination.len(), source.len())
-					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
-
-				destination.copy_from_slice(&source[range]);
-				Ok(())
-			}
-		}
-
-		/// Write data to a slice of memory.
-		///
-		/// Returns an error if the write would go out of the memory bounds.
-		pub fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
-			unsafe {
-				let memory = self.buffer.borrow_mut();
-
-				// This should be safe since we don't grow up memory while caching this reference and
-				// we give up the reference before returning from this function.
-				let destination = Self::memory_as_slice_mut(&memory);
-
-				let range = checked_range(dest_addr.into(), source.len(), destination.len())
-					.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
-
-				&mut destination[range].copy_from_slice(source);
-				Ok(())
-			}
-		}
-
 		/// Clone the underlying memory object
 		///
 		/// # Safety
@@ -155,4 +162,37 @@ pub mod wasmer {
 		}
 	}
 
+	impl super::MemoryTransfer for MemoryRef {
+		fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
+			unsafe {
+				let memory = self.buffer.borrow();
+
+				// This should be safe since we don't grow up memory while caching this reference and
+				// we give up the reference before returning from this function.
+				let source = Self::memory_as_slice(&memory);
+
+				let range = checked_range(source_addr.into(), destination.len(), source.len())
+					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+				destination.copy_from_slice(&source[range]);
+				Ok(())
+			}
+		}
+
+		fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
+			unsafe {
+				let memory = self.buffer.borrow_mut();
+
+				// This should be safe since we don't grow up memory while caching this reference and
+				// we give up the reference before returning from this function.
+				let destination = Self::memory_as_slice_mut(&memory);
+
+				let range = checked_range(dest_addr.into(), source.len(), destination.len())
+					.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
+
+				&mut destination[range].copy_from_slice(source);
+				Ok(())
+			}
+		}	
+	}
 }
