@@ -481,6 +481,7 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub OffchainRepeat: BlockNumber = 5;
+	pub const VoterBagThresholds: &'static [u64] = &[];
 }
 
 use frame_election_provider_support::onchain;
@@ -510,6 +511,7 @@ impl pallet_staking::Config for Runtime {
 	type GenesisElectionProvider =
 		onchain::OnChainSequentialPhragmen<pallet_election_provider_multi_phase::OnChainConfig<Self>>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
+	type VoterBagThresholds = VoterBagThresholds;
 }
 
 parameter_types! {

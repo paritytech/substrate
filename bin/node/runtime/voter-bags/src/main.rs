@@ -17,24 +17,32 @@
 
 //! Make the set of voting bag thresholds to be used in `voter_bags.rs`.
 
-const N_BAGS: usize = 200;
+use pallet_staking::voter_bags::make_bags::generate_thresholds_module;
+use std::path::PathBuf;
+use structopt::{clap::arg_enum, StructOpt};
 
-fn main() {
-	let ratio = ((u64::MAX as f64).ln() / (N_BAGS as f64)).exp();
-	println!("pub const CONSTANT_RATIO: f64 = {};", ratio);
-
-	let mut thresholds = Vec::with_capacity(N_BAGS as usize);
-
-	while thresholds.len() < N_BAGS as usize {
-		let prev_item: u64 = thresholds.last().copied().unwrap_or_default();
-		let item = (prev_item as f64 * ratio).round().max(prev_item as f64 + 1.0);
-		thresholds.push(item as u64);
+arg_enum!{
+	#[derive(Debug)]
+	enum Runtime {
+		Node,
 	}
+}
 
-	*thresholds.last_mut().unwrap() = u64::MAX;
+#[derive(Debug, StructOpt)]
+struct Opt {
+	/// How many bags to generate.
+	#[structopt(
+		long,
+		default_value = "200",
+	)]
+	n_bags: usize,
 
-	println!("pub const THRESHOLDS: [u64; {}] = {:#?};", N_BAGS, thresholds);
+	/// Where to write the output.
+	output: PathBuf,
+}
 
-	debug_assert_eq!(thresholds.len(), N_BAGS as usize);
-	debug_assert_eq!(*thresholds.last().unwrap(), u64::MAX);
+fn main() -> Result<(), std::io::Error> {
+	let Opt {n_bags, output} = Opt::from_args();
+	let mut ext = sp_io::TestExternalities::new_empty();
+	ext.execute_with(|| generate_thresholds_module::<node_runtime::Runtime>(n_bags, &output))
 }
