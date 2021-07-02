@@ -603,3 +603,39 @@ pub enum VoterType {
 	Validator,
 	Nominator,
 }
+
+/// Support code to ease the process of generating voter bags.
+#[cfg(feature = "make-bags")]
+pub mod make_bags {
+	use crate::{AccountIdOf, Config};
+	use frame_election_provider_support::VoteWeight;
+	use frame_support::traits::{Currency, CurrencyToVote};
+    use std::path::{Path, PathBuf};
+
+	/// Return the path to a header file used in this repository if is exists.
+	///
+	/// Just searches the git working directory root for files matching certain patterns; it's
+	/// pretty naive.
+	fn path_to_header_file() -> Option<PathBuf> {
+		let repo = git2::Repository::open_from_env().ok()?;
+		let workdir = repo.workdir()?;
+		for file_name in ["HEADER-APACHE2", "HEADER-GPL3", "HEADER"] {
+			let path = workdir.join(file_name);
+			if path.exists() {
+				return Some(path);
+			}
+		}
+		None
+	}
+
+	/// Compute the existential weight for the specified configuration.
+	///
+	/// Note that this value depends on the current issuance, a quantity known to change over time.
+	/// This makes the project of computing a static value suitable for inclusion in a static,
+	/// generated file _excitingly unstable_.
+	pub fn existential_weight<T: Config>() -> VoteWeight {
+		let existential_deposit = <T::Currency as Currency<AccountIdOf<T>>>::minimum_balance();
+		let issuance = <T::Currency as Currency<AccountIdOf<T>>>::total_issuance();
+		T::CurrencyToVote::to_vote(existential_deposit, issuance)
+	}
+}
