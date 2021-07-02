@@ -351,7 +351,7 @@ where
 	/// Return the [`RuntimeCode`] build from the wrapped `backend`.
 	pub fn runtime_code(
 		&self,
-		context: crate::ExecutionContext,
+		context: sp_core::traits::CodeContext,
 	) -> Result<RuntimeCode, &'static str> {
 		let hash = self
 			.backend
@@ -362,8 +362,8 @@ where
 			.encode();
 
 		let heap_pages_key = match context {
-			crate::ExecutionContext::Consensus => well_known_keys::HEAP_PAGES,
-			crate::ExecutionContext::Offchain => well_known_keys::OFFCHAIN_HEAP_PAGES,
+			sp_core::traits::CodeContext::Consensus => well_known_keys::HEAP_PAGES,
+			sp_core::traits::CodeContext::Offchain => well_known_keys::OFFCHAIN_HEAP_PAGES,
 		};
 		let heap_pages = self
 			.backend
@@ -372,6 +372,6 @@ where
 			.flatten()
 			.and_then(|d| Decode::decode(&mut &d[..]).ok());
 
-		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
+		Ok(RuntimeCode { code_fetcher: self, hash, context, heap_pages })
 	}
 }

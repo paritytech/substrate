@@ -178,7 +178,7 @@ mod execution {
 	use codec::{Decode, Encode, Codec};
 	use sp_core::{
 		storage::ChildInfo, NativeOrEncoded, NeverNativeValue, hexdisplay::HexDisplay,
-		traits::{CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
+		traits::{CodeExecutor, CodeContext, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
 	};
 	use sp_externalities::Extensions;
 
@@ -209,18 +209,7 @@ mod execution {
 		/// The strategy of the execution's runtime.
 		pub strategy: ExecutionStrategy,
 		/// The context at which the aforementioned strategy is being used.
-		pub context: ExecutionContext,
-	}
-
-	/// The context of the execution.
-	#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-	pub enum ExecutionContext {
-		/// Consensus critical task. Resources should be sufficient, but not not more, and trust
-		/// levels should be high. The need for determinism is absolute.
-		Consensus,
-		/// Offchain operations that do not affect the chain state directly. Can be used for
-		/// offchain worker threads, and other utility tools.
-		Offchain,
+		pub context: CodeContext,
 	}
 
 	/// Strategy for executing a call into the runtime.
@@ -258,15 +247,15 @@ mod execution {
 
 	impl ExecutionConfig {
 		/// Build a new [`ExecutionConfig`] with the given strategy and
-		/// [`ExecutionContext::Consensus`].
+		/// [`CodeContext::Consensus`].
 		pub fn new_consensus(strategy: ExecutionStrategy) -> Self {
-			Self { strategy, context: ExecutionContext::Consensus }
+			Self { strategy, context: CodeContext::Consensus }
 		}
 
 		/// Build a new [`ExecutionConfig`] with the given strategy and
-		/// [`ExecutionContext::Offchain`].
+		/// [`CodeContext::Offchain`].
 		pub fn new_offchain(strategy: ExecutionStrategy) -> Self {
-			Self { strategy, context: ExecutionContext::Offchain }
+			Self { strategy, context: CodeContext::Offchain }
 		}
 
 		/// Gets the corresponding manager for the execution config.
@@ -334,14 +323,14 @@ mod execution {
 		/// The strategy of the execution's runtime.
 		pub strategy: ExecutionStrategyWithHandler<F>,
 		/// The context in which the aforementioned strategy is being used.
-		pub context: ExecutionContext,
+		pub context: CodeContext,
 	}
 
 	#[cfg(test)]
 	impl<F> ExecutionManager<F> {
 		/// Create a new instance of [`Self`] from the given strategy for testing.
 		pub(crate) fn new(strategy: ExecutionStrategyWithHandler<F>) -> Self {
-			Self { strategy, context: ExecutionContext::Offchain }
+			Self { strategy, context: CodeContext::Consensus }
 		}
 	}
 
@@ -365,7 +354,7 @@ mod execution {
 	pub fn native_else_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager {
 			strategy: ExecutionStrategyWithHandler::NativeElseWasm,
-			context: ExecutionContext::Consensus,
+			context: CodeContext::Consensus,
 		}
 	}
 
@@ -374,7 +363,7 @@ mod execution {
 	fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager {
 			strategy: ExecutionStrategyWithHandler::AlwaysWasm(BackendTrustLevel::Trusted),
-			context: ExecutionContext::Consensus,
+			context: CodeContext::Consensus,
 		}
 	}
 
@@ -383,7 +372,7 @@ mod execution {
 	fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager {
 			strategy: ExecutionStrategyWithHandler::AlwaysWasm(BackendTrustLevel::Untrusted),
-			context: ExecutionContext::Consensus,
+			context: CodeContext::Consensus,
 		}
 	}
 
@@ -1089,6 +1078,7 @@ mod tests {
 			_: &RuntimeCode,
 			_method: &str,
 			_data: &[u8],
+			_heap_pages: u64,
 			use_native: bool,
 			native_call: Option<NC>,
 		) -> (CallResult<R, Self::Error>, bool) {

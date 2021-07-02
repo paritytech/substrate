@@ -45,7 +45,8 @@ use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
 
 /// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES: u64 = 2048;
+const DEFAULT_HEAP_PAGES_CONSENSUS: u64 = 2048;
+const DEFAULT_HEAP_PAGES_OFFCHAIN: u64 = DEFAULT_HEAP_PAGES_CONSENSUS * 4;
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
 ///
@@ -96,7 +97,7 @@ pub struct WasmExecutor {
 	/// Method used to execute fallback Wasm code.
 	method: WasmExecutionMethod,
 	/// The number of 64KB pages to allocate for Wasm execution.
-	default_heap_pages: u64,
+	// default_heap_pages: Option<u64>,
 	/// The host functions registered with this instance.
 	host_functions: Arc<Vec<&'static dyn Function>>,
 	/// WASM runtime cache.
@@ -135,7 +136,7 @@ impl WasmExecutor {
 	) -> Self {
 		WasmExecutor {
 			method,
-			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
+			// default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 			host_functions: Arc::new(host_functions),
 			cache: Arc::new(RuntimeCache::new(max_runtime_instances, cache_path.clone())),
 			max_runtime_instances,
@@ -170,11 +171,15 @@ impl WasmExecutor {
 			AssertUnwindSafe<&mut dyn Externalities>,
 		) -> Result<Result<R>>,
 	{
+		let default_heap_pages = match runtime_code.context {
+			sp_core::traits::CodeContext::Consensus => DEFAULT_HEAP_PAGES_CONSENSUS,
+			sp_core::traits::CodeContext::Offchain => DEFAULT_HEAP_PAGES_OFFCHAIN,
+		};
 		match self.cache.with_instance(
 			runtime_code,
 			ext,
 			self.method,
-			self.default_heap_pages,
+			default_heap_pages,
 			&*self.host_functions,
 			allow_missing_host_functions,
 			|module, instance, version, ext| {
@@ -194,8 +199,10 @@ impl WasmExecutor {
 	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be instantiated with the
 	/// parameters this `WasmExecutor` was initialized with.
 	///
-	/// In case of problems with during creation of the runtime or instantiation, a `Err` is
+	/// In case of problems during creation of the runtime or instantiation, a `Err` is
 	/// returned. that describes the message.
+	///
+	/// This runtime is always initiated with the number of heap pages of consensus context.
 	#[doc(hidden)] // We use this function for tests across multiple crates.
 	pub fn uncached_call(
 		&self,
@@ -207,7 +214,7 @@ impl WasmExecutor {
 	) -> std::result::Result<Vec<u8>, String> {
 		let module = crate::wasm_runtime::create_wasm_runtime_with_code(
 			self.method,
-			self.default_heap_pages,
+			DEFAULT_HEAP_PAGES_CONSENSUS,
 			runtime_blob,
 			self.host_functions.to_vec(),
 			allow_missing_host_functions,

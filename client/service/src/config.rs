@@ -38,7 +38,7 @@ use std::{
 	net::SocketAddr,
 	sync::Arc,
 };
-pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
+pub use sc_transaction_pool::Options as TransactionPoolOptions;
 use sc_chain_spec::ChainSpec;
 use sp_core::crypto::SecretString;
 pub use sc_telemetry::TelemetryEndpoints;

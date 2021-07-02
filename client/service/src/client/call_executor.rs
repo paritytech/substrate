@@ -32,7 +32,7 @@ use sp_core::{
 	NativeOrEncoded, NeverNativeValue,
 	traits::{CodeExecutor, SpawnNamed, RuntimeCode},
 };
-use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{ProofRecorder, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
 use super::{client::ClientConfig, wasm_override::WasmOverride, wasm_substitutes::WasmSubstitutes};
 
@@ -176,8 +176,6 @@ where
 	}
 
 	fn contextual_call<
-		'a,
-		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -186,27 +184,18 @@ where
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
-		initialize_block_fn: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
-		initialize_block: InitializeBlock<'a, Block>,
+		storage_transaction_cache: Option<&RefCell<
+			StorageTransactionCache<Block, B::State>
+		>>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
-		match initialize_block {
-			InitializeBlock::Do(ref init_block)
-				if init_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) => {
-				initialize_block_fn()?;
-			},
-			// We don't need to initialize the runtime at a block.
-			_ => {},
-		}
-
 		let changes_trie_state = backend::changes_tries_state_at_block(at, self.backend.changes_trie_storage())?;
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
@@ -292,7 +281,7 @@ where
 		);
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code = state_runtime_code
-			.runtime_code(sp_state_machine::ExecutionContext::Consensus)
+			.runtime_code(sp_core::traits::CodeContext::Consensus)
 			.map_err(sp_blockchain::Error::RuntimeCode)?;
 		self.executor
 			.runtime_version(&mut ext, &runtime_code)
@@ -308,7 +297,7 @@ where
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_state);
 		let runtime_code = state_runtime_code
-			.runtime_code(sp_state_machine::ExecutionContext::Consensus)
+			.runtime_code(sp_core::traits::CodeContext::Consensus)
 			.map_err(sp_blockchain::Error::RuntimeCode)?;
 		sp_state_machine::prove_execution_on_trie_backend::<_, _, NumberFor<Block>, _, _>(
 			trie_state,

@@ -165,7 +165,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit>
 			syncing: execution_strategy.in_consensus(),
 			importing: execution_strategy.in_consensus(),
 			block_construction: execution_strategy.in_consensus(),
-			offchain_worker: execution_strategy.in_consensus(),
+			offchain_worker: execution_strategy.in_offchain(),
 			other: execution_strategy.in_consensus(),
 		};
 		self

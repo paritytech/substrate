@@ -18,7 +18,7 @@
 // NOTE: we allow missing docs here because arg_enum! creates the function variants without doc
 #![allow(missing_docs)]
 
-use sc_client_api::ExecutionContext;
+use sp_core::traits::CodeContext;
 use structopt::clap::arg_enum;
 
 /// How to execute Wasm runtime code.
@@ -263,8 +263,8 @@ macro_rules! generate_config_const {
 			$(
 				pub const [<DEFAULT_STRATEGY_ $role:snake:upper>]: ExecutionStrategy
 					= ExecutionStrategy::$strategy;
-				pub const [<DEFAULT_CONTEXT_ $role:snake:upper>]: ExecutionContext
-					= ExecutionContext::$context;
+				pub const [<DEFAULT_CODE_CONTEXT_ $role:snake:upper>]: CodeContext
+					= CodeContext::$context;
 			)*
 		}
 	};

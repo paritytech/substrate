@@ -169,7 +169,7 @@ fn construct_block(
 	let mut overlay = OverlayedChanges::default();
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(backend);
 	let runtime_code = backend_runtime_code
-		.runtime_code(sp_state_machine::ExecutionContext::Consensus)
+		.runtime_code(sp_core::traits::CodeContext::Consensus)
 		.expect("Code is part of the backend");
 	let task_executor = Box::new(TaskExecutor::new());
 
@@ -252,7 +252,7 @@ fn construct_genesis_should_work_with_native() {
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code
-		.runtime_code(sp_state_machine::ExecutionContext::Consensus)
+		.runtime_code(sp_core::traits::CodeContext::Consensus)
 		.expect("Code is part of the backend");
 
 	let mut overlay = OverlayedChanges::default();
@@ -288,7 +288,7 @@ fn construct_genesis_should_work_with_wasm() {
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code
-		.runtime_code(sp_state_machine::ExecutionContext::Consensus)
+		.runtime_code(sp_core::traits::CodeContext::Consensus)
 		.expect("Code is part of the backend");
 
 	let mut overlay = OverlayedChanges::default();
@@ -324,7 +324,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 	let (b1data, _b1hash) = block1(genesis_hash, &backend);
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code
-		.runtime_code(sp_state_machine::ExecutionContext::Consensus)
+		.runtime_code(sp_core::traits::CodeContext::Consensus)
 		.expect("Code is part of the backend");
 
 	let mut overlay = OverlayedChanges::default();

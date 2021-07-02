@@ -233,7 +233,7 @@ where
 		&[],
 		ext.extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
-			.runtime_code(sp_state_machine::ExecutionContext::Consensus)?,
+			.runtime_code(sp_core::traits::CodeContext::Consensus)?,
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.in_consensus())
@@ -333,7 +333,7 @@ where
 		header.encode().as_ref(),
 		ext.extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
-			.runtime_code(sp_state_machine::ExecutionContext::Offchain)?,
+			.runtime_code(sp_core::traits::CodeContext::Offchain)?,
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.in_offchain())
@@ -436,7 +436,7 @@ where
 		block.encode().as_ref(),
 		ext.extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
-			.runtime_code(sp_state_machine::ExecutionContext::Consensus)?,
+			.runtime_code(sp_core::traits::CodeContext::Consensus)?,
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.in_consensus())

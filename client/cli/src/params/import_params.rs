@@ -20,8 +20,9 @@ use crate::arg_enums::{
 	ExecutionStrategy, WasmExecutionMethod, DEFAULT_STRATEGY_BLOCK_CONSTRUCTION,
 	DEFAULT_STRATEGY_IMPORT_BLOCK, DEFAULT_STRATEGY_IMPORT_BLOCK_VALIDATOR,
 	DEFAULT_STRATEGY_OFFCHAIN_WORKER, DEFAULT_STRATEGY_OTHER, DEFAULT_STRATEGY_SYNCING,
-	DEFAULT_CONTEXT_SYNCING, DEFAULT_CONTEXT_IMPORT_BLOCK, DEFAULT_CONTEXT_IMPORT_BLOCK_VALIDATOR,
-	DEFAULT_CONTEXT_BLOCK_CONSTRUCTION, DEFAULT_CONTEXT_OFFCHAIN_WORKER, DEFAULT_CONTEXT_OTHER,
+	DEFAULT_CODE_CONTEXT_SYNCING, DEFAULT_CODE_CONTEXT_IMPORT_BLOCK,
+	DEFAULT_CODE_CONTEXT_IMPORT_BLOCK_VALIDATOR,DEFAULT_CODE_CONTEXT_BLOCK_CONSTRUCTION,
+	DEFAULT_CODE_CONTEXT_OFFCHAIN_WORKER, DEFAULT_CODE_CONTEXT_OTHER,
 };
 use crate::params::DatabaseParams;
 use crate::params::PruningParams;
@@ -116,15 +117,15 @@ impl ImportParams {
 			DEFAULT_STRATEGY_IMPORT_BLOCK
 		};
 		let default_context_import_block = if is_validator {
-			DEFAULT_CONTEXT_IMPORT_BLOCK_VALIDATOR
+			DEFAULT_CODE_CONTEXT_IMPORT_BLOCK_VALIDATOR
 		} else {
-			DEFAULT_CONTEXT_IMPORT_BLOCK
+			DEFAULT_CODE_CONTEXT_IMPORT_BLOCK
 		};
 
 		ExecutionConfigs {
 			syncing: ExecutionConfig {
 				strategy: exec_all_or(exec.execution_syncing, DEFAULT_STRATEGY_SYNCING),
-				context: DEFAULT_CONTEXT_SYNCING,
+				context: DEFAULT_CODE_CONTEXT_SYNCING,
 			},
 			importing: ExecutionConfig {
 				strategy: exec_all_or(exec.execution_import_block, default_execution_import_block),
@@ -135,18 +136,18 @@ impl ImportParams {
 					exec.execution_block_construction,
 					DEFAULT_STRATEGY_BLOCK_CONSTRUCTION,
 				),
-				context: DEFAULT_CONTEXT_BLOCK_CONSTRUCTION,
+				context: DEFAULT_CODE_CONTEXT_BLOCK_CONSTRUCTION,
 			},
 			offchain_worker: ExecutionConfig {
 				strategy: exec_all_or(
 					exec.execution_offchain_worker,
 					DEFAULT_STRATEGY_OFFCHAIN_WORKER,
 				),
-				context: DEFAULT_CONTEXT_OFFCHAIN_WORKER,
+				context: DEFAULT_CODE_CONTEXT_OFFCHAIN_WORKER,
 			},
 			other: ExecutionConfig {
 				strategy: exec_all_or(exec.execution_other, DEFAULT_STRATEGY_OTHER),
-				context: DEFAULT_CONTEXT_OTHER,
+				context: DEFAULT_CODE_CONTEXT_OTHER,
 			},
 		}
 	}
