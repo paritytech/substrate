@@ -266,7 +266,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T>
 	where
 		T::AccountId: UncheckedFrom<T::Hash>,
-		T::AccountId: AsRef<[u8]> + scale_info::TypeInfo,
+		T::AccountId: AsRef<[u8]>,
 	{
 		/// Makes a call to an account, optionally transferring some balance.
 		///
@@ -623,7 +623,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T>
 where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> + scale_info::TypeInfo,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Perform a call to a specified contract.
 	///
