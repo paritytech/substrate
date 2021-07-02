@@ -297,6 +297,13 @@ where
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter()
 	}
 
+	/// Enumerate all keys in the map in no particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter_keys()
+	}
+
 	/// Remove all elements from the map and iterate through them in no particular order.
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
