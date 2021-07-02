@@ -19,14 +19,7 @@
 
 use pallet_staking::voter_bags::make_bags::generate_thresholds_module;
 use std::path::PathBuf;
-use structopt::{clap::arg_enum, StructOpt};
-
-arg_enum!{
-	#[derive(Debug)]
-	enum Runtime {
-		Node,
-	}
-}
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
