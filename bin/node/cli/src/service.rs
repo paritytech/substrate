@@ -41,6 +41,7 @@ use sc_consensus_babe_rpc::BabeRpc;
 use sc_sync_state_rpc::SyncStateRpc;
 use pallet_transaction_payment_rpc::TransactionPaymentRpc;
 use substrate_frame_rpc_system::{SystemRpc, SystemRpcBackendFull};
+use pallet_mmr_rpc::MmrRpc;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -192,6 +193,8 @@ pub fn new_partial(
 		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
 		let system_rpc_backend = SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
 		let system_rpc = SystemRpc::new(Box::new(system_rpc_backend)).into_rpc_module().expect("TODO: error handling");
+
+		let mmr_rpc = MmrRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
 		// TODO: add other rpc modules here
 		let mut module = RpcModule::new(());
 		module.merge(grandpa_rpc).expect("TODO: error handling");
@@ -199,6 +202,7 @@ pub fn new_partial(
 		module.merge(sync_state_rpc).expect("TODO: error handling");
 		module.merge(transaction_payment_rpc).expect("TODO: error handling");
 		module.merge(system_rpc).expect("TODO: error handling");
+		module.merge(mmr_rpc).expect("TODO: error handling");
 		module
 	};
 

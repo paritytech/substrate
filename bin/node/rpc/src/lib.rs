@@ -29,11 +29,12 @@
 //! be placed here or imported from corresponding FRAME RPC definitions.
 
 #![warn(missing_docs)]
+#![warn(unused_crate_dependencies)]
 
 use std::sync::Arc;
 
 use sp_keystore::SyncCryptoStorePtr;
-use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
+use node_primitives::{Block, BlockNumber, AccountId, Balance, Hash};
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{
@@ -43,7 +44,6 @@ pub use sc_rpc_api::DenyUnsafe;
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
-use sp_consensus_babe::BabeApi;
 use sc_rpc::SubscriptionTaskExecutor;
 use sc_client_api::AuxStore;
 
@@ -99,15 +99,10 @@ pub fn create_full<C>(
 ) -> jsonrpc_core::IoHandler<()> where
 	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + AuxStore +
 		HeaderMetadata<Block, Error=BlockChainError> + Sync + Send + 'static,
-	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber, Hash>,
-	C::Api: pallet_mmr_rpc::MmrRuntimeApi<Block, <Block as sp_runtime::traits::Block>::Hash>,
-	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
-	C::Api: BabeApi<Block>,
 	C::Api: BlockBuilder<Block>,
 {
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
-	use pallet_mmr_rpc::{MmrApi, Mmr};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	let FullDeps { client } = deps;
@@ -118,9 +113,5 @@ pub fn create_full<C>(
 	io.extend_with(
 		ContractsApi::to_delegate(Contracts::new(client.clone()))
 	);
-	io.extend_with(
-		MmrApi::to_delegate(Mmr::new(client.clone()))
-	);
-
 	io
 }
