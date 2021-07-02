@@ -102,23 +102,24 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	};
 
-	let storage_info_span = def.pallet_struct.generate_storage_info
-		.unwrap_or(def.pallet_struct.attr_span);
-
 	// Depending on the flag `generate_storage_info` we use partial or full storage info from
 	// storage.
 	let (
+		storage_info_span,
 		storage_info_trait,
 		storage_info_method,
-	) = if def.pallet_struct.generate_storage_info.is_some() {
+	) = if let Some(span) = def.pallet_struct.generate_storage_info {
 		(
-			quote::quote_spanned!(storage_info_span => StorageInfoTrait),
-			quote::quote_spanned!(storage_info_span => storage_info),
+			span,
+			quote::quote_spanned!(span => StorageInfoTrait),
+			quote::quote_spanned!(span => storage_info),
 		)
 	} else {
+		let span = def.pallet_struct.attr_span;
 		(
-			quote::quote_spanned!(storage_info_span => PartialStorageInfoTrait),
-			quote::quote_spanned!(storage_info_span => partial_storage_info),
+			span,
+			quote::quote_spanned!(span => PartialStorageInfoTrait),
+			quote::quote_spanned!(span => partial_storage_info),
 		)
 	};
 
