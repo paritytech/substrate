@@ -700,7 +700,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 	}
 }
 
-impl<T: Config + TypeInfo + Send + Sync> SignedExtension for WatchDummy<T>
+impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
 where
 	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
 {
