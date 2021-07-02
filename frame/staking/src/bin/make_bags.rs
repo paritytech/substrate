@@ -17,7 +17,7 @@
 
 //! Make the set of voting bag thresholds to be used in `voter_bags.rs`.
 
-use pallet_staking::voter_bags::N_BAGS;
+const N_BAGS: usize = 200;
 
 fn main() {
 	let ratio = ((u64::MAX as f64).ln() / (N_BAGS as f64)).exp();
@@ -27,7 +27,7 @@ fn main() {
 
 	while thresholds.len() < N_BAGS as usize {
 		let prev_item: u64 = thresholds.last().copied().unwrap_or_default();
-		let item = (prev_item as f64 * ratio).max(prev_item as f64 + 1.0);
+		let item = (prev_item as f64 * ratio).round().max(prev_item as f64 + 1.0);
 		thresholds.push(item as u64);
 	}
 
