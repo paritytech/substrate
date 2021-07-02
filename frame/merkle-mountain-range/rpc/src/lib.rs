@@ -25,16 +25,13 @@ use std::{marker::PhantomData, sync::Arc};
 use codec::{Codec, Encode};
 use jsonrpsee::RpcModule;
 use jsonrpsee_types::{error::CallError, Error as JsonRpseeError};
+use pallet_mmr_primitives::{Error as MmrError, Proof};
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT},
-};
-use pallet_mmr_primitives::{Error as MmrError, Proof};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 pub use pallet_mmr_primitives::MmrApi as MmrRuntimeApi;
 
@@ -55,11 +52,8 @@ pub struct LeafProof<BlockHash> {
 
 impl<BlockHash> LeafProof<BlockHash> {
 	/// Create new `LeafProof` from given concrete `leaf` and `proof`.
-	pub fn new<Leaf, MmrHash>(
-		block_hash: BlockHash,
-		leaf: Leaf,
-		proof: Proof<MmrHash>,
-	) -> Self where
+	pub fn new<Leaf, MmrHash>(block_hash: BlockHash, leaf: Leaf, proof: Proof<MmrHash>) -> Self
+	where
 		Leaf: Encode,
 		MmrHash: Encode,
 	{
@@ -81,16 +75,15 @@ impl<Client, Block, MmrHash> MmrRpc<Client, (Block, MmrHash)>
 where
 	Block: BlockT,
 	Client: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	Client::Api: MmrRuntimeApi<
-		Block,
-		MmrHash,
-	>,
+	Client::Api: MmrRuntimeApi<Block, MmrHash>,
 	MmrHash: Codec + Send + Sync + 'static,
-
 {
 	/// Create a new [`MmrRpc`].
 	pub fn new(client: Arc<Client>) -> Self {
-		MmrRpc { client, _marker: Default::default() }
+		MmrRpc {
+			client,
+			_marker: Default::default(),
+		}
 	}
 
 	/// Convert this [`MmrRpc`] to an [`RpcModule`].
@@ -124,7 +117,6 @@ where
 
 		Ok(module)
 	}
-
 }
 
 /// Converts a mmr-specific error into a [`CallError`].
