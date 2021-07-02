@@ -42,6 +42,7 @@ use sc_sync_state_rpc::SyncStateRpc;
 use pallet_transaction_payment_rpc::TransactionPaymentRpc;
 use substrate_frame_rpc_system::{SystemRpc, SystemRpcBackendFull};
 use pallet_mmr_rpc::MmrRpc;
+use pallet_contracts_rpc::ContractsRpc;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -195,7 +196,8 @@ pub fn new_partial(
 		let system_rpc = SystemRpc::new(Box::new(system_rpc_backend)).into_rpc_module().expect("TODO: error handling");
 
 		let mmr_rpc = MmrRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
-		// TODO: add other rpc modules here
+		let contracts_rpc = ContractsRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
+
 		let mut module = RpcModule::new(());
 		module.merge(grandpa_rpc).expect("TODO: error handling");
 		module.merge(babe_rpc).expect("TODO: error handling");
@@ -203,6 +205,7 @@ pub fn new_partial(
 		module.merge(transaction_payment_rpc).expect("TODO: error handling");
 		module.merge(system_rpc).expect("TODO: error handling");
 		module.merge(mmr_rpc).expect("TODO: error handling");
+		module.merge(contracts_rpc).expect("TODO: error handling");
 		module
 	};
 
@@ -211,10 +214,8 @@ pub fn new_partial(
 	// TODO: (dp) remove this when all APIs are ported.
 	let (rpc_extensions_builder, rpc_setup) = {
 		let rpc_setup = grandpa::SharedVoterState::empty();
-		let client = client.clone();
 		let rpc_extensions_builder = move |_deny_unsafe, _subscription_executor| {
-			let deps = node_rpc::FullDeps { client: client.clone() };
-			node_rpc::create_full(deps)
+			node_rpc::create_full()
 		};
 
 		(rpc_extensions_builder, rpc_setup)

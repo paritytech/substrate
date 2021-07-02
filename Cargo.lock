@@ -4168,6 +4168,7 @@ dependencies = [
  "pallet-authority-discovery",
  "pallet-balances",
  "pallet-contracts",
+ "pallet-contracts-rpc",
  "pallet-grandpa",
  "pallet-im-online",
  "pallet-indices",
@@ -4304,16 +4305,12 @@ version = "2.0.0"
 dependencies = [
  "jsonrpc-core",
  "node-primitives",
- "pallet-contracts-rpc",
  "sc-client-api",
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-finality-grandpa",
  "sc-rpc",
  "sc-rpc-api",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
  "sp-keystore",
 ]
 
@@ -4898,6 +4895,8 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
+ "jsonrpsee",
+ "jsonrpsee-types",
  "pallet-contracts-primitives",
  "pallet-contracts-rpc-runtime-api",
  "parity-scale-codec",
