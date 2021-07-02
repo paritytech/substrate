@@ -84,17 +84,18 @@ pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 use sp_runtime::TypeId;
 
 /// A unified log target for support operations.
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
-#[derive(Debug, PartialEq, Eq, Clone, scale_info::TypeInfo)]
+#[derive(Debug, PartialEq, Eq, Clone, TypeInfo)]
 pub enum Never {}
 
 /// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo)]
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode, TypeInfo)]
 pub struct PalletId(pub [u8; 8]);
 
 impl TypeId for PalletId {
@@ -364,7 +365,7 @@ macro_rules! parameter_types {
 			}
 		}
 
-		impl $crate::scale_info::TypeInfo for $name {
+		impl $crate::TypeInfo for $name {
 			type Identity = Self;
 
 			fn type_info() -> $crate::scale_info::Type<$crate::scale_info::form::MetaForm> {
@@ -822,7 +823,7 @@ pub mod tests {
 	}
 
 	pub trait Config: 'static {
-		type BlockNumber: Codec + EncodeLike + Default + scale_info::TypeInfo;
+		type BlockNumber: Codec + EncodeLike + Default + TypeInfo;
 		type Origin;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;

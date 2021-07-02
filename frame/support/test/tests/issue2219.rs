@@ -33,12 +33,12 @@ mod module {
 	);
 	pub type Requests<T> = Vec<Request<T>>;
 
-	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, scale_info::TypeInfo)]
+	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, TypeInfo)]
 	pub enum Role {
 		Storage,
 	}
 
-	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, scale_info::TypeInfo)]
+	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, TypeInfo)]
 	pub struct RoleParameters<T: Config> {
 		// minimum actors to maintain - if role is unstaking
 		// and remaining actors would be less that this value - prevent or punish for unstaking
@@ -81,7 +81,7 @@ mod module {
 		}
 	}
 
-	pub trait Config: system::Config + scale_info::TypeInfo {}
+	pub trait Config: system::Config + TypeInfo {}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}

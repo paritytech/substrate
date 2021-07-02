@@ -21,6 +21,7 @@
 
 #![recursion_limit="128"]
 
+use scale_info::TypeInfo;
 use sp_runtime::{generic, traits::{BlakeTwo256, Verify}, DispatchError};
 use sp_core::{H256, sr25519};
 use sp_std::cell::RefCell;
@@ -50,7 +51,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, scale_info::TypeInfo)]
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
 	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData::<(T, I)>);
 
 	frame_support::decl_event! {
@@ -92,7 +93,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, scale_info::TypeInfo)]
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
 	pub struct Origin;
 
 	frame_support::decl_event! {
@@ -135,7 +136,7 @@ mod nested {
 			}
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, scale_info::TypeInfo)]
+		#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
 		pub struct Origin;
 
 		frame_support::decl_event! {
@@ -191,7 +192,7 @@ pub mod module3 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, scale_info::TypeInfo)]
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
 	pub struct Origin<T>(pub core::marker::PhantomData<T>);
 
 	frame_support::decl_event! {

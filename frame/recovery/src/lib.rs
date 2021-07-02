@@ -154,6 +154,7 @@
 use sp_std::prelude::*;
 use sp_runtime::traits::{Dispatchable, SaturatedConversion, CheckedAdd, CheckedMul};
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 
 use frame_support::{
 	RuntimeDebug, weights::GetDispatchInfo,
@@ -172,7 +173,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// An active recovery process.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
 pub struct ActiveRecovery<BlockNumber, Balance, AccountId> {
 	/// The block number when the recovery process started.
 	created: BlockNumber,
@@ -184,7 +185,7 @@ pub struct ActiveRecovery<BlockNumber, Balance, AccountId> {
 }
 
 /// Configuration for recovering an account.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
 pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 	/// The minimum number of blocks since the start of the recovery process before the account
 	/// can be recovered.

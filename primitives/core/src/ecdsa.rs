@@ -24,6 +24,7 @@ use sp_std::vec::Vec;
 
 use sp_std::cmp::Ordering;
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 
 #[cfg(feature = "full_crypto")]
 use core::convert::{TryFrom, TryInto};
@@ -52,7 +53,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode, PassByInner, max_encoded_len::MaxEncodedLen, scale_info::TypeInfo)]
+#[derive(Clone, Encode, Decode, PassByInner, max_encoded_len::MaxEncodedLen, TypeInfo)]
 pub struct Public(pub [u8; 33]);
 
 impl PartialOrd for Public {
@@ -227,7 +228,7 @@ impl sp_std::hash::Hash for Public {
 }
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Encode, Decode, PassByInner, scale_info::TypeInfo)]
+#[derive(Encode, Decode, PassByInner, TypeInfo)]
 pub struct Signature(pub [u8; 65]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {

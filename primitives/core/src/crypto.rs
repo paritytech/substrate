@@ -32,6 +32,7 @@ use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
@@ -700,7 +701,7 @@ pub trait Public:
 }
 
 /// An opaque 32-byte cryptographic identifier.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen, scale_info::TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
@@ -1108,7 +1109,7 @@ pub trait CryptoType {
 /// public modules.
 #[derive(
 	Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, PassByInner,
-	crate::RuntimeDebug, scale_info::TypeInfo
+	crate::RuntimeDebug, TypeInfo
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);

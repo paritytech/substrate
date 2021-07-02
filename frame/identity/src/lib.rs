@@ -81,6 +81,7 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput, Saturating};
 use frame_support::traits::{Currency, ReservableCurrency, OnUnbalanced, BalanceStatus};
@@ -95,7 +96,7 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_s
 /// than 32-bytes then it will be truncated when encoding.
 ///
 /// Can also be `None`.
-#[derive(Clone, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum Data {
 	/// No data here.
 	None,
@@ -166,7 +167,7 @@ pub type RegistrarIndex = u32;
 ///
 /// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
 /// which fields their attestation is relevant for by off-chain means.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum Judgement<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > {
@@ -217,7 +218,7 @@ impl<
 /// The fields that we use to identify the owner of an account with. Each corresponds to a field
 /// in the `IdentityInfo` struct.
 #[repr(u64)]
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug, TypeInfo)]
 pub enum IdentityField {
 	Display        = 0b0000000000000000000000000000000000000000000000000000000000000001,
 	Legal          = 0b0000000000000000000000000000000000000000000000000000000000000010,
@@ -245,7 +246,7 @@ impl Decode for IdentityFields {
 		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
 	}
 }
-impl scale_info::TypeInfo for IdentityFields {
+impl TypeInfo for IdentityFields {
 	type Identity = Self;
 
 	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
@@ -265,7 +266,7 @@ impl scale_info::TypeInfo for IdentityFields {
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 #[cfg_attr(test, derive(Default))]
 pub struct IdentityInfo {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
@@ -317,7 +318,7 @@ pub struct IdentityInfo {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct Registration<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > {
@@ -352,7 +353,7 @@ impl<
 }
 
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq

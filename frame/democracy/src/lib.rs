@@ -158,6 +158,7 @@ use sp_runtime::{
 	traits::{Zero, Hash, Dispatchable, Saturating, Bounded},
 };
 use codec::{Encode, Decode, Input};
+use scale_info::TypeInfo;
 use frame_support::{
 	ensure, weights::Weight,
 	traits::{
@@ -201,7 +202,7 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 type NegativeImbalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
-#[derive(Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum PreimageStatus<AccountId, Balance, BlockNumber> {
 	/// The preimage is imminently needed at the argument.
 	Missing(BlockNumber),
@@ -228,7 +229,7 @@ impl<AccountId, Balance, BlockNumber> PreimageStatus<AccountId, Balance, BlockNu
 // A value placed in storage that represents the current version of the Democracy storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 enum Releases {
 	V1,
 }

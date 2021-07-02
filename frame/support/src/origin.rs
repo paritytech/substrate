@@ -271,7 +271,7 @@ macro_rules! impl_outer_origin {
 		}
 
 		$crate::paste::item! {
-			#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug, $crate::codec::Encode, $crate::codec::Decode, $crate::scale_info::TypeInfo)]
+			#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug, $crate::codec::Encode, $crate::codec::Decode, $crate::TypeInfo)]
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $caller_name {
@@ -420,6 +420,7 @@ macro_rules! impl_outer_origin {
 #[cfg(test)]
 mod tests {
 	use codec::{Encode, Decode};
+	use scale_info::TypeInfo;
 	use crate::traits::{Filter, OriginTrait};
 	mod frame_system {
 		use super::*;
@@ -430,7 +431,7 @@ mod tests {
 			type BaseCallFilter;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
@@ -452,20 +453,20 @@ mod tests {
 	mod origin_without_generic {
 		use super::*;
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 		pub struct Origin;
 	}
 
 	mod origin_with_generic {
 		use super::*;
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 		pub struct Origin<T> {
 			t: T
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
+	#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 	pub struct TestRuntime;
 
 	pub struct BaseCallFilter;

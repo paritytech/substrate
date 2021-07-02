@@ -36,7 +36,10 @@ use crate::transaction_validity::{TransactionValidity, TransactionValidityError,
 /// 2. Can be converted to any `Public` key.
 /// 3. Implements `RuntimeAppPublic` so it can be used instead of regular application-specific
 ///    crypto.
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord, scale_info::TypeInfo)]
+#[derive(
+	Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, 
+	Ord, TypeInfo
+)]
 pub struct UintAuthorityId(pub u64);
 
 impl From<u64> for UintAuthorityId {
@@ -142,7 +145,7 @@ impl traits::IdentifyAccount for UintAuthorityId {
 }
 
 /// A dummy signature type, to match `UintAuthorityId`.
-#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode, scale_info::TypeInfo)]
+#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo)]
 pub struct TestSignature(pub u64, pub Vec<u8>);
 
 impl traits::Verify for TestSignature {
@@ -255,7 +258,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 /// with index only used if sender is some.
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct TestXt<Call, Extra> {
 	/// Signature of the extrinsic.
 	pub signature: Option<(u64, Extra)>,

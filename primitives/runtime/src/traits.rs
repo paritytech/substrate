@@ -27,6 +27,7 @@ use std::str::FromStr;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
+use crate::scale_info::TypeInfo;
 use crate::transaction_validity::{
 	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 	UnknownTransaction,
@@ -203,7 +204,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + Debug + scale_info::TypeInfo;
+	type Source: Codec + Clone + PartialEq + Debug + TypeInfo;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -215,7 +216,7 @@ pub trait StaticLookup {
 /// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + Debug + scale_info::TypeInfo> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + Debug + TypeInfo> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> Result<T, LookupError> { Ok(x) }
@@ -388,7 +389,7 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode + MaxEncodedLen
-		+ scale_info::TypeInfo;
+		+ TypeInfo;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
@@ -408,7 +409,7 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
@@ -435,7 +436,7 @@ impl Hash for BlakeTwo256 {
 }
 
 /// Keccak-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Keccak256;
 
@@ -553,7 +554,7 @@ pub trait Header:
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>
-		+ AsMut<[u8]> + MaybeMallocSizeOf + scale_info::TypeInfo;
+		+ AsMut<[u8]> + MaybeMallocSizeOf + TypeInfo;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -609,7 +610,7 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + May
 	/// Block hash type.
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>
-		+ MaybeMallocSizeOf + scale_info::TypeInfo;
+		+ MaybeMallocSizeOf + TypeInfo;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -1202,7 +1203,7 @@ macro_rules! impl_opaque_keys_inner {
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
 			$crate::codec::Decode,
-			$crate::scale_info::TypeInfo,
+			$crate::TypeInfo,
 			$crate::RuntimeDebug,
 		)]
 		pub struct $name {
