@@ -20,6 +20,7 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
+use crate::scale_info::TypeInfo;
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
 	SignedExtension, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,

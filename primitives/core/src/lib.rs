@@ -43,6 +43,7 @@ use serde::{Serialize, Deserialize};
 pub use serde;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
+use scale_info::TypeInfo;
 
 pub use sp_debug_derive::RuntimeDebug;
 
