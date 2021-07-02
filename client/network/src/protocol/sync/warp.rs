@@ -88,11 +88,7 @@ impl<B: BlockT> WarpSync<B> {
 				WarpProofImportResult::BadResponse
 			},
 			Phase::WarpProof { set_id, authorities, last_hash } => {
-				match self.warp_sync_provider.verify(
-					&response,
-					*set_id,
-					std::mem::take(authorities),
-				) {
+				match self.warp_sync_provider.verify(&response, *set_id, authorities.clone()) {
 					Err(e) => {
 						log::debug!(target: "sync", "Bad warp proof response: {:?}", e);
 						return WarpProofImportResult::BadResponse
@@ -162,7 +158,7 @@ impl<B: BlockT> WarpSync<B> {
 	}
 
 	/// Returns state sync estimated progress (percentage, bytes)
-	pub fn progress(&self) -> WarpSyncProgress {
+	pub fn progress(&self) -> WarpSyncProgress<B> {
 		match &self.phase {
 			Phase::WarpProof { .. } => WarpSyncProgress {
 				phase: WarpSyncPhase::DownloadingWarpProofs,
