@@ -304,7 +304,7 @@ macro_rules! benchmarks_iter {
 			( $( $names_extra )* )
 			$name { $( $code )* }: {
 				<
-					Call<T $(, $instance)? > as $crate::traits::UnfilteredDispatchable
+					Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
 				>::dispatch_bypass_filter(
 					Call::<T $(, $instance)? >::$dispatch($($arg),*), $origin.into()
 				)?;
@@ -722,7 +722,7 @@ macro_rules! impl_benchmark {
 				// Add whitelist to DB including whitelisted caller
 				let mut whitelist = whitelist.to_vec();
 				let whitelisted_caller_key =
-					<frame_system::Account::<T> as $crate::storage::StorageMap<_,_>>::hashed_key_for(
+					<frame_system::Account::<T> as $crate::frame_support::storage::StorageMap<_,_>>::hashed_key_for(
 						$crate::whitelisted_caller::<T::AccountId>()
 					);
 				whitelist.push(whitelisted_caller_key.into());
