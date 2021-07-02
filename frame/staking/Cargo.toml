@@ -82,7 +82,3 @@ make-bags = [
 	"num-format",
 	"std",
 ]
-
-[[bin]]
-name = "make_bags"
-required-features = ["make-bags"]

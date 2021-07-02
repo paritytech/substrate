@@ -21,8 +21,6 @@
 //! - It's efficient to iterate over the top* N voters by stake, where the precise ordering of
 //!   voters doesn't particularly matter.
 
-pub mod thresholds;
-
 use crate::{
 	AccountIdOf, Config, Nominations, Nominators, Pallet, Validators, VoteWeight, VoterBagFor,
 	VotingDataOf, slashing::SlashingSpans,
@@ -605,6 +603,39 @@ pub enum VoterType {
 }
 
 /// Support code to ease the process of generating voter bags.
+///
+/// The process of adding voter bags to a runtime requires only four steps.
+///
+/// 1. Update the runtime definition.
+///
+///    ```ignore
+///    parameter_types!{
+///         pub const VoterBagThresholds: &'static [u64] = &[];
+///    }
+///
+///    impl pallet_staking::Config for Runtime {
+///         // <snip>
+///         type VoterBagThresholds = VoterBagThresholds;
+///    }
+///    ```
+///
+/// 2. Write a little program to generate the definitions. This can be a near-identical copy of
+///    `substrate/node/runtime/voter-bags`. This program exists only to hook together the runtime
+///    definitions with the
+///
+/// 3. Run that program:
+///
+///    ```sh,notrust
+///    $ cargo run -p node-runtime-voter-bags -- bin/node/runtime/src/voter_bags.rs
+///    ```
+///
+/// 4. Update the runtime definition.
+///
+///    ```diff,notrust
+///    + mod voter_bags;
+///    - pub const VoterBagThresholds: &'static [u64] = &[];
+///    + pub const VoterBagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
+///    ```
 #[cfg(feature = "make-bags")]
 pub mod make_bags {
 	use crate::{AccountIdOf, Config};
