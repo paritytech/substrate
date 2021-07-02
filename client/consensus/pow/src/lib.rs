@@ -341,7 +341,10 @@ where
 		mut block: BlockImportParams<B, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		let best_header = self.select_chain.best_chain()
+		let best_header = self
+			.select_chain
+			.best_chain()
+			.await
 			.map_err(|e| format!("Fetch best chain failed via select chain: {:?}", e))?;
 		let best_hash = best_header.hash();
 
@@ -527,22 +530,24 @@ pub fn import_queue<B, Transaction, Algorithm>(
 ///
 /// `pre_runtime` is a parameter that allows a custom additional pre-runtime digest to be inserted
 /// for blocks being built. This can encode authorship information, or just be a graffiti.
-pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, CIDP>(
+pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP, CAW>(
 	block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
 	client: Arc<C>,
 	select_chain: S,
 	algorithm: Algorithm,
 	mut env: E,
 	mut sync_oracle: SO,
+	justification_sync_link: L,
 	pre_runtime: Option<Vec<u8>>,
 	create_inherent_data_providers: CIDP,
 	timeout: Duration,
 	build_time: Duration,
 	can_author_with: CAW,
 ) -> (
-	Arc<Mutex<MiningWorker<Block, Algorithm, C, <E::Proposer as Proposer<Block>>::Proof>>>,
+	Arc<Mutex<MiningWorker<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>>>,
 	impl Future<Output = ()>,
-) where
+)
+where
 	Block: BlockT,
 	C: ProvideRuntimeApi<Block> + BlockchainEvents<Block> + 'static,
 	S: SelectChain<Block> + 'static,
@@ -552,14 +557,16 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, CIDP>(
 	E::Error: std::fmt::Debug,
 	E::Proposer: Proposer<Block, Transaction = sp_api::TransactionFor<C, Block>>,
 	SO: SyncOracle + Clone + Send + Sync + 'static,
-	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
+	L: sp_consensus::JustificationSyncLink<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()>,
+	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
 {
 	let mut timer = UntilImportedOrTimeout::new(client.import_notification_stream(), timeout);
-	let worker = Arc::new(Mutex::new(MiningWorker::<Block, Algorithm, C, _> {
+	let worker = Arc::new(Mutex::new(MiningWorker {
 		build: None,
 		algorithm: algorithm.clone(),
 		block_import,
+		justification_sync_link,
 	}));
 	let worker_ret = worker.clone();
 
@@ -575,7 +582,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, CIDP>(
 				return;
 			}
 
-			let best_header = match select_chain.best_chain() {
+			let best_header = match select_chain.best_chain().await {
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
@@ -585,7 +592,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, CIDP>(
 						err
 					);
 					return;
-				},
+				}
 			};
 			let best_hash = best_header.hash();
 

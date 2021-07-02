@@ -24,10 +24,9 @@
 use sp_std::{result, prelude::*, collections::btree_set::BTreeSet};
 use frame_support::{
 	dispatch, traits::{FindAuthor, VerifySeal, Get},
-	inherent::{InherentData, ProvideInherent, InherentIdentifier},
 };
 use codec::{Encode, Decode};
-use sp_runtime::traits::{Header as HeaderT, One, Zero};
+use sp_runtime::traits::{Header as HeaderT, One, Saturating};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
@@ -226,7 +225,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Provide a set of uncles.
 		#[pallet::weight((0, DispatchClass::Mandatory))]
-		fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
+		pub fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
 
@@ -236,6 +235,68 @@ pub mod pallet {
 			<DidSetUncles<T>>::put(true);
 
 			Self::verify_and_import_uncles(new_uncles)
+		}
+	}
+
+	#[pallet::inherent]
+	impl<T: Config> ProvideInherent for Pallet<T> {
+		type Call = Call<T>;
+		type Error = InherentError;
+		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+			let uncles = data.uncles().unwrap_or_default();
+			let mut set_uncles = Vec::new();
+
+			if !uncles.is_empty() {
+				let prev_uncles = <Uncles<T>>::get();
+				let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
+					match entry {
+						UncleEntryItem::InclusionHeight(_) => None,
+						UncleEntryItem::Uncle(h, _) => Some(h),
+					}
+				).collect();
+
+				let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
+
+				for uncle in uncles {
+					match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
+						Ok(_) => {
+							let hash = uncle.hash();
+							set_uncles.push(uncle);
+							existing_hashes.push(hash);
+
+							if set_uncles.len() == MAX_UNCLES {
+								break
+							}
+						}
+						Err(_) => {
+							// skip this uncle
+						}
+					}
+				}
+			}
+
+			if set_uncles.is_empty() {
+				None
+			} else {
+				Some(Call::set_uncles(set_uncles))
+			}
+		}
+
+		fn check_inherent(call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
+			match call {
+				Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
+					Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into()))
+				},
+				_ => {
+					Ok(())
+				},
+			}
+		}
+
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, Call::set_uncles(_))
 		}
 	}
 }
@@ -298,11 +359,7 @@ impl<T: Config> Pallet<T> {
 
 		let (minimum_height, maximum_height) = {
 			let uncle_generations = T::UncleGenerations::get();
-			let min = if now >= uncle_generations {
-				now - uncle_generations
-			} else {
-				Zero::zero()
-			};
+			let min = now.saturating_sub(uncle_generations);
 
 			(min, now)
 		};
@@ -329,7 +386,7 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::OldUncle.into());
 		}
 
-		let duplicate = existing_uncles.into_iter().find(|h| **h == hash).is_some();
+		let duplicate = existing_uncles.into_iter().any(|h| *h == hash);
 		let in_chain = <frame_system::Pallet<T>>::block_hash(uncle.number()) == hash;
 
 		if duplicate || in_chain {
@@ -341,76 +398,14 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn prune_old_uncles(minimum_height: T::BlockNumber) {
-		let mut uncles = <Uncles<T>>::get();
+		let uncles = <Uncles<T>>::get();
 		let prune_entries = uncles.iter().take_while(|item| match item {
 			UncleEntryItem::Uncle(_, _) => true,
 			UncleEntryItem::InclusionHeight(height) => height < &minimum_height,
 		});
 		let prune_index = prune_entries.count();
 
-		let _ = uncles.drain(..prune_index);
-		<Uncles<T>>::put(uncles);
-	}
-}
-
-impl<T: Config> ProvideInherent for Pallet<T> {
-	type Call = Call<T>;
-	type Error = InherentError;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let uncles = data.uncles().unwrap_or_default();
-		let mut set_uncles = Vec::new();
-
-		if !uncles.is_empty() {
-			let prev_uncles = <Uncles<T>>::get();
-			let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
-				match entry {
-					UncleEntryItem::InclusionHeight(_) => None,
-					UncleEntryItem::Uncle(h, _) => Some(h),
-				}
-			).collect();
-
-			let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
-
-			for uncle in uncles {
-				match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
-					Ok(_) => {
-						let hash = uncle.hash();
-						set_uncles.push(uncle);
-						existing_hashes.push(hash);
-
-						if set_uncles.len() == MAX_UNCLES {
-							break
-						}
-					}
-					Err(_) => {
-						// skip this uncle
-					}
-				}
-			}
-		}
-
-		if set_uncles.is_empty() {
-			None
-		} else {
-			Some(Call::set_uncles(set_uncles))
-		}
-	}
-
-	fn check_inherent(call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
-		match call {
-			Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
-				Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into()))
-			},
-			_ => {
-				Ok(())
-			},
-		}
-	}
-
-	fn is_inherent(call: &Self::Call) -> bool {
-		matches!(call, Call::set_uncles(_))
+		<Uncles<T>>::put(&uncles[prune_index..]);
 	}
 }
 

@@ -1,10 +1,10 @@
-error: Union types are not supported
+error: Union types are not supported.
  --> $DIR/union.rs:5:1
   |
 5 | union Union {
   | ^^^^^
 
-error: Union types are not supported.
+error: Union types are not supported
  --> $DIR/union.rs:5:1
   |
 5 | union Union {

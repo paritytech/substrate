@@ -31,7 +31,7 @@ log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
-grandpa = { package = "finality-grandpa", version = "0.14.0", features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", version = "0.14.1", features = ["derive-codec"] }
 sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 pallet-offences = { version = "3.0.0", path = "../offences" }

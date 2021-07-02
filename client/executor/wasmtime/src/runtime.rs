@@ -31,7 +31,7 @@ use sc_executor_common::{
 	runtime_blob::{DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob},
 	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
 };
-use sp_allocator::FreeingBumpHeapAllocator;
+use sc_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize, Value};
 use wasmtime::{Engine, Store};
@@ -150,7 +150,13 @@ impl WasmInstance for WasmtimeInstance {
 				globals_snapshot.apply(&**instance_wrapper);
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator)
+				let result = perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator);
+
+				// Signal to the OS that we are done with the linear memory and that it can be
+				// reclaimed.
+				instance_wrapper.decommit();
+
+				result
 			}
 			Strategy::RecreateInstance(instance_creator) => {
 				let instance_wrapper = instance_creator.instantiate()?;
@@ -171,6 +177,19 @@ impl WasmInstance for WasmtimeInstance {
 			Strategy::RecreateInstance(instance_creator) => {
 				instance_creator.instantiate()?.get_global_val(name)
 			}
+		}
+	}
+
+	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
+		match &self.strategy {
+			Strategy::RecreateInstance(_) => {
+				// We do not keep the wasm instance around, therefore there is no linear memory
+				// associated with it.
+				None
+			}
+			Strategy::FastInstanceReuse {
+				instance_wrapper, ..
+			} => Some(instance_wrapper.base_ptr()),
 		}
 	}
 }
@@ -272,7 +291,7 @@ pub struct Config {
 	pub semantics: Semantics,
 }
 
-pub enum CodeSupplyMode<'a> {
+enum CodeSupplyMode<'a> {
 	/// The runtime is instantiated using the given runtime blob.
 	Verbatim {
 		// Rationale to take the `RuntimeBlob` here is so that the client will be able to reuse
@@ -295,9 +314,42 @@ pub enum CodeSupplyMode<'a> {
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
-///
-/// The `cache_path` designates where this executor implementation can put compiled artifacts.
 pub fn create_runtime(
+	blob: RuntimeBlob,
+	config: Config,
+	host_functions: Vec<&'static dyn Function>,
+) -> std::result::Result<WasmtimeRuntime, WasmError> {
+	// SAFETY: this is safe because it doesn't use `CodeSupplyMode::Artifact`.
+	unsafe { do_create_runtime(CodeSupplyMode::Verbatim { blob }, config, host_functions) }
+}
+
+/// The same as [`create_runtime`] but takes a precompiled artifact, which makes this function
+/// considerably faster than [`create_runtime`].
+///
+/// # Safety
+///
+/// The caller must ensure that the compiled artifact passed here was produced by [`prepare_runtime_artifact`].
+/// Otherwise, there is a risk of arbitrary code execution with all implications.
+///
+/// It is ok though if the `compiled_artifact` was created by code of another version or with different
+/// configuration flags. In such case the caller will receive an `Err` deterministically.
+pub unsafe fn create_runtime_from_artifact(
+	compiled_artifact: &[u8],
+	config: Config,
+	host_functions: Vec<&'static dyn Function>,
+) -> std::result::Result<WasmtimeRuntime, WasmError> {
+	do_create_runtime(
+		CodeSupplyMode::Artifact { compiled_artifact },
+		config,
+		host_functions,
+	)
+}
+
+/// # Safety
+///
+/// This is only unsafe if called with [`CodeSupplyMode::Artifact`]. See [`create_runtime_from_artifact`]
+/// to get more details.
+unsafe fn do_create_runtime(
 	code_supply_mode: CodeSupplyMode<'_>,
 	config: Config,
 	host_functions: Vec<&'static dyn Function>,
@@ -313,7 +365,8 @@ pub fn create_runtime(
 		}
 	}
 
-	let engine = Engine::new(&wasmtime_config);
+	let engine = Engine::new(&wasmtime_config)
+		.map_err(|e| WasmError::Other(format!("cannot create the engine for runtime: {}", e)))?;
 
 	let (module, snapshot_data) = match code_supply_mode {
 		CodeSupplyMode::Verbatim { mut blob } => {
@@ -341,6 +394,8 @@ pub fn create_runtime(
 			}
 		}
 		CodeSupplyMode::Artifact { compiled_artifact } => {
+			// SAFETY: The unsafity of `deserialize` is covered by this function. The
+			//         responsibilities to maintain the invariants are passed to the caller.
 			let module = wasmtime::Module::deserialize(&engine, compiled_artifact)
 				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {}", e)))?;
 
@@ -375,12 +430,12 @@ pub fn prepare_runtime_artifact(
 ) -> std::result::Result<Vec<u8>, WasmError> {
 	instrument(&mut blob, semantics);
 
-	let engine = Engine::new(&common_config());
-	let module = wasmtime::Module::new(&engine, &blob.serialize())
-		.map_err(|e| WasmError::Other(format!("cannot compile module: {}", e)))?;
-	module
-		.serialize()
-		.map_err(|e| WasmError::Other(format!("cannot serialize module: {}", e)))
+	let engine = Engine::new(&common_config())
+		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;
+
+	engine
+		.precompile_module(&blob.serialize())
+		.map_err(|e| WasmError::Other(format!("cannot precompile module: {}", e)))
 }
 
 fn perform_call(

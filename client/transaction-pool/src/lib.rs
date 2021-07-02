@@ -31,7 +31,7 @@ pub mod error;
 #[cfg(test)]
 pub mod testing;
 
-pub use sc_transaction_graph as txpool;
+pub use sc_transaction_graph::{ChainApi, Options, Pool};
 pub use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::{HashMap, HashSet}, sync::Arc, pin::Pin, convert::TryInto};
@@ -40,15 +40,15 @@ use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero},
+	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero, Header as HeaderT},
 };
-use sp_core::traits::SpawnNamed;
+use sp_core::traits::SpawnEssentialNamed;
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 	TransactionSource,
 };
-use sc_transaction_graph::{ChainApi, ExtrinsicHash};
+use sc_transaction_graph::{IsValidator, ExtrinsicHash};
 use wasm_timer::Instant;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
@@ -98,6 +98,13 @@ impl<T, Block: BlockT> Default for ReadyPoll<T, Block> {
 }
 
 impl<T, Block: BlockT> ReadyPoll<T, Block> {
+	fn new(best_block_number: NumberFor<Block>) -> Self {
+		Self {
+			updated_at: best_block_number,
+			pollers: Default::default(),
+		}
+	}
+
 	fn trigger(&mut self, number: NumberFor<Block>, iterator_factory: impl Fn() -> T) {
 		self.updated_at = number;
 
@@ -184,23 +191,30 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	/// revalidation type.
 	pub fn with_revalidation_type(
 		options: sc_transaction_graph::Options,
-		is_validator: txpool::IsValidator,
+		is_validator: IsValidator,
 		pool_api: Arc<PoolApi>,
 		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
-		spawner: impl SpawnNamed,
+		spawner: impl SpawnEssentialNamed,
+		best_block_number: NumberFor<Block>,
 	) -> Self {
 		let pool = Arc::new(sc_transaction_graph::Pool::new(options, is_validator, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
-			RevalidationType::Light => (revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
+			RevalidationType::Light => (
+				revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()),
+				None,
+			),
 			RevalidationType::Full => {
-				let (queue, background) = revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
+				let (queue, background) = revalidation::RevalidationQueue::new_background(
+					pool_api.clone(),
+					pool.clone(),
+				);
 				(queue, Some(background))
 			},
 		};
 
 		if let Some(background_task) = background_task {
-			spawner.spawn("txpool-background", background_task);
+			spawner.spawn_essential("txpool-background", background_task);
 		}
 
 		Self {
@@ -213,7 +227,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 					RevalidationType::Full => RevalidationStrategy::Always,
 				}
 			)),
-			ready_poll: Default::default(),
+			ready_poll: Arc::new(Mutex::new(ReadyPoll::new(best_block_number))),
 			metrics: PrometheusMetrics::new(prometheus),
 		}
 	}
@@ -309,21 +323,29 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 
 	fn ready_at(&self, at: NumberFor<Self::Block>) -> PolledIterator<PoolApi> {
+		let status = self.status();
+		// If there are no transactions in the pool, it is fine to return early.
+		//
+		// There could be transaction being added because of some re-org happening at the relevant
+		// block, but this is relative unlikely.
+		if status.ready == 0 && status.future == 0 {
+			return async { Box::new(std::iter::empty()) as Box<_> }.boxed()
+		}
+
 		if self.ready_poll.lock().updated_at() >= at {
 			log::trace!(target: "txpool", "Transaction pool already processed block  #{}", at);
 			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
-			return Box::pin(futures::future::ready(iterator));
+			return async move { iterator }.boxed();
 		}
 
-		Box::pin(
-			self.ready_poll
-				.lock()
-				.add(at)
-				.map(|received| received.unwrap_or_else(|e| {
-					log::warn!("Error receiving pending set: {:?}", e);
-					Box::new(vec![].into_iter())
-				}))
-		)
+		self.ready_poll
+			.lock()
+			.add(at)
+			.map(|received| received.unwrap_or_else(|e| {
+				log::warn!("Error receiving pending set: {:?}", e);
+				Box::new(std::iter::empty())
+			}))
+			.boxed()
 	}
 
 	fn ready(&self) -> ReadyIteratorFor<PoolApi> {
@@ -334,20 +356,26 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 impl<Block, Client, Fetcher> LightPool<Block, Client, Fetcher>
 where
 	Block: BlockT,
-	Client: sp_blockchain::HeaderBackend<Block> + 'static,
+	Client: sp_blockchain::HeaderBackend<Block> + sc_client_api::UsageProvider<Block> + 'static,
 	Fetcher: sc_client_api::Fetcher<Block> + 'static,
 {
 	/// Create new basic transaction pool for a light node with the provided api.
 	pub fn new_light(
 		options: sc_transaction_graph::Options,
 		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed,
+		spawner: impl SpawnEssentialNamed,
 		client: Arc<Client>,
 		fetcher: Arc<Fetcher>,
 	) -> Self {
-		let pool_api = Arc::new(LightChainApi::new(client, fetcher));
+		let pool_api = Arc::new(LightChainApi::new(client.clone(), fetcher));
 		Self::with_revalidation_type(
-			options, false.into(), pool_api, prometheus, RevalidationType::Light, spawner,
+			options,
+			false.into(),
+			pool_api,
+			prometheus,
+			RevalidationType::Light,
+			spawner,
+			client.usage_info().chain.best_number,
 		)
 	}
 }
@@ -357,21 +385,32 @@ where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
 		+ sc_client_api::BlockBackend<Block>
-		+ sp_runtime::traits::BlockIdTo<Block>,
-	Client: sc_client_api::ExecutorProvider<Block> + Send + Sync + 'static,
+		+ sc_client_api::blockchain::HeaderBackend<Block>
+		+ sp_runtime::traits::BlockIdTo<Block>
+		+ sc_client_api::ExecutorProvider<Block>
+		+ sc_client_api::UsageProvider<Block>
+		+ Send
+		+ Sync
+		+ 'static,
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
 {
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
 		options: sc_transaction_graph::Options,
-		is_validator: txpool::IsValidator,
+		is_validator: IsValidator,
 		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed,
+		spawner: impl SpawnEssentialNamed,
 		client: Arc<Client>,
 	) -> Arc<Self> {
-		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
+		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus, &spawner));
 		let pool = Arc::new(Self::with_revalidation_type(
-			options, is_validator, pool_api, prometheus, RevalidationType::Full, spawner
+			options,
+			is_validator,
+			pool_api,
+			prometheus,
+			RevalidationType::Full,
+			spawner,
+			client.usage_info().chain.best_number,
 		));
 
 		// make transaction pool available for off-chain runtime calls.
@@ -387,6 +426,7 @@ where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
 		+ sc_client_api::BlockBackend<Block>
+		+ sc_client_api::blockchain::HeaderBackend<Block>
 		+ sp_runtime::traits::BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
@@ -523,19 +563,32 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
 	api: &Api,
 	pool: &sc_transaction_graph::Pool<Api>,
 ) -> Vec<ExtrinsicHash<Api>> {
-	let hashes = api.block_body(&block_id).await
+	let extrinsics = api.block_body(&block_id).await
 		.unwrap_or_else(|e| {
 			log::warn!("Prune known transactions: error request {:?}!", e);
 			None
 		})
-		.unwrap_or_default()
-		.into_iter()
+		.unwrap_or_default();
+
+	let hashes = extrinsics.iter()
 		.map(|tx| pool.hash_of(&tx))
 		.collect::<Vec<_>>();
 
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
-	if let Err(e) = pool.prune_known(&block_id, &hashes) {
+	let header = match api.block_header(&block_id) {
+		Ok(Some(h)) => h,
+		Ok(None) => {
+			log::debug!(target: "txpool", "Could not find header for {:?}.", block_id);
+			return hashes
+		},
+		Err(e) => {
+			log::debug!(target: "txpool", "Error retrieving header for {:?}: {:?}", block_id, e);
+			return hashes
+		}
+	};
+
+	if let Err(e) = pool.prune(&block_id, &BlockId::hash(*header.parent_hash()), &extrinsics).await {
 		log::error!("Cannot prune known in the pool {:?}!", e);
 	}
 
@@ -578,7 +631,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 				async move {
 					// We keep track of everything we prune so that later we won't add
-					// tranactions with those hashes from the retracted blocks.
+					// transactions with those hashes from the retracted blocks.
 					let mut pruned_log = HashSet::<ExtrinsicHash<PoolApi>>::new();
 
 					// If there is a tree route, we use this to prune known tx based on the enacted

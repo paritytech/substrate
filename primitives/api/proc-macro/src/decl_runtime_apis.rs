@@ -58,21 +58,9 @@ const CHANGED_IN_ATTRIBUTE: &str = "changed_in";
 ///
 /// Is used when a trait method was renamed.
 const RENAMED_ATTRIBUTE: &str = "renamed";
-/// The `skip_initialize_block` attribute.
-///
-/// Is used when a trait method does not require that the block is initialized
-/// before being called.
-const SKIP_INITIALIZE_BLOCK_ATTRIBUTE: &str = "skip_initialize_block";
-/// The `initialize_block` attribute.
-///
-/// A trait method tagged with this attribute, initializes the runtime at
-/// certain block.
-const INITIALIZE_BLOCK_ATTRIBUTE: &str = "initialize_block";
 /// All attributes that we support in the declaration of a runtime api trait.
 const SUPPORTED_ATTRIBUTE_NAMES: &[&str] = &[
-	CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE, CHANGED_IN_ATTRIBUTE,
-	RENAMED_ATTRIBUTE, SKIP_INITIALIZE_BLOCK_ATTRIBUTE,
-	INITIALIZE_BLOCK_ATTRIBUTE,
+	CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE, CHANGED_IN_ATTRIBUTE, RENAMED_ATTRIBUTE,
 ];
 
 /// The structure used for parsing the runtime api declarations.
@@ -376,15 +364,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			continue;
 		}
 
-		let skip_initialize_block = attrs.contains_key(SKIP_INITIALIZE_BLOCK_ATTRIBUTE);
-		let update_initialized_block = if attrs.contains_key(INITIALIZE_BLOCK_ATTRIBUTE) {
-			quote!(
-				|| *initialized_block.borrow_mut() = Some(*at)
-			)
-		} else {
-			quote!(|| ())
-		};
-
 		// Parse the renamed attributes.
 		let mut renames = Vec::new();
 		if let Some((_, a)) = attrs
@@ -413,72 +392,54 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				NC: FnOnce() -> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe,
 				Block: #crate_::BlockT,
 				T: #crate_::CallApiAt<Block>,
-				C: #crate_::Core<Block>,
 			>(
 				call_runtime_at: &T,
-				core_api: &C,
 				at: &#crate_::BlockId<Block>,
 				args: Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
-				initialized_block: &std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 				native_call: Option<NC>,
 				context: #crate_::ExecutionContext,
 				recorder: &Option<#crate_::ProofRecorder<Block>>,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, #crate_::ApiError> {
 				let version = call_runtime_at.runtime_version_at(at)?;
-				use #crate_::InitializeBlock;
-				let initialize_block = if #skip_initialize_block {
-					InitializeBlock::Skip
-				} else {
-					InitializeBlock::Do(&initialized_block)
-				};
-				let update_initialized_block = #update_initialized_block;
 
 				#(
 					// Check if we need to call the function by an old name.
 					if version.apis.iter().any(|(s, v)| {
 						s == &ID && *v < #versions
 					}) {
-						let params = #crate_::CallApiAtParams::<_, _, fn() -> _, _> {
-							core_api,
+						let params = #crate_::CallApiAtParams::<_, fn() -> _, _> {
 							at,
 							function: #old_names,
 							native_call: None,
 							arguments: args,
 							overlayed_changes: changes,
 							storage_transaction_cache,
-							initialize_block,
 							context,
 							recorder,
 						};
 
 						let ret = call_runtime_at.call_api_at(params)?;
 
-						update_initialized_block();
 						return Ok(ret)
 					}
 				)*
 
 				let params = #crate_::CallApiAtParams {
-					core_api,
 					at,
 					function: #trait_fn_name,
 					native_call,
 					arguments: args,
 					overlayed_changes: changes,
 					storage_transaction_cache,
-					initialize_block,
 					context,
 					recorder,
 				};
 
-				let ret = call_runtime_at.call_api_at(params)?;
-
-				update_initialized_block();
-				Ok(ret)
+				call_runtime_at.call_api_at(params)
 			}
 		));
 	}

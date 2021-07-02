@@ -149,6 +149,18 @@ impl CallDef {
 		let mut methods = vec![];
 		for impl_item in &mut item.items {
 			if let syn::ImplItem::Method(method) = impl_item {
+				if !matches!(method.vis, syn::Visibility::Public(_)) {
+					let msg = "Invalid pallet::call, dispatchable function must be public: \
+						`pub fn`";
+
+					let span = match method.vis {
+						syn::Visibility::Inherited => method.sig.span(),
+						_ => method.vis.span(),
+					};
+
+					return Err(syn::Error::new(span, msg));
+				}
+
 				match method.sig.inputs.first() {
 					None => {
 						let msg = "Invalid pallet::call, must have at least origin arg";

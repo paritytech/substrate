@@ -54,7 +54,6 @@ pub mod offchain;
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
-pub mod random_number_generator;
 mod runtime_string;
 mod multiaddress;
 pub mod runtime_logger;
@@ -84,8 +83,6 @@ pub use sp_arithmetic::{
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use sp_arithmetic::biguint;
-
-pub use random_number_generator::RandomNumberGenerator;
 
 pub use either::Either;
 
@@ -544,6 +541,8 @@ pub enum TokenError {
 	UnknownAsset,
 	/// Funds exist but are frozen.
 	Frozen,
+	/// Operation is not supported by the asset.
+	Unsupported,
 }
 
 impl From<TokenError> for &'static str {
@@ -555,6 +554,7 @@ impl From<TokenError> for &'static str {
 			TokenError::CannotCreate => "Account cannot be created",
 			TokenError::UnknownAsset => "The asset in question is unknown",
 			TokenError::Frozen => "Funds exist but are frozen",
+			TokenError::Unsupported => "Operation is not supported by the asset",
 		}
 	}
 }

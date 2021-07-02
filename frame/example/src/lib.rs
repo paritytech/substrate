@@ -488,7 +488,7 @@ pub mod pallet {
 		#[pallet::weight(
 			<T as pallet::Config>::WeightInfo::accumulate_dummy((*increase_by).saturated_into())
 		)]
-		pub(super) fn accumulate_dummy(
+		pub fn accumulate_dummy(
 			origin: OriginFor<T>,
 			increase_by: T::Balance
 		) -> DispatchResult {
@@ -533,7 +533,7 @@ pub mod pallet {
 		// The weight for this extrinsic we use our own weight object `WeightForSetDummy` to determine
 		// its weight
 		#[pallet::weight(WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32)))]
-		pub(super) fn set_dummy(
+		pub fn set_dummy(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
 		) -> DispatchResult {

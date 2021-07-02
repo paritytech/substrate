@@ -19,87 +19,6 @@
 //!
 //! An equivalent of `sp_io::TestExternalities` that can load its state from a remote substrate
 //! based chain, or a local state snapshot file.
-//!
-//! #### Runtime to Test Against
-//!
-//! While not absolutely necessary, you most likely need a `Runtime` equivalent in your test setup
-//! through which you can infer storage types. There are two options here:
-//!
-//! 1. Build a mock runtime, similar how to you would build one in a pallet test (see example
-//!    below). The very important point here is that this mock needs to hold real values for types
-//!    that matter for you, based on the chain of interest. Some typical ones are:
-//!
-//! - `sp_runtime::AccountId32` as `AccountId`.
-//! - `u32` as `BlockNumber`.
-//! - `u128` as Balance.
-//!
-//! Once you have your `Runtime`, you can use it for storage type resolution and do things like
-//! `<my_pallet::Pallet<Runtime>>::storage_getter()` or `<my_pallet::StorageItem<Runtime>>::get()`.
-//!
-//! 2. Or, you can use a real runtime.
-//!
-//! ### Example
-//!
-//! With a test runtime
-//!
-//! ```ignore
-//! use remote_externalities::Builder;
-//!
-//! #[derive(Clone, Eq, PartialEq, Debug, Default)]
-//! pub struct TestRuntime;
-//!
-//! use frame_system as system;
-//! impl_outer_origin! {
-//!     pub enum Origin for TestRuntime {}
-//! }
-//!
-//! impl frame_system::Config for TestRuntime {
-//!     ..
-//!     // we only care about these two for now. The rest can be mock. The block number type of
-//!     // kusama is u32.
-//!     type BlockNumber = u32;
-//!     type Header = Header;
-//!     ..
-//! }
-//!
-//! #[test]
-//! fn test_runtime_works() {
-//!     let hash: Hash =
-//!         hex!["f9a4ce984129569f63edc01b1c13374779f9384f1befd39931ffdcc83acf63a7"].into();
-//!     let parent: Hash =
-//!         hex!["540922e96a8fcaf945ed23c6f09c3e189bd88504ec945cc2171deaebeaf2f37e"].into();
-//!     Builder::new()
-//!         .at(hash)
-//!         .module("System")
-//!         .build()
-//!         .execute_with(|| {
-//!             assert_eq!(
-//!                 // note: the hash corresponds to 3098546. We can check only the parent.
-//!                 // https://polkascan.io/kusama/block/3098546
-//!                 <frame_system::Pallet<Runtime>>::block_hash(3098545u32),
-//!                 parent,
-//!             )
-//!         });
-//! }
-//! ```
-//!
-//! Or with the real kusama runtime.
-//!
-//! ```ignore
-//! use remote_externalities::Builder;
-//! use kusama_runtime::Runtime;
-//!
-//! #[test]
-//! fn test_runtime_works() {
-//!     let hash: Hash =
-//!         hex!["f9a4ce984129569f63edc01b1c13374779f9384f1befd39931ffdcc83acf63a7"].into();
-//!     Builder::new()
-//!         .at(hash)
-//!         .module("Staking")
-//!         .build()
-//!         .execute_with(|| assert_eq!(<pallet_staking::Module<Runtime>>::validator_count(), 400));
-//! }
-//! ```
 
 use std::{
 	fs,
@@ -115,17 +34,21 @@ use sp_core::{
 use codec::{Encode, Decode};
 use sp_runtime::traits::Block as BlockT;
 use jsonrpsee_ws_client::{
-	WsClientBuilder, WsClient, v2::params::JsonRpcParams, traits::Client,
+	WsClientBuilder, WsClient, v2::params::JsonRpcParams,
 };
+
+pub mod rpc_api;
 
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
-const BATCH_SIZE: usize = 512;
+const BATCH_SIZE: usize = 1000;
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi<B: BlockT> {
+		#[rpc(method = "state_getStorage", positional_params)]
+		fn get_storage(prefix: StorageKey, hash: Option<B::Hash>) -> StorageData;
 		#[rpc(method = "state_getKeysPaged", positional_params)]
 		fn get_keys_paged(
 			prefix: Option<StorageKey>,
@@ -153,7 +76,7 @@ impl<B: BlockT> Default for Mode<B> {
 	}
 }
 
-/// configuration of the online execution.
+/// Configuration of the offline execution.
 ///
 /// A state snapshot config must be present.
 #[derive(Clone)]
@@ -162,7 +85,7 @@ pub struct OfflineConfig {
 	pub state_snapshot: SnapshotConfig,
 }
 
-/// Description of the transport protocol.
+/// Description of the transport protocol (for online execution).
 #[derive(Debug)]
 pub struct Transport {
 	uri: String,
@@ -186,7 +109,7 @@ impl From<String> for Transport {
 /// A state snapshot config may be present and will be written to in that case.
 #[derive(Clone)]
 pub struct OnlineConfig<B: BlockT> {
-	/// The block number at which to connect. Will be latest finalized head if not provided.
+	/// The block hash at which to get the runtime state. Will be latest finalized head if not provided.
 	pub at: Option<B::Hash>,
 	/// An optional state snapshot file to WRITE to, not for reading. Not written if set to `None`.
 	pub state_snapshot: Option<SnapshotConfig>,
@@ -196,10 +119,17 @@ pub struct OnlineConfig<B: BlockT> {
 	pub transport: Transport,
 }
 
+impl<B: BlockT> OnlineConfig<B> {
+	/// Return rpc (ws) client.
+	fn rpc_client(&self) -> &WsClient {
+		self.transport.client.as_ref().expect("ws client must have been initialized by now; qed.")
+	}
+}
+
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport { uri: DEFAULT_TARGET.to_string(), client: None },
+			transport: Transport { uri: DEFAULT_TARGET.to_owned(), client: None },
 			at: None,
 			state_snapshot: None,
 			modules: vec![],
@@ -207,12 +137,6 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 	}
 }
 
-impl<B: BlockT> OnlineConfig<B> {
-	/// Return rpc (ws) client.
-	fn rpc_client(&self) -> &WsClient {
-		self.transport.client.as_ref().expect("ws client must have been initialized by now; qed.")
-	}
-}
 
 /// Configuration of the state snapshot.
 #[derive(Clone)]
@@ -235,8 +159,13 @@ impl Default for SnapshotConfig {
 
 /// Builder for remote-externalities.
 pub struct Builder<B: BlockT> {
-	/// Pallets to inject their prefix into the externalities.
+	/// Custom key-pairs to be injected into the externalities.
 	inject: Vec<KeyPair>,
+	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must
+	/// be given.
+	hashed_prefixes: Vec<Vec<u8>>,
+	/// Storage entry keys to be injected into the externalities. The *hashed* key must be given.
+	hashed_keys: Vec<Vec<u8>>,
 	/// connectivity mode, online or offline.
 	mode: Mode<B>,
 }
@@ -245,7 +174,12 @@ pub struct Builder<B: BlockT> {
 // that.
 impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
-		Self { inject: Default::default(), mode: Default::default() }
+		Self {
+			inject: Default::default(),
+			mode: Default::default(),
+			hashed_prefixes: Default::default(),
+			hashed_keys: Default::default(),
+		}
 	}
 }
 
@@ -268,6 +202,18 @@ impl<B: BlockT> Builder<B> {
 
 // RPC methods
 impl<B: BlockT> Builder<B> {
+	async fn rpc_get_storage(
+		&self,
+		key: StorageKey,
+		maybe_at: Option<B::Hash>,
+	) -> Result<StorageData, &'static str> {
+		trace!(target: LOG_TARGET, "rpc: get_storage");
+		RpcApi::<B>::get_storage(self.as_online().rpc_client(), key, maybe_at).await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc get_storage failed."
+		})
+	}
+	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
 		RpcApi::<B>::finalized_head(self.as_online().rpc_client()).await.map_err(|e| {
@@ -329,6 +275,7 @@ impl<B: BlockT> Builder<B> {
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
+		use jsonrpsee_ws_client::traits::Client;
 		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
@@ -355,7 +302,7 @@ impl<B: BlockT> Builder<B> {
 			let values = client.batch_request::<Option<StorageData>>(batch)
 				.await
 				.map_err(|e| {
-					log::error!(target: LOG_TARGET, "failed to execute batch {:?} due to {:?}", chunk_keys, e);
+					log::error!(target: LOG_TARGET, "failed to execute batch: {:?}. Error: {:?}", chunk_keys, e);
 					"batch failed."
 				})?;
 			assert_eq!(chunk_keys.len(), values.len());
@@ -394,7 +341,7 @@ impl<B: BlockT> Builder<B> {
 
 	/// initialize `Self` from state snapshot. Panics if the file does not exist.
 	fn load_state_snapshot(&self, path: &Path) -> Result<Vec<KeyPair>, &'static str> {
-		info!(target: LOG_TARGET, "scraping keypairs from state snapshot {:?}", path,);
+		info!(target: LOG_TARGET, "scraping key-pairs from state snapshot {:?}", path,);
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
@@ -407,9 +354,9 @@ impl<B: BlockT> Builder<B> {
 			.at
 			.expect("online config must be initialized by this point; qed.")
 			.clone();
-		info!(target: LOG_TARGET, "scraping keypairs from remote @ {:?}", at);
+		info!(target: LOG_TARGET, "scraping key-pairs from remote @ {:?}", at);
 
-		let keys_and_values = if config.modules.len() > 0 {
+		let mut keys_and_values = if config.modules.len() > 0 {
 			let mut filtered_kv = vec![];
 			for f in config.modules.iter() {
 				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
@@ -428,6 +375,24 @@ impl<B: BlockT> Builder<B> {
 			info!(target: LOG_TARGET, "downloading data for all modules.");
 			self.rpc_get_pairs_paged(StorageKey(vec![]), at).await?
 		};
+
+		for prefix in &self.hashed_prefixes {
+			debug!(
+				target: LOG_TARGET,
+				"adding data for hashed prefix: {:?}",
+				HexDisplay::from(prefix)
+			);
+			let additional_key_values =
+				self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at).await?;
+			keys_and_values.extend(additional_key_values);
+		}
+
+		for key in &self.hashed_keys {
+			let key = StorageKey(key.to_vec());
+			debug!(target: LOG_TARGET, "adding data for hashed key: {:?}", HexDisplay::from(&key));
+			let value = self.rpc_get_storage(key.clone(), Some(at)).await?;
+			keys_and_values.push((key, value));
+		}
 
 		Ok(keys_and_values)
 	}
@@ -468,7 +433,7 @@ impl<B: BlockT> Builder<B> {
 
 		info!(
 			target: LOG_TARGET,
-			"extending externalities with {} manually injected keys",
+			"extending externalities with {} manually injected key-values",
 			self.inject.len()
 		);
 		base_kv.extend(self.inject.clone());
@@ -484,10 +449,26 @@ impl<B: BlockT> Builder<B> {
 	}
 
 	/// Inject a manual list of key and values to the storage.
-	pub fn inject(mut self, injections: &[KeyPair]) -> Self {
+	pub fn inject_key_value(mut self, injections: &[KeyPair]) -> Self {
 		for i in injections {
 			self.inject.push(i.clone());
 		}
+		self
+	}
+
+	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed.
+	///
+	/// This should be used to inject a "PREFIX", like a storage (double) map.
+	pub fn inject_hashed_prefix(mut self, hashed: &[u8]) -> Self {
+		self.hashed_prefixes.push(hashed.to_vec());
+		self
+	}
+
+	/// Inject a hashed key to scrape. This is treated as-is, and should be pre-hashed.
+	///
+	/// This should be used to inject a "KEY", like a storage value.
+	pub fn inject_hashed_key(mut self, hashed: &[u8]) -> Self {
+		self.hashed_keys.push(hashed.to_vec());
 		self
 	}
 
@@ -505,8 +486,10 @@ impl<B: BlockT> Builder<B> {
 		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
 		for (k, v) in kv {
 			let (k, v) = (k.0, v.0);
+			// Insert the key,value pair into the test trie backend
 			ext.insert(k, v);
 		}
+
 		Ok(ext)
 	}
 }

@@ -54,6 +54,19 @@ impl<Block: BlockT> BlockId<Block> {
 	pub fn number(number: NumberFor<Block>) -> Self {
 		BlockId::Number(number)
 	}
+
+	/// Check if this block ID refers to the pre-genesis state.
+	pub fn is_pre_genesis(&self) -> bool {
+		match self {
+			BlockId::Hash(hash) => hash == &Default::default(),
+			BlockId::Number(_) => false,
+		}
+	}
+
+	/// Create a block ID for a pre-genesis state.
+	pub fn pre_genesis() -> Self {
+		BlockId::Hash(Default::default())
+	}
 }
 
 impl<Block: BlockT> Copy for BlockId<Block> {}

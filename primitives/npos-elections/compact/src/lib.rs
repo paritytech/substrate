@@ -169,7 +169,7 @@ fn struct_def(
 		);
 		quote!{
 			#compact_impl
-			#[derive(Default, PartialEq, Eq, Clone, Debug)]
+			#[derive(Default, PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]
 		}
 	} else {
 		// automatically derived.
@@ -419,7 +419,7 @@ fn check_compact_attr(input: ParseStream) -> Result<bool> {
 	}
 }
 
-/// #[compact] pub struct CompactName::<VoterIndex = u32, TargetIndex = u32, Accuracy = u32>()
+/// `#[compact] pub struct CompactName::<VoterIndex = u32, TargetIndex = u32, Accuracy = u32>()`
 impl Parse for SolutionDef {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		// optional #[compact]

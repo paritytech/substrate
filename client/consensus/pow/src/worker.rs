@@ -18,8 +18,13 @@
 
 use std::{pin::Pin, time::Duration, collections::HashMap, borrow::Cow};
 use sc_client_api::ImportNotifications;
-use sp_runtime::{DigestItem, traits::Block as BlockT, generic::BlockId};
-use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, import_queue::BoxBlockImport};
+use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, StorageChanges,
+	StateAction, import_queue::BoxBlockImport};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
+	DigestItem,
+};
 use futures::{prelude::*, task::{Context, Poll}};
 use futures_timer::Delay;
 use log::*;
@@ -57,18 +62,22 @@ pub struct MiningWorker<
 	Block: BlockT,
 	Algorithm: PowAlgorithm<Block>,
 	C: sp_api::ProvideRuntimeApi<Block>,
-	Proof
+	L: sp_consensus::JustificationSyncLink<Block>,
+	Proof,
 > {
 	pub(crate) build: Option<MiningBuild<Block, Algorithm, C, Proof>>,
 	pub(crate) algorithm: Algorithm,
 	pub(crate) block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
+	pub(crate) justification_sync_link: L,
 }
 
-impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
+impl<Block, Algorithm, C, L, Proof> MiningWorker<Block, Algorithm, C, L, Proof>
+where
 	Block: BlockT,
 	C: sp_api::ProvideRuntimeApi<Block>,
 	Algorithm: PowAlgorithm<Block>,
 	Algorithm::Difficulty: 'static + Send,
+	L: sp_consensus::JustificationSyncLink<Block>,
 	sp_api::TransactionFor<C, Block>: Send + 'static,
 {
 	/// Get the current best hash. `None` if the worker has just started or the client is doing
@@ -128,7 +137,9 @@ impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(seal);
 			import_block.body = Some(body);
-			import_block.storage_changes = Some(build.proposal.storage_changes);
+			import_block.state_action = StateAction::ApplyChanges(
+				StorageChanges::Changes(build.proposal.storage_changes)
+			);
 
 			let intermediate = PowIntermediate::<Algorithm::Difficulty> {
 				difficulty: Some(build.metadata.difficulty),
@@ -139,8 +150,11 @@ impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
 				Box::new(intermediate) as Box<_>,
 			);
 
+			let header = import_block.post_header();
 			match self.block_import.import_block(import_block, HashMap::default()).await {
-				Ok(_) => {
+				Ok(res) => {
+					res.handle_justification(&header.hash(), *header.number(), &mut self.justification_sync_link);
+
 					info!(
 						target: "pow",
 						"✅ Successfully mined block on top of: {}",

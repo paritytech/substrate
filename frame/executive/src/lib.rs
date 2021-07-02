@@ -474,9 +474,17 @@ where
 	pub fn validate_transaction(
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
+		block_hash: Block::Hash,
 	) -> TransactionValidity {
 		sp_io::init_tracing();
 		use sp_tracing::{enter_span, within_span};
+
+		<frame_system::Pallet<System>>::initialize(
+			&(frame_system::Pallet::<System>::block_number() + One::one()),
+			&block_hash,
+			&Default::default(),
+			frame_system::InitKind::Inspection,
+		);
 
 		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
 
@@ -667,6 +675,7 @@ mod tests {
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+			TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 			Custom: custom::{Pallet, Call, ValidateUnsigned, Inherent},
 		}
 	);
@@ -721,6 +730,8 @@ mod tests {
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type MaxLocks = ();
+		type MaxReserves = ();
+		type ReserveIdentifier = [u8; 8];
 		type WeightInfo = ();
 	}
 
@@ -833,7 +844,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("6e70de4fa07bac443dc7f8a812c8a0c941aacfa892bb373c5899f7d511d4c25b").into(),
+					state_root: hex!("1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -1003,11 +1014,19 @@ mod tests {
 		default_with_prio_3.priority = 3;
 		t.execute_with(|| {
 			assert_eq!(
-				Executive::validate_transaction(TransactionSource::InBlock, valid.clone()),
+				Executive::validate_transaction(
+					TransactionSource::InBlock,
+					valid.clone(),
+					Default::default(),
+				),
 				Ok(default_with_prio_3),
 			);
 			assert_eq!(
-				Executive::validate_transaction(TransactionSource::InBlock, invalid.clone()),
+				Executive::validate_transaction(
+					TransactionSource::InBlock,
+					invalid.clone(),
+					Default::default(),
+				),
 				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator)),
 			);
 			assert_eq!(Executive::apply_extrinsic(valid), Ok(Err(DispatchError::BadOrigin)));
