@@ -108,11 +108,14 @@ Hence every hash retrieved from `provided_tags` is always present in `ready`;
 qed
 "#;
 
+/// Validated transactions that are block ready with all their dependencies
+/// met.
 #[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
-	/// Insertion id
+	/// Next free insertion id (used to indicate when a transaction was inserted into the pool).
 	insertion_id: u64,
 	/// tags that are provided by Ready transactions
+	/// (only one transaction can provide a tag)
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
 	ready: TrackedMap<Hash, ReadyTx<Hash, Ex>>,
@@ -235,7 +238,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 			.fold(None, f)
 	}
 
-	/// Returns true if given hash is part of the queue.
+	/// Returns true if given transaction hash is part of the queue.
 	pub fn contains(&self, hash: &Hash) -> bool {
 		self.ready.read().contains_key(hash)
 	}
