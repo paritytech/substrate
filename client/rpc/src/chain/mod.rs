@@ -112,7 +112,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 }
 
 /// Create new state API that works on full node.
-pub fn new_full<Block: BlockT, Client>(
+ pub fn new_full<Block: BlockT, Client>(
 	client: Arc<Client>,
 	executor: Arc<SubscriptionTaskExecutor>,
 ) -> Chain<Block, Client>
@@ -242,4 +242,3 @@ fn client_err(err: sp_blockchain::Error) -> Error {
 fn rpc_err(err: Error) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(err))
 }
-

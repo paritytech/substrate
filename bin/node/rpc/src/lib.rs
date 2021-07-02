@@ -45,7 +45,6 @@ use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sp_consensus_babe::BabeApi;
 use sc_rpc::SubscriptionTaskExecutor;
-use sp_transaction_pool::TransactionPool;
 use sc_client_api::AuxStore;
 
 /// Light client extra dependencies.
@@ -85,13 +84,9 @@ pub struct GrandpaDeps<B> {
 }
 
 /// Full client dependencies.
-pub struct FullDeps<C, P> {
+pub struct FullDeps<C> {
 	/// The client instance to use.
 	pub client: Arc<C>,
-	/// Transaction pool instance.
-	pub pool: Arc<P>,
-	/// Whether to deny unsafe calls
-	pub deny_unsafe: DenyUnsafe,
 }
 
 /// A IO handler that uses all Full RPC extensions.
@@ -99,8 +94,8 @@ pub type IoHandler = jsonrpc_core::IoHandler<()>;
 
 /// Instantiate all Full RPC extensions.
 // TODO(niklasad1): replace these.
-pub fn create_full<C, P>(
-	deps: FullDeps<C, P>,
+pub fn create_full<C>(
+	deps: FullDeps<C>,
 ) -> jsonrpc_core::IoHandler<()> where
 	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + AuxStore +
 		HeaderMetadata<Block, Error=BlockChainError> + Sync + Send + 'static,
@@ -110,23 +105,13 @@ pub fn create_full<C, P>(
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
 	C::Api: BabeApi<Block>,
 	C::Api: BlockBuilder<Block>,
-	P: TransactionPool + 'static,
 {
-	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_mmr_rpc::{MmrApi, Mmr};
 
 	let mut io = jsonrpc_core::IoHandler::default();
-	let FullDeps {
-		client,
-		pool,
-		deny_unsafe,
-	} = deps;
+	let FullDeps { client } = deps;
 
-	// TODO: (dp) remove
-	io.extend_with(
-		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
-	);
 	// Making synchronous calls in light client freezes the browser currently,
 	// more context: https://github.com/paritytech/substrate/pull/3480
 	// These RPCs should use an asynchronous caller instead.
@@ -135,32 +120,6 @@ pub fn create_full<C, P>(
 	);
 	io.extend_with(
 		MmrApi::to_delegate(Mmr::new(client.clone()))
-	);
-
-	io
-}
-
-/// Instantiate all Light RPC extensions.
-// TODO(niklasad1): replace these.
-pub fn create_light<C, P, F>(
-	deps: LightDeps<C, F, P>,
-) -> jsonrpc_core::IoHandler<()> where
-	C: sp_blockchain::HeaderBackend<Block>,
-	C: Send + Sync + 'static,
-	F: sc_client_api::light::Fetcher<Block> + 'static,
-	P: TransactionPool + 'static,
-{
-	use substrate_frame_rpc_system::{LightSystem, SystemApi};
-
-	let LightDeps {
-		client,
-		pool,
-		remote_blockchain,
-		fetcher
-	} = deps;
-	let mut io = jsonrpc_core::IoHandler::default();
-	io.extend_with(
-		SystemApi::<Hash, AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
 	);
 
 	io

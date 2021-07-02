@@ -371,6 +371,7 @@ pub struct RpcSession {
 	metadata: (),
 }
 
+// TODO: (dp) Should be safe to remove but has some scary fallout for util/browser we need to understand better.
 impl RpcSession {
 	/// Creates an RPC session.
 	///
@@ -378,7 +379,7 @@ impl RpcSession {
 	/// messages.
 	///
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
-	pub fn new(sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
+	pub fn new(_sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
 		RpcSession {
 			metadata: (),
 		}

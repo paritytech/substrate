@@ -425,7 +425,7 @@ impl<Block, Client> StateApi<Block, Client>
 
 /// Child state backend API.
 #[async_trait::async_trait]
-pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
+pub trait ChildStateBackend<Block, Client>: Send + Sync + 'static
 	where
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
