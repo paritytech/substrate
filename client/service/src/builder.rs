@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	error::Error, MallocSizeOfWasm, RpcHandlers,
+	error::Error, MallocSizeOfWasm,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
@@ -500,7 +500,7 @@ pub fn build_offchain_workers<TBl, TCl>(
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TBackend>,
-) -> Result<RpcHandlers, Error>
+) -> Result<(), Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
@@ -616,14 +616,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 	// we could spawn it in the background but then the errors must be handled via a channel or something
 	let rpc = futures::executor::block_on(start_rpc_servers(&config, gen_rpc_module))?;
 
-	// NOTE(niklasad1): dummy type for now.
-	let noop_rpc_handlers = RpcHandlers;
-	// This is used internally, so don't restrict access to unsafe RPC
-	// let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
-	//     sc_rpc::DenyUnsafe::No,
-	//     sc_rpc_server::RpcMiddleware::new(rpc_metrics, "inbrowser")
-	// ).into()));
-
 	// Spawn informant task
 	spawn_handle.spawn("informant", sc_informant::build(
 		client.clone(),
@@ -636,7 +628,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 	// this will not shutdown the server.
 	task_manager.keep_alive((config.base_path, rpc));
 
-	Ok(noop_rpc_handlers)
+	Ok(())
 }
 
 async fn transaction_notifications<TBl, TExPool>(

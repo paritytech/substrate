@@ -38,7 +38,7 @@ use std::pin::Pin;
 use std::collections::HashMap;
 use std::task::Poll;
 
-use futures::{Future, FutureExt, Stream, StreamExt, stream};
+use futures::{FutureExt, Stream, StreamExt, stream};
 use sc_network::PeerId;
 use log::{warn, debug, error};
 use codec::{Encode, Decode};
@@ -93,26 +93,6 @@ pub trait MallocSizeOfWasm {}
 impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
 #[cfg(target_os = "unknown")]
 impl<T> MallocSizeOfWasm for T {}
-
-/// RPC handlers that can perform RPC queries.
-#[derive(Clone)]
-pub struct RpcHandlers;
-
-impl RpcHandlers {
-	/// Starts an RPC query.
-	///
-	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
-	/// would for example send.
-	///
-	/// Returns a `Future` that contains the optional response.
-	///
-	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
-	/// send back spontaneous events.
-	pub fn rpc_query(&self, _mem: &RpcSession, _request: &str)
-		-> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		todo!();
-	}
-}
 
 /// An incomplete set of chain components, but enough to run the chain ops subcommands.
 pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
@@ -365,28 +345,6 @@ fn start_rpc_servers<
 	_: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
-}
-
-/// An RPC session. Used to perform in-memory RPC queries (ie. RPC queries that don't go through
-/// the HTTP or WebSockets server).
-#[derive(Clone)]
-pub struct RpcSession {
-	metadata: (),
-}
-
-// TODO: (dp) Should be safe to remove but has some scary fallout for util/browser we need to understand better.
-impl RpcSession {
-	/// Creates an RPC session.
-	///
-	/// The `sender` is stored inside the `RpcSession` and is used to communicate spontaneous JSON
-	/// messages.
-	///
-	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
-	pub fn new(_sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
-		RpcSession {
-			metadata: (),
-		}
-	}
 }
 
 /// Transaction pool adapter.

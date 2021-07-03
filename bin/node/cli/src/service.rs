@@ -24,9 +24,7 @@ use std::sync::Arc;
 use sc_consensus_babe;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
-use sc_service::{
-	config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager,
-};
+use sc_service::{config::Configuration, error::Error as ServiceError, TaskManager};
 use sc_network::{Event, NetworkService};
 use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
@@ -456,7 +454,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 
 pub fn new_light_base(mut config: Configuration) -> Result<(
 	TaskManager,
-	RpcHandlers,
 	Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
@@ -583,25 +580,23 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 	}
 
 	// TODO: (dp) implement rpsee builder here for all RPC modules available to the light client.
-	let rpc_handlers =
-		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
-			on_demand: Some(on_demand),
-			remote_blockchain: Some(backend.remote_blockchain()),
-			// TODO(niklasad1): implement.
-			rpc_builder: Box::new(|_, _| RpcModule::new(())),
-			client: client.clone(),
-			transaction_pool: transaction_pool.clone(),
-			keystore: keystore_container.sync_keystore(),
-			config, backend, system_rpc_tx,
-			network: network.clone(),
-			task_manager: &mut task_manager,
-			telemetry: telemetry.as_mut(),
-		})?;
+	sc_service::spawn_tasks(sc_service::SpawnTasksParams {
+		on_demand: Some(on_demand),
+		remote_blockchain: Some(backend.remote_blockchain()),
+		// TODO(niklasad1): implement.
+		rpc_builder: Box::new(|_, _| RpcModule::new(())),
+		client: client.clone(),
+		transaction_pool: transaction_pool.clone(),
+		keystore: keystore_container.sync_keystore(),
+		config, backend, system_rpc_tx,
+		network: network.clone(),
+		task_manager: &mut task_manager,
+		telemetry: telemetry.as_mut(),
+	})?;
 
 	network_starter.start_network();
 	Ok((
 		task_manager,
-		rpc_handlers,
 		client,
 		network,
 		transaction_pool,
@@ -612,7 +607,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 pub fn new_light(
 	config: Configuration,
 ) -> Result<TaskManager, ServiceError> {
-	new_light_base(config).map(|(task_manager, _, _, _, _)| {
+	new_light_base(config).map(|(task_manager, _, _, _)| {
 		task_manager
 	})
 }
@@ -694,7 +689,7 @@ mod tests {
 				Ok((node, setup_handles.unwrap()))
 			},
 			|config| {
-				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
+				let (keep_alive, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			|service, &mut (ref mut block_import, ref babe_link)| {
@@ -856,7 +851,7 @@ mod tests {
 				Ok(sc_service_test::TestNetComponents::new(task_manager, client, network, transaction_pool))
 			},
 			|config| {
-				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
+				let (keep_alive, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			vec![
