@@ -695,7 +695,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 // Maciej: This is very WIP, mocking the original `gen_handler`. All of the `jsonrpsee`
 // specific logic should be merged back to `gen_handler` down the road.
 fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
-	_deny_unsafe: sc_rpc::DenyUnsafe,
+	_deny_unsafe: DenyUnsafe,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
@@ -705,7 +705,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
-	rpsee_builder: Box<dyn FnOnce(sc_rpc::DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
+	rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 ) -> RpcModule<()>
 	where
 		TBl: BlockT,
@@ -722,7 +722,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	const UNIQUE_METHOD_NAMES_PROOF: &str = "Method names are unique; qed";
 
 	// TODO(niklasad1): expose CORS to jsonrpsee to handle this propely.
-	let deny_unsafe = sc_rpc::DenyUnsafe::No;
+	let deny_unsafe = DenyUnsafe::No;
 
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),
@@ -800,7 +800,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	rpc_api.merge(state).expect(UNIQUE_METHOD_NAMES_PROOF);
 	rpc_api.merge(child_state).expect(UNIQUE_METHOD_NAMES_PROOF);
 	// Additional [`RpcModule`]s defined in the node to fit the specific blockchain
-	let extra_rpcs = rpsee_builder(deny_unsafe, task_executor.clone());
+	let extra_rpcs = rpc_builder(deny_unsafe, task_executor.clone());
 	rpc_api.merge(extra_rpcs).expect(UNIQUE_METHOD_NAMES_PROOF);
 
 	rpc_api
