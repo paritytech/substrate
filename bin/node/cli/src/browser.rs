@@ -54,10 +54,10 @@ async fn start_inner(
 	info!("👤 Role: {:?}", config.role);
 
 	// Create the service. This is the most heavy initialization step.
-	let (task_manager, rpc_handlers) =
+	let task_manager =
 		crate::service::new_light_base(config)
-			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
+			.map(|(task_manager, _, _, _)| task_manager)
 			.map_err(|e| format!("{:?}", e))?;
 
-	Ok(browser_utils::start_client(task_manager, rpc_handlers))
+	Ok(browser_utils::start_client(task_manager))
 }

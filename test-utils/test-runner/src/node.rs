@@ -40,7 +40,6 @@ use sp_runtime::{generic::BlockId, transaction_validity::TransactionSource, Mult
 use sp_runtime::{generic::UncheckedExtrinsic, traits::NumberFor};
 use sp_session::SessionKeys;
 // TODO(niklasad1): this is a hack.
-use sc_service::RpcHandlers;
 use sp_state_machine::Ext;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_transaction_pool::TransactionPool;
@@ -52,8 +51,6 @@ use log::LevelFilter;
 /// the node process is dropped when this struct is dropped
 /// also holds logs from the process.
 pub struct Node<T: ChainInfo> {
-	/// rpc handler for communicating with the node over rpc.
-	_rpc_handler: RpcHandlers,
 	/// Stream of log lines
 	log_stream: mpsc::UnboundedReceiver<String>,
 	/// node tokio runtime
@@ -172,23 +169,21 @@ impl<T: ChainInfo> Node<T> {
 		// Channel for the rpc handler to communicate with the authorship task.
 		let (command_sink, commands_stream) = mpsc::channel(10);
 
-		let rpc_handlers = {
-			let params = SpawnTasksParams {
-				config,
-				client: client.clone(),
-				backend: backend.clone(),
-				task_manager: &mut task_manager,
-				keystore,
-				on_demand: None,
-				transaction_pool: transaction_pool.clone(),
-				rpc_builder: Box::new(|_, _| RpcModule::new(())),
-				remote_blockchain: None,
-				network,
-				system_rpc_tx,
-				telemetry: None
-			};
-			spawn_tasks(params)?
+		let params = SpawnTasksParams {
+			config,
+			client: client.clone(),
+			backend: backend.clone(),
+			task_manager: &mut task_manager,
+			keystore,
+			on_demand: None,
+			transaction_pool: transaction_pool.clone(),
+			rpc_builder: Box::new(|_, _| RpcModule::new(())),
+			remote_blockchain: None,
+			network,
+			system_rpc_tx,
+			telemetry: None
 		};
+		spawn_tasks(params)?;
 
 		// Background authorship future.
 		let authorship_future = run_manual_seal(ManualSealParams {
@@ -208,12 +203,9 @@ impl<T: ChainInfo> Node<T> {
 			.spawn("manual-seal", authorship_future);
 
 		network_starter.start_network();
-		// TODO(niklasad1): use a real rpc handler :)
-		// let rpc_handler = rpc_handlers.io_handler();
 		let initial_number = client.info().best_number;
 
 		Ok(Self {
-			_rpc_handler: rpc_handlers,
 			_task_manager: Some(task_manager),
 			_runtime: tokio_runtime,
 			client,
