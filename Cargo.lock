@@ -4892,9 +4892,6 @@ dependencies = [
 name = "pallet-contracts-rpc"
 version = "3.0.0"
 dependencies = [
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
  "jsonrpsee",
  "jsonrpsee-types",
  "pallet-contracts-primitives",

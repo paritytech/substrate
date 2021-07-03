@@ -17,12 +17,14 @@
 
 //! Node-specific RPC methods for interaction with contracts.
 
+#![warn(unused_crate_dependencies)]
+
 use std::{sync::Arc, marker::PhantomData};
 
 use codec::Codec;
 use jsonrpsee::RpcModule;
 use jsonrpsee_types::error::{CallError, Error as JsonRpseeError};
-use pallet_contracts_primitives::RentProjection;
+use pallet_contracts_primitives::{Code, ContractInstantiateResult, RentProjection, ContractExecResult};
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
 use sp_api::ProvideRuntimeApi;
@@ -31,7 +33,6 @@ use sp_core::{Bytes, H256};
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::{generic::BlockId, traits::{self, Block as BlockT, Header as HeaderT}};
 use std::convert::{TryFrom, TryInto};
-use pallet_contracts_primitives::Code;
 
 pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
 
@@ -138,7 +139,10 @@ where
 		// won't change any state. Nonetheless, calling state-changing contracts is still possible.
 		//
 		// This method is useful for calling getter-like methods on contracts.
-		module.register_method("contracts_call", |params, contracts| {
+		module.register_method(
+			"contracts_call",
+			|params, contracts| -> Result<ContractExecResult, CallError>
+			{
 			let (call_request, at): (CallRequest<AccountId>, Option<<Block as BlockT>::Hash>) = params.parse()?;
 			let api = contracts.client.runtime_api();
 			let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
@@ -160,7 +164,6 @@ where
 				.map_err(runtime_error_into_rpc_err)?;
 
 			Ok(exec_result)
-
 		})?;
 
 		// Instantiate a new contract.
@@ -169,8 +172,18 @@ where
 		// is not actually created.
 		//
 		// This method is useful for UIs to dry-run contract instantiations.
-		module.register_method("contracts_instantiate", |params, contracts| {
-			let (instantiate_request, at): ( InstantiateRequest<AccountId, Hash>, Option<<Block as BlockT>::Hash>) = params.parse()?;
+		module.register_method(
+			"contracts_instantiate",
+			|params, contracts| -> Result<
+						ContractInstantiateResult<AccountId, <<Block as BlockT>::Header as HeaderT>::Number>,
+						CallError
+					>
+			{
+			let (instantiate_request, at): (
+				InstantiateRequest<AccountId, Hash>,
+				Option<<Block as BlockT>::Hash>
+			) = params.parse()?;
+
 			let api = contracts.client.runtime_api();
 			let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
  			let InstantiateRequest {
@@ -195,7 +208,10 @@ where
 
 		// Returns the value under a specified storage `key` in a contract given by `address` param,
 		// or `None` if it is not set.
-		module.register_method("contracts_getStorage", |params, contracts| {
+		module.register_method(
+			"contracts_getStorage",
+			|params, contracts| -> Result<Option<Bytes>, CallError>
+			{
 			let (address, key, at): (AccountId, H256, Option<<Block as BlockT>::Hash>) = params.parse()?;
 
 			let api = contracts.client.runtime_api();
@@ -216,7 +232,10 @@ where
 		// accessed at the beginning of that block.
 		//
 		// Returns `None` if the contract is exempted from rent.
-		module.register_method("contracts_rentProjection", |params, contracts| {
+		module.register_method(
+			"contracts_rentProjection",
+			|params, contracts| -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>, CallError>
+		{
 			let (address, at): (AccountId, Option<<Block as BlockT>::Hash>) = params.parse()?;
 
 			let api = contracts.client.runtime_api();
