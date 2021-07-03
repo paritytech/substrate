@@ -367,7 +367,7 @@ mod execution {
 		}
 	}
 
-	/// Helper to create the [`ExecutionStrategyWithHandler::AlwaysWasm(Untrsuted)`] without naming
+	/// Helper to create the [`ExecutionStrategyWithHandler::AlwaysWasm(Untrusted)`] without naming
 	/// types.
 	fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager {
