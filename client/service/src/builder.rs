@@ -32,7 +32,7 @@ use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator, Chain},
 	import_queue::ImportQueue,
 };
-use sc_rpc::SubscriptionTaskExecutor;
+use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
 use futures::{
 	FutureExt, StreamExt,
 	future::ready,
@@ -455,7 +455,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, Backend> {
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
-	pub rpsee_builder: Box<dyn FnOnce(sc_rpc::DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
+	pub rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 	/// An optional, shared remote blockchain instance. Used for light clients.
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
@@ -525,7 +525,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 		backend,
 		keystore,
 		transaction_pool,
-		rpsee_builder,
+		rpc_builder,
 		remote_blockchain,
 		network,
 		system_rpc_tx,
@@ -596,7 +596,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 	);
 
 	// jsonrpsee RPC
-	let gen_rpc_module = |deny_unsafe: sc_rpc::DenyUnsafe| {
+	let gen_rpc_module = |deny_unsafe: DenyUnsafe| {
 		gen_rpc_module(
 			deny_unsafe,
 			task_manager.spawn_handle(),
@@ -608,7 +608,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 			system_rpc_tx.clone(),
 			&config,
 			backend.offchain_storage(),
-			rpsee_builder,
+			rpc_builder,
 		)
 	};
 
@@ -695,7 +695,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 // Maciej: This is very WIP, mocking the original `gen_handler`. All of the `jsonrpsee`
 // specific logic should be merged back to `gen_handler` down the road.
 fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
-	_deny_unsafe: sc_rpc::DenyUnsafe,
+	_deny_unsafe: DenyUnsafe,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
@@ -705,7 +705,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
-	rpsee_builder: Box<dyn FnOnce(sc_rpc::DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
+	rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 ) -> RpcModule<()>
 	where
 		TBl: BlockT,
@@ -722,7 +722,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	const UNIQUE_METHOD_NAMES_PROOF: &str = "Method names are unique; qed";
 
 	// TODO(niklasad1): expose CORS to jsonrpsee to handle this propely.
-	let deny_unsafe = sc_rpc::DenyUnsafe::No;
+	let deny_unsafe = DenyUnsafe::No;
 
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),
@@ -800,7 +800,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TExPool>(
 	rpc_api.merge(state).expect(UNIQUE_METHOD_NAMES_PROOF);
 	rpc_api.merge(child_state).expect(UNIQUE_METHOD_NAMES_PROOF);
 	// Additional [`RpcModule`]s defined in the node to fit the specific blockchain
-	let extra_rpcs = rpsee_builder(deny_unsafe, task_executor.clone());
+	let extra_rpcs = rpc_builder(deny_unsafe, task_executor.clone());
 	rpc_api.merge(extra_rpcs).expect(UNIQUE_METHOD_NAMES_PROOF);
 
 	rpc_api

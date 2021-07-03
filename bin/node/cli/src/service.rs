@@ -60,17 +60,12 @@ pub fn new_partial(
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
-		// rpc_extensions_builder (jsonrpc, old,  TODO: (dp) remove)
-		impl Fn(node_rpc::DenyUnsafe, sc_rpc::SubscriptionTaskExecutor) -> node_rpc::IoHandler,
-		// rpc setup (jsonrpsee)
-		impl FnOnce(node_rpc::DenyUnsafe, Arc<sc_rpc::SubscriptionTaskExecutor>) -> RpcModule<()>,
-		// import setup
+		// Block import setup.
 		(
 			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 			grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
 			sc_consensus_babe::BabeLink<Block>,
 		),
-		grandpa::SharedVoterState,
 		Option<Telemetry>,
 	)
 >, ServiceError> {
@@ -149,7 +144,6 @@ pub fn new_partial(
 		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
-	// TODO: (dp) cleanup all of this crap when removing the jsonrpc stuff below.
 	// Grandpa stuff
 	let shared_authority_set = grandpa_link.shared_authority_set().clone();
 	let justification_stream = grandpa_link.justification_stream().clone();
@@ -164,62 +158,59 @@ pub fn new_partial(
 	let shared_epoch_changes = babe_link.epoch_changes().clone();
 	// System
 	let transaction_pool2 = transaction_pool.clone();
-	let rpsee_builder = move |deny_unsafe, executor| -> RpcModule<()> {
-		let grandpa_rpc = GrandpaRpc::new(
-			executor,
-			shared_authority_set.clone(),
-			grandpa::SharedVoterState::empty(),
-			justification_stream,
-			grandpa::FinalityProofProvider::new_for_service(
-				backend2,
-				Some(shared_authority_set.clone()),
-			),
-		).into_rpc_module().expect("TODO: error handling");
+	let rpc_builder = Box::new(move |deny_unsafe, executor| -> RpcModule<()> {
+			let grandpa_rpc = GrandpaRpc::new(
+				executor,
+				shared_authority_set.clone(),
+				grandpa::SharedVoterState::empty(),
+				justification_stream,
+				grandpa::FinalityProofProvider::new_for_service(
+					backend2,
+					Some(shared_authority_set.clone()),
+				),
+			).into_rpc_module().expect("TODO: error handling");
 
-		let babe_rpc = BabeRpc::new(
-			client2.clone(),
-			babe_link.epoch_changes().clone(),
-			sync_keystore,
-			babe_link.config().clone(),
-			select_chain2,
-			deny_unsafe,
-		).into_rpc_module().expect("TODO: error handling");
-		let sync_state_rpc = SyncStateRpc::new(
-			chain_spec,
-			client2.clone(),
-			shared_authority_set.clone(),
-			shared_epoch_changes,
-			deny_unsafe,
-		).into_rpc_module().expect("TODO: error handling");
-		let transaction_payment_rpc = TransactionPaymentRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
-		let system_rpc_backend = SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
-		let system_rpc = SystemRpc::new(Box::new(system_rpc_backend)).into_rpc_module().expect("TODO: error handling");
+			let babe_rpc = BabeRpc::new(
+				client2.clone(),
+				babe_link.epoch_changes().clone(),
+				sync_keystore,
+				babe_link.config().clone(),
+				select_chain2,
+				deny_unsafe,
+			).into_rpc_module().expect("TODO: error handling");
+			let sync_state_rpc = SyncStateRpc::new(
+				chain_spec,
+				client2.clone(),
+				shared_authority_set.clone(),
+				shared_epoch_changes,
+				deny_unsafe,
+			).into_rpc_module().expect("TODO: error handling");
+			let transaction_payment_rpc = TransactionPaymentRpc::new(
+				client2.clone()
+			).into_rpc_module().expect("TODO: error handling");
+			let system_rpc_backend = SystemRpcBackendFull::new(client2.clone(), transaction_pool2.clone(), deny_unsafe);
+			let system_rpc = SystemRpc::new(
+				Box::new(system_rpc_backend)
+			).into_rpc_module().expect("TODO: error handling");
+			let mmr_rpc = MmrRpc::new(
+				client2.clone()
+			).into_rpc_module().expect("TODO: error handling");
+			let contracts_rpc = ContractsRpc::new(
+				client2.clone()
+			).into_rpc_module().expect("TODO: error handling");
 
-		let mmr_rpc = MmrRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
-		let contracts_rpc = ContractsRpc::new(client2.clone()).into_rpc_module().expect("TODO: error handling");
-
-		let mut module = RpcModule::new(());
-		module.merge(grandpa_rpc).expect("TODO: error handling");
-		module.merge(babe_rpc).expect("TODO: error handling");
-		module.merge(sync_state_rpc).expect("TODO: error handling");
-		module.merge(transaction_payment_rpc).expect("TODO: error handling");
-		module.merge(system_rpc).expect("TODO: error handling");
-		module.merge(mmr_rpc).expect("TODO: error handling");
-		module.merge(contracts_rpc).expect("TODO: error handling");
-		module
-	};
+			let mut module = RpcModule::new(());
+			module.merge(grandpa_rpc).expect("TODO: error handling");
+			module.merge(babe_rpc).expect("TODO: error handling");
+			module.merge(sync_state_rpc).expect("TODO: error handling");
+			module.merge(transaction_payment_rpc).expect("TODO: error handling");
+			module.merge(system_rpc).expect("TODO: error handling");
+			module.merge(mmr_rpc).expect("TODO: error handling");
+			module.merge(contracts_rpc).expect("TODO: error handling");
+			module
+		});
 
 	let import_setup = (block_import, grandpa_link, babe_link2);
-
-	// TODO: (dp) remove this when all APIs are ported.
-	let (rpc_extensions_builder, rpc_setup) = {
-		let rpc_setup = grandpa::SharedVoterState::empty();
-		let rpc_extensions_builder = move |_deny_unsafe, _subscription_executor| {
-			node_rpc::create_full()
-		};
-
-		(rpc_extensions_builder, rpc_setup)
-	};
 
 	Ok(sc_service::PartialComponents {
 		client,
@@ -229,8 +220,8 @@ pub fn new_partial(
 		select_chain,
 		import_queue,
 		transaction_pool,
-		// TODO: (dp) `rpc_setup` is a copy of `shared_voter_state`, but why?
-		other: (rpc_extensions_builder, Box::new(rpsee_builder), import_setup, rpc_setup, telemetry),
+		rpc_builder,
+		other: (import_setup, telemetry),
 	})
 }
 
@@ -257,16 +248,13 @@ pub fn new_full_base(
 		keystore_container,
 		select_chain,
 		transaction_pool,
+		rpc_builder,
 		other: (
-			_rpc_extensions_builder,
-			rpsee_builder,
 			import_setup,
-			rpc_setup,
 			mut telemetry
 		),
 	} = new_partial(&config)?;
 
-	let shared_voter_state = rpc_setup;
 	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
@@ -313,7 +301,7 @@ pub fn new_full_base(
 			client: client.clone(),
 			keystore: keystore_container.sync_keystore(),
 			network: network.clone(),
-			rpsee_builder: Box::new(rpsee_builder),
+			rpc_builder: Box::new(rpc_builder),
 			transaction_pool: transaction_pool.clone(),
 			task_manager: &mut task_manager,
 			on_demand: None,
@@ -439,7 +427,7 @@ pub fn new_full_base(
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
-			shared_voter_state,
+			shared_voter_state: grandpa::SharedVoterState::empty(),
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.
@@ -600,7 +588,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
 			// TODO(niklasad1): implement.
-			rpsee_builder: Box::new(|_, _| RpcModule::new(())),
+			rpc_builder: Box::new(|_, _| RpcModule::new(())),
 			client: client.clone(),
 			transaction_pool: transaction_pool.clone(),
 			keystore: keystore_container.sync_keystore(),

@@ -153,8 +153,7 @@ where
 		module.register_method(
 			"contracts_call",
 			|params, contracts| -> Result<ContractExecResult, CallError> {
-				let (call_request, at): (CallRequest<AccountId>, Option<<Block as BlockT>::Hash>) =
-					params.parse()?;
+				let (call_request, at): (CallRequest<AccountId>, Option<<Block as BlockT>::Hash>) = params.parse()?;
 				let api = contracts.client.runtime_api();
 				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
 
@@ -186,9 +185,7 @@ where
 		// This method is useful for UIs to dry-run contract instantiations.
 		module.register_method(
 			"contracts_instantiate",
-			|params,
-			 contracts|
-			 -> Result<
+			|params, contracts| -> Result<
 				ContractInstantiateResult<
 					AccountId,
 					<<Block as BlockT>::Header as HeaderT>::Number,

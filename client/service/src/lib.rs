@@ -47,6 +47,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use jsonrpsee::RpcModule;
+use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -129,6 +130,8 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 	pub import_queue: ImportQueue,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TransactionPool>,
+	/// RPC module builder.
+	pub rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 	/// Everything else that needs to be passed into the main build function.
 	pub other: Other,
 }
