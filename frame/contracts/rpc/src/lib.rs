@@ -19,19 +19,24 @@
 
 #![warn(unused_crate_dependencies)]
 
-use std::{sync::Arc, marker::PhantomData};
+use std::{marker::PhantomData, sync::Arc};
 
 use codec::Codec;
 use jsonrpsee::RpcModule;
 use jsonrpsee_types::error::{CallError, Error as JsonRpseeError};
-use pallet_contracts_primitives::{Code, ContractInstantiateResult, RentProjection, ContractExecResult};
+use pallet_contracts_primitives::{
+	Code, ContractExecResult, ContractInstantiateResult, RentProjection,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::{Bytes, H256};
 use sp_rpc::number::NumberOrHex;
-use sp_runtime::{generic::BlockId, traits::{self, Block as BlockT, Header as HeaderT}};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{self, Block as BlockT, Header as HeaderT},
+};
 use std::convert::{TryFrom, TryInto};
 
 pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
@@ -126,7 +131,13 @@ where
 	Hash: traits::MaybeSerializeDeserialize + Codec + Send + Sync + 'static,
 {
 	pub fn new(client: Arc<Client>) -> Self {
-		Self { client, _block: Default::default(), _account_id: Default::default(), _balance: Default::default(), _hash: Default::default() }
+		Self {
+			client,
+			_block: Default::default(),
+			_account_id: Default::default(),
+			_balance: Default::default(),
+			_hash: Default::default(),
+		}
 	}
 
 	/// Convert a [`ContractsRpc`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
@@ -141,30 +152,31 @@ where
 		// This method is useful for calling getter-like methods on contracts.
 		module.register_method(
 			"contracts_call",
-			|params, contracts| -> Result<ContractExecResult, CallError>
-			{
-			let (call_request, at): (CallRequest<AccountId>, Option<<Block as BlockT>::Hash>) = params.parse()?;
-			let api = contracts.client.runtime_api();
-			let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
+			|params, contracts| -> Result<ContractExecResult, CallError> {
+				let (call_request, at): (CallRequest<AccountId>, Option<<Block as BlockT>::Hash>) =
+					params.parse()?;
+				let api = contracts.client.runtime_api();
+				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
 
-			let CallRequest {
-				origin,
-				dest,
-				value,
-				gas_limit,
-				input_data,
-			} = call_request;
+				let CallRequest {
+					origin,
+					dest,
+					value,
+					gas_limit,
+					input_data,
+				} = call_request;
 
-			let value: Balance = decode_hex(value, "balance")?;
-			let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
-			limit_gas(gas_limit)?;
+				let value: Balance = decode_hex(value, "balance")?;
+				let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
+				limit_gas(gas_limit)?;
 
-			let exec_result = api
-				.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
-				.map_err(runtime_error_into_rpc_err)?;
+				let exec_result = api
+					.call(&at, origin, dest, value, gas_limit, input_data.to_vec())
+					.map_err(runtime_error_into_rpc_err)?;
 
-			Ok(exec_result)
-		})?;
+				Ok(exec_result)
+			},
+		)?;
 
 		// Instantiate a new contract.
 		//
@@ -174,57 +186,70 @@ where
 		// This method is useful for UIs to dry-run contract instantiations.
 		module.register_method(
 			"contracts_instantiate",
-			|params, contracts| -> Result<
-						ContractInstantiateResult<AccountId, <<Block as BlockT>::Header as HeaderT>::Number>,
-						CallError
-					>
-			{
-			let (instantiate_request, at): (
-				InstantiateRequest<AccountId, Hash>,
-				Option<<Block as BlockT>::Hash>
-			) = params.parse()?;
+			|params,
+			 contracts|
+			 -> Result<
+				ContractInstantiateResult<
+					AccountId,
+					<<Block as BlockT>::Header as HeaderT>::Number,
+				>,
+				CallError,
+			> {
+				let (instantiate_request, at): (
+					InstantiateRequest<AccountId, Hash>,
+					Option<<Block as BlockT>::Hash>,
+				) = params.parse()?;
 
-			let api = contracts.client.runtime_api();
-			let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
- 			let InstantiateRequest {
-				origin,
-				endowment,
-				gas_limit,
-				code,
-				data,
-				salt,
-			} = instantiate_request;
+				let api = contracts.client.runtime_api();
+				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
+				let InstantiateRequest {
+					origin,
+					endowment,
+					gas_limit,
+					code,
+					data,
+					salt,
+				} = instantiate_request;
 
-			let endowment: Balance = decode_hex(endowment, "balance")?;
-			let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
-			limit_gas(gas_limit)?;
+				let endowment: Balance = decode_hex(endowment, "balance")?;
+				let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
+				limit_gas(gas_limit)?;
 
-			let exec_result = api
-				.instantiate(&at, origin, endowment, gas_limit, code, data.to_vec(), salt.to_vec())
-				.map_err(runtime_error_into_rpc_err)?;
+				let exec_result = api
+					.instantiate(
+						&at,
+						origin,
+						endowment,
+						gas_limit,
+						code,
+						data.to_vec(),
+						salt.to_vec(),
+					)
+					.map_err(runtime_error_into_rpc_err)?;
 
-			Ok(exec_result)
-		})?;
+				Ok(exec_result)
+			},
+		)?;
 
 		// Returns the value under a specified storage `key` in a contract given by `address` param,
 		// or `None` if it is not set.
 		module.register_method(
 			"contracts_getStorage",
-			|params, contracts| -> Result<Option<Bytes>, CallError>
-			{
-			let (address, key, at): (AccountId, H256, Option<<Block as BlockT>::Hash>) = params.parse()?;
+			|params, contracts| -> Result<Option<Bytes>, CallError> {
+				let (address, key, at): (AccountId, H256, Option<<Block as BlockT>::Hash>) =
+					params.parse()?;
 
-			let api = contracts.client.runtime_api();
-			let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
-			let result = api
-				.get_storage(&at, address, key.into())
-				.map_err(runtime_error_into_rpc_err)?
-				.map_err(ContractAccessError)?
-				.map(Bytes);
+				let api = contracts.client.runtime_api();
+				let at = BlockId::hash(at.unwrap_or_else(|| contracts.client.info().best_hash));
+				let result = api
+					.get_storage(&at, address, key.into())
+					.map_err(runtime_error_into_rpc_err)?
+					.map_err(ContractAccessError)?
+					.map(Bytes);
 
-			Ok(result)
-		})?;
-
+				Ok(result)
+			},
+		)?;
 
 		// Returns the projected time a given contract will be able to sustain paying its rent.
 		//
@@ -265,7 +290,10 @@ fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> CallError {
 	}
 }
 
-fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(from: H, name: &str) -> Result<T, CallError> {
+fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(
+	from: H,
+	name: &str,
+) -> Result<T, CallError> {
 	from.try_into().map_err(|_| CallError::Custom {
 		code: -32602, // TODO: was `ErrorCode::InvalidParams`
 		message: format!("{:?} does not fit into the {} type", from, name),
@@ -287,7 +315,6 @@ fn limit_gas(gas_limit: Weight) -> Result<(), CallError> {
 		Ok(())
 	}
 }
-
 
 #[cfg(test)]
 mod tests {
