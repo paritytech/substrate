@@ -1078,7 +1078,6 @@ mod tests {
 			_: &RuntimeCode,
 			_method: &str,
 			_data: &[u8],
-			_heap_pages: u64,
 			use_native: bool,
 			native_call: Option<NC>,
 		) -> (CallResult<R, Self::Error>, bool) {

@@ -352,6 +352,7 @@ mod tests {
 		let onchain_code = RuntimeCode {
 			code_fetcher: &onchain_code,
 			heap_pages: Some(128),
+			context: sp_core::traits::CodeContext::Consensus,
 			hash: vec![0, 0, 0, 0],
 		};
 
