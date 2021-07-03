@@ -209,7 +209,12 @@ fn make_offenders_im_online<T: Config>(num_offenders: u32, num_nominators: u32) 
 #[cfg(test)]
 fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expected: I) {
 	let events = System::<T>::events() .into_iter()
-		.map(|frame_system::EventRecord { event, .. }| event).collect::<Vec<_>>();
+		.map(|frame_system::EventRecord { event, .. }| event)
+		.filter(|event| match event {
+			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(_)) => false,
+			_ => true
+		})
+		.collect::<Vec<_>>();
 	let expected = expected.collect::<Vec<_>>();
 	let lengths = (events.len(), expected.len());
 	let length_mismatch = if lengths.0 != lengths.1 {
