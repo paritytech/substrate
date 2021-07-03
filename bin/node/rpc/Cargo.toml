@@ -13,14 +13,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 jsonrpc-core = "15.1.0"
 node-primitives = { version = "2.0.0", path = "../primitives" }
-pallet-contracts-rpc = { version = "3.0.0", path = "../../../frame/contracts/rpc/" }
 sc-client-api = { version = "3.0.0", path = "../../../client/api" }
 sc-consensus-babe = { version = "0.9.0", path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.9.0", path = "../../../client/consensus/epochs" }
 sc-finality-grandpa = { version = "0.9.0", path = "../../../client/finality-grandpa" }
 sc-rpc-api = { version = "0.9.0", path = "../../../client/rpc-api" }
 sc-rpc = { version = "3.0.0", path = "../../../client/rpc" }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builder" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }

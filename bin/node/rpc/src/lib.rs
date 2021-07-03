@@ -34,18 +34,14 @@
 use std::sync::Arc;
 
 use sp_keystore::SyncCryptoStorePtr;
-use node_primitives::{Block, BlockNumber, AccountId, Balance, Hash};
+use node_primitives::{Block, BlockNumber, Hash};
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{
 	SharedVoterState, SharedAuthoritySet, FinalityProofProvider, GrandpaJustificationStream
 };
 pub use sc_rpc_api::DenyUnsafe;
-use sp_api::ProvideRuntimeApi;
-use sp_block_builder::BlockBuilder;
-use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sc_rpc::SubscriptionTaskExecutor;
-use sc_client_api::AuxStore;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -83,35 +79,12 @@ pub struct GrandpaDeps<B> {
 	pub finality_provider: Arc<FinalityProofProvider<B, Block>>,
 }
 
-/// Full client dependencies.
-pub struct FullDeps<C> {
-	/// The client instance to use.
-	pub client: Arc<C>,
-}
-
 /// A IO handler that uses all Full RPC extensions.
 pub type IoHandler = jsonrpc_core::IoHandler<()>;
 
 /// Instantiate all Full RPC extensions.
 // TODO(niklasad1): replace these.
-pub fn create_full<C>(
-	deps: FullDeps<C>,
-) -> jsonrpc_core::IoHandler<()> where
-	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + AuxStore +
-		HeaderMetadata<Block, Error=BlockChainError> + Sync + Send + 'static,
-	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber, Hash>,
-	C::Api: BlockBuilder<Block>,
+pub fn create_full() -> jsonrpc_core::IoHandler<()>
 {
-	use pallet_contracts_rpc::{Contracts, ContractsApi};
-
-	let mut io = jsonrpc_core::IoHandler::default();
-	let FullDeps { client } = deps;
-
-	// Making synchronous calls in light client freezes the browser currently,
-	// more context: https://github.com/paritytech/substrate/pull/3480
-	// These RPCs should use an asynchronous caller instead.
-	io.extend_with(
-		ContractsApi::to_delegate(Contracts::new(client.clone()))
-	);
-	io
+	jsonrpc_core::IoHandler::default()
 }
