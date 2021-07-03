@@ -596,7 +596,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 	);
 
 	// jsonrpsee RPC
-	let gen_rpc_module = |deny_unsafe: sc_rpc::DenyUnsafe| {
+	let gen_rpc_module = |deny_unsafe: DenyUnsafe| {
 		gen_rpc_module(
 			deny_unsafe,
 			task_manager.spawn_handle(),
