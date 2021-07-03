@@ -32,7 +32,7 @@ use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator, Chain},
 	import_queue::ImportQueue,
 };
-use sc_rpc::SubscriptionTaskExecutor;
+use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
 use futures::{
 	FutureExt, StreamExt,
 	future::ready,
@@ -455,7 +455,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, Backend> {
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
-	pub rpsee_builder: Box<dyn FnOnce(sc_rpc::DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
+	pub rpc_builder: Box<dyn FnOnce(DenyUnsafe, Arc<SubscriptionTaskExecutor>) -> RpcModule<()>>,
 	/// An optional, shared remote blockchain instance. Used for light clients.
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
@@ -525,7 +525,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 		backend,
 		keystore,
 		transaction_pool,
-		rpsee_builder,
+		rpc_builder,
 		remote_blockchain,
 		network,
 		system_rpc_tx,
@@ -608,7 +608,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TCl>(
 			system_rpc_tx.clone(),
 			&config,
 			backend.offchain_storage(),
-			rpsee_builder,
+			rpc_builder,
 		)
 	};
 

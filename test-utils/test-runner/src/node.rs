@@ -18,6 +18,7 @@
 
 use std::sync::Arc;
 
+use jsonrpsee::RpcModule;
 use futures::{FutureExt, SinkExt, channel::{mpsc, oneshot}};
 use manual_seal::{run_manual_seal, EngineCommand, ManualSealParams};
 use sc_cli::build_runtime;
@@ -180,7 +181,7 @@ impl<T: ChainInfo> Node<T> {
 				keystore,
 				on_demand: None,
 				transaction_pool: transaction_pool.clone(),
-				rpsee_builder: Box::new(|_, _| jsonrpsee_ws_server::RpcModule::new(())),
+				rpc_builder: Box::new(|_, _| RpcModule::new(())),
 				remote_blockchain: None,
 				network,
 				system_rpc_tx,
