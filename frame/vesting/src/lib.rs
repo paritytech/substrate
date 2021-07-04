@@ -493,7 +493,7 @@ impl<T: Config> Pallet<T> {
 		schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 	) -> DispatchResult {
 		// Validate user inputs.
-		ensure!(schedule.locked() > T::MinVestedTransfer::get(), Error::<T>::AmountLow);
+		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 		schedule.validate::<T::BlockNumberToBalance, T>()?;
 
 		// Potentially correct `per_block` if its greater than locked.

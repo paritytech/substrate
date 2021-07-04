@@ -28,27 +28,27 @@ const ED: u64 = 256;
 #[test]
 fn check_vesting_status() {
 	ExtBuilder::default()
-		.existential_deposit(256)
+		.existential_deposit(ED)
 		.build()
 		.execute_with(|| {
 			let user1_free_balance = Balances::free_balance(&1);
 			let user2_free_balance = Balances::free_balance(&2);
 			let user12_free_balance = Balances::free_balance(&12);
-			assert_eq!(user1_free_balance, 256 * 10); // Account 1 has free balance
-			assert_eq!(user2_free_balance, 256 * 20); // Account 2 has free balance
-			assert_eq!(user12_free_balance, 256 * 10); // Account 12 has free balance
+			assert_eq!(user1_free_balance, ED * 10); // Account 1 has free balance
+			assert_eq!(user2_free_balance, ED * 20); // Account 2 has free balance
+			assert_eq!(user12_free_balance, ED * 10); // Account 12 has free balance
 			let user1_vesting_schedule = VestingInfo::new::<Test>(
-				256 * 5,
+				ED * 5,
 				128, // Vesting over 10 blocks
 				0,
 			);
 			let user2_vesting_schedule = VestingInfo::new::<Test>(
-				256 * 20,
-				256, // Vesting over 20 blocks
+				ED * 20,
+				ED, // Vesting over 20 blocks
 				10,
 			);
 			let user12_vesting_schedule = VestingInfo::new::<Test>(
-				256 * 5,
+				ED * 5,
 				64, // Vesting over 20 blocks
 				10,
 			);
@@ -56,12 +56,12 @@ fn check_vesting_status() {
 			assert_eq!(Vesting::vesting(&2).unwrap(), vec![user2_vesting_schedule]); // Account 2 has a vesting schedule
 			assert_eq!(Vesting::vesting(&12).unwrap(), vec![user12_vesting_schedule]); // Account 12 has a vesting schedule
 
-			// Account 1 has only 128 units vested from their illiquid 256 * 5 units at block 1
+			// Account 1 has only 128 units vested from their illiquid ED * 5 units at block 1
 			assert_eq!(Vesting::vesting_balance(&1), Some(128 * 9));
 			// Account 2 has their full balance locked
 			assert_eq!(Vesting::vesting_balance(&2), Some(user2_free_balance));
 			// Account 12 has only their illiquid funds locked
-			assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - 256 * 5));
+			assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - ED * 5));
 
 			System::set_block_number(10);
 			assert_eq!(System::block_number(), 10);
@@ -71,7 +71,7 @@ fn check_vesting_status() {
 			// Account 2 has started vesting by block 10
 			assert_eq!(Vesting::vesting_balance(&2), Some(user2_free_balance));
 			// Account 12 has started vesting by block 10
-			assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - 256 * 5));
+			assert_eq!(Vesting::vesting_balance(&12), Some(user12_free_balance - ED * 5));
 
 			System::set_block_number(30);
 			assert_eq!(System::block_number(), 30);
@@ -317,18 +317,18 @@ fn vested_transfer_works() {
 #[test]
 fn vested_transfer_correctly_fails() {
 	ExtBuilder::default()
-		.existential_deposit(256)
+		.existential_deposit(ED)
 		.build()
 		.execute_with(|| {
 			let user2_free_balance = Balances::free_balance(&2);
 			let user4_free_balance = Balances::free_balance(&4);
-			assert_eq!(user2_free_balance, 256 * 20);
-			assert_eq!(user4_free_balance, 256 * 40);
+			assert_eq!(user2_free_balance, ED * 20);
+			assert_eq!(user4_free_balance, ED * 40);
 
 			// Account 2 should already have a vesting schedule.
 			let user2_vesting_schedule = VestingInfo::new::<Test>(
-				256 * 20,
-				256, // Vesting over 20 blocks
+				ED * 20,
+				ED, // Vesting over 20 blocks
 				10,
 			);
 			assert_eq!(Vesting::vesting(&2).unwrap(), vec![user2_vesting_schedule]);
@@ -342,9 +342,9 @@ fn vested_transfer_correctly_fails() {
 			);
 
 			// `per_block` is 0, which would result in a schedule with infinite duration.
-			let schedule_per_block_0 = VestingInfo::new::<Test>(256, 0, 10);
+			let schedule_per_block_0 = VestingInfo::new::<Test>(<Test as Config>::MinVestedTransfer::get() + 1, 0, 10);
 			assert_noop!(
-				Vesting::vested_transfer(Some(3).into(), 4, schedule_per_block_0),
+				Vesting::vested_transfer(Some(13).into(), 4, schedule_per_block_0),
 				Error::<Test>::InfiniteSchedule,
 			);
 
@@ -374,15 +374,16 @@ fn vested_transfer_allows_max_schedules() {
 		let mut user_4_free_balance = Balances::free_balance(&4);
 		let max_schedules = <Test as Config>::MaxVestingSchedules::get();
 		let sched = VestingInfo::new::<Test>(
-			ED, 1, // Vest over 256 blocks.
+			<Test as Config>::MinVestedTransfer::get(),
+			1, // Vest over 2 * 256 blocks.
 			10,
 		);
 		// Add max amount schedules to user 4.
 		for _ in 0 .. max_schedules {
-			assert_ok!(Vesting::vested_transfer(Some(3).into(), 4, sched));
+			assert_ok!(Vesting::vested_transfer(Some(13).into(), 4, sched));
 		}
 		// The schedules count towards vesting balance
-		let transferred_amount = ED * max_schedules as u64;
+		let transferred_amount = <Test as Config>::MinVestedTransfer::get() * max_schedules as u64;
 		assert_eq!(Vesting::vesting_balance(&4), Some(transferred_amount));
 		// and free balance.
 		user_4_free_balance += transferred_amount;
@@ -397,7 +398,7 @@ fn vested_transfer_allows_max_schedules() {
 		assert_eq!(Balances::free_balance(&4), user_4_free_balance);
 
 		// Account 4 has fully vested when all the schedules end
-		System::set_block_number(ED + 10);
+		System::set_block_number(<Test as Config>::MinVestedTransfer::get() + 10);
 		assert_eq!(Vesting::vesting_balance(&4), Some(0));
 		// and after unlocking its schedules are removed from storage.
 		assert_ok!(Vesting::vest(Some(4).into()));
@@ -408,18 +409,18 @@ fn vested_transfer_allows_max_schedules() {
 #[test]
 fn force_vested_transfer_works() {
 	ExtBuilder::default()
-		.existential_deposit(256)
+		.existential_deposit(ED)
 		.build()
 		.execute_with(|| {
 			let user3_free_balance = Balances::free_balance(&3);
 			let user4_free_balance = Balances::free_balance(&4);
-			assert_eq!(user3_free_balance, 256 * 30);
-			assert_eq!(user4_free_balance, 256 * 40);
+			assert_eq!(user3_free_balance, ED * 30);
+			assert_eq!(user4_free_balance, ED * 40);
 			// Account 4 should not have any vesting yet.
 			assert_eq!(Vesting::vesting(&4), None);
 			// Make the schedule for the new transfer.
 			let new_vesting_schedule = VestingInfo::new::<Test>(
-				256 * 5,
+				ED * 5,
 				64, // Vesting over 20 blocks
 				10,
 			);
@@ -439,11 +440,11 @@ fn force_vested_transfer_works() {
 			assert_eq!(Vesting::vesting(&4).unwrap().len(), 1);
 			// Ensure the transfer happened correctly.
 			let user3_free_balance_updated = Balances::free_balance(&3);
-			assert_eq!(user3_free_balance_updated, 256 * 25);
+			assert_eq!(user3_free_balance_updated, ED * 25);
 			let user4_free_balance_updated = Balances::free_balance(&4);
-			assert_eq!(user4_free_balance_updated, 256 * 45);
-			// Account 4 has 5 * 256 locked.
-			assert_eq!(Vesting::vesting_balance(&4), Some(256 * 5));
+			assert_eq!(user4_free_balance_updated, ED * 45);
+			// Account 4 has 5 * ED locked.
+			assert_eq!(Vesting::vesting_balance(&4), Some(ED * 5));
 
 			System::set_block_number(20);
 			assert_eq!(System::block_number(), 20);
@@ -465,17 +466,17 @@ fn force_vested_transfer_works() {
 #[test]
 fn force_vested_transfer_correctly_fails() {
 	ExtBuilder::default()
-		.existential_deposit(256)
+		.existential_deposit(ED)
 		.build()
 		.execute_with(|| {
 			let user2_free_balance = Balances::free_balance(&2);
 			let user4_free_balance = Balances::free_balance(&4);
-			assert_eq!(user2_free_balance, 256 * 20);
-			assert_eq!(user4_free_balance, 256 * 40);
+			assert_eq!(user2_free_balance, ED * 20);
+			assert_eq!(user4_free_balance, ED * 40);
 			// Account 2 should already have a vesting schedule.
 			let user2_vesting_schedule = VestingInfo::new::<Test>(
-				256 * 20,
-				256, // Vesting over 20 blocks
+				ED * 20,
+				ED, // Vesting over 20 blocks
 				10,
 			);
 			assert_eq!(Vesting::vesting(&2).unwrap(), vec![user2_vesting_schedule]);
@@ -494,9 +495,10 @@ fn force_vested_transfer_correctly_fails() {
 			);
 
 			// `per_block` is 0.
-			let schedule_per_block_0 = VestingInfo::new::<Test>(256, 0, 10);
+			let schedule_per_block_0 =
+				VestingInfo::new::<Test>(<Test as Config>::MinVestedTransfer::get(), 0, 10);
 			assert_noop!(
-				Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_per_block_0),
+				Vesting::force_vested_transfer(RawOrigin::Root.into(), 13, 4, schedule_per_block_0),
 				Error::<Test>::InfiniteSchedule,
 			);
 
@@ -526,15 +528,16 @@ fn force_vested_transfer_allows_max_schedules() {
 		let mut user_4_free_balance = Balances::free_balance(&4);
 		let max_schedules = <Test as Config>::MaxVestingSchedules::get();
 		let sched = VestingInfo::new::<Test>(
-			ED, 1, // Vest over 256 blocks.
+			<Test as Config>::MinVestedTransfer::get(),
+			1, // Vest over 256 blocks.
 			10,
 		);
 		// Add max amount schedules to user 4.
 		for _ in 0 .. max_schedules {
-			assert_ok!(Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, sched));
+			assert_ok!(Vesting::force_vested_transfer(RawOrigin::Root.into(), 13, 4, sched));
 		}
 		// The schedules count towards vesting balance.
-		let transferred_amount = ED * max_schedules as u64;
+		let transferred_amount = <Test as Config>::MinVestedTransfer::get() * max_schedules as u64;
 		assert_eq!(Vesting::vesting_balance(&4), Some(transferred_amount));
 		// and free balance.
 		user_4_free_balance += transferred_amount;
@@ -549,7 +552,7 @@ fn force_vested_transfer_allows_max_schedules() {
 		assert_eq!(Balances::free_balance(&4), user_4_free_balance);
 
 		// Account 4 has fully vested when all the schedules end
-		System::set_block_number(ED + 10);
+		System::set_block_number(<Test as Config>::MinVestedTransfer::get() + 10);
 		assert_eq!(Vesting::vesting_balance(&4), Some(0));
 		// and after unlocking its schedules are removed from storage.
 		assert_ok!(Vesting::vest(Some(4).into()));
@@ -601,8 +604,8 @@ fn merge_ongoing_schedules() {
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0]);
 
 		let sched1 = VestingInfo::new::<Test>(
-			256 * 10,
-			256,                         // Vest over 10 blocks
+			ED * 10,
+			ED,                         // Vest over 10 blocks
 			sched0.starting_block() + 5, // Start at block 15
 		);
 		Vesting::vested_transfer(Some(4).into(), 2, sched1).unwrap();

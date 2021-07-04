@@ -85,7 +85,9 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub const MinVestedTransfer: u64 = 10;
+	// Ideally all tests should use a value less than `MinVestedTransfer` when configuring the
+	// existential deposit.
+	pub const MinVestedTransfer: u64 = 256 * 2;
 	pub static ExistentialDeposit: u64 = 0;
 	pub const MaxVestingSchedules: u32 = 3;
 }
@@ -129,6 +131,7 @@ impl ExtBuilder {
 				(3, 30 * self.existential_deposit),
 				(4, 40 * self.existential_deposit),
 				(12, 10 * self.existential_deposit),
+				(13, 9999 * self.existential_deposit),
 			],
 		}
 		.assimilate_storage(&mut t)
