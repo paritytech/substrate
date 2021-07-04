@@ -704,7 +704,7 @@ fn merging_shifts_other_schedules_index() {
 }
 
 #[test]
-fn merge_ongoing_and_yet_to_be_started_schedule() {
+fn merge_ongoing_and_yet_to_be_started_schedules() {
 	// Merge an ongoing schedule that has had `vest` called and a schedule that has not already
 	// started.
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
@@ -768,7 +768,7 @@ fn merge_ongoing_and_yet_to_be_started_schedule() {
 }
 
 #[test]
-fn merge_finishing_and_ongoing_schedule() {
+fn merge_finished_and_ongoing_schedules() {
 	// If a schedule finishes by the current block we treat the ongoing schedule,
 	// without any alterations, as the merged one.
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
@@ -861,13 +861,62 @@ fn merge_finishing_schedules_does_not_create_a_new_one() {
 		assert_eq!(Balances::usable_balance(&2), 0);
 
 		// Merge schedule 0 and 1.
-		Vesting::merge_schedules(Some(2).into(), 0, 1).unwrap();
+		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
 		// The user no longer has any more vesting schedules because they both ended at the
-		// block they where merged.
+		// block they where merged,
 		assert!(!<VestingStorage<Test>>::contains_key(&2));
-		// And their usable balance has increased by the total amount locked in the merged
+		// and their usable balance has increased by the total amount locked in the merged
 		// schedules.
 		assert_eq!(Balances::usable_balance(&2), sched0.locked() + sched1.locked());
+	});
+}
+
+#[test]
+fn merge_finished_and_yet_to_be_started_schedules() {
+	// Merging a schedule that has finished and on that has not yet started results in just the not
+	// yet started schedule being moved to the back.
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		// Account 2 should already have a vesting schedule.
+		let sched0 = VestingInfo::new::<Test>(
+			ED * 20,
+			ED, // 20 block duration.
+			10, // Ends at block 30
+		);
+		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0]);
+
+		let sched1 = VestingInfo::new::<Test>(
+			ED * 30,
+			ED * 2, // 30 block duration.
+			35,
+		);
+		assert_ok!(Vesting::vested_transfer(Some(13).into(), 2, sched1));
+		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1]);
+
+		let sched2 = VestingInfo::new::<Test>(
+			ED * 40,
+			ED, // 40 block duration.
+			30,
+		);
+		// Add a 3rd schedule to demonstrate how sched1 moves
+		assert_ok!(Vesting::vested_transfer(Some(13).into(), 2, sched2));
+		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1, sched2]);
+
+		System::set_block_number(30);
+
+		// At block 30, sched0 has finished unlocking while sched1 and sched2 are still fully locked,
+		assert_eq!(Vesting::vesting_balance(&2), Some(sched1.locked() + sched2.locked()));
+		// but since we have not vested usable balance is still 0.
+		assert_eq!(Balances::usable_balance(&2), 0);
+
+		// Merge schedule 0 and 1.
+		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
+
+		// sched0 is removed since it finished, and sched1 is removed and then pushed on the back
+		// because it is treated as the merged schedule
+		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched2, sched1]);
+
+		// The usable balance is updated because merging fully unlocked sched0.
+		assert_eq!(Balances::usable_balance(&2), sched0.locked());
 	});
 }
 
