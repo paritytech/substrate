@@ -47,8 +47,11 @@ fn add_vesting_schedules<T: Config>(
 	target: <T::Lookup as StaticLookup>::Source,
 	n: u32,
 ) -> Result<BalanceOf<T>, &'static str> {
-	let locked = ED * 20u32;
-	let per_block = ED; // Vest over 20 blocks
+	let min_transfer = T::MinVestedTransfer::get();
+	let per_block_duration_20 = min_transfer.checked_div(&20u32.into()).unwrap();
+
+	let locked = min_transfer;
+	let per_block = per_block_duration_20;
 	let starting_block = 1u32;
 
 	let source: T::AccountId = account("source", 0, SEED);
@@ -57,13 +60,16 @@ fn add_vesting_schedules<T: Config>(
 
 	System::<T>::set_block_number(T::BlockNumber::zero());
 
-	let mut total_locked = 0;
+	let mut total_locked: BalanceOf<T> = Zero::zero();
 	for _ in 0 .. n {
 		total_locked += locked;
 
-		let schedule =
-			VestingInfo::try_new::<T>(locked.into(), per_block.into(), starting_block.into())?;
-		assert_ok!(Vesting::<T>::do_vested_transfer(source_lookup.clone(), target.clone(), schedule));
+		let schedule = VestingInfo::new::<T>(locked, per_block, starting_block.into());
+		assert_ok!(Vesting::<T>::do_vested_transfer(
+			source_lookup.clone(),
+			target.clone(),
+			schedule
+		));
 	}
 
 	Ok(total_locked.into())
@@ -71,7 +77,7 @@ fn add_vesting_schedules<T: Config>(
 
 benchmarks! {
 	vest_locked {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
@@ -97,7 +103,7 @@ benchmarks! {
 	}
 
 	vest_unlocked {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
@@ -123,7 +129,7 @@ benchmarks! {
 	}
 
 	vest_other_locked {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
@@ -151,7 +157,7 @@ benchmarks! {
 	}
 
 	vest_other_unlocked {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
@@ -179,7 +185,7 @@ benchmarks! {
 	}
 
 	last_vested_transfer {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -192,15 +198,15 @@ benchmarks! {
 		let one_less_than_max_vesting = T::MaxVestingSchedules::get() - 1;
 		let mut expected_balance = add_vesting_schedules::<T>(target_lookup.clone(), one_less_than_max_vesting)?;
 
-		let duration = 10u32;
-		let transfer_amount = (ED * duration).into();
+		let transfer_amount = T::MinVestedTransfer::get();
+		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
 		expected_balance += transfer_amount;
 
-		let vesting_schedule = VestingInfo::try_new::<T>(
+		let vesting_schedule = VestingInfo::new::<T>(
 			transfer_amount,
-			duration.into(),
+			per_block_duration_20,
 			1u32.into(),
-		)?;
+		);
 	}: vested_transfer(RawOrigin::Signed(caller), target_lookup, vesting_schedule)
 	verify {
 		assert_eq!(
@@ -216,7 +222,7 @@ benchmarks! {
 	}
 
 	first_vested_transfer {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -226,14 +232,14 @@ benchmarks! {
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
 
-		let duration = 10u32;
-		let transfer_amount = (ED * duration).into();
+		let transfer_amount = T::MinVestedTransfer::get();
+		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
 
-		let vesting_schedule = VestingInfo::try_new::<T>(
+		let vesting_schedule = VestingInfo::new::<T>(
 			transfer_amount,
-			duration.into(),
+			per_block_duration_20,
 			1u32.into(),
-		)?;
+		);
 
 	}:  vested_transfer(RawOrigin::Signed(caller), target_lookup, vesting_schedule)
 	verify {
@@ -250,7 +256,7 @@ benchmarks! {
 	}
 
 	first_force_vested_transfer {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let source: T::AccountId = account("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
@@ -261,14 +267,14 @@ benchmarks! {
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
 
-		let duration = 10u32;
-		let transfer_amount = (ED * duration).into();
+		let transfer_amount = T::MinVestedTransfer::get();
+		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
 
-		let vesting_schedule = VestingInfo::try_new::<T>(
+		let vesting_schedule = VestingInfo::new::<T>(
 			transfer_amount,
-			duration.into(),
+			per_block_duration_20,
 			1u32.into(),
-		)?;
+		);
 	}: force_vested_transfer(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
 	verify {
 		assert_eq!(
@@ -284,7 +290,7 @@ benchmarks! {
 	}
 
 	last_force_vested_transfer {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let source: T::AccountId = account("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
@@ -298,15 +304,15 @@ benchmarks! {
 		let one_less_than_max_vesting = T::MaxVestingSchedules::get() - 1;
 		let mut expected_balance = add_vesting_schedules::<T>(target_lookup.clone(), one_less_than_max_vesting)?;
 
-		let duration = 10u32;
-		let transfer_amount = (ED * duration).into();
+		let transfer_amount = T::MinVestedTransfer::get();
+		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
 		expected_balance += transfer_amount;
 
-		let vesting_schedule = VestingInfo::try_new::<T>(
+		let vesting_schedule = VestingInfo::new::<T>(
 			transfer_amount,
-			duration.into(),
+			per_block_duration_20,
 			1u32.into(),
-		)?;
+		);
 	}: force_vested_transfer(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
 	verify {
 		assert_eq!(
@@ -322,7 +328,7 @@ benchmarks! {
 		}
 
 	not_unlocking_merge_schedules {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
@@ -330,6 +336,9 @@ benchmarks! {
 		add_locks::<T>(&caller, l as u8);
 		// Add max vesting schedules
 		let expected_balance = add_vesting_schedules::<T>(caller_lookup.clone(), T::MaxVestingSchedules::get())?;
+		// Values of the schedules added by `add_vesting_schedules`.
+		let transfer_amount = T::MinVestedTransfer::get();
+		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
 
 		// Schedules are not vesting at block 0
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
@@ -345,11 +354,11 @@ benchmarks! {
 		);
 	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, T::MaxVestingSchedules::get() - 1)
 	verify {
-		let expected_schedule = VestingInfo::try_new::<T>(
-			(ED * 40u32).into(),
-			(ED * 2u32).into(),
+		let expected_schedule = VestingInfo::new::<T>(
+			T::MinVestedTransfer::get() * 2u32.into(),
+			per_block_duration_20 * 2u32.into(),
 			1u32.into(),
-		)?;
+		);
 		let expected_index = (T::MaxVestingSchedules::get() - 2) as usize;
 		assert_eq!(
 			Vesting::<T>::vesting(&caller).unwrap()[expected_index],
@@ -368,7 +377,7 @@ benchmarks! {
 	}
 
 	unlocking_merge_schedules {
-		let l in 0 .. MaxLocksOf::<T>::get();
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
@@ -376,6 +385,9 @@ benchmarks! {
 		add_locks::<T>(&caller, l as u8);
 		// Add max vesting schedules
 		let mut expected_balance = add_vesting_schedules::<T>(caller_lookup.clone(), T::MaxVestingSchedules::get())?;
+		// Values of the schedules added by `add_vesting_schedules`.
+		let transfer_amount = T::MinVestedTransfer::get();
+		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
 
 		// Go to half way through all the schedules duration. (They all start at 1, and have a duration of 20).
 		System::<T>::set_block_number(11u32.into());
@@ -393,11 +405,11 @@ benchmarks! {
 		);
 	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, T::MaxVestingSchedules::get() - 1)
 	verify {
-		let expected_schedule = VestingInfo::try_new::<T>(
-			(ED * 20u32).into(),
-			(ED * 2u32).into(),
+		let expected_schedule = VestingInfo::new::<T>(
+			transfer_amount,
+			per_block_duration_20 * 2u32.into(),
 			11u32.into(),
-		)?;
+		);
 		let expected_index = (T::MaxVestingSchedules::get() - 2) as usize;
 		assert_eq!(
 			Vesting::<T>::vesting(&caller).unwrap()[expected_index],

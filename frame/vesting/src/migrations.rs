@@ -27,12 +27,10 @@ pub(crate) mod v1 {
 	pub(crate) fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 		assert!(StorageVersion::<T>::get() == Releases::V0, "Storage version too high.");
 
-		// TODO: figure out how to iterate over old type of values
-		// Vesting::<T>::translate::<VestingInfo<BalanceOf<T>, T::BlockNumber>, _>(
-		// 	|_key, vesting_info| {
-		// 		assert!(vesting_info.per_block() > Zero::zero(), "A schedule with per_block of 0 exists");
-		// 		Some(vesting_info)
-		// });
+		log::debug!(
+			target: LOG_TARGET,
+			"Vesting storage version v1 **PRE** migration checks succesful!"
+		);
 
 		Ok(())
 	}
@@ -59,17 +57,23 @@ pub(crate) mod v1 {
 		assert_eq!(StorageVersion::<T>::get(), Releases::V1);
 
 		for (key, schedules) in Vesting::<T>::iter() {
-			log::debug!(target: LOG_TARGET, "[post_migrate] Vesting key {}", key);
 			// Assert the new bound vec respects size.
 			assert!(schedules.len() > 0, "A bounded vec with no items was created.");
-			assert!(schedules.len() <= T::MaxVestingSchedules::get() as usize, "A bounded vec with too many items was created.");
+			assert!(
+				schedules.len() <= T::MaxVestingSchedules::get() as usize,
+				"A bounded vec with too many items was created."
+			);
 
 			for s in schedules {
-				// Check for infinite schedules
+				// Check for infinite schedules.
 				assert!(s.per_block() > Zero::zero(), "A schedule with per_block of 0 exists");
 			}
 		}
 
+		log::debug!(
+			target: LOG_TARGET,
+			"Vesting storage version v1 **POST** migration checks succesful!"
+		);
 		Ok(())
 	}
 }

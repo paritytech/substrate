@@ -84,7 +84,7 @@ type MaxLocksOf<T> =
 const VESTING_ID: LockIdentifier = *b"vesting ";
 const LOG_TARGET: &'static str = "runtime::vesting";
 
-// A value placed in storage that represents the current version of the Staking storage.
+// A value placed in storage that represents the current version of the Vesting storage.
 // This value is used by `on_runtime_upgrade` to determine whether we run storage migration logic.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 enum Releases {
@@ -94,8 +94,6 @@ enum Releases {
 
 impl Default for Releases {
 	fn default() -> Self {
-		// TODO: verify assumption that this will be value in storages
-		// when we try to do runtime upgrade
 		Releases::V0
 	}
 }
