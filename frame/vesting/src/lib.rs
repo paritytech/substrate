@@ -45,7 +45,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod migration;
+mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -150,13 +150,23 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			migrations::v1::pre_migrate::<T>()
+		}
+
 		fn on_runtime_upgrade() -> Weight {
 			if StorageVersion::<T>::get() == Releases::V0 {
 				StorageVersion::<T>::put(Releases::V1);
-				migration::v1::migrate::<T>()
+				migrations::v1::migrate::<T>()
 			} else {
 				T::DbWeight::get().reads(1)
 			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			migrations::v1::post_migrate::<T>()
 		}
 
 		fn integrity_test() {
