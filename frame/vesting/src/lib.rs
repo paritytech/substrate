@@ -481,7 +481,7 @@ impl<T: Config> Pallet<T> {
 			match locked.checked_div(&duration) {
 				// The logic of `ending_block` guarantees that each schedule ends at least a block
 				// after it starts and since we take the max starting and ending_block we should never
-				// get here
+				// get here.
 				None => locked,
 				Some(per_block) => per_block,
 			}
@@ -521,7 +521,7 @@ impl<T: Config> Pallet<T> {
 			ExistenceRequirement::AllowDeath,
 		)?;
 
-		// We can't let this fail because the currency transfer has already happened
+		// We can't let this fail because the currency transfer has already happened.
 		Self::add_vesting_schedule(
 			&target,
 			schedule.locked(),

@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use frame_support::{assert_noop, assert_ok, assert_storage_noop};
+use frame_support::dispatch::EncodeLike;
 use frame_system::RawOrigin;
 use sp_runtime::traits::{BadOrigin, Identity};
 
@@ -24,6 +25,18 @@ use crate::mock::{Balances, ExtBuilder, System, Test, Vesting};
 
 /// A default existential deposit.
 const ED: u64 = 256;
+
+/// Calls vest, and asserts that there is no entry for `account`
+/// in the `Vesting` storage item.
+fn vest_and_assert_no_vesting<T>(account: u64)
+where
+	u64: EncodeLike<<T as frame_system::Config>::AccountId>,
+	T: pallet::Config,
+{
+		// Its ok for this to fail because the user may already have no schedules.
+		let _result = Vesting::vest(Some(account).into());
+		assert!(!<VestingStorage<T>>::contains_key(account));
+}
 
 #[test]
 fn check_vesting_status() {
@@ -81,12 +94,9 @@ fn check_vesting_status() {
 			assert_eq!(Vesting::vesting_balance(&12), Some(0)); // Account 2 has fully vested by block 30
 
 			// Once we unlock the funds, they are removed from storage.
-			assert_ok!(Vesting::vest(Some(1).into()));
-			assert!(!<VestingStorage<Test>>::contains_key(&1));
-			assert_ok!(Vesting::vest(Some(2).into()));
-			assert!(!<VestingStorage<Test>>::contains_key(&2));
-			assert_ok!(Vesting::vest(Some(12).into()));
-			assert!(!<VestingStorage<Test>>::contains_key(&12));
+			vest_and_assert_no_vesting::<Test>(1);
+			vest_and_assert_no_vesting::<Test>(2);
+			vest_and_assert_no_vesting::<Test>(12);
 		});
 }
 
@@ -161,11 +171,10 @@ fn check_vesting_status_for_multi_schedule_account() {
 		assert_eq!(System::block_number(), 35);
 		assert_eq!(Vesting::vesting_balance(&2), Some(0));
 		// Since we have not called any extrinsics that would unlock funds the schedules
-		// are still in storage.
+		// are still in storage,
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1, sched2]);
-		// But once we unlock the funds, they are removed from storage.
-		assert_ok!(Vesting::vest(Some(2).into()));
-		assert!(!<VestingStorage<Test>>::contains_key(&2));
+		// but once we unlock the funds, they are removed from storage.
+		vest_and_assert_no_vesting::<Test>(2);
 	});
 }
 
@@ -309,8 +318,7 @@ fn vested_transfer_works() {
 			// Account 4 has fully vested
 			assert_eq!(Vesting::vesting_balance(&4), Some(0));
 			// and after unlocking its schedules are removed from storage.
-			assert_ok!(Vesting::vest(Some(4).into()));
-			assert!(!<VestingStorage<Test>>::contains_key(&4));
+			vest_and_assert_no_vesting::<Test>(4);
 		});
 }
 
@@ -365,6 +373,8 @@ fn vested_transfer_correctly_fails() {
 			// Free balance has not changed.
 			assert_eq!(user2_free_balance, Balances::free_balance(&2));
 			assert_eq!(user4_free_balance, Balances::free_balance(&4));
+			// Account 4 has no schedules.
+			vest_and_assert_no_vesting::<Test>(4);
 		});
 }
 
@@ -401,8 +411,7 @@ fn vested_transfer_allows_max_schedules() {
 		System::set_block_number(<Test as Config>::MinVestedTransfer::get() + 10);
 		assert_eq!(Vesting::vesting_balance(&4), Some(0));
 		// and after unlocking its schedules are removed from storage.
-		assert_ok!(Vesting::vest(Some(4).into()));
-		assert!(!<VestingStorage<Test>>::contains_key(&4));
+		vest_and_assert_no_vesting::<Test>(4);
 	});
 }
 
@@ -455,11 +464,10 @@ fn force_vested_transfer_works() {
 			System::set_block_number(30);
 			assert_eq!(System::block_number(), 30);
 
-			// Account 4 has fully vested.
+			// Account 4 has fully vested,
 			assert_eq!(Vesting::vesting_balance(&4), Some(0));
 			// and after unlocking its schedules are removed from storage.
-			assert_ok!(Vesting::vest(Some(4).into()));
-			assert!(!<VestingStorage<Test>>::contains_key(&4));
+			vest_and_assert_no_vesting::<Test>(4);
 		});
 }
 
@@ -519,6 +527,8 @@ fn force_vested_transfer_correctly_fails() {
 			// Verify no currency transfer happened.
 			assert_eq!(user2_free_balance, Balances::free_balance(&2));
 			assert_eq!(user4_free_balance, Balances::free_balance(&4));
+			// Account 4 has no schedules.
+			vest_and_assert_no_vesting::<Test>(4);
 		});
 }
 
@@ -555,8 +565,7 @@ fn force_vested_transfer_allows_max_schedules() {
 		System::set_block_number(<Test as Config>::MinVestedTransfer::get() + 10);
 		assert_eq!(Vesting::vesting_balance(&4), Some(0));
 		// and after unlocking its schedules are removed from storage.
-		assert_ok!(Vesting::vest(Some(4).into()));
-		assert!(!<VestingStorage<Test>>::contains_key(&4));
+		vest_and_assert_no_vesting::<Test>(4);
 	});
 }
 
@@ -639,6 +648,10 @@ fn merge_ongoing_schedules() {
 
 		let sched2 = VestingInfo::new::<Test>(sched2_locked, sched2_per_block, cur_block);
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched2]);
+
+		// And just to double check, we assert the new merged schedule we be cleaned up as expected.
+		System::set_block_number(30);
+		vest_and_assert_no_vesting::<Test>(2);
 	});
 }
 
@@ -758,7 +771,8 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 		let sched2_locked =
 			sched0.locked_at::<Identity>(cur_block) + sched1.locked_at::<Identity>(cur_block);
 		// and will end at the max possible block.
-		let sched2_end = sched0.ending_block::<Identity, Test>().unwrap().max(sched1.ending_block::<Identity, Test>().unwrap());
+		let sched2_end = sched0.ending_block::<Identity, Test>().unwrap()
+			.max(sched1.ending_block::<Identity, Test>().unwrap());
 		let sched2_duration = sched2_end - sched2_start;
 		let sched2_per_block = sched2_locked / sched2_duration;
 
@@ -873,8 +887,6 @@ fn merge_finishing_schedules_does_not_create_a_new_one() {
 
 #[test]
 fn merge_finished_and_yet_to_be_started_schedules() {
-	// Merging a schedule that has finished and on that has not yet started results in just the not
-	// yet started schedule being moved to the back.
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		// Account 2 should already have a vesting schedule.
 		let sched0 = VestingInfo::new::<Test>(
