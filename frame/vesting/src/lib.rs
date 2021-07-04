@@ -45,6 +45,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+mod migration;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -82,6 +83,22 @@ type MaxLocksOf<T> =
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
 const LOG_TARGET: &'static str = "runtime::vesting";
+
+// A value placed in storage that represents the current version of the Staking storage.
+// This value is used by `on_runtime_upgrade` to determine whether we run storage migration logic.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+enum Releases {
+	V0,
+	V1,
+}
+
+impl Default for Releases {
+	fn default() -> Self {
+		// TODO: verify assumption that this will be value in storages
+		// when we try to do runtime upgrade
+		Releases::V0
+	}
+}
 
 /// Actions to take on a users `Vesting` storage entry.
 enum VestingAction {
@@ -133,6 +150,15 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if StorageVersion::<T>::get() == Releases::V0 {
+				StorageVersion::<T>::put(Releases::V1);
+				migration::v1::migrate::<T>()
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
 		fn integrity_test() {
 			assert!(T::MinVestedTransfer::get() >= <T as Config>::Currency::minimum_balance());
 			assert!(T::MaxVestingSchedules::get() > 0);
@@ -148,6 +174,12 @@ pub mod pallet {
 		T::AccountId,
 		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>,
 	>;
+
+	/// Storage version of the pallet.
+	///
+	/// New networks start with latest version, as determined by the genesis build.
+	#[pallet::storage]
+	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -171,6 +203,8 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			use sp_runtime::traits::Saturating;
+
+			StorageVersion::<T>::put(Releases::V1);
 
 			// Generate initial vesting configuration
 			// * who - Account which we are generating vesting configuration for
@@ -730,4 +764,9 @@ where
 		Self::write_lock(who, locked_now);
 		Ok(())
 	}
+
+	// TODO: migration tests
+	// 	- migration version changes as expected
+	//  - same checks as pre and post migrate
+	// TODO: test that genesis build has the correct migrations version
 }
