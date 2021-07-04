@@ -393,4 +393,3 @@ impl_benchmark_test_suite!(
 	crate::mock::new_test_ext(),
 	crate::mock::Test,
 );
-
