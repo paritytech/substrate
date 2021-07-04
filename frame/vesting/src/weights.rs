@@ -39,84 +39,98 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_vesting.
 pub trait WeightInfo {
-	fn vest_locked(l: u32, ) -> Weight;
-	fn vest_unlocked(l: u32, ) -> Weight;
-	fn vest_other_locked(l: u32, ) -> Weight;
-	fn vest_other_unlocked(l: u32, ) -> Weight;
-	fn last_vested_transfer(l: u32, ) -> Weight;
+	fn vest_locked(l: u32, s: u32, ) -> Weight;
+	fn vest_unlocked(l: u32, s: u32, ) -> Weight;
+	fn vest_other_locked(l: u32, s: u32, ) -> Weight;
+	fn vest_other_unlocked(l: u32, s: u32, ) -> Weight;
+	fn last_vested_transfer(l: u32, s: u32, ) -> Weight;
 	fn first_vested_transfer(l: u32, ) -> Weight;
 	fn first_force_vested_transfer(l: u32, ) -> Weight;
-	fn last_force_vested_transfer(l: u32, ) -> Weight;
-	fn not_unlocking_merge_schedules(l: u32, ) -> Weight;
-	fn unlocking_merge_schedules(l: u32, ) -> Weight;
+	fn last_force_vested_transfer(l: u32, s: u32, ) -> Weight;
+	fn not_unlocking_merge_schedules(l: u32, s: u32, ) -> Weight;
+	fn unlocking_merge_schedules(l: u32, s: u32, ) -> Weight;
 }
 
 /// Weights for pallet_vesting using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn vest_locked(l: u32, ) -> Weight {
-		(44_879_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((76_000 as Weight).saturating_mul(l as Weight))
+	fn vest_locked(l: u32, s: u32, ) -> Weight {
+		(50_388_000 as Weight)
+			// Standard Error: 57_000
+			.saturating_add((123_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 137_000
+			.saturating_add((183_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn vest_unlocked(l: u32, ) -> Weight {
-		(41_286_000 as Weight)
-			// Standard Error: 417_000
-			.saturating_add((331_000 as Weight).saturating_mul(l as Weight))
+	fn vest_unlocked(_l: u32, s: u32, ) -> Weight {
+		(62_248_000 as Weight)
+			// Standard Error: 429_000
+			.saturating_add((127_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn vest_other_locked(l: u32, ) -> Weight {
-		(40_099_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((140_000 as Weight).saturating_mul(l as Weight))
+	fn vest_other_locked(l: u32, s: u32, ) -> Weight {
+		(40_181_000 as Weight)
+			// Standard Error: 100_000
+			.saturating_add((295_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 239_000
+			.saturating_add((509_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
-	fn vest_other_unlocked(l: u32, ) -> Weight {
-		(39_132_000 as Weight)
-			// Standard Error: 93_000
-			.saturating_add((71_000 as Weight).saturating_mul(l as Weight))
+	fn vest_other_unlocked(l: u32, _s: u32, ) -> Weight {
+		(79_110_000 as Weight)
+			// Standard Error: 265_000
+			.saturating_add((17_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
-	fn last_vested_transfer(l: u32, ) -> Weight {
-		(61_648_000 as Weight)
-			// Standard Error: 565_000
-			.saturating_add((576_000 as Weight).saturating_mul(l as Weight))
+	fn last_vested_transfer(l: u32, s: u32, ) -> Weight {
+		(69_185_000 as Weight)
+			// Standard Error: 35_000
+			.saturating_add((183_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 85_000
+			.saturating_add((265_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn first_vested_transfer(_l: u32, ) -> Weight {
-		(113_429_000 as Weight)
+		(94_473_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn first_force_vested_transfer(l: u32, ) -> Weight {
-		(75_462_000 as Weight)
-			// Standard Error: 389_000
-			.saturating_add((538_000 as Weight).saturating_mul(l as Weight))
+		(75_989_000 as Weight)
+			// Standard Error: 22_000
+			.saturating_add((141_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
-	fn last_force_vested_transfer(l: u32, ) -> Weight {
-		(63_044_000 as Weight)
-			// Standard Error: 207_000
-			.saturating_add((386_000 as Weight).saturating_mul(l as Weight))
+	fn last_force_vested_transfer(l: u32, s: u32, ) -> Weight {
+		(72_107_000 as Weight)
+			// Standard Error: 121_000
+			.saturating_add((92_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 289_000
+			.saturating_add((346_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
-	fn not_unlocking_merge_schedules(_l: u32, ) -> Weight {
-		(71_495_000 as Weight)
+	fn not_unlocking_merge_schedules(l: u32, s: u32, ) -> Weight {
+		(50_015_000 as Weight)
+			// Standard Error: 54_000
+			.saturating_add((215_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 139_000
+			.saturating_add((375_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
-	fn unlocking_merge_schedules(l: u32, ) -> Weight {
-		(64_495_000 as Weight)
-			// Standard Error: 247_000
-			.saturating_add((124_000 as Weight).saturating_mul(l as Weight))
+	fn unlocking_merge_schedules(l: u32, s: u32, ) -> Weight {
+		(55_278_000 as Weight)
+			// Standard Error: 39_000
+			.saturating_add((154_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 101_000
+			.saturating_add((71_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -124,69 +138,83 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn vest_locked(l: u32, ) -> Weight {
-		(44_879_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((76_000 as Weight).saturating_mul(l as Weight))
+	fn vest_locked(l: u32, s: u32, ) -> Weight {
+		(50_388_000 as Weight)
+			// Standard Error: 57_000
+			.saturating_add((123_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 137_000
+			.saturating_add((183_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn vest_unlocked(l: u32, ) -> Weight {
-		(41_286_000 as Weight)
-			// Standard Error: 417_000
-			.saturating_add((331_000 as Weight).saturating_mul(l as Weight))
+	fn vest_unlocked(_l: u32, s: u32, ) -> Weight {
+		(62_248_000 as Weight)
+			// Standard Error: 429_000
+			.saturating_add((127_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn vest_other_locked(l: u32, ) -> Weight {
-		(40_099_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((140_000 as Weight).saturating_mul(l as Weight))
+	fn vest_other_locked(l: u32, s: u32, ) -> Weight {
+		(40_181_000 as Weight)
+			// Standard Error: 100_000
+			.saturating_add((295_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 239_000
+			.saturating_add((509_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	fn vest_other_unlocked(l: u32, ) -> Weight {
-		(39_132_000 as Weight)
-			// Standard Error: 93_000
-			.saturating_add((71_000 as Weight).saturating_mul(l as Weight))
+	fn vest_other_unlocked(l: u32, _s: u32, ) -> Weight {
+		(79_110_000 as Weight)
+			// Standard Error: 265_000
+			.saturating_add((17_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	fn last_vested_transfer(l: u32, ) -> Weight {
-		(61_648_000 as Weight)
-			// Standard Error: 565_000
-			.saturating_add((576_000 as Weight).saturating_mul(l as Weight))
+	fn last_vested_transfer(l: u32, s: u32, ) -> Weight {
+		(69_185_000 as Weight)
+			// Standard Error: 35_000
+			.saturating_add((183_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 85_000
+			.saturating_add((265_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn first_vested_transfer(_l: u32, ) -> Weight {
-		(113_429_000 as Weight)
+		(94_473_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn first_force_vested_transfer(l: u32, ) -> Weight {
-		(75_462_000 as Weight)
-			// Standard Error: 389_000
-			.saturating_add((538_000 as Weight).saturating_mul(l as Weight))
+		(75_989_000 as Weight)
+			// Standard Error: 22_000
+			.saturating_add((141_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
-	fn last_force_vested_transfer(l: u32, ) -> Weight {
-		(63_044_000 as Weight)
-			// Standard Error: 207_000
-			.saturating_add((386_000 as Weight).saturating_mul(l as Weight))
+	fn last_force_vested_transfer(l: u32, s: u32, ) -> Weight {
+		(72_107_000 as Weight)
+			// Standard Error: 121_000
+			.saturating_add((92_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 289_000
+			.saturating_add((346_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
-	fn not_unlocking_merge_schedules(_l: u32, ) -> Weight {
-		(71_495_000 as Weight)
+	fn not_unlocking_merge_schedules(l: u32, s: u32, ) -> Weight {
+		(50_015_000 as Weight)
+			// Standard Error: 54_000
+			.saturating_add((215_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 139_000
+			.saturating_add((375_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
-	fn unlocking_merge_schedules(l: u32, ) -> Weight {
-		(64_495_000 as Weight)
-			// Standard Error: 247_000
-			.saturating_add((124_000 as Weight).saturating_mul(l as Weight))
+	fn unlocking_merge_schedules(l: u32, s: u32, ) -> Weight {
+		(55_278_000 as Weight)
+			// Standard Error: 39_000
+			.saturating_add((154_000 as Weight).saturating_mul(l as Weight))
+			// Standard Error: 101_000
+			.saturating_add((71_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}

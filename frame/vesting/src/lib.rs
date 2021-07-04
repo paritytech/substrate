@@ -289,8 +289,8 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::vest_locked(MaxLocksOf::<T>::get())
-			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get()))
+		#[pallet::weight(T::WeightInfo::vest_locked(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
+			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get()))
 		)]
 		pub fn vest(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -312,8 +312,8 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get())
-			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get()))
+		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
+			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get()))
 		)]
 		pub fn vest_other(
 			origin: OriginFor<T>,
@@ -340,7 +340,7 @@ pub mod pallet {
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		/// # </weight>
 		#[pallet::weight(
-			T::WeightInfo::last_vested_transfer(MaxLocksOf::<T>::get())
+			T::WeightInfo::last_vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
 			.max(T::WeightInfo::first_vested_transfer(MaxLocksOf::<T>::get()))
 		)]
 		pub fn vested_transfer(
@@ -371,7 +371,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight(
 			T::WeightInfo::first_force_vested_transfer(MaxLocksOf::<T>::get())
-			.max(T::WeightInfo::last_force_vested_transfer(MaxLocksOf::<T>::get()))
+			.max(T::WeightInfo::last_force_vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get()))
 		)]
 		pub fn force_vested_transfer(
 			origin: OriginFor<T>,
@@ -403,8 +403,8 @@ pub mod pallet {
 		/// - `schedule1_index`: index of the first schedule to merge.
 		/// - `schedule2_index`: index of the second schedule to merge.
 		#[pallet::weight(
-			T::WeightInfo::not_unlocking_merge_schedules(MaxLocksOf::<T>::get())
-			.max(T::WeightInfo::unlocking_merge_schedules(MaxLocksOf::<T>::get()))
+			T::WeightInfo::not_unlocking_merge_schedules(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
+			.max(T::WeightInfo::unlocking_merge_schedules(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get()))
 		)]
 		pub fn merge_schedules(
 			origin: OriginFor<T>,
