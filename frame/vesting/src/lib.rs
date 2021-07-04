@@ -464,7 +464,7 @@ pub mod pallet {
 					locked_now == Zero::zero() && schedules.len() == 0
 			);
 			if let Err(e) = Self::write_vesting(&who, schedules) {
-				// The write should not fail because that would mean their where too
+				// The write should not fail because that would mean their were too
 				// many schedules to start out with.
 				log::warn!(target: LOG_TARGET, "an account has too many vesting schedules",);
 				return e.into();
@@ -655,7 +655,7 @@ impl<T: Config> Pallet<T> {
 		);
 
 		if let Err(e) = Self::write_vesting(&who, schedules) {
-			// The write should not fail because that would mean their where too
+			// The write should not fail because that would mean their were too
 			// many schedules to start out with.
 			log::warn!(target: LOG_TARGET, "an account has too many vesting schedules",);
 			return e.into();
