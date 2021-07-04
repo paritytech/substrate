@@ -131,6 +131,14 @@ pub mod pallet {
 		type MaxVestingSchedules: Get<u32>;
 	}
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn integrity_test() {
+			assert!(T::MinVestedTransfer::get() >= <T as Config>::Currency::minimum_balance());
+			assert!(T::MaxVestingSchedules::get() > 0);
+		}
+	}
+
 	/// Information regarding the vesting of a given account.
 	#[pallet::storage]
 	#[pallet::getter(fn vesting)]
@@ -138,7 +146,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>
+		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>,
 	>;
 
 	#[pallet::pallet]
