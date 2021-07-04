@@ -349,6 +349,8 @@ impl FreeingBumpHeapAllocator {
 			return Err(error("the allocator has been poisoned"))
 		}
 
+		log::debug!(target: "wasm-heap", "requesting an allocation of size {:?}", size);
+
 		let bomb = PoisonBomb { poisoned: &mut self.poisoned };
 		let order = Order::from_size(size)?;
 
