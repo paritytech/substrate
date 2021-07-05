@@ -1307,7 +1307,7 @@ impl<T: Config> Pallet<T> {
 		// do some checks.
 		debug_assert_eq!(buffer, snapshot.encode());
 		// buffer should have not re-allocated since.
-		debug_assert_eq!(buffer.len(), size);
+		debug_assert!(buffer.len() == size && size == buffer.capacity());
 
 		sp_io::storage::set(&<Snapshot<T>>::hashed_key(), &buffer);
 		Ok(w1.saturating_add(w2).saturating_add(w3).saturating_add(T::DbWeight::get().writes(3)))
