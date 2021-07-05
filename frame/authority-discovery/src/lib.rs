@@ -291,7 +291,10 @@ mod tests {
 			.unwrap();
 
 
-		GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig{keys: Default::default()}, &mut t).unwrap();
+		GenesisBuild::<Test>::assimilate_storage(
+			&pallet_authority_discovery::GenesisConfig{keys: vec![]},
+			&mut t
+		).unwrap();
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
