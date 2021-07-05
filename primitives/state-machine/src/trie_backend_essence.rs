@@ -50,8 +50,8 @@ pub trait Storage<H: Hasher>: Send + Sync {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 }
 
-#[cfg(feature = "std")]
 /// Local cache for child root.
+#[cfg(feature = "std")]
 pub(crate) struct Cache {
 	pub child_root: HashMap<Vec<u8>, Option<Vec<u8>>>,
 }
