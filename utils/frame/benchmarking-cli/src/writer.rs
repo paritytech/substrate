@@ -355,7 +355,7 @@ fn add_storage_comments(
 	results: &[BenchmarkResults],
 	storage_info: &[StorageInfo],
 ) {
-	let storage_info_map = storage_info.iter().map(|info| (info.prefix, info))
+	let storage_info_map = storage_info.iter().map(|info| (info.prefix.clone(), info))
 		.collect::<HashMap<_, _>>();
 	// This tracks the keys we already identified, so we only generate a single comment.
 	let mut identified = HashMap::new();

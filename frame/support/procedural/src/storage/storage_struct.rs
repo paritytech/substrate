@@ -281,7 +281,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::storage_prefix().to_vec(),
 										prefix: <
 											#storage_struct as #scrate::#storage_generator_trait
-										>::storage_value_final_key(),
+										>::storage_value_final_key().to_vec(),
 										max_values: Some(1),
 										max_size: Some(max_size),
 									}
@@ -325,7 +325,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										prefix: <
 											#storage_struct
 											as #scrate::storage::StoragePrefixedMap<#value_type>
-										>::final_prefix(),
+										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: Some(max_size),
 									}
@@ -375,7 +375,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										prefix: <
 											#storage_struct
 											as #scrate::storage::StoragePrefixedMap<#value_type>
-										>::final_prefix(),
+										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: Some(max_size),
 									}
@@ -418,7 +418,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										prefix: <
 											#storage_struct
 											as #scrate::storage::StoragePrefixedMap<#value_type>
-										>::final_prefix(),
+										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: Some(max_size),
 									}
@@ -451,7 +451,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										>::storage_prefix().to_vec(),
 										prefix: <
 											#storage_struct as #scrate::#storage_generator_trait
-										>::storage_value_final_key(),
+										>::storage_value_final_key().to_vec(),
 										max_values: Some(1),
 										max_size: None,
 									}
@@ -482,7 +482,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										prefix: <
 											#storage_struct
 											as #scrate::storage::StoragePrefixedMap<#value_type>
-										>::final_prefix(),
+										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: None,
 									}
@@ -513,7 +513,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										prefix: <
 											#storage_struct
 											as #scrate::storage::StoragePrefixedMap<#value_type>
-										>::final_prefix(),
+										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: None,
 									}
@@ -544,7 +544,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 										prefix: <
 											#storage_struct
 											as #scrate::storage::StoragePrefixedMap<#value_type>
-										>::final_prefix(),
+										>::final_prefix().to_vec(),
 										max_values: #max_values,
 										max_size: None,
 									}

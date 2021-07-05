@@ -488,7 +488,7 @@ where
 			StorageInfo {
 				pallet_name: Self::module_prefix().to_vec(),
 				storage_name: Self::storage_prefix().to_vec(),
-				prefix: Self::final_prefix(),
+				prefix: Self::final_prefix().to_vec(),
 				max_values: MaxValues::get(),
 				max_size: Some(
 					Hasher1::max_len::<Key1>()
@@ -521,7 +521,7 @@ where
 			StorageInfo {
 				pallet_name: Self::module_prefix().to_vec(),
 				storage_name: Self::storage_prefix().to_vec(),
-				prefix: Self::final_prefix(),
+				prefix: Self::final_prefix().to_vec(),
 				max_values: MaxValues::get(),
 				max_size: None
 			}

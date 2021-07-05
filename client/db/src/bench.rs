@@ -509,11 +509,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		// We only track at the level of a key-prefix and not whitelisted for now for memory size.
 		// TODO: Refactor to enable full storage key transparency, where we can remove the
 		// `prefix_key_tracker`.
-		let mut prefix_key_tracker = HashMap::<[u8; 32], (u32, u32, bool)>::new();
+		let mut prefix_key_tracker = HashMap::<Vec<u8>, (u32, u32, bool)>::new();
 		self.all_trackers().iter().for_each(|tracker| {
 			if !tracker.whitelisted {
-				let mut prefix = [0u8; 32];
-				prefix[0..32].copy_from_slice(&tracker.key[0..32]);
+				let prefix_length = tracker.key.len().min(32);
+				let prefix = tracker.key[0..prefix_length].to_vec();
 				// each read / write of a specific key is counted at most one time, since
 				// additional reads / writes happen in the memory overlay.
 				let reads = tracker.reads.min(1);
