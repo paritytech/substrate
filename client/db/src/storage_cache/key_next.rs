@@ -23,12 +23,35 @@
 use std::collections::{HashMap, BTreeMap};
 use sp_core::storage::ChildInfo;
 use super::EstimateSize;
+use std::sync::Arc;
+use std::borrow::Borrow;
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default)]
+struct RcKey<K>(Arc<K>);
+
+impl<K: Borrow<[u8]>> Borrow<[u8]> for RcKey<K> {
+	fn borrow(&self) -> &[u8] {
+		self.0.as_ref().borrow()
+	}
+}
+
+impl<K> Borrow<K> for RcKey<K> {
+	fn borrow(&self) -> &K {
+		self.0.as_ref()
+	}
+}
+
+impl<K: Clone> RcKey<K> {
+	fn clone_key(&self) -> K {
+		self.0.as_ref().clone()
+	}
+}
 
 pub(super) struct LRUOrderedKeys<K> {
 	/// We use a BTreeMap for storage internally.
-	intervals: BTreeMap<K, Box<KeyOrderedEntry<K>>>,
+	intervals: BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 	/// Intervals for child storages.
-	child_intervals: HashMap<Vec<u8>, BTreeMap<K, Box<KeyOrderedEntry<K>>>>,
+	child_intervals: HashMap<Vec<u8>, BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>>,
 	/// Current total size of contents.
 	used_size: usize,
 	/// Limit size of contents.
@@ -43,9 +66,9 @@ pub(super) struct LRUOrderedKeys<K> {
 #[derive(Default)]
 pub(super) struct LocalOrderedKeys<K: Ord> {
 	/// We use a BTreeMap for storage internally.
-	intervals: BTreeMap<K, Option<K>>,
+	intervals: BTreeMap<RcKey<K>, Option<RcKey<K>>>,
 	/// Intervals for child storages.
-	child_intervals: HashMap<Vec<u8>, BTreeMap<K, Option<K>>>,
+	child_intervals: HashMap<Vec<u8>, BTreeMap<RcKey<K>, Option<RcKey<K>>>>,
 }
 	
 struct KeyOrderedEntry<K> {
@@ -55,12 +78,12 @@ struct KeyOrderedEntry<K> {
 	next: *mut KeyOrderedEntry<K>,
 	/// Used to remove from btreemap.
 	/// Specialized lru struct would not need it.
-	key: K,
+	key: RcKey<K>,
 	/// When intervals are in child cache (also only use
 	/// to remove from cache).
 	child_storage_key: Option<Vec<u8>>,
 	/// Next key cached.
-	next_key: Option<K>,
+	next_key: Option<RcKey<K>>,
 }
 
 unsafe impl<K: Send> Send for LRUOrderedKeys<K> {}
@@ -81,10 +104,10 @@ impl<K: Default + EstimateSize> KeyOrderedEntry<K> {
 		lru_bound
 	}
 	fn estimate_size(&self) -> usize {
-		self.key.estimate_size() * 2 // apply 2 to account for btreemap internal key storage.
+		self.key.0.as_ref().estimate_size() * 2 // apply 2 to account for btreemap internal key storage.
 			+ self.child_storage_key.as_ref().map(|k| k.len()).unwrap_or(0) + 1
 			+ 2 * 4 // assuming 64 bit arch
-			+ self.next_key.as_ref().map(|k| k.estimate_size()).unwrap_or(0) + 1
+			+ self.next_key.as_ref().map(|k| k.0.as_ref().estimate_size()).unwrap_or(0) + 1
 	}
 }
 
@@ -153,7 +176,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		};
 	
 		let key = unsafe { &(*to_rem).key };
-		Self::remove_interval_entry(intervals, key, false, &mut self.used_size);
+		Self::remove_interval_entry(intervals, key.0.as_ref(), false, &mut self.used_size);
 		true
 	}
 
@@ -171,20 +194,20 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	}
 
 	fn next_storage_key_inner(
-		intervals: &mut BTreeMap<K, Box<KeyOrderedEntry<K>>>,
+		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 		key: &K,
 		lru_bound: &mut Option<&mut Box<KeyOrderedEntry<K>>>,
 	) -> Option<Option<K>> {
-		let mut iter = intervals.range_mut(..=key);
+		let mut iter = intervals.range_mut::<K, _>(..=key);
 		if let Some((prev_key, state)) = iter.next_back() {
-			let do_match = prev_key == key ||	if let Some(next_key) = state.next_key.as_ref() {
-				key < next_key
+			let do_match = prev_key.0.as_ref() == key ||	if let Some(next_key) = state.next_key.as_ref() {
+				key < next_key.borrow()
 			} else {
 				true
 			};
 			if do_match {
 				state.lru_touched_opt(lru_bound);
-				return Some(state.next_key.clone());
+				return Some(state.next_key.as_ref().map(|k| k.clone_key()));
 			}
 		}
 		None
@@ -201,7 +224,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 
 	fn merge_local_cache_inner(
 		&mut self,
-		keys: &BTreeMap<K, Option<K>>,
+		keys: &BTreeMap<RcKey<K>, Option<RcKey<K>>>,
 		child: Option<&Vec<u8>>,
 	) {
 		// No conflict of existing interval should happen if we correctly do `enact_value_changes` of
@@ -226,14 +249,14 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	// `no_lru` only indicate no lru limit applied.
 	// TODO after lru extract see if can be a simple self method.
 	fn add_valid_interval_no_lru(
-		intervals: &mut BTreeMap<K, Box<KeyOrderedEntry<K>>>,
-		key: &K,
+		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
+		key: &RcKey<K>,
 		child: Option<&Vec<u8>>,
-		next_key: &Option<K>,
+		next_key: &Option<RcKey<K>>,
 		lru_bound: &mut Box<KeyOrderedEntry<K>>,
 		used_size: &mut usize,
 	) {
-		let mut iter = intervals.range(..=key);
+		let mut iter = intervals.range::<K, _>(..=key.0.as_ref());
 		if let Some((prev_key, state)) = iter.next_back() {
 			let do_match = prev_key == key ||	if let Some(next_key) = state.next_key.as_ref() {
 				key < next_key
@@ -247,7 +270,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			}
 		}
 	
-		let mut iter = intervals.range(key..);
+		let mut iter = intervals.range::<K, _>(key.0.as_ref()..);
 		let mut do_remove = None;
 		if let Some((prev_key, state)) = iter.next() {
 			let do_match = if let Some(next_key) = next_key.as_ref() {
@@ -311,7 +334,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 
 	// This split insert in some existing interval an inserted value.
 	fn enact_insert(
-		intervals: &mut BTreeMap<K, Box<KeyOrderedEntry<K>>>,
+		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 		key: &K,
 		child: Option<&Vec<u8>>,
 		lru_bound: &mut Box<KeyOrderedEntry<K>>,
@@ -320,7 +343,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		let mut iter = intervals.range_mut(..key);
 		let end = if let Some((_prev_key, state)) = iter.next_back() {
 			let do_split = if let Some(next_key) = state.next_key.as_ref() {
-				key < next_key
+				key < next_key.0.as_ref()
 			} else {
 				true
 			};
@@ -350,7 +373,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	// If value remove is Next, then we just remove interval because
 	// we do not know if it was an existing value.
 	fn enact_remove(
-		intervals: &mut BTreeMap<K, Box<KeyOrderedEntry<K>>>,
+		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 		key: &K,
 		used_size: &mut usize,
 	) {
@@ -377,7 +400,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 					let prev = intervals.range(..=key).next_back()
 						.expect("If cached there is previous value.").0.clone();
 
-					Self::remove_interval_entry(intervals, &prev, false, &mut self.used_size);
+					Self::remove_interval_entry(intervals, prev.0.as_ref(), false, &mut self.used_size);
 				},
 				None => (),
 			}
@@ -386,7 +409,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 
 	// return total estimate size of all removed entries
 	fn remove_interval_entry(
-		intervals: &mut BTreeMap<K, Box<KeyOrderedEntry<K>>>,
+		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 		key: &K,
 		do_merge: bool,
 		used_size: &mut usize,
@@ -451,7 +474,7 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 				true
 			};
 			if do_match {
-				return Some(next_key.as_ref());
+				return Some(next_key.map(|k| k.0.as_ref()));
 			}
 		}
 		None
