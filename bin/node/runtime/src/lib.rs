@@ -1542,22 +1542,7 @@ impl_runtime_apis! {
 				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95ecffd7b6c0f78751baa9d281e0bfa3a6d6f646c70792f74727372790000000000000000000000000000000000000000").to_vec().into(),
 			];
 
-			let mut storage_info: Vec<StorageInfo> = <(
-				Assets,
-				Balances,
-				Proxy,
-				Sudo,
-				Timestamp,
-			)>::storage_info();
-
-			storage_info.push(StorageInfo::new(b"System", b"Account"));
-			storage_info.push(StorageInfo::new(b"System", b"ExtrinsicCount"));
-			storage_info.push(StorageInfo::new(b"System", b"BlockWeight"));
-			storage_info.push(StorageInfo::new(b"System", b"AllExtrinsicsLen"));
-			storage_info.push(StorageInfo::new(b"System", b"Events"));
-			storage_info.push(StorageInfo::new(b"System", b"EventCount"));
-			storage_info.push(StorageInfo::new(b"System", b"ExecutionPhase"));
-			storage_info.push(StorageInfo::new(b"System", b"Number"));
+			let mut storage_info: Vec<StorageInfo> = <AllPalletsWithSystem>::storage_info();
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
