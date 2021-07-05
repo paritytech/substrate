@@ -66,7 +66,7 @@ pub struct Node<T: ChainInfo> {
 			Block = T::Block,
 			Hash = <T::Block as BlockT>::Hash,
 			Error = sc_transaction_pool::error::Error,
-			InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+			InPoolTransaction = sc_transaction_pool::Transaction<
 				<T::Block as BlockT>::Hash,
 				<T::Block as BlockT>::Extrinsic,
 			>,

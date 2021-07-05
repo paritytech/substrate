@@ -39,8 +39,10 @@ use sp_runtime::transaction_validity::{
 };
 use sc_transaction_pool_api::{error, PoolStatus, InPoolTransaction};
 
-use crate::future::{FutureTransactions, WaitingTransaction};
-use crate::ready::ReadyTransactions;
+use super::{
+	future::{FutureTransactions, WaitingTransaction},
+	ready::ReadyTransactions,
+};
 
 /// Successful import result.
 #[derive(Debug, PartialEq, Eq)]

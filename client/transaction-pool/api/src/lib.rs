@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Transaction pool primitives types & Runtime API.
+//! Transaction pool client facing API.
+#![warn(missing_docs)]
 
 pub mod error;
 

@@ -8186,46 +8186,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-transaction-graph"
+name = "sc-transaction-pool"
 version = "3.0.0"
 dependencies = [
  "assert_matches",
  "criterion",
  "derive_more",
  "futures 0.3.15",
+ "hex",
+ "intervalier",
  "linked-hash-map",
  "log",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.11.1",
  "retain_mut",
- "sc-transaction-pool-api",
- "serde",
- "sp-blockchain",
- "sp-core",
- "sp-runtime",
- "sp-utils",
- "substrate-test-runtime",
- "thiserror",
- "wasm-timer",
-]
-
-[[package]]
-name = "sc-transaction-pool"
-version = "3.0.0"
-dependencies = [
- "assert_matches",
- "futures 0.3.15",
- "hex",
- "intervalier",
- "log",
- "parity-scale-codec",
- "parity-util-mem",
- "parking_lot 0.11.1",
  "sc-block-builder",
  "sc-client-api",
- "sc-transaction-graph",
  "sc-transaction-pool-api",
+ "serde",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
@@ -8236,6 +8215,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-utils",
  "substrate-prometheus-endpoint",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "thiserror",
@@ -9817,7 +9797,7 @@ dependencies = [
  "futures 0.3.15",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "sc-transaction-graph",
+ "sc-transaction-pool",
  "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime",
@@ -9963,7 +9943,6 @@ dependencies = [
  "sc-rpc",
  "sc-rpc-server",
  "sc-service",
- "sc-transaction-graph",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "sp-api",

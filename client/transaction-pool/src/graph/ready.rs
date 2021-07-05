@@ -31,7 +31,7 @@ use sp_runtime::transaction_validity::{
 };
 use sc_transaction_pool_api::error;
 
-use crate::{
+use super::{
 	base_pool::Transaction,
 	future::WaitingTransaction,
 	tracked_map::{self, ReadOnlyTrackedMap, TrackedMap},

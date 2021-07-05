@@ -23,17 +23,22 @@
 #![warn(unused_extern_crates)]
 
 mod api;
+mod graph;
 mod revalidation;
 mod metrics;
 
 pub mod error;
 
-#[cfg(test)]
-pub mod testing;
+#[cfg(feature = "test-helpers")]
+pub use self::{graph::{ChainApi, Pool}, revalidation::RevalidationQueue};
+/// Common types for working with the transaction pool
+#[cfg(feature = "test-helpers")]
+pub mod types {
+	pub use super::graph::{NumberFor, BlockHash, ExtrinsicFor};
+}
 
-pub use sc_transaction_graph::{ChainApi, Options, Pool};
+pub use graph::{Options, Transaction};
 pub use crate::api::{FullChainApi, LightChainApi};
-
 use std::{collections::{HashMap, HashSet}, sync::Arc, pin::Pin, convert::TryInto};
 use futures::{prelude::*, future::{self, ready}, channel::oneshot};
 use parking_lot::Mutex;
@@ -48,18 +53,18 @@ use sc_transaction_pool_api::{
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 	TransactionSource,
 };
-use sc_transaction_graph::{IsValidator, ExtrinsicHash};
+use graph::{IsValidator, ExtrinsicHash};
 use wasm_timer::Instant;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use crate::metrics::MetricsLink as PrometheusMetrics;
 
 type BoxedReadyIterator<Hash, Data> = Box<
-	dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send
+	dyn Iterator<Item=Arc<graph::base_pool::Transaction<Hash, Data>>> + Send
 >;
 
 type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<
-	sc_transaction_graph::ExtrinsicHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>
+	graph::ExtrinsicHash<PoolApi>, graph::ExtrinsicFor<PoolApi>
 >;
 
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolApi>> + Send>>;
@@ -75,7 +80,7 @@ pub struct BasicPool<PoolApi, Block>
 		Block: BlockT,
 		PoolApi: ChainApi<Block=Block>,
 {
-	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
+	pool: Arc<graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
@@ -166,11 +171,11 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		PoolApi: ChainApi<Block=Block> + 'static,
 {
 	/// Create new basic transaction pool with provided api, for tests.
-	#[cfg(test)]
+	#[cfg(feature = "test-helpers")]
 	pub fn new_test(
 		pool_api: Arc<PoolApi>,
 	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>, intervalier::BackSignalControl) {
-		let pool = Arc::new(sc_transaction_graph::Pool::new(Default::default(), true.into(), pool_api.clone()));
+		let pool = Arc::new(graph::Pool::new(Default::default(), true.into(), pool_api.clone()));
 		let (revalidation_queue, background_task, notifier) =
 			revalidation::RevalidationQueue::new_test(pool_api.clone(), pool.clone());
 		(
@@ -190,7 +195,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	/// Create new basic transaction pool with provided api and custom
 	/// revalidation type.
 	pub fn with_revalidation_type(
-		options: sc_transaction_graph::Options,
+		options: graph::Options,
 		is_validator: IsValidator,
 		pool_api: Arc<PoolApi>,
 		prometheus: Option<&PrometheusRegistry>,
@@ -198,7 +203,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		spawner: impl SpawnEssentialNamed,
 		best_block_number: NumberFor<Block>,
 	) -> Self {
-		let pool = Arc::new(sc_transaction_graph::Pool::new(options, is_validator, pool_api.clone()));
+		let pool = Arc::new(graph::Pool::new(options, is_validator, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
 			RevalidationType::Light => (
 				revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()),
@@ -233,8 +238,14 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	}
 
 	/// Gets shared reference to the underlying pool.
-	pub fn pool(&self) -> &Arc<sc_transaction_graph::Pool<PoolApi>> {
+	pub fn pool(&self) -> &Arc<graph::Pool<PoolApi>> {
 		&self.pool
+	}
+
+	/// Get access to the underlying api
+	#[cfg(feature = "test-helpers")]
+	pub fn api(&self) -> &PoolApi {
+		&self.api
 	}
 }
 
@@ -244,8 +255,8 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		PoolApi: 'static + ChainApi<Block=Block>,
 {
 	type Block = PoolApi::Block;
-	type Hash = sc_transaction_graph::ExtrinsicHash<PoolApi>;
-	type InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+	type Hash = graph::ExtrinsicHash<PoolApi>;
+	type InPoolTransaction = graph::base_pool::Transaction<
 		TxHash<Self>, TransactionFor<Self>
 	>;
 	type Error = PoolApi::Error;
@@ -361,7 +372,7 @@ where
 {
 	/// Create new basic transaction pool for a light node with the provided api.
 	pub fn new_light(
-		options: sc_transaction_graph::Options,
+		options: graph::Options,
 		prometheus: Option<&PrometheusRegistry>,
 		spawner: impl SpawnEssentialNamed,
 		client: Arc<Client>,
@@ -396,7 +407,7 @@ where
 {
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
-		options: sc_transaction_graph::Options,
+		options: graph::Options,
 		is_validator: IsValidator,
 		prometheus: Option<&PrometheusRegistry>,
 		spawner: impl SpawnEssentialNamed,
@@ -432,7 +443,7 @@ where
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
 {
 	type Block = Block;
-	type Hash = sc_transaction_graph::ExtrinsicHash<FullChainApi<Client, Block>>;
+	type Hash = graph::ExtrinsicHash<FullChainApi<Client, Block>>;
 	type Error = <FullChainApi<Client, Block> as ChainApi>::Error;
 
 	fn submit_local(
@@ -440,7 +451,7 @@ where
 		at: &BlockId<Self::Block>,
 		xt: sc_transaction_pool_api::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
-		use sc_transaction_graph::ValidatedTransaction;
+		use graph::ValidatedTransaction;
 		use sp_runtime::traits::SaturatedConversion;
 		use sp_runtime::transaction_validity::TransactionValidityError;
 
@@ -561,7 +572,7 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
 	block_id: BlockId<Block>,
 	api: &Api,
-	pool: &sc_transaction_graph::Pool<Api>,
+	pool: &graph::Pool<Api>,
 ) -> Vec<ExtrinsicHash<Api>> {
 	let extrinsics = api.block_body(&block_id).await
 		.unwrap_or_else(|e| {
