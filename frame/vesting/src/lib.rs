@@ -340,8 +340,8 @@ pub mod pallet {
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		/// # </weight>
 		#[pallet::weight(
-			T::WeightInfo::last_vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
-			.max(T::WeightInfo::first_vested_transfer(MaxLocksOf::<T>::get()))
+			T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
+			
 		)]
 		pub fn vested_transfer(
 			origin: OriginFor<T>,
@@ -370,8 +370,7 @@ pub mod pallet {
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
 		/// # </weight>
 		#[pallet::weight(
-			T::WeightInfo::first_force_vested_transfer(MaxLocksOf::<T>::get())
-			.max(T::WeightInfo::last_force_vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get()))
+		T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
 		)]
 		pub fn force_vested_transfer(
 			origin: OriginFor<T>,

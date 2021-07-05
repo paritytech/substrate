@@ -188,7 +188,7 @@ benchmarks! {
 		);
 	}
 
-	last_vested_transfer {
+	vested_transfer {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 0 .. T::MaxVestingSchedules::get() - 1;
 
@@ -211,7 +211,7 @@ benchmarks! {
 			per_block_duration_20,
 			1u32.into(),
 		);
-	}: vested_transfer(RawOrigin::Signed(caller), target_lookup, vesting_schedule)
+	}: _(RawOrigin::Signed(caller), target_lookup, vesting_schedule)
 	verify {
 		assert_eq!(
 			expected_balance,
@@ -225,79 +225,7 @@ benchmarks! {
 		);
 	}
 
-	first_vested_transfer {
-		let l in 0 .. MaxLocksOf::<T>::get() - 1;
-		// TODO: this is just here to get the polkadot runtimes too build .. need to figure that out
-		let s in 0 .. T::MaxVestingSchedules::get() - 1;
-
-		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-
-		let target: T::AccountId = account("target", 0, SEED);
-		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
-		// Give target existing locks
-		add_locks::<T>(&target, l as u8);
-
-		let transfer_amount = T::MinVestedTransfer::get();
-		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
-
-		let vesting_schedule = VestingInfo::new::<T>(
-			transfer_amount,
-			per_block_duration_20,
-			1u32.into(),
-		);
-
-	}:  vested_transfer(RawOrigin::Signed(caller), target_lookup, vesting_schedule)
-	verify {
-		assert_eq!(
-			transfer_amount,
-			T::Currency::free_balance(&target),
-			"Transfer didn't happen",
-		);
-		assert_eq!(
-			Vesting::<T>::vesting_balance(&target),
-			Some(transfer_amount),
-			"Lock not created",
-		);
-	}
-
-	first_force_vested_transfer {
-		let l in 0 .. MaxLocksOf::<T>::get() - 1;
-		// TODO: this is just here to get the polkadot runtimes too build .. need to figure that out
-		let s in 0 .. T::MaxVestingSchedules::get() - 1;
-
-		let source: T::AccountId = account("source", 0, SEED);
-		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
-		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
-
-		let target: T::AccountId = account("target", 0, SEED);
-		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
-		// Give target existing locks
-		add_locks::<T>(&target, l as u8);
-
-		let transfer_amount = T::MinVestedTransfer::get();
-		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
-
-		let vesting_schedule = VestingInfo::new::<T>(
-			transfer_amount,
-			per_block_duration_20,
-			1u32.into(),
-		);
-	}: force_vested_transfer(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
-	verify {
-		assert_eq!(
-			transfer_amount,
-			T::Currency::free_balance(&target),
-			"Transfer didn't happen",
-		);
-		assert_eq!(
-			Vesting::<T>::vesting_balance(&target),
-			Some(transfer_amount),
-			"Lock not created",
-		);
-	}
-
-	last_force_vested_transfer {
+	force_vested_transfer {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 0 .. T::MaxVestingSchedules::get() - 1;
 
@@ -321,7 +249,7 @@ benchmarks! {
 			per_block_duration_20,
 			1u32.into(),
 		);
-	}: force_vested_transfer(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
+	}: _(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
 	verify {
 		assert_eq!(
 			expected_balance,
