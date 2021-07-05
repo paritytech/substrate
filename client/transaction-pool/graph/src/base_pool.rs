@@ -538,7 +538,6 @@ mod tests {
 		BasePool::default()
 	}
 
-	// (DEFAULT_TX can be static as the vec![] are empty and thus don't allocate.)
 	const DEFAULT_TX: Transaction::<Hash, Vec<u8>> = Transaction {
 		data: vec![],
 		bytes: 1,
