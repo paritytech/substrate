@@ -19,7 +19,7 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" 
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-inherents = { version = "3.0.0", default-features = false, path = "../inherents" }
 wasm-timer = { version = "0.2", optional = true }
-thiserror = { version = "1.0.21", optional = true }
+thiserror = { version = "1.0.26", optional = true }
 log = { version = "0.4.8", optional = true }
 futures-timer = { version = "3.0.2", optional = true }
 async-trait = { version = "0.1.48", optional = true }

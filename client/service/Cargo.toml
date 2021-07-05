@@ -24,7 +24,7 @@ wasmtime = [
 test-helpers = []
 
 [dependencies]
-thiserror = "1.0.21"
+thiserror = "1.0.26"
 futures01 = { package = "futures", version = "0.1.29" }
 futures = { version = "0.3.4", features = ["compat"] }
 jsonrpc-pubsub = "15.1"
