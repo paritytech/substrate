@@ -19,7 +19,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use futures::{future::{ready, Ready}, executor::block_on};
-use sc_transaction_pool::*;
+use sc_transaction_pool::{*, test_helpers::*};
 use codec::Encode;
 use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 use sp_runtime::{
