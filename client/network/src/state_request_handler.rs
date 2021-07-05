@@ -193,7 +193,7 @@ impl<B: BlockT> StateRequestHandler<B> {
 				)?;
 				response.entries = entries.into_iter().map(|(state, complete)| {
 					KeyValueStateEntry {
-						parent_storages: state.parent_storages,
+						state_root: state.state_root,
 						entries: state.key_values.into_iter()
 							.map(|(key, value)| StateEntry { key, value }).collect(),
 						complete,

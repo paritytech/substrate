@@ -807,27 +807,26 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					sp_consensus::StorageChanges::Import(changes) => {
 						let mut storage = sp_storage::Storage::default();
 						for state in changes.state.0.into_iter() {
-							if state.parent_storages.len() == 0 {
+							if state.parent_storage_keys.len() == 0 && state.state_root.len() == 0 {
 								for (key, value) in state.key_values.into_iter() {
 									storage.top.insert(key, value);
 								}
-							} else if state.parent_storages.len() == 1 {
-								let storage_key = PrefixedStorageKey::new_ref(&state.parent_storages[0]);
-								let storage_key = match ChildType::from_prefixed_key(&storage_key) {
-									Some((ChildType::ParentKeyId, storage_key)) => storage_key,
-									None => return Err(Error::Backend("Invalid child storage key.".to_string())),
-								};
-								let entry = storage.children_default.entry(storage_key.to_vec())
-									.or_insert_with(|| StorageChild {
-										data: Default::default(),
-										child_info: ChildInfo::new_default(storage_key),
-									});
-								for (key, value) in state.key_values.into_iter() {
-									entry.data.insert(key, value);
+							} else {
+								for parent_storage in state.parent_storage_keys {
+									let storage_key = PrefixedStorageKey::new_ref(&parent_storage);
+									let storage_key = match ChildType::from_prefixed_key(&storage_key) {
+										Some((ChildType::ParentKeyId, storage_key)) => storage_key,
+										None => return Err(Error::Backend("Invalid child storage key.".to_string())),
+									};
+									let entry = storage.children_default.entry(storage_key.to_vec())
+										.or_insert_with(|| StorageChild {
+											data: Default::default(),
+											child_info: ChildInfo::new_default(storage_key),
+										});
+									for (key, value) in state.key_values.iter() {
+										entry.data.insert(key.clone(), value.clone());
+									}
 								}
-							}
-							if state.parent_storages.len() > 1 {
-								return Err(Error::InvalidState);
 							}
 						}
 
@@ -1397,24 +1396,32 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 			}
 		};
 		let mut current_child = if start_key.len() == 2 {
-			Some(child_info(start_key.get(0).expect("checked len"))?)
+			let start_key = start_key.get(0).expect("checked len");
+			if let Some(child_root) = state.storage(&start_key)
+				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))? {
+				Some((child_info(start_key)?, child_root))
+			} else {
+				return Err(Error::Backend("Invalid root start key.".to_string()));
+			}
 		} else {
 			None
 		};
 		let mut current_key = start_key.last().map(Clone::clone).unwrap_or(Vec::new());
 		let mut total_size = 0;
 		let mut result = vec![(KeyValueStorageLevel {
-			parent_storages: Vec::new(),
+			state_root: Vec::new(),
 			key_values: Vec::new(),
+			parent_storage_keys: Vec::new(),
 		}, false)];
 
+		let mut child_roots = HashSet::new();
 		loop {
 			let mut entries = Vec::new();
 			let mut complete = true;
 			let mut switch_child_key = None;
 			while let Some(next_key) = if let Some(child) = current_child.as_ref() {
 				state
-					.next_child_storage_key(child, &current_key)
+					.next_child_storage_key(&child.0, &current_key)
 					.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			} else {
 				state
@@ -1423,7 +1430,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 			} {
 				let value = if let Some(child) = current_child.as_ref() {
 					state
-						.child_storage(child, next_key.as_ref())
+						.child_storage(&child.0, next_key.as_ref())
 						.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 						.unwrap_or_default()
 				} else {
@@ -1438,24 +1445,29 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 					break;
 				}
 				total_size += size;
-				entries.push((next_key.clone(), value));
 
 				if current_child.is_none()
 					&& sp_core::storage::well_known_keys::is_child_storage_key(next_key.as_slice()) {
-					switch_child_key = Some(next_key);
-					break;
+					if !child_roots.contains(value.as_slice()) {
+						child_roots.insert(value.clone());
+						switch_child_key = Some((next_key.clone(), value.clone()));
+						entries.push((next_key.clone(), value));
+						break;
+					}
 				}
+				entries.push((next_key.clone(), value));
 				current_key = next_key;
 			}
-			if let Some(child) = switch_child_key.take() {
+			if let Some((child, child_root)) = switch_child_key.take() {
 				result[0].0.key_values.extend(entries.into_iter());
-				current_child = Some(child_info(&child)?);
+				current_child = Some((child_info(&child)?, child_root));
 				current_key = Vec::new();
-			} else if let Some(child) = current_child.take() {
+			} else if let Some((child, child_root)) = current_child.take() {
 				current_key = child.into_prefixed_storage_key().into_inner();
 				result.push((KeyValueStorageLevel {
-					parent_storages: vec![current_key.clone()],
+					state_root: child_root,
 					key_values: entries,
+					parent_storage_keys: Vec::new(),
 				}, complete));
 				if !complete {
 					break;

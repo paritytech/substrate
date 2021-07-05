@@ -175,7 +175,7 @@ mod std_reexport {
 #[cfg(feature = "std")]
 mod execution {
 	use super::*;
-	use std::{fmt, result, collections::HashMap, panic::UnwindSafe};
+	use std::{fmt, result, collections::HashMap, collections::HashSet, panic::UnwindSafe};
 	use log::{warn, trace};
 	use hash_db::Hasher;
 	use codec::{Decode, Encode, Codec};
@@ -740,24 +740,29 @@ mod execution {
 	#[derive(PartialEq, Eq, Clone)]
 	pub struct KeyValueStates(pub Vec<KeyValueStorageLevel>);
 
-	/// A key value state.
+	/// A key value state at any storage level.
 	#[derive(PartialEq, Eq, Clone)]
 	pub struct KeyValueStorageLevel {
-		/// Storage key in parent states.
-		pub parent_storages: Vec<Vec<u8>>,
+		/// State root of the level, for
+		/// top trie it is as an empty byte array.
+		pub state_root: Vec<u8>,
+		/// Storage of parents, empty for top root or
+		/// when exporting (building proof).
+		pub parent_storage_keys: Vec<Vec<u8>>,
 		/// Pair of key and values from this state.
 		pub key_values: Vec<(Vec<u8>, Vec<u8>)>,
 	}
 
 	impl<I> From<I> for KeyValueStates
-		where I: IntoIterator<Item = (Vec<Vec<u8>>, Vec<(Vec<u8>, Vec<u8>)>)>
+		where I: IntoIterator<Item = (Vec<u8>, (Vec<(Vec<u8>, Vec<u8>)>, Vec<Vec<u8>>))>
 	{
 		fn from(b: I) -> Self {
 			let mut result = Vec::new();
-			for (parent_storages, key_values) in b.into_iter() {
+			for (state_root, (key_values, storage_paths)) in b.into_iter() {
 				result.push(KeyValueStorageLevel {
-					parent_storages,
+					state_root,
 					key_values,
+					parent_storage_keys: storage_paths,
 				})
 			}
 			KeyValueStates(result)
@@ -875,8 +880,17 @@ mod execution {
 		let proving_backend = proving_backend::ProvingBackend::<S, H>::new(trie_backend);
 		let mut count = 0;
 
+		let mut child_roots = HashSet::new();
 		let (mut child_key, mut start_at) = if start_at.len() == 2 {
-			(start_at.get(0).cloned(), start_at.get(1).cloned())
+			let storage_key = start_at.get(0).expect("Checked length.").clone();
+			if let Some(state_root) = proving_backend.storage(&storage_key)
+				.map_err(|e| Box::new(e) as Box<dyn Error>)? {
+				child_roots.insert(state_root.clone());
+			} else {
+				return Err(Box::new("Invalid range start child trie key."));
+			}
+
+			(Some(storage_key), start_at.get(1).cloned())
 		} else {
 			(None, start_at.get(0).cloned())
 		};
@@ -899,7 +913,7 @@ mod execution {
 				child_info.as_ref(),
 				None,
 				start_at_ref,
-				|key, _value| {
+				|key, value| {
 					if first {
 						if start_at_ref.as_ref().map(|start| &key.as_slice() > start)
 							.unwrap_or(true) {
@@ -910,9 +924,15 @@ mod execution {
 						true
 					} else if depth < MAX_NESTED_TRIE_DEPTH
 							&& sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice()) {
-						switch_child_key = Some(key);
 						count += 1;
-						false
+						if !child_roots.contains(value.as_slice()) {
+							child_roots.insert(value);
+							switch_child_key = Some(key);
+							false
+						} else {
+							// do not add two child trie with same root
+							true
+						}
 					} else if proving_backend.estimate_encoded_size() <= size_limit {
 						count += 1;
 						true
@@ -1201,25 +1221,38 @@ mod execution {
 		H::Out: Ord + Codec,
 	{
 		let mut result = vec![KeyValueStorageLevel {
-			parent_storages: Default::default(),
+			state_root: Default::default(),
 			key_values: Default::default(),
+			parent_storage_keys: Default::default(),
 		}];
 		if start_at.len() > MAX_NESTED_TRIE_DEPTH {
 			return Err(Box::new("Invalid start of range."));
 		}
 
+		let mut child_roots = HashSet::new();
 		let (mut child_key, mut start_at) = if start_at.len() == 2 {
-			(start_at.get(0).cloned(), start_at.get(1).cloned())
+			let storage_key = start_at.get(0).expect("Checked length.").clone();
+			let child_key = if let Some(state_root) = proving_backend.storage(&storage_key)
+				.map_err(|e| Box::new(e) as Box<dyn Error>)? {
+				child_roots.insert(state_root.clone());
+				Some((storage_key, state_root))
+			} else {
+				return Err(Box::new("Invalid range start child trie key."));
+			};
+
+			(child_key, start_at.get(1).cloned())
 		} else {
 			(None, start_at.get(0).cloned())
 		};
 
 		let completed = loop {
-			let (child_info, depth) = if let Some(storage_key) = child_key.as_ref() {
+			let (child_info, depth) = if let Some((storage_key, state_root)) = child_key.as_ref() {
 				result.push(KeyValueStorageLevel {
-					parent_storages: vec![storage_key.clone()],
+					state_root: state_root.clone(),
 					key_values: Default::default(),
+					parent_storage_keys: Default::default(),
 				});
+
 				let storage_key = PrefixedStorageKey::new_ref(storage_key);
 				(Some(match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
@@ -1255,8 +1288,14 @@ mod execution {
 						true
 					} else if depth < MAX_NESTED_TRIE_DEPTH
 							&& sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice()) {
-						switch_child_key = Some(key);
-						false
+						if child_roots.contains(value.as_slice()) {
+							// Do not add two chid trie with same root.
+							true
+						} else {
+							child_roots.insert(value.clone());
+							switch_child_key = Some((key, value));
+							false
+						}
 					} else {
 						true
 					}
@@ -1271,7 +1310,7 @@ mod execution {
 				if depth == 1 {
 					break 0;
 				} else {
-					start_at = child_key.take();
+					start_at = child_key.take().map(|entry| entry.0);
 				}
 			} else {
 				child_key = switch_child_key;

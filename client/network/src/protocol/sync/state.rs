@@ -36,7 +36,7 @@ pub struct StateSync<B: BlockT> {
 	target_header: B::Header,
 	target_root: B::Hash,
 	last_key: SmallVec<[Vec<u8>; 2]>,
-	state: HashMap<Vec<Vec<u8>>, Vec<(Vec<u8>, Vec<u8>)>>,
+	state: HashMap<Vec<u8>, (Vec<(Vec<u8>, Vec<u8>)>, Vec<Vec<u8>>)>,
 	complete: bool,
 	client: Arc<dyn Client<B>>,
 	imported_bytes: u64,
@@ -122,28 +122,38 @@ impl<B: BlockT> StateSync<B> {
 			};
 
 			for values in values.0 {
-				use std::collections::hash_map::Entry;
-				let key_values = if values.parent_storages.len() == 0 {
-					// skip all child key root (will be recalculated on import)
+				let key_values = if values.state_root.is_empty() {
+					// Read child trie roots.
 					values.key_values.into_iter()
-						.filter(|key_value| !well_known_keys::is_child_storage_key(key_value.0.as_slice()))
+						.filter(|key_value| if well_known_keys::is_child_storage_key(key_value.0.as_slice()) {
+								self.state.entry(key_value.1.clone())
+									.or_default().1
+									.push(key_value.0.clone());
+								false
+							} else {
+								true
+							})
 						.collect()
 				} else {
 					values.key_values
 				};
-				match self.state.entry(values.parent_storages) {
-					Entry::Occupied(mut entry) => {
-						for (key, value) in key_values {
-							self.imported_bytes += key.len() as u64;
-							entry.get_mut().push((key, value))
-						}
-					},
-					Entry::Vacant(entry) => {
+				let mut entry = self.state.entry(values.state_root).or_default();
+				if entry.0.len() > 0 && entry.1.len() > 1 {
+					// Already imported child_trie with same root.
+					// Warning this will not work with parallel download.
+				} else {
+					if entry.0.is_empty() {
 						for (key, _value) in key_values.iter() {
 							self.imported_bytes += key.len() as u64;
 						}
-						entry.insert(key_values);
-					},
+
+						entry.0 = key_values;
+					} else {
+						for (key, value) in key_values {
+							self.imported_bytes += key.len() as u64;
+							entry.0.push((key, value))
+						}
+					}
 				}
 			}
 			self.imported_bytes += proof_size;
@@ -174,13 +184,25 @@ impl<B: BlockT> StateSync<B> {
 					}
 					complete = false;
 				}
-				let is_top = state.parent_storages.len() == 0;
-				let entry = self.state.entry(state.parent_storages).or_default();
-				for StateEntry { key, value } in state.entries {
-					// Skip all child key root (will be recalculated on import).
-					if !(is_top && well_known_keys::is_child_storage_key(key.as_slice())) {
-						self.imported_bytes += key.len() as u64;
-						entry.push((key, value))
+				let is_top = state.state_root.is_empty();
+				let entry = self.state.entry(state.state_root).or_default();
+				if entry.0.len() > 0 && entry.1.len() > 1 {
+					// Already imported child trie with same root.
+				} else {
+					let mut child_roots = Vec::new();
+					for StateEntry { key, value } in state.entries {
+						// Skip all child key root (will be recalculated on import).
+						if is_top && well_known_keys::is_child_storage_key(key.as_slice()) {
+							child_roots.push((value, key));
+						} else {
+							self.imported_bytes += key.len() as u64;
+							entry.0.push((key, value))
+						}
+					}
+					for (root, storage_key) in child_roots {
+						self.state.entry(root)
+							.or_default().1
+							.push(storage_key);
 					}
 				}
 			}

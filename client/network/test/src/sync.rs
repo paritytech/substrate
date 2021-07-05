@@ -1103,6 +1103,10 @@ fn syncs_state() {
 			data: child_data.clone(),
 			child_info: sp_core::storage::ChildInfo::new_default(b"child1"),
 		};
+		let child3 = sp_core::storage::StorageChild {
+			data: child_data.clone(),
+			child_info: sp_core::storage::ChildInfo::new_default(b"child3"),
+		};
 		for i in 22u8..33 {
 			child_data.insert(vec![i; 5], vec![i; 33]);
 		}
@@ -1112,6 +1116,7 @@ fn syncs_state() {
 		};
 		genesis_storage.children_default.insert(child1.child_info.storage_key().to_vec(), child1);
 		genesis_storage.children_default.insert(child2.child_info.storage_key().to_vec(), child2);
+		genesis_storage.children_default.insert(child3.child_info.storage_key().to_vec(), child3);
 		let mut config_one = FullPeerConfig::default();
 		config_one.extra_storage = Some(genesis_storage.clone());
 		net.add_full_peer_with_config(config_one);

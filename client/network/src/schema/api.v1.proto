@@ -88,8 +88,9 @@ message StateResponse {
 
 // A key value state.
 message KeyValueStateEntry {
-	// Parent nested storage location, empty for top state.
-	repeated bytes parent_storages = 1;
+	// Root of for this level, empty length bytes
+	// if top level.
+	bytes state_root = 1;
 	// A collection of keys-values.
 	repeated StateEntry entries = 2;
 	// Set to true when there are no more keys to return.
