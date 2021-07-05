@@ -1018,6 +1018,13 @@ fn multiple_schedules_from_genesis_config_errors() {
 }
 
 #[test]
+fn build_genesis_has_storage_version_v1() {
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		assert_eq!(StorageVersion::<Test>::get(), Releases::V1);
+	});
+}
+
+#[test]
 fn merge_vesting_errors_with_per_block_0() {
 	// Faulty schedules with an infinite duration (per_block == 0) can be merged to create
 	// a schedule that vest 1 per_block, (helpful for faulty, legacy schedules).
