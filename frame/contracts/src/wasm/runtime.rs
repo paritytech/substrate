@@ -26,9 +26,9 @@ use crate::{
 };
 use bitflags::bitflags;
 use pwasm_utils::parity_wasm::elements::ValueType;
-use frame_support::{dispatch::DispatchError, ensure, weights::Weight, traits::MaxEncodedLen};
+use frame_support::{dispatch::DispatchError, ensure, weights::Weight};
 use sp_std::prelude::*;
-use codec::{Decode, DecodeAll, Encode};
+use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
 use sp_core::{Bytes, crypto::UncheckedFrom};
 use sp_io::hashing::{
 	keccak_256,

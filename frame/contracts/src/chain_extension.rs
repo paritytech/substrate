@@ -59,8 +59,8 @@ use crate::{
 	wasm::{Runtime, RuntimeCosts},
 	gas::ChargedAmount,
 };
-use codec::Decode;
-use frame_support::{weights::Weight, traits::MaxEncodedLen};
+use codec::{Decode, MaxEncodedLen};
+use frame_support::weights::Weight;
 use sp_runtime::DispatchError;
 use sp_std::{
 	marker::PhantomData,

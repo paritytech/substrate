@@ -29,7 +29,7 @@ mod tests {
 
 	pub trait Config: frame_support_test::Config {
 		type Origin2: codec::Codec + codec::EncodeLike + Default
-			+ frame_support::traits::MaxEncodedLen;
+			+ codec::MaxEncodedLen;
 	}
 
 	frame_support::decl_storage! {
