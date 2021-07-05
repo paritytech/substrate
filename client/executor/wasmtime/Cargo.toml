@@ -31,5 +31,4 @@ pwasm-utils = { version = "0.18" }
 assert_matches = "1.3.0"
 sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
 sp-io = { version = "3.0.0", path = "../../../primitives/io" }
-sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
 wat = "1.0"
