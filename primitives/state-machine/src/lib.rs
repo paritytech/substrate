@@ -738,11 +738,11 @@ mod execution {
 	/// Multiple key value state.
 	/// States are ordered by root storage key.
 	#[derive(PartialEq, Eq, Clone)]
-	pub struct KeyValueStates(pub Vec<KeyValueState>);
+	pub struct KeyValueStates(pub Vec<KeyValueStorageLevel>);
 
 	/// A key value state.
 	#[derive(PartialEq, Eq, Clone)]
-	pub struct KeyValueState {
+	pub struct KeyValueStorageLevel {
 		/// Storage key in parent states.
 		pub parent_storages: Vec<Vec<u8>>,
 		/// Pair of key and values from this state.
@@ -755,7 +755,7 @@ mod execution {
 		fn from(b: I) -> Self {
 			let mut result = Vec::new();
 			for (parent_storages, key_values) in b.into_iter() {
-				result.push(KeyValueState {
+				result.push(KeyValueStorageLevel {
 					parent_storages,
 					key_values,
 				})
@@ -1200,7 +1200,7 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
-		let mut result = vec![KeyValueState {
+		let mut result = vec![KeyValueStorageLevel {
 			parent_storages: Default::default(),
 			key_values: Default::default(),
 		}];
@@ -1216,7 +1216,7 @@ mod execution {
 
 		let completed = loop {
 			let (child_info, depth) = if let Some(storage_key) = child_key.as_ref() {
-				result.push(KeyValueState {
+				result.push(KeyValueStorageLevel {
 					parent_storages: vec![storage_key.clone()],
 					key_values: Default::default(),
 				});

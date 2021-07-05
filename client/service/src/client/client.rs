@@ -55,7 +55,7 @@ use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
-	prove_range_read_with_child_with_size, KeyValueStates, KeyValueState,
+	prove_range_read_with_child_with_size, KeyValueStates, KeyValueStorageLevel,
 	read_range_proof_check_with_child_on_proving_backend, MAX_NESTED_TRIE_DEPTH,
 };
 use sc_executor::RuntimeVersion;
@@ -1384,7 +1384,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
-	) -> sp_blockchain::Result<Vec<(KeyValueState, bool)>> {
+	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>> {
 		if start_key.len() > MAX_NESTED_TRIE_DEPTH {
 			return Err(Error::Backend("Invalid start key.".to_string()));
 		}
@@ -1403,7 +1403,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		};
 		let mut current_key = start_key.last().map(Clone::clone).unwrap_or(Vec::new());
 		let mut total_size = 0;
-		let mut result = vec![(KeyValueState {
+		let mut result = vec![(KeyValueStorageLevel {
 			parent_storages: Vec::new(),
 			key_values: Vec::new(),
 		}, false)];
@@ -1453,7 +1453,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 				current_key = Vec::new();
 			} else if let Some(child) = current_child.take() {
 				current_key = child.into_prefixed_storage_key().into_inner();
-				result.push((KeyValueState {
+				result.push((KeyValueStorageLevel {
 					parent_storages: vec![current_key.clone()],
 					key_values: entries,
 				}, complete));

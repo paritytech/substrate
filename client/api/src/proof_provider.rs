@@ -23,7 +23,7 @@ use sp_runtime::{
 };
 use crate::{StorageProof, ChangesProof, CompactProof};
 use sp_storage::{ChildInfo, StorageKey, PrefixedStorageKey};
-use sp_state_machine::{KeyValueStates, KeyValueState};
+use sp_state_machine::{KeyValueStates, KeyValueStorageLevel};
 
 
 /// Interface for providing block proving utilities.
@@ -101,7 +101,7 @@ pub trait ProofProvider<Block: BlockT> {
 		id: &BlockId<Block>,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
-	) -> sp_blockchain::Result<Vec<(KeyValueState, bool)>>;
+	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>>;
 
 	/// Verify read storage proof for a set of keys.
 	/// Returns collected key-value pairs and a the nested state
