@@ -2,11 +2,27 @@
 ;; https://github.com/WebAssembly/testsuite/blob/01efde81028c5b0d099eb836645a2dc5e7755449/skip-stack-guard-page.wast
 ;; Licensed Apache 2.0 https://github.com/WebAssembly/testsuite/blob/01efde81028c5b0d099eb836645a2dc5e7755449/LICENSE
 
+;; This wasm module implements a Substrate Runtime with one entrypoint: `test-many-locals`. This
+;; entrypoint does not take any parameters nor returns a result. Each execution should end up with
+;; a stack overflow trap.
+;;
+;; What it does is essentially a recursive call. The function that recurses into itself declares
+;; lots of local variables. It reads into each local at the corresponding offset, recurses into itself
+;; and then writes the contents of the locals back into the memory at the same offset.
+;;
+;; The original purpose of this file in the test suite is to test skipping the guard page (hence the
+;; size 256 + 4096 + 4096). However, what's important here is to just an infinite recursion with
+;; many locals.
+;;
+;; NOTE That memory accesses are put there in an attempt to prevent eliminating the dead locals.
+;; At the moment of writing, wasmtime should be dumb enough to be tricked into thinking that the code
+;; does something.
 
 (module
   (import "env" "memory" (memory 1))
   (export "test-many-locals" (func $test-many-locals))
 
+  ;; The heap base is chosen so that the heap doesn't overlap with the data below.
   (global (export "__heap_base") i32 (i32.const 8448))
 
   (func $test-many-locals
@@ -158,7 +174,7 @@
     ;; recurse first to try to make the callee access the stack below the space allocated for the locals before the locals themselves have been initialized.
     (call $function-with-many-locals)
 
-    ;; load from memory into the locals
+    ;; load from memory into the locals.
     (local.set 0x000 (i64.load offset=0x000 align=1 (i32.const 0)))
     (local.set 0x001 (i64.load offset=0x001 align=1 (i32.const 0)))
     (local.set 0x002 (i64.load offset=0x002 align=1 (i32.const 0)))
