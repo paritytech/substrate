@@ -114,7 +114,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn reset_cache(&mut self) {
+	fn reset_child_roots_cache(&mut self) {
 	}
 
 	/// Consumes self and returns underlying storage.
