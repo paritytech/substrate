@@ -162,7 +162,7 @@ pub mod pallet {
 
 	#[pallet::origin]
 	#[derive(EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode, scale_info::TypeInfo)]
-	#[scale_info(skip_type_params(T, I))] // todo: [AJ] could/should this be added automatically?
+	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::validate_unsigned]
