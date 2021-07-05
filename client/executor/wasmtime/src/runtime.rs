@@ -271,7 +271,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// way (the machine stack limit should be so high that the deterministic limit always triggers
 /// first).
 ///
-/// The deterministic stack height limiting feature allows to intstrument the code so that it will
+/// The deterministic stack height limiting feature allows to instrument the code so that it will
 /// count the number of items that may be on the stack. This counting will only act as an rough
 /// estimate of the actual stack limit in wasmtime. This is because wasmtime measures it's stack
 /// usage in bytes.
