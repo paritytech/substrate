@@ -8922,6 +8922,7 @@ dependencies = [
  "hash256-std-hasher",
  "hex",
  "hex-literal",
+ "impl-codec",
  "impl-serde",
  "lazy_static",
  "libsecp256k1",
