@@ -15,12 +15,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 parking_lot = "0.11.1"
 log = "0.4.8"
-kvdb = "0.9.0"
-kvdb-rocksdb = { version = "0.11.0", optional = true }
-kvdb-memorydb = "0.9.0"
+kvdb = "0.10.0"
+kvdb-rocksdb = { version = "0.12.0", optional = true }
+kvdb-memorydb = "0.10.0"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
-parity-util-mem = { version = "0.9.0", default-features = false, features = ["std"] }
+parity-util-mem = { version = "0.10.0", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 blake2-rfc = "0.2.18"
 
@@ -43,7 +43,7 @@ sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 quickcheck = "1.0.3"
-kvdb-rocksdb = "0.11.0"
+kvdb-rocksdb = "0.12.0"
 tempfile = "3"
 
 [features]
