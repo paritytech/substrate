@@ -897,7 +897,7 @@ pub mod pallet {
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_emergency_election_result(
 			origin: OriginFor<T>,
-			supports: Supports<T::AcountId>,
+			supports: Supports<T::AccountId>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
