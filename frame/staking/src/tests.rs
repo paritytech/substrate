@@ -3909,7 +3909,7 @@ fn test_rebag() {
 		let node = Node::<Test>::from_id(&stash).unwrap();
 		assert_eq!(
 			{
-				let origin_bag = Bag::<Test>::get(node.bag_idx).unwrap();
+				let origin_bag = Bag::<Test>::get(node.bag_upper).unwrap();
 				origin_bag.iter().count()
 			},
 			1,
@@ -3919,7 +3919,7 @@ fn test_rebag() {
 		assert!(!other_node.is_misplaced(&weight_of), "other stash balance never changed");
 		assert_ne!(
 			{
-				let destination_bag = Bag::<Test>::get(other_node.bag_idx);
+				let destination_bag = Bag::<Test>::get(other_node.bag_upper);
 				destination_bag.iter().count()
 			},
 			0,

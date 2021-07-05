@@ -700,7 +700,7 @@ benchmarks! {
 		);
 		ensure!(
 			{
-				let origin_bag = Bag::<T>::get(node.bag_idx).ok_or("origin bag not found")?;
+				let origin_bag = Bag::<T>::get(node.bag_upper).ok_or("origin bag not found")?;
 				origin_bag.iter().count() == 1
 			},
 			"stash should be the only node in origin bag",

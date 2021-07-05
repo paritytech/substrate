@@ -556,14 +556,14 @@ impl<T: Config> Node<T> {
 		existed
 	}
 
-	/// Get the index of the bag that this node _should_ be in, given its vote weight.
+	/// Get the upper threshold of the bag that this node _should_ be in, given its vote weight.
 	///
 	/// This is a helper intended only for benchmarking and should not be used in production.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	pub fn proper_bag_for(&self) -> VoteWeight {
 		let weight_of = crate::Pallet::<T>::weight_of_fn();
 		let current_weight = weight_of(&self.voter.id);
-		notional_bag_for(current_weight)
+		notional_bag_for::<T>(current_weight)
 	}
 }
 
@@ -788,7 +788,7 @@ pub mod make_bags {
 		writeln!(buf, "/// Constant ratio between bags for this runtime.")?;
 		writeln!(buf, "#[cfg(any(test, feature = \"std\"))]")?;
 		writeln!(buf, "#[allow(unused)]")?;
-		writeln!(buf, "pub const CONSTANT_RATIO: f64 = {};", constant_ratio)?;
+		writeln!(buf, "pub const CONSTANT_RATIO: f64 = {:.16};", constant_ratio)?;
 
 		// thresholds
 		let thresholds = thresholds(existential_weight, constant_ratio, n_bags);
