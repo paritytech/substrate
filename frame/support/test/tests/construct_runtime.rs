@@ -531,39 +531,6 @@ fn call_weight_should_attach_to_call_enum() {
 }
 
 #[test]
-fn call_name() {
-	use frame_support::dispatch::GetCallName;
-	let name = module3::Call::<Runtime>::aux_4().get_call_name();
-	assert_eq!("aux_4", name);
-}
-
-#[test]
-fn call_metadata() {
-	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
-	let call = Call::Module3(module3::Call::<Runtime>::aux_4());
-	let metadata = call.get_call_metadata();
-	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
-	assert_eq!(metadata, expected);
-}
-
-#[test]
-fn get_call_names() {
-	use frame_support::dispatch::GetCallName;
-	let call_names = module3::Call::<Runtime>::get_call_names();
-	assert_eq!(["fail", "aux_1", "aux_2", "aux_3", "aux_4", "operational"], call_names);
-}
-
-#[test]
-fn get_module_names() {
-	use frame_support::dispatch::GetCallMetadata;
-	let module_names = Call::get_module_names();
-	assert_eq!([
-		"System", "Module1_1", "Module2", "Module1_2", "NestedModule3", "Module3",
-		"Module1_4", "Module1_6", "Module1_7", "Module1_8", "Module1_9",
-	], module_names);
-}
-
-#[test]
 fn call_subtype_conversion() {
 	use frame_support::{dispatch::CallableCallFor, traits::IsSubType};
 	let call = Call::Module3(module3::Call::<Runtime>::fail());

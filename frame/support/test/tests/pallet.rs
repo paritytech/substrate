@@ -18,7 +18,7 @@
 use frame_support::{
 	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
 	traits::{
-		GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade, GetPalletVersion, OnGenesis,
+		OnInitialize, OnFinalize, OnRuntimeUpgrade, GetPalletVersion, OnGenesis,
 		MaxEncodedLen,
 	},
 	dispatch::{UnfilteredDispatchable, Parameter},
@@ -531,11 +531,6 @@ fn call_expand() {
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes,
 		}
-	);
-	assert_eq!(call_foo.get_call_name(), "foo");
-	assert_eq!(
-		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_transactional", "foo_no_post_info"],
 	);
 }
 

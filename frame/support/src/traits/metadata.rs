@@ -41,33 +41,6 @@ pub trait PalletInfoAccess {
 	fn name() -> &'static str;
 }
 
-/// The function and pallet name of the Call.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
-pub struct CallMetadata {
-	/// Name of the function.
-	pub function_name: &'static str,
-	/// Name of the pallet to which the function belongs.
-	pub pallet_name: &'static str,
-}
-
-/// Gets the function name of the Call.
-pub trait GetCallName {
-	/// Return all function names.
-	fn get_call_names() -> &'static [&'static str];
-	/// Return the function name of the Call.
-	fn get_call_name(&self) -> &'static str;
-}
-
-/// Gets the metadata for the Call - function name and pallet name.
-pub trait GetCallMetadata {
-	/// Return all module names.
-	fn get_module_names() -> &'static [&'static str];
-	/// Return all function names for the given `module`.
-	fn get_call_names(module: &str) -> &'static [&'static str];
-	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
-	fn get_call_metadata(&self) -> CallMetadata;
-}
-
 /// The storage key postfix that is used to store the [`PalletVersion`] per pallet.
 ///
 /// The full storage key is built by using:

@@ -1513,7 +1513,7 @@ pub mod pallet_prelude {
 ///
 /// The macro create an enum `Call` with one variant per dispatchable. This enum implements:
 /// `Clone`, `Eq`, `PartialEq`, `Debug` (with stripped implementation in `not("std")`), `Encode`,
-/// `Decode`, `GetDispatchInfo`, `GetCallName`, `UnfilteredDispatchable`.
+/// `Decode`, `GetDispatchInfo`, `UnfilteredDispatchable`.
 ///
 /// The macro implement on `Pallet`, the `Callable` trait and a function `call_functions` which
 /// returns the dispatchable metadatas.
