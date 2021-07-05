@@ -637,7 +637,6 @@ impl<T: Config> Pallet<T> {
 		let (schedules, locked_now) =
 			Self::report_schedule_updates(schedules.to_vec(), VestingAction::Passive);
 
-		debug_assert!(schedules.len() <= T::MaxVestingSchedules::get() as usize);
 		debug_assert!(
 			locked_now > Zero::zero() && schedules.len() > 0 ||
 				locked_now == Zero::zero() && schedules.len() == 0
@@ -700,7 +699,6 @@ where
 		let (schedules, locked_now) =
 			Self::report_schedule_updates(schedules.to_vec(), VestingAction::Passive);
 
-		debug_assert!(schedules.len() <= T::MaxVestingSchedules::get() as usize);
 		debug_assert!(
 			locked_now > Zero::zero() && schedules.len() > 0 ||
 				locked_now == Zero::zero() && schedules.len() == 0
@@ -739,7 +737,6 @@ where
 		let (schedules, locked_now) =
 			Self::report_schedule_updates(schedules.to_vec(), remove_action);
 
-		debug_assert!(schedules.len() <= T::MaxVestingSchedules::get() as usize);
 		debug_assert!(
 			locked_now > Zero::zero() && schedules.len() > 0 ||
 				locked_now == Zero::zero() && schedules.len() == 0

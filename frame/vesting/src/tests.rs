@@ -363,10 +363,10 @@ fn vested_transfer_correctly_fails() {
 				Error::<Test>::InfiniteSchedule,
 			);
 
-			// `locked` is 0.
+			// `locked` is less than `MinVestedTransfer`.
 			let schedule_locked_0 = VestingInfo::new::<Test>(0, 1, 10);
 			assert_noop!(
-				Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_locked_0),
+				Vesting::vested_transfer(Some(3).into(), 4, schedule_locked_0),
 				Error::<Test>::AmountLow,
 			);
 
@@ -755,10 +755,10 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 			1, // Vesting over 256 * 10 (2560) blocks
 			cur_block + 1,
 		);
-		Vesting::vested_transfer(Some(4).into(), 2, sched1).unwrap();
+		assert_ok!(Vesting::vested_transfer(Some(4).into(), 2, sched1));
 
 		// Merge the schedules before sched1 starts.
-		Vesting::merge_schedules(Some(2).into(), 0, 1).unwrap();
+		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
 		// After merging, the usable balance only changes by the amount sched0 vested since we
 		// last called `vest` (which is just 1 block). The usable balance is not affected by
 		// sched1 because it has not started yet.
@@ -963,6 +963,12 @@ fn merge_schedules_throws_proper_errors() {
 
 		// It is a storage noop with no errors if the indexes are the same.
 		assert_storage_noop!(Vesting::merge_schedules(Some(2).into(), 0, 0).unwrap());
+
+		// There are no vesting schedules, so they are not vesting
+		assert_noop!(
+			Vesting::merge_schedules(Some(4).into(), 0, 1),
+			Error::<Test>::NotVesting
+		);
 	});
 }
 
@@ -1026,8 +1032,6 @@ fn build_genesis_has_storage_version_v1() {
 
 #[test]
 fn merge_vesting_errors_with_per_block_0() {
-	// Faulty schedules with an infinite duration (per_block == 0) can be merged to create
-	// a schedule that vest 1 per_block, (helpful for faulty, legacy schedules).
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let sched0 = VestingInfo::new::<Test>(
 			ED, 0, // Vesting over infinite blocks.
@@ -1124,4 +1128,20 @@ fn vesting_info_ending_block_works() {
 			.locked_at::<Identity>(imperfect_per_block.ending_block::<Identity, Test>().unwrap()),
 		0
 	);
+}
+
+#[test]
+fn vest_correctly_fails() {
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		assert!(!<VestingStorage<Test>>::contains_key(4));
+		assert_noop!(Vesting::vest(Some(4).into()), Error::<Test>::NotVesting);
+	});
+}
+
+#[test]
+fn vest_other_correctly_fails() {
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		assert!(!<VestingStorage<Test>>::contains_key(4));
+		assert_noop!(Vesting::vest_other(Some(3).into(), 4), Error::<Test>::NotVesting);
+	});
 }
