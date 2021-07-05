@@ -30,7 +30,7 @@ struct RuntimeBuilder {
 	code: Option<&'static str>,
 	fast_instance_reuse: bool,
 	canonicalize_nans: bool,
-	stack_depth_metering: bool,
+	deterministic_stack: bool,
 	heap_pages: u32,
 }
 
@@ -42,7 +42,7 @@ impl RuntimeBuilder {
 			code: None,
 			fast_instance_reuse: false,
 			canonicalize_nans: false,
-			stack_depth_metering: false,
+			deterministic_stack: false,
 			heap_pages: 1024,
 		}
 	}
@@ -55,8 +55,8 @@ impl RuntimeBuilder {
 		self.canonicalize_nans = canonicalize_nans;
 	}
 
-	fn stack_depth_metering(&mut self, stack_depth_metering: bool) {
-		self.stack_depth_metering = stack_depth_metering;
+	fn deterministic_stack(&mut self, deterministic_stack: bool) {
+		self.deterministic_stack = deterministic_stack;
 	}
 
 	fn build(self) -> Arc<dyn WasmModule> {
@@ -83,7 +83,14 @@ impl RuntimeBuilder {
 				cache_path: None,
 				semantics: crate::Semantics {
 					fast_instance_reuse: self.fast_instance_reuse,
-					stack_depth_metering: self.stack_depth_metering,
+					deterministic_stack_limit:
+						match self.deterministic_stack {
+							true => Some(crate::DeterministicStackLimit {
+								logical_max: 65536,
+								native_stack_max: 256 * 1024 * 1024,
+							}),
+							false => None,
+						},
 					canonicalize_nans: self.canonicalize_nans,
 				},
 			},
@@ -151,7 +158,7 @@ fn test_stack_depth_reaching() {
 	let runtime = {
 		let mut builder = RuntimeBuilder::new_on_demand();
 		builder.use_wat(TEST_GUARD_PAGE_SKIP);
-		builder.stack_depth_metering(true);
+		builder.deterministic_stack(true);
 		builder.build()
 	};
 	let instance = runtime

@@ -232,28 +232,18 @@ directory = \"{cache_dir}\"
 	Ok(())
 }
 
-fn common_config(semantics: &Semantics) -> wasmtime::Config {
+fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config, WasmError> {
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
 
-	if semantics.stack_depth_metering {
-		// With `stack_depth_metering` is enabled, the wasm code will instrumented with its own
-		// stack depth tracker.
-		//
-		// We do not ever want the wasmtime's stack overflow guard to be hit. The amount of data
-		// a stack frame of a compiled function consumes may depend on the wasmtime version and
-		// the architecture the host is running. This introduces some non-determinism and
-		// the `stack_depth_metering` option aims to fix exactly that.
-		//
-		// Hence 256 MiB for the stack. It seems unlikely that this will be reached even with specially
-		// crafted code.
-		config.max_wasm_stack(256 * 1024 * 1024).expect(
-			"this value is a literal and trivially is not 0;
-				we do not supply the async max stack;
-				according to the docs only Ok can be returned;
-				qed",
-		);
+	if let Some(DeterministicStackLimit {
+		native_stack_max, ..
+	}) = semantics.deterministic_stack_limit
+	{
+		config
+			.max_wasm_stack(native_stack_max as usize)
+			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {}", e)))?;
 	}
 
 	// Be clear and specific about the extensions we support. If an update brings new features
@@ -266,7 +256,41 @@ fn common_config(semantics: &Semantics) -> wasmtime::Config {
 	config.wasm_module_linking(false);
 	config.wasm_threads(false);
 
-	config
+	Ok(config)
+}
+
+/// Knobs for deterministic stack height.
+///
+/// The WebAssembly standard defines a call/value stack but it doesn't say anything about its
+/// size except that it has to be finite. The implementations are free to choose their own notion
+/// of limit: some may count the number of calls or values, others would rely on the host machine
+/// stack and trap on reaching a guard page.
+///
+/// This obviously is a source of non-determinism during execution. This feature can be used
+/// to instrument the code so that it will count the depth of execution in some deterministic
+/// way (the machine stack limit should be so high that the deterministic limit always triggers
+/// first).
+///
+/// See [here][stack_height] for more details of the instrumentation
+///
+/// [stack_height]: https://github.com/paritytech/wasm-utils/blob/d9432baf/src/stack_height/mod.rs#L1-L50
+pub struct DeterministicStackLimit {
+	/// A number of logical "values" that can be pushed on the wasm stack. A trap will be triggered
+	/// if exceeded.
+	///
+	/// A logical value is a local, an argument or a value pushed on operand stack.
+	pub logical_max: u32,
+	/// The maximum number of bytes for stack used by wasmtime JITed code.
+	///
+	/// It's not specified how much bytes will be consumed by a stack frame for a given wasm function
+	/// after translation into machine code. It is also not quite trivial.
+	///
+	/// Therefore, this number should be choosen conservatively. It must be so large so that it can
+	/// fit the [`logical_max`] logical values on the stack, according to the current instrumentation
+	/// algorithm.
+	///
+	/// This value cannot be 0.
+	pub native_stack_max: u32,
 }
 
 pub struct Semantics {
@@ -285,23 +309,16 @@ pub struct Semantics {
 	/// is used.
 	pub fast_instance_reuse: bool,
 
-	/// The WebAssembly standard defines a call/value stack but it doesn't say anything about its
-	/// size except that it has to be finite. The implementations are free to choose their own notion
-	/// of limit: some may count the number of calls or values, others would rely on the host machine
-	/// stack and trap on reaching a guard page.
+	/// Specifiying `Some` will enable deterministic stack height. That is, all executor invocations
+	/// will reach stack overflow at the exactly same point across different wasmtime versions and
+	/// architectures.
 	///
-	/// This obviously is a source of non-determinism during execution. This feature can be used
-	/// to instrument the code so that it will count the depth of execution in some deterministic
-	/// way (the machine stack limit should be so high that the deterministic limit always triggers
-	/// first).
-	///
-	/// See [here][stack_height] for more details of the instrumentation
+	/// This is achieved by a combination of running an instrumentation pass on input code and
+	/// configuring wasmtime accordingly.
 	///
 	/// Since this feature depends on instrumentation, it can be set only if [`CodeSupplyMode::Verbatim`]
 	/// is used.
-	///
-	/// [stack_height]: https://github.com/paritytech/wasm-utils/blob/d9432baf/src/stack_height/mod.rs#L1-L50
-	pub stack_depth_metering: bool,
+	pub deterministic_stack_limit: Option<DeterministicStackLimit>,
 
 	/// Controls whether wasmtime should compile floating point in a way that doesn't allow for
 	/// non-determinism.
@@ -399,7 +416,7 @@ unsafe fn do_create_runtime(
 	host_functions: Vec<&'static dyn Function>,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
 	// Create the engine, store and finally the module from the given code.
-	let mut wasmtime_config = common_config(&config.semantics);
+	let mut wasmtime_config = common_config(&config.semantics)?;
 	if let Some(ref cache_path) = config.cache_path {
 		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut wasmtime_config) {
 			log::warn!(
@@ -460,9 +477,8 @@ fn instrument(
 	mut blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<RuntimeBlob, WasmError> {
-	if semantics.stack_depth_metering {
-		const STACK_DEPTH_LIMIT: u32 = 65536;
-		blob = blob.inject_stack_depth_metering(STACK_DEPTH_LIMIT)?;
+	if let Some(DeterministicStackLimit { logical_max, .. }) = semantics.deterministic_stack_limit {
+		blob = blob.inject_stack_depth_metering(logical_max)?;
 	}
 
 	// If enabled, this should happen after all other passes that may introduce global variables.
@@ -481,7 +497,7 @@ pub fn prepare_runtime_artifact(
 ) -> std::result::Result<Vec<u8>, WasmError> {
 	let blob = instrument(blob, semantics)?;
 
-	let engine = Engine::new(&common_config(semantics))
+	let engine = Engine::new(&common_config(semantics)?)
 		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;
 
 	engine
