@@ -16,9 +16,8 @@
 // limitations under the License.
 
 use codec::Encode;
-use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::EncodeLike, Blake2_128Concat, StorageHasher};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::EncodeLike, Blake2_128Concat,Twox128, StorageHasher};
 use frame_system::RawOrigin;
-use sp_core::hashing::{blake2_128, twox_128};
 use sp_runtime::traits::{BadOrigin, Identity};
 
 use super::{Vesting as VestingStorage, *};
@@ -39,26 +38,9 @@ where
 	assert!(!<VestingStorage<T>>::contains_key(account));
 }
 
-/// Place the given encoded `schedules` into storage, overriding any checks.
-// fn override_vesting(account: u64, schedules: &[u8]) {
-// 	let vesting_key = account.using_encoded(blake2_128concat);
-// 	let storage_key = twox_128(b"Vesting")
-// 		.iter()
-// 		.chain(twox_128(b"Vesting").iter())
-// 		.chain(vesting_key[..].iter())
-// 		.cloned()
-// 		.collect::<Vec<_>>();
-// 	sp_io::storage::set(&storage_key[..], schedules);
-// }
-
-fn blake2_128concat(x: &[u8]) -> Vec<u8> {
-	blake2_128(x).iter().chain(x.into_iter()).cloned().collect::<Vec<_>>()
-}
-
 fn generate_vesting_key(account: u64) -> Vec<u8> {
-	let module_prefix_hashed = twox_128(b"Vesting");
-	let storage_prefix_hashed = twox_128(b"Vesting");
-	// let key_hashed = account.using_encoded(blake2_128concat);
+	let module_prefix_hashed = Twox128::hash(b"Vesting");
+	let storage_prefix_hashed = Twox128::hash(b"Vesting");
 	let key_hashed = account.using_encoded(Blake2_128Concat::hash);
 
 	let mut final_key = Vec::with_capacity(
