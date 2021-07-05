@@ -223,7 +223,7 @@ impl RuntimeCache {
 		let code_hash = &runtime_code.hash;
 		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
 
-		log::debug!(
+		log::trace!(
 			target: "wasm-runtime",
 			"with_instance: using {} heap pages in {:?} context",
 			heap_pages,
