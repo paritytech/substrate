@@ -539,7 +539,7 @@ mod tests {
 	}
 
 	// (DEFAULT_TX can be static as the vec![] are empty and thus don't allocate.)
-	static DEFAULT_TX : Transaction::<Hash, Vec<u8>> = Transaction {
+	const DEFAULT_TX: Transaction::<Hash, Vec<u8>> = Transaction {
 		data: vec![],
 		bytes: 1,
 		hash: 1u64,
