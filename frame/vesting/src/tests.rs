@@ -15,8 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::Encode;
-use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::EncodeLike, Blake2_128Concat,Twox128, StorageHasher};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::EncodeLike};
 use frame_system::RawOrigin;
 use sp_runtime::traits::{BadOrigin, Identity};
 
@@ -36,49 +35,6 @@ where
 	// Its ok for this to fail because the user may already have no schedules.
 	let _result = Vesting::vest(Some(account).into());
 	assert!(!<VestingStorage<T>>::contains_key(account));
-}
-
-fn generate_vesting_key(account: u64) -> Vec<u8> {
-	let module_prefix_hashed = Twox128::hash(b"Vesting");
-	let storage_prefix_hashed = Twox128::hash(b"Vesting");
-	let key_hashed = account.using_encoded(Blake2_128Concat::hash);
-
-	let mut final_key = Vec::with_capacity(
-		module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len(),
-	);
-
-	final_key.extend_from_slice(&module_prefix_hashed[..]);
-	final_key.extend_from_slice(&storage_prefix_hashed[..]);
-	final_key.extend_from_slice(key_hashed.as_ref());
-
-	final_key
-}
-
-#[test]
-fn merge_schedules_fails_when_starting_with_too_many_schedules() {
-	let one_extra = <Test as Config>::MaxVestingSchedules::get() + 1;
-
-	let sched = VestingInfo::new::<Test>(ED * 20, ED, 10u64);
-
-	let too_many_schedules = (0 .. one_extra)
-		.map(|_| sched)
-		.collect::<Vec<_>>();
-	let storage_value = too_many_schedules.clone().encode();
-	// let storage_value = Some(too_many_schedules.clone()).encode();
-
-	let storage_key = generate_vesting_key(4);
-
-	let mut ext = ExtBuilder::default().existential_deposit(ED).build();
-	ext.insert(storage_key.clone(), storage_value.clone()); // seems to be equivalent to storage::set
-
-	ext.execute_with(|| {
-		// sp_io::storage::set(&storage_key[..], &storage_value[..]);
-		// This works
-		assert_eq!(sp_io::storage::get(&storage_key[..]).unwrap(), &storage_value[..]);
-
-		// This does not work, says there is nothing in storage
-		assert_eq!(Vesting::vesting(4).unwrap(), too_many_schedules);
-	});
 }
 
 #[test]
