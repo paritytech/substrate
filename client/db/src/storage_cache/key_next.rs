@@ -22,8 +22,7 @@
 
 use std::collections::{HashMap, BTreeMap};
 use sp_core::storage::ChildInfo;
-use super::{EstimateSize,
-};
+use super::EstimateSize;
 
 pub(super) struct LRUOrderedKeys<K> {
 	/// We use a BTreeMap for storage internally.
@@ -44,9 +43,9 @@ pub(super) struct LRUOrderedKeys<K> {
 #[derive(Default)]
 pub(super) struct LocalOrderedKeys<K: Ord> {
 	/// We use a BTreeMap for storage internally.
-	intervals: BTreeMap<K, CachedInterval>,
+	intervals: BTreeMap<K, Option<K>>,
 	/// Intervals for child storages.
-	child_intervals: HashMap<Vec<u8>, BTreeMap<K, CachedInterval>>,
+	child_intervals: HashMap<Vec<u8>, BTreeMap<K, Option<K>>>,
 }
 	
 struct KeyOrderedEntry<K> {
@@ -60,8 +59,8 @@ struct KeyOrderedEntry<K> {
 	/// When intervals are in child cache (also only use
 	/// to remove from cache).
 	child_storage_key: Option<Vec<u8>>,
-	/// Actual content.
-	state: CachedInterval,
+	/// Next key cached.
+	next_key: Option<K>,
 }
 
 unsafe impl<K: Send> Send for LRUOrderedKeys<K> {}
@@ -74,7 +73,7 @@ impl<K: Default + EstimateSize> KeyOrderedEntry<K> {
 			next: std::ptr::null_mut(),
 			key: Default::default(),
 			child_storage_key: None,
-			state: CachedInterval::Prev,
+			next_key: None,
 		});
 		let ptr: *mut KeyOrderedEntry<K> = (&mut lru_bound).as_mut();
 		lru_bound.prev = ptr;
@@ -176,53 +175,19 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		key: &K,
 		lru_bound: &mut Option<&mut Box<KeyOrderedEntry<K>>>,
 	) -> Option<Option<K>> {
-		let mut iter = intervals.range_mut(key..);
-		let n = iter.next().map(|(k, v)| (k, v.state.clone(), v));
-		match n {
-			Some((next_key, CachedInterval::Next, v))
-			| Some((next_key, CachedInterval::Both, v)) if next_key == key => {
-				v.lru_touched_opt(lru_bound);
-				let nn = iter.next().map(|(k, v)| {
-					v.lru_touched_opt(lru_bound);
-					(k, v.state.clone())
-				});
-				match nn {
-					Some((next_key, CachedInterval::Prev))
-					| Some((next_key, CachedInterval::Both)) => Some(Some(next_key.clone())),
-					Some((_next_key, CachedInterval::Next)) => None, // Should be unreachable
-					None => Some(None),
-				}
-			},
-			Some((next_key, CachedInterval::Prev, _v)) if next_key == key => None,
-			Some((_next_key, CachedInterval::Next, _v)) => None,
-			Some((next_key, _, v)) => {
-				v.lru_touched_opt(lru_bound);
-				let result = Some(Some(next_key.clone()));
-				let nb = intervals.range_mut(..key).next_back().map(|(k, v)| {
-					v.lru_touched_opt(lru_bound);
-					(k, v.state.clone())
-				});
-				debug_assert!({
-					match nb {
-						Some((_prev_key, CachedInterval::Next))
-						| Some((_prev_key, CachedInterval::Both)) => true,
-						_ => false,
-					}
-				});
-				result
-			},
-			None => {
-				let nb = intervals.range_mut(..key).next_back().map(|(k, v)| (k, v.state.clone(), v));
-				match nb {
-					Some((_prev_key, CachedInterval::Next, v))
-					| Some((_prev_key, CachedInterval::Both, v)) => {
-						v.lru_touched_opt(lru_bound);
-						Some(None)
-					},
-					_ => None,
-				}
-			},
+		let mut iter = intervals.range_mut(..=key);
+		if let Some((prev_key, state)) = iter.next_back() {
+			let do_match = prev_key == key ||	if let Some(next_key) = state.next_key.as_ref() {
+				key < next_key
+			} else {
+				true
+			};
+			if do_match {
+				state.lru_touched_opt(lru_bound);
+				return Some(state.next_key.clone());
+			}
 		}
+		None
 	}
 
 	pub(super) fn merge_local_cache(&mut self, local: &mut LocalOrderedKeys<K>) {
@@ -236,7 +201,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 
 	fn merge_local_cache_inner(
 		&mut self,
-		keys: &BTreeMap<K, CachedInterval>,
+		keys: &BTreeMap<K, Option<K>>,
 		child: Option<&Vec<u8>>,
 	) {
 		// No conflict of existing interval should happen if we correctly do `enact_value_changes` of
@@ -252,45 +217,63 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			&mut self.intervals
 		};
 
-		for (k, interval) in keys {
-			self.used_size += Self::add_valid_interval_no_lru(intervals, k, child, interval.clone(), &mut self.lru_bound);
+		for (k, next_key) in keys {
+			Self::add_valid_interval_no_lru(intervals, k, child, next_key, &mut self.lru_bound, &mut self.used_size);
 		}
 		self.apply_lru_limit();
 	}
 
 	// `no_lru` only indicate no lru limit applied.
+	// TODO after lru extract see if can be a simple self method.
 	fn add_valid_interval_no_lru(
 		intervals: &mut BTreeMap<K, Box<KeyOrderedEntry<K>>>,
 		key: &K,
 		child: Option<&Vec<u8>>,
-		state: CachedInterval,
+		next_key: &Option<K>,
 		lru_bound: &mut Box<KeyOrderedEntry<K>>,
-	) -> usize {
-		if state == CachedInterval::Next {
-			// Avoid consecutive Next.
-			if intervals.range(..=key).next_back()
-				.map(|p| p.1.state != CachedInterval::Prev)
-				.unwrap_or(false) {
-				return 0;
+		used_size: &mut usize,
+	) {
+		let mut iter = intervals.range(..=key);
+		if let Some((prev_key, state)) = iter.next_back() {
+			let do_match = prev_key == key ||	if let Some(next_key) = state.next_key.as_ref() {
+				key < next_key
+			} else {
+				true
+			};
+
+			if do_match {
+				debug_assert!(&state.next_key == next_key);
+				return;
+			}
+		}
+	
+		let mut iter = intervals.range(..key);
+		let mut do_remove = None;
+		if let Some((prev_key, state)) = iter.next() {
+			let do_match = if let Some(next_key) = next_key.as_ref() {
+				prev_key < next_key
+			} else {
+				true
+			};
+			if do_match {
+				debug_assert!(&state.next_key == next_key);
+				do_remove = Some(prev_key.clone());
+			}
+		}
+		if let Some(key) = do_remove {
+			if let Some(entry) = intervals.remove(&key) {
+				entry.detach();
+				*used_size -= entry.estimate_size();
 			}
 		}
 
-		let mut size = None;
-		let size = &mut size;
-		let entry = intervals.entry(key.clone()).or_insert_with(|| {
-			let mut entry = KeyOrderedEntry::empty();
-			entry.key = key.clone();
-			entry.child_storage_key = child.cloned();
-			entry.state = state.clone();
-			entry.lru_touched(lru_bound);
-			*size = Some(entry.estimate_size());
-			entry
-		});
-		if size.is_none() {
-			entry.state.merge(state);
-			entry.lru_touched(lru_bound);
-		}
-		size.unwrap_or(0)
+		let mut entry = KeyOrderedEntry::empty();
+		entry.key = key.clone();
+		entry.child_storage_key = child.cloned();
+		entry.next_key = next_key.clone();
+		entry.lru_touched(lru_bound);
+		*used_size += entry.estimate_size();
+		intervals.insert(key.clone(), entry);
 	}
 
 	fn apply_lru_limit(&mut self) {
@@ -317,9 +300,9 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		// and full iteration worst than seeking each changes.
 		for (key, changed) in key {
 			if changed {
-				self.used_size += Self::enact_insert(intervals, key, child, &mut self.lru_bound);
+				Self::enact_insert(intervals, key, child, &mut self.lru_bound, &mut self.used_size);
 			} else {
-				self.used_size -= Self::enact_remove(intervals, key);
+				Self::enact_remove(intervals, key, &mut self.used_size);
 			}
 		}
 
@@ -332,48 +315,35 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		key: &K,
 		child: Option<&Vec<u8>>,
 		lru_bound: &mut Box<KeyOrderedEntry<K>>,
-	) -> usize {
-		let n = intervals.range(key..).next().map(|(k, v)| (k, v.state.clone()));
-		let do_insert = match n {
-			// Match key
-			Some((_, CachedInterval::Next)) => {
-				false
-			},
-			Some((cur_key, CachedInterval::Prev))
-			| Some((cur_key, CachedInterval::Both)) if cur_key == key => {
-				false
-			},
-			Some((_cur_key, CachedInterval::Prev))
-			| Some((_cur_key, CachedInterval::Both)) => {
-				debug_assert!(_cur_key > key);
+		used_size: &mut usize,
+	) {
+		let mut iter = intervals.range_mut(..key);
+		let end = if let Some((prev_key, state)) = iter.next_back() {
+			let do_split = if let Some(next_key) = state.next_key.as_ref() {
+				key < next_key
+			} else {
 				true
-			},
-			None => {
-				// check if previous is next or both to see if splitted interval, then insert both
-				let nb = intervals.range_mut(..key).next_back().map(|(k, v)| (k, v.state.clone()));
-				match nb {
-					Some((_, CachedInterval::Next))
-					| Some((_, CachedInterval::Both)) => true,
-					_ => false,
-				}
-			},
-		};
-
-		if do_insert {
-			let mut entry = KeyOrderedEntry::empty();
-			entry.key = key.clone();
-			entry.child_storage_key = child.cloned();
-			entry.state = CachedInterval::Both;
-			// We do not touch corresponding interval,
-			// would not really make sense since it is not an
-			// next_key query.
-			entry.lru_touched(lru_bound);
-			let size = entry.estimate_size();
-			intervals.insert(key.clone(), entry); 
-			size
+			};
+			if do_split {
+				*used_size -= state.estimate_size();
+				let end = state.next_key.take();
+				state.next_key = Some(key.clone());
+				*used_size += state.estimate_size();
+				end
+			} else {
+				return;
+			}
 		} else {
-			0
-		}
+			return;
+		};
+		let mut entry = KeyOrderedEntry::empty();
+		entry.key = key.clone();
+		entry.child_storage_key = child.cloned();
+		entry.next_key = end;
+		// Should actually use splitted entry lru order.
+		entry.lru_touched(lru_bound);
+		*used_size += entry.estimate_size();
+		intervals.insert(key.clone(), entry);
 	}
 
 	// This merge existing interval when removing a value.
@@ -382,8 +352,9 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	fn enact_remove(
 		intervals: &mut BTreeMap<K, Box<KeyOrderedEntry<K>>>,
 		key: &K,
-	) -> usize {
-		Self::remove_interval_entry(intervals, key, true)
+		used_size: &mut usize,
+	) {
+		Self::remove_interval_entry(intervals, key, true, used_size)
 	}
 
 	pub(super) fn retract_value_changes<'a>(&mut self, keys: impl Iterator<Item = &'a K>, child: Option<&Vec<u8>>) {
@@ -406,7 +377,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 					let prev = intervals.range(..=key).next_back()
 						.expect("If cached there is previous value.").0.clone();
 
-					self.used_size -= Self::remove_interval_entry(intervals, &prev, false);
+					Self::remove_interval_entry(intervals, &prev, false, &mut self.used_size);
 				},
 				None => (),
 			}
@@ -418,66 +389,38 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		intervals: &mut BTreeMap<K, Box<KeyOrderedEntry<K>>>,
 		key: &K,
 		do_merge: bool,
-	) -> usize {
-		let mut size_removed = 0;
-		let (rem_prev, rem_next) = if let Some(mut siblings) = intervals.remove(key) {
-			siblings.detach();
-			size_removed += siblings.estimate_size();
-			let siblings = siblings.state.clone();
-			let mut iter = intervals.range_mut(key..);
-			// If merg is define we only remove the both node, otherwhise
-			// `both` siblings get updated.
-			let both = !do_merge && siblings == CachedInterval::Both;
-			let rem_next = if siblings == CachedInterval::Next || both {
-				let n = iter.next().map(|(k, v)| (k, v.state.clone(), v));
-				match n {
-					Some((k, CachedInterval::Prev, _v)) => {
-						Some(k.clone())
-					},
-					Some(kv) => {
-						debug_assert!(kv.1.clone() == CachedInterval::Both);
-						kv.2.state = CachedInterval::Next;
-						None
-					},
-					_ => None,
-				}
+		used_size: &mut usize,
+	) {
+		let mut iter = intervals.range_mut(..=key);
+		let mut can_merge = do_merge;
+		let (do_remove, can_merge) = if let Some((prev_key, state)) = iter.next_back() {
+			let do_remove = prev_key == key ||	if let Some(next_key) = state.next_key.as_ref() {
+				key < next_key
 			} else {
-				None
+				true
 			};
-			let rem_prev = if siblings == CachedInterval::Prev || both {
-				let nb = intervals.range_mut(..key).next_back().map(|(k, v)| (k, v.state.clone(), v));
-				match nb {
-					Some((k, CachedInterval::Next, _v)) => {
-						Some(k)
-					},
-					Some(kv) => {
-						debug_assert!(kv.1.clone() == CachedInterval::Both);
-						kv.2.state = CachedInterval::Prev;
-						None
-					},
-					_ => None,
-				}
+			if do_remove {
+				(prev_key.clone(), (do_merge && prev_key == key).then(|| state.next_key.clone()))
 			} else {
-				None
-			};
-			(rem_prev.cloned(), rem_next)
+				return;
+			}
 		} else {
-			return size_removed;
+			return;
 		};
-		if let Some(rem) = rem_prev {
-			size_removed += intervals.remove(&rem).map(|mut e| {
-				e.detach();
-				e.estimate_size()
-			}).unwrap_or(0);
-		}
-		if let Some(rem) = rem_next {
-			size_removed += intervals.remove(&rem).map(|mut e| {
-				e.detach();
-				e.estimate_size()
-			}).unwrap_or(0);
+		if let Some(next_next) = can_merge {
+			if let Some((prev_key, state)) = iter.next_back() {
+				if state.next_key.as_ref() == Some(key) {
+					*used_size -= state.estimate_size();
+					state.next_key = next_next;
+					*used_size += state.estimate_size();
+				}
+			}
 		}
 
-		size_removed
+		if let Some(entry) = intervals.remove(&do_remove) {
+			entry.detach();
+			*used_size -= entry.estimate_size();
+		}
 	}
 
 	pub(super) fn clear(&mut self) {
