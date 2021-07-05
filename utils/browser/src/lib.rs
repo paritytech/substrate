@@ -77,7 +77,9 @@ where
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {
+			info!("Opening Indexed DB database '{}'...", name);
 			let db = kvdb_memorydb::create(10);
+
 			DatabaseConfig::Custom(sp_database::as_database(db))
 		},
 		keystore_remote: Default::default(),
