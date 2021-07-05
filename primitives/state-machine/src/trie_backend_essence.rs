@@ -103,7 +103,19 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Set trie root. This is useful for testing.
 	pub fn set_root(&mut self, root: H::Out) {
+		// if root did change so can have child roots.
+		self.reset_child_roots_cache();
 		self.root = root;
+	}
+
+	#[cfg(feature = "std")]
+	fn reset_child_roots_cache(&mut self) {
+		self.cache = Arc::new(RwLock::new(Cache::new()));
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn reset_cache(&mut self) {
+		self.cache = Arc::new(RwLock::new(Cache::new()));
 	}
 
 	/// Consumes self and returns underlying storage.
