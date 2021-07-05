@@ -13,7 +13,7 @@ description = "Trait MaxEncodedLen bounds the max encoded length of an item."
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 impl-trait-for-tuples = "0.2.1"
 max-encoded-len-derive = { package = "max-encoded-len-derive", version = "3.0.0", path = "derive", default-features = false, optional = true }
-primitive-types = { version = "0.9.0", default-features = false, features = ["codec"] }
+primitive-types = { version = "0.10.0", default-features = false, features = ["codec"] }
 
 [dev-dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [ "derive" ] }
