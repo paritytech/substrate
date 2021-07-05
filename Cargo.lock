@@ -6244,9 +6244,9 @@ dependencies = [
 
 [[package]]
 name = "primitive-types"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2415937401cb030a2a0a4d922483f945fa068f52a7dbb22ce0fe5f2b6f6adace"
+checksum = "06345ee39fbccfb06ab45f3a1a5798d9dafa04cb8921a76d227040003a234b0e"
 dependencies = [
  "fixed-hash",
  "impl-codec",
@@ -8922,7 +8922,6 @@ dependencies = [
  "hash256-std-hasher",
  "hex",
  "hex-literal",
- "impl-codec",
  "impl-serde",
  "lazy_static",
  "libsecp256k1",
