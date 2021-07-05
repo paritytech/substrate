@@ -108,6 +108,7 @@ impl<T: Config> VoterList<T> {
 	pub fn iter() -> impl Iterator<Item = Node<T>> {
 		T::VoterBagThresholds::get()
 			.iter()
+			.rev()
 			.copied()
 			.filter_map(Bag::get)
 			.flat_map(|bag| bag.iter())
