@@ -115,7 +115,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	#[cfg(not(feature = "std"))]
 	fn reset_cache(&mut self) {
-		self.cache = Arc::new(RwLock::new(Cache::new()));
 	}
 
 	/// Consumes self and returns underlying storage.
