@@ -3781,7 +3781,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "max-encoded-len-derive",
  "parity-scale-codec",
- "primitive-types 0.10.1",
+ "primitive-types",
  "rustversion",
  "trybuild",
 ]
@@ -5887,7 +5887,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-util-mem-derive",
  "parking_lot 0.11.1",
- "primitive-types 0.10.1",
+ "primitive-types",
  "smallvec 1.6.1",
  "winapi 0.3.9",
 ]
@@ -6324,17 +6324,6 @@ dependencies = [
  "ctor",
  "diff",
  "output_vt100",
-]
-
-[[package]]
-name = "primitive-types"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2415937401cb030a2a0a4d922483f945fa068f52a7dbb22ce0fe5f2b6f6adace"
-dependencies = [
- "fixed-hash",
- "impl-codec",
- "uint",
 ]
 
 [[package]]
@@ -8844,7 +8833,7 @@ dependencies = [
  "integer-sqrt",
  "num-traits",
  "parity-scale-codec",
- "primitive-types 0.9.0",
+ "primitive-types",
  "rand 0.7.3",
  "scale-info",
  "serde",
@@ -8861,7 +8850,7 @@ dependencies = [
  "honggfuzz",
  "num-bigint",
  "num-traits",
- "primitive-types 0.9.0",
+ "primitive-types",
  "sp-arithmetic",
 ]
 
@@ -9040,7 +9029,7 @@ dependencies = [
  "parity-util-mem",
  "parking_lot 0.11.1",
  "pretty_assertions 0.6.1",
- "primitive-types 0.10.1",
+ "primitive-types",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "regex",
@@ -9289,7 +9278,7 @@ version = "3.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "primitive-types 0.10.1",
+ "primitive-types",
  "rustversion",
  "sp-core",
  "sp-externalities",
@@ -10649,12 +10638,12 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.22.5"
+version = "0.22.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd81fe0c8bc2b528a51c9d2c31dae4483367a26a723a3c9a4a8120311d7774e3"
+checksum = "9eac131e334e81b6b3be07399482042838adcd7957aa0010231d0813e39e02fa"
 dependencies = [
  "hash-db",
- "hashbrown 0.9.1",
+ "hashbrown 0.11.2",
  "log",
  "rustc-hex",
  "smallvec 1.6.1",

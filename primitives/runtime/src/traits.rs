@@ -1203,7 +1203,7 @@ macro_rules! impl_opaque_keys_inner {
 			Default, Clone, PartialEq, Eq,
 			$crate::codec::Encode,
 			$crate::codec::Decode,
-			$crate::TypeInfo,
+			$crate::scale_info::TypeInfo,
 			$crate::RuntimeDebug,
 		)]
 		pub struct $name {
