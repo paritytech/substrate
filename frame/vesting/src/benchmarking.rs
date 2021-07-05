@@ -227,6 +227,8 @@ benchmarks! {
 
 	first_vested_transfer {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
+		// TODO: this is just here to get the polkadot runtimes too build .. need to figure that out
+		let s in 0 .. T::MaxVestingSchedules::get() - 1;
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -261,6 +263,8 @@ benchmarks! {
 
 	first_force_vested_transfer {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
+		// TODO: this is just here to get the polkadot runtimes too build .. need to figure that out
+		let s in 0 .. T::MaxVestingSchedules::get() - 1;
 
 		let source: T::AccountId = account("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
