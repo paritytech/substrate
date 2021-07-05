@@ -1,5 +1,5 @@
 [package]
-name = "sp-allocator"
+name = "sc-allocator"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -7,18 +7,18 @@ license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Collection of allocator implementations."
-documentation = "https://docs.rs/sp-allocator"
+documentation = "https://docs.rs/sc-allocator"
 readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-std = { version = "3.0.0", path = "../std", default-features = false }
-sp-core = { version = "3.0.0", path = "../core", default-features = false }
-sp-wasm-interface = { version = "3.0.0", path = "../wasm-interface", default-features = false }
+sp-std = { version = "3.0.0", path = "../../primitives/std", default-features = false }
+sp-core = { version = "3.0.0", path = "../../primitives/core", default-features = false }
+sp-wasm-interface = { version = "3.0.0", path = "../../primitives/wasm-interface", default-features = false }
 log = { version = "0.4.11", optional = true }
-thiserror = { version = "1.0.21", optional = true }
+thiserror = { version = "1.0.21" }
 
 [features]
 default = [ "std" ]
@@ -27,5 +27,4 @@ std = [
 	"sp-core/std",
 	"sp-wasm-interface/std",
 	"log",
-	"thiserror",
 ]
