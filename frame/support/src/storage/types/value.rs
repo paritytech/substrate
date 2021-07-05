@@ -244,6 +244,8 @@ where
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
 				prefix: Self::hashed_key(),
 				max_values: Some(1),
 				max_size: None,

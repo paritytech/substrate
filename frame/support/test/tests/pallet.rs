@@ -1281,6 +1281,8 @@ fn test_storage_info() {
 		Example2::storage_info(),
 		vec![
 			StorageInfo {
+				pallet_name: b"Example2".to_vec(),
+				storage_name: b"SomeValue".to_vec(),
 				prefix: prefix(b"Example2", b"SomeValue"),
 				max_values: Some(1),
 				max_size: None,
