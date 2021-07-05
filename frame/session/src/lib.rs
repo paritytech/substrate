@@ -238,12 +238,19 @@ pub trait SessionManager<ValidatorId> {
 	/// `new_session(session)` is guaranteed to be called before `end_session(session-1)`. In other
 	/// words, a new session must always be planned before an ongoing one can be finished.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
+	/// Same as `new_session`, but it this should only be called at genesis.
+	///
+	/// The session manager might decide to treat this in a different way. Default impl is simply
+	/// using [`new_session`].
+	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<ValidatorId>> {
+		Self::new_session(new_index)
+	}
 	/// End the session.
 	///
 	/// Because the session pallet can queue validator set the ending session can be lower than the
 	/// last new session index.
 	fn end_session(end_index: SessionIndex);
-	/// Start the session.
+	/// Start an already planned session.
 	///
 	/// The session start to be used for validation.
 	fn start_session(start_index: SessionIndex);
@@ -340,13 +347,9 @@ impl<AId> SessionHandler<AId> for Tuple {
 pub struct TestSessionHandler;
 impl<AId> SessionHandler<AId> for TestSessionHandler {
 	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sp_runtime::key_types::DUMMY];
-
 	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
-
 	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
-
 	fn on_before_session_ending() {}
-
 	fn on_disabled(_: usize) {}
 }
 
@@ -451,7 +454,7 @@ decl_storage! {
 				}
 			}
 
-			let initial_validators_0 = T::SessionManager::new_session(0)
+			let initial_validators_0 = T::SessionManager::new_session_genesis(0)
 				.unwrap_or_else(|| {
 					frame_support::print("No initial validator provided by `SessionManager`, use \
 						session config keys to generate initial validator set.");
@@ -459,7 +462,7 @@ decl_storage! {
 				});
 			assert!(!initial_validators_0.is_empty(), "Empty validator set for session 0 in genesis block!");
 
-			let initial_validators_1 = T::SessionManager::new_session(1)
+			let initial_validators_1 = T::SessionManager::new_session_genesis(1)
 				.unwrap_or_else(|| initial_validators_0.clone());
 			assert!(!initial_validators_1.is_empty(), "Empty validator set for session 1 in genesis block!");
 
@@ -548,7 +551,7 @@ decl_module! {
 		///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
 		/// - DbReads: `T::ValidatorIdOf`, `NextKeys`, `origin account`
 		/// - DbWrites: `NextKeys`, `origin account`
-		/// - DbWrites per key id: `KeyOwnder`
+		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
 		#[weight = T::WeightInfo::purge_keys()]
 		pub fn purge_keys(origin) {
@@ -573,17 +576,17 @@ decl_module! {
 }
 
 impl<T: Config> Module<T> {
-	/// Move on to next session. Register new validator set and session keys. Changes
-	/// to the validator set have a session of delay to take effect. This allows for
-	/// equivocation punishment after a fork.
+	/// Move on to next session. Register new validator set and session keys. Changes to the
+	/// validator set have a session of delay to take effect. This allows for equivocation
+	/// punishment after a fork.
 	pub fn rotate_session() {
 		let session_index = CurrentIndex::get();
+		log::trace!(target: "runtime::session", "rotating session {:?}", session_index);
 
 		let changed = QueuedChanged::get();
 
 		// Inform the session handlers that a session is going to end.
 		T::SessionHandler::on_before_session_ending();
-
 		T::SessionManager::end_session(session_index);
 
 		// Get queued session keys and validators.

@@ -43,6 +43,7 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../.
 frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
+frame-election-provider-support = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-support" }
 frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 frame-try-runtime = { version = "0.9.0", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-assets = { version = "3.0.0", default-features = false, path = "../../../frame/assets" }

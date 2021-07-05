@@ -35,10 +35,10 @@ fn backing_for_should_work() {
 fn deposit_for_proposals_should_be_taken() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(1, 2, 5));
-		assert_ok!(Democracy::second(Origin::signed(2), 0, u32::max_value()));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::max_value()));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::max_value()));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::max_value()));
+		assert_ok!(Democracy::second(Origin::signed(2), 0, u32::MAX));
+		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
 		assert_eq!(Balances::free_balance(1), 5);
 		assert_eq!(Balances::free_balance(2), 15);
 		assert_eq!(Balances::free_balance(5), 35);
@@ -49,10 +49,10 @@ fn deposit_for_proposals_should_be_taken() {
 fn deposit_for_proposals_should_be_returned() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(1, 2, 5));
-		assert_ok!(Democracy::second(Origin::signed(2), 0, u32::max_value()));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::max_value()));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::max_value()));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::max_value()));
+		assert_ok!(Democracy::second(Origin::signed(2), 0, u32::MAX));
+		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
 		fast_forward_to(3);
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 20);
@@ -79,7 +79,7 @@ fn poor_seconder_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(2, 2, 11));
 		assert_noop!(
-			Democracy::second(Origin::signed(1), 0, u32::max_value()),
+			Democracy::second(Origin::signed(1), 0, u32::MAX),
 			BalancesError::<Test, _>::InsufficientBalance
 		);
 	});

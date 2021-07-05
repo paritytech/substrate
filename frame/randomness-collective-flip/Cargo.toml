@@ -16,23 +16,23 @@ targets = ["x86_64-unknown-linux-gnu"]
 safe-mix = { version = "1.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-io = { version = "3.0.0", path = "../../primitives/io" }
-serde = { version = "1.0.101" }
 
 [features]
 default = ["std"]
 std = [
 	"safe-mix/std",
-	"frame-system/std",
 	"codec/std",
-	"frame-support/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"frame-system/std",
+	"frame-support/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
