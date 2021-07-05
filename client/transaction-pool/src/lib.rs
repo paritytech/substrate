@@ -53,7 +53,7 @@ use sc_transaction_pool_api::{
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 	TransactionSource,
 };
-use graph::{IsValidator, ExtrinsicHash, ChainApi as _};
+use graph::{IsValidator, ExtrinsicHash};
 use wasm_timer::Instant;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
@@ -451,7 +451,7 @@ where
 		at: &BlockId<Self::Block>,
 		xt: sc_transaction_pool_api::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
-		use graph::ValidatedTransaction;
+		use graph::{ValidatedTransaction, ChainApi};
 		use sp_runtime::traits::SaturatedConversion;
 		use sp_runtime::transaction_validity::TransactionValidityError;
 
