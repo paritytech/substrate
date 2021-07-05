@@ -20,7 +20,6 @@
 // end::description[]
 
 use crate::{sr25519, ed25519};
-use max_encoded_len::MaxEncodedLen;
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
 use sp_std::str;
@@ -31,7 +30,7 @@ use sp_std::convert::TryFrom;
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
