@@ -159,6 +159,7 @@ pub mod weights;
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
+use scale_info::TypeInfo;
 use frame_support::{
 	ensure, WeakBoundedVec,
 	traits::{

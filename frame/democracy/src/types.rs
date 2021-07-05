@@ -18,7 +18,7 @@
 //! Miscellaneous additional datatypes.
 
 use codec::{Encode, Decode};
-use scale_info::TypeInfo
+use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{Zero, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, Saturating};
 use crate::{Vote, VoteThreshold, AccountVote, Conviction};
