@@ -621,7 +621,7 @@ pub enum VoterType {
 ///
 /// 2. Write a little program to generate the definitions. This can be a near-identical copy of
 ///    `substrate/node/runtime/voter-bags`. This program exists only to hook together the runtime
-///    definitions with the
+///    definitions with the various calculations here.
 ///
 /// 3. Run that program:
 ///
@@ -659,6 +659,15 @@ pub mod make_bags {
 		None
 	}
 
+	/// Create an underscore formatter: a formatter which inserts `_` every 3 digits of a number.
+	fn underscore_formatter() -> num_format::CustomFormat {
+		num_format::CustomFormat::builder()
+			.grouping(num_format::Grouping::Standard)
+			.separator("_")
+			.build()
+			.expect("format described here meets all constraints")
+	}
+
 	/// Compute the existential weight for the specified configuration.
 	///
 	/// Note that this value depends on the current issuance, a quantity known to change over time.
@@ -676,7 +685,7 @@ pub mod make_bags {
 	/// final one, is a constant multiple of the previous, while fully occupying the `VoteWeight`
 	/// space.
 	pub fn constant_ratio(existential_weight: VoteWeight, n_bags: usize) -> f64 {
-		(((VoteWeight::MAX - existential_weight) as f64).ln() / (n_bags as f64)).exp()
+		((VoteWeight::MAX as f64 / existential_weight as f64).ln() / ((n_bags - 1) as f64)).exp()
 	}
 
 	/// Compute the list of bag thresholds.
@@ -705,6 +714,9 @@ pub mod make_bags {
 			let successor = (last as f64 * constant_ratio).round().max(last as f64 + 1.0);
 			if successor < WEIGHT_LIMIT {
 				thresholds.push(successor as VoteWeight);
+			} else {
+				eprintln!("unexpectedly exceeded weight limit; breaking threshold generation loop");
+				break
 			}
 		}
 
@@ -744,6 +756,10 @@ pub mod make_bags {
 		let file = std::fs::OpenOptions::new().create(true).append(true).open(output)?;
 		let mut buf = std::io::BufWriter::new(file);
 
+		// create underscore formatter and format buffer
+		let mut num_buf = num_format::Buffer::new();
+		let format = underscore_formatter();
+
 		// module docs
 		let now = chrono::Utc::now();
 		writeln!(buf)?;
@@ -758,11 +774,12 @@ pub mod make_bags {
 
 		// existential weight
 		let existential_weight = existential_weight::<T>();
+		num_buf.write_formatted(&existential_weight, &format);
 		writeln!(buf)?;
 		writeln!(buf, "/// Existential weight for this runtime.")?;
 		writeln!(buf, "#[cfg(any(test, feature = \"std\"))]")?;
 		writeln!(buf, "#[allow(unused)]")?;
-		writeln!(buf, "pub const EXISTENTIAL_WEIGHT: u64 = {};", existential_weight)?;
+		writeln!(buf, "pub const EXISTENTIAL_WEIGHT: u64 = {};", num_buf.as_str())?;
 
 		// constant ratio
 		let constant_ratio = constant_ratio(existential_weight, n_bags);
@@ -777,15 +794,10 @@ pub mod make_bags {
 		writeln!(buf)?;
 		writeln!(buf, "/// Upper thresholds delimiting the bag list.")?;
 		writeln!(buf, "pub const THRESHOLDS: [u64; {}] = [", thresholds.len())?;
-		let mut num_buf = num_format::Buffer::new();
-		let format = num_format::CustomFormat::builder()
-			.grouping(num_format::Grouping::Standard)
-			.separator("_")
-			.build()
-			.expect("format described here meets all constraints");
 		for threshold in thresholds {
 			num_buf.write_formatted(&threshold, &format);
-			writeln!(buf, "	{},", num_buf.as_str())?;
+			// u64::MAX, with spacers every 3 digits, is 26 characters wide
+			writeln!(buf, "	{:>26},", num_buf.as_str())?;
 		}
 		writeln!(buf, "];")?;
 
