@@ -651,6 +651,47 @@ mod test2 {
 	}
 
 	impl Config for TraitImpl {}
+
+	#[test]
+	fn storage_info() {
+		use frame_support::{
+			StorageHasher,
+			traits::{StorageInfoTrait, StorageInfo},
+			pallet_prelude::*,
+		};
+		let prefix = |pallet_name, storage_name| {
+			let mut res = [0u8; 32];
+			res[0..16].copy_from_slice(&Twox128::hash(pallet_name));
+			res[16..32].copy_from_slice(&Twox128::hash(storage_name));
+			res
+		};
+		pretty_assertions::assert_eq!(
+			<Module<TraitImpl>>::storage_info(),
+			vec![
+				StorageInfo {
+					prefix: prefix(b"TestStorage", b"SingleDef"),
+					max_values: Some(1),
+					max_size: None,
+				},
+				StorageInfo {
+					prefix: prefix(b"TestStorage", b"PairDef"),
+					max_values: Some(1),
+					max_size: None,
+				},
+				StorageInfo {
+					prefix: prefix(b"TestStorage", b"Single"),
+					max_values: Some(1),
+					max_size: None,
+				},
+				StorageInfo {
+					prefix: prefix(b"TestStorage", b"Pair"),
+					max_values: Some(1),
+					max_size: None,
+				},
+			],
+		);
+	}
+
 }
 
 #[cfg(test)]
