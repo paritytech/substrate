@@ -24,7 +24,6 @@ use sp_runtime::{
 
 use super::*;
 use crate as pallet_vesting;
-
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 

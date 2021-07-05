@@ -15,9 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{assert_noop, assert_ok, assert_storage_noop};
-use frame_support::dispatch::EncodeLike;
+use codec::Encode;
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::EncodeLike, Blake2_128Concat, StorageHasher};
 use frame_system::RawOrigin;
+use sp_core::hashing::{blake2_128, twox_128};
 use sp_runtime::traits::{BadOrigin, Identity};
 
 use super::{Vesting as VestingStorage, *};
@@ -33,9 +34,69 @@ where
 	u64: EncodeLike<<T as frame_system::Config>::AccountId>,
 	T: pallet::Config,
 {
-		// Its ok for this to fail because the user may already have no schedules.
-		let _result = Vesting::vest(Some(account).into());
-		assert!(!<VestingStorage<T>>::contains_key(account));
+	// Its ok for this to fail because the user may already have no schedules.
+	let _result = Vesting::vest(Some(account).into());
+	assert!(!<VestingStorage<T>>::contains_key(account));
+}
+
+/// Place the given encoded `schedules` into storage, overriding any checks.
+// fn override_vesting(account: u64, schedules: &[u8]) {
+// 	let vesting_key = account.using_encoded(blake2_128concat);
+// 	let storage_key = twox_128(b"Vesting")
+// 		.iter()
+// 		.chain(twox_128(b"Vesting").iter())
+// 		.chain(vesting_key[..].iter())
+// 		.cloned()
+// 		.collect::<Vec<_>>();
+// 	sp_io::storage::set(&storage_key[..], schedules);
+// }
+
+fn blake2_128concat(x: &[u8]) -> Vec<u8> {
+	blake2_128(x).iter().chain(x.into_iter()).cloned().collect::<Vec<_>>()
+}
+
+fn generate_vesting_key(account: u64) -> Vec<u8> {
+	let module_prefix_hashed = twox_128(b"Vesting");
+	let storage_prefix_hashed = twox_128(b"Vesting");
+	// let key_hashed = account.using_encoded(blake2_128concat);
+	let key_hashed = account.using_encoded(Blake2_128Concat::hash);
+
+	let mut final_key = Vec::with_capacity(
+		module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len(),
+	);
+
+	final_key.extend_from_slice(&module_prefix_hashed[..]);
+	final_key.extend_from_slice(&storage_prefix_hashed[..]);
+	final_key.extend_from_slice(key_hashed.as_ref());
+
+	final_key
+}
+
+#[test]
+fn merge_schedules_fails_when_starting_with_too_many_schedules() {
+	let one_extra = <Test as Config>::MaxVestingSchedules::get() + 1;
+
+	let sched = VestingInfo::new::<Test>(ED * 20, ED, 10u64);
+
+	let too_many_schedules = (0 .. one_extra)
+		.map(|_| sched)
+		.collect::<Vec<_>>();
+	let storage_value = too_many_schedules.clone().encode();
+	// let storage_value = Some(too_many_schedules.clone()).encode();
+
+	let storage_key = generate_vesting_key(4);
+
+	let mut ext = ExtBuilder::default().existential_deposit(ED).build();
+	ext.insert(storage_key.clone(), storage_value.clone()); // seems to be equivalent to storage::set
+
+	ext.execute_with(|| {
+		// sp_io::storage::set(&storage_key[..], &storage_value[..]);
+		// This works
+		assert_eq!(sp_io::storage::get(&storage_key[..]).unwrap(), &storage_value[..]);
+
+		// This does not work, says there is nothing in storage
+		assert_eq!(Vesting::vesting(4).unwrap(), too_many_schedules);
+	});
 }
 
 #[test]
@@ -375,6 +436,7 @@ fn vested_transfer_correctly_fails() {
 			assert_eq!(user4_free_balance, Balances::free_balance(&4));
 			// Account 4 has no schedules.
 			vest_and_assert_no_vesting::<Test>(4);
+
 		});
 }
 
