@@ -1,4 +1,4 @@
-use sc_transaction_pool::{Pool, RevalidationQueue};
+use sc_transaction_pool::test_helpers::{Pool, RevalidationQueue};
 use sc_transaction_pool_api::TransactionSource;
 use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 use futures::executor::block_on;

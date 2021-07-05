@@ -226,7 +226,7 @@ impl TestApi {
 	}
 }
 
-impl sc_transaction_pool::ChainApi for TestApi {
+impl sc_transaction_pool::test_helpers::ChainApi for TestApi {
 	type Block = Block;
 	type Error = Error;
 	type ValidationFuture = futures::future::Ready<Result<TransactionValidity, Error>>;
@@ -236,7 +236,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		&self,
 		at: &BlockId<Self::Block>,
 		_source: TransactionSource,
-		uxt: sc_transaction_pool::types::ExtrinsicFor<Self>,
+		uxt: sc_transaction_pool::test_helpers::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		self.validation_requests.write().push(uxt.clone());
 
@@ -300,7 +300,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<sc_transaction_pool::types::NumberFor<Self>>, Error> {
+	) -> Result<Option<sc_transaction_pool::test_helpers::NumberFor<Self>>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => self.chain
 				.read()
@@ -314,7 +314,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<sc_transaction_pool::types::BlockHash<Self>>, Error> {
+	) -> Result<Option<sc_transaction_pool::test_helpers::BlockHash<Self>>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => Some(x.clone()),
 			generic::BlockId::Number(num) => self.chain
@@ -327,7 +327,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 
 	fn hash_and_length(
 		&self,
-		ex: &sc_transaction_pool::types::ExtrinsicFor<Self>,
+		ex: &sc_transaction_pool::test_helpers::ExtrinsicFor<Self>,
 	) -> (Hash, usize) {
 		Self::hash_and_length_inner(ex)
 	}

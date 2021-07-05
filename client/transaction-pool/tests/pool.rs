@@ -34,7 +34,7 @@ use std::{collections::BTreeSet, sync::Arc, convert::TryInto};
 use sc_client_api::client::BlockchainEvents;
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::BlockOrigin;
-use sc_transaction_pool::*;
+use sc_transaction_pool::{*, test_helpers::*};
 
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), true.into(), TestApi::with_alice_nonce(209).into())

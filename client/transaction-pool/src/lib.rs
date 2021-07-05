@@ -29,12 +29,13 @@ mod metrics;
 
 pub mod error;
 
+/// Common types for testing the transaction pool
 #[cfg(feature = "test-helpers")]
-pub use self::{graph::{ChainApi, Pool}, revalidation::RevalidationQueue};
-/// Common types for working with the transaction pool
-#[cfg(feature = "test-helpers")]
-pub mod types {
-	pub use super::graph::{NumberFor, BlockHash, ExtrinsicFor};
+pub mod test_helpers {
+	pub use super::{
+		graph::{ChainApi, Pool, NumberFor, BlockHash, ExtrinsicFor},
+		revalidation::RevalidationQueue,
+	};
 }
 
 pub use graph::{Options, Transaction};
