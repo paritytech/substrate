@@ -40,7 +40,7 @@ use sc_executor_common::runtime_blob::{RuntimeBlob, DataSegmentsSnapshot};
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
-	heap: sp_allocator::FreeingBumpHeapAllocator,
+	heap: sc_allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
@@ -59,7 +59,7 @@ impl<'a> FunctionExecutor<'a> {
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: sp_allocator::FreeingBumpHeapAllocator::new(heap_base),
+			heap: sc_allocator::FreeingBumpHeapAllocator::new(heap_base),
 			memory: m,
 			table: t,
 			host_functions,

@@ -31,7 +31,7 @@ pub mod error;
 #[cfg(test)]
 pub mod testing;
 
-pub use sc_transaction_graph as txpool;
+pub use sc_transaction_graph::{ChainApi, Options, Pool};
 pub use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::{HashMap, HashSet}, sync::Arc, pin::Pin, convert::TryInto};
@@ -48,7 +48,7 @@ use sp_transaction_pool::{
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 	TransactionSource,
 };
-use sc_transaction_graph::{ChainApi, ExtrinsicHash};
+use sc_transaction_graph::{IsValidator, ExtrinsicHash};
 use wasm_timer::Instant;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
@@ -191,7 +191,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	/// revalidation type.
 	pub fn with_revalidation_type(
 		options: sc_transaction_graph::Options,
-		is_validator: txpool::IsValidator,
+		is_validator: IsValidator,
 		pool_api: Arc<PoolApi>,
 		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
@@ -397,7 +397,7 @@ where
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
 		options: sc_transaction_graph::Options,
-		is_validator: txpool::IsValidator,
+		is_validator: IsValidator,
 		prometheus: Option<&PrometheusRegistry>,
 		spawner: impl SpawnEssentialNamed,
 		client: Arc<Client>,

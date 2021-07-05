@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ProvideRuntimeApi, Core};
 use substrate_test_runtime_client::{
 	prelude::*,
 	DefaultTestClientBuilderExt, TestClientBuilder,
-	runtime::{TestAPI, DecodeFails, Transfer, Block},
+	runtime::{TestAPI, DecodeFails, Transfer, Block, Header},
 };
 use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, HashFor}};
 use sp_state_machine::{
@@ -133,24 +133,11 @@ fn initialize_block_works() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.chain_info().best_number);
+	runtime_api.initialize_block(
+		&block_id,
+		&Header::new(1, Default::default(), Default::default(), Default::default(), Default::default()),
+	).unwrap();
 	assert_eq!(runtime_api.get_block_number(&block_id).unwrap(), 1);
-}
-
-#[test]
-fn initialize_block_is_called_only_once() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.chain_info().best_number);
-	assert_eq!(runtime_api.take_block_number(&block_id).unwrap(), Some(1));
-	assert_eq!(runtime_api.take_block_number(&block_id).unwrap(), None);
-}
-
-#[test]
-fn initialize_block_is_skipped() {
-	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.chain_info().best_number);
-	assert!(runtime_api.without_initialize_block(&block_id).unwrap());
 }
 
 #[test]
