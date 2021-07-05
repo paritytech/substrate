@@ -14,9 +14,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "2.1.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
 frame-metadata = { version = "13.0.0", default-features = false, path = "../metadata" }
-max-encoded-len = { version = "3.0.0", default-features = false, path = "../../max-encoded-len", features = [ "derive" ] }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -56,7 +55,6 @@ std = [
 	"sp-state-machine",
 	"frame-support-procedural/std",
 	"log/std",
-	"max-encoded-len/std",
 ]
 runtime-benchmarks = []
 try-runtime = []

@@ -25,8 +25,6 @@
 
 use sp_std::prelude::*;
 use frame_support::traits::OneSessionHandler;
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
 use sp_authority_discovery::AuthorityId;
 
 pub use pallet::*;
@@ -148,17 +146,6 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl GenesisConfig {
-	/// Direct implementation of `GenesisBuild::assimilate_storage`.
-	pub fn assimilate_storage<T: Config>(
-		&self,
-		storage: &mut sp_runtime::Storage
-	) -> Result<(), String> {
-		<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use crate as pallet_authority_discovery;
@@ -172,6 +159,7 @@ mod tests {
 		Perbill, KeyTypeId,
 	};
 	use frame_support::parameter_types;
+	use frame_support::traits::GenesisBuild;
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
@@ -302,11 +290,11 @@ mod tests {
 			.build_storage::<Test>()
 			.unwrap();
 
-		pallet_authority_discovery::GenesisConfig {
-			keys: vec![],
-		}
-		.assimilate_storage::<Test>(&mut t)
-		.unwrap();
+
+		GenesisBuild::<Test>::assimilate_storage(
+			&pallet_authority_discovery::GenesisConfig{keys: vec![]},
+			&mut t
+		).unwrap();
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
