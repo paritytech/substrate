@@ -259,7 +259,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	Ok(config)
 }
 
-/// Knobs for deterministic stack height.
+/// Knobs for deterministic stack height limiting.
 ///
 /// The WebAssembly standard defines a call/value stack but it doesn't say anything about its
 /// size except that it has to be finite. The implementations are free to choose their own notion
@@ -270,6 +270,16 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// to instrument the code so that it will count the depth of execution in some deterministic
 /// way (the machine stack limit should be so high that the deterministic limit always triggers
 /// first).
+///
+/// The deterministic stack height limiting feature allows to intstrument the code so that it will
+/// count the number of items that may be on the stack. This counting will only act as an rough
+/// estimate of the actual stack limit in wasmtime. This is because wasmtime measures it's stack
+/// usage in bytes.
+///
+/// The actual number of bytes consumed by a function is not trivial to compute  without going through
+/// full compilation. Therefore, it's expected that `native_stack_max` is grealy overestimated and
+/// thus never reached in practice. The stack overflow check introduced by the instrumentation and
+/// that relies on the logical item count should be reached first.
 ///
 /// See [here][stack_height] for more details of the instrumentation
 ///
