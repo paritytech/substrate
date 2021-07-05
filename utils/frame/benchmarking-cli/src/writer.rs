@@ -17,7 +17,7 @@
 
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use core::convert::TryInto;
@@ -358,37 +358,38 @@ fn add_storage_comments(
 	let storage_info_map = storage_info.iter().map(|info| (info.prefix.clone(), info))
 		.collect::<HashMap<_, _>>();
 	// This tracks the keys we already identified, so we only generate a single comment.
-	let mut identified = HashMap::new();
+	let mut identified = HashSet::<Vec<u8>>::new();
 
-	for result in results {
-		for key in &result.keys {
+	for result in results.clone() {
+		for (key, reads, writes, whitelisted) in &result.keys {
 			// skip keys which are whitelisted
-			if key.3 { continue; }
-			let prefix = &key.0[0..32];
-			if identified.contains_key(prefix) {
+			if *whitelisted { continue; }
+			let prefix_length = key.len().min(32);
+			let prefix = key[0..prefix_length].to_vec();
+			if identified.contains(&prefix) {
 				// skip adding comments for keys we already identified
 				continue;
 			} else {
 				// track newly identified keys
-				identified.insert(prefix, ());
+				identified.insert(prefix.clone());
 			}
-			match storage_info_map.get(prefix) {
+			match storage_info_map.get(&prefix) {
 				Some(key_info) => {
 					let comment = format!(
 						"Storage: {} {} (r:{} w:{})",
 						String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
 						String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
-						key.1,
-						key.2,
+						reads,
+						writes,
 					);
 					comments.push(comment)
 				},
 				None => {
 					let comment = format!(
 						"Storage: unknown [0x{}] (r:{} w:{})",
-						HexDisplay::from(&key.0),
-						key.1,
-						key.2,
+						HexDisplay::from(key),
+						reads,
+						writes,
 					);
 					comments.push(comment)
 				}
