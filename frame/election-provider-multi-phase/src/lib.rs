@@ -298,7 +298,7 @@ impl BenchmarkingConfig for () {
 }
 
 /// Current phase of the pallet.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug)]
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
@@ -356,7 +356,7 @@ pub enum FallbackStrategy {
 }
 
 /// The type of `Computation` that provided this election data.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug)]
 pub enum ElectionCompute {
 	/// Election was computed on-chain.
 	OnChain,
@@ -428,7 +428,7 @@ pub struct RoundSnapshot<A> {
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
 /// This is also used in dispatchables as weight witness data and should **only contain the size of
 /// the presented solution**, not the entire snapshot.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default)]
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
@@ -576,6 +576,13 @@ pub mod pallet {
 			let remaining = next_election - now;
 			let current_phase = Self::current_phase();
 
+			log!(
+				trace,
+				"current phase {:?}, next election {:?}, metadata: {:?}",
+				current_phase,
+				next_election,
+				Self::snapshot_metadata()
+			);
 			match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
@@ -945,11 +952,15 @@ impl<T: Config> Pallet<T> {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
 		}
 
+
 		// only write snapshot if all existed.
 		<SnapshotMetadata<T>>::put(SolutionOrSnapshotSize {
 			voters: voters.len() as u32,
 			targets: targets.len() as u32,
 		});
+
+		log!(info, "creating a snapshot with metadata {:?}", Self::snapshot_metadata());
+
 		<DesiredTargets<T>>::put(desired_targets);
 		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
 		Ok(w1.saturating_add(w2).saturating_add(w3).saturating_add(T::DbWeight::get().writes(3)))

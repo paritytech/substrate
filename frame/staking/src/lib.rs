@@ -2488,6 +2488,7 @@ impl<T: Config> Module<T> {
 	/// Note that this is VERY expensive. Use with care.
 	pub fn get_npos_voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let weight_of = Self::slashable_balance_of_fn();
+		log!(debug, "1");
 		let mut all_voters = Vec::new();
 
 		for (validator, _) in <Validators<T>>::iter() {
@@ -2495,6 +2496,7 @@ impl<T: Config> Module<T> {
 			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
 			all_voters.push(self_vote);
 		}
+		log!(debug, "2");
 
 		// collect all slashing spans into a BTreeMap for further queries.
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
@@ -2513,6 +2515,7 @@ impl<T: Config> Module<T> {
 			let vote_weight = weight_of(&nominator);
 			all_voters.push((nominator, vote_weight, targets))
 		}
+		log!(debug, "3");
 
 		all_voters
 	}

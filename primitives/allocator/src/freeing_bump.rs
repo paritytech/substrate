@@ -124,6 +124,7 @@ impl Order {
 	/// `MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION`
 	fn from_size(size: u32) -> Result<Self, Error> {
 		let clamped_size = if size > MAX_POSSIBLE_ALLOCATION {
+			log::warn!(target: "wasm-heap", "going to fail due to allocating {:?}", size);
 			return Err(Error::RequestedAllocationTooLarge);
 		} else if size < MIN_POSSIBLE_ALLOCATION {
 			MIN_POSSIBLE_ALLOCATION
