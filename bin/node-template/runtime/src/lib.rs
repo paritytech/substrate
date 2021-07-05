@@ -473,7 +473,7 @@ impl_runtime_apis! {
 				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7").to_vec().into(),
 			];
 
-			let storage_info: Vec<StorageInfo> = <AllPalletsWithSystem>::storage_info();
+			let storage_info = AllPalletsWithSystem::storage_info();
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);

@@ -1514,7 +1514,7 @@ impl_runtime_apis! {
 			sp_runtime::RuntimeString,
 		> {
 			use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
-			use frame_support::traits::{StorageInfo, StorageInfoTrait};
+			use frame_support::traits::StorageInfoTrait;
 
 			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency
 			// issues. To get around that, we separated the Session benchmarks into its own crate,
@@ -1542,7 +1542,7 @@ impl_runtime_apis! {
 				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95ecffd7b6c0f78751baa9d281e0bfa3a6d6f646c70792f74727372790000000000000000000000000000000000000000").to_vec().into(),
 			];
 
-			let mut storage_info: Vec<StorageInfo> = <AllPalletsWithSystem>::storage_info();
+			let storage_info = AllPalletsWithSystem::storage_info();
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
