@@ -53,7 +53,7 @@ use sc_transaction_pool_api::{
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 	TransactionSource,
 };
-use graph::{IsValidator, ExtrinsicHash};
+use graph::{IsValidator, ExtrinsicHash, ChainApi as _};
 use wasm_timer::Instant;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
@@ -78,7 +78,7 @@ pub type LightPool<Block, Client, Fetcher> = BasicPool<LightChainApi<Client, Fet
 pub struct BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: ChainApi<Block=Block>,
+		PoolApi: graph::ChainApi<Block=Block>,
 {
 	pool: Arc<graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
@@ -139,7 +139,7 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 #[cfg(not(target_os = "unknown"))]
 impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
 where
-	PoolApi: ChainApi<Block=Block>,
+	PoolApi: graph::ChainApi<Block=Block>,
 	Block: BlockT,
 {
 	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
@@ -168,7 +168,7 @@ pub enum RevalidationType {
 impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: ChainApi<Block=Block> + 'static,
+		PoolApi: graph::ChainApi<Block=Block> + 'static,
 {
 	/// Create new basic transaction pool with provided api, for tests.
 	#[cfg(feature = "test-helpers")]
@@ -252,7 +252,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: 'static + ChainApi<Block=Block>,
+		PoolApi: 'static + graph::ChainApi<Block=Block>,
 {
 	type Block = PoolApi::Block;
 	type Hash = graph::ExtrinsicHash<PoolApi>;
@@ -444,7 +444,7 @@ where
 {
 	type Block = Block;
 	type Hash = graph::ExtrinsicHash<FullChainApi<Client, Block>>;
-	type Error = <FullChainApi<Client, Block> as ChainApi>::Error;
+	type Error = <FullChainApi<Client, Block> as graph::ChainApi>::Error;
 
 	fn submit_local(
 		&self,
@@ -569,7 +569,7 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 }
 
 /// Prune the known txs for the given block.
-async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
+async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = Block>>(
 	block_id: BlockId<Block>,
 	api: &Api,
 	pool: &graph::Pool<Api>,
@@ -609,7 +609,7 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: 'static + ChainApi<Block=Block>,
+		PoolApi: 'static + graph::ChainApi<Block=Block>,
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {

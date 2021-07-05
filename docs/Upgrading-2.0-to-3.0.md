@@ -353,7 +353,7 @@ As said, we've added a new optional RPC service for improved light client suppor
 @@ -49,6 +49,7 @@ use sp_consensus::SelectChain;
  use sp_consensus_babe::BabeApi;
  use sc_rpc::SubscriptionTaskExecutor;
- use sc_transaction_pool_primitives::TransactionPool;
+ use sp_transaction_pool::TransactionPool;
 +use sc_client_api::AuxStore;
 
  /// Light client extra dependencies.
@@ -1003,7 +1003,7 @@ Altogether this accumulates to the following diff for `node/cli/src/service.rs`.
  	use crate::service::{new_full_base, new_light_base, NewFullBase};
 -	use sp_runtime::traits::IdentifyAccount;
 +	use sp_runtime::{key_types::BABE, traits::IdentifyAccount, RuntimeAppPublic};
- 	use sc_transaction_pool_api::{MaintainedTransactionPool, ChainEvent};
+ 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
  	use sc_client_api::BlockBackend;
 +	use sc_keystore::LocalKeystore;
 
