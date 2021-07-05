@@ -205,8 +205,9 @@ where
 	}
 
 	/// Remove all values under the first key.
-	pub fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<Key1> {
-		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::remove_prefix(k1)
+	pub fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+		where KArg1: ?Sized + EncodeLike<Key1> {
+		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::remove_prefix(k1, limit)
 	}
 
 	/// Iterate over values that share the first key.
@@ -316,8 +317,8 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all() {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -386,6 +387,15 @@ where
 		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_prefix(k1)
 	}
 
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
+	/// order.
+	///
+	/// If you add or remove values whose first key is `k1` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_key_prefix(k1: impl EncodeLike<Key1>) -> crate::storage::KeyPrefixIterator<Key2> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_key_prefix(k1)
+	}
+
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order.
 	///
@@ -400,6 +410,13 @@ where
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key1, Key2, Value)> {
 		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter()
+	}
+
+	/// Enumerate all keys `k1` and `k2` in the map in no particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<(Key1, Key2)> {
+		<Self as crate::storage::IterableStorageDoubleMap<Key1, Key2, Value>>::iter_keys()
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
@@ -615,7 +632,7 @@ mod test {
 
 			A::insert(3, 30, 10);
 			A::insert(4, 40, 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key(3, 30), false);
 			assert_eq!(A::contains_key(4, 40), false);
 
@@ -655,7 +672,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len(3, 30), None);
 			WithLen::append(0, 100, 10);
 			assert_eq!(WithLen::decode_len(0, 100), Some(1));
@@ -669,7 +686,7 @@ mod test {
 			assert_eq!(A::iter_prefix_values(4).collect::<Vec<_>>(), vec![13, 14]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 
-			A::remove_prefix(3);
+			A::remove_prefix(3, None);
 			assert_eq!(A::iter_prefix(3).collect::<Vec<_>>(), vec![]);
 			assert_eq!(A::iter_prefix(4).collect::<Vec<_>>(), vec![(40, 13), (41, 14)]);
 

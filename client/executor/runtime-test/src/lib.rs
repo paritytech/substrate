@@ -39,6 +39,14 @@ extern "C" {
 /// the initialized value at the start of a runtime call.
 static mut MUTABLE_STATIC: u64 = 32;
 
+#[cfg(not(feature = "std"))]
+/// This is similar to `MUTABLE_STATIC`. The tests need `MUTABLE_STATIC` for testing that
+/// non-null initialization data is properly restored during instance reusing.
+///
+/// `MUTABLE_STATIC_BSS` on the other hand focuses on the zeroed data. This is important since there
+/// may be differences in handling zeroed and non-zeroed data.
+static mut MUTABLE_STATIC_BSS: u64 = 0;
+
 sp_core::wasm_export_functions! {
 	fn test_calling_missing_external() {
 		unsafe { missing_external() }
@@ -63,7 +71,7 @@ sp_core::wasm_export_functions! {
 	}
 
 	fn test_clear_prefix(input: Vec<u8>) -> Vec<u8> {
-		storage::clear_prefix(&input);
+		storage::clear_prefix(&input, None);
 		b"all ok!".to_vec()
 	}
 
@@ -203,7 +211,6 @@ sp_core::wasm_export_functions! {
 		code
 	}
 
-
 	fn test_sandbox_get_global_val(code: Vec<u8>) -> i64 {
 		let env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		let instance = if let Ok(i) = sp_sandbox::Instance::new(&code, &env_builder, &mut ()) {
@@ -219,11 +226,9 @@ sp_core::wasm_export_functions! {
 		}
 	}
 
-
 	fn test_offchain_index_set() {
 		sp_io::offchain_index::set(b"k", b"v");
 	}
-
 
 	fn test_offchain_local_storage() -> bool {
 		let kind = sp_core::offchain::StorageKind::PERSISTENT;
@@ -278,11 +283,6 @@ sp_core::wasm_export_functions! {
 		run().is_some()
 	}
 
-	// Just some test to make sure that `sp-allocator` compiles on `no_std`.
-	fn test_sp_allocator_compiles() {
-		sp_allocator::FreeingBumpHeapAllocator::new(0);
-	}
-
 	fn test_enter_span() -> u64 {
 		wasm_tracing::enter_span(Default::default())
 	}
@@ -306,6 +306,13 @@ sp_core::wasm_export_functions! {
 		unsafe {
 			MUTABLE_STATIC += 1;
 			MUTABLE_STATIC
+		}
+	}
+
+	fn returns_mutable_static_bss() -> u64 {
+		unsafe {
+			MUTABLE_STATIC_BSS += 1;
+			MUTABLE_STATIC_BSS
 		}
 	}
 

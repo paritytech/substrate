@@ -347,6 +347,11 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 			genesis_hash: storage.genesis_hash,
 			finalized_hash: storage.finalized_hash,
 			finalized_number: storage.finalized_number,
+			finalized_state: if storage.finalized_hash != Default::default() {
+				Some((storage.finalized_hash.clone(), storage.finalized_number))
+			} else {
+				None
+			},
 			number_leaves: storage.leaves.count()
 		}
 	}
@@ -528,6 +533,32 @@ pub struct BlockImportOperation<Block: BlockT> {
 	set_head: Option<BlockId<Block>>,
 }
 
+impl<Block: BlockT> BlockImportOperation<Block> where
+	Block::Hash: Ord,
+{
+	fn apply_storage(&mut self, storage: Storage, commit: bool) -> sp_blockchain::Result<Block::Hash> {
+		check_genesis_storage(&storage)?;
+
+		let child_delta = storage.children_default.iter()
+			.map(|(_storage_key, child_content)|
+				(
+					&child_content.child_info,
+					child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())))
+				)
+			);
+
+		let (root, transaction) = self.old_state.full_storage_root(
+			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
+			child_delta,
+		);
+
+		if commit {
+			self.new_state = Some(transaction);
+		}
+		Ok(root)
+	}
+}
+
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> where
 	Block::Hash: Ord,
 {
@@ -569,24 +600,12 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		Ok(())
 	}
 
+	fn set_genesis_state(&mut self, storage: Storage, commit: bool) -> sp_blockchain::Result<Block::Hash> {
+		self.apply_storage(storage, commit)
+	}
+
 	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
-		check_genesis_storage(&storage)?;
-
-		let child_delta = storage.children_default.iter()
-			.map(|(_storage_key, child_content)|
-				 (
-					 &child_content.child_info,
-					 child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())))
-				 )
-			);
-
-		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
-			child_delta,
-		);
-
-		self.new_state = Some(transaction);
-		Ok(root)
+		self.apply_storage(storage, true)
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> sp_blockchain::Result<()>
@@ -806,12 +825,12 @@ impl<Block: BlockT> backend::RemoteBackend<Block> for Backend<Block> where Block
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 	if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-		return Err(sp_blockchain::Error::GenesisInvalid.into());
+		return Err(sp_blockchain::Error::InvalidState.into());
 	}
 
 	if storage.children_default.keys()
 		.any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
-			return Err(sp_blockchain::Error::GenesisInvalid.into());
+			return Err(sp_blockchain::Error::InvalidState.into());
 	}
 
 	Ok(())

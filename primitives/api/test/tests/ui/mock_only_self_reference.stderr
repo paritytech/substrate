@@ -22,7 +22,17 @@ error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for tr
    | |_- type in trait
 ...
 12 |   sp_api::mock_impl_runtime_apis! {
-   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `()`
+   |   -^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |   |
+   |  _expected `u64`, found `()`
+   | |
+13 | |     impl Api<Block> for MockApi {
+14 | |         fn test(self, data: u64) {}
+15 | |
+16 | |         fn test2(&mut self, data: u64) {}
+17 | |     }
+18 | | }
+   | |_- help: change the parameter type to match the trait: `Option<u64>`
    |
    = note: expected fn pointer `fn(&MockApi, &BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, Extrinsic>>, ExecutionContext, Option<u64>, Vec<_>) -> Result<_, _>`
               found fn pointer `fn(&MockApi, &BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, Extrinsic>>, ExecutionContext, Option<()>, Vec<_>) -> Result<_, _>`
@@ -40,7 +50,17 @@ error[E0053]: method `Api_test2_runtime_api_impl` has an incompatible type for t
    | |_- type in trait
 ...
 12 |   sp_api::mock_impl_runtime_apis! {
-   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `u64`, found `()`
+   |   -^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |   |
+   |  _expected `u64`, found `()`
+   | |
+13 | |     impl Api<Block> for MockApi {
+14 | |         fn test(self, data: u64) {}
+15 | |
+16 | |         fn test2(&mut self, data: u64) {}
+17 | |     }
+18 | | }
+   | |_- help: change the parameter type to match the trait: `Option<u64>`
    |
    = note: expected fn pointer `fn(&MockApi, &BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, Extrinsic>>, ExecutionContext, Option<u64>, Vec<_>) -> Result<_, _>`
               found fn pointer `fn(&MockApi, &BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, Extrinsic>>, ExecutionContext, Option<()>, Vec<_>) -> Result<_, _>`

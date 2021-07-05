@@ -27,9 +27,10 @@ rustversion = "1.0.0"
 
 [dev-dependencies]
 criterion = "0.3.0"
-substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sp-core = { version = "3.0.0", path = "../../core" }
+futures = "0.3.9"
 log = "0.4.14"
+sp-core = { version = "3.0.0", path = "../../core" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 
 [[bench]]
 name = "bench"

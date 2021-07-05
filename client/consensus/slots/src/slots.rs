@@ -151,7 +151,7 @@ where
 
 			let ends_at = Instant::now() + ends_in;
 
-			let chain_head = match self.client.best_chain() {
+			let chain_head = match self.client.best_chain().await {
 				Ok(x) => x,
 				Err(e) => {
 					log::warn!(
