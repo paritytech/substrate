@@ -152,8 +152,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		};
 	
 		let key = unsafe { &(*to_rem).key };
-		let size = Self::remove_interval_entry(intervals, key, false);
-		self.used_size -= size;
+		Self::remove_interval_entry(intervals, key, false, &mut self.used_size);
 		true
 	}
 
@@ -247,7 +246,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			}
 		}
 	
-		let mut iter = intervals.range(..key);
+		let mut iter = intervals.range(key..);
 		let mut do_remove = None;
 		if let Some((prev_key, state)) = iter.next() {
 			let do_match = if let Some(next_key) = next_key.as_ref() {
@@ -261,7 +260,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			}
 		}
 		if let Some(key) = do_remove {
-			if let Some(entry) = intervals.remove(&key) {
+			if let Some(mut entry) = intervals.remove(&key) {
 				entry.detach();
 				*used_size -= entry.estimate_size();
 			}
@@ -318,7 +317,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		used_size: &mut usize,
 	) {
 		let mut iter = intervals.range_mut(..key);
-		let end = if let Some((prev_key, state)) = iter.next_back() {
+		let end = if let Some((_prev_key, state)) = iter.next_back() {
 			let do_split = if let Some(next_key) = state.next_key.as_ref() {
 				key < next_key
 			} else {
@@ -392,7 +391,6 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		used_size: &mut usize,
 	) {
 		let mut iter = intervals.range_mut(..=key);
-		let mut can_merge = do_merge;
 		let (do_remove, can_merge) = if let Some((prev_key, state)) = iter.next_back() {
 			let do_remove = prev_key == key ||	if let Some(next_key) = state.next_key.as_ref() {
 				key < next_key
@@ -408,7 +406,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			return;
 		};
 		if let Some(next_next) = can_merge {
-			if let Some((prev_key, state)) = iter.next_back() {
+			if let Some((_prev_key, state)) = iter.next_back() {
 				if state.next_key.as_ref() == Some(key) {
 					*used_size -= state.estimate_size();
 					state.next_key = next_next;
@@ -417,7 +415,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			}
 		}
 
-		if let Some(entry) = intervals.remove(&do_remove) {
+		if let Some(mut entry) = intervals.remove(&do_remove) {
 			entry.detach();
 			*used_size -= entry.estimate_size();
 		}
@@ -444,33 +442,18 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 		} else {
 			&self.intervals
 		};
-		let mut iter = intervals.range(key..);
-		match iter.next() {
-			Some((next_key, CachedInterval::Next))
-			| Some((next_key, CachedInterval::Both)) if next_key == key => {
-				match iter.next() {
-					Some((next_key, CachedInterval::Prev))
-					| Some((next_key, CachedInterval::Both)) => Some(Some(next_key)),
-					Some((_next_key, CachedInterval::Next)) => None, // Should be unreachable
-					None => Some(None),
-				}
-			},
-			Some((next_key, CachedInterval::Prev)) if next_key == key => None,
-			Some((_next_key, CachedInterval::Next)) => None,
-			Some((next_key, _)) => {
-				debug_assert!(match intervals.range(..key).next_back() {
-					Some((_prev_key, CachedInterval::Next))
-					| Some((_prev_key, CachedInterval::Both)) => true,
-					_ => false,
-				});
-				Some(Some(next_key))
-			},
-			None => match intervals.range(..key).next_back() {
-				Some((_prev_key, CachedInterval::Next))
-				| Some((_prev_key, CachedInterval::Both)) => Some(None),
-				_ => None,
-			},
+		let mut iter = intervals.range(..=key);
+		if let Some((prev_key, next_key)) = iter.next_back() {
+			let do_match = prev_key == key ||	if let Some(next_key) = next_key.as_ref() {
+				key < next_key
+			} else {
+				true
+			};
+			if do_match {
+				return Some(next_key.as_ref());
+			}
 		}
+		None
 	}
 
 	pub(super) fn insert(&mut self, key: K, child: Option<&ChildInfo>, next: Option<K>) {
@@ -484,80 +467,39 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 		} else {
 			&mut self.intervals
 		};
-		let process_end_interval = |next_key: Option<(&K, &mut CachedInterval)>| -> (Option<K>, bool) {
-			match next_key {
-				Some(next_key) if next.is_none() || Some(next_key.0) < next.as_ref() => {
-					// having prev would mean we did cache a different interval.
-					debug_assert!(next_key.1.clone() == CachedInterval::Next);
-					(Some(next_key.0.clone()), false)
-				},
-				Some(next_key) if Some(next_key.0) == next.as_ref() => {
-					if next_key.1.clone() != CachedInterval::Prev {
-						*next_key.1 = CachedInterval::Both;
-					}
-					(None, false)
-				},
-				_ =>  {
-					// next is before or we did not have next, so just insert.
-					(None, true)
-				},
-			}
-		};
 
-		let mut iter = intervals.range_mut(&key..);
-		// handle start of interval
-		let (insert_start, (remove_end, insert_end)) = match iter.next() {
-			// Match key
-			Some((cur_key, CachedInterval::Next))
-			| Some((cur_key, CachedInterval::Both)) if cur_key == &key => {
-				debug_assert!({
-					match iter.next() {
-						Some((_next_key, CachedInterval::Next)) => false,
-						Some((next_key, _)) => Some(next_key) == next.as_ref(),
-						None => next.is_none(),
-					}
-				});
-				// we already got end of interval 
+		let mut iter = intervals.range(..=&key);
+		if let Some((prev_key, next_key)) = iter.next_back() {
+			let do_match = prev_key == &key ||	if let Some(next_key) = next_key.as_ref() {
+				&key < next_key
+			} else {
+				true
+			};
+
+			if do_match {
+				debug_assert!(next_key == &next);
 				return;
-			},
-			Some(cur_key) if cur_key.0 == &key => {
-				*cur_key.1 = CachedInterval::Both;
-				(false, process_end_interval(iter.next()))
-			},
-			// Before interval
-			next_key => {
-				let processed_next = process_end_interval(next_key);
-				match intervals.range_mut(..&key).next_back() {
-					Some((prev_key, CachedInterval::Prev)) if prev_key < &key => {
-						// no overlap
-						(true, processed_next)
-					},
-					Some(prev_key) if prev_key.1.clone() == CachedInterval::Prev => {
-						// prev_key == key (cannot be >)
-						*prev_key.1 = CachedInterval::Both;
-						(false, processed_next)
-					},
-					Some(_) => {
-						(false, processed_next)
-					},
-					None => {
-						// first key
-						(true, processed_next)
-					},
-				}
-			},
-		};
-		if insert_start {
-			intervals.insert(key, CachedInterval::Next);
-		}
-		if insert_end {
-			if let Some(key) = next {
-				intervals.insert(key, CachedInterval::Prev);
 			}
 		}
-		if let Some(key) = remove_end {
+	
+		let mut iter = intervals.range(&key..);
+		let mut do_remove = None;
+		if let Some((prev_key, next_key)) = iter.next() {
+			let do_match = if let Some(next_key) = next.as_ref() {
+				prev_key < next_key
+			} else {
+				true
+			};
+			if do_match {
+				debug_assert!(next_key == &next);
+				do_remove = Some(prev_key.clone());
+			}
+		}
+		if let Some(key) = do_remove {
 			intervals.remove(&key);
 		}
+
+		intervals.insert(key, next);
 	}
 
 	// removal is mainly for lru, but both cache shares implementation and
@@ -573,79 +515,31 @@ impl<K: Ord + Clone> LocalOrderedKeys<K> {
 		} else {
 			&mut self.intervals
 		};
-		let (rem_prev, rem_next) = if let Some(siblings) = intervals.remove(&key) {
-			let mut iter = intervals.range_mut(&key..);
-			let rem_next = if siblings == CachedInterval::Next || siblings == CachedInterval::Both {
-				match iter.next() {
-					Some((k, CachedInterval::Prev)) => {
-						Some(k.clone())
-					},
-					Some(k) => {
-						debug_assert!(k.1.clone() == CachedInterval::Both);
-						*k.1 = CachedInterval::Next;
-						None
-					},
-					_ => None,
-				}
+
+		let mut iter = intervals.range_mut(..=&key);
+		let (do_remove, can_merge) = if let Some((prev_key, next_key)) = iter.next_back() {
+			let do_remove = prev_key == &key ||	if let Some(next_key) = next_key.as_ref() {
+				&key < next_key
 			} else {
-				None
+				true
 			};
-			let rem_prev = if siblings == CachedInterval::Prev || siblings == CachedInterval::Both {
-				match intervals.range_mut(..&key).next_back() {
-					Some((k, CachedInterval::Next)) => {
-						Some(k)
-					},
-					Some(k) => {
-						debug_assert!(k.1.clone() == CachedInterval::Both);
-						*k.1 = CachedInterval::Prev;
-						None
-					},
-					_ => None,
-				}
+			if do_remove {
+				(prev_key.clone(), (prev_key == &key).then(|| next_key.clone()))
 			} else {
-				None
-			};
-			(rem_prev.cloned(), rem_next)
+				return;
+			}
 		} else {
 			return;
 		};
-		if let Some(rem) = rem_prev {
-			let _ = intervals.remove(&rem);
+		if let Some(next_next) = can_merge {
+			if let Some((_prev_key, next_key)) = iter.next_back() {
+				if next_key.as_ref() == Some(&key) {
+					*next_key = next_next;
+				}
+			}
 		}
-		if let Some(rem) = rem_next {
-			let _ = intervals.remove(&rem);
-		}
-	}
-}
 
-// Could be Copy, but is not for the
-// sake of assigning to &mut without surprise.
-#[derive(PartialEq, Eq, Clone, Debug)]
-enum CachedInterval {
-	/// Next key is next key in cache.
-	/// The current key could be an undefined key.
-	Next,
-	/// Previous key is previous key in cache.
-	/// The current key cannot be an undefined key.
-	Prev,
-	/// Next and Previous key are keys in cache.
-	/// The current key cannot be an undefined key.
-	Both,
-}
-
-impl CachedInterval {
-	// Return true if it was updated.
-	fn merge(&mut self, other: CachedInterval) -> bool {
-		match (self.clone(), other) {
-			(CachedInterval::Next, CachedInterval::Both)
-			| (CachedInterval::Next, CachedInterval::Prev)
-			| (CachedInterval::Prev, CachedInterval::Both)
-			| (CachedInterval::Prev, CachedInterval::Next) => {
-				*self = CachedInterval::Both;
-				true
-			},
-			_ => false
-		}
+		intervals.remove(&do_remove);
 	}
 }
 
@@ -655,7 +549,7 @@ mod tests {
 
 	#[test]
 	fn interval_map_works() {
-		let nb_test = 100;
+		let nb_test = 10_000;
 		let layout = [1, 3, 7, 8];
 		let query_range = 10;
 		let seed = 0;
