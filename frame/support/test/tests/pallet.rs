@@ -397,6 +397,9 @@ pub mod pallet2 {
 	{
 	}
 
+	#[pallet::storage]
+	pub type SomeValue<T: Config> = StorageValue<_, Vec<u32>>;
+
 	#[pallet::event]
 	pub enum Event {
 		/// Something
@@ -1244,6 +1247,17 @@ fn test_storage_info() {
 					max_values: None,
 					max_size: Some(7 + 16 + 8),
 				}
+			},
+		],
+	);
+
+	assert_eq!(
+		Example2::storage_info(),
+		vec![
+			StorageInfo {
+				prefix: prefix(b"Example2", b"SomeValue"),
+				max_values: Some(1),
+				max_size: None,
 			},
 		],
 	);
