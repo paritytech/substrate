@@ -127,7 +127,7 @@ mod known_os {
 			.await
 			.map_err(|_| Error::PortInUse(prometheus_addr))?;
 
-		log::info!("〽️ Prometheus server started at {}", prometheus_addr);
+		log::info!("〽️ Prometheus exporter started at {}", prometheus_addr);
 
 		let service = make_service_fn(move |_| {
 			let registry = registry.clone();

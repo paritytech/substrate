@@ -318,6 +318,19 @@ where
 		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_prefix(kp)
 	}
 
+	/// Enumerate all suffix keys in the map with prefix key `kp` in no particular order.
+	///
+	/// If you add or remove values whose prefix key is `kp` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_key_prefix<KP>(
+		kp: KP,
+	) -> crate::storage::KeyPrefixIterator<<Key as HasKeyPrefix<KP>>::Suffix>
+	where
+		Key: HasReversibleKeyPrefix<KP>,
+	{
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_key_prefix(kp)
+	}
+
 	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
 	/// particular order.
 	///
@@ -337,6 +350,13 @@ where
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key::Key, Value)> {
 		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter()
+	}
+
+	/// Enumerate all keys in the map in no particular order.
+	///
+	/// If you add or remove values to the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key::Key> {
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_keys()
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
@@ -410,6 +430,28 @@ where
 	}
 }
 
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::PartialStorageInfoTrait for
+	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Key: super::key::KeyGenerator,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::final_prefix(),
+				max_values: MaxValues::get(),
+				max_size: None,
+			}
+		]
+	}
+}
 #[cfg(test)]
 mod test {
 	use super::*;
