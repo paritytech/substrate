@@ -63,25 +63,6 @@ pub struct StorageInfo {
 	pub max_size: Option<u32>,
 }
 
-impl StorageInfo {
-	pub fn new(pallet: &[u8], storage: &[u8]) -> Self {
-		use crate::{hash::StorageHasher, Twox128};
-		let pallet_name = pallet.to_vec();
-		let storage_name = storage.to_vec();
-		let mut prefix = [0u8; 32];
-		prefix[0..16].copy_from_slice(&Twox128::hash(&pallet_name));
-		prefix[16..32].copy_from_slice(&Twox128::hash(&storage_name));
-
-		Self {
-			pallet_name,
-			storage_name,
-			prefix,
-			max_values: None,
-			max_size: None,
-		}
-	}
-}
-
 /// A trait to give information about storage.
 ///
 /// It can be used to calculate PoV worst case size.
