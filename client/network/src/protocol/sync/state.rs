@@ -150,8 +150,12 @@ impl<B: BlockT> StateSync<B> {
 			complete
 		} else {
 			let mut complete = true;
+			// if the trie is a child trie and one of its parent trie is empty,
+			// the parent cursor stays valid.
+			// Empty parent trie content only happens when all the response content
+			// is part of a single child trie.
 			if self.last_key.len() == 2 && response.entries[0].entries.len() == 0 {
-				// Unchanged parent trie key, keep old value.
+				// Do not remove the parent trie position.
 				self.last_key.pop();
 			} else {
 				self.last_key.clear();
