@@ -968,8 +968,9 @@ pub mod pallet {
 		/// voter's weight is less than or equal to its upper threshold.
 		///
 		/// When voters are iterated, higher bags are iterated completely before lower bags. This
-		/// that iteration is _semi-sorted_: voters of higher weight tend to come before voters of
-		/// lower weight, but peer voters within a particular bag are sorted in insertion order.
+		/// means that iteration is _semi-sorted_: voters of higher weight tend to come before
+		/// voters of lower weight, but peer voters within a particular bag are sorted in insertion
+		/// order.
 		///
 		/// # Expressing the constant
 		///
@@ -987,8 +988,8 @@ pub mod pallet {
 		/// there exists some constant ratio such that `threshold[k + 1] == (threshold[k] *
 		/// constant_ratio).max(threshold[k] + 1)` for all `k`.
 		///
-		/// Given the desire to compute `N` bags, the constant ratio can be computed with
-		/// `exp(ln(VoterBags::MAX) / N)`.
+		/// The helpers in the `voter_bags::make_bags` module can simplify this calculation. To use
+		/// them, the `make-bags` feature must be enabled.
 		///
 		/// # Examples
 		///
@@ -1004,8 +1005,9 @@ pub mod pallet {
 		///
 		/// # Migration
 		///
-		/// In the event that this list ever changes, the `VoterList` data structure will need to be
-		/// regenerated.
+		/// In the event that this list ever changes, a copy of the old bags list must be retained.
+		/// With that `VoterList::migrate` can be called, which will perform the appropriate
+		/// migration.
 		#[pallet::constant]
 		type VoterBagThresholds: Get<&'static [VoteWeight]>;
 	}
