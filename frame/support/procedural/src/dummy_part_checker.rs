@@ -19,6 +19,7 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 		#[doc(hidden)]
 		macro_rules! #no_op_macro_ident {
 			($pallet_name:tt) => {};
+			($pallet_name:tt, $pallet_path:tt) => {};
 		}
 
 		#[doc(hidden)]
