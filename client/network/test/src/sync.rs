@@ -1087,3 +1087,43 @@ fn syncs_after_missing_announcement() {
 	net.block_until_sync();
 	assert!(net.peer(1).client().header(&BlockId::Hash(final_block)).unwrap().is_some());
 }
+
+#[test]
+fn syncs_state() {
+	sp_tracing::try_init_simple();
+	for skip_proofs in &[ false, true ] {
+		let mut net = TestNet::new(0);
+		net.add_full_peer_with_config(Default::default());
+		net.add_full_peer_with_config(FullPeerConfig {
+			sync_mode: SyncMode::Fast { skip_proofs: *skip_proofs },
+			..Default::default()
+		});
+		net.peer(0).push_blocks(64, false);
+		// Wait for peer 1 to sync header chain.
+		net.block_until_sync();
+		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
+
+		let just = (*b"FRNK", Vec::new());
+		net.peer(1).client().finalize_block(BlockId::Number(60), Some(just), true).unwrap();
+		// Wait for state sync.
+		block_on(futures::future::poll_fn::<(), _>(|cx| {
+			net.poll(cx);
+			if net.peer(1).client.info().finalized_state.is_some() {
+				Poll::Ready(())
+			} else {
+				Poll::Pending
+			}
+		}));
+		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
+		// Wait for the rest of the states to be imported.
+		block_on(futures::future::poll_fn::<(), _>(|cx| {
+			net.poll(cx);
+			if net.peer(1).client().has_state_at(&BlockId::Number(64)) {
+				Poll::Ready(())
+			} else {
+				Poll::Pending
+			}
+		}));
+	}
+}
+

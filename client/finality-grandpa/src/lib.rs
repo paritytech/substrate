@@ -778,7 +778,7 @@ where
 
 				let authorities = serde_json::to_string(&authorities).expect(
 					"authorities is always at least an empty vector; \
-					elements are always of type string",
+					 elements are always of type string",
 				);
 
 				telemetry!(
@@ -945,7 +945,7 @@ where
 			.collect::<Vec<_>>();
 
 		let authorities = serde_json::to_string(&authorities).expect(
-			"authorities is always at least an empty vector; elements are always of type string",
+			"authorities is always at least an empty vector; elements are always of type string; qed.",
 		);
 
 		telemetry!(
@@ -1037,9 +1037,9 @@ where
 				let voters = Arc::new(VoterSet::new(new.authorities.into_iter())
 					.expect(
 						"new authorities come from pending change; \
-						pending change comes from `AuthoritySet`; \
-						`AuthoritySet` validates authorities is non-empty and weights are non-zero; \
-						qed."
+						 pending change comes from `AuthoritySet`; \
+						 `AuthoritySet` validates authorities is non-empty and weights are non-zero; \
+						 qed."
 					)
 				);
 

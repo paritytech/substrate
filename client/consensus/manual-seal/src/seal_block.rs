@@ -25,10 +25,10 @@ use sp_runtime::{
 	generic::BlockId,
 };
 use futures::prelude::*;
-use sc_transaction_pool::txpool;
+use sc_transaction_pool::{ChainApi, Pool};
 use sp_consensus::{
 	self, BlockImport, Environment, Proposer, ForkChoiceStrategy,
-	BlockImportParams, BlockOrigin, ImportResult, SelectChain,
+	BlockImportParams, BlockOrigin, ImportResult, SelectChain, StateAction,
 };
 use sp_blockchain::HeaderBackend;
 use std::collections::HashMap;
@@ -40,7 +40,7 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: txpool::ChainApi, CIDP> {
+pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: ChainApi, CIDP> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -51,7 +51,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P:
 	/// sender to report errors/success to the rpc.
 	pub sender: rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
 	/// transaction pool
-	pub pool: Arc<txpool::Pool<P>>,
+	pub pool: Arc<Pool<P>>,
 	/// header backend
 	pub client: Arc<C>,
 	/// Environment trait object for creating a proposer
@@ -90,7 +90,7 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 	C: HeaderBackend<B> + ProvideRuntimeApi<B>,
 	E: Environment<B>,
 	E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
-	P: txpool::ChainApi<Block = B>,
+	P: ChainApi<Block = B>,
 	SC: SelectChain<B>,
 	TransactionFor<C, B>: 'static,
 	CIDP: CreateInherentDataProviders<B, ()>,
@@ -145,7 +145,9 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 		params.body = Some(body);
 		params.finalized = finalize;
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		params.storage_changes = Some(proposal.storage_changes);
+		params.state_action = StateAction::ApplyChanges(
+			sp_consensus::StorageChanges::Changes(proposal.storage_changes)
+		);
 
 		if let Some(digest_provider) = digest_provider {
 			digest_provider.append_block_import(&parent, &mut params, &inherent_data)?;

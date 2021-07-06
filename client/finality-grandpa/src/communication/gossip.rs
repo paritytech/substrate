@@ -1468,7 +1468,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 						"" => "",
 					);
 
-					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
+					let len = std::cmp::min(i32::MAX as usize, data.len()) as i32;
 					Action::Discard(Misbehavior::UndecodablePacket(len).cost())
 				}
 			}

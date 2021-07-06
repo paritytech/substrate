@@ -458,11 +458,11 @@ fn phragmen_accuracy_on_large_scale_only_candidates() {
 	// candidate can have the maximum amount of tokens, and also supported by the maximum.
 	let candidates = vec![1, 2, 3, 4, 5];
 	let stake_of = create_stake_of(&[
-		(1, (u64::max_value() - 1).into()),
-		(2, (u64::max_value() - 4).into()),
-		(3, (u64::max_value() - 5).into()),
-		(4, (u64::max_value() - 3).into()),
-		(5, (u64::max_value() - 2).into()),
+		(1, (u64::MAX - 1).into()),
+		(2, (u64::MAX - 4).into()),
+		(3, (u64::MAX - 5).into()),
+		(4, (u64::MAX - 3).into()),
+		(5, (u64::MAX - 2).into()),
 	]);
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
@@ -489,13 +489,13 @@ fn phragmen_accuracy_on_large_scale_voters_and_candidates() {
 	];
 	voters.extend(auto_generate_self_voters(&candidates));
 	let stake_of = create_stake_of(&[
-		(1,  (u64::max_value() - 1).into()),
-		(2,  (u64::max_value() - 4).into()),
-		(3,  (u64::max_value() - 5).into()),
-		(4,  (u64::max_value() - 3).into()),
-		(5,  (u64::max_value() - 2).into()),
-		(13, (u64::max_value() - 10).into()),
-		(14, u64::max_value().into()),
+		(1,  (u64::MAX - 1).into()),
+		(2,  (u64::MAX - 4).into()),
+		(3,  (u64::MAX - 5).into()),
+		(4,  (u64::MAX - 3).into()),
+		(5,  (u64::MAX - 2).into()),
+		(13, (u64::MAX - 10).into()),
+		(14, u64::MAX.into()),
 	]);
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(

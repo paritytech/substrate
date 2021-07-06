@@ -17,8 +17,8 @@
 
 //! Storage key type.
 
-use crate::{hash::{ReversibleStorageHasher, StorageHasher}, traits::MaxEncodedLen};
-use codec::{Encode, EncodeLike, FullCodec};
+use crate::hash::{ReversibleStorageHasher, StorageHasher};
+use codec::{Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use paste::paste;
 use sp_std::prelude::*;
 
@@ -110,7 +110,7 @@ impl<H: StorageHasher, K: FullCodec> KeyGeneratorInner for Key<H, K> {
 	}
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(2, 18)]
+#[impl_trait_for_tuples::impl_for_tuples(1, 18)]
 #[tuple_types_custom_trait_bound(KeyGeneratorInner)]
 impl KeyGenerator for Tuple {
 	for_tuples!( type Key = ( #(Tuple::Key),* ); );
@@ -150,7 +150,7 @@ impl KeyGenerator for Tuple {
 	}
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(2, 18)]
+#[impl_trait_for_tuples::impl_for_tuples(1, 18)]
 #[tuple_types_custom_trait_bound(KeyGeneratorInner + KeyGeneratorMaxEncodedLen)]
 impl KeyGeneratorMaxEncodedLen for Tuple {
 	fn key_max_encoded_len() -> usize {
