@@ -135,7 +135,7 @@ pub trait IndexedBody<B: BlockT> {
 		number: NumberFor<B>,
 	) -> Result<Option<Vec<Vec<u8>>>, Error>;
 
-	/// Get block number by hash. Returns `None` if the header is not in the chain.
+	/// Get block number for a block hash.
 	fn number(
 		&self,
 		hash: B::Hash,
