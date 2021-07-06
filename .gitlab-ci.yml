@@ -334,6 +334,9 @@ unleash-check:
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash de-dev-deps
+# TODO: Let's see if we can shave some time by reusing cache
+    - mkdir target/unleash
+    - export CARGO_TARGET_DIR=target/unleash
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
 
 test-frame-examples-compile-to-wasm:
