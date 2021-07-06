@@ -98,11 +98,12 @@ impl Default for Releases {
 	}
 }
 
-/// Actions to take on a users `Vesting` storage entry.
+/// Actions to take on a user's `Vesting` storage entry.
+#[derive(Clone, Copy)]
 enum VestingAction {
 	/// Do not actively remove any schedules.
 	Passive,
-	/// Remove the schedules specified by the index.
+	/// Remove the schedule specified by the index.
 	Remove(usize),
 	/// Remove the two schedules, specified by index, so they can be merged.
 	Merge(usize, usize),
