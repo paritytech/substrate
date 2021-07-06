@@ -19,7 +19,7 @@ with nixpkgs; pkgs.mkShell {
     darwin.apple_sdk.frameworks.Security
   ];
 
-  LIBCLANG_PATH = "${llvmPackages.libclang}/lib";
+  LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
   ROCKSDB_LIB_DIR = "${rocksdb}/lib";
 }
