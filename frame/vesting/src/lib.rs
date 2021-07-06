@@ -655,8 +655,8 @@ impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T>
 where
 	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
 {
-	type Currency = T::Currency;
 	type Moment = T::BlockNumber;
+	type Currency = T::Currency;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
@@ -681,16 +681,14 @@ where
 	/// `vest_other`.
 	///
 	/// Is a no-op if the amount to be vested is zero.
-	/// NOTE: it is assumed the function user has done necessary `VestingInfo` param validation.
+	/// NOTE: does not validate schedule params.
 	fn add_vesting_schedule(
 		who: &T::AccountId,
 		locked: BalanceOf<T>,
 		per_block: BalanceOf<T>,
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
-		if locked.is_zero() {
-			return Ok(());
-		}
+		if locked.is_zero() { return Ok(()); }
 
 		let vesting_schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
 		let mut schedules = Self::vesting(who).unwrap_or_default();
@@ -713,7 +711,7 @@ where
 	}
 
 	// Ensure we can call `add_vesting_schedule` without error. This should always
-	// be updated in lockstep with `add_vesting_schedule`.
+	// be called prior to `add_vesting_schedule`.
 	//
 	// NOTE: expects schedule param validation has been done due to different
 	// scenarios having varying requirements.
