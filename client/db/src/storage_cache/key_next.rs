@@ -73,6 +73,71 @@ impl<K: Ord> PartialOrd<K> for RcKey<K> {
 	}
 }
 
+struct LRUList<K> {
+	/// Dummy `KeyOrderedEntry` containing `next` pointer
+	/// as the oldest entry.
+	/// `prev` pointer is used as the lru entry, meaning
+	/// if `prev` equals to `next` the lru structure is empty.
+	lru_bound: Box<KeyOrderedEntry<K>>,
+}
+
+struct LRUEntry<K> {
+	/// Entry accessed before.
+	prev: *mut KeyOrderedEntry<K>,
+	/// Entry access after.
+	next: *mut KeyOrderedEntry<K>,
+}
+
+impl<K> LRUList<K> {
+	fn next_pop(&mut self) -> Option<(&RcKey<K>, Option<&RcKey<Vec<u8>>>)> {
+		let to_rem = self.lru_bound.lru_pos.next;
+
+		if to_rem == self.lru_bound.as_mut() {
+			return None; // empty
+		}
+
+		let child = unsafe { (*to_rem).child_storage_key.as_ref() };
+		let key = unsafe { &(*to_rem).key };
+		Some((key, child))
+	}
+
+	fn touched(
+		self: &mut LRUList<K>,
+		entry: &mut LRUEntry<K>,
+	) {
+		let s = entry.detach();
+		unsafe {
+			let ptr: *mut KeyOrderedEntry<K> = self.lru_bound.as_mut();
+			(*s).lru_pos.next = ptr;
+			(*s).lru_pos.prev = (*self.lru_bound).lru_pos.prev;
+			(*(*s).lru_pos.prev).lru_pos.next = s;
+		}
+		(*self.lru_bound).lru_pos.prev = s;
+	}
+}
+
+impl<K> LRUEntry<K> {
+	fn detach(
+		&mut self,
+	) -> *mut KeyOrderedEntry<K> {
+		let prev = self.prev;
+		let next = self.next;
+		unsafe {
+			let s = (*prev).lru_pos.next;
+			(*prev).lru_pos.next = next;
+			(*next).lru_pos.prev = prev;
+			(*s).lru_pos.next = s;
+			(*s).lru_pos.prev = s;
+			s
+		}
+	}
+}
+
+unsafe impl<K: Send> Send for LRUList<K> { }
+unsafe impl<K: Sync> Sync for LRUList<K> { }
+unsafe impl<K: Send> Send for LRUEntry<K> { }
+unsafe impl<K: Sync> Sync for LRUEntry<K> { }
+
 pub(super) struct LRUOrderedKeys<K> {
 	/// We use a BTreeMap for storage internally.
 	intervals: BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
@@ -85,11 +150,8 @@ pub(super) struct LRUOrderedKeys<K> {
 	used_size: usize,
 	/// Limit size of contents.
 	limit: usize,
-	/// Dummy `KeyOrderedEntry` containing `next` pointer
-	/// as the oldest entry.
-	/// `prev` pointer is used as the lru entry, meaning
-	/// if `prev` equals to `next` the lru structure is empty.
-	lru_bound: Box<KeyOrderedEntry<K>>,
+	/// Lru management.
+	lru: LRUList<K>,
 }
 
 #[derive(Default)]
@@ -101,10 +163,8 @@ pub(super) struct LocalOrderedKeys<K: Ord> {
 }
 	
 struct KeyOrderedEntry<K> {
-	/// Entry accessed before.
-	prev: *mut KeyOrderedEntry<K>,
-	/// Entry access after.
-	next: *mut KeyOrderedEntry<K>,
+	/// Position in LRUList.
+	lru_pos: LRUEntry<K>,
 	/// Used to remove from btreemap.
 	/// Specialized lru struct would not need it.
 	key: RcKey<K>,
@@ -115,21 +175,20 @@ struct KeyOrderedEntry<K> {
 	next_key: Option<RcKey<K>>,
 }
 
-unsafe impl<K: Send> Send for LRUOrderedKeys<K> {}
-unsafe impl<K: Sync> Sync for LRUOrderedKeys<K> {}
-
 impl<K: Default + EstimateSize> KeyOrderedEntry<K> {
 	fn empty() -> Box<Self> {
 		let mut lru_bound = Box::new(KeyOrderedEntry {
-			prev: std::ptr::null_mut(),
-			next: std::ptr::null_mut(),
+			lru_pos: LRUEntry {
+				prev: std::ptr::null_mut(),
+				next: std::ptr::null_mut(),
+			},
 			key: Default::default(),
 			child_storage_key: None,
 			next_key: None,
 		});
 		let ptr: *mut KeyOrderedEntry<K> = (&mut lru_bound).as_mut();
-		lru_bound.prev = ptr;
-		lru_bound.next = ptr;
+		lru_bound.lru_pos.prev = ptr;
+		lru_bound.lru_pos.next = ptr;
 		lru_bound
 	}
 	fn estimate_size(&self) -> usize {
@@ -141,36 +200,15 @@ impl<K: Default + EstimateSize> KeyOrderedEntry<K> {
 }
 
 impl<K> KeyOrderedEntry<K> {
-	fn detach(
-		&mut self,
-	) -> *mut KeyOrderedEntry<K> {
-		let prev = self.prev;
-		let next = self.next;
-		unsafe {
-			let s = (*prev).next;
-			(*prev).next = next;
-			(*next).prev = prev;
-			(*s).next = s;
-			(*s).prev = s;
-			s
-		}
-	}
 	fn lru_touched(
 		&mut self,
-		lru_bound: &mut Box<KeyOrderedEntry<K>>,
+		lru_bound: &mut LRUList<K>,
 	) {
-		let s = self.detach();
-		unsafe {
-			let ptr: *mut KeyOrderedEntry<K> = lru_bound.as_mut();
-			(*s).next = ptr;
-			(*s).prev = (*lru_bound).prev;
-			(*(*s).prev).next = s;
-		}
-		(*lru_bound).prev = s;
+		lru_bound.touched(&mut self.lru_pos)
 	}
 	fn lru_touched_opt(
 		&mut self,
-		lru_bound: &mut Option<&mut Box<KeyOrderedEntry<K>>>,
+		lru_bound: &mut Option<&mut LRUList<K>>,
 	) {
 		lru_bound.as_mut().map(|b| self.lru_touched(b));
 	}
@@ -183,30 +221,28 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 			child_intervals: HashMap::new(),
 			used_size: 0,
 			limit,
-			lru_bound: KeyOrderedEntry::empty(),
+			lru: LRUList {
+				lru_bound: KeyOrderedEntry::empty()
+			},
 		}
 	}
 
 	fn lru_pop(
 		&mut self
 	) -> bool {
-		let to_rem = self.lru_bound.next;
+		if let Some((key, child)) = self.lru.next_pop() {
+			let intervals = if let Some(child) = child {
+				&mut self.child_intervals.get_mut(child.as_ref())
+					.expect("Removed only when no entry").0
+			} else {
+				&mut self.intervals
+			};
 
-		if to_rem == self.lru_bound.as_mut() {
-			return false; // empty
-		}
-
-		// unsafe { (*to_rem).detach() }; detach is called in remove_interval_entry
-		let intervals = if let Some(child) = unsafe { (*to_rem).child_storage_key.as_ref() } {
-			&mut self.child_intervals.get_mut(child.as_ref())
-				.expect("Removed only when no entry").0
+			Self::remove_interval_entry(intervals, key.as_ref(), false, &mut self.used_size);
+			true
 		} else {
-			&mut self.intervals
-		};
-	
-		let key = unsafe { &(*to_rem).key };
-		Self::remove_interval_entry(intervals, key.as_ref(), false, &mut self.used_size);
-		true
+			false
+		}
 	}
 
 	pub(super) fn next_storage_key(&mut self, key: &K, child: Option<&ChildInfo>) -> Option<Option<K>> {
@@ -219,13 +255,13 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		} else {
 			&mut self.intervals
 		};
-		Self::next_storage_key_inner(intervals, key, &mut Some(&mut self.lru_bound))
+		Self::next_storage_key_inner(intervals, key, &mut Some(&mut self.lru))
 	}
 
 	fn next_storage_key_inner(
 		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 		key: &K,
-		lru_bound: &mut Option<&mut Box<KeyOrderedEntry<K>>>,
+		lru: &mut Option<&mut LRUList<K>>,
 	) -> Option<Option<K>> {
 		let mut iter = intervals.range_mut::<K, _>(..=key);
 		if let Some((prev_key, state)) = iter.next_back() {
@@ -235,7 +271,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 				true
 			};
 			if do_match {
-				state.lru_touched_opt(lru_bound);
+				state.lru_touched_opt(lru);
 				return Some(state.next_key.as_ref().map(|k| k.clone_key()));
 			}
 		}
@@ -271,19 +307,18 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		};
 
 		for (k, next_key) in keys {
-			Self::add_valid_interval_no_lru(intervals, k, child, next_key, &mut self.lru_bound, &mut self.used_size);
+			Self::add_valid_interval_no_lru(intervals, k, child, next_key, &mut self.lru, &mut self.used_size);
 		}
 		self.apply_lru_limit();
 	}
 
 	// `no_lru` only indicate no lru limit applied.
-	// TODO after lru extract see if can be a simple self method.
 	fn add_valid_interval_no_lru(
 		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 		key: &RcKey<K>,
 		child: Option<&RcKey<Vec<u8>>>,
 		next_key: &Option<RcKey<K>>,
-		lru_bound: &mut Box<KeyOrderedEntry<K>>,
+		lru: &mut LRUList<K>,
 		used_size: &mut usize,
 	) {
 		let mut rc_key = None;
@@ -323,7 +358,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		}
 		if let Some(key) = do_remove {
 			if let Some(mut entry) = intervals.remove(&key) {
-				entry.detach();
+				entry.lru_pos.detach();
 				*used_size -= entry.estimate_size();
 			}
 		}
@@ -338,7 +373,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		entry.key = key.clone();
 		entry.child_storage_key = child.cloned();
 		entry.next_key = next_key.clone();
-		entry.lru_touched(lru_bound);
+		entry.lru_touched(lru);
 		*used_size += entry.estimate_size();
 		intervals.insert(key.clone(), entry);
 	}
@@ -367,7 +402,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		// and full iteration worst than seeking each changes.
 		for (key, changed) in key {
 			if changed {
-				Self::enact_insert(intervals, key, child, &mut self.lru_bound, &mut self.used_size);
+				Self::enact_insert(intervals, key, child, &mut self.lru, &mut self.used_size);
 			} else {
 				Self::enact_remove(intervals, key, &mut self.used_size);
 			}
@@ -381,7 +416,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 		key: &K,
 		child: Option<&RcKey<Vec<u8>>>,
-		lru_bound: &mut Box<KeyOrderedEntry<K>>,
+		lru: &mut LRUList<K>,
 		used_size: &mut usize,
 	) {
 		let mut iter = intervals.range_mut::<K, _>(..key);
@@ -409,7 +444,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		entry.child_storage_key = child.cloned();
 		entry.next_key = end;
 		// Should actually use splitted entry lru order.
-		entry.lru_touched(lru_bound);
+		entry.lru_touched(lru);
 		*used_size += entry.estimate_size();
 		intervals.insert(key, entry);
 	}
@@ -485,7 +520,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 		}
 
 		if let Some(mut entry) = intervals.remove(&do_remove) {
-			entry.detach();
+			entry.lru_pos.detach();
 			*used_size -= entry.estimate_size();
 		}
 	}
