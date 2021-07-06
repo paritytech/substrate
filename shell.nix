@@ -1,8 +1,9 @@
 let
   mozillaOverlay =
     import (builtins.fetchGit {
-      url = "https://github.com/mozilla/nixpkgs-mozilla.git";
-      rev = "57c8084c7ef41366993909c20491e359bbb90f54";
+      # TODO: revert to upstream after https://github.com/mozilla/nixpkgs-mozilla/pull/250
+      url = "https://github.com/andresilva/nixpkgs-mozilla.git";
+      rev = "7626aca57c20f3f6ee28cce8657147d9b358ea18";
     });
   nixpkgs = import <nixpkgs> { overlays = [ mozillaOverlay ]; };
   rust-nightly = with nixpkgs; ((rustChannelOf { date = "2021-03-01"; channel = "nightly"; }).rust.override {
@@ -14,7 +15,7 @@ with nixpkgs; pkgs.mkShell {
     clang
     pkg-config
     rust-nightly
-  ] ++ stdenv.lib.optionals stdenv.isDarwin [
+  ] ++ lib.optionals stdenv.isDarwin [
     darwin.apple_sdk.frameworks.Security
   ];
 
