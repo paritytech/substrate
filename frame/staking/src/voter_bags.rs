@@ -26,7 +26,7 @@ use crate::{
 	VotingDataOf, slashing::SlashingSpans,
 };
 use codec::{Encode, Decode};
-use frame_support::{DebugNoBound, DefaultNoBound, traits::Get};
+use frame_support::{DefaultNoBound, traits::Get};
 use sp_runtime::SaturatedConversion;
 use sp_std::{
 	boxed::Box,
@@ -348,7 +348,7 @@ impl<T: Config> VoterList<T> {
 /// iteration so that there's no incentive to churn voter positioning to improve the chances of
 /// appearing within the voter set.
 #[derive(DefaultNoBound, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(DebugNoBound))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 pub struct Bag<T: Config> {
 	head: Option<AccountIdOf<T>>,
 	tail: Option<AccountIdOf<T>>,
@@ -462,7 +462,7 @@ impl<T: Config> Bag<T> {
 
 /// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
 #[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(DebugNoBound))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 pub struct Node<T: Config> {
 	voter: Voter<AccountIdOf<T>>,
 	prev: Option<AccountIdOf<T>>,
