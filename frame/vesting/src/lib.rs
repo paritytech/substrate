@@ -470,26 +470,16 @@ impl<T: Config> Pallet<T> {
 
 		let ending_block = schedule1_ending_block.max(schedule2_ending_block);
 		let starting_block = now.max(schedule1.starting_block()).max(schedule2.starting_block());
-		let duration =
-			ending_block.saturating_sub(T::BlockNumberToBalance::convert(starting_block));
-		let per_block = if duration > locked {
-			// This would mean we have a per_block of less than 1, which should not be not possible
-			// because when we create the new schedule is at most the same duration as the longest,
-			// but never greater.
-			One::one()
-		} else {
-			match locked.checked_div(&duration) {
-				// The logic of `ending_block_as_balance` guarantees that each schedule ends at
-				// least a block after it starts and since we take the max starting and ending_block
-				// we should never get here.
-				None => locked,
-				Some(per_block) => per_block,
-			}
+
+		let per_block = {
+			let duration = ending_block
+				.saturating_sub(T::BlockNumberToBalance::convert(starting_block))
+				.max(One::one());
+			(locked / duration).max(One::one())
 		};
 
-		// While `per_block` should never be 0, it is possible that the created schedule would
-		// end after the highest possible block, which is a case where `validate` fails but we
-		// are ok with.
+		// While `per_block` should never be 0, it is possible that the created schedule would end
+		// after the highest possible block, which is a case we are ok with, but `validate` fails
 		let schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
 
 		Ok(Some(schedule))
