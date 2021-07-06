@@ -26,7 +26,7 @@ use super::EstimateSize;
 use std::sync::Arc;
 use std::borrow::Borrow;
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default, Hash)]
 struct RcKey<K>(Arc<K>);
 
 impl<K: Borrow<[u8]>> Borrow<[u8]> for RcKey<K> {
@@ -77,7 +77,10 @@ pub(super) struct LRUOrderedKeys<K> {
 	/// We use a BTreeMap for storage internally.
 	intervals: BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 	/// Intervals for child storages.
-	child_intervals: HashMap<Vec<u8>, BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>>,
+	child_intervals: HashMap<
+		RcKey<Vec<u8>>,
+		(BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>, RcKey<Vec<u8>>),
+	>,
 	/// Current total size of contents.
 	used_size: usize,
 	/// Limit size of contents.
@@ -107,7 +110,7 @@ struct KeyOrderedEntry<K> {
 	key: RcKey<K>,
 	/// When intervals are in child cache (also only use
 	/// to remove from cache).
-	child_storage_key: Option<Vec<u8>>,
+	child_storage_key: Option<RcKey<Vec<u8>>>,
 	/// Next key cached.
 	next_key: Option<RcKey<K>>,
 }
@@ -131,7 +134,7 @@ impl<K: Default + EstimateSize> KeyOrderedEntry<K> {
 	}
 	fn estimate_size(&self) -> usize {
 		self.key.as_ref().estimate_size() * 2 // apply 2 to account for btreemap internal key storage.
-			+ self.child_storage_key.as_ref().map(|k| k.len()).unwrap_or(0) + 1
+			+ 2 * 4 + 1 // ommitting child key as it is an Rc.
 			+ 2 * 4 // assuming 64 bit arch
 			+ self.next_key.as_ref().map(|k| k.as_ref().estimate_size()).unwrap_or(0) + 1
 	}
@@ -195,8 +198,8 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 
 		// unsafe { (*to_rem).detach() }; detach is called in remove_interval_entry
 		let intervals = if let Some(child) = unsafe { (*to_rem).child_storage_key.as_ref() } {
-			self.child_intervals.get_mut(child)
-				.expect("Removed only when no entry")
+			&mut self.child_intervals.get_mut(child.as_ref())
+				.expect("Removed only when no entry").0
 		} else {
 			&mut self.intervals
 		};
@@ -209,7 +212,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	pub(super) fn next_storage_key(&mut self, key: &K, child: Option<&ChildInfo>) -> Option<Option<K>> {
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info.storage_key()) {
-				intervals
+				&mut intervals.0
 			} else {
 				return None;
 			}
@@ -255,15 +258,16 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	) {
 		// No conflict of existing interval should happen if we correctly do `enact_value_changes` of
 		// previous block.
-		let intervals = if let Some(info) = child {
+		let (intervals, child) = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info) {
-				intervals
+				(&mut intervals.0, Some(&intervals.1))
 			} else {
-				self.child_intervals.insert(info.clone(), Default::default());
+				let child_key = RcKey::new(info.clone());
+				self.child_intervals.insert(child_key.clone(), (Default::default(), child_key));
 				return self.merge_local_cache_inner(keys, child);
 			}
 		} else {
-			&mut self.intervals
+			(&mut self.intervals, None)
 		};
 
 		for (k, next_key) in keys {
@@ -277,7 +281,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	fn add_valid_interval_no_lru(
 		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 		key: &RcKey<K>,
-		child: Option<&Vec<u8>>,
+		child: Option<&RcKey<Vec<u8>>>,
 		next_key: &Option<RcKey<K>>,
 		lru_bound: &mut Box<KeyOrderedEntry<K>>,
 		used_size: &mut usize,
@@ -349,14 +353,14 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 
 	/// Update cached intervals from block change delta.
 	pub(super) fn enact_value_changes<'a>(&mut self, key: impl Iterator<Item = (&'a K, bool)>, child: Option<&Vec<u8>>) {
-		let intervals = if let Some(info) = child {
+		let (intervals, child) = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info) {
-				intervals
+				(&mut intervals.0, Some(&intervals.1))
 			} else {
 				return;
 			}
 		} else {
-			&mut self.intervals
+			(&mut self.intervals, None)
 		};
 
 		// we do not run both iteration in paralell, as we consider that lru cache can be big
@@ -376,7 +380,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	fn enact_insert(
 		intervals: &mut BTreeMap<RcKey<K>, Box<KeyOrderedEntry<K>>>,
 		key: &K,
-		child: Option<&Vec<u8>>,
+		child: Option<&RcKey<Vec<u8>>>,
 		lru_bound: &mut Box<KeyOrderedEntry<K>>,
 		used_size: &mut usize,
 	) {
@@ -424,7 +428,7 @@ impl<K: Default + Ord + Clone + EstimateSize + 'static> LRUOrderedKeys<K> {
 	pub(super) fn retract_value_changes<'a>(&mut self, keys: impl Iterator<Item = &'a K>, child: Option<&Vec<u8>>) {
 		let intervals = if let Some(info) = child {
 			if let Some(intervals) = self.child_intervals.get_mut(info) {
-				intervals
+				&mut intervals.0
 			} else {
 				return;
 			}
@@ -695,8 +699,7 @@ mod tests {
 	#[test]
 	fn interval_lru_works() {
 		// estimate size for entry is 
-		// 4 * 2 + 1 + 2 * 4 + 4 + 1 = 22
-		let entry_size = 22;
+		let entry_size = 30;
 
 		let mut input = LocalOrderedKeys::<u32>::default();
 		input.insert(4, None, Some(6));
@@ -705,7 +708,6 @@ mod tests {
 		cache.merge_local_cache(&mut input);
 		input.insert(4, None, Some(6));
 		cache.merge_local_cache(&mut input);
-
 		assert!(cache.used_size == entry_size);
 		assert_eq!(None, cache.next_storage_key(&0, None));
 		assert_eq!(None, cache.next_storage_key(&6, None));
