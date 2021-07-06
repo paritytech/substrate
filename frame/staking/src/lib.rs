@@ -1508,6 +1508,8 @@ pub mod pallet {
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up
 		/// for staking.
 		///
+		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
+		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		/// Unlike [`bond`] or [`unbond`] this function does not impose any limitation on the amount
 		/// that can be added.
@@ -1545,6 +1547,8 @@ pub mod pallet {
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
 		/// T::Currency::minimum_balance(), then it is increased to the full amount.
+		///
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
