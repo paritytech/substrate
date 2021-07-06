@@ -22,10 +22,6 @@ use quote::quote;
 use super::DeclStorageDefExt;
 
 pub fn impl_storage_info(def: &DeclStorageDefExt) -> TokenStream {
-	if !def.generate_storage_info {
-		return Default::default()
-	}
-
 	let scrate = &def.hidden_crate;
 
 	let mut res_append_storage = TokenStream::new();
