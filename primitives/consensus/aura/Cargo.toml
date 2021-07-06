@@ -20,7 +20,7 @@ sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../timestamp" }
-sp-consensus-slots = { version = "0.9.0", default-features = false, path = "../slots" }
+sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
 sp-consensus = { version = "0.10.0-dev", path = "../common", optional = true }
 async-trait = { version = "0.1.48", optional = true }
 

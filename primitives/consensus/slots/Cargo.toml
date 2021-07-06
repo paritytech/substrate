@@ -1,6 +1,6 @@
 [package]
 name = "sp-consensus-slots"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for slots-based consensus"
 edition = "2018"

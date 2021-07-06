@@ -33,7 +33,7 @@ sp-consensus-babe = { path = "../../../primitives/consensus/babe", version = "0.
 sc-transaction-pool = { path = "../../transaction-pool", version = "4.0.0-dev"}
 sp-blockchain = { path = "../../../primitives/blockchain", version = "4.0.0-dev"}
 sp-consensus = { path = "../../../primitives/consensus/common", version = "0.10.0-dev"}
-sp-consensus-slots = { path = "../../../primitives/consensus/slots", version = "0.9.0"}
+sp-consensus-slots = { path = "../../../primitives/consensus/slots", version = "0.10.0-dev"}
 sp-inherents = { path = "../../../primitives/inherents", version = "4.0.0-dev"}
 sp-runtime = {  path = "../../../primitives/runtime", version = "4.0.0-dev"}
 sp-core = {  path = "../../../primitives/core", version = "4.0.0-dev"}
