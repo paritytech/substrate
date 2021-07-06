@@ -56,6 +56,7 @@ use sp_runtime::RuntimeDebug;
 
 /// Pending atomic swap operation.
 #[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct PendingSwap<T: Config> {
 	/// Source of the swap.
 	pub source: T::AccountId,
