@@ -5599,7 +5599,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-transaction-payment-rpc"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",

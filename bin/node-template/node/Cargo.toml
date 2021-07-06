@@ -47,7 +47,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
 substrate-frame-rpc-system = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/system" }
-pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/transaction-payment/rpc/" }
+pallet-transaction-payment-rpc = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/rpc/" }
 
 # These dependencies are used for runtime benchmarking
 frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
