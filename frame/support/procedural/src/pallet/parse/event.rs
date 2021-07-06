@@ -38,7 +38,7 @@ pub struct EventDef {
 	/// The kind of generic the type `Event` has.
 	pub gen_kind: super::GenericKind,
 	/// Whether the function `deposit_event` must be generated.
-	pub deposit_event: Option<(syn::Visibility, proc_macro2::Span)>,
+	pub deposit_event: Option<PalletEventDepositAttr>,
 	/// Where clause used in event definition.
 	pub where_clause: Option<syn::WhereClause>,
 	/// The span of the pallet::event attribute.
@@ -49,26 +49,15 @@ pub struct EventDef {
 ///
 /// Syntax is:
 /// * `#[pallet::generate_deposit($vis fn deposit_event)]`
-enum PalletEventAttr {
-	// todo: [AJ] could make this just a struct now it is a single variant
-	DepositEvent {
-		fn_vis: syn::Visibility,
-		// Span for the keyword deposit_event
-		fn_span: proc_macro2::Span,
-		// Span of the attribute
-		span: proc_macro2::Span,
-	},
+pub struct PalletEventDepositAttr {
+	pub fn_vis: syn::Visibility,
+	// Span for the keyword deposit_event
+	pub fn_span: proc_macro2::Span,
+	// Span of the attribute
+	pub span: proc_macro2::Span,
 }
 
-impl PalletEventAttr {
-	fn span(&self) -> proc_macro2::Span {
-		match self {
-			Self::DepositEvent { span, .. } => *span,
-		}
-	}
-}
-
-impl syn::parse::Parse for PalletEventAttr {
+impl syn::parse::Parse for PalletEventDepositAttr {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 		input.parse::<syn::Token![#]>()?;
 		let content;
@@ -76,38 +65,29 @@ impl syn::parse::Parse for PalletEventAttr {
 		content.parse::<keyword::pallet>()?;
 		content.parse::<syn::Token![::]>()?;
 
-		let lookahead = content.lookahead1();
-		if lookahead.peek(keyword::generate_deposit) {
-			let span = content.parse::<keyword::generate_deposit>()?.span();
+		let span = content.parse::<keyword::generate_deposit>()?.span();
+		let generate_content;
+		syn::parenthesized!(generate_content in content);
+		let fn_vis = generate_content.parse::<syn::Visibility>()?;
+		generate_content.parse::<syn::Token![fn]>()?;
+		let fn_span = generate_content.parse::<keyword::deposit_event>()?.span();
 
-			let generate_content;
-			syn::parenthesized!(generate_content in content);
-			let fn_vis = generate_content.parse::<syn::Visibility>()?;
-			generate_content.parse::<syn::Token![fn]>()?;
-			let fn_span = generate_content.parse::<keyword::deposit_event>()?.span();
-
-
-			Ok(PalletEventAttr::DepositEvent { fn_vis, span, fn_span })
-		} else {
-			Err(lookahead.error())
-		}
+		Ok(PalletEventDepositAttr { fn_vis, span, fn_span })
 	}
 }
 
 struct PalletEventAttrInfo {
-	deposit_event: Option<(syn::Visibility, proc_macro2::Span)>,
+	deposit_event: Option<PalletEventDepositAttr>,
 }
 
 impl PalletEventAttrInfo {
-	fn from_attrs(attrs: Vec<PalletEventAttr>) -> syn::Result<Self> {
+	fn from_attrs(attrs: Vec<PalletEventDepositAttr>) -> syn::Result<Self> {
 		let mut deposit_event = None;
 		for attr in attrs {
-			match attr {
-				PalletEventAttr::DepositEvent { fn_vis, fn_span, .. } if deposit_event.is_none() =>
-					deposit_event = Some((fn_vis, fn_span)),
-				attr => {
-					return Err(syn::Error::new(attr.span(), "Duplicate attribute"));
-				}
+			if deposit_event.is_none() {
+				deposit_event = Some(attr)
+			} else {
+				return Err(syn::Error::new(attr.span, "Duplicate attribute"));
 			}
 		}
 
@@ -127,7 +107,7 @@ impl EventDef {
 			return Err(syn::Error::new(item.span(), "Invalid pallet::event, expected item enum"))
 		};
 
-		let event_attrs: Vec<PalletEventAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
+		let event_attrs: Vec<PalletEventDepositAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
 		let attr_info = PalletEventAttrInfo::from_attrs(event_attrs)?;
 		let deposit_event = attr_info.deposit_event;
 

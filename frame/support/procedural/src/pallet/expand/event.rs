@@ -15,9 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
-use frame_support_procedural_tools::get_doc_literals;
 use crate::COUNTER;
+use crate::pallet::{
+	Def,
+	parse::event::PalletEventDepositAttr,
+};
+use frame_support_procedural_tools::get_doc_literals;
 use syn::{spanned::Spanned, Ident};
 
 /// * Add __Ignore variant on Event
@@ -121,11 +124,13 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	// skip requirement for type params to implement `TypeInfo`
 	event_item.attrs.push(syn::parse_quote!( #[scale_info(skip_type_params(#event_use_gen))] ));
 
-	let deposit_event = if let Some((fn_vis, fn_span)) = &event.deposit_event {
+	let deposit_event = if let Some(deposit_event) = &event.deposit_event {
 		let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
 		let trait_use_gen = &def.trait_use_generics(event.attr_span);
 		let type_impl_gen = &def.type_impl_generics(event.attr_span);
 		let type_use_gen = &def.type_use_generics(event.attr_span);
+
+		let PalletEventDepositAttr { fn_vis, fn_span, .. } = deposit_event;
 
 		quote::quote_spanned!(*fn_span =>
 			impl<#type_impl_gen> Pallet<#type_use_gen> #completed_where_clause {
