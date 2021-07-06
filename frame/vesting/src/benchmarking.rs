@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
-use frame_support::{assert_err, assert_noop, assert_ok};
+use frame_support::assert_ok;
 use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, CheckedDiv};
 

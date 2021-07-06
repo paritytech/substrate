@@ -209,11 +209,8 @@ fn vested_balance_should_transfer() {
 }
 
 #[test]
-fn vested_balance_should_transferwith_multi_sched() {
-	ExtBuilder::default()
-		.existential_deposit(ED)
-		.build()
-		.execute_with(|| {
+fn vested_balance_should_transfer_with_multi_sched() {
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 			let sched0 = VestingInfo::new::<Test>(5*ED, 128, 0);
 			assert_ok!(Vesting::vested_transfer(Some(13).into(), 1, sched0));
 			// Total of 2560 of locked for all the schedules.
