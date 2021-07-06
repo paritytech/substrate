@@ -8198,7 +8198,6 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-keyring",
  "sp-runtime",
  "sp-tracing",
  "sp-transaction-pool",
