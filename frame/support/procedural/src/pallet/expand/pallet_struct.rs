@@ -72,12 +72,8 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::EqNoBound,
 			#frame_support::PartialEqNoBound,
 			#frame_support::RuntimeDebugNoBound,
-			#frame_support::scale_info::TypeInfo,
 		)]
 	));
-
-	// skip requirement for type params to implement `TypeInfo`
-	pallet_item.attrs.push(syn::parse_quote!( #[scale_info(skip_type_params(#type_use_gen))] ));
 
 	let pallet_error_metadata = if let Some(error_def) = &def.error {
 		let error_ident = &error_def.error;
