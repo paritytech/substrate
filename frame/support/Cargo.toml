@@ -41,9 +41,8 @@ frame-system = { version = "3.0.0", path = "../system" }
 parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 
 [features]
-default = ["std"]
+default = ["std", "metadata-docs"]
 std = [
-	"metadata-docs",
 	"once_cell",
 	"serde",
 	"scale-info/std",
