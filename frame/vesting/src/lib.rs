@@ -540,9 +540,13 @@ impl<T: Config> Pallet<T> {
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
 
-		// Check we can add to this account prior to any storage writes. The schedule
-		// params are ignored so we just use 0s.
-		Self::can_add_vesting_schedule(&target, Zero::zero(), Zero::zero(), Zero::zero())?;
+		// Check we can add to this account prior to any storage writes.
+		Self::can_add_vesting_schedule(
+			&target,
+			schedule.locked(),
+			schedule.per_block(),
+			schedule.starting_block(),
+		)?;
 
 		T::Currency::transfer(
 			&source,

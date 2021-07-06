@@ -355,10 +355,11 @@ fn vested_transfer_correctly_fails() {
 				Error::<Test>::InfiniteSchedule,
 			);
 
-			// `locked / per_block > BlockNumber::max_value()`
-			let schedule_duration_gt_max_blocknumber = VestingInfo::new::<Test>(u64::MAX, 1, 10);
+			// `locked / per_block + starting_block > BlockNumber::max_value()`
+			let start = 10u64;
+			let schedule_end_gt_max_blocknumber = VestingInfo::new::<Test>(u64::MAX - start + 1, 1, start);
 			assert_noop!(
-				Vesting::vested_transfer(Some(3).into(), 4, schedule_duration_gt_max_blocknumber),
+				Vesting::vested_transfer(Some(3).into(), 4, schedule_end_gt_max_blocknumber),
 				Error::<Test>::InfiniteSchedule,
 			);
 
@@ -510,10 +511,11 @@ fn force_vested_transfer_correctly_fails() {
 				Error::<Test>::InfiniteSchedule,
 			);
 
-			// `locked / per_block > BlockNumber::max_value()`
-			let schedule_duration_gt_max_blocknumber = VestingInfo::new::<Test>(u64::MAX, 1, 10);
+			// `locked / per_block + starting_block > BlockNumber::max_value()`
+			let start = 10u64;
+			let schedule_end_gt_max_blocknumber = VestingInfo::new::<Test>(u64::MAX - start + 1, 1, start);
 			assert_noop!(
-				Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_duration_gt_max_blocknumber),
+				Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_end_gt_max_blocknumber),
 				Error::<Test>::InfiniteSchedule,
 			);
 
