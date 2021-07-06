@@ -85,7 +85,7 @@ account of). By looking at these fields we can establish a transaction's readine
 for block inclusion.
 
 The `provides` set contains properties that will be *satisfied* in case the transaction
-is successfully added to a block. Only one transaction in a block may provide a specific
+is successfully added to a block. Only a transaction in a block may provide a specific
 tag. `requires` contains properties that must be satisfied **before** the transaction
 can be included to a block.
 
