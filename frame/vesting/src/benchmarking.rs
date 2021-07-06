@@ -69,6 +69,9 @@ fn add_vesting_schedules<T: Config>(
 			target.clone(),
 			schedule
 		));
+
+		// Top up to guarantee we can always transfer another schedule.
+		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
 	}
 
 	Ok(total_locked.into())
@@ -81,7 +84,8 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
+		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
+
 		add_locks::<T>(&caller, l as u8);
 		let expected_balance = add_vesting_schedules::<T>(caller_lookup, s)?;
 
@@ -108,7 +112,8 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
+		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
+
 		add_locks::<T>(&caller, l as u8);
 		add_vesting_schedules::<T>(caller_lookup, s)?;
 
@@ -135,7 +140,8 @@ benchmarks! {
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
-		T::Currency::make_free_balance_be(&other, BalanceOf::<T>::max_value() / 2u32.into());
+		// T::Currency::make_free_balance_be(&other, BalanceOf::<T>::max_value() / 2u32.into());
+
 		add_locks::<T>(&other, l as u8);
 		let expected_balance = add_vesting_schedules::<T>(other_lookup.clone(), s)?;
 
@@ -164,7 +170,6 @@ benchmarks! {
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
-		T::Currency::make_free_balance_be(&other, BalanceOf::<T>::max_value() / 2u32.into());
 
 		add_locks::<T>(&other, l as u8);
 		add_vesting_schedules::<T>(other_lookup.clone(), s)?;
