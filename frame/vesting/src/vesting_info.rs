@@ -98,8 +98,8 @@ where
 			.unwrap_or(Zero::zero())
 	}
 
-	/// Block number at which the schedule ends.
-	pub fn ending_block<BlockNumberToBalance: Convert<BlockNumber, Balance>, T: Config>(
+	/// Block number at which the schedule ends (as type `Balance`).
+	pub fn ending_block_as_balance<BlockNumberToBalance: Convert<BlockNumber, Balance>, T: Config>(
 		&self,
 	) -> Result<Balance, DispatchError> {
 		let starting_block = BlockNumberToBalance::convert(self.starting_block);

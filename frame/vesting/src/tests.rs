@@ -640,7 +640,7 @@ fn merge_ongoing_schedules() {
 			.locked_at::<Identity>(cur_block)
 			.saturating_add(sched0.locked_at::<Identity>(cur_block));
 		// End block of the new schedule is the greater of either merged schedule
-		let sched2_end = sched1.ending_block::<Identity, Test>().unwrap().max(sched0.ending_block::<Identity, Test>().unwrap());
+		let sched2_end = sched1.ending_block_as_balance::<Identity, Test>().unwrap().max(sched0.ending_block_as_balance::<Identity, Test>().unwrap());
 		let sched2_duration = sched2_end - cur_block;
 		// Based off the new schedules total locked and its duration, we can calculate the
 		// amount to unlock per block.
@@ -704,7 +704,7 @@ fn merging_shifts_other_schedules_index() {
 		let sched3_locked =
 			sched2.locked_at::<Identity>(cur_block) + sched0.locked_at::<Identity>(cur_block);
 		// and will end at the max possible block.
-		let sched3_end = sched2.ending_block::<Identity, Test>().unwrap().max(sched0.ending_block::<Identity, Test>().unwrap());
+		let sched3_end = sched2.ending_block_as_balance::<Identity, Test>().unwrap().max(sched0.ending_block_as_balance::<Identity, Test>().unwrap());
 		let sched3_duration = sched3_end - sched3_start;
 		let sched3_per_block = sched3_locked / sched3_duration;
 		let sched3 = VestingInfo::new::<Test>(sched3_locked, sched3_per_block, sched3_start);
@@ -730,7 +730,7 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0]);
 
 		// Fast forward to half way through the life of sched_1
-		let mut cur_block = (sched0.starting_block() + sched0.ending_block::<Identity, Test>().unwrap()) / 2;
+		let mut cur_block = (sched0.starting_block() + sched0.ending_block_as_balance::<Identity, Test>().unwrap()) / 2;
 		assert_eq!(cur_block, 20);
 		System::set_block_number(cur_block);
 
@@ -771,8 +771,8 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 		let sched2_locked =
 			sched0.locked_at::<Identity>(cur_block) + sched1.locked_at::<Identity>(cur_block);
 		// and will end at the max possible block.
-		let sched2_end = sched0.ending_block::<Identity, Test>().unwrap()
-			.max(sched1.ending_block::<Identity, Test>().unwrap());
+		let sched2_end = sched0.ending_block_as_balance::<Identity, Test>().unwrap()
+			.max(sched1.ending_block_as_balance::<Identity, Test>().unwrap());
 		let sched2_duration = sched2_end - sched2_start;
 		let sched2_per_block = sched2_locked / sched2_duration;
 
@@ -814,7 +814,7 @@ fn merge_finished_and_ongoing_schedules() {
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1, sched2]);
 
 		// Fast forward to sched0's end block.
-		let cur_block = sched0.ending_block::<Identity, Test>().unwrap();
+		let cur_block = sched0.ending_block_as_balance::<Identity, Test>().unwrap();
 		System::set_block_number(cur_block);
 		assert_eq!(System::block_number(), 30);
 
@@ -866,7 +866,7 @@ fn merge_finishing_schedules_does_not_create_a_new_one() {
 		assert_eq!(Vesting::vesting(&2).unwrap(), vec![sched0, sched1]);
 
 		let all_scheds_end =
-			sched0.ending_block::<Identity, Test>().unwrap().max(sched1.ending_block::<Identity, Test>().unwrap());
+			sched0.ending_block_as_balance::<Identity, Test>().unwrap().max(sched1.ending_block_as_balance::<Identity, Test>().unwrap());
 		assert_eq!(all_scheds_end, 40);
 		System::set_block_number(all_scheds_end);
 
@@ -1038,7 +1038,7 @@ fn merge_vesting_errors_with_per_block_0() {
 			1,
 		);
 		assert_eq!(
-			sched0.ending_block::<Identity, Test>(),
+			sched0.ending_block_as_balance::<Identity, Test>(),
 			Err(Error::<Test>::InfiniteSchedule.into())
 		);
 		let sched1 = VestingInfo::new::<Test>(
@@ -1046,7 +1046,7 @@ fn merge_vesting_errors_with_per_block_0() {
 			1, // Vesting over 512 blocks.
 			10,
 		);
-		assert_eq!(sched1.ending_block::<Identity, Test>(), Ok(512u64 + 10));
+		assert_eq!(sched1.ending_block_as_balance::<Identity, Test>(), Ok(512u64 + 10));
 
 		assert_eq!(
 			Vesting::merge_vesting_info(5, sched0, sched1),
@@ -1095,37 +1095,37 @@ fn vesting_info_validate_and_correct_works() {
 }
 
 #[test]
-fn vesting_info_ending_block_works() {
+fn vesting_info_ending_block_as_balance_works() {
 	// Treats `per_block` 0 as an error
 	let per_block_0 = VestingInfo::new::<Test>(256u32, 0u32, 10u32);
 	assert_eq!(
-		per_block_0.ending_block::<Identity, Test>(),
+		per_block_0.ending_block_as_balance::<Identity, Test>(),
 		Err(Error::<Test>::InfiniteSchedule.into())
 	);
 	// let per_block_1 = VestingInfo::new::<Test>(256u32, 1u32, 10u32);
-	// assert_eq!(per_block_0.ending_block::<Identity, Test>().unwrap(), per_block_1.ending_block::<Identity, Test>().unwrap());
+	// assert_eq!(per_block_0.ending_block_as_balance::<Identity, Test>().unwrap(), per_block_1.ending_block_as_balance::<Identity, Test>().unwrap());
 
 	// `per_block >= locked` always results in a schedule ending the block after it starts
 	let per_block_gt_locked = VestingInfo::new::<Test>(256u32, 256 * 2u32, 10u32);
 	assert_eq!(
-		per_block_gt_locked.ending_block::<Identity, Test>().unwrap(),
+		per_block_gt_locked.ending_block_as_balance::<Identity, Test>().unwrap(),
 		1 + per_block_gt_locked.starting_block()
 	);
 	let per_block_eq_locked = VestingInfo::new::<Test>(256u32, 256u32, 10u32);
 	assert_eq!(
-		per_block_gt_locked.ending_block::<Identity, Test>().unwrap(),
-		per_block_eq_locked.ending_block::<Identity, Test>().unwrap()
+		per_block_gt_locked.ending_block_as_balance::<Identity, Test>().unwrap(),
+		per_block_eq_locked.ending_block_as_balance::<Identity, Test>().unwrap()
 	);
 
 	// Correctly calcs end if `locked % per_block != 0`. (We need a block to unlock the remainder).
 	let imperfect_per_block = VestingInfo::new::<Test>(256u32, 250u32, 10u32);
 	assert_eq!(
-		imperfect_per_block.ending_block::<Identity, Test>().unwrap(),
+		imperfect_per_block.ending_block_as_balance::<Identity, Test>().unwrap(),
 		imperfect_per_block.starting_block() + 2u32,
 	);
 	assert_eq!(
 		imperfect_per_block
-			.locked_at::<Identity>(imperfect_per_block.ending_block::<Identity, Test>().unwrap()),
+			.locked_at::<Identity>(imperfect_per_block.ending_block_as_balance::<Identity, Test>().unwrap()),
 		0
 	);
 }
