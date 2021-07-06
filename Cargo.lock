@@ -1858,7 +1858,6 @@ dependencies = [
  "frame-system",
  "impl-trait-for-tuples",
  "log",
- "max-encoded-len",
  "once_cell",
  "parity-scale-codec",
  "parity-util-mem",
@@ -2767,6 +2766,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61124eeebbd69b8190558df225adf7e4caafce0d743919e5d6b19652314ec5ec"
 dependencies = [
  "cfg-if 1.0.0",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -3774,29 +3776,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "max-encoded-len"
-version = "3.0.0"
-dependencies = [
- "frame-support",
- "impl-trait-for-tuples",
- "max-encoded-len-derive",
- "parity-scale-codec",
- "primitive-types",
- "rustversion",
- "trybuild",
-]
-
-[[package]]
-name = "max-encoded-len-derive"
-version = "3.0.0"
-dependencies = [
- "proc-macro-crate 1.0.0",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "maybe-uninit"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4155,6 +4134,7 @@ dependencies = [
  "jsonrpc-core",
  "libp2p",
  "node-cli",
+ "parking_lot 0.11.1",
  "sc-rpc-api",
  "serde",
  "serde_json",
@@ -4371,7 +4351,6 @@ dependencies = [
  "frame-try-runtime",
  "hex-literal",
  "log",
- "max-encoded-len",
  "node-primitives",
  "pallet-assets",
  "pallet-authority-discovery",
@@ -4728,7 +4707,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "max-encoded-len",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
@@ -4845,7 +4823,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
- "max-encoded-len",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "scale-info",
@@ -5398,7 +5375,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "max-encoded-len",
  "pallet-balances",
  "pallet-utility",
  "parity-scale-codec",
@@ -6335,7 +6311,6 @@ dependencies = [
  "fixed-hash",
  "impl-codec",
  "impl-serde",
- "scale-info",
  "uint",
 ]
 
@@ -8804,7 +8779,6 @@ dependencies = [
 name = "sp-application-crypto"
 version = "3.0.0"
 dependencies = [
- "max-encoded-len",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -9022,7 +8996,6 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log",
- "max-encoded-len",
  "merlin",
  "num-traits",
  "parity-scale-codec",
@@ -9253,7 +9226,6 @@ dependencies = [
  "hash256-std-hasher",
  "impl-trait-for-tuples",
  "log",
- "max-encoded-len",
  "parity-scale-codec",
  "parity-util-mem",
  "paste 1.0.5",
