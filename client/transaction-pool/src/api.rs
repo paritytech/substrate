@@ -203,24 +203,54 @@ where
 	sp_tracing::within_span!(sp_tracing::Level::TRACE, "validate_transaction";
 	{
 		let runtime_api = client.runtime_api();
-		let has_v2 = sp_tracing::within_span! { sp_tracing::Level::TRACE, "check_version";
+		let api_version = sp_tracing::within_span! { sp_tracing::Level::TRACE, "check_version";
 			runtime_api
-				.has_api_with::<dyn TaggedTransactionQueue<Block>, _>(&at, |v| v >= 2)
-				.unwrap_or_default()
-		};
+				.api_version::<dyn TaggedTransactionQueue<Block>>(&at)
+				.map_err(|e| Error::RuntimeApi(e.to_string()))?
+				.ok_or_else(|| Error::RuntimeApi(
+					format!("Could not find `TaggedTransactionQueue` api for block `{:?}`.", at)
+				))
+		}?;
 
-		let res = sp_tracing::within_span!(
+		let block_hash = client.to_hash(at)
+			.map_err(|e| Error::RuntimeApi(format!("{:?}", e)))?
+			.ok_or_else(|| Error::RuntimeApi(format!("Could not get hash for block `{:?}`.", at)))?;
+
+		use sp_api::Core;
+
+		sp_tracing::within_span!(
 			sp_tracing::Level::TRACE, "runtime::validate_transaction";
 		{
-			if has_v2 {
-				runtime_api.validate_transaction(&at, source, uxt)
+			if api_version >= 3 {
+				runtime_api.validate_transaction(&at, source, uxt, block_hash)
+					.map_err(|e| Error::RuntimeApi(e.to_string()))
 			} else {
-				#[allow(deprecated)] // old validate_transaction
-				runtime_api.validate_transaction_before_version_2(&at, uxt)
-			}
-		});
+				let block_number = client.to_number(at)
+					.map_err(|e| Error::RuntimeApi(format!("{:?}", e)))?
+					.ok_or_else(||
+						Error::RuntimeApi(format!("Could not get number for block `{:?}`.", at))
+					)?;
 
-		res.map_err(|e| Error::RuntimeApi(e.to_string()))
+				// The old versions require us to call `initialize_block` before.
+				runtime_api.initialize_block(at, &sp_runtime::traits::Header::new(
+					block_number + sp_runtime::traits::One::one(),
+					Default::default(),
+					Default::default(),
+					block_hash,
+					Default::default()),
+				).map_err(|e| Error::RuntimeApi(e.to_string()))?;
+
+				if api_version == 2 {
+					#[allow(deprecated)] // old validate_transaction
+					runtime_api.validate_transaction_before_version_3(&at, source, uxt)
+						.map_err(|e| Error::RuntimeApi(e.to_string()))
+				} else {
+					#[allow(deprecated)] // old validate_transaction
+					runtime_api.validate_transaction_before_version_2(&at, uxt)
+						.map_err(|e| Error::RuntimeApi(e.to_string()))
+				}
+			}
+		})
 	})
 }
 

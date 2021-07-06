@@ -267,9 +267,9 @@ mod tests {
 	use super::*;
 	use super::helpers_128bit::*;
 
-	const MAX128: u128 = u128::max_value();
-	const MAX64: u128 = u64::max_value() as u128;
-	const MAX64_2: u128 = 2 * u64::max_value() as u128;
+	const MAX128: u128 = u128::MAX;
+	const MAX64: u128 = u64::MAX as u128;
+	const MAX64_2: u128 = 2 * u64::MAX as u128;
 
 	fn r(p: u128, q: u128) -> Rational128 {
 		Rational128(p, q)

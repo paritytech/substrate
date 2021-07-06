@@ -180,7 +180,7 @@ impl Order {
 }
 
 /// A special magic value for a pointer in a link that denotes the end of the linked list.
-const NIL_MARKER: u32 = u32::max_value();
+const NIL_MARKER: u32 = u32::MAX;
 
 /// A link between headers in the free list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -496,7 +496,7 @@ impl Memory for [u8] {
 		let range =
 			heap_range(ptr, 8, self.len()).ok_or_else(|| error("write out of heap bounds"))?;
 		let bytes = val.to_le_bytes();
-		&mut self[range].copy_from_slice(&bytes[..]);
+		self[range].copy_from_slice(&bytes[..]);
 		Ok(())
 	}
 	fn size(&self) -> u32 {

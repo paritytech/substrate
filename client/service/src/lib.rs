@@ -65,7 +65,7 @@ pub use sc_chain_spec::{
 	NoExtension, ChainType,
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
-pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
+pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]

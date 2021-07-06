@@ -345,7 +345,7 @@ fn lots_of_incoming_peers_works() {
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
-					in_peers: u32::max_value(),
+					in_peers: u32::MAX,
 					.. Default::default()
 				},
 			}
