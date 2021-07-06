@@ -5117,7 +5117,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "max-encoded-len",
  "pallet-balances",
  "parity-scale-codec",
  "sp-core",

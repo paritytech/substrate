@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use enumflags2::BitFlags;
 use frame_support::{
-    traits::{ConstU32, Get, MaxEncodedLen},
+    traits::{ConstU32, Get},
     BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use sp_std::prelude::*;
@@ -202,7 +202,8 @@ impl Decode for IdentityFields {
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
-#[derive(CloneNoBound, Encode, Decode, Eq, PartialEqNoBound, RuntimeDebugNoBound)]
+#[derive(CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound)]
+#[codec(mel_bound(FieldLimit: Get<u32>))]
 #[cfg_attr(test, derive(frame_support::DefaultNoBound))]
 pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
@@ -250,27 +251,16 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	pub twitter: Data,
 }
 
-impl<FieldLimit: Get<u32>> MaxEncodedLen for IdentityInfo<FieldLimit> {
-	fn max_encoded_len() -> usize {
-		let mut len = 0usize;
-		len = len.saturating_add(<BoundedVec<(Data, Data), FieldLimit>>::max_encoded_len());
-		len = len.saturating_add(Data::max_encoded_len()); // display
-		len = len.saturating_add(Data::max_encoded_len()); // legal
-		len = len.saturating_add(Data::max_encoded_len()); // web
-		len = len.saturating_add(Data::max_encoded_len()); // riot
-		len = len.saturating_add(Data::max_encoded_len()); // email
-		len = len.saturating_add(<Option<[u8; 20]>>::max_encoded_len()); // PGP fingerprint
-		len = len.saturating_add(Data::max_encoded_len()); // image
-		len = len.saturating_add(Data::max_encoded_len()); // twitter
-		len
-	}
-}
-
 /// Information concerning the identity of the controller of an account.
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(CloneNoBound, Encode, Eq, PartialEqNoBound, RuntimeDebugNoBound)]
+#[derive(CloneNoBound, Encode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound)]
+#[codec(mel_bound(
+	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
+	MaxJudgements: Get<u32>,
+	MaxAdditionalFields: Get<u32>,
+))]
 pub struct Registration<
 	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,
 	MaxJudgements: Get<u32>,
@@ -285,20 +275,6 @@ pub struct Registration<
 
 	/// Information on the identity.
 	pub info: IdentityInfo<MaxAdditionalFields>,
-}
-
-impl <
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
-	MaxJudgements: Get<u32>,
-	MaxAdditionalFields: Get<u32>,
-> MaxEncodedLen for Registration<Balance, MaxJudgements, MaxAdditionalFields> {
-	fn max_encoded_len() -> usize {
-		let mut len = 0usize;
-		len = len.saturating_add(<BoundedVec<(RegistrarIndex, Judgement<Balance>), MaxJudgements>>::max_encoded_len());
-		len = len.saturating_add(Balance::max_encoded_len());
-		len = len.saturating_add(<IdentityInfo<MaxAdditionalFields>>::max_encoded_len());
-		len
-	}
 }
 
 impl <
