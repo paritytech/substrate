@@ -237,7 +237,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 			.fold(None, f)
 	}
 
-	/// Returns true if given transaction hash is part of the queue.
+	/// Returns true if given transaction is part of the queue.
 	pub fn contains(&self, hash: &Hash) -> bool {
 		self.ready.read().contains_key(hash)
 	}
