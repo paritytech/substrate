@@ -1396,7 +1396,7 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
-/// and value types must bound [`traits::MaxEncodedLen`].
+/// and value types must bound [`pallet_prelude::MaxEncodedLen`].
 ///
 /// ### Macro expansion:
 ///

@@ -35,6 +35,9 @@ pub use sp_std;
 #[cfg(feature = "std")]
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 
+#[cfg(feature = "std")]
+pub mod embed;
+
 /// An attribute that accepts a version declaration of a runtime and generates a custom wasm section
 /// with the equivalent contents.
 ///
