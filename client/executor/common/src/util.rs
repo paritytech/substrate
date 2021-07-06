@@ -33,6 +33,7 @@ pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usiz
 	}
 }
 
+/// Provides safe memory access interface using an external buffer
 pub trait MemoryTransfer {
 	/// Read data from a slice of memory into a destination buffer.
 	///
@@ -45,34 +46,56 @@ pub trait MemoryTransfer {
 	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()>;
 }
 
-struct WasmiMemoryWrapper(wasmi::MemoryRef);
+/// Safe wrapper over wasmi memory reference
+pub mod wasmi {
+	use super::*;
 
-impl WasmiMemoryWrapper {
-	/// Take ownership of the memory region and return a wrapper object
-	pub fn new(memory: wasmi::MemoryRef) -> Self {
-		Self(memory)
+	/// Wasmi provides direct access to its memory using slices.
+	///
+	/// This wrapper limits the scope where the slice can be taken to
+	#[derive(Debug, Clone)]
+	pub struct MemoryWrapper(::wasmi::MemoryRef);
+
+	impl MemoryWrapper {
+		/// Take ownership of the memory region and return a wrapper object
+		pub fn new(memory: ::wasmi::MemoryRef) -> Self {
+			Self(memory)
+		}
+
+		/// Clone the underlying memory object
+		///
+		/// # Safety
+		///
+		/// The sole purpose of `MemoryRef` is to protect the memory from uncontrolled
+		/// access. By returning the memory object "as is" we bypass all of the checks.
+		///
+		/// Intended to use only during module initialization.
+		///
+		pub unsafe fn clone_inner(&self) -> ::wasmi::MemoryRef {
+			self.0.clone()
+		}
 	}
-}
 
-impl MemoryTransfer for WasmiMemoryWrapper {
-	fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
-		self.0.with_direct_access(|source| {
-			let range = checked_range(source_addr.into(), destination.len(), source.len())
-				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+	impl super::MemoryTransfer for MemoryWrapper {
+		fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
+			self.0.with_direct_access(|source| {
+				let range = checked_range(source_addr.into(), destination.len(), source.len())
+					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
 
-			destination.copy_from_slice(&source[range]);
-			Ok(())
-		})
-	}
+				destination.copy_from_slice(&source[range]);
+				Ok(())
+			})
+		}
 
-	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
-		self.0.with_direct_access_mut(|destination| {
-			let range = checked_range(dest_addr.into(), source.len(), destination.len())
-				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
+		fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
+			self.0.with_direct_access_mut(|destination| {
+				let range = checked_range(dest_addr.into(), source.len(), destination.len())
+					.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
 
-			&mut destination[range].copy_from_slice(source);
-			Ok(())
-		})
+				&mut destination[range].copy_from_slice(source);
+				Ok(())
+			})
+		}
 	}
 }
 
@@ -81,20 +104,20 @@ impl MemoryTransfer for WasmiMemoryWrapper {
 /// backends right from the start.
 #[cfg(feature = "wasmer-sandbox")]
 pub mod wasmer {
-	use std::{cell::{RefCell}, rc::Rc};
-	use error::Result;
 	use sp_wasm_interface::Pointer;
-	use crate::{error::{self, Error}, util::checked_range};
+	use crate::error::{Result, Error};
+	use super::checked_range;
+	use std::{cell::RefCell, rc::Rc};
 	use std::convert::TryInto;
 
 	/// In order to enforce memory access protocol to the backend memory
 	/// we wrap it with `RefCell` and encapsulate all memory operations.
 	#[derive(Debug, Clone)]
-	pub struct MemoryRef {
+	pub struct MemoryWrapper {
 		buffer: Rc<RefCell<wasmer::Memory>>,
 	}
 
-	impl MemoryRef {
+	impl MemoryWrapper {
 		/// Take ownership of the memory region and return a wrapper object
 		pub fn new(memory: wasmer::Memory) -> Self {
 			Self {
@@ -162,7 +185,7 @@ pub mod wasmer {
 		}
 	}
 
-	impl super::MemoryTransfer for MemoryRef {
+	impl super::MemoryTransfer for MemoryWrapper {
 		fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
 			unsafe {
 				let memory = self.buffer.borrow();

@@ -261,6 +261,8 @@ impl Sandbox for HostState {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			sandbox::Memory::Wasmer(sandboxed_memory) => {
+				// TODO check len vs supervisor_mem_size
+
 				let len = val_len as usize;
 				let mut buffer = vec![0; len];
 

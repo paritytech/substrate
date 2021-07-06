@@ -25,13 +25,14 @@ use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
 use wasmi::{
-	Externals, ImportResolver, MemoryInstance, MemoryRef as WasmiMemoryRef, Module,
+	Externals, ImportResolver, MemoryInstance, Module,
 	ModuleInstance, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages
 };
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
 #[cfg(feature = "wasmer-sandbox")]
-use crate::util::wasmer::MemoryRef as WasmerMemoryRef;
+use crate::util::wasmer::MemoryWrapper as WasmerMemoryWrapper;
+use crate::util::wasmi::MemoryWrapper as WasmiMemoryWrapper;
 
 /// Index of a function inside the supervisor.
 ///
@@ -122,7 +123,7 @@ impl ImportResolver for Imports {
 		module_name: &str,
 		field_name: &str,
 		_memory_type: &::wasmi::MemoryDescriptor,
-	) -> std::result::Result<WasmiMemoryRef, wasmi::Error> {
+	) -> std::result::Result<wasmi::MemoryRef, wasmi::Error> {
 		let mem = self.memory_by_name(module_name, field_name)
 			.ok_or_else(|| {
 				wasmi::Error::Instantiation(format!(
@@ -131,14 +132,18 @@ impl ImportResolver for Imports {
 				))
 			})?;
 
-		let mem = mem.as_wasmi()
+		let wrapper = mem
+			.as_wasmi()
 			.ok_or_else(|| {
 				wasmi::Error::Instantiation(format!(
 					"Unsupported non-wasmi export {}:{}",
 					module_name, field_name
 				))
-			})?
-			.clone();
+			})?;
+
+		// Here we use inner memory reference only to resolve
+		// the imports wthout accessing the memory contents.
+		let mem = unsafe { wrapper.clone_inner() };
 
 		Ok(mem)
 	}
@@ -626,16 +631,16 @@ pub enum SandboxBackend {
 #[derive(Clone, Debug)]
 pub enum Memory {
 	/// Wasmi memory reference
-	Wasmi(WasmiMemoryRef),
+	Wasmi(WasmiMemoryWrapper),
 
 	/// Wasmer memory refernce
 	#[cfg(feature = "wasmer-sandbox")]
-	Wasmer(WasmerMemoryRef),
+	Wasmer(WasmerMemoryWrapper),
 }
 
 impl Memory {
 	/// View as wasmi memory
-	pub fn as_wasmi(&self) -> Option<WasmiMemoryRef> {
+	pub fn as_wasmi(&self) -> Option<WasmiMemoryWrapper> {
 		match self {
 			Memory::Wasmi(memory) => Some(memory.clone()),
 
@@ -646,7 +651,7 @@ impl Memory {
 
 	/// View as wasmer memory
 	#[cfg(feature = "wasmer-sandbox")]
-	pub fn as_wasmer(&self) -> Option<WasmerMemoryRef> {
+	pub fn as_wasmer(&self) -> Option<WasmerMemoryWrapper> {
 		match self {
 			Memory::Wasmer(memory) => Some(memory.clone()),
 			Memory::Wasmi(_) => None,
@@ -726,17 +731,21 @@ impl<FR> Store<FR> {
 
 		let memory = match &backend_context {
 			BackendContext::Wasmi => {
-				Memory::Wasmi(MemoryInstance::alloc(
-					Pages(initial as usize),
-					maximum.map(|m| Pages(m as usize)),
-				)?)
+				Memory::Wasmi(
+					WasmiMemoryWrapper::new(
+						MemoryInstance::alloc(
+						Pages(initial as usize),
+						maximum.map(|m| Pages(m as usize)),
+						)?
+					)
+				)
 			}
 
 			#[cfg(feature = "wasmer-sandbox")]
 			BackendContext::Wasmer(context) => {
 				let ty = wasmer::MemoryType::new(initial, maximum, false);
 				Memory::Wasmer(
-					WasmerMemoryRef::new(
+					WasmerMemoryWrapper::new(
 						wasmer::Memory::new(&context.store, ty)
 							.map_err(|_| Error::InvalidMemoryReference)?
 					)
