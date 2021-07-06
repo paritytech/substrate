@@ -692,6 +692,7 @@ impl<T: Config> Pallet<T> {
 /// Additionally, it drops any transaction with an encoded length higher than 200 bytes. No
 /// particular reason why, just to demonstrate the power of signed extensions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct WatchDummy<T: Config + Send + Sync>(PhantomData<T>);
 
 impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
