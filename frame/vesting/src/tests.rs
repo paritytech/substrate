@@ -1096,26 +1096,28 @@ fn build_genesis_has_storage_version_v1() {
 }
 
 #[test]
-fn merge_vesting_errors_with_per_block_0() {
+fn merge_vesting_handles_per_block_0() {
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let sched0 = VestingInfo::new::<Test>(
-			ED, 0, // Vesting over infinite blocks.
+			ED,
+			0, // Vesting over 256 blocks.
 			1,
 		);
 		assert_eq!(
 			sched0.ending_block_as_balance::<Identity, Test>(),
-			Err(Error::<Test>::InfiniteSchedule.into())
+			Ok(257)
 		);
 		let sched1 = VestingInfo::new::<Test>(
 			ED * 2,
-			1, // Vesting over 512 blocks.
+			0, // Vesting over 512 blocks.
 			10,
 		);
 		assert_eq!(sched1.ending_block_as_balance::<Identity, Test>(), Ok(512u64 + 10));
 
+		let merged = VestingInfo::new::<Test>(764, 1, 10);
 		assert_eq!(
 			Vesting::merge_vesting_info(5, sched0, sched1),
-			Err(Error::<Test>::InfiniteSchedule.into())
+			Ok(Some(merged))
 		);
 	});
 }
@@ -1155,11 +1157,11 @@ fn vesting_info_validate_works() {
 
 #[test]
 fn vesting_info_ending_block_as_balance_works() {
-	// Treats `per_block` 0 as an error
+	// Treats `per_block` 0 as 1.
 	let per_block_0 = VestingInfo::new::<Test>(256u32, 0u32, 10u32);
 	assert_eq!(
 		per_block_0.ending_block_as_balance::<Identity, Test>(),
-		Err(Error::<Test>::InfiniteSchedule.into())
+		Ok(266)
 	);
 
 	// `per_block >= locked` always results in a schedule ending the block after it starts
@@ -1185,4 +1187,15 @@ fn vesting_info_ending_block_as_balance_works() {
 			.locked_at::<Identity>(imperfect_per_block.ending_block_as_balance::<Identity, Test>().unwrap()),
 		0
 	);
+}
+
+#[test]
+fn per_block_works() {
+	let per_block_0 = VestingInfo::new::<Test>(256u32, 0u32, 10u32);
+	assert_eq!(per_block_0.per_block(), 1u32);
+	assert_eq!(per_block_0.raw_per_block(), 0u32);
+
+	let per_block_1 = VestingInfo::new::<Test>(256u32, 1u32, 10u32);
+	assert_eq!(per_block_1.per_block(), 1u32);
+	assert_eq!(per_block_1.raw_per_block(), 1u32);
 }

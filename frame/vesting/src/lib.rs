@@ -476,8 +476,9 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// While `per_block` should never be 0, it is possible that the created schedule would end
-		// after the highest possible block, which is a case we are ok with, but `validate` fails
+		// after the highest possible block, which is a case we are ok with, but `validate` fails.
 		let schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
+		// debug_assert!(schedule.validate::<T::BlockNumberToBalance, T>());
 
 		Ok(Some(schedule))
 	}

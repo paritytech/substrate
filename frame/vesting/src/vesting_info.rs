@@ -54,7 +54,7 @@ where
 
 		let max_block = BlockNumberToBalance::convert(BlockNumber::max_value());
 		let starting_block = BlockNumberToBalance::convert(self.starting_block());
-		match self.locked.checked_div(&self.per_block) {
+		match self.locked.checked_div(&self.raw_per_block()) {
 			None => return Err(Error::<T>::InfiniteSchedule), // `per_block` is 0
 			Some(duration) => {
 				let end = duration.saturating_add(starting_block);
@@ -70,8 +70,17 @@ where
 		self.locked
 	}
 
-	// pub fn raw_per_block(&self) -> Balance {
+
+	/// Amount that gets unlocked every block after `starting_block`. Corrects for `per_block` of 0.
+	/// This should be used whenever accessing `per_block` unless explicitly checking for 0 values.
 	pub fn per_block(&self) -> Balance {
+		self.per_block.max(One::one())
+	}
+
+
+	/// Get the unmodified `per_block`. Generally should not be used, but is is useful for
+	/// validating `per_block`.
+	pub fn raw_per_block(&self) -> Balance {
 		self.per_block
 	}
 
@@ -92,7 +101,7 @@ where
 		let vested_block_count = BlockNumberToBalance::convert(vested_block_count);
 		// Return amount that is still locked in vesting
 		vested_block_count
-			.checked_mul(&self.per_block)
+			.checked_mul(&self.per_block()) // per_block accessor guarantees at least 1.
 			.map(|to_unlock| self.locked.saturating_sub(to_unlock))
 			.unwrap_or(Zero::zero())
 	}
@@ -102,17 +111,13 @@ where
 		&self,
 	) -> Result<Balance, DispatchError> {
 		let starting_block = BlockNumberToBalance::convert(self.starting_block);
-		let duration = if self.per_block >= self.locked {
+		let duration = if self.per_block() >= self.locked {
 			// If `per_block` is bigger than `locked`, the schedule will end
 			// the block after starting.
 			One::one()
-		} else if self.per_block.is_zero() {
-			// Check for div by 0 errors, which should only be from legacy
-			// vesting schedules since new ones are validated for this.
-			return Err(Error::<T>::InfiniteSchedule.into());
 		} else {
-			self.locked / self.per_block +
-				if (self.locked % self.per_block).is_zero() {
+			self.locked / self.per_block() +
+				if (self.locked % self.per_block()).is_zero() {
 					Zero::zero()
 				} else {
 					// `per_block` does not perfectly divide `locked`, so we need an extra block to
