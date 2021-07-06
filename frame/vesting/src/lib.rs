@@ -110,11 +110,11 @@ enum VestingAction {
 
 impl VestingAction {
 	/// Whether or not the filter says the schedule index should be removed.
-	fn should_remove(&self, index: &usize) -> bool {
+	fn should_remove(&self, index: usize) -> bool {
 		match self {
 			Self::Passive => false,
-			Self::Remove(index1) => index1 == index,
-			Self::Merge(index1, index2) => index1 == index || index2 == index,
+			Self::Remove(index1) => *index1 == index,
+			Self::Merge(index1, index2) => *index1 == index || *index2 == index,
 		}
 	}
 }
@@ -544,7 +544,7 @@ impl<T: Config> Pallet<T> {
 			.enumerate()
 			.filter_map(|(index, schedule)| {
 				let locked_now = schedule.locked_at::<T::BlockNumberToBalance>(now);
-				if locked_now.is_zero() || action.should_remove(&index) {
+				if locked_now.is_zero() || action.should_remove(index) {
 					None
 				} else {
 					// We track the locked amount only if the schedule is included.
