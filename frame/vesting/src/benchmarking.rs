@@ -19,13 +19,12 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_support::{assert_err, assert_noop, assert_ok};
+use frame_system::{Pallet as System, RawOrigin};
+use sp_runtime::traits::{Bounded, CheckedDiv};
+
 use super::*;
-
-use frame_system::{RawOrigin, Pallet as System};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
-use sp_runtime::traits::{CheckedDiv, Bounded};
-use frame_support::assert_ok;
-
 use crate::Pallet as Vesting;
 
 const SEED: u32 = 0;
@@ -320,6 +319,9 @@ benchmarks! {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
 		let s in 2 .. T::MaxVestingSchedules::get();
 
+		// Destination used just for currency transfers in asserts.
+		let test_dest: T::AccountId = account("test_dest", 0, SEED);
+
 		let caller: T::AccountId = account("caller", 0, SEED);
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
 		// Give target other locks.
@@ -344,6 +346,8 @@ benchmarks! {
 			s as usize,
 			"There should be exactly max vesting schedules"
 		);
+		// The balance is not actually transferable because it has not been unlocked.
+		assert!(T::Currency::transfer(&caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath).is_err());
 	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, s - 1)
 	verify {
 		let expected_schedule = VestingInfo::new::<T>(
@@ -370,6 +374,10 @@ benchmarks! {
 			Vesting::<T>::vesting(&caller).unwrap().len(),
 			(s - 1) as usize,
 			"Schedule count should reduce by 1"
+		);
+		// Since merge unlocks all schedules we can now transfer the balance.
+		assert_ok!(
+			T::Currency::transfer(&caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath)
 		);
 	}
 }
