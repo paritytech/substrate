@@ -110,6 +110,7 @@ impl Default for ExtBuilder {
 		Self { existential_deposit: 1, vesting_genesis_config: None }
 	}
 }
+
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
