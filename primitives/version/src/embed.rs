@@ -34,7 +34,10 @@ pub enum Error {
 /// If there was already a runtime version embedded, this will be overwritten.
 ///
 /// Returns the new WASM blob.
-pub fn to_wasm(wasm: &[u8], mut version: crate::RuntimeVersion) -> Result<Vec<u8>, Error> {
+pub fn embed_runtime_version(
+	wasm: &[u8],
+	mut version: crate::RuntimeVersion,
+) -> Result<Vec<u8>, Error> {
 	let mut module: Module = deserialize_buffer(wasm).map_err(|_| Error::Deserialize)?;
 
 	let apis = version.apis

@@ -544,7 +544,7 @@ mod tests {
 			transaction_version: 100,
 		};
 
-		let embedded = sp_version::embed::to_wasm(
+		let embedded = sp_version::embed::embed_runtime_version(
 			&wasm,
 			runtime_version.clone(),
 		).expect("Embedding works");
