@@ -668,7 +668,7 @@ where
 
 	/// Adds a vesting schedule to a given account.
 	///
-	/// If the account has `MaxVestingSchedules`, an Error is returned and nothing
+	/// If the account has `MaxVestingSchedules`, an Error is returned and nothing	`
 	/// is updated.
 	///
 	/// On success, a linearly reducing amount of funds will be locked. In order to realise any
@@ -676,6 +676,8 @@ where
 	/// `vest_other`.
 	///
 	/// Is a no-op if the amount to be vested is zero.
+	///
+	/// NOTE: This doesn't alter the free balance of the account.
 	fn add_vesting_schedule(
 		who: &T::AccountId,
 		locked: BalanceOf<T>,

@@ -84,8 +84,8 @@ pub trait VestingSchedule<AccountId> {
 
 	/// Adds a vesting schedule to a given account.
 	///
-	/// If there already exists a vesting schedule for the given account, an `Err` is returned
-	/// and nothing is updated.
+	/// If the account has `MaxVestingSchedules`, an Error is returned and nothing
+	/// is updated.
 	///
 	/// Is a no-op if the amount to be vested is zero.
 	///
