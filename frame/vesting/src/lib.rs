@@ -251,9 +251,6 @@ pub mod pallet {
 		VestingUpdated(T::AccountId, BalanceOf<T>),
 		/// An \[account\] has become fully vested. No further vesting can happen.
 		VestingCompleted(T::AccountId),
-		/// 2 vesting schedules where successfully merged together and the merged schedule was added.
-		/// \[locked, per_block, starting_block\]
-		MergedScheduleAdded(BalanceOf<T>, BalanceOf<T>, T::BlockNumber),
 	}
 
 	/// Error for the vesting pallet.
@@ -634,14 +631,8 @@ impl<T: Config> Pallet<T> {
 					// (we use `locked_at` in case this is a schedule that started in the past)
 					let new_schedule_locked =
 						new_schedule.locked_at::<T::BlockNumberToBalance>(now);
-					// 2) update the locked amount to reflect the schedule we just added,
+					// and 2) update the locked amount to reflect the schedule we just added.
 					locked_now = locked_now.saturating_add(new_schedule_locked);
-					// and 3) deposit an event.
-					Self::deposit_event(Event::<T>::MergedScheduleAdded(
-						new_schedule.locked(),
-						new_schedule.per_block(),
-						new_schedule.starting_block(),
-					));
 				} // In the None case there was no new schedule to account for.
 
 				(schedules, locked_now)
