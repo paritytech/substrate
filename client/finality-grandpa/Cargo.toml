@@ -55,7 +55,7 @@ assert_matches = "1.3.0"
 finality-grandpa = { version = "0.14.1", features = ["derive-codec", "test-helpers"] }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
-sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
+sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0",  path = "../../test-utils/runtime/client" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../primitives/consensus/babe" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }

@@ -56,7 +56,7 @@ async-trait = "0.1.42"
 
 [dev-dependencies]
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
-sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
 sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }

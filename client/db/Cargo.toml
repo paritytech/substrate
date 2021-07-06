@@ -39,7 +39,7 @@ parity-db = { version = "0.2.4", optional = true }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
 
 [dev-dependencies]
-sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
+sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 quickcheck = "1.0.3"

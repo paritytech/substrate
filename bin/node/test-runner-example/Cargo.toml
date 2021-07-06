@@ -31,7 +31,7 @@ sc-informant = { version = "0.10.0-dev", path = "../../../client/informant" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 
 sp-runtime = { path = "../../../primitives/runtime", version = "4.0.0-dev"}
-sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-api = { version = "4.0.0-dev",  path = "../../../primitives/api" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }

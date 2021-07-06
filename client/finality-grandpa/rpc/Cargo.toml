@@ -34,6 +34,6 @@ sc-rpc = { version = "4.0.0-dev", path = "../../rpc", features = ["test-helpers"
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
-sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0",  path = "../../../test-utils/runtime/client" }
 lazy_static = "1.4"

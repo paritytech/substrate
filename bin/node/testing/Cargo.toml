@@ -21,7 +21,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
 pallet-grandpa = { version = "4.0.0-dev", path = "../../../frame/grandpa" }
 pallet-indices = { version = "4.0.0-dev", path = "../../../frame/indices" }
-sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 node-executor = { version = "3.0.0-dev", path = "../executor" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }

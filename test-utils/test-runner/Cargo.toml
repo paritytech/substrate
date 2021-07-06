@@ -33,7 +33,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
-sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
+sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 
 sp-externalities = { version = "0.10.0-dev", path = "../../primitives/externalities" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
