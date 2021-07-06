@@ -50,7 +50,7 @@ mod migrations;
 mod mock;
 #[cfg(test)]
 mod tests;
-mod vesting_info;
+pub mod vesting_info;
 
 pub mod weights;
 
@@ -341,7 +341,6 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight(
 			T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
-			
 		)]
 		pub fn vested_transfer(
 			origin: OriginFor<T>,

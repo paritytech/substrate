@@ -18,9 +18,10 @@
 //! Module to enforce private fields on `VestingInfo`.
 
 use super::*;
+use codec::MaxEncodedLen;
 
 /// Struct to encode the vesting schedule of an individual account.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub struct VestingInfo<Balance, BlockNumber> {
 	/// Locked amount at genesis.
 	locked: Balance,
