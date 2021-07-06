@@ -28,7 +28,12 @@ use crate::{
 use codec::{Encode, Decode};
 use frame_support::{DebugNoBound, DefaultNoBound, traits::Get};
 use sp_runtime::SaturatedConversion;
-use sp_std::{collections::{btree_map::BTreeMap, btree_set::BTreeSet}, iter, marker::PhantomData};
+use sp_std::{
+	boxed::Box,
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	iter,
+	marker::PhantomData,
+};
 
 /// [`Voter`] parametrized by [`Config`] instead of by `AccountId`.
 pub type VoterOf<T> = Voter<AccountIdOf<T>>;
