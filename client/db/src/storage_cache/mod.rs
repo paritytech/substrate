@@ -753,7 +753,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		let key = key.to_vec();
 		if let Some(entry) = local_cache.next_keys.next_storage_key(&key, None) {
 			trace!("Found next storage key in local cache: {:?}", HexDisplay::from(&key));
-			return Ok(entry.cloned())
+			return Ok(entry)
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if let Some(parent) = self.cache.parent_hash.as_ref() {
@@ -779,7 +779,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		let key = key.to_vec();
 		if let Some(entry) = local_cache.next_keys.next_storage_key(&key, Some(child_info)) {
 			trace!("Found next storage key in local cache: {:?}", HexDisplay::from(&key));
-			return Ok(entry.cloned())
+			return Ok(entry)
 		}
 		let mut cache = self.cache.shared_cache.lock();
 		if let Some(parent) = self.cache.parent_hash.as_ref() {
