@@ -114,7 +114,7 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// Next free insertion id (used to indicate when a transaction was inserted into the pool).
 	insertion_id: u64,
 	/// tags that are provided by Ready transactions
-	/// (only one transaction can provide a tag)
+	/// (only a single transaction can provide a specific tag)
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
 	ready: TrackedMap<Hash, ReadyTx<Hash, Ex>>,
