@@ -64,3 +64,6 @@ wasmtime = [
 wasmi-errno = [
 	"wasmi/errno"
 ]
+track-heap = [
+	"sc-executor-common/track-heap"
+]

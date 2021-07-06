@@ -88,11 +88,9 @@ fn error(msg: &'static str) -> Error {
 /// A custom "trace" implementation that is only activated when `feature = std`.
 ///
 /// Uses `wasm-heap` as default target.
-macro_rules! trace {
-	( $( $args:expr ),+ ) => {
-		sp_std::if_std! {
-			log::trace!(target: "wasm-heap", $( $args ),+);
-		}
+macro_rules! log {
+	($level:tt, $( $args:expr ),+ ) => {
+		log::$level!(target: "wasm-heap", $( $args ),+);
 	}
 }
 
@@ -146,6 +144,7 @@ impl Order {
 	/// `MIN_POSSIBLE_ALLOCATION <= size <= MAX_POSSIBLE_ALLOCATION`
 	fn from_size(size: u32) -> Result<Self, Error> {
 		let clamped_size = if size > MAX_POSSIBLE_ALLOCATION {
+			log!(warn, "going to fail due to allocating {:?}", size);
 			return Err(Error::RequestedAllocationTooLarge);
 		} else if size < MIN_POSSIBLE_ALLOCATION {
 			MIN_POSSIBLE_ALLOCATION
@@ -331,6 +330,16 @@ pub struct FreeingBumpHeapAllocator {
 	free_lists: FreeLists,
 	total_size: u32,
 	poisoned: bool,
+	#[cfg(feature = "track-heap")]
+	/// Tracks maximum of `(total_size, bumper)`.
+	tracker: (u32, u32),
+}
+
+#[cfg(feature = "track-heap")]
+impl Drop for FreeingBumpHeapAllocator {
+	fn drop(&mut self) {
+		log!(debug, "allocator being destroyed, max total_size {}, max bumper {}", self.tracker.0, self.tracker.1)
+	}
 }
 
 impl FreeingBumpHeapAllocator {
@@ -347,6 +356,8 @@ impl FreeingBumpHeapAllocator {
 			free_lists: FreeLists::new(),
 			total_size: 0,
 			poisoned: false,
+			#[cfg(feature = "track-heap")]
+			tracker: (0, aligned_heap_base),
 		}
 	}
 
@@ -392,6 +403,7 @@ impl FreeingBumpHeapAllocator {
 			}
 			Link::Nil => {
 				// Corresponding free list is empty. Allocate a new item.
+				log!(trace, "trying to increment bumper from {} by {} ", self.bumper, order.size() + HEADER_SIZE);
 				Self::bump(
 					&mut self.bumper,
 					order.size() + HEADER_SIZE,
@@ -404,7 +416,16 @@ impl FreeingBumpHeapAllocator {
 		Header::Occupied(order).write_into(mem, header_ptr)?;
 
 		self.total_size += order.size() + HEADER_SIZE;
-		trace!("Heap size is {} bytes after allocation", self.total_size);
+		log!(trace, "after allocation, total_size = {}, bumper = {}.", self.total_size, self.bumper);
+
+		#[cfg(feature = "track-heap")]
+		if self.total_size > self.tracker.0 {
+			self.tracker.0 = self.total_size;
+		}
+		#[cfg(feature = "track-heap")]
+		if self.bumper > self.tracker.1 {
+			self.tracker.1 = self.bumper;
+		}
 
 		bomb.disarm();
 		Ok(Pointer::new(header_ptr + HEADER_SIZE))
@@ -442,7 +463,7 @@ impl FreeingBumpHeapAllocator {
 			.total_size
 			.checked_sub(order.size() + HEADER_SIZE)
 			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
-		trace!("Heap size is {} bytes after deallocation", self.total_size);
+		log!(trace, "after deallocation, total_size = {}, bumper = {}.", self.total_size, self.bumper);
 
 		bomb.disarm();
 		Ok(())
@@ -450,11 +471,11 @@ impl FreeingBumpHeapAllocator {
 
 	/// Increases the `bumper` by `size`.
 	///
-	/// Returns the `bumper` from before the increase.
-	/// Returns an `Error::AllocatorOutOfSpace` if the operation
-	/// would exhaust the heap.
+	/// Returns the `bumper` from before the increase. Returns an `Error::AllocatorOutOfSpace` if
+	/// the operation would exhaust the heap.
 	fn bump(bumper: &mut u32, size: u32, heap_end: u32) -> Result<u32, Error> {
 		if *bumper + size > heap_end {
+			log!(error, "running out of space with current bumper {}, mem size {}", bumper, heap_end);
 			return Err(Error::AllocatorOutOfSpace);
 		}
 

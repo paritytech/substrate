@@ -20,7 +20,7 @@ structopt = "0.3.8"
 
 sc-service = { version = "0.9.0", default-features = false, path = "../../../../client/service" }
 sc-cli = { version = "0.9.0", path = "../../../../client/cli" }
-sc-executor = { version = "0.9.0", path = "../../../../client/executor" }
+sc-executor = { features = ["track-heap"], version = "0.9.0", path = "../../../../client/executor" }
 sc-client-api = { version = "3.0.0", path = "../../../../client/api" }
 sc-chain-spec = { version = "3.0.0", path = "../../../../client/chain-spec" }
 sp-state-machine = { version = "0.9.0", path = "../../../../primitives/state-machine" }
