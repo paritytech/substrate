@@ -25,8 +25,10 @@ pub trait Filter<T> {
 	fn filter(_: &T) -> bool;
 }
 
+/// A [`Filter`] that allows any value.
 pub enum AllowAllFilter {}
 
+/// A [`Filter`] that denies any value.
 pub enum DenyAllFilter {}
 
 impl<T> Filter<T> for AllowAllFilter {
