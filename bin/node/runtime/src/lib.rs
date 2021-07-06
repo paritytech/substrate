@@ -33,7 +33,7 @@ use frame_support::{
 	},
 	traits::{
 		Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, LockIdentifier,
-		U128CurrencyToVote, Filter,
+		U128CurrencyToVote, AllowAllFilter, DenyAllFilter,
 	},
 };
 use frame_system::{
@@ -193,7 +193,7 @@ parameter_types! {
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = AllowAllFilter;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -821,26 +821,19 @@ parameter_types! {
 	pub Schedule: pallet_contracts::Schedule<Runtime> = Default::default();
 }
 
-/// The safest default is to allow no calls at all.
-///
-/// Runtimes should whitelist dispatchables that are allowed to be called from contracts
-/// and make sure they are stable. Dispatchables exposed to contracts are not allowed to
-/// change because that would break already deployed contracts. The `Call` structure itself
-/// is not allowed to change the indices of existing pallets, too.
-pub struct ContractsCallFilter;
-impl Filter<Call> for ContractsCallFilter {
-	fn filter(_: &Call) -> bool {
-		false
-	}
-}
-
 impl pallet_contracts::Config for Runtime {
 	type Time = Timestamp;
 	type Randomness = RandomnessCollectiveFlip;
 	type Currency = Balances;
 	type Event = Event;
 	type Call = Call;
-	type CallFilter = ContractsCallFilter;
+	/// The safest default is to allow no calls at all.
+	///
+	/// Runtimes should whitelist dispatchables that are allowed to be called from contracts
+	/// and make sure they are stable. Dispatchables exposed to contracts are not allowed to
+	/// change because that would break already deployed contracts. The `Call` structure itself
+	/// is not allowed to change the indices of existing pallets, too.
+	type CallFilter = DenyAllFilter;
 	type RentPayment = ();
 	type SignedClaimHandicap = SignedClaimHandicap;
 	type TombstoneDeposit = TombstoneDeposit;

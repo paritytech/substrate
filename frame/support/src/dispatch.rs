@@ -2800,7 +2800,7 @@ mod tests {
 		type Origin = OuterOrigin;
 		type AccountId = u32;
 		type Call = OuterCall;
-		type BaseCallFilter = ();
+		type BaseCallFilter = frame_support::traits::AllowAllFilter;
 		type BlockNumber = u32;
 		type PalletInfo = Self;
 		type DbWeight = ();
