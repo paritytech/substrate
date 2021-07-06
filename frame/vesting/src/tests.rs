@@ -209,6 +209,35 @@ fn vested_balance_should_transfer() {
 }
 
 #[test]
+fn vested_balance_should_transferwith_multi_sched() {
+	ExtBuilder::default()
+		.existential_deposit(ED)
+		.build()
+		.execute_with(|| {
+			let sched0 = VestingInfo::new::<Test>(5*ED, 128, 0);
+			assert_ok!(Vesting::vested_transfer(Some(13).into(), 1, sched0));
+			// Total of 2560 of locked for all the schedules.
+			assert_eq!(Vesting::vesting(&1).unwrap(), vec![sched0, sched0]);
+
+			let user1_free_balance = Balances::free_balance(&1);
+			assert_eq!(user1_free_balance, 3840); // Account 1 has free balance
+
+			// Account 1 has only 256 units unlocking at block 1 (plus 1280 unvested)
+			assert_eq!(Vesting::vesting_balance(&1), Some(2304));
+			assert_ok!(Vesting::vest(Some(1).into()));
+			assert_ok!(Balances::transfer(Some(1).into(), 2, 1536));
+		});
+}
+
+#[test]
+fn vest_correctly_fails() {
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		assert!(!<VestingStorage<Test>>::contains_key(4));
+		assert_noop!(Vesting::vest(Some(4).into()), Error::<Test>::NotVesting);
+	});
+}
+
+#[test]
 fn vested_balance_should_transfer_using_vest_other() {
 	ExtBuilder::default()
 		.existential_deposit(10)
@@ -221,6 +250,35 @@ fn vested_balance_should_transfer_using_vest_other() {
 			assert_ok!(Vesting::vest_other(Some(2).into(), 1));
 			assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
 		});
+}
+
+#[test]
+fn vested_balance_should_transfer_using_vest_other_with_multi_sched() {
+	ExtBuilder::default()
+		.existential_deposit(ED)
+		.build()
+		.execute_with(|| {
+			let sched0 = VestingInfo::new::<Test>(5*ED, 128, 0);
+			assert_ok!(Vesting::vested_transfer(Some(13).into(), 1, sched0));
+			// Total of 2560 of locked for all the schedules.
+			assert_eq!(Vesting::vesting(&1).unwrap(), vec![sched0, sched0]);
+
+			let user1_free_balance = Balances::free_balance(&1);
+			assert_eq!(user1_free_balance, 3840); // Account 1 has free balance
+
+			// Account 1 has only 256 units unlocking at block 1 (plus 1280 unvested)
+			assert_eq!(Vesting::vesting_balance(&1), Some(2304));
+			assert_ok!(Vesting::vest_other(Some(2).into(), 1));
+			assert_ok!(Balances::transfer(Some(1).into(), 2, 1536));
+		});
+}
+
+#[test]
+fn vest_other_correctly_fails() {
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		assert!(!<VestingStorage<Test>>::contains_key(4));
+		assert_noop!(Vesting::vest_other(Some(3).into(), 4), Error::<Test>::NotVesting);
+	});
 }
 
 #[test]
@@ -542,7 +600,7 @@ fn force_vested_transfer_allows_max_schedules() {
 		let max_schedules = <Test as Config>::MaxVestingSchedules::get();
 		let sched = VestingInfo::new::<Test>(
 			<Test as Config>::MinVestedTransfer::get(),
-			1, // Vest over 256 blocks.
+			1, // Vest over 2 * 256 blocks.
 			10,
 		);
 
@@ -1134,20 +1192,4 @@ fn vesting_info_ending_block_as_balance_works() {
 			.locked_at::<Identity>(imperfect_per_block.ending_block_as_balance::<Identity, Test>().unwrap()),
 		0
 	);
-}
-
-#[test]
-fn vest_correctly_fails() {
-	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
-		assert!(!<VestingStorage<Test>>::contains_key(4));
-		assert_noop!(Vesting::vest(Some(4).into()), Error::<Test>::NotVesting);
-	});
-}
-
-#[test]
-fn vest_other_correctly_fails() {
-	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
-		assert!(!<VestingStorage<Test>>::contains_key(4));
-		assert_noop!(Vesting::vest_other(Some(3).into(), 4), Error::<Test>::NotVesting);
-	});
 }
