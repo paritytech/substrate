@@ -93,11 +93,14 @@ impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
 }
 
 impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
-	where
-		B: BlockT,
-		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
-		C::Api: BabeRuntimeApi<B>,
-		SC: SelectChain<B> + Clone + 'static,
+where
+	B: BlockT,
+	C: ProvideRuntimeApi<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = BlockChainError>
+		+ 'static,
+	C::Api: BabeRuntimeApi<B>,
+	SC: SelectChain<B> + Clone + 'static,
 {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
@@ -118,28 +121,33 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 			self.select_chain.clone(),
 		);
 		let future = async move {
-			let header = select_chain.best_chain().map_err(Error::Consensus)?;
-			let epoch_start = client.runtime_api()
+			let header = select_chain.best_chain().map_err(Error::Consensus).await?;
+			let epoch_start = client
+				.runtime_api()
 				.current_epoch_start(&BlockId::Hash(header.hash()))
-				.map_err(|err| {
-					Error::StringError(format!("{:?}", err))
-				})?;
+				.map_err(|err| Error::StringError(format!("{:?}", err)))?;
 			let epoch = epoch_data(
 				&shared_epoch,
 				&client,
 				&babe_config,
 				*epoch_start,
 				&select_chain,
-			)?;
+			)
+			.await?;
 			let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
 
 			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
 
 			let keys = {
-				epoch.authorities.iter()
+				epoch
+					.authorities
+					.iter()
 					.enumerate()
 					.filter_map(|(i, a)| {
-						if SyncCryptoStore::has_keys(&*keystore, &[(a.0.to_raw_vec(), AuthorityId::ID)]) {
+						if SyncCryptoStore::has_keys(
+							&*keystore,
+							&[(a.0.to_raw_vec(), AuthorityId::ID)],
+						) {
 							Some((a.0.clone(), i))
 						} else {
 							None
@@ -167,7 +175,8 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 			}
 
 			Ok(claims)
-		}.boxed();
+		}
+		.boxed();
 
 		Box::new(future.compat())
 	}
@@ -203,20 +212,20 @@ impl From<Error> for jsonrpc_core::Error {
 	}
 }
 
-/// fetches the epoch data for a given slot.
-fn epoch_data<B, C, SC>(
+/// Fetches the epoch data for a given slot.
+async fn epoch_data<B, C, SC>(
 	epoch_changes: &SharedEpochChanges<B, Epoch>,
 	client: &Arc<C>,
 	babe_config: &Config,
 	slot: u64,
 	select_chain: &SC,
 ) -> Result<Epoch, Error>
-	where
-		B: BlockT,
-		C: HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
-		SC: SelectChain<B>,
+where
+	B: BlockT,
+	C: HeaderBackend<B> + HeaderMetadata<B, Error = BlockChainError> + 'static,
+	SC: SelectChain<B>,
 {
-	let parent = select_chain.best_chain()?;
+	let parent = select_chain.best_chain().await?;
 	epoch_changes.shared_data().epoch_data_for_child_of(
 		descendent_query(&**client),
 		&parent.hash(),

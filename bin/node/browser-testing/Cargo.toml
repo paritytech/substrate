@@ -19,3 +19,7 @@ futures = "0.3.9"
 
 node-cli = { path = "../cli", default-features = false, features = ["browser"], version = "3.0.0-dev"}
 sc-rpc-api = { path = "../../../client/rpc-api", version = "0.10.0-dev"}
+
+# This is a HACK to make browser tests pass.
+# enables [`instant/wasm_bindgen`]
+parking_lot = { version = "0.11.1", features = ["wasm-bindgen"] }

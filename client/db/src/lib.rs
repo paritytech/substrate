@@ -205,6 +205,17 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.for_key_values_with_prefix(prefix, f)
 	}
 
+	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+		allow_missing: bool,
+	) -> Result<bool, Self::Error> {
+		self.state.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
+	}
+
 	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: Option<&ChildInfo>,
@@ -387,6 +398,14 @@ impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 	}
 }
 
+struct MetaUpdate<Block: BlockT> {
+	pub hash: Block::Hash,
+	pub number: NumberFor<Block>,
+	pub is_best: bool,
+	pub is_finalized: bool,
+	pub with_state: bool,
+}
+
 fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 	cache: &mut LinkedHashMap<Hash, Option<Header>>,
 	hash: Hash,
@@ -427,11 +446,9 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 	fn update_meta(
 		&self,
-		hash: Block::Hash,
-		number: <Block::Header as HeaderT>::Number,
-		is_best: bool,
-		is_finalized: bool
+		update: MetaUpdate<Block>,
 	) {
+		let MetaUpdate { hash, number, is_best, is_finalized, with_state } = update;
 		let mut meta = self.meta.write();
 		if number.is_zero() {
 			meta.genesis_hash = hash;
@@ -444,6 +461,9 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		}
 
 		if is_finalized {
+			if with_state {
+				meta.finalized_state = Some((hash.clone(), number));
+			}
 			meta.finalized_number = number;
 			meta.finalized_hash = hash;
 		}
@@ -484,6 +504,7 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
 			finalized_number: meta.finalized_number,
+			finalized_state: meta.finalized_state.clone(),
 			number_leaves: self.leaves.read().count(),
 		}
 	}
@@ -754,6 +775,42 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			}
 		}
 	}
+
+	fn apply_new_state(
+		&mut self,
+		storage: Storage,
+	) -> ClientResult<Block::Hash> {
+		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
+			return Err(sp_blockchain::Error::InvalidState.into());
+		}
+
+		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)|(
+				&child_content.child_info,
+				child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
+		));
+
+		let mut changes_trie_config = None;
+		let (root, transaction) = self.old_state.full_storage_root(
+			storage.top.iter().map(|(k, v)| {
+				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
+					changes_trie_config = Some(Decode::decode(&mut &v[..]));
+				}
+				(&k[..], Some(&v[..]))
+			}),
+			child_delta
+		);
+
+		let changes_trie_config = match changes_trie_config {
+			Some(Ok(c)) => Some(c),
+			Some(Err(_)) => return Err(sp_blockchain::Error::InvalidState.into()),
+			None => None,
+		};
+
+		self.db_updates = transaction;
+		self.changes_trie_config_update = Some(changes_trie_config);
+		Ok(root)
+	}
+
 }
 
 impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
@@ -796,32 +853,18 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		&mut self,
 		storage: Storage,
 	) -> ClientResult<Block::Hash> {
-		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
-			return Err(sp_blockchain::Error::GenesisInvalid.into());
-		}
-
-		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)|(
-			&child_content.child_info,
-			child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
-		));
-
-		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.iter().map(|(k, v)| {
-				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
-					changes_trie_config = Some(
-						Decode::decode(&mut &v[..])
-							.expect("changes trie configuration is encoded properly at genesis")
-					);
-				}
-				(&k[..], Some(&v[..]))
-			}),
-			child_delta
-		);
-
-		self.db_updates = transaction;
-		self.changes_trie_config_update = Some(changes_trie_config);
+		let root = self.apply_new_state(storage)?;
 		self.commit_state = true;
+		Ok(root)
+	}
+
+	fn set_genesis_state(
+		&mut self,
+		storage: Storage,
+		commit: bool,
+	) -> ClientResult<Block::Hash> {
+		let root = self.apply_new_state(storage)?;
+		self.commit_state = commit;
 		Ok(root)
 	}
 
@@ -907,18 +950,39 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 	}
 }
 
-struct DbGenesisStorage<Block: BlockT>(pub Block::Hash);
+struct DbGenesisStorage<Block: BlockT> {
+	root: Block::Hash,
+	storage: PrefixedMemoryDB<HashFor<Block>>,
+}
 
 impl<Block: BlockT> DbGenesisStorage<Block> {
-	pub fn new() -> Self {
-		let mut root = Block::Hash::default();
-		let mut mdb = MemoryDB::<HashFor<Block>>::default();
-		sp_state_machine::TrieDBMut::<HashFor<Block>>::new(&mut mdb, &mut root);
-		DbGenesisStorage(root)
+	pub fn new(root: Block::Hash, storage: PrefixedMemoryDB<HashFor<Block>>) -> Self {
+		DbGenesisStorage {
+			root,
+			storage,
+		}
 	}
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStorage<Block> {
+	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		use hash_db::HashDB;
+		Ok(self.storage.get(key, prefix))
+	}
+}
+
+struct EmptyStorage<Block: BlockT>(pub Block::Hash);
+
+impl<Block: BlockT> EmptyStorage<Block> {
+	pub fn new() -> Self {
+		let mut root = Block::Hash::default();
+		let mut mdb = MemoryDB::<HashFor<Block>>::default();
+		sp_state_machine::TrieDBMut::<HashFor<Block>>::new(&mut mdb, &mut root);
+		EmptyStorage(root)
+	}
+}
+
+impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for EmptyStorage<Block> {
 	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
@@ -980,6 +1044,7 @@ pub struct Backend<Block: BlockT> {
 	transaction_storage: TransactionStorageMode,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
+	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1058,7 +1123,7 @@ impl<Block: BlockT> Backend<Block> {
 			},
 		)?;
 
-		Ok(Backend {
+		let backend = Backend {
 			storage: Arc::new(storage_db),
 			offchain_storage,
 			changes_tries_storage,
@@ -1074,7 +1139,24 @@ impl<Block: BlockT> Backend<Block> {
 			state_usage: Arc::new(StateUsageStats::new()),
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
-		})
+			genesis_state: RwLock::new(None),
+		};
+
+		// Older DB versions have no last state key. Check if the state is available and set it.
+		let info = backend.blockchain.info();
+		if info.finalized_state.is_none()
+			&& info.finalized_hash != Default::default()
+			&& sc_client_api::Backend::have_state_at(&backend, &info.finalized_hash, info.finalized_number)
+		{
+			backend.blockchain.update_meta(MetaUpdate {
+				hash: info.finalized_hash,
+				number: info.finalized_number,
+				is_best: info.finalized_hash == info.best_hash,
+				is_finalized: true,
+				with_state: true,
+			});
+		}
+		Ok(backend)
 	}
 
 	/// Handle setting head within a transaction. `route_to` should be the last
@@ -1170,10 +1252,11 @@ impl<Block: BlockT> Backend<Block> {
 		justification: Option<Justification>,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
-	) -> ClientResult<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool)> {
+	) -> ClientResult<MetaUpdate<Block>> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
+		let with_state = sc_client_api::Backend::have_state_at(self, &hash, number);
 
 		self.note_finalized(
 			transaction,
@@ -1182,6 +1265,7 @@ impl<Block: BlockT> Backend<Block> {
 			*hash,
 			changes_trie_cache_ops,
 			finalization_displaced,
+			with_state,
 		)?;
 
 		if let Some(justification) = justification {
@@ -1191,7 +1275,13 @@ impl<Block: BlockT> Backend<Block> {
 				Justifications::from(justification).encode(),
 			);
 		}
-		Ok((*hash, number, false, true))
+		Ok(MetaUpdate {
+			hash: *hash,
+			number,
+			is_best: false,
+			is_finalized: true,
+			with_state,
+		})
 	}
 
 	// performs forced canonicalization with a delay after importing a non-finalized block.
@@ -1219,6 +1309,9 @@ impl<Block: BlockT> Backend<Block> {
 				)?.expect("existence of block with number `new_canonical` \
 					implies existence of blocks with all numbers before it; qed")
 			};
+			if !sc_client_api::Backend::have_state_at(self, &hash, new_canonical.saturated_into()) {
+				return Ok(())
+			}
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
@@ -1240,12 +1333,13 @@ impl<Block: BlockT> Backend<Block> {
 
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
+		let mut last_finalized_num = self.blockchain.meta.read().finalized_number;
+		let best_num = self.blockchain.meta.read().best_number;
 
 		let mut changes_trie_cache_ops = None;
 		for (block, justification) in operation.finalized_blocks {
 			let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
 			let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
-
 			meta_updates.push(self.finalize_block_with_transaction(
 				&mut transaction,
 				&block_hash,
@@ -1256,12 +1350,16 @@ impl<Block: BlockT> Backend<Block> {
 				&mut finalization_displaced_leaves,
 			)?);
 			last_finalized_hash = block_hash;
+			last_finalized_num = block_header.number().clone();
 		}
 
 		let imported = if let Some(pending_block) = operation.pending_block {
+
 			let hash = pending_block.header.hash();
+
 			let parent_hash = *pending_block.header.parent_hash();
 			let number = pending_block.header.number().clone();
+			let existing_header = number <= best_num && self.blockchain.header(BlockId::hash(hash))?.is_some();
 
 			// blocks are keyed by number + hash.
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
@@ -1296,12 +1394,23 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			if number.is_zero() {
-				transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
+				transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key.clone());
 				transaction.set(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 
 				// for tests, because config is set from within the reset_storage
 				if operation.changes_trie_config_update.is_none() {
 					operation.changes_trie_config_update = Some(None);
+				}
+
+				if operation.commit_state {
+					transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key);
+				} else {
+					// When we don't want to commit the genesis state, we still preserve it in memory
+					// to bootstrap consensus. It is queried for an initial list of authorities, etc.
+					*self.genesis_state.write() = Some(Arc::new(DbGenesisStorage::new(
+						pending_block.header.state_root().clone(),
+						operation.db_updates.clone()
+					)));
 				}
 			}
 
@@ -1361,79 +1470,111 @@ impl<Block: BlockT> Backend<Block> {
 					changeset,
 				).map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 				apply_state_commit(&mut transaction, commit);
+				if number <= last_finalized_num {
+					// Canonicalize in the db when re-importing existing blocks with state.
+					let commit = self.storage.state_db.canonicalize_block(&hash)
+						.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
+					apply_state_commit(&mut transaction, commit);
+					meta_updates.push(MetaUpdate {
+						hash,
+						number,
+						is_best: false,
+						is_finalized: true,
+						with_state: true,
+					});
+				}
+
 
 				// Check if need to finalize. Genesis is always finalized instantly.
 				let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
 				finalized
 			} else {
-				false
+				number.is_zero() || pending_block.leaf_state.is_final()
 			};
 
 			let header = &pending_block.header;
 			let is_best = pending_block.leaf_state.is_best();
 			let changes_trie_updates = operation.changes_trie_updates;
-			let changes_trie_config_update = operation.changes_trie_config_update;
-			changes_trie_cache_ops = Some(self.changes_tries_storage.commit(
-				&mut transaction,
-				changes_trie_updates,
-				cache::ComplexBlockId::new(
-					*header.parent_hash(),
-					if number.is_zero() { Zero::zero() } else { number - One::one() },
-				),
-				cache::ComplexBlockId::new(hash, number),
-				header,
-				finalized,
-				changes_trie_config_update,
-				changes_trie_cache_ops,
-			)?);
-			self.state_usage.merge_sm(operation.old_state.usage_info());
-			// release state reference so that it can be finalized
-			let cache = operation.old_state.into_cache_changes();
-
-			if finalized {
-				// TODO: ensure best chain contains this block.
-				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
-				self.note_finalized(
-					&mut transaction,
-					true,
-					header,
-					hash,
-					&mut changes_trie_cache_ops,
-					&mut finalization_displaced_leaves,
-				)?;
-			} else {
-				// canonicalize blocks which are old enough, regardless of finality.
-				self.force_delayed_canonicalize(&mut transaction, hash, *header.number())?
-			}
-
-			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, is_best);
-
-			let displaced_leaf = {
-				let mut leaves = self.blockchain.leaves.write();
-				let displaced_leaf = leaves.import(hash, number, parent_hash);
-				leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
-
-				displaced_leaf
-			};
-
-			let mut children = children::read_children(
-				&*self.storage.db,
-				columns::META,
-				meta_keys::CHILDREN_PREFIX,
-				parent_hash,
-			)?;
-			children.push(hash);
-			children::write_children(
-				&mut transaction,
-				columns::META,
-				meta_keys::CHILDREN_PREFIX,
-				parent_hash,
-				children,
+			debug!(target: "db",
+				"DB Commit {:?} ({}), best={}, state={}, existing={}",
+				hash, number, is_best, operation.commit_state, existing_header,
 			);
 
-			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
+			if !existing_header {
+				let changes_trie_config_update = operation.changes_trie_config_update;
+				changes_trie_cache_ops = Some(self.changes_tries_storage.commit(
+					&mut transaction,
+					changes_trie_updates,
+					cache::ComplexBlockId::new(
+						*header.parent_hash(),
+						if number.is_zero() { Zero::zero() } else { number - One::one() },
+					),
+					cache::ComplexBlockId::new(hash, number),
+					header,
+					finalized,
+					changes_trie_config_update,
+					changes_trie_cache_ops,
+				)?);
 
-			Some((pending_block.header, number, hash, enacted, retracted, displaced_leaf, is_best, cache))
+				self.state_usage.merge_sm(operation.old_state.usage_info());
+				// release state reference so that it can be finalized
+				let cache = operation.old_state.into_cache_changes();
+
+				if finalized {
+					// TODO: ensure best chain contains this block.
+					self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
+					self.note_finalized(
+						&mut transaction,
+						true,
+						header,
+						hash,
+						&mut changes_trie_cache_ops,
+						&mut finalization_displaced_leaves,
+						operation.commit_state,
+					)?;
+				} else {
+					// canonicalize blocks which are old enough, regardless of finality.
+					self.force_delayed_canonicalize(&mut transaction, hash, *header.number())?
+				}
+
+
+				let displaced_leaf = {
+					let mut leaves = self.blockchain.leaves.write();
+					let displaced_leaf = leaves.import(hash, number, parent_hash);
+					leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
+
+					displaced_leaf
+				};
+
+				let mut children = children::read_children(
+					&*self.storage.db,
+					columns::META,
+					meta_keys::CHILDREN_PREFIX,
+					parent_hash,
+				)?;
+				if !children.contains(&hash) {
+					children.push(hash);
+				}
+				children::write_children(
+					&mut transaction,
+					columns::META,
+					meta_keys::CHILDREN_PREFIX,
+					parent_hash,
+					children,
+				);
+
+				meta_updates.push(MetaUpdate {
+					hash,
+					number,
+					is_best: pending_block.leaf_state.is_best(),
+					is_finalized: finalized,
+					with_state: operation.commit_state,
+				});
+
+				Some((pending_block.header, number, hash, enacted, retracted, displaced_leaf, is_best, cache))
+			} else {
+				None
+			}
 		} else {
 			None
 		};
@@ -1448,7 +1589,13 @@ impl<Block: BlockT> Backend<Block> {
 					hash.clone(),
 					(number.clone(), hash.clone())
 				)?;
-				meta_updates.push((hash, *number, true, false));
+				meta_updates.push(MetaUpdate {
+					hash,
+					number: *number,
+					is_best: true,
+					is_finalized: false,
+					with_state: false,
+				});
 				Some((enacted, retracted))
 			} else {
 				return Err(sp_blockchain::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
@@ -1472,6 +1619,7 @@ impl<Block: BlockT> Backend<Block> {
 			is_best,
 			mut cache,
 		)) = imported {
+			trace!(target: "db", "DB Commit done {:?}", hash);
 			let header_metadata = CachedHeaderMetadata::from(&header);
 			self.blockchain.insert_header_metadata(
 				header_metadata.hash,
@@ -1498,8 +1646,8 @@ impl<Block: BlockT> Backend<Block> {
 			self.shared_cache.lock().sync(&enacted, &retracted);
 		}
 
-		for (hash, number, is_best, is_finalized) in meta_updates {
-			self.blockchain.update_meta(hash, number, is_best, is_finalized);
+		for m in meta_updates {
+			self.blockchain.update_meta(m);
 		}
 
 		Ok(())
@@ -1515,29 +1663,35 @@ impl<Block: BlockT> Backend<Block> {
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
-		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>
+		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
+		with_state: bool,
 	) -> ClientResult<()> {
 		let f_num = f_header.number().clone();
 
-		if self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true) {
-			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
-			transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
+		let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
+		if with_state {
+			transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key.clone());
+		}
+		transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
 
+		if sc_client_api::Backend::have_state_at(self, &f_hash, f_num) &&
+			self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true)
+		{
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
 				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
 			apply_state_commit(transaction, commit);
+		}
 
-			if !f_num.is_zero() {
-				let new_changes_trie_cache_ops = self.changes_tries_storage.finalize(
-					transaction,
-					*f_header.parent_hash(),
-					f_hash,
-					f_num,
-					if is_inserted { Some(&f_header) } else { None },
-					changes_trie_cache_ops.take(),
-				)?;
-				*changes_trie_cache_ops = Some(new_changes_trie_cache_ops);
-			}
+		if !f_num.is_zero() {
+			let new_changes_trie_cache_ops = self.changes_tries_storage.finalize(
+				transaction,
+				*f_header.parent_hash(),
+				f_hash,
+				f_num,
+				if is_inserted { Some(&f_header) } else { None },
+				changes_trie_cache_ops.take(),
+			)?;
+			*changes_trie_cache_ops = Some(new_changes_trie_cache_ops);
 		}
 
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
@@ -1627,6 +1781,23 @@ impl<Block: BlockT> Backend<Block> {
 			None => return Ok(()),
 		}
 		Ok(())
+	}
+
+	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
+		let root = EmptyStorage::<Block>::new().0; // Empty trie
+		let db_state = DbState::<Block>::new(self.storage.clone(), root);
+		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
+		let caching_state = CachingState::new(
+			state,
+			self.shared_cache.clone(),
+			None,
+		);
+		Ok(SyncingCachingState::new(
+				caching_state,
+				self.state_usage.clone(),
+				self.blockchain.meta.clone(),
+				self.import_lock.clone(),
+		))
 	}
 }
 
@@ -1737,7 +1908,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	type OffchainStorage = offchain::LocalStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
-		let mut old_state = self.state_at(BlockId::Hash(Default::default()))?;
+		let mut old_state = self.empty_state()?;
 		old_state.disable_syncing();
 
 		Ok(BlockImportOperation {
@@ -1763,7 +1934,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		operation: &mut Self::BlockImportOperation,
 		block: BlockId<Block>,
 	) -> ClientResult<()> {
-		operation.old_state = self.state_at(block)?;
+		if block.is_pre_genesis() {
+			operation.old_state = self.empty_state()?;
+		} else {
+			operation.old_state = self.state_at(block)?;
+		}
 		operation.old_state.disable_syncing();
 
 		operation.commit_state = true;
@@ -1800,7 +1975,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let mut displaced = None;
 
 		let mut changes_trie_cache_ops = None;
-		let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(
+		let m = self.finalize_block_with_transaction(
 			&mut transaction,
 			&hash,
 			&header,
@@ -1810,7 +1985,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			&mut displaced,
 		)?;
 		self.storage.db.commit(transaction)?;
-		self.blockchain.update_meta(hash, number, is_best, is_finalized);
+		self.blockchain.update_meta(m);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		Ok(())
 	}
@@ -1967,14 +2142,36 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 								meta_keys::FINALIZED_BLOCK,
 								key.clone()
 							);
+
 							reverted_finalized.insert(removed_hash);
+							if let Some((hash, _)) = self.blockchain.info().finalized_state {
+								if hash == best_hash {
+									if !best_number.is_zero()
+										&& self.have_state_at(&prev_hash, best_number - One::one())
+									{
+										let lookup_key = utils::number_and_hash_to_lookup_key(
+											best_number - One::one(),
+											prev_hash
+										)?;
+										transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key);
+									} else {
+										transaction.remove(columns::META, meta_keys::FINALIZED_STATE);
+									}
+								}
+							}
 						}
 						transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, key);
 						transaction.remove(columns::KEY_LOOKUP, removed.hash().as_ref());
 						children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, best_hash);
 						self.storage.db.commit(transaction)?;
 						self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
-						self.blockchain.update_meta(best_hash, best_number, true, update_finalized);
+						self.blockchain.update_meta(MetaUpdate {
+							hash: best_hash,
+							number: best_number,
+							is_best: true,
+							is_finalized: update_finalized,
+							with_state: false
+						});
 					}
 					None => return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
@@ -2061,26 +2258,30 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
-		// special case for genesis initialization
-		match block {
-			BlockId::Hash(h) if h == Default::default() => {
-				let genesis_storage = DbGenesisStorage::<Block>::new();
-				let root = genesis_storage.0.clone();
-				let db_state = DbState::<Block>::new(Arc::new(genesis_storage), root);
+		let is_genesis = match &block {
+			BlockId::Number(n) if n.is_zero() => true,
+			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash => true,
+			_ => false,
+		};
+		if is_genesis {
+			if let Some(genesis_state) = &*self.genesis_state.read() {
+				let root = genesis_state.root.clone();
+				let db_state = DbState::<Block>::new(genesis_state.clone(), root);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				let caching_state = CachingState::new(
 					state,
 					self.shared_cache.clone(),
 					None,
 				);
-				return Ok(SyncingCachingState::new(
+				let mut state = SyncingCachingState::new(
 					caching_state,
 					self.state_usage.clone(),
 					self.blockchain.meta.clone(),
 					self.import_lock.clone(),
-				));
-			},
-			_ => {}
+				);
+				state.disable_syncing();
+				return Ok(state)
+			}
 		}
 
 		let hash = match block {
@@ -2305,7 +2506,6 @@ pub(crate) mod tests {
 		let db = Backend::<Block>::new_test(2, 0);
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
-			db.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
 			let mut header = Header {
 				number: 0,
 				parent_hash: Default::default(),

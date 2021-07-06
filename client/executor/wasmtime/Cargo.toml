@@ -23,7 +23,7 @@ sc-executor-common = { version = "0.10.0-dev", path = "../common" }
 sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "4.0.0-dev", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sp-allocator = { version = "4.0.0-dev", path = "../../../primitives/allocator" }
+sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
 wasmtime = "0.27.0"
 
 [dev-dependencies]

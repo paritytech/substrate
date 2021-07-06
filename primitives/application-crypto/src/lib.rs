@@ -39,8 +39,6 @@ pub use sp_std::{
 	ops::Deref,
 	vec::Vec,
 };
-#[doc(hidden)]
-pub use max_encoded_len;
 
 pub mod ed25519;
 pub mod sr25519;
@@ -200,9 +198,9 @@ macro_rules! app_crypto_public_full_crypto {
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
-				$crate::max_encoded_len::MaxEncodedLen,
+				$crate::codec::MaxEncodedLen,
 			)]
-			#[max_encoded_len_crate($crate::max_encoded_len)]
+			#[codec(crate = $crate::codec)]
 			pub struct Public($public);
 		}
 

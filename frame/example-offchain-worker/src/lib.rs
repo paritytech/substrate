@@ -53,7 +53,7 @@ use frame_support::traits::Get;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	RuntimeDebug,
-	offchain::{http, Duration, storage::StorageValueRef},
+	offchain::{http, Duration, storage::{MutateStorageError, StorageRetrievalError, StorageValueRef}},
 	traits::Zero,
 	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
 };
@@ -366,15 +366,11 @@ impl<T: Config> Pallet<T> {
 		// low-level method of local storage API, which means that only one worker
 		// will be able to "acquire a lock" and send a transaction if multiple workers
 		// happen to be executed concurrently.
-		let res = val.mutate(|last_send: Option<Option<T::BlockNumber>>| {
-			// We match on the value decoded from the storage. The first `Option`
-			// indicates if the value was present in the storage at all,
-			// the second (inner) `Option` indicates if the value was succesfuly
-			// decoded to expected type (`T::BlockNumber` in our case).
+		let res = val.mutate(|last_send: Result<Option<T::BlockNumber>, StorageRetrievalError>| {
 			match last_send {
 				// If we already have a value in storage and the block number is recent enough
 				// we avoid sending another transaction at this time.
-				Some(Some(block)) if block_number < block + T::GracePeriod::get() => {
+				Ok(Some(block)) if block_number < block + T::GracePeriod::get() => {
 					Err(RECENTLY_SENT)
 				},
 				// In every other case we attempt to acquire the lock and send a transaction.
@@ -390,7 +386,7 @@ impl<T: Config> Pallet<T> {
 		// written to in the meantime.
 		match res {
 			// The value has been set correctly, which means we can safely send a transaction now.
-			Ok(Ok(block_number)) => {
+			Ok(block_number) => {
 				// Depending if the block is even or odd we will send a `Signed` or `Unsigned`
 				// transaction.
 				// Note that this logic doesn't really guarantee that the transactions will be sent
@@ -406,13 +402,13 @@ impl<T: Config> Pallet<T> {
 				else { TransactionType::Raw }
 			},
 			// We are in the grace period, we should not send a transaction this time.
-			Err(RECENTLY_SENT) => TransactionType::None,
+			Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => TransactionType::None,
 			// We wanted to send a transaction, but failed to write the block number (acquire a
 			// lock). This indicates that another offchain worker that was running concurrently
 			// most likely executed the same logic and succeeded at writing to storage.
 			// Thus we don't really want to send the transaction, knowing that the other run
 			// already did.
-			Ok(Err(_)) => TransactionType::None,
+			Err(MutateStorageError::ConcurrentModification(_)) => TransactionType::None,
 		}
 	}
 

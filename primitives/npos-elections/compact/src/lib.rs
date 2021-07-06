@@ -169,7 +169,7 @@ fn struct_def(
 		);
 		quote!{
 			#compact_impl
-			#[derive(Default, PartialEq, Eq, Clone, Debug)]
+			#[derive(Default, PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]
 		}
 	} else {
 		// automatically derived.

@@ -34,7 +34,7 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::{prelude::*, convert::TryInto};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	DispatchResult,
@@ -45,7 +45,7 @@ use frame_support::{
 		dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
 		traits::{
 			Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait,
-			IsType, IsSubType, MaxEncodedLen,
+			IsType, IsSubType,
 		},
 		weights::GetDispatchInfo,
 };

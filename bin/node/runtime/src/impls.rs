@@ -307,7 +307,7 @@ mod multiplier_tests {
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
 		let kb = 1024 as Weight;
 		let mb = kb * kb;
-		let max_fm = Multiplier::saturating_from_integer(i128::max_value());
+		let max_fm = Multiplier::saturating_from_integer(i128::MAX);
 
 		// check that for all values it can compute, correctly.
 		vec![
