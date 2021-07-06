@@ -23,7 +23,7 @@
 use sp_std::vec::Vec;
 
 use sp_std::cmp::Ordering;
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 #[cfg(feature = "full_crypto")]
@@ -53,7 +53,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode, PassByInner, max_encoded_len::MaxEncodedLen, TypeInfo)]
+#[derive(Clone, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo)]
 pub struct Public(pub [u8; 33]);
 
 impl PartialOrd for Public {

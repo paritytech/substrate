@@ -23,7 +23,7 @@
 use sp_std::vec::Vec;
 
 use crate::{hash::H256, hash::H512};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 #[cfg(feature = "full_crypto")]
@@ -57,7 +57,7 @@ type Seed = [u8; 32];
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(
 	PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner,
-	max_encoded_len::MaxEncodedLen, TypeInfo,
+	MaxEncodedLen, TypeInfo,
 )]
 pub struct Public(pub [u8; 32]);
 

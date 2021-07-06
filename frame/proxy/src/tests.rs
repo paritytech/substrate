@@ -103,8 +103,8 @@ parameter_types! {
 	pub const AnnouncementDepositFactor: u64 = 1;
 }
 #[derive(
-	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug,
-	max_encoded_len::MaxEncodedLen, scale_info::TypeInfo,
+	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, MaxEncodedLen,
+	scale_info::TypeInfo,
 )]
 pub enum ProxyType {
 	Any,

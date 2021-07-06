@@ -17,14 +17,14 @@
 
 //! Storage value type. Implements StorageValue trait and its method directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
+use codec::{FullCodec, Decode, EncodeLike, Encode, MaxEncodedLen};
 use crate::{
 	metadata::{StorageEntryModifier, StorageEntryType},
 	storage::{
 		StorageAppend, StorageTryAppend, StorageDecodeLength,
 		types::{OptionQuery, StorageEntryMetadata, QueryKindTrait},
 	},
-	traits::{GetDefault, StorageInstance, MaxEncodedLen, StorageInfo},
+	traits::{GetDefault, StorageInstance, StorageInfo},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;

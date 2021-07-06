@@ -43,7 +43,7 @@ pub fn init_logging(pattern: &str) -> Result<(), sc_tracing::logging::Error> {
 /// Create a service configuration from a chain spec.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<G, E>(
+pub fn browser_configuration<G, E>(
 	chain_spec: GenericChainSpec<G, E>,
 ) -> Result<Configuration, Box<dyn std::error::Error>>
 where

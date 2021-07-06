@@ -18,14 +18,14 @@
 //! Storage map type. Implements StorageDoubleMap, StorageIterableDoubleMap,
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
-use codec::{Decode, Encode, EncodeLike, FullCodec};
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use crate::{
 	metadata::{StorageEntryModifier, StorageEntryType},
 	storage::{
 		StorageAppend, StorageTryAppend, StorageDecodeLength, StoragePrefixedMap,
 		types::{OptionQuery, StorageEntryMetadata, QueryKindTrait},
 	},
-	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
+	traits::{GetDefault, StorageInstance, Get, StorageInfo},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
