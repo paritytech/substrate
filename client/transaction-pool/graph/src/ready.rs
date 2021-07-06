@@ -108,8 +108,7 @@ Hence every hash retrieved from `provided_tags` is always present in `ready`;
 qed
 "#;
 
-/// Validated transactions that are block ready with all their dependencies
-/// met.
+/// Validated transactions that are block ready with all their dependencies met.
 #[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// Next free insertion id (used to indicate when a transaction was inserted into the pool).
