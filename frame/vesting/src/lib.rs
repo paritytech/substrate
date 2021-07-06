@@ -67,8 +67,8 @@ use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 pub use pallet::*;
 use sp_runtime::{
 	traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedDiv, Convert, MaybeSerializeDeserialize, One,
-		Saturating, StaticLookup, Zero,
+		AtLeast32BitUnsigned, Bounded, Convert, MaybeSerializeDeserialize, One, Saturating,
+		StaticLookup, Zero,
 	},
 	RuntimeDebug,
 };
@@ -688,7 +688,6 @@ where
 	/// `vest_other`.
 	///
 	/// Is a no-op if the amount to be vested is zero.
-	/// NOTE: does not validate schedule params.
 	fn add_vesting_schedule(
 		who: &T::AccountId,
 		locked: BalanceOf<T>,
@@ -698,6 +697,9 @@ where
 		if locked.is_zero() { return Ok(()); }
 
 		let vesting_schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
+		// Check for `per_block` or `locked` of 0 and ending block greater than max block.
+		vesting_schedule.validate::<T::BlockNumberToBalance, T>()?;
+
 		let mut schedules = Self::vesting(who).unwrap_or_default();
 
 		// NOTE: we must push the new schedule so that `exec_action`
@@ -716,14 +718,16 @@ where
 	// Ensure we can call `add_vesting_schedule` without error. This should always
 	// be called prior to `add_vesting_schedule`.
 	//
-	// NOTE: expects schedule param validation has been done due to different
-	// scenarios having varying requirements.
 	fn can_add_vesting_schedule(
 		who: &T::AccountId,
-		_locked: BalanceOf<T>,
-		_per_block: BalanceOf<T>,
-		_starting_block: T::BlockNumber,
+		locked: BalanceOf<T>,
+		per_block: BalanceOf<T>,
+		starting_block: T::BlockNumber,
 	) -> DispatchResult {
+		// Check for `per_block` or `locked` of 0 and ending block greater than max block.
+		VestingInfo::new::<T>(locked, per_block, starting_block)
+			.validate::<T::BlockNumberToBalance, T>()?;
+
 		ensure!(
 			Vesting::<T>::decode_len(who).unwrap_or_default() <
 				T::MaxVestingSchedules::get() as usize,
