@@ -267,7 +267,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 								use #scrate::sp_runtime::SaturatedConversion;
 
 								let max_size = <
-									#value_type as #scrate::traits::MaxEncodedLen
+									#value_type as #scrate::codec::MaxEncodedLen
 								>::max_encoded_len()
 									.saturated_into();
 
@@ -307,7 +307,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 								>::Hasher::max_len::<#key>();
 
 								let max_size = <
-									#value_type as #scrate::traits::MaxEncodedLen
+									#value_type as #scrate::codec::MaxEncodedLen
 								>::max_encoded_len()
 									.saturating_add(key_max_size)
 									.saturated_into();
@@ -356,7 +356,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 								>::Hasher2::max_len::<#key2>();
 
 								let max_size = <
-									#value_type as #scrate::traits::MaxEncodedLen
+									#value_type as #scrate::codec::MaxEncodedLen
 								>::max_encoded_len()
 									.saturating_add(key1_max_size)
 									.saturating_add(key2_max_size)
@@ -400,7 +400,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 								>::key_max_encoded_len();
 
 								let max_size = <
-									#value_type as #scrate::traits::MaxEncodedLen
+									#value_type as #scrate::codec::MaxEncodedLen
 								>::max_encoded_len()
 									.saturating_add(key_max_size)
 									.saturated_into();

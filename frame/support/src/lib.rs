@@ -1274,7 +1274,7 @@ pub mod pallet_prelude {
 		RuntimeDebug, storage,
 		traits::{
 			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
-			ConstU32, GetDefault, MaxEncodedLen,
+			ConstU32, GetDefault,
 		},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
@@ -1284,7 +1284,7 @@ pub mod pallet_prelude {
 		},
 		storage::bounded_vec::BoundedVec,
 	};
-	pub use codec::{Encode, Decode};
+	pub use codec::{Encode, Decode, MaxEncodedLen};
 	pub use crate::inherent::{InherentData, InherentIdentifier, ProvideInherent};
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
@@ -2376,7 +2376,3 @@ pub mod pallet_prelude {
 /// * use the newest nightly possible.
 ///
 pub use frame_support_procedural::pallet;
-
-/// The `max_encoded_len` module contains the `MaxEncodedLen` trait and derive macro, which is
-/// useful for computing upper bounds on storage size.
-pub use max_encoded_len;
