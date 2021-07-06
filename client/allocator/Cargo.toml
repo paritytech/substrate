@@ -22,7 +22,6 @@ thiserror = { version = "1.0.21" }
 
 [features]
 default = [ "std" ]
-track-heap = []
 std = [
 	"sp-std/std",
 	"sp-core/std",

@@ -27,4 +27,3 @@ thiserror = "1.0.21"
 
 [features]
 default = []
-track-heap = [ "sc-allocator/track-heap" ]
