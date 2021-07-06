@@ -35,6 +35,11 @@ pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usiz
 
 /// Provides safe memory access interface using an external buffer
 pub trait MemoryTransfer {
+	/// Read data from a slice of memory into a newly allocated buffer.
+	///
+	/// Returns an error if the read would go out of the memory bounds.
+	fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>>;
+
 	/// Read data from a slice of memory into a destination buffer.
 	///
 	/// Returns an error if the read would go out of the memory bounds.
@@ -77,6 +82,15 @@ pub mod wasmi {
 	}
 
 	impl super::MemoryTransfer for MemoryWrapper {
+		fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
+			self.0.with_direct_access(|source| {
+				let range = checked_range(source_addr.into(), size, source.len())
+					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+				Ok(Vec::from(&source[range]))
+			})
+		}
+
 		fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
 			self.0.with_direct_access(|source| {
 				let range = checked_range(source_addr.into(), destination.len(), source.len())
@@ -186,6 +200,23 @@ pub mod wasmer {
 	}
 
 	impl super::MemoryTransfer for MemoryWrapper {
+		fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
+			let memory = self.buffer.borrow();
+
+			let data_size = memory
+				.data_size()
+				.try_into()
+				.expect("data size does not fit");
+
+			let range = checked_range(source_addr.into(), size, data_size)
+				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+			let mut buffer = vec![0; range.len()];
+			self.read_into(source_addr, &mut buffer)?;
+
+			Ok(buffer)
+		}
+
 		fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
 			unsafe {
 				let memory = self.buffer.borrow();
@@ -216,6 +247,6 @@ pub mod wasmer {
 				&mut destination[range].copy_from_slice(source);
 				Ok(())
 			}
-		}	
+		}
 	}
 }

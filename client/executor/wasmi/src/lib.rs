@@ -148,11 +148,11 @@ impl Sandbox for FunctionExecutor {
 			.memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = buf_len as usize;
-		let mut buffer = vec![0; len];
 
-		if let Err(_) = sandboxed_memory.read_into(Pointer::new(offset as u32), &mut buffer) {
-			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-		}
+		let buffer = match sandboxed_memory.read(Pointer::new(offset as u32), len) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Ok(buffer) => buffer,
+		};
 
 		if let Err(_) = self.inner.memory.set(buf_ptr.into(), &buffer) {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
@@ -175,11 +175,11 @@ impl Sandbox for FunctionExecutor {
 			.memory(memory_id).map_err(|e| e.to_string())?;
 
 		let len = val_len as usize;
-		let mut buffer = vec![0; len];
 
-		if let Err(_) = self.inner.memory.get_into(val_ptr.into(), &mut buffer) {
-			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-		}
+		let buffer = match self.inner.memory.get(val_ptr.into(), len) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Ok(buffer) => buffer,
+		};
 
 		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)

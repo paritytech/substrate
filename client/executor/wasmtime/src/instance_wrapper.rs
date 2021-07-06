@@ -318,6 +318,19 @@ fn get_table(instance: &Instance) -> Option<Table> {
 
 /// Functions realted to memory.
 impl InstanceWrapper {
+	/// Read data from a slice of memory into a newly allocated buffer.
+	///
+	/// Returns an error if the read would go out of the memory bounds.
+	pub fn read_memory(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
+		let range = checked_range(source_addr.into(), size, self.memory.data_size())
+			.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+		let mut buffer = vec![0; range.len()];
+		self.read_memory_into(source_addr, &mut buffer)?;
+
+		Ok(buffer)
+	}
+
 	/// Read data from a slice of memory into a destination buffer.
 	///
 	/// Returns an error if the read would go out of the memory bounds.

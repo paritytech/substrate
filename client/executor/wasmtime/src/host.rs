@@ -175,11 +175,11 @@ impl Sandbox for HostState {
 			.map_err(|e| e.to_string())?;
 
 		let len = buf_len as usize;
-		let mut buffer = vec![0; len];
 
-		if let Err(_) = sandboxed_memory.read_into(Pointer::new(offset as u32), &mut buffer) {
-			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-		}
+		let buffer = match sandboxed_memory.read(Pointer::new(offset as u32), len) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Ok(buffer) => buffer,
+		};
 
 		if let Err(_) = self.inner.instance.write_memory_from(buf_ptr, &buffer) {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
@@ -201,14 +201,12 @@ impl Sandbox for HostState {
 			.memory(memory_id)
 			.map_err(|e| e.to_string())?;
 
-		// TODO check len vs supervisor_mem_size
-
 		let len = val_len as usize;
-		let mut buffer = vec![0; len];
 
-		if let Err(_) = self.inner.instance.read_memory_into(val_ptr, &mut buffer) {
-			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-		}
+		let buffer = match self.inner.instance.read_memory(val_ptr, len) {
+			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Ok(buffer) => buffer,
+		};
 
 		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
 			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)

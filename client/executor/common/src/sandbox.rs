@@ -660,7 +660,20 @@ impl Memory {
 }
 
 impl util::MemoryTransfer for Memory {
-    fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
+	fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
+		match self {
+			Memory::Wasmi(sandboxed_memory) => {
+				sandboxed_memory.read(source_addr, size)
+			},
+
+			#[cfg(feature = "wasmer-sandbox")]
+			Memory::Wasmer(sandboxed_memory) => {
+				sandboxed_memory.read(source_addr, size)
+			},
+		}
+	}
+
+	fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
 		match self {
 			Memory::Wasmi(sandboxed_memory) => {
 				sandboxed_memory.read_into(source_addr, destination)
