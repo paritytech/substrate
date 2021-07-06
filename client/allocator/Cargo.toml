@@ -26,5 +26,4 @@ std = [
 	"sp-std/std",
 	"sp-core/std",
 	"sp-wasm-interface/std",
-	"log/std",
 ]
