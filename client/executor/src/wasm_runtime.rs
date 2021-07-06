@@ -526,4 +526,35 @@ mod tests {
 		let version = decode_version(&old_runtime_version.encode()).unwrap();
 		assert_eq!(3, version.transaction_version);
 	}
+
+	#[test]
+	fn embed_runtime_version_works() {
+		let wasm = sp_maybe_compressed_blob::decompress(
+			substrate_test_runtime::wasm_binary_unwrap(),
+			sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
+		).expect("Decompressing works");
+
+		let runtime_version = RuntimeVersion {
+			spec_name: "test_replace".into(),
+			impl_name: "test_replace".into(),
+			authoring_version: 100,
+			spec_version: 100,
+			impl_version: 100,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
+			transaction_version: 100,
+		};
+
+		let embedded = sp_version::embed::embed_runtime_version(
+			&wasm,
+			runtime_version.clone(),
+		).expect("Embedding works");
+
+		let blob = RuntimeBlob::new(&embedded).expect("Embedded blob is valid");
+		let read_version = read_embedded_version(&blob)
+			.ok()
+			.flatten()
+			.expect("Reading embedded version works");
+
+		assert_eq!(runtime_version, read_version);
+	}
 }
