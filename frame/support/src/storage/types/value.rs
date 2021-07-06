@@ -17,13 +17,13 @@
 
 //! Storage value type. Implements StorageValue trait and its method directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
+use codec::{FullCodec, Decode, EncodeLike, Encode, MaxEncodedLen};
 use crate::{
 	storage::{
 		StorageAppend, StorageTryAppend, StorageDecodeLength,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
-	traits::{GetDefault, StorageInstance, MaxEncodedLen, StorageInfo},
+	traits::{GetDefault, StorageInstance, StorageInfo},
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -223,6 +223,27 @@ where
 					Value::max_encoded_len()
 						.saturated_into(),
 				),
+			}
+		]
+	}
+}
+
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Value, QueryKind, OnEmpty>
+	crate::traits::PartialStorageInfoTrait for
+	StorageValue<Prefix, Value, QueryKind, OnEmpty>
+where
+	Prefix: StorageInstance,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::hashed_key(),
+				max_values: Some(1),
+				max_size: None,
 			}
 		]
 	}

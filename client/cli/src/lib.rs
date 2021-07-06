@@ -139,6 +139,7 @@ pub trait SubstrateCli: Sized {
 				AppSettings::GlobalVersion,
 				AppSettings::ArgsNegateSubcommands,
 				AppSettings::SubcommandsNegateReqs,
+				AppSettings::ColoredHelp,
 			]);
 
 		let matches = match app.get_matches_from_safe(iter) {

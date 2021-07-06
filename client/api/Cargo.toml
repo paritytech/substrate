@@ -24,7 +24,7 @@ futures = "0.3.1"
 hash-db = { version = "0.15.2", default-features = false }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-inherents = { version = "3.0.0", default-features = false, path = "../../primitives/inherents" }
-kvdb = "0.9.0"
+kvdb = "0.10.0"
 log = "0.4.8"
 parking_lot = "0.11.1"
 lazy_static =  "1.4.0"
@@ -43,7 +43,7 @@ sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
 
 [dev-dependencies]
-kvdb-memorydb = "0.9.0"
+kvdb-memorydb = "0.10.0"
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime"  }
 thiserror = "1.0.21"

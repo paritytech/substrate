@@ -363,7 +363,7 @@ where
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 100_000_000);
-		let base_cost = <<Test as Config>::WeightInfo as WeightInfo>::call(0);
+		let base_cost = <<Test as Config>::WeightInfo as WeightInfo>::call();
 
 		assert_eq!(
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
@@ -1727,6 +1727,10 @@ fn self_destruct_works() {
 				Ok(_)
 			);
 
+			// The call triggers rent collection that reduces the amount of balance
+			// that remains for the beneficiary.
+			let balance_after_rent = 93_078;
+
 			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1738,7 +1742,7 @@ fn self_destruct_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Balances(
-						pallet_balances::Event::Transfer(addr.clone(), DJANGO, 93_086)
+						pallet_balances::Event::Transfer(addr.clone(), DJANGO, balance_after_rent)
 					),
 					topics: vec![],
 				},
@@ -1761,7 +1765,7 @@ fn self_destruct_works() {
 
 			// check that the beneficiary (django) got remaining balance
 			// some rent was deducted before termination
-			assert_eq!(Balances::free_balance(DJANGO), 1_093_086);
+			assert_eq!(Balances::free_balance(DJANGO), 1_000_000 + balance_after_rent);
 		});
 }
 
@@ -2936,5 +2940,61 @@ fn debug_message_invalid_utf8() {
 			true,
 		);
 		assert_err!(result.result, <Error<Test>>::DebugMessageInvalidUTF8);
+	});
+}
+
+#[test]
+fn gas_estimation_correct() {
+	let (caller_code, caller_hash) = compile_module::<Test>("call_return_code").unwrap();
+	let (callee_code, callee_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Pallet::<Test>::subsistence_threshold();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
+
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				subsistence * 100,
+				GAS_LIMIT,
+				caller_code,
+				vec![],
+				vec![0],
+			),
+		);
+		let addr_caller = Contracts::contract_address(&ALICE, &caller_hash, &[0]);
+
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				subsistence * 100,
+				GAS_LIMIT,
+				callee_code,
+				vec![],
+				vec![1],
+			),
+		);
+		let addr_callee = Contracts::contract_address(&ALICE, &callee_hash, &[1]);
+
+		// Call in order to determine the gas that is required for this call
+		let result = Contracts::bare_call(
+			ALICE,
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			AsRef::<[u8]>::as_ref(&addr_callee).to_vec(),
+			false,
+		);
+		assert_ok!(result.result);
+
+		// Make the same call using the estimated gas. Should succeed.
+		assert_ok!(Contracts::bare_call(
+			ALICE,
+			addr_caller,
+			0,
+			result.gas_consumed,
+			AsRef::<[u8]>::as_ref(&addr_callee).to_vec(),
+			false,
+		).result);
 	});
 }
