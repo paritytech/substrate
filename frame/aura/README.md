@@ -1,7 +1,7 @@
 # Aura Module
 
 - [`aura::Config`](https://docs.rs/pallet-aura/latest/pallet_aura/pallet/trait.Config.html)
-- [`Module`](https://docs.rs/pallet-aura/latest/pallet_aura/struct.Module.html)
+- [`Pallet`](https://docs.rs/pallet-aura/latest/pallet_aura/pallet/struct.Pallet.html)
 
 ## Overview
 

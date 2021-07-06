@@ -524,7 +524,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Pin state values in memory
 	pub fn pin(&mut self, hash: &BlockHash) {
 		if self.pending_insertions.contains(hash) {
-			debug_assert!(false, "Trying to pin pending state");
+			// Pinning pending state is not implemented. Pending states
+			// won't be pruned for quite some time anyway, so it's not a big deal.
 			return;
 		}
 		let refs = self.pinned.entry(hash.clone()).or_default();
