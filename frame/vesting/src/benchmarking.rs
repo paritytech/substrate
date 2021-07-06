@@ -23,7 +23,7 @@ use super::*;
 
 use frame_system::{RawOrigin, Pallet as System};
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{CheckedDiv, Bounded};
 use frame_support::assert_ok;
 
 use crate::Pallet as Vesting;
@@ -140,7 +140,6 @@ benchmarks! {
 
 		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
-		// T::Currency::make_free_balance_be(&other, BalanceOf::<T>::max_value() / 2u32.into());
 
 		add_locks::<T>(&other, l as u8);
 		let expected_balance = add_vesting_schedules::<T>(other_lookup.clone(), s)?;
