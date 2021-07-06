@@ -99,7 +99,6 @@ impl Default for Releases {
 }
 
 /// Actions to take on a user's `Vesting` storage entry.
-#[derive(Clone, Copy)]
 enum VestingAction {
 	/// Do not actively remove any schedules.
 	Passive,
