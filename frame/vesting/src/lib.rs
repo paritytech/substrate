@@ -655,8 +655,8 @@ impl<T: Config> VestingSchedule<T::AccountId> for Pallet<T>
 where
 	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
 {
-	type Moment = T::BlockNumber;
 	type Currency = T::Currency;
+	type Moment = T::BlockNumber;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
@@ -730,10 +730,10 @@ where
 		Ok(())
 	}
 
-	/// Remove a vesting schedule for a given account. Will error if `schedule_index` is `None`.
+	/// Remove a vesting schedule for a given account.
 	fn remove_vesting_schedule(who: &T::AccountId, schedule_index: u32) -> DispatchResult {
-		let remove_action = VestingAction::Remove(schedule_index as usize);
 		let schedules = Self::vesting(who).ok_or(Error::<T>::NotVesting)?;
+		let remove_action = VestingAction::Remove(schedule_index as usize);
 
 		let (schedules, locked_now) =
 			Self::report_schedule_updates(schedules.to_vec(), remove_action);
@@ -746,9 +746,4 @@ where
 		Self::write_lock(who, locked_now);
 		Ok(())
 	}
-
-	// TODO: migration tests
-	// 	- migration version changes as expected
-	//  - same checks as pre and post migrate
-	// TODO: test that genesis build has the correct migrations version
 }

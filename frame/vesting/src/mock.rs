@@ -24,6 +24,7 @@ use sp_runtime::{
 
 use super::*;
 use crate as pallet_vesting;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -84,8 +85,8 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	// Ideally all tests should use a value less than `MinVestedTransfer` when configuring the
-	// existential deposit.
+	// Ideally all tests should use a value <= `MinVestedTransfer` when configuring the
+	// existential deposit. This is ensured the by the integrity test.
 	pub const MinVestedTransfer: u64 = 256 * 2;
 	pub static ExistentialDeposit: u64 = 0;
 	pub const MaxVestingSchedules: u32 = 3;

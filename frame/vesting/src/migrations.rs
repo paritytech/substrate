@@ -29,11 +29,12 @@ pub(crate) mod v1 {
 
 		log::debug!(
 			target: LOG_TARGET,
-			"Vesting storage version v1 **PRE** migration checks succesful!"
+			"Vesting storage version v1 PRE migration checks succesful!"
 		);
 
 		Ok(())
 	}
+
 	/// Migrate from single schedule to multi schedule storage
 	pub(crate) fn migrate<T: Config>() -> Weight {
 		let mut reads_writes = 0;
@@ -56,7 +57,7 @@ pub(crate) mod v1 {
 	pub(crate) fn post_migrate<T: Config>() -> Result<(), &'static str> {
 		assert_eq!(StorageVersion::<T>::get(), Releases::V1);
 
-		for (key, schedules) in Vesting::<T>::iter() {
+		for (_key, schedules) in Vesting::<T>::iter() {
 			// Assert the new bound vec respects size.
 			assert!(schedules.len() > 0, "A bounded vec with no items was created.");
 			assert!(
@@ -69,13 +70,16 @@ pub(crate) mod v1 {
 				assert!(s.per_block() > Zero::zero(), "A schedule with per_block of 0 exists");
 				// It is ok if this does not pass, but ideally pre-existing schedules would pass
 				// this validation logic so we can be more confident about edge cases.
-				debug_assert!(s.validate(), "A schedule does not pass new validation logic");
+				debug_assert!(
+					s.validate::<T::BlockNumberToBalance, T>().is_ok(),
+					"A schedule does not pass new validation logic"
+				);
 			}
 		}
 
 		log::debug!(
 			target: LOG_TARGET,
-			"Vesting storage version v1 **POST** migration checks succesful!"
+			"Vesting storage version v1 POST migration checks succesful!"
 		);
 		Ok(())
 	}
