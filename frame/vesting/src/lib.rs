@@ -50,7 +50,7 @@ mod migrations;
 mod mock;
 #[cfg(test)]
 mod tests;
-pub mod vesting_info;
+mod vesting_info;
 
 pub mod weights;
 
@@ -489,6 +489,7 @@ impl<T: Config> Pallet<T> {
 			.locked_at::<T::BlockNumberToBalance>(now)
 			.saturating_add(schedule2.locked_at::<T::BlockNumberToBalance>(now));
 		// This shouldn't happen because we know at least one ending block is greater than now.
+		debug_assert!(!locked.is_zero(), "merge_vesting_info validation checks failed to catch a locked of 0");
 		if locked.is_zero() {
 			log::warn!(
 				target: LOG_TARGET,
