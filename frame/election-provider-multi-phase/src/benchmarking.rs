@@ -124,7 +124,7 @@ fn solution_with_size<T: Config>(
 		.map(|(voter, _stake, votes)| {
 			let percent_per_edge: InnerOf<CompactAccuracyOf<T>> =
 				(100 / votes.len()).try_into().unwrap_or_else(|_| panic!("failed to convert"));
-			Assignment {
+			crate::unsigned::Assignment::<T> {
 				who: voter.clone(),
 				distribution: votes
 					.iter()

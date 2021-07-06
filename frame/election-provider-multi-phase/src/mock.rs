@@ -330,11 +330,11 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::submit(c)
 		}
 	}
-	fn elect_queued() -> Weight {
+	fn elect_queued(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::elect_queued()
+			<() as multi_phase::weights::WeightInfo>::elect_queued(v, t, a, d)
 		}
 	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
