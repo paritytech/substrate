@@ -7520,6 +7520,7 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-io",
+ "sp-maybe-compressed-blob",
  "sp-panic-handler",
  "sp-runtime",
  "sp-runtime-interface",
@@ -9526,11 +9527,13 @@ version = "3.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
+ "parity-wasm 0.42.2",
  "scale-info",
  "serde",
  "sp-runtime",
  "sp-std",
  "sp-version-proc-macro",
+ "thiserror",
 ]
 
 [[package]]
