@@ -208,8 +208,10 @@ fn make_offenders_im_online<T: Config>(num_offenders: u32, num_nominators: u32) 
 
 #[cfg(test)]
 fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expected: I) {
-	let events = System::<T>::events() .into_iter()
-		.map(|frame_system::EventRecord { event, .. }| event).collect::<Vec<_>>();
+	let events = System::<T>::events()
+		.into_iter()
+		.map(|frame_system::EventRecord { event, .. }| event)
+		.collect::<Vec<_>>();
 	let expected = expected.collect::<Vec<_>>();
 	let lengths = (events.len(), expected.len());
 	let length_mismatch = if lengths.0 != lengths.1 {
@@ -273,13 +275,19 @@ benchmarks! {
 		let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());
 		let slash_amount = slash_fraction * bond_amount;
 		let reward_amount = slash_amount * (1 + n) / 2;
+		let slash = |id| core::iter::once(
+			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slash(id, BalanceOf::<T>::from(slash_amount)))
+		);
+		let chill = |id| core::iter::once(
+			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(id))
+		);
 		let mut slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
-				core::iter::once(offender.stash).chain(offender.nominator_stashes.into_iter())
+				let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| slash(nom));
+				chill(offender.stash.clone())
+				.chain(slash(offender.stash))
+				.chain(nom_slashes)
 			})
-			.map(|stash| <T as StakingConfig>::Event::from(
-				StakingEvent::<T>::Slash(stash, BalanceOf::<T>::from(slash_amount))
-			))
 			.collect::<Vec<_>>();
 		let reward_events = reporters.into_iter()
 			.flat_map(|reporter| vec![
@@ -289,8 +297,9 @@ benchmarks! {
 				).into()
 			]);
 
-		// rewards are applied after first offender and it's nominators
-		let slash_rest = slash_events.split_off(1 + n as usize);
+		// Rewards are applied after first offender and it's nominators.
+		// We split after: offender slash + offender chill + nominator slashes.
+		let slash_rest = slash_events.split_off(2 + n as usize);
 
 		// make sure that all slashes have been applied
 		#[cfg(test)]
@@ -338,6 +347,7 @@ benchmarks! {
 			+ 1 // offence
 			+ 2 // reporter (reward + endowment)
 			+ 1 // offenders slashed
+			+ 1 // offenders chilled
 			+ n // nominators slashed
 		);
 	}
@@ -372,6 +382,7 @@ benchmarks! {
 			+ 1 // offence
 			+ 2 // reporter (reward + endowment)
 			+ 1 // offenders slashed
+			+ 1 // offenders chilled
 			+ n // nominators slashed
 		);
 	}

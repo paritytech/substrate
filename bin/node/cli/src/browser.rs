@@ -26,13 +26,12 @@ use browser_utils::{
 
 /// Starts the client.
 #[wasm_bindgen]
-pub async fn start_client(chain_spec: Option<String>, log_level: String) -> Result<Client, JsValue> {
+pub fn start_client(chain_spec: Option<String>, log_level: String) -> Result<Client, JsValue> {
 	start_inner(chain_spec, log_level)
-		.await
 		.map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
-async fn start_inner(
+fn start_inner(
 	chain_spec: Option<String>,
 	log_directives: String,
 ) -> Result<Client, Box<dyn std::error::Error>> {
@@ -44,7 +43,7 @@ async fn start_inner(
 		None => crate::chain_spec::development_config(),
 	};
 
-	let config = browser_configuration(chain_spec).await?;
+	let config = browser_configuration(chain_spec)?;
 
 	info!("Substrate browser node");
 	info!("✌️  version {}", config.impl_version);

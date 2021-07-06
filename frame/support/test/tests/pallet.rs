@@ -19,7 +19,6 @@ use frame_support::{
 	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
 	traits::{
 		GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade, GetPalletVersion, OnGenesis,
-		MaxEncodedLen,
 	},
 	dispatch::{UnfilteredDispatchable, Parameter},
 	storage::unhashed,
@@ -48,10 +47,10 @@ impl From<SomeType6> for u64 { fn from(_t: SomeType6) -> Self { 0u64 } }
 pub struct SomeType7;
 impl From<SomeType7> for u64 { fn from(_t: SomeType7) -> Self { 0u64 } }
 
-pub trait SomeAssociation1 { type _1: Parameter + MaxEncodedLen; }
+pub trait SomeAssociation1 { type _1: Parameter + codec::MaxEncodedLen; }
 impl SomeAssociation1 for u64 { type _1 = u64; }
 
-pub trait SomeAssociation2 { type _2: Parameter + MaxEncodedLen; }
+pub trait SomeAssociation2 { type _2: Parameter + codec::MaxEncodedLen; }
 impl SomeAssociation2 for u64 { type _2 = u64; }
 
 #[frame_support::pallet]
@@ -396,6 +395,9 @@ pub mod pallet2 {
 	where T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 	}
+
+	#[pallet::storage]
+	pub type SomeValue<T: Config> = StorageValue<_, Vec<u32>>;
 
 	#[pallet::event]
 	pub enum Event {
@@ -1244,6 +1246,17 @@ fn test_storage_info() {
 					max_values: None,
 					max_size: Some(7 + 16 + 8),
 				}
+			},
+		],
+	);
+
+	assert_eq!(
+		Example2::storage_info(),
+		vec![
+			StorageInfo {
+				prefix: prefix(b"Example2", b"SomeValue"),
+				max_values: Some(1),
+				max_size: None,
 			},
 		],
 	);

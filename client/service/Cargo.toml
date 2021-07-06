@@ -79,7 +79,7 @@ sc-tracing = { version = "3.0.0", path = "../tracing" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 tracing = "0.1.25"
 tracing-futures = { version = "0.2.4" }
-parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 async-trait = "0.1.42"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]

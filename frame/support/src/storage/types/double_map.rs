@@ -18,13 +18,13 @@
 //! Storage map type. Implements StorageDoubleMap, StorageIterableDoubleMap,
 //! StoragePrefixedDoubleMap traits and their methods directly.
 
-use codec::{Decode, Encode, EncodeLike, FullCodec};
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use crate::{
 	storage::{
 		StorageAppend, StorageTryAppend, StorageDecodeLength, StoragePrefixedMap,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
-	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
+	traits::{GetDefault, StorageInstance, Get, StorageInfo},
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -494,6 +494,32 @@ where
 						.saturating_add(Value::max_encoded_len())
 						.saturated_into(),
 				),
+			}
+		]
+	}
+}
+
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::PartialStorageInfoTrait for
+	StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Hasher1: crate::hash::StorageHasher,
+	Hasher2: crate::hash::StorageHasher,
+	Key1: FullCodec,
+	Key2: FullCodec,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::final_prefix(),
+				max_values: MaxValues::get(),
+				max_size: None
 			}
 		]
 	}
