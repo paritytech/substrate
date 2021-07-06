@@ -147,38 +147,18 @@ impl Sandbox for FunctionExecutor {
 			.borrow()
 			.memory(memory_id).map_err(|e| e.to_string())?;
 
-		match sandboxed_memory {
-			sandbox::Memory::Wasmi(sandboxed_memory) => {
-				match MemoryInstance::transfer(
-					&sandboxed_memory,
-					offset as usize,
-					&self.inner.memory,
-					buf_ptr.into(),
-					buf_len as usize,
-				) {
-					Ok(()) => Ok(sandbox_primitives::ERR_OK),
-					Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-				}
-			}
+		let len = buf_len as usize;
+		let mut buffer = vec![0; len];
 
-			#[cfg(feature = "wasmer-sandbox")]
-			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				let len = buf_len as usize;
-				let mut buffer = vec![0; len];
-
-				if let Err(_) = sandboxed_memory.read_into(Pointer::new(offset as u32), &mut buffer) {
-					return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-				}
-
-				todo!();
-				// if let Err(_) = self.inner.instance.write_memory_from(buf_ptr, &buffer) {
-				// 	return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-				// }
-
-				// Ok(sandbox_primitives::ERR_OK)
-			}
+		if let Err(_) = sandboxed_memory.read_into(Pointer::new(offset as u32), &mut buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
 
+		if let Err(_) = self.inner.memory.set(buf_ptr.into(), &buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+		}
+
+		Ok(sandbox_primitives::ERR_OK)
 	}
 
 	fn memory_set(
@@ -194,25 +174,18 @@ impl Sandbox for FunctionExecutor {
 			.borrow()
 			.memory(memory_id).map_err(|e| e.to_string())?;
 
-		match sandboxed_memory {
-			sandbox::Memory::Wasmi(sandboxed_memory) => {
-				match MemoryInstance::transfer(
-					&self.inner.memory,
-					val_ptr.into(),
-					&sandboxed_memory,
-					offset as usize,
-					val_len as usize,
-				) {
-					Ok(()) => Ok(sandbox_primitives::ERR_OK),
-					Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-				}
-			}
+		let len = val_len as usize;
+		let mut buffer = vec![0; len];
 
-			#[cfg(feature = "wasmer-sandbox")]
-			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				todo!()
-			}
+		if let Err(_) = self.inner.memory.get_into(val_ptr.into(), &mut buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
+
+		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+		}
+
+		Ok(sandbox_primitives::ERR_OK)
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {

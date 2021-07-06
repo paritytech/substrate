@@ -20,7 +20,7 @@
 //!
 //! Sandboxing is backed by wasmi and wasmer, depending on the configuration.
 
-use crate::error::{Result, Error};
+use crate::{error::{Result, Error}, util};
 use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
@@ -655,6 +655,34 @@ impl Memory {
 		match self {
 			Memory::Wasmer(memory) => Some(memory.clone()),
 			Memory::Wasmi(_) => None,
+		}
+	}
+}
+
+impl util::MemoryTransfer for Memory {
+    fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
+		match self {
+			Memory::Wasmi(sandboxed_memory) => {
+				sandboxed_memory.read_into(source_addr, destination)
+			},
+
+			#[cfg(feature = "wasmer-sandbox")]
+			Memory::Wasmer(sandboxed_memory) => {
+				sandboxed_memory.read_into(source_addr, destination)
+			},
+		}
+	}
+
+	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
+		match self {
+			Memory::Wasmi(sandboxed_memory) => {
+				sandboxed_memory.write_from(dest_addr, source)
+			},
+
+			#[cfg(feature = "wasmer-sandbox")]
+			Memory::Wasmer(sandboxed_memory) => {
+				sandboxed_memory.write_from(dest_addr, source)
+			},
 		}
 	}
 }

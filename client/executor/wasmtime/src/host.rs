@@ -174,49 +174,18 @@ impl Sandbox for HostState {
 			.memory(memory_id)
 			.map_err(|e| e.to_string())?;
 
-		match sandboxed_memory {
-			sandbox::Memory::Wasmi(sandboxed_memory) => {
-				sandboxed_memory.with_direct_access(|sandboxed_memory| {
-					let len = buf_len as usize;
+		let len = buf_len as usize;
+		let mut buffer = vec![0; len];
 
-					let src_range = match util::checked_range(offset as usize, len, sandboxed_memory.len()) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
-
-					let supervisor_mem_size = self.inner.instance.memory_size() as usize;
-					let dst_range = match util::checked_range(buf_ptr.into(), len, supervisor_mem_size) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
-
-					self.inner.instance
-						.write_memory_from(
-							Pointer::new(dst_range.start as u32),
-							&sandboxed_memory[src_range],
-						)
-						.expect("ranges are checked above; write can't fail; qed");
-
-					Ok(sandbox_primitives::ERR_OK)
-				})
-			},
-
-			#[cfg(feature = "wasmer-sandbox")]
-			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				let len = buf_len as usize;
-				let mut buffer = vec![0; len];
-
-				if let Err(_) = sandboxed_memory.read_into(Pointer::new(offset as u32), &mut buffer) {
-					return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-				}
-
-				if let Err(_) = self.inner.instance.write_memory_from(buf_ptr, &buffer) {
-					return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-				}
-
-				Ok(sandbox_primitives::ERR_OK)
-			}
+		if let Err(_) = sandboxed_memory.read_into(Pointer::new(offset as u32), &mut buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
+
+		if let Err(_) = self.inner.instance.write_memory_from(buf_ptr, &buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+		}
+
+		Ok(sandbox_primitives::ERR_OK)
 	}
 
 	fn memory_set(
@@ -232,51 +201,20 @@ impl Sandbox for HostState {
 			.memory(memory_id)
 			.map_err(|e| e.to_string())?;
 
-		match sandboxed_memory {
-			sandbox::Memory::Wasmi(sandboxed_memory) => {
-				sandboxed_memory.with_direct_access_mut(|sandboxed_memory| {
-					let len = val_len as usize;
-					let supervisor_mem_size = self.inner.instance.memory_size() as usize;
+		// TODO check len vs supervisor_mem_size
 
-					let src_range = match util::checked_range(val_ptr.into(), len, supervisor_mem_size) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
+		let len = val_len as usize;
+		let mut buffer = vec![0; len];
 
-					let dst_range = match util::checked_range(offset as usize, len, sandboxed_memory.len()) {
-						Some(range) => range,
-						None => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-					};
-
-					self.inner.instance
-						.read_memory_into(
-							Pointer::new(src_range.start as u32),
-							&mut sandboxed_memory[dst_range],
-						)
-						.expect("ranges are checked above; read can't fail; qed");
-
-					Ok(sandbox_primitives::ERR_OK)
-				})
-			}
-
-			#[cfg(feature = "wasmer-sandbox")]
-			sandbox::Memory::Wasmer(sandboxed_memory) => {
-				// TODO check len vs supervisor_mem_size
-
-				let len = val_len as usize;
-				let mut buffer = vec![0; len];
-
-				if let Err(_) = self.inner.instance.read_memory_into(val_ptr, &mut buffer) {
-					return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-				}
-
-				if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
-					return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
-				}
-
-				Ok(sandbox_primitives::ERR_OK)
-			}
+		if let Err(_) = self.inner.instance.read_memory_into(val_ptr, &mut buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
 		}
+
+		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
+			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+		}
+
+		Ok(sandbox_primitives::ERR_OK)
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> sp_wasm_interface::Result<()> {
