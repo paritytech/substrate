@@ -212,6 +212,7 @@ pub mod pallet {
 		fn build(&self) {
 			use sp_runtime::traits::Saturating;
 
+			// Genesis uses the latest storage version.
 			StorageVersion::<T>::put(Releases::V1);
 
 			// Generate initial vesting configuration
@@ -260,14 +261,14 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The account given is not vesting.
 		NotVesting,
-		/// The account already has `MaxVestingSchedules` number of schedules and thus
+		/// The account already has `MaxVestingSchedules` count of schedules and thus
 		/// cannot add another one. Consider merging existing schedules in order to add another.
 		AtMaxVestingSchedules,
 		/// Amount being transferred is too low to create a vesting schedule.
 		AmountLow,
-		/// At least one of the indexes is out of bounds of the vesting schedules.
+		/// An index was out of bounds of the vesting schedules.
 		ScheduleIndexOutOfBounds,
-		/// Failed to create a new schedule because some parameters where invalid. e.g. `locked` was 0.
+		/// Failed to create a new schedule because some parameter was invalid. e.g. `locked` was 0.
 		InvalidScheduleParams,
 		/// A schedule contained a `per_block` of 0 or `locked / per_block > BlockNumber::max_value()`,
 		/// thus rendering it unable to ever fully unlock funds.
@@ -369,7 +370,7 @@ pub mod pallet {
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
 		/// # </weight>
 		#[pallet::weight(
-		T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
+			T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
 		)]
 		pub fn force_vested_transfer(
 			origin: OriginFor<T>,
@@ -381,7 +382,7 @@ pub mod pallet {
 			Self::do_vested_transfer(source, target, schedule)
 		}
 
-		/// Merge two vesting schedules together, creating a new vesting schedule that unlocks over
+		/// Merge two vesting schedules together, creating a new vesting schedule that unlocks over the
 		/// highest possible start and end blocks. If both schedules have already started the current
 		/// block will be used as the schedule start; with the caveat that if one schedule is finished
 		/// by the current block, the other will be treated as the new merged schedule, unmodified.
@@ -427,20 +428,20 @@ pub mod pallet {
 
 			// The length of `schedules` decreases by 2 here since we filter out 2 schedules.
 			// Thus we know below that we can insert the new merged schedule without error (assuming
-			// the its initial state was valid).
+			// initial state was valid).
 			let (mut schedules, mut locked_now) =
 				Self::report_schedule_updates(schedules.to_vec(), merge_action);
 
 			let now = <frame_system::Pallet<T>>::block_number();
 			if let Some(new_schedule) = Self::merge_vesting_info(now, schedule1, schedule2)? {
-				// Merging created a new schedule; so now we need to add it to the
-				// accounts vesting schedule collection.
+				// Merging created a new schedule so we:
+				// 1) need to add it to the accounts vesting schedule collection,
 				schedules.push(new_schedule);
-				// (We use `locked_at` in case this is a schedule that started in the past.)
+				// (we use `locked_at` in case this is a schedule that started in the past)
 				let new_schedule_locked = new_schedule.locked_at::<T::BlockNumberToBalance>(now);
-				// update the locked amount to reflect the schedule we just added,
+				// 2) update the locked amount to reflect the schedule we just added,
 				locked_now = locked_now.saturating_add(new_schedule_locked);
-				// and deposit an event to show the new, new, merged schedule.
+				// and 3) deposit an event.
 				Self::deposit_event(Event::<T>::MergedScheduleAdded(
 					new_schedule.locked(),
 					new_schedule.per_block(),
@@ -448,7 +449,6 @@ pub mod pallet {
 				));
 			} // In the None case there was no new schedule to account for.
 
-			debug_assert!(schedules.len() <= T::MaxVestingSchedules::get() as usize);
 			debug_assert!(
 				locked_now > Zero::zero() && schedules.len() > 0 ||
 					locked_now == Zero::zero() && schedules.len() == 0
@@ -508,17 +508,18 @@ impl<T: Config> Pallet<T> {
 			One::one()
 		} else {
 			match locked.checked_div(&duration) {
-				// The logic of `ending_block` guarantees that each schedule ends at least a block
-				// after it starts and since we take the max starting and ending_block we should never
-				// get here.
+				// The logic of `ending_block_as_balance` guarantees that each schedule ends at
+				// least a block after it starts and since we take the max starting and ending_block
+				// we should never get here.
 				None => locked,
 				Some(per_block) => per_block,
 			}
 		};
 
-		// At this point inputs have been validated, so this should always be `Some`.
+		// While `per_block` should never be 0, it is possible that the created schedule would
+		// end after the highest possible block, which is a case where `validate` fails but we
+		// are ok with.
 		let schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
-		debug_assert!(schedule.validate::<T::BlockNumberToBalance, T>().is_ok());
 
 		Ok(Some(schedule))
 	}

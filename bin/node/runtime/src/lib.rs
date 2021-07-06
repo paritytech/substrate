@@ -1023,25 +1023,26 @@ impl pallet_society::Config for Runtime {
 
 parameter_types! {
 	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
-	pub const MaxVestingSchedules: u32 = 20;
+	pub const MaxVestingSchedules: u32 = 28;
 }
 
 impl pallet_vesting::Config for Runtime {
-	type Event = Event;
-	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
+	type Currency = Balances;
+	type Event = Event;
+	type MaxVestingSchedules = MaxVestingSchedules;
 	type MinVestedTransfer = MinVestedTransfer;
 	type WeightInfo = pallet_vesting::weights::SubstrateWeight<Runtime>;
-	type MaxVestingSchedules = MaxVestingSchedules;
 }
 
 impl pallet_mmr::Config for Runtime {
-	const INDEXING_PREFIX: &'static [u8] = b"mmr";
-	type Hashing = <Runtime as frame_system::Config>::Hashing;
 	type Hash = <Runtime as frame_system::Config>::Hash;
+	type Hashing = <Runtime as frame_system::Config>::Hashing;
 	type LeafData = frame_system::Pallet<Self>;
 	type OnNewRoot = ();
 	type WeightInfo = ();
+
+	const INDEXING_PREFIX: &'static [u8] = b"mmr";
 }
 
 parameter_types! {

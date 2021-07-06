@@ -67,6 +67,9 @@ pub(crate) mod v1 {
 			for s in schedules {
 				// Check for infinite schedules.
 				assert!(s.per_block() > Zero::zero(), "A schedule with per_block of 0 exists");
+				// It is ok if this does not pass, but ideally pre-existing schedules would pass
+				// this validation logic so we can be more confident about edge cases.
+				debug_assert!(s.validate(), "A schedule does not pass new validation logic");
 			}
 		}
 

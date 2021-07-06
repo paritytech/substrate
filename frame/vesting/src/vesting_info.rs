@@ -55,7 +55,9 @@ where
 		let max_block = BlockNumberToBalance::convert(BlockNumber::max_value());
 		match self.locked.checked_div(&self.per_block) {
 			None => return Err(Error::<T>::InfiniteSchedule), // `per_block` is 0
-			Some(duration) => ensure!(duration < max_block, Error::<T>::InfiniteSchedule),
+			Some(duration) => {
+				ensure!(duration + self.starting_block() < max_block, Error::<T>::InfiniteSchedule)
+			}
 		};
 
 		Ok(())

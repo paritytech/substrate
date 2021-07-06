@@ -29,15 +29,14 @@ use frame_support::assert_ok;
 use crate::Pallet as Vesting;
 
 const SEED: u32 = 0;
-const ED: u32 = 256;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
 	for id in 0 .. n {
 		let lock_id = [id; 8];
-		let locked = ED;
-
+		let locked = 256u32;
 		let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 		T::Currency::set_lock(lock_id, who, locked.into(), reasons);
 	}
@@ -180,7 +179,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
 	verify {
-		// Vesting schedule is removed!
+		// Vesting schedule is removed.
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&other),
 			None,
@@ -199,7 +198,7 @@ benchmarks! {
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
-		// Add one less than max vesting schedules
+		// Add one less than max vesting schedules.
 		let mut expected_balance = add_vesting_schedules::<T>(target_lookup.clone(), s)?;
 
 		let transfer_amount = T::MinVestedTransfer::get();
@@ -269,15 +268,15 @@ benchmarks! {
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-		// Give target existing locks
+		// Give target existing locks.
 		add_locks::<T>(&caller, l as u8);
-		// Add max vesting schedules
+		// Add max vesting schedules.
 		let expected_balance = add_vesting_schedules::<T>(caller_lookup.clone(), s)?;
-		// Values of the schedules added by `add_vesting_schedules`.
+		// Track the value of the schedules added by `add_vesting_schedules`.
 		let transfer_amount = T::MinVestedTransfer::get();
 		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
 
-		// Schedules are not vesting at block 0
+		// Schedules are not vesting at block 0.
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
@@ -319,9 +318,9 @@ benchmarks! {
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
-		// Give target existing locks
+		// Give target other locks.
 		add_locks::<T>(&caller, l as u8);
-		// Add max vesting schedules
+		// Add max vesting schedules.
 		let mut expected_balance = add_vesting_schedules::<T>(caller_lookup.clone(), s)?;
 		// Values of the schedules added by `add_vesting_schedules`.
 		let transfer_amount = T::MinVestedTransfer::get();
@@ -329,7 +328,7 @@ benchmarks! {
 
 		// Go to half way through all the schedules duration. (They all start at 1, and have a duration of 20).
 		System::<T>::set_block_number(11u32.into());
-		// We expect half the original locked balance
+		// We expect half the original locked balance.
 		expected_balance = expected_balance / 2u32.into();
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
