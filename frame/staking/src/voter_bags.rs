@@ -26,9 +26,9 @@ use crate::{
 	VotingDataOf, slashing::SlashingSpans,
 };
 use codec::{Encode, Decode};
-use frame_support::{DefaultNoBound, traits::Get};
+use frame_support::{DebugNoBound, DefaultNoBound, traits::Get};
 use sp_runtime::SaturatedConversion;
-use sp_std::{collections::{btree_map::BTreeMap, btree_set::BTreeSet}, marker::PhantomData};
+use sp_std::{collections::{btree_map::BTreeMap, btree_set::BTreeSet}, iter, marker::PhantomData};
 
 /// [`Voter`] parametrized by [`Config`] instead of by `AccountId`.
 pub type VoterOf<T> = Voter<AccountIdOf<T>>;
@@ -106,10 +106,22 @@ impl<T: Config> VoterList<T> {
 	///
 	/// Full iteration can be expensive; it's recommended to limit the number of items with `.take(n)`.
 	pub fn iter() -> impl Iterator<Item = Node<T>> {
-		T::VoterBagThresholds::get()
-			.iter()
-			.rev()
-			.copied()
+		// We need a touch of special handling here: because we permit `T::VoterBagThresholds` to
+		// omit the final bound, we need to ensure that we explicitly include that threshold in the
+		// list.
+		//
+		// It's important to retain the ability to omit the final bound because it makes tests much
+		// easier; they can just configure `type VoterBagThresholds = ()`.
+		let thresholds = T::VoterBagThresholds::get();
+		let iter = thresholds.iter().copied();
+		let iter: Box<dyn Iterator<Item = u64>> = if thresholds.last() == Some(&VoteWeight::MAX) {
+			// in the event that they included it, we can just pass the iterator through unchanged.
+			Box::new(iter.rev())
+		} else {
+			// otherwise, insert it here.
+			Box::new(iter.chain(iter::once(VoteWeight::MAX)).rev())
+		};
+		iter
 			.filter_map(Bag::get)
 			.flat_map(|bag| bag.iter())
 	}
@@ -331,6 +343,7 @@ impl<T: Config> VoterList<T> {
 /// iteration so that there's no incentive to churn voter positioning to improve the chances of
 /// appearing within the voter set.
 #[derive(DefaultNoBound, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(DebugNoBound))]
 pub struct Bag<T: Config> {
 	head: Option<AccountIdOf<T>>,
 	tail: Option<AccountIdOf<T>>,
@@ -444,7 +457,7 @@ impl<T: Config> Bag<T> {
 
 /// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
 #[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(DebugNoBound))]
 pub struct Node<T: Config> {
 	voter: Voter<AccountIdOf<T>>,
 	prev: Option<AccountIdOf<T>>,
