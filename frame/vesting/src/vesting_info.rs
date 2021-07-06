@@ -65,21 +65,16 @@ where
 		Ok(())
 	}
 
-	/// Potentially correct the `per_block` of a schedule. Typically called after `validate`.
-	pub fn correct(mut self) -> Self {
-		self.per_block = if self.per_block > self.locked { self.locked } else { self.per_block };
-		self
-	}
-
 	/// Locked amount at schedule creation.
 	pub fn locked(&self) -> Balance {
 		self.locked
 	}
 
-	/// Amount that gets unlocked every block after `starting_block`.
+	// pub fn raw_per_block(&self) -> Balance {
 	pub fn per_block(&self) -> Balance {
 		self.per_block
 	}
+
 
 	/// Starting block for unlocking(vesting).
 	pub fn starting_block(&self) -> BlockNumber {

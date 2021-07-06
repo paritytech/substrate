@@ -492,9 +492,6 @@ impl<T: Config> Pallet<T> {
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 		schedule.validate::<T::BlockNumberToBalance, T>()?;
 
-		// Potentially correct `per_block` if its greater than locked.
-		let schedule = schedule.correct();
-
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
 

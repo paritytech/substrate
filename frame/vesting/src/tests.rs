@@ -1121,7 +1121,7 @@ fn merge_vesting_errors_with_per_block_0() {
 }
 
 #[test]
-fn vesting_info_validate_and_correct_works() {
+fn vesting_info_validate_works() {
 	let min_transfer = <Test as Config>::MinVestedTransfer::get();
 	// Does not check for min transfer.
 	match VestingInfo::new::<Test>(min_transfer - 1, 1u64, 10u64).validate::<Identity, Test>() {
@@ -1148,16 +1148,9 @@ fn vesting_info_validate_and_correct_works() {
 		_ => panic!(),
 	}
 
-	// `per_block` gets corrected to never bigger than `locked`.
-	assert_eq!(
-		VestingInfo::new::<Test>(256u64, 256 * 2u64, 10u64).correct(),
-		VestingInfo::new::<Test>(256u64, 256u64, 10u64)
-	);
-
 	// With valid inputs it does not error and does not modify the inputs.
 	let valid = VestingInfo::new::<Test>(min_transfer, 1u64, 10u64);
 	assert_ok!(valid.validate::<Identity, Test>());
-	assert_eq!(valid.correct(), VestingInfo::new::<Test>(min_transfer, 1u64, 10u64));
 }
 
 #[test]
