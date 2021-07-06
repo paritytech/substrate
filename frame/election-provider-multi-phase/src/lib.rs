@@ -191,8 +191,8 @@
 //! portion of the bond).
 //!
 //! **Conditionally open unsigned phase**: Currently, the unsigned phase is always opened. This is
-//! useful because an honest validator will run substrate OCW code, which should be good enough to trump
-//! a mediocre or malicious signed submission (assuming in the absence of honest signed bots).
+//! useful because an honest validator will run substrate OCW code, which should be good enough to
+//! trump a mediocre or malicious signed submission (assuming in the absence of honest signed bots).
 //! If there are signed submissions, they can be checked against an absolute measure (e.g. PJR),
 //! then we can only open the unsigned phase in extreme conditions (i.e. "no good signed solution
 //! received") to spare some work for the active validators.
@@ -304,6 +304,12 @@ pub trait BenchmarkingConfig {
 	const ACTIVE_VOTERS: [u32; 2];
 	/// Range of desired targets.
 	const DESIRED_TARGETS: [u32; 2];
+	/// Maximum number of voters expected. This is used only for memory-benchmarking of snapshot.
+	const SNAPSHOT_MAXIMUM_VOTERS: u32;
+	/// Maximum number of voters expected. This is used only for memory-benchmarking of miner.
+	const MINER_MAXIMUM_VOTERS: u32;
+	/// Maximum number of targets expected. This is used only for memory-benchmarking.
+	const MAXIMUM_TARGETS: u32;
 }
 
 /// Current phase of the pallet.
@@ -998,8 +1004,9 @@ impl<T: Config> Pallet<T> {
 	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 	/// acquired with success.
 	fn do_synchronized_offchain_worker(now: T::BlockNumber) {
-		log!(trace, "lock for offchain worker acquired.");
-		match Self::current_phase() {
+		let current_phase = Self::current_phase();
+		log!(trace, "lock for offchain worker acquired. Phase = {:?}", current_phase);
+		match current_phase {
 			Phase::Unsigned((true, opened)) if opened == now => {
 				// Mine a new solution, cache it, and attempt to submit it
 				let initial_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
@@ -1243,11 +1250,20 @@ impl<T: Config> Pallet<T> {
 						.map_err(Into::into),
 					FallbackStrategy::Nothing => Err(ElectionError::NoFallbackConfigured),
 				},
-				|ReadySolution { supports, compute, .. }| Ok((
-					supports,
-					T::WeightInfo::elect_queued(),
-					compute
-				)),
+				|ReadySolution { supports, compute, .. }| {
+					// defensive-only: snapshot must always exist by this point.
+					let metadata = Self::snapshot_metadata().unwrap_or_default();
+					let desired = supports.len() as u32;
+					let active_voters = supports
+						.iter()
+						.map(|(_, x)| x)
+						.fold(Zero::zero(), |acc, next| acc + next.voters.len() as u32);
+					Ok((
+						supports,
+						T::WeightInfo::elect_queued(metadata.voters, metadata.targets, active_voters, desired),
+						compute
+					))
+				},
 			)
 			.map(|(supports, weight, compute)| {
 				Self::deposit_event(Event::ElectionFinalized(Some(compute)));

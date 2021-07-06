@@ -35,11 +35,13 @@
 // --output=./frame/election-provider-multi-phase/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
-
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{
+	traits::Get,
+	weights::{constants::RocksDbWeight, Weight},
+};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_election_provider_multi_phase.
@@ -48,12 +50,13 @@ pub trait WeightInfo {
 	fn on_initialize_open_signed() -> Weight;
 	fn on_initialize_open_unsigned_with_snapshot() -> Weight;
 	fn on_initialize_open_unsigned_without_snapshot() -> Weight;
-	fn elect_queued() -> Weight;
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
+	fn elect_queued(v: u32, t: u32, a: u32, d: u32) -> Weight;
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
 }
 
-/// Weights for pallet_election_provider_multi_phase using the Substrate node and recommended hardware.
+/// Weights for pallet_election_provider_multi_phase using the Substrate node and recommended
+/// hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn on_initialize_nothing() -> Weight {
@@ -75,12 +78,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn elect_queued() -> Weight {
+	fn elect_queued(_v: u32, _t: u32, _a: u32, _d: u32) -> Weight {
 		(6_038_989_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 12_000
 			.saturating_add((3_480_000 as Weight).saturating_mul(v as Weight))
@@ -93,7 +96,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 7_000
 			.saturating_add((3_481_000 as Weight).saturating_mul(v as Weight))
@@ -128,12 +131,12 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn elect_queued() -> Weight {
+	fn elect_queued(_v: u32, _t: u32, _a: u32, _d: u32) -> Weight {
 		(6_038_989_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 12_000
 			.saturating_add((3_480_000 as Weight).saturating_mul(v as Weight))
@@ -146,7 +149,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 7_000
 			.saturating_add((3_481_000 as Weight).saturating_mul(v as Weight))

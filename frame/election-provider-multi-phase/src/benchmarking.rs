@@ -18,12 +18,12 @@
 //! Two phase election pallet benchmarking.
 
 use super::*;
-use crate::{Pallet as MultiPhase, unsigned::IndexAssignmentOf};
+use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
 use frame_benchmarking::impl_benchmark_test_suite;
-use frame_support::{assert_ok, traits::OnInitialize};
+use frame_election_provider_support::Assignment;
+use frame_support::{assert_ok, ensure, traits::Hooks};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
-use frame_election_provider_support::Assignment;
 use sp_arithmetic::{per_things::Percent, traits::One};
 use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
@@ -38,14 +38,14 @@ fn solution_with_size<T: Config>(
 	size: SolutionOrSnapshotSize,
 	active_voters_count: u32,
 	desired_targets: u32,
-) -> RawSolution<CompactOf<T>> {
-	assert!(size.targets >= desired_targets, "must have enough targets");
-	assert!(
+) -> Result<RawSolution<CompactOf<T>>, &'static str> {
+	ensure!(size.targets >= desired_targets, "must have enough targets");
+	ensure!(
 		size.targets >= (<CompactOf<T>>::LIMIT * 2) as u32,
 		"must have enough targets for unique votes."
 	);
-	assert!(size.voters >= active_voters_count, "must have enough voters");
-	assert!(
+	ensure!(size.voters >= active_voters_count, "must have enough voters");
+	ensure!(
 		(<CompactOf<T>>::LIMIT as u32) < desired_targets,
 		"must have enough winners to give them votes."
 	);
@@ -141,7 +141,7 @@ fn solution_with_size<T: Config>(
 	let round = <MultiPhase<T>>::round();
 
 	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
-	RawSolution { compact, score, round }
+	Ok(RawSolution { compact, score, round })
 }
 
 fn set_up_data_provider<T: Config>(v: u32, t: u32) {
@@ -214,14 +214,18 @@ frame_benchmarking::benchmarks! {
 
 	// a call to `<Pallet as ElectionProvider>::elect` where we only return the queued solution.
 	elect_queued {
-		// assume largest values for the election status. These will merely affect the decoding.
-		let v = T::BenchmarkingConfig::VOTERS[1];
-		let t = T::BenchmarkingConfig::TARGETS[1];
-		let a = T::BenchmarkingConfig::ACTIVE_VOTERS[1];
-		let d = T::BenchmarkingConfig::DESIRED_TARGETS[1];
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot.
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
+		// number of assignments, i.e. compact.len(). This means the active nominators, thus must be
+		// a subset of `v` component.
+		let a in (T::BenchmarkingConfig::ACTIVE_VOTERS[0]) .. T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		// number of desired targets. Must be a subset of `t` component.
+		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
-		let raw_solution = solution_with_size::<T>(witness, a, d);
+		let raw_solution = solution_with_size::<T>(witness, a, d)?;
 		let ready_solution =
 			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed).unwrap();
 
@@ -242,42 +246,6 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(<CurrentPhase<T>>::get(), <Phase<T::BlockNumber>>::Off);
 	}
 
-	// NOTE: this weight is not user anywhere, but should NOT be marked as #[extra] as its execution
-	// is vital to ensure memory-safety.
-	mine_solution_offchain_memory {
-		// number of votes in snapshot.
-		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
-		// number of targets in snapshot. Fixed to maximum.
-		let t  = T::BenchmarkingConfig::TARGETS[1];
-
-		T::DataProvider::clear();
-		set_up_data_provider(v, t);
-		<MultiPhase::<T>>::create_snapshot().unwrap();
-	}: {
-		<MultiPhase::<T>>::offchain_worker(1u32.into())
-	} verify {
-
-	}
-
-	// NOTE: this weight is not user anywhere, but should NOT be marked as #[extra] as its execution
-	// is vital to ensure memory-safety.
-	create_snapshot_memory {
-		// number of votes in snapshot.
-		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
-		// number of targets in snapshot. Fixed to maximum.
-		let t  = T::BenchmarkingConfig::TARGETS[1];
-
-		T::DataProvider::clear();
-		set_up_data_provider(v, t);
-		assert!(<MultiPhase<T>>::snapshot().is_none());
-	}: {
-		<MultiPhase::<T>>::create_snapshot().unwrap()
-	} verify {
-		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().voters, v + t);
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().targets, t);
-	}
-
 	submit_unsigned {
 		// number of votes in snapshot.
 		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
@@ -290,7 +258,7 @@ frame_benchmarking::benchmarks! {
 		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
-		let raw_solution = solution_with_size::<T>(witness, a, d);
+		let raw_solution = solution_with_size::<T>(witness, a, d)?;
 
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
@@ -319,7 +287,7 @@ frame_benchmarking::benchmarks! {
 		let d in (T::BenchmarkingConfig::DESIRED_TARGETS[0]) .. T::BenchmarkingConfig::DESIRED_TARGETS[1];
 
 		let size = SolutionOrSnapshotSize { voters: v, targets: t };
-		let raw_solution = solution_with_size::<T>(size, a, d);
+		let raw_solution = solution_with_size::<T>(size, a, d)?;
 
 		assert_eq!(raw_solution.compact.voter_count() as u32, a);
 		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
@@ -329,6 +297,59 @@ frame_benchmarking::benchmarks! {
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
 		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
+	}
+
+	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in
+	// isolation is vital to ensure memory-safety. For the same reason, we don't care about the
+	// components iterating, we merely check that this operation will work with the "maximum"
+	// numbers.
+	//
+	// ONLY run this benchmark in isolation, and pass the `--extra` flag to enable it.
+	//
+	// NOTE: If this benchmark does not run out of memory with a given heap pages, it means that the
+	// OCW process can SURELY succeed with the given configuration, but the opposite is not true.
+	// This benchmark is doing more work than a raw call to `OffchainWorker_offchain_worker` runtime
+	// api call, since it is also setting up some mock data, which will itself exhaust the heap to
+	// some extent.
+	#[extra]
+	mine_solution_offchain_memory {
+		// number of votes in snapshot. Fixed to maximum.
+		let v = T::BenchmarkingConfig::MINER_MAXIMUM_VOTERS;
+		// number of targets in snapshot. Fixed to maximum.
+		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+
+		T::DataProvider::clear();
+		set_up_data_provider::<T>(v, t);
+		let now = frame_system::Pallet::<T>::block_number();
+		<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
+		<MultiPhase::<T>>::create_snapshot().unwrap();
+	}: {
+		// we can't really verify this as it won't write anything to state, check logs.
+		<MultiPhase::<T>>::offchain_worker(now)
+	}
+
+	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in
+	// isolation is vital to ensure memory-safety. For the same reason, we don't care about the
+	// components iterating, we merely check that this operation will work with the "maximum"
+	// numbers.
+	//
+	// ONLY run this benchmark in isolation, and pass the `--extra` flag to enable it.
+	#[extra]
+	create_snapshot_memory {
+		// number of votes in snapshot. Fixed to maximum.
+		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
+		// number of targets in snapshot. Fixed to maximum.
+		let t  = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+
+		T::DataProvider::clear();
+		set_up_data_provider::<T>(v, t);
+		assert!(<MultiPhase<T>>::snapshot().is_none());
+	}: {
+		<MultiPhase::<T>>::create_snapshot().unwrap()
+	} verify {
+		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().unwrap().targets, t);
 	}
 
 	#[extra]
@@ -347,7 +368,7 @@ frame_benchmarking::benchmarks! {
 
 		// Compute a random solution, then work backwards to get the lists of voters, targets, and assignments
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
-		let RawSolution { compact, .. } = solution_with_size::<T>(witness, a, d);
+		let RawSolution { compact, .. } = solution_with_size::<T>(witness, a, d)?;
 		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().unwrap();
 		let voter_at = helpers::voter_at_fn::<T>(&voters);
 		let target_at = helpers::target_at_fn::<T>(&targets);
