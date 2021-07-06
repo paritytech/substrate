@@ -98,11 +98,12 @@ impl Default for Releases {
 	}
 }
 
-/// Actions to take on a users `Vesting` storage entry.
+/// Actions to take on a user's `Vesting` storage entry.
+#[derive(Clone, Copy)]
 enum VestingAction {
 	/// Do not actively remove any schedules.
 	Passive,
-	/// Remove the schedules specified by the index.
+	/// Remove the schedule specified by the index.
 	Remove(usize),
 	/// Remove the two schedules, specified by index, so they can be merged.
 	Merge(usize, usize),
@@ -110,7 +111,7 @@ enum VestingAction {
 
 impl VestingAction {
 	/// Whether or not the filter says the schedule index should be removed.
-	fn should_remove(&self, index: &usize) -> bool {
+	fn should_remove(&self, index: usize) -> bool {
 		match self {
 			Self::Passive => false,
 			Self::Remove(index1) => index1 == index,
