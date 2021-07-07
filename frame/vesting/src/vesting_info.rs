@@ -64,13 +64,13 @@ where
 	}
 
 	/// Amount that gets unlocked every block after `starting_block`. Corrects for `per_block` of 0.
-	/// We don't let `per_block` be less than one, or else the vesting will never end.
+	/// We don't let `per_block` be less than 1, or else the vesting will never end.
 	/// This should be used whenever accessing `per_block` unless explicitly checking for 0 values.
 	pub fn per_block(&self) -> Balance {
 		self.per_block.max(One::one())
 	}
 
-	/// Get the unmodified `per_block`. Generally should not be used, but is is useful for
+	/// Get the unmodified `per_block`. Generally should not be used, but is useful for
 	/// validating `per_block`.
 	pub fn raw_per_block(&self) -> Balance {
 		self.per_block
