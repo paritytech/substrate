@@ -82,7 +82,6 @@ type MaxLocksOf<T> =
 	<<T as Config>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
-const LOG_TARGET: &'static str = "runtime::vesting";
 
 // A value placed in storage that represents the current version of the Vesting storage.
 // This value is used by `on_runtime_upgrade` to determine whether we run storage migration logic.
@@ -268,9 +267,6 @@ pub mod pallet {
 		ScheduleIndexOutOfBounds,
 		/// Failed to create a new schedule because some parameter was invalid. e.g. `locked` was 0.
 		InvalidScheduleParams,
-		/// A schedule contained a `per_block` of 0 or `locked / per_block > BlockNumber::max_value()`,
-		/// thus rendering it unable to ever fully unlock funds.
-		InfiniteSchedule,
 	}
 
 	#[pallet::call]

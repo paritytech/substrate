@@ -406,18 +406,10 @@ fn vested_transfer_correctly_fails() {
 			let schedule_per_block_0 = VestingInfo::new::<Test>(<Test as Config>::MinVestedTransfer::get(), 0, 10);
 			assert_noop!(
 				Vesting::vested_transfer(Some(13).into(), 4, schedule_per_block_0),
-				Error::<Test>::InfiniteSchedule,
+				Error::<Test>::InvalidScheduleParams,
 			);
 
-			// `locked / per_block + starting_block > BlockNumber::max_value()`
-			let start = 10u64;
-			let schedule_end_gt_max_blocknumber = VestingInfo::new::<Test>(u64::MAX - start + 1, 1, start);
-			assert_noop!(
-				Vesting::vested_transfer(Some(3).into(), 4, schedule_end_gt_max_blocknumber),
-				Error::<Test>::InfiniteSchedule,
-			);
-
-			// `locked` is 0
+			// `locked` is 0.
 			let schedule_locked_0 = VestingInfo::new::<Test>(0, 1, 10);
 			assert_noop!(
 				Vesting::vested_transfer(Some(3).into(), 4, schedule_locked_0),
@@ -564,15 +556,7 @@ fn force_vested_transfer_correctly_fails() {
 				VestingInfo::new::<Test>(<Test as Config>::MinVestedTransfer::get(), 0, 10);
 			assert_noop!(
 				Vesting::force_vested_transfer(RawOrigin::Root.into(), 13, 4, schedule_per_block_0),
-				Error::<Test>::InfiniteSchedule,
-			);
-
-			// `locked / per_block + starting_block > BlockNumber::max_value()`
-			let start = 10u64;
-			let schedule_end_gt_max_blocknumber = VestingInfo::new::<Test>(u64::MAX - start + 1, 1, start);
-			assert_noop!(
-				Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, schedule_end_gt_max_blocknumber),
-				Error::<Test>::InfiniteSchedule,
+				Error::<Test>::InvalidScheduleParams,
 			);
 
 			// `locked` is 0.
@@ -1136,18 +1120,11 @@ fn vesting_info_validate_works() {
 
 	// `per_block` cannot be 0.
 	match VestingInfo::new::<Test>(min_transfer + 1, 0u64, 10u64).validate::<Identity, Test>() {
-		Err(Error::<Test>::InfiniteSchedule) => (),
+		Err(Error::<Test>::InvalidScheduleParams) => (),
 		_ => panic!(),
 	}
 
-	// `locked / per_block + starting_block` cannot be bigger than BlockNumber::max_value`.
-	let start = 10;
-	match VestingInfo::new::<Test>(u64::MAX - start + 1, 1u64, start).validate::<Identity, Test>() {
-		Err(Error::<Test>::InfiniteSchedule) => (),
-		_ => panic!(),
-	}
-
-	// With valid inputs it does not error and does not modify the inputs.
+	// With valid inputs it does not error.
 	let valid = VestingInfo::new::<Test>(min_transfer, 1u64, 10u64);
 	assert_ok!(valid.validate::<Identity, Test>());
 }

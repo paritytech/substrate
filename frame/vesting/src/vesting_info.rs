@@ -50,17 +50,10 @@ where
 	pub fn validate<BlockNumberToBalance: Convert<BlockNumber, Balance>, T: Config>(
 		&self,
 	) -> Result<(), Error<T>> {
-		ensure!(!self.locked.is_zero(), Error::<T>::InvalidScheduleParams);
-
-		let max_block = BlockNumberToBalance::convert(BlockNumber::max_value());
-		let starting_block = BlockNumberToBalance::convert(self.starting_block());
-		match self.locked.checked_div(&self.raw_per_block()) {
-			None => return Err(Error::<T>::InfiniteSchedule), // `per_block` is 0
-			Some(duration) => {
-				let end = duration.saturating_add(starting_block);
-				ensure!(end < max_block, Error::<T>::InfiniteSchedule)
-			}
-		};
+		ensure!(
+			!self.locked.is_zero() && !self.raw_per_block().is_zero(),
+			Error::<T>::InvalidScheduleParams
+		);
 
 		Ok(())
 	}
@@ -70,21 +63,18 @@ where
 		self.locked
 	}
 
-
 	/// Amount that gets unlocked every block after `starting_block`. Corrects for `per_block` of 0.
-	/// We dont let `per_block` be less than one, or else the vesting will never end.
+	/// We don't let `per_block` be less than one, or else the vesting will never end.
 	/// This should be used whenever accessing `per_block` unless explicitly checking for 0 values.
 	pub fn per_block(&self) -> Balance {
 		self.per_block.max(One::one())
 	}
-
 
 	/// Get the unmodified `per_block`. Generally should not be used, but is is useful for
 	/// validating `per_block`.
 	pub fn raw_per_block(&self) -> Balance {
 		self.per_block
 	}
-
 
 	/// Starting block for unlocking(vesting).
 	pub fn starting_block(&self) -> BlockNumber {
