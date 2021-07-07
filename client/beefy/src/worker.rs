@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
@@ -33,12 +33,13 @@ use sp_runtime::{
 };
 
 use beefy_primitives::{
-	crypto::{Public, Signature},
+	crypto::{AuthorityId, Public, Signature},
 	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, VersionedCommitment, VoteMessage,
 	BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 use crate::{
+	error,
 	gossip::{topic, GossipValidator},
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
@@ -165,7 +166,7 @@ where
 	///
 	/// Such a failure is usually an indication that the BEEFT pallet has not been deployed (yet).
 	fn validator_set(&self, header: &B::Header) -> Option<ValidatorSet<Public>> {
-		let new = if let Some(new) = find_authorities_change::<B, Public>(header) {
+		let new = if let Some(new) = find_authorities_change::<B>(header) {
 			Some(new)
 		} else {
 			let at = BlockId::hash(header.hash());
@@ -175,6 +176,27 @@ where
 		trace!(target: "beefy", "🥩 active validator set: {:?}", new);
 
 		new
+	}
+
+	/// Verify `active` validator set for `block` against the key store
+	///
+	/// The critical case is, if we do have a public key in the key store which is not
+	/// part of the active validator set.
+	///
+	/// Note that for a non-authority node there will be no keystore, and we will
+	/// return an error and don't check. The error can usually be ignored.
+	fn verify_validator_set(&self, block: &NumberFor<B>, mut active: ValidatorSet<Public>) -> Result<(), error::Error> {
+		let active: BTreeSet<Public> = active.validators.drain(..).collect();
+
+		let store: BTreeSet<Public> = self.key_store.public_keys()?.drain(..).collect();
+
+		let missing: Vec<_> = store.difference(&active).cloned().collect();
+
+		if !missing.is_empty() {
+			debug!(target: "beefy", "🥩 for block {:?} public key missing in validator set: {:?}", block, missing);
+		}
+
+		Ok(())
 	}
 
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<B>) {
@@ -200,6 +222,9 @@ where
 					metric_inc!(self, beefy_skipped_sessions);
 				}
 
+				// verify the new validator set
+				let _ = self.verify_validator_set(notification.header.number(), active.clone());
+
 				self.rounds = round::Rounds::new(active.clone());
 
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", active.id);
@@ -214,10 +239,10 @@ where
 
 		if self.should_vote_on(*notification.header.number()) {
 			let authority_id = if let Some(id) = self.key_store.authority_id(self.rounds.validators().as_slice()) {
-				trace!(target: "beefy", "🥩 Local authority id: {:?}", id);
+				debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
 				id
 			} else {
-				trace!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
+				debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
 				return;
 			};
 
@@ -233,14 +258,22 @@ where
 				block_number: notification.header.number(),
 				validator_set_id: self.rounds.validator_set_id(),
 			};
+			let encoded_commitment = commitment.encode();
 
-			let signature = match self.key_store.sign(&authority_id, commitment.encode().as_ref()) {
+			let signature = match self.key_store.sign(&authority_id, &*encoded_commitment) {
 				Ok(sig) => sig,
 				Err(err) => {
 					warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
 					return;
 				}
 			};
+
+			trace!(
+				target: "beefy",
+				"🥩 Produced signature using {:?}, is_valid: {:?}",
+				authority_id,
+				BeefyKeystore::verify(&authority_id, &signature, &*encoded_commitment)
+			);
 
 			let message = VoteMessage {
 				commitment,
@@ -298,9 +331,9 @@ where
 					)
 					.is_err()
 				{
-					// this is a warning for now, because until the round lifecycle is improved, we will
+					// just a trace, because until the round lifecycle is improved, we will
 					// conclude certain rounds multiple times.
-					warn!(target: "beefy", "🥩 Failed to append justification: {:?}", signed_commitment);
+					trace!(target: "beefy", "🥩 Failed to append justification: {:?}", signed_commitment);
 				}
 
 				self.signed_commitment_sender.notify(signed_commitment);
@@ -314,7 +347,7 @@ where
 	pub(crate) async fn run(mut self) {
 		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<B>()).filter_map(
 			|notification| async move {
-				trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
+				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
 				VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(&mut &notification.message[..]).ok()
 			},
@@ -367,14 +400,13 @@ where
 
 /// Scan the `header` digest log for a BEEFY validator set change. Return either the new
 /// validator set or `None` in case no validator set change has been signaled.
-fn find_authorities_change<B, Id>(header: &B::Header) -> Option<ValidatorSet<Id>>
+fn find_authorities_change<B>(header: &B::Header) -> Option<ValidatorSet<AuthorityId>>
 where
 	B: Block,
-	Id: Codec,
 {
 	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
 
-	let filter = |log: ConsensusLog<Id>| match log {
+	let filter = |log: ConsensusLog<AuthorityId>| match log {
 		ConsensusLog::AuthoritiesChange(validator_set) => Some(validator_set),
 		_ => None,
 	};

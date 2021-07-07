@@ -16,7 +16,7 @@
 
 use std::{collections::BTreeMap, hash::Hash};
 
-use log::trace;
+use log::{debug, trace};
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
@@ -98,7 +98,7 @@ where
 			.map(|tracker| tracker.is_done(threshold(self.validator_set.validators.len())))
 			.unwrap_or(false);
 
-		trace!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
+		debug!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
 
 		done
 	}

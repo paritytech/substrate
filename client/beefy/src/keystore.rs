@@ -17,6 +17,8 @@ use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
+use log::warn;
+
 use beefy_primitives::{
 	crypto::{Public, Signature},
 	KEY_TYPE,
@@ -39,13 +41,18 @@ impl BeefyKeystore {
 	pub fn authority_id(&self, keys: &[Public]) -> Option<Public> {
 		let store = self.0.clone()?;
 
-		for key in keys {
-			if SyncCryptoStore::has_keys(&*store, &[(key.to_raw_vec(), KEY_TYPE)]) {
-				return Some(key.clone());
-			}
+		// we do check for multiple private keys as a key store sanity check.
+		let public: Vec<Public> = keys
+			.iter()
+			.filter(|k| SyncCryptoStore::has_keys(&*store, &[(k.to_raw_vec(), KEY_TYPE)]))
+			.cloned()
+			.collect();
+
+		if public.len() > 1 {
+			warn!(target: "beefy", "🥩 Multiple private keys found for: {:?} ({})", public, public.len());
 		}
 
-		None
+		public.get(0).cloned()
 	}
 
 	/// Sign `message` with the `public` key.
@@ -75,7 +82,6 @@ impl BeefyKeystore {
 		Ok(sig)
 	}
 
-	#[allow(dead_code)]
 	/// Returns a vector of [`beefy_primitives::crypto::Public`] keys which are currently supported (i.e. found
 	/// in the keystore).
 	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error> {

@@ -82,7 +82,7 @@ where
 	/// We retain the [`MAX_LIVE_GOSSIP_ROUNDS`] most **recent** voting rounds as live.
 	/// As long as a voting round is live, it will be gossiped to peer nodes.
 	pub(crate) fn note_round(&self, round: NumberFor<B>) {
-		trace!(target: "beefy", "🥩 About to note round #{}", round);
+		debug!(target: "beefy", "🥩 About to note round #{}", round);
 
 		let mut live = self.known_votes.write();
 
