@@ -25,3 +25,5 @@ markComment: >
 closeComment: false
 # Set to true to ignore issues in a project (defaults to false)
 exemptProjects: true
+# Limit to only `pulls`
+ only: pulls
