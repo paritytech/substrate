@@ -25,9 +25,10 @@ use sp_runtime::{
 
 /// Ensure the transaction version registered in the transaction is the same as at present.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-pub struct CheckTxVersion<T: Config + TypeInfo + Send + Sync>(sp_std::marker::PhantomData<T>);
+#[scale_info(skip_type_params(T))]
+pub struct CheckTxVersion<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config + TypeInfo + Send + Sync> sp_std::fmt::Debug for CheckTxVersion<T> {
+impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckTxVersion<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckTxVersion")
@@ -39,14 +40,14 @@ impl<T: Config + TypeInfo + Send + Sync> sp_std::fmt::Debug for CheckTxVersion<T
 	}
 }
 
-impl<T: Config + TypeInfo + Send + Sync> CheckTxVersion<T> {
+impl<T: Config + Send + Sync> CheckTxVersion<T> {
 	/// Create new `SignedExtension` to check transaction version.
 	pub fn new() -> Self {
 		Self(sp_std::marker::PhantomData)
 	}
 }
 
-impl<T: Config + TypeInfo + Send + Sync> SignedExtension for CheckTxVersion<T> {
+impl<T: Config + Send + Sync> SignedExtension for CheckTxVersion<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Config>::Call;
 	type AdditionalSigned = u32;

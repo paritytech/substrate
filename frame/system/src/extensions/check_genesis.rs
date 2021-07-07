@@ -40,7 +40,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckGenesis<T> {
 	}
 }
 
-impl<T: Config + TypeInfo + Send + Sync> CheckGenesis<T> {
+impl<T: Config + Send + Sync> CheckGenesis<T> {
 	/// Creates new `SignedExtension` to check genesis hash.
 	pub fn new() -> Self {
 		Self(sp_std::marker::PhantomData)
