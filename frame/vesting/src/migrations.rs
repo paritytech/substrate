@@ -19,6 +19,8 @@
 
 use super::*;
 
+const LOG_TARGET: &'static str = "runtime::vesting";
+
 // Migration from single schedule to multiple schedules.
 pub(crate) mod v1 {
 	use super::*;
