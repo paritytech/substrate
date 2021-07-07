@@ -95,7 +95,7 @@ diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 # We're using `--offline` to minimize impact of updating unrelated dependencies
 for vers in $(grep -oP '(?<=sp-core) [a-zA-Z0-9|\.|-]*' < Cargo.lock | sort | uniq)
 do
-  cargo update -p sp-core:${vers} --offline
+  cargo update -p sp-core:"${vers}" --offline
 done
 
 # Test Polkadot pr or master branch with this Substrate commit.
