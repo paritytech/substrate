@@ -88,9 +88,12 @@ fi
 # Patch all Substrate crates in Polkadot
 diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 
-# Propagate the patches across the workspace (e.g. so that BEEFY uses the
-# patched version as well)
-cargo update --workspace
+# We need to update explicitly our patched Substrate crates so that other crates
+# that depend on them (e.g. Polkadot, BEEFY) use this unified version
+# NOTE: There's no way to only update patched crates, so we use a heuristic
+# of updating a crucial Substrate crate (`sp-core`)
+SP_CORE_VERSION=$(cat ../primitives/core/Cargo.toml  | grep -oP '(?<=version = ")[a-zA-z0-9|\.|-]+(?="\w*$)')
+cargo update -p sp-core:${SP_CORE_VERSION} --offline
 
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
