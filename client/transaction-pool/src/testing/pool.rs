@@ -19,7 +19,6 @@
 use crate::*;
 use sp_transaction_pool::TransactionStatus;
 use futures::executor::{block_on, block_on_stream};
-use txpool::{self, Pool};
 use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{ValidTransaction, TransactionSource, InvalidTransaction},
@@ -910,7 +909,11 @@ fn should_not_accept_old_signatures() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
-		BasicPool::new_test(Arc::new(FullChainApi::new(client, None))).0
+		BasicPool::new_test(Arc::new(FullChainApi::new(
+			client,
+			None,
+			&sp_core::testing::TaskExecutor::new(),
+		))).0
 	);
 
 	let transfer = Transfer {
@@ -946,7 +949,11 @@ fn import_notification_to_pool_maintain_works() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
-		BasicPool::new_test(Arc::new(FullChainApi::new(client.clone(), None))).0
+		BasicPool::new_test(Arc::new(FullChainApi::new(
+			client.clone(),
+			None,
+			&sp_core::testing::TaskExecutor::new(),
+		))).0
 	);
 
 	// Prepare the extrisic, push it to the pool and check that it was added.

@@ -45,6 +45,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 	}
 );
 
@@ -90,6 +91,7 @@ impl pallet_transaction_payment::Config for Test {
 }
 parameter_types! {
 	pub const MaxLocks: u32 = 50;
+	pub const MaxReserves: u32 = 2;
 }
 impl Config for Test {
 	type Balance = u64;
@@ -103,6 +105,8 @@ impl Config for Test {
 		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
 
@@ -169,9 +173,9 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::frame_system(system::Event::NewAccount(1)),
-					Event::pallet_balances(crate::Event::Endowed(1, 100)),
-					Event::pallet_balances(crate::Event::BalanceSet(1, 100, 0)),
+					Event::System(system::Event::NewAccount(1)),
+					Event::Balances(crate::Event::Endowed(1, 100)),
+					Event::Balances(crate::Event::BalanceSet(1, 100, 0)),
 				]
 			);
 
@@ -187,8 +191,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::frame_system(system::Event::KilledAccount(1)),
-					Event::pallet_balances(crate::Event::DustLost(1, 1)),
+					Event::System(system::Event::KilledAccount(1)),
+					Event::Balances(crate::Event::DustLost(1, 1)),
 				]
 			);
 		});

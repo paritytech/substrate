@@ -48,7 +48,7 @@ use crate::{
 		Protocol,
 		Ready,
 		event::Event,
-		sync::SyncState,
+		sync::{SyncState, Status as SyncStatus},
 	},
 	transactions,
 	transport, ReputationChange,
@@ -196,6 +196,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			protocol::ProtocolConfig {
 				roles: From::from(&params.role),
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
+				sync_mode: params.network_config.sync_mode.clone(),
 			},
 			params.chain.clone(),
 			params.protocol_id.clone(),
@@ -299,20 +300,20 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let yamux_maximum_buffer_size = {
 					let requests_max = params.network_config
 						.request_response_protocols.iter()
-						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::max_value()));
+						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::MAX));
 					let responses_max = params.network_config
 						.request_response_protocols.iter()
-						.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::max_value()));
+						.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::MAX));
 					let notifs_max = params.network_config
 						.extra_sets.iter()
-						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::max_value()));
+						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::MAX));
 
 					// A "default" max is added to cover all the other protocols: ping, identify,
 					// kademlia, block announces, and transactions.
 					let default_max = cmp::max(
 						1024 * 1024,
 						usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
-							.unwrap_or(usize::max_value())
+							.unwrap_or(usize::MAX)
 					);
 
 					iter::once(default_max)
@@ -331,7 +332,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 
 			let behaviour = {
-				let bitswap = if params.network_config.ipfs_server { Some(Bitswap::new(client)) } else { None };
+				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -339,6 +340,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					light_client_request_sender,
 					discovery_config,
 					params.block_request_protocol_config,
+					params.state_request_protocol_config,
 					bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
@@ -442,14 +444,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 	/// High-level network status information.
 	pub fn status(&self) -> NetworkStatus<B> {
+		let status = self.sync_state();
 		NetworkStatus {
-			sync_state: self.sync_state(),
+			sync_state: status.state,
 			best_seen_block: self.best_seen_block(),
 			num_sync_peers: self.num_sync_peers(),
 			num_connected_peers: self.num_connected_peers(),
 			num_active_peers: self.num_active_peers(),
 			total_bytes_inbound: self.total_bytes_inbound(),
 			total_bytes_outbound: self.total_bytes_outbound(),
+			state_sync: status.state_sync,
 		}
 	}
 
@@ -474,7 +478,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// Current global sync state.
-	pub fn sync_state(&self) -> SyncState {
+	pub fn sync_state(&self) -> SyncStatus<B> {
 		self.network_service.behaviour().user_protocol().sync_state()
 	}
 
@@ -976,6 +980,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
 	}
 
+	/// Clear all pending justification requests.
+	pub fn clear_justification_requests(&self) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::ClearJustificationRequests);
+	}
+
 	/// Are we in the process of downloading the chain?
 	pub fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing.load(Ordering::Relaxed)
@@ -1219,6 +1230,16 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
 	}
 }
 
+impl<B: BlockT, H: ExHashT> sp_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		NetworkService::request_justification(self, hash, number);
+	}
+
+	fn clear_justification_requests(&self) {
+		NetworkService::clear_justification_requests(self);
+	}
+}
+
 impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	where
 		B: sp_runtime::traits::Block,
@@ -1323,6 +1344,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	PropagateTransaction(H),
 	PropagateTransactions,
 	RequestJustification(B::Hash, NumberFor<B>),
+	ClearJustificationRequests,
 	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
@@ -1444,6 +1466,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.behaviour_mut().user_protocol_mut().announce_block(hash, data),
 				ServiceToWorkerMsg::RequestJustification(hash, number) =>
 					this.network_service.behaviour_mut().user_protocol_mut().request_justification(&hash, number),
+				ServiceToWorkerMsg::ClearJustificationRequests =>
+					this.network_service.behaviour_mut().user_protocol_mut().clear_justification_requests(),
 				ServiceToWorkerMsg::PropagateTransaction(hash) =>
 					this.tx_handler_controller.propagate_transaction(hash),
 				ServiceToWorkerMsg::PropagateTransactions =>
@@ -1849,7 +1873,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			*this.external_addresses.lock() = external_addresses;
 		}
 
-		let is_major_syncing = match this.network_service.behaviour_mut().user_protocol_mut().sync_state() {
+		let is_major_syncing = match this.network_service.behaviour_mut().user_protocol_mut().sync_state().state {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
 		};

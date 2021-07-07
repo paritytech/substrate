@@ -46,6 +46,8 @@ pub use sp_io::{storage::root as storage_root, self};
 pub use sp_runtime::RuntimeDebug;
 #[doc(hidden)]
 pub use log;
+#[doc(hidden)]
+pub use frame_metadata as metadata;
 
 #[macro_use]
 mod origin;
@@ -55,8 +57,6 @@ pub mod storage;
 mod hash;
 #[macro_use]
 pub mod event;
-#[macro_use]
-pub mod metadata;
 #[macro_use]
 pub mod genesis_config;
 #[macro_use]
@@ -100,7 +100,8 @@ impl TypeId for PalletId {
 }
 
 /// Generate a new type alias for [`storage::types::StorageValue`],
-/// [`storage::types::StorageMap`] and [`storage::types::StorageDoubleMap`].
+/// [`storage::types::StorageMap`], [`storage::types::StorageDoubleMap`]
+/// and [`storage::types::StorageNMap`].
 ///
 /// Useful for creating a *storage-like* struct for test and migrations.
 ///
@@ -154,6 +155,18 @@ macro_rules! generate_storage_alias {
 			>;
 		}
 	};
+	($pallet:ident, $name:ident => NMap<$(($key:ty, $hasher:ty),)+ $value:ty>) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			type $name = $crate::storage::types::StorageNMap<
+				[<$name Instance>],
+				(
+					$( $crate::storage::types::Key<$hasher, $key>, )+
+				),
+				$value,
+			>;
+		}
+	};
 	($pallet:ident, $name:ident => Value<$value:ty>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -189,6 +202,22 @@ macro_rules! generate_storage_alias {
 				$hasher1,
 				$key2,
 				$hasher2,
+				$value,
+			>;
+		}
+	};
+	(
+		$pallet:ident,
+		$name:ident<$t:ident : $bounds:tt> => NMap<$(($key:ty, $hasher:ty),)+ $value:ty>
+	) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			#[allow(type_alias_bounds)]
+			type $name<$t : $bounds> = $crate::storage::types::StorageNMap<
+				[<$name Instance>],
+				(
+					$( $crate::storage::types::Key<$hasher, $key>, )+
+				),
 				$value,
 			>;
 		}
@@ -501,8 +530,11 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound
+	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound,
 };
+
+#[doc(hidden)]
+pub use frame_support_procedural::__generate_dummy_part_checker;
 
 /// Derive [`Clone`] but do not bound any generic.
 ///
@@ -1005,7 +1037,10 @@ pub mod tests {
 			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
-			DoubleMap::remove_prefix(&key1);
+			assert!(matches!(
+				DoubleMap::remove_prefix(&key1, None),
+				sp_io::KillStorageResult::AllRemoved(0), // all in overlay
+			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
 			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
@@ -1239,7 +1274,7 @@ pub mod pallet_prelude {
 		RuntimeDebug, storage,
 		traits::{
 			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
-			ConstU32, GetDefault, MaxEncodedLen,
+			ConstU32, GetDefault,
 		},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
@@ -1249,7 +1284,7 @@ pub mod pallet_prelude {
 		},
 		storage::bounded_vec::BoundedVec,
 	};
-	pub use codec::{Encode, Decode};
+	pub use codec::{Encode, Decode, MaxEncodedLen};
 	pub use crate::inherent::{InherentData, InherentIdentifier, ProvideInherent};
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
@@ -1361,7 +1396,7 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
-/// and value types must bound [`traits::MaxEncodedLen`].
+/// and value types must bound [`pallet_prelude::MaxEncodedLen`].
 ///
 /// ### Macro expansion:
 ///
@@ -1395,6 +1430,8 @@ pub mod pallet_prelude {
 /// If the attribute set_storage_max_encoded_len is set then the macro call
 /// [`traits::StorageInfoTrait`] for each storage in the implementation of
 /// [`traits::StorageInfoTrait`] for the pallet.
+/// Otherwise it implements [`traits::StorageInfoTrait`] for the pallet using the
+/// [`traits::PartialStorageInfoTrait`] implementation of storages.
 ///
 /// # Hooks: `#[pallet::hooks]` optional
 ///
@@ -1438,7 +1475,7 @@ pub mod pallet_prelude {
 /// impl<T: Config> Pallet<T> {
 /// 	/// $some_doc
 /// 	#[pallet::weight($ExpressionResultingInWeight)]
-/// 	$vis fn $fn_name(
+/// 	pub fn $fn_name(
 /// 		origin: OriginFor<T>,
 /// 		$some_arg: $some_type,
 /// 		// or with compact attribute: #[pallet::compact] $some_arg: $some_type,
@@ -1897,7 +1934,7 @@ pub mod pallet_prelude {
 /// 	impl<T: Config> Pallet<T> {
 /// 		/// Doc comment put in metadata
 /// 		#[pallet::weight(0)] // Defines weight for call (function parameters are in scope)
-/// 		fn toto(
+/// 		pub fn toto(
 /// 			origin: OriginFor<T>,
 /// 			#[pallet::compact] _foo: u32,
 /// 		) -> DispatchResultWithPostInfo {
@@ -2071,7 +2108,7 @@ pub mod pallet_prelude {
 /// 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 /// 		/// Doc comment put in metadata
 /// 		#[pallet::weight(0)]
-/// 		fn toto(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
+/// 		pub fn toto(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
 /// 			let _ = origin;
 /// 			unimplemented!();
 /// 		}
@@ -2339,7 +2376,3 @@ pub mod pallet_prelude {
 /// * use the newest nightly possible.
 ///
 pub use frame_support_procedural::pallet;
-
-/// The `max_encoded_len` module contains the `MaxEncodedLen` trait and derive macro, which is
-/// useful for computing upper bounds on storage size.
-pub use max_encoded_len;

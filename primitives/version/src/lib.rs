@@ -35,6 +35,9 @@ pub use sp_std;
 #[cfg(feature = "std")]
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 
+#[cfg(feature = "std")]
+pub mod embed;
+
 /// An attribute that accepts a version declaration of a runtime and generates a custom wasm section
 /// with the equivalent contents.
 ///
@@ -197,6 +200,11 @@ impl RuntimeVersion {
 		predicate: P,
 	) -> bool {
 		self.apis.iter().any(|(s, v)| s == id && predicate(*v))
+	}
+
+	/// Returns the api version found for api with `id`.
+	pub fn api_version(&self, id: &ApiId) -> Option<u32> {
+		self.apis.iter().find_map(|a| (a.0 == *id).then(|| a.1))
 	}
 }
 

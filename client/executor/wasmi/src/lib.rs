@@ -45,7 +45,7 @@ struct FunctionExecutor {
 
 struct Inner {
 	sandbox_store: RefCell<sandbox::Store<wasmi::FuncRef>>,
-	allocator: RefCell<sp_allocator::FreeingBumpHeapAllocator>,
+	heap: RefCell<sc_allocator::FreeingBumpHeapAllocator>,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	host_functions: Arc<Vec<&'static dyn Function>>,
@@ -65,7 +65,7 @@ impl FunctionExecutor {
 		Ok(FunctionExecutor {
 			inner: Rc::new(Inner {
 				sandbox_store: RefCell::new(sandbox::Store::new(sandbox::SandboxBackend::Wasmi)),
-				allocator: RefCell::new(sp_allocator::FreeingBumpHeapAllocator::new(heap_base)),
+				heap: RefCell::new(sc_allocator::FreeingBumpHeapAllocator::new(heap_base)),
 				memory: m,
 				table: t,
 				host_functions,
@@ -115,14 +115,14 @@ impl FunctionContext for FunctionExecutor {
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
-		let heap = &mut self.inner.allocator.borrow_mut();
+		let heap = &mut self.inner.heap.borrow_mut();
 		self.inner.memory.with_direct_access_mut(|mem| {
 			heap.allocate(mem, size).map_err(|e| e.to_string())
 		})
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
-		let heap = &mut self.inner.allocator.borrow_mut();
+		let heap = &mut self.inner.heap.borrow_mut();
 		self.inner.memory.with_direct_access_mut(|mem| {
 			heap.deallocate(mem, ptr).map_err(|e| e.to_string())
 		})
@@ -212,7 +212,7 @@ impl Sandbox for FunctionExecutor {
 		&mut self,
 		instance_id: u32,
 		export_name: &str,
-		args: &[u8],
+		mut args: &[u8],
 		return_val: Pointer<u8>,
 		return_val_len: WordSize,
 		state: u32,
@@ -220,7 +220,7 @@ impl Sandbox for FunctionExecutor {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &args[..])
+		let args = Vec::<sp_wasm_interface::Value>::decode(&mut args)
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)

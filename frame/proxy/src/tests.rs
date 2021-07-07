@@ -80,6 +80,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
@@ -100,10 +102,7 @@ parameter_types! {
 	pub const AnnouncementDepositBase: u64 = 1;
 	pub const AnnouncementDepositFactor: u64 = 1;
 }
-#[derive(
-	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug,
-	max_encoded_len::MaxEncodedLen,
-)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, MaxEncodedLen)]
 pub enum ProxyType {
 	Any,
 	JustTransfer,

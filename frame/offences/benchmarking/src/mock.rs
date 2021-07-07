@@ -72,6 +72,8 @@ parameter_types! {
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
@@ -176,6 +178,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 }
 
@@ -216,7 +219,7 @@ frame_support::construct_runtime!(
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		ImOnline: pallet_im_online::{Pallet, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
-		Offences: pallet_offences::{Pallet, Call, Storage, Event},
+		Offences: pallet_offences::{Pallet, Storage, Event},
 		Historical: pallet_session_historical::{Pallet},
 	}
 );

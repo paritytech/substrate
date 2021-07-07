@@ -18,13 +18,13 @@
 //! Storage map type. Implements StorageMap, StorageIterableMap, StoragePrefixedMap traits and their
 //! methods directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
+use codec::{FullCodec, Decode, EncodeLike, Encode, MaxEncodedLen};
 use crate::{
 	storage::{
 		StorageAppend, StorageTryAppend, StorageDecodeLength, StoragePrefixedMap,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
-	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
+	traits::{GetDefault, StorageInstance, Get, StorageInfo},
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -231,8 +231,8 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all() {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -295,6 +295,13 @@ where
 	/// If you alter the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key, Value)> {
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter()
+	}
+
+	/// Enumerate all keys in the map in no particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter_keys()
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
@@ -363,6 +370,30 @@ where
 						.saturating_add(Value::max_encoded_len())
 						.saturated_into(),
 				),
+			}
+		]
+	}
+}
+
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::PartialStorageInfoTrait for
+	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::final_prefix(),
+				max_values: MaxValues::get(),
+				max_size: None,
 			}
 		]
 	}
@@ -498,7 +529,7 @@ mod test {
 
 			A::insert(3, 10);
 			A::insert(4, 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key(3), false);
 			assert_eq!(A::contains_key(4), false);
 
@@ -533,7 +564,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len(3), None);
 			WithLen::append(0, 10);
 			assert_eq!(WithLen::decode_len(0), Some(1));
