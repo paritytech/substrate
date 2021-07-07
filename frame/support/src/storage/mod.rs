@@ -716,6 +716,37 @@ pub struct PrefixIterator<T> {
 }
 
 impl<T> PrefixIterator<T> {
+	/// Creates a new `PrefixIterator`, starting from `next_key` and filtering out keys that are
+	/// not prefixed with `prefix`.
+	///
+	/// A `decode_fn` function must also be supplied, and it takes in two `&[u8]` parameters,
+	/// returning a `Result` containing the decoded type `T` if successful, and a `codec::Error` on
+	/// failure. The first `&[u8]` argument represents the raw, undecoded key without the prefix of
+	/// the current item, while the second `&[u8]` argument denotes the corresponding raw,
+	/// undecoded value.
+	pub fn new(
+		prefix: Vec<u8>,
+		next_key: Vec<u8>,
+		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
+	) -> Self {
+		PrefixIterator {
+			prefix,
+			previous_key: next_key,
+			drain: false,
+			closure: decode_fn,
+		}
+	}
+
+	/// Get the next key that is about to be iterated upon and return it.
+	pub fn next_key(&self) -> &[u8] {
+		&self.previous_key
+	}
+
+	/// Get the prefix that is being iterated upon for this iterator and return it.
+	pub fn prefix(&self) -> &[u8] {
+		&self.prefix
+	}
+
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
 	pub fn drain(mut self) -> Self {
 		self.drain = true;
@@ -781,6 +812,36 @@ pub struct KeyPrefixIterator<T> {
 }
 
 impl<T> KeyPrefixIterator<T> {
+	/// Creates a new `KeyPrefixIterator`, starting from `previous_key` and filtering out keys that
+	/// are not prefixed with `prefix`.
+	///
+	/// A `decode_fn` function must also be supplied, and it takes in a `&[u8]` parameter, returning
+	/// a `Result` containing the decoded key type `T` if successful, and a `codec::Error` on
+	/// failure. The `&[u8]` argument represents the raw, undecoded key without the prefix of the
+	/// current item.
+	pub fn new(
+		prefix: Vec<u8>,
+		previous_key: Vec<u8>,
+		decode_fn: fn(&[u8]) -> Result<T, codec::Error>,
+	) -> Self {
+		KeyPrefixIterator {
+			prefix,
+			previous_key,
+			drain: false,
+			closure: decode_fn,
+		}
+	}
+
+	/// Get the next key that is about to be iterated upon and return it.
+	pub fn next_key(&self) -> &[u8] {
+		&self.previous_key
+	}
+
+	/// Get the prefix that is being iterated upon for this iterator and return it.
+	pub fn prefix(&self) -> &[u8] {
+		&self.prefix
+	}
+
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
 	pub fn drain(mut self) -> Self {
 		self.drain = true;
@@ -1410,6 +1471,62 @@ mod test {
 
 			// empty again
 			assert!(MyStorageMap::iter_keys().collect::<Vec<_>>().is_empty());
+		});
+	}
+
+	#[test]
+	fn prefix_iterator_pagination() {
+		TestExternalities::default().execute_with(|| {
+			use crate::storage::generator::StorageMap;
+			use crate::hash::Twox64Concat;
+			struct MyStorageMap;
+			impl StorageMap<u64, u64> for MyStorageMap {
+				type Query = u64;
+				type Hasher = Twox64Concat;
+
+				fn module_prefix() -> &'static [u8] {
+					b"MyModule"
+				}
+
+				fn storage_prefix() -> &'static [u8] {
+					b"MyStorageMap"
+				}
+
+				fn from_optional_value_to_query(v: Option<u64>) -> Self::Query {
+					v.unwrap_or_default()
+				}
+
+				fn from_query_to_optional_value(v: Self::Query) -> Option<u64> {
+					Some(v)
+				}
+			}
+
+			MyStorageMap::insert(1, 10);
+			MyStorageMap::insert(2, 20);
+			MyStorageMap::insert(3, 30);
+			MyStorageMap::insert(4, 40);
+			MyStorageMap::insert(5, 50);
+			MyStorageMap::insert(6, 60);
+			MyStorageMap::insert(7, 70);
+			MyStorageMap::insert(8, 80);
+			MyStorageMap::insert(9, 90);
+			MyStorageMap::insert(10, 100);
+
+			let mut iter = MyStorageMap::iter();
+			assert!(iter.next().is_some());
+			assert!(iter.next().is_some());
+
+			let prefix = iter.prefix().to_owned();
+			let stored_key = iter.next_key().to_owned();
+			let iter = PrefixIterator::new(
+				prefix,
+				stored_key,
+				|raw_key_without_prefix, mut raw_value| {
+					let mut key_material = Twox64Concat::reverse(raw_key_without_prefix);
+					Ok((u64::decode(&mut key_material)?, u64::decode(&mut raw_value)?))
+				},
+			);
+			assert_eq!(iter.collect::<Vec<_>>().len(), 8);
 		});
 	}
 
