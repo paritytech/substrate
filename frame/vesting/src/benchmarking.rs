@@ -32,6 +32,15 @@ const SEED: u32 = 0;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+// Duration of schedules used in `add_vesting_schedules`.
+fn schedule_duration<T: Config>() -> u32 {
+	if T::MinVestedTransfer::get() % 20u32.into() == Zero::zero() {
+		20u32
+	} else {
+		21u32
+	}
+}
+
 fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
 	for id in 0 .. n {
 		let lock_id = [id; 8];
@@ -46,10 +55,9 @@ fn add_vesting_schedules<T: Config>(
 	n: u32,
 ) -> Result<BalanceOf<T>, &'static str> {
 	let min_transfer = T::MinVestedTransfer::get();
-	let per_block_duration_20 = min_transfer.checked_div(&20u32.into()).unwrap();
-
 	let locked = min_transfer;
-	let per_block = per_block_duration_20;
+	// If 20 does not evenly divide `min_transfer` the duration will be 21 blocks.
+	let per_block = min_transfer.checked_div(&20u32.into()).unwrap();
 	let starting_block = 1u32;
 
 	let source: T::AccountId = account("source", 0, SEED);
@@ -116,8 +124,8 @@ benchmarks! {
 		add_locks::<T>(&caller, l as u8);
 		add_vesting_schedules::<T>(caller_lookup, s)?;
 
-		// At block 21, everything is unvested.
-		System::<T>::set_block_number(21u32.into());
+		// At block 22, everything is guaranteed unlocked.
+		System::<T>::set_block_number(22u32.into());
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
 			Some(BalanceOf::<T>::zero()),
@@ -171,8 +179,9 @@ benchmarks! {
 
 		add_locks::<T>(&other, l as u8);
 		add_vesting_schedules::<T>(other_lookup.clone(), s)?;
-		// At block 21, everything is unvested.
-		System::<T>::set_block_number(21u32.into());
+		// At block 22, everything is guaranteed unlocked.
+		System::<T>::set_block_number(22u32.into());
+
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&other),
 			Some(BalanceOf::<T>::zero()),
@@ -205,12 +214,12 @@ benchmarks! {
 		let mut expected_balance = add_vesting_schedules::<T>(target_lookup.clone(), s)?;
 
 		let transfer_amount = T::MinVestedTransfer::get();
-		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
+		let per_block = transfer_amount.checked_div(&20u32.into()).unwrap();
 		expected_balance += transfer_amount;
 
 		let vesting_schedule = VestingInfo::new::<T>(
 			transfer_amount,
-			per_block_duration_20,
+			per_block,
 			1u32.into(),
 		);
 	}: _(RawOrigin::Signed(caller), target_lookup, vesting_schedule)
@@ -243,12 +252,12 @@ benchmarks! {
 		let mut expected_balance = add_vesting_schedules::<T>(target_lookup.clone(), s)?;
 
 		let transfer_amount = T::MinVestedTransfer::get();
-		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
+		let per_block = transfer_amount.checked_div(&20u32.into()).unwrap();
 		expected_balance += transfer_amount;
 
 		let vesting_schedule = VestingInfo::new::<T>(
 			transfer_amount,
-			per_block_duration_20,
+			per_block,
 			1u32.into(),
 		);
 	}: _(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
@@ -277,7 +286,6 @@ benchmarks! {
 		let expected_balance = add_vesting_schedules::<T>(caller_lookup.clone(), s)?;
 		// Track the value of the schedules added by `add_vesting_schedules`.
 		let transfer_amount = T::MinVestedTransfer::get();
-		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
 
 		// Schedules are not vesting at block 0.
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
@@ -293,9 +301,10 @@ benchmarks! {
 		);
 	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, s - 1)
 	verify {
+		let expected_locked = transfer_amount * 2u32.into();
 		let expected_schedule = VestingInfo::new::<T>(
-			T::MinVestedTransfer::get() * 2u32.into(),
-			per_block_duration_20 * 2u32.into(),
+			expected_locked,
+			expected_locked.checked_div(&schedule_duration::<T>().into()).unwrap(),
 			1u32.into(),
 		);
 		let expected_index = (s - 2) as usize;
@@ -327,15 +336,17 @@ benchmarks! {
 		// Give target other locks.
 		add_locks::<T>(&caller, l as u8);
 		// Add max vesting schedules.
-		let mut expected_balance = add_vesting_schedules::<T>(caller_lookup.clone(), s)?;
+		let total_transferred = add_vesting_schedules::<T>(caller_lookup.clone(), s)?;
 		// Values of the schedules added by `add_vesting_schedules`.
 		let transfer_amount = T::MinVestedTransfer::get();
-		let per_block_duration_20 = transfer_amount.checked_div(&20u32.into()).unwrap();
+		let per_block = transfer_amount.checked_div(&20u32.into()).unwrap();
 
-		// Go to half way through all the schedules duration. (They all start at 1, and have a duration of 20).
-		System::<T>::set_block_number(11u32.into());
-		// We expect half the original locked balance.
-		expected_balance = expected_balance / 2u32.into();
+		// Go to about half way through all the schedules duration. (They all start at 1, and have a duration of 20 or 21).
+		let half_way = 10u32;
+		System::<T>::set_block_number((half_way + 1).into());
+		// We expect half the original locked balance (+ any remainder that vests on the last block).
+		let expected_balance = total_transferred - per_block * s.into() * half_way.into();
+		let transferrable = total_transferred - expected_balance;
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
 			Some(expected_balance),
@@ -347,12 +358,16 @@ benchmarks! {
 			"There should be exactly max vesting schedules"
 		);
 		// The balance is not actually transferable because it has not been unlocked.
-		assert!(T::Currency::transfer(&caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath).is_err());
+		assert!(T::Currency::transfer(&caller, &test_dest, transferrable, ExistenceRequirement::AllowDeath).is_err());
 	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, s - 1)
 	verify {
+		let duration = if schedule_duration::<T>() == 20u32 { 10u32 } else { 11u32 };
+		let total_locked = transfer_amount * 2u32.into();
+		let unlocked_so_far = per_block * half_way.into() * 2u32.into();
+		let remaining_locked = total_locked - unlocked_so_far;
 		let expected_schedule = VestingInfo::new::<T>(
-			transfer_amount,
-			per_block_duration_20 * 2u32.into(),
+			remaining_locked,
+			remaining_locked / duration.into(),
 			11u32.into(),
 		);
 		let expected_index = (s - 2) as usize;
@@ -377,7 +392,7 @@ benchmarks! {
 		);
 		// Since merge unlocks all schedules we can now transfer the balance.
 		assert_ok!(
-			T::Currency::transfer(&caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath)
+			T::Currency::transfer(&caller, &test_dest, transferrable, ExistenceRequirement::AllowDeath)
 		);
 	}
 }
