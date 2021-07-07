@@ -289,37 +289,6 @@ macro_rules! __decl_generic_event {
 	}
 }
 
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __events_to_metadata {
-	(
-		$( $metadata:expr ),*;
-		$( #[doc = $doc_attr:tt] )*
-		$event:ident $( ( $( $param:path ),* $(,)? ) )*,
-		$( $rest:tt )*
-	) => {
-		$crate::__events_to_metadata!(
-			$( $metadata, )*
-			$crate::metadata::EventMetadata {
-				name: stringify!($event),
-				arguments: $crate::sp_std::vec![
-					$( $( $crate::metadata::TypeSpec::new::<$param>(stringify!($param)) ),* )*
-				],
-				#[cfg(feature = "metadata-docs")]
-				documentation: $crate::sp_std::vec![ $( $doc_attr ),* ],
-				#[cfg(not(feature = "metadata-docs"))]
-				documentation: $crate::sp_std::vec![],
-			};
-			$( $rest )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-	) => {
-		$crate::sp_std::vec![ $( $metadata ),* ]
-	}
-}
-
 /// Constructs an Event type for a runtime. This is usually called automatically by the
 /// construct_runtime macro.
 #[macro_export]
