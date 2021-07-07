@@ -24,10 +24,11 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnbounded
 
 /// Extrinsic watcher.
 ///
-/// Represents a stream of status updates for particular extrinsic.
+/// Represents a stream of status updates for a particular extrinsic.
 #[derive(Debug)]
 pub struct Watcher<H, BH> {
 	receiver: TracingUnboundedReceiver<TransactionStatus<H, BH>>,
+	/// transaction hash of watched extrinsic
 	hash: H,
 }
 

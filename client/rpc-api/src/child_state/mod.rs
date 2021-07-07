@@ -34,6 +34,7 @@ pub trait ChildStateApi<Hash> {
 	/// RPC Metadata
 	type Metadata;
 
+	/// DEPRECATED: Please use `childstate_getKeysPaged` with proper paging support.
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
 	#[rpc(name = "childstate_getKeys")]
 	fn storage_keys(
@@ -41,6 +42,19 @@ pub trait ChildStateApi<Hash> {
 		child_storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
 		hash: Option<Hash>
+	) -> FutureResult<Vec<StorageKey>>;
+
+	/// Returns the keys with prefix from a child storage with pagination support.
+	/// Up to `count` keys will be returned.
+	/// If `start_key` is passed, return next keys in storage in lexicographic order.
+	#[rpc(name = "childstate_getKeysPaged", alias("childstate_getKeysPagedAt"))]
+	fn storage_keys_paged(
+		&self,
+		child_storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		hash: Option<Hash>,
 	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a child storage entry at a specific block's state.
