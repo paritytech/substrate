@@ -88,5 +88,9 @@ fi
 # Patch all Substrate crates in Polkadot
 diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 
+# Propagate the patches across the workspace (e.g. so that BEEFY uses the
+# patched version as well)
+cargo update --workspace
+
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
