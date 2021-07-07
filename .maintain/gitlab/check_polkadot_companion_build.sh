@@ -92,8 +92,13 @@ diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 # that depend on them (e.g. Polkadot, BEEFY) use this unified version
 # NOTE: There's no way to only update patched crates, so we use a heuristic
 # of updating a crucial Substrate crate (`sp-core`)
-SP_CORE_VERSION=$(cat ../primitives/core/Cargo.toml  | grep -oP '(?<=version = ")[a-zA-z0-9|\.|-]+(?="\w*$)')
-cargo update -p sp-core:${SP_CORE_VERSION} --offline
+# We're using `--offline` to minimize impact of updating unrelated dependencies
+# SP_CORE_VERSION=$(cat ../primitives/core/Cargo.toml  | grep -oP '(?<=version = ")[a-zA-z0-9|\.|-]+(?="\w*$)')
+SP_CORE_VERSIONS=$(cat Cargo.lock  | grep -oP '(?<=sp-core) [a-zA-Z0-9|\.|-]*' | sort | uniq)
+for vers in ${SP_CORE_VERSIONS[@]}
+do
+  cargo update -p sp-core:${vers} --offline
+done
 
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
