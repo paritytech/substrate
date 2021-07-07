@@ -18,34 +18,23 @@
 
 use std::sync::Arc;
 
-use futures::{FutureExt, SinkExt, channel::{mpsc, oneshot}, StreamExt};
+use futures::{FutureExt, SinkExt, channel::{mpsc, oneshot}};
 use jsonrpc_core::MetaIoHandler;
 use parking_lot::Mutex;
-use manual_seal::{run_manual_seal, EngineCommand, ManualSealParams};
-use sc_cli::build_runtime;
-use sc_client_api::{
-	backend::{self, Backend}, CallExecutor, ExecutorProvider,
-};
-use sc_service::{
-	build_network, spawn_tasks, BuildNetworkParams, SpawnTasksParams,
-	TFullBackend, TFullCallExecutor, TFullClient, TaskManager, TaskType,
-};
-use sc_transaction_pool::BasicPool;
-use sp_api::{ApiExt, ConstructRuntimeApi, Core, Metadata, OverlayedChanges, StorageTransactionCache};
-use sp_block_builder::BlockBuilder;
+use manual_seal::EngineCommand;
+use sc_client_api::{backend::{self, Backend}, CallExecutor, ExecutorProvider};
+use sc_service::{TFullBackend, TFullCallExecutor, TFullClient, TaskManager};
+use sp_api::{OverlayedChanges, StorageTransactionCache};
 use sp_blockchain::HeaderBackend;
 use sp_core::ExecutionContext;
-use sp_offchain::OffchainWorkerApi;
-use sp_runtime::traits::{Block as BlockT, Extrinsic};
-use sp_runtime::{generic::BlockId, transaction_validity::TransactionSource, MultiSignature, MultiAddress};
-use sp_runtime::{generic::UncheckedExtrinsic, traits::NumberFor};
-use sp_session::SessionKeys;
-use sp_state_machine::Ext;
-use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
+use sp_runtime::{
+	generic::{BlockId, UncheckedExtrinsic},
+	traits::{Block as BlockT, Extrinsic, NumberFor},
+	transaction_validity::TransactionSource, MultiSignature, MultiAddress
+};
+use crate::ChainInfo;
 use sp_transaction_pool::TransactionPool;
-
-use crate::{ChainInfo, rpc::{RuntimeUpgradeApi, RuntimeUpgrade}};
-use manual_seal::rpc::{ManualSeal, ManualSealApi};
+use sp_state_machine::Ext;
 
 /// This holds a reference to a running node on another thread,
 /// the node process is dropped when this struct is dropped
@@ -53,24 +42,20 @@ use manual_seal::rpc::{ManualSeal, ManualSealApi};
 pub struct Node<T: ChainInfo> {
 	/// rpc handler for communicating with the node over rpc.
 	rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
-	/// node tokio runtime
-	_runtime: Mutex<tokio::runtime::Runtime>,
 	/// handle to the running node.
-	_task_manager: Mutex<Option<TaskManager>>,
+	task_manager: Mutex<Option<TaskManager>>,
 	/// client instance
 	client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
 	/// transaction pool
-	pool: Arc<
-		dyn TransactionPool<
-			Block = T::Block,
-			Hash = <T::Block as BlockT>::Hash,
-			Error = sc_transaction_pool::error::Error,
-			InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
-				<T::Block as BlockT>::Hash,
-				<T::Block as BlockT>::Extrinsic,
-			>,
+	pool: Arc<dyn TransactionPool<
+		Block = <T as ChainInfo>::Block,
+		Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
+		Error = sc_transaction_pool::error::Error,
+		InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+			<<T as ChainInfo>::Block as BlockT>::Hash,
+			<<T as ChainInfo>::Block as BlockT>::Extrinsic,
 		>,
-	>,
+	>>,
 	/// channel to communicate with manual seal on.
 	manual_seal_command_sink: mpsc::Sender<EngineCommand<<T::Block as BlockT>::Hash>>,
 	/// backend type.
@@ -82,152 +67,32 @@ pub struct Node<T: ChainInfo> {
 type EventRecord<T> = frame_system::EventRecord<<T as frame_system::Config>::Event, <T as frame_system::Config>::Hash>;
 
 impl<T: ChainInfo> Node<T> {
-	/// Starts a node with the manual-seal authorship.
-	pub fn new() -> Result<Arc<Self>, sc_service::Error>
-	where
-		<T::RuntimeApi as ConstructRuntimeApi<T::Block, TFullClient<T::Block, T::RuntimeApi, T::Executor>>>::RuntimeApi:
-			Core<T::Block>
-				+ Metadata<T::Block>
-				+ OffchainWorkerApi<T::Block>
-				+ SessionKeys<T::Block>
-				+ TaggedTransactionQueue<T::Block>
-				+ BlockBuilder<T::Block>
-				+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>,
-		<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>,
-		T: 'static,
-	{
-		let tokio_runtime = build_runtime().unwrap();
-		let runtime_handle = tokio_runtime.handle().clone();
-		let task_executor = move |fut, task_type| match task_type {
-			TaskType::Async => runtime_handle.spawn(fut).map(drop),
-			TaskType::Blocking => runtime_handle
-				.spawn_blocking(move || futures::executor::block_on(fut))
-				.map(drop),
-		};
-		let config = T::config(task_executor.into());
-
-		let (
-			client,
-			backend,
-			keystore,
-			mut task_manager,
-			create_inherent_data_providers,
-			consensus_data_provider,
-			select_chain,
-			block_import,
-			import_queue
-		) = T::create_client_parts(&config)?;
-
-		let transaction_pool = BasicPool::new_full(
-			config.transaction_pool.clone(),
-			true.into(),
-			config.prometheus_registry(),
-			task_manager.spawn_essential_handle(),
-			client.clone(),
-		);
-
-		let (network, system_rpc_tx, network_starter) = {
-			let params = BuildNetworkParams {
-				config: &config,
-				client: client.clone(),
-				transaction_pool: transaction_pool.clone(),
-				spawn_handle: task_manager.spawn_handle(),
-				import_queue,
-				on_demand: None,
-				block_announce_validator_builder: None,
-			};
-			build_network(params)?
-		};
-
-		sc_service::build_offchain_workers(
-			&config,
-			task_manager.spawn_handle(),
-			client.clone(),
-			network.clone(),
-		);
-
-		// Proposer object for block authorship.
-		let env = sc_basic_authorship::ProposerFactory::new(
-			task_manager.spawn_handle(),
-			client.clone(),
-			transaction_pool.clone(),
-			config.prometheus_registry(),
-			None
-		);
-
-		// Channel for the rpc handler to communicate with the authorship task.
-		let (command_sink, commands_stream) = mpsc::channel(10);
-		let (wasm_sink, mut wasm_stream) = mpsc::channel(10);
-
-		let rpc_sink = command_sink.clone();
-
-		let rpc_handlers = {
-			let params = SpawnTasksParams {
-				config,
-				client: client.clone(),
-				backend: backend.clone(),
-				task_manager: &mut task_manager,
-				keystore,
-				on_demand: None,
-				transaction_pool: transaction_pool.clone(),
-				rpc_extensions_builder: Box::new(move |_, _| {
-					let mut io = jsonrpc_core::IoHandler::default();
-					io.extend_with(
-						ManualSealApi::to_delegate(ManualSeal::new(rpc_sink.clone()))
-					);
-					io.extend_with(RuntimeUpgradeApi::to_delegate(RuntimeUpgrade::new(wasm_sink.clone())));
-					io
-				}),
-				remote_blockchain: None,
-				network,
-				system_rpc_tx,
-				telemetry: None
-			};
-			spawn_tasks(params)?
-		};
-
-		// Background authorship future.
-		let authorship_future = run_manual_seal(ManualSealParams {
-			block_import,
-			env,
-			client: client.clone(),
-			pool: transaction_pool.pool().clone(),
-			commands_stream,
-			select_chain,
-			consensus_data_provider,
-			create_inherent_data_providers,
-		});
-
-		// spawn the authorship task as an essential task.
-		task_manager
-			.spawn_essential_handle()
-			.spawn("manual-seal", authorship_future);
-
-		network_starter.start_network();
-		let rpc_handler = rpc_handlers.io_handler();
-		let initial_number = client.info().best_number;
-
-		let node = Arc::new(Self {
+	/// Creates a new node.
+	pub fn new(
+		rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
+		task_manager: TaskManager,
+		client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
+		pool: Arc<dyn TransactionPool<
+			Block = <T as ChainInfo>::Block,
+			Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
+			Error = sc_transaction_pool::error::Error,
+			InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+				<<T as ChainInfo>::Block as BlockT>::Hash,
+				<<T as ChainInfo>::Block as BlockT>::Extrinsic,
+			>,
+		>>,
+		command_sink: mpsc::Sender<EngineCommand<<T::Block as BlockT>::Hash>>,
+		backend: Arc<TFullBackend<T::Block>>,
+	) -> Arc<Self> {
+		Arc::new(Self {
 			rpc_handler,
-			_task_manager: Mutex::new(Some(task_manager)),
-			_runtime: Mutex::new(tokio_runtime),
-			client,
-			pool: transaction_pool,
+			task_manager: Mutex::new(Some(task_manager)),
+			client: client.clone(),
+			pool,
 			backend,
 			manual_seal_command_sink: command_sink,
-			initial_block_number: initial_number,
-		});
-
-		let cloned = Arc::clone(&node);
-		node._runtime.lock().spawn(async move {
-			while let Some(request) = wasm_stream.next().await {
-				cloned.upgrade_runtime(request.wasm);
-				let _ = request.sender.send(());
-			}
-		});
-
-
-		Ok(node)
+			initial_block_number: client.info().best_number,
+		})
 	}
 
 	/// Returns a reference to the rpc handlers.
@@ -270,11 +135,11 @@ impl<T: ChainInfo> Node<T> {
 	}
 
 	/// submit some extrinsic to the node, providing the sending account.
-	pub fn submit_extrinsic(
+	pub async fn submit_extrinsic(
 		&self,
 		call: impl Into<<T::Runtime as frame_system::Config>::Call>,
 		from: <T::Runtime as frame_system::Config>::AccountId,
-	) -> <T::Block as BlockT>::Hash
+	) -> Result<<T::Block as BlockT>::Hash, sc_transaction_pool::error::Error>
 	where
 		<T::Block as BlockT>::Extrinsic: From<
 			UncheckedExtrinsic<
@@ -302,12 +167,7 @@ impl<T: ChainInfo> Node<T> {
 		.expect("UncheckedExtrinsic::new() always returns Some");
 		let at = self.client.info().best_hash;
 
-		let mut runtime = self._runtime.lock();
-		runtime
-			.block_on(
-				self.pool.submit_one(&BlockId::Hash(at), TransactionSource::Local, ext.into())
-			)
-			.unwrap()
+		self.pool.submit_one(&BlockId::Hash(at), TransactionSource::Local, ext.into()).await
 	}
 
 	/// Get the events of the most recently produced block
@@ -316,8 +176,8 @@ impl<T: ChainInfo> Node<T> {
 	}
 
 	/// Instructs manual seal to seal new, possibly empty blocks.
-	pub fn seal_blocks(&self, num: usize) {
-		let (mut tokio, mut sink) = (self._runtime.lock(), self.manual_seal_command_sink.clone());
+	pub async fn seal_blocks(&self, num: usize) {
+		let mut sink =  self.manual_seal_command_sink.clone();
 
 		for count in 0..num {
 			let (sender, future_block) = oneshot::channel();
@@ -328,15 +188,13 @@ impl<T: ChainInfo> Node<T> {
 				sender: Some(sender),
 			});
 
-			tokio.block_on(async {
-				const ERROR: &'static str = "manual-seal authorship task is shutting down";
-				future.await.expect(ERROR);
+			const ERROR: &'static str = "manual-seal authorship task is shutting down";
+			future.await.expect(ERROR);
 
-				match future_block.await.expect(ERROR) {
-					Ok(block) => log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num),
-					Err(err) => log::error!("failed to seal block {} of {}, error: {:?}", count + 1, num, err),
-				}
-			});
+			match future_block.await.expect(ERROR) {
+				Ok(block) => log::info!("sealed {} (hash: {}) of {} blocks", count + 1, block.hash, num),
+				Err(err) => log::error!("failed to seal block {} of {}, error: {:?}", count + 1, num, err),
+			}
 		}
 	}
 
@@ -355,29 +213,16 @@ impl<T: ChainInfo> Node<T> {
 	}
 
 	/// so you've decided to run the test runner as a binary, use this to shutdown gracefully.
-	pub fn until_shutdown(&self) {
-		let manager = self._task_manager.lock().take();
-		let future = async {
-			if let Some(mut task_manager) = manager {
-				let task = task_manager.future().fuse();
-				let signal = tokio::signal::ctrl_c();
-				futures::pin_mut!(signal);
-				futures::future::select(task, signal).await;
-				// we don't really care whichever comes first.
-				task_manager.clean_shutdown().await
-			}
-		};
-
-		self._runtime.lock().block_on(future)
-	}
-
-	/// Performs a runtime upgrade given a wasm blob.
-	pub fn upgrade_runtime(&self, wasm: Vec<u8>)
-		where
-			<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>
-	{
-		let call = frame_system::Call::set_code(wasm);
-		T::dispatch_with_root(call.into(), self);
+	pub async fn until_shutdown(&self) {
+		let manager = self.task_manager.lock().take();
+		if let Some(mut task_manager) = manager {
+			let task = task_manager.future().fuse();
+			let signal = tokio::signal::ctrl_c();
+			futures::pin_mut!(signal);
+			futures::future::select(task, signal).await;
+			// we don't really care whichever comes first.
+			task_manager.clean_shutdown().await
+		}
 	}
 }
 

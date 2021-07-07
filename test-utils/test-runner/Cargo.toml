@@ -15,6 +15,10 @@ sc-cli = { version = "0.9.0", path = "../../client/cli" }
 sc-basic-authorship = { version = "0.9.0", path = "../../client/basic-authorship" }
 sc-rpc = { version = "3.0.0", path = "../../client/rpc" }
 sc-transaction-pool = { version = "3.0.0", path = "../../client/transaction-pool" }
+grandpa = { version = "0.9.0", package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
+sp-consensus-babe = { version = "0.9.0", path = "../../primitives/consensus/babe" }
+sc-consensus-babe = { version = "0.9.0", path = "../../client/consensus/babe" }
+sc-consensus = { version = "0.9.0", path = "../../client/consensus/common" }
 sc-transaction-graph = { version = "3.0.0", path = "../../client/transaction-pool/graph" }
 sc-client-api = { version = "3.0.0", path = "../../client/api" }
 sc-rpc-server = { version = "3.0.0", path = "../../client/rpc-servers" }
@@ -52,3 +56,4 @@ parking_lot = "0.11.1"
 jsonrpc-core = "15.1"
 jsonrpc-core-client = "15.1"
 jsonrpc-derive = "15.1"
+num-traits = "0.2.14"
