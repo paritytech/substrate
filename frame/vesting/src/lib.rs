@@ -54,7 +54,7 @@ mod vesting_info;
 
 pub mod weights;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	pallet_prelude::*,
@@ -86,7 +86,7 @@ const LOG_TARGET: &'static str = "runtime::vesting";
 
 // A value placed in storage that represents the current version of the Vesting storage.
 // This value is used by `on_runtime_upgrade` to determine whether we run storage migration logic.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 enum Releases {
 	V0,
 	V1,
@@ -191,6 +191,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::genesis_config]
