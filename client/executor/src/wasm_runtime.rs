@@ -328,7 +328,8 @@ pub fn create_wasm_runtime_with_code(
 					cache_path: cache_path.map(ToOwned::to_owned),
 					semantics: sc_executor_wasmtime::Semantics {
 						fast_instance_reuse: true,
-						stack_depth_metering: false,
+						deterministic_stack_limit: None,
+						canonicalize_nans: false,
 					},
 				},
 				host_functions,
