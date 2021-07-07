@@ -824,6 +824,10 @@ macro_rules! impl_benchmark {
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
+							// TODO: Fix memory allocation issue then re-enable
+							// let read_and_written_keys = $crate::benchmarking::get_read_and_written_keys();
+							let read_and_written_keys = Default::default();
+
 							results.push($crate::BenchmarkResults {
 								components: c.to_vec(),
 								extrinsic_time: elapsed_extrinsic,
@@ -833,6 +837,7 @@ macro_rules! impl_benchmark {
 								writes: read_write_count.2,
 								repeat_writes: read_write_count.3,
 								proof_size: diff_pov,
+								keys: read_and_written_keys,
 							});
 						}
 
