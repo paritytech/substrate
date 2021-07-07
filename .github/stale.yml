@@ -23,3 +23,5 @@ markComment: >
   occurs. Thank you for your contributions.
 # Comment to post when closing a stale issue. Set to `false` to disable
 closeComment: false
+# Set to true to ignore issues in a project (defaults to false)
+exemptProjects: true
