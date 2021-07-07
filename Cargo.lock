@@ -7052,7 +7052,6 @@ version = "3.0.0"
 dependencies = [
  "log",
  "sp-core",
- "sp-std",
  "sp-wasm-interface",
  "thiserror",
 ]
@@ -8028,7 +8027,6 @@ dependencies = [
 name = "sc-runtime-test"
 version = "2.0.0"
 dependencies = [
- "sc-allocator",
  "sp-core",
  "sp-io",
  "sp-runtime",

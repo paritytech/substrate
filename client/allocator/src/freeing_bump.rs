@@ -67,7 +67,7 @@
 //!   This is more pronounced (in terms of absolute heap amounts) with larger allocation sizes.
 
 use crate::Error;
-use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
+use std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
 
 /// The minimal alignment guaranteed by this allocator.
