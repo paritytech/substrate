@@ -364,19 +364,6 @@ macro_rules! parameter_types {
 				I::from($value)
 			}
 		}
-
-		impl $crate::scale_info::TypeInfo for $name {
-			type Identity = Self;
-
-			fn type_info() -> $crate::scale_info::Type<$crate::scale_info::form::MetaForm> {
-				$crate::scale_info::Type::builder()
-					.path($crate::scale_info::Path::new(stringify!($name), module_path!()))
-					.composite(
-					    scale_info::build::Fields::unnamed()
-							.field(|f| f.ty::<$type>().type_name(stringify!($type)))
-					)
-			}
-		}
 	};
 	(IMPL $name:ident, $type:ty, $value:expr) => {
 		impl $name {

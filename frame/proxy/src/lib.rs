@@ -136,14 +136,14 @@ pub mod pallet {
 
 		/// The maximum amount of proxies allowed for a single account.
 		#[pallet::constant]
-		type MaxProxies: Get<u32> + TypeInfo;
+		type MaxProxies: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
 		/// The maximum amount of time-delayed announcements that are allowed to be pending.
 		#[pallet::constant]
-		type MaxPending: Get<u32> + TypeInfo;
+		type MaxPending: Get<u32>;
 
 		/// The type of hash used for hashing the call.
 		type CallHasher: Hash;

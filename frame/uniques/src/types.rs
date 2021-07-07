@@ -96,6 +96,7 @@ pub struct InstanceDetails<AccountId, DepositBalance> {
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo)]
+#[scale_info(skip_type_params(StringLimit))]
 pub struct ClassMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
@@ -110,6 +111,7 @@ pub struct ClassMetadata<DepositBalance, StringLimit: Get<u32>> {
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo)]
+#[scale_info(skip_type_params(StringLimit))]
 pub struct InstanceMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///

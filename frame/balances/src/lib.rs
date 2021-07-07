@@ -215,10 +215,10 @@ pub mod pallet {
 
 		/// The maximum number of locks that should exist on an account.
 		/// Not strictly enforced, but used for weight estimation.
-		type MaxLocks: Get<u32> + TypeInfo;
+		type MaxLocks: Get<u32>;
 
 		/// The maximum number of named reserves that can exist on an account.
-		type MaxReserves: Get<u32> + TypeInfo;
+		type MaxReserves: Get<u32>;
 
 		/// The id type for named reserves.
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;

@@ -138,7 +138,7 @@ pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 	type MotionDuration: Get<Self::BlockNumber>;
 
 	/// Maximum number of proposals allowed to be active in parallel.
-	type MaxProposals: Get<ProposalIndex> + TypeInfo;
+	type MaxProposals: Get<ProposalIndex>;
 
 	/// The maximum number of members supported by the pallet. Used for weight estimation.
 	///
