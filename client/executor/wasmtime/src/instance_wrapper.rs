@@ -311,7 +311,7 @@ fn get_table(instance: &Instance) -> Option<Table> {
 		.cloned()
 }
 
-/// Functions realted to memory.
+/// Functions related to memory.
 impl InstanceWrapper {
 	/// Read data from a slice of memory into a destination buffer.
 	///

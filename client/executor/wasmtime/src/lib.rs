@@ -24,6 +24,10 @@ mod runtime;
 mod state_holder;
 mod util;
 
+#[cfg(test)]
+mod tests;
+
 pub use runtime::{
 	create_runtime, create_runtime_from_artifact, prepare_runtime_artifact, Config, Semantics,
+	DeterministicStackLimit,
 };
