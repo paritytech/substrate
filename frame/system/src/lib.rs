@@ -87,7 +87,7 @@ use frame_support::{
 	Parameter, storage,
 	traits::{
 		SortedMembers, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
-		StoredMap, EnsureOrigin, OriginTrait, Filter, MaxEncodedLen,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
@@ -95,7 +95,7 @@ use frame_support::{
 	},
 	dispatch::{DispatchResultWithPostInfo, DispatchResult},
 };
-use codec::{Encode, Decode, FullCodec, EncodeLike};
+use codec::{Encode, Decode, FullCodec, EncodeLike, MaxEncodedLen};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -580,7 +580,7 @@ pub mod pallet {
 	/// Events deposited for the current block.
 	#[pallet::storage]
 	#[pallet::getter(fn events)]
-	pub(super) type Events<T: Config> =
+	pub type Events<T: Config> =
 		StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.

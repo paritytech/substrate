@@ -15,16 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Collection of allocator implementations.
-//!
-//! This crate provides the following allocator implementations:
-//! - A freeing-bump allocator: [`FreeingBumpHeapAllocator`](freeing_bump::FreeingBumpHeapAllocator)
-
-#![cfg_attr(not(feature = "std"), no_std)]
-#![warn(missing_docs)]
-
-mod error;
-mod freeing_bump;
-
-pub use freeing_bump::FreeingBumpHeapAllocator;
-pub use error::Error;
+/// The error type used by the allocators.
+#[derive(sp_core::RuntimeDebug)]
+#[derive(thiserror::Error)]
+pub enum Error {
+	/// Someone tried to allocate more memory than the allowed maximum per allocation.
+	#[error("Requested allocation size is too large")]
+	RequestedAllocationTooLarge,
+	/// Allocator run out of space.
+	#[error("Allocator ran out of space")]
+	AllocatorOutOfSpace,
+	/// Some other error occurred.
+	#[error("Other: {0}")]
+	Other(&'static str)
+}

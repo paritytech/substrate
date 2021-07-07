@@ -15,13 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "derive")]
-#[rustversion::attr(not(stable), ignore)]
-#[test]
-fn derive_no_bound_ui() {
-	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
-	std::env::set_var("SKIP_WASM_BUILD", "1");
+//! Collection of allocator implementations.
+//!
+//! This crate provides the following allocator implementations:
+//! - A freeing-bump allocator: [`FreeingBumpHeapAllocator`](freeing_bump::FreeingBumpHeapAllocator)
 
-	let t = trybuild::TestCases::new();
-	t.compile_fail("tests/max_encoded_len_ui/*.rs");
-}
+#![warn(missing_docs)]
+
+mod error;
+mod freeing_bump;
+
+pub use freeing_bump::FreeingBumpHeapAllocator;
+pub use error::Error;

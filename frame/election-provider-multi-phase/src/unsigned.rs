@@ -30,8 +30,10 @@ use sp_npos_elections::{
 	assignment_staked_to_ratio_normalized, is_score_better, seq_phragmen,
 };
 use sp_runtime::{
+	DispatchError,
+	SaturatedConversion,
 	offchain::storage::{MutateStorageError, StorageValueRef},
-	traits::TrailingZeroInput, SaturatedConversion
+	traits::TrailingZeroInput,
 };
 use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec};
 
@@ -57,7 +59,8 @@ pub type Assignment<T> = sp_npos_elections::Assignment<
 	CompactAccuracyOf<T>,
 >;
 
-/// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular runtime `T`.
+/// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular
+/// runtime `T`.
 pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<CompactOf<T>>;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -69,7 +72,7 @@ pub enum MinerError {
 	/// Submitting a transaction to the pool failed.
 	PoolSubmissionFailed,
 	/// The pre-dispatch checks failed for the mined solution.
-	PreDispatchChecksFailed,
+	PreDispatchChecksFailed(DispatchError),
 	/// The solution generated from the miner is not feasible.
 	Feasibility(FeasibilityError),
 	/// Something went wrong fetching the lock.
@@ -234,7 +237,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), MinerError> {
 		Self::unsigned_pre_dispatch_checks(raw_solution).map_err(|err| {
 			log!(debug, "pre-dispatch checks failed for {} solution: {:?}", solution_type, err);
-			MinerError::PreDispatchChecksFailed
+			MinerError::PreDispatchChecksFailed(err)
 		})?;
 
 		Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(|err| {
@@ -344,7 +347,11 @@ impl<T: Config> Pallet<T> {
 		// converting to `Compact`.
 		let mut index_assignments = sorted_assignments
 			.into_iter()
-			.map(|assignment| IndexAssignmentOf::<T>::new(&assignment, &voter_index, &target_index))
+			.map(|assignment| IndexAssignmentOf::<T>::new(
+				&assignment,
+				&voter_index,
+				&target_index,
+			))
 			.collect::<Result<Vec<_>, _>>()?;
 
 		// trim assignments list for weight and length.
@@ -416,7 +423,9 @@ impl<T: Config> Pallet<T> {
 			size,
 			max_weight,
 		);
-		let removing: usize = assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
+		let removing: usize = assignments.len().saturating_sub(
+			maximum_allowed_voters.saturated_into(),
+		);
 		log!(
 			debug,
 			"from {} assignments, truncating to {} for weight, removing {}",
@@ -464,7 +473,9 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		let maximum_allowed_voters =
-			if low < assignments.len() && encoded_size_of(&assignments[..low + 1])? <= max_allowed_length {
+			if low < assignments.len() &&
+				encoded_size_of(&assignments[..low + 1])? <= max_allowed_length
+			{
 				low + 1
 			} else {
 				low
@@ -672,6 +683,15 @@ mod max_weight {
 			0
 		}
 		fn on_initialize_open_unsigned_without_snapshot() -> Weight {
+			unreachable!()
+		}
+		fn finalize_signed_phase_accept_solution() -> Weight {
+			unreachable!()
+		}
+		fn finalize_signed_phase_reject_solution() -> Weight {
+			unreachable!()
+		}
+		fn submit(c: u32) -> Weight {
 			unreachable!()
 		}
 		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -994,7 +1014,11 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::mine_check_save_submit().unwrap_err(),
-				MinerError::PreDispatchChecksFailed,
+				MinerError::PreDispatchChecksFailed(DispatchError::Module{
+					index: 2,
+					error: 1,
+					message: Some("PreDispatchWrongWinnerCount"),
+				}),
 			);
 		})
 	}
@@ -1199,11 +1223,17 @@ mod tests {
 			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
 			storage.clear();
 
-			assert!(!ocw_solution_exists::<Runtime>(), "no solution should be present before we mine one");
+			assert!(
+				!ocw_solution_exists::<Runtime>(),
+				"no solution should be present before we mine one",
+			);
 
 			// creates and cache a solution
 			MultiPhase::offchain_worker(25);
-			assert!(ocw_solution_exists::<Runtime>(), "a solution must be cached after running the worker");
+			assert!(
+				ocw_solution_exists::<Runtime>(),
+				"a solution must be cached after running the worker",
+			);
 
 			// after an election, the solution must be cleared
 			// we don't actually care about the result of the election
@@ -1329,10 +1359,15 @@ mod tests {
 				_ => panic!("bad call: unexpected submission"),
 			};
 
-			// Custom(3) maps to PreDispatchChecksFailed
-			let pre_dispatch_check_error = TransactionValidityError::Invalid(InvalidTransaction::Custom(3));
+			// Custom(7) maps to PreDispatchChecksFailed
+			let pre_dispatch_check_error = TransactionValidityError::Invalid(
+				InvalidTransaction::Custom(7),
+			);
 			assert_eq!(
-				<MultiPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
+				<MultiPhase as ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&call,
+				)
 					.unwrap_err(),
 				pre_dispatch_check_error,
 			);
@@ -1359,7 +1394,11 @@ mod tests {
 			let compact_clone = compact.clone();
 
 			// when
-			MultiPhase::trim_assignments_length(encoded_len, &mut assignments, encoded_size_of).unwrap();
+			MultiPhase::trim_assignments_length(
+				encoded_len,
+				&mut assignments,
+				encoded_size_of,
+			).unwrap();
 
 			// then
 			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
@@ -1383,7 +1422,11 @@ mod tests {
 			let compact_clone = compact.clone();
 
 			// when
-			MultiPhase::trim_assignments_length(encoded_len as u32 - 1, &mut assignments, encoded_size_of).unwrap();
+			MultiPhase::trim_assignments_length(
+				encoded_len as u32 - 1,
+				&mut assignments,
+				encoded_size_of,
+			).unwrap();
 
 			// then
 			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
@@ -1414,7 +1457,11 @@ mod tests {
 				.unwrap();
 
 			// when
-			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments, encoded_size_of).unwrap();
+			MultiPhase::trim_assignments_length(
+				encoded_len - 1,
+				&mut assignments,
+				encoded_size_of,
+			).unwrap();
 
 			// then
 			assert_eq!(assignments.len(), count - 1, "we must have removed exactly one assignment");

@@ -106,11 +106,11 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Ok(self.info.chain_name.clone())
 	}
 
-	fn system_type(&self) -> Result<sp_chain_spec::ChainType> {
+	fn system_type(&self) -> Result<sc_chain_spec::ChainType> {
 		Ok(self.info.chain_type.clone())
 	}
 
-	fn system_properties(&self) -> Result<sp_chain_spec::Properties> {
+	fn system_properties(&self) -> Result<sc_chain_spec::Properties> {
 		Ok(self.info.properties.clone())
 	}
 
