@@ -250,11 +250,6 @@ impl InstanceWrapper {
 		self.table.as_ref()
 	}
 
-	/// Returns the byte size of the linear memory instance attached to this instance.
-	pub fn memory_size(&self) -> u32 {
-		self.memory.data_size() as u32
-	}
-
 	/// Reads `__heap_base: i32` global variable and returns it.
 	///
 	/// If it doesn't exist, not a global or of not i32 type returns an error.
