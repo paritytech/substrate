@@ -20,6 +20,7 @@
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
+use crate::scale_info::TypeInfo;
 use crate::traits::{
 	self, Member, AtLeast32BitUnsigned, SimpleBitOps, Hash as HashT,
 	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay,
@@ -115,18 +116,34 @@ impl<Number, Hash> Encode for Header<Number, Hash> where
 	}
 }
 
-impl<Number, Hash> scale_info::TypeInfo for Header<Number, Hash> where
-	Number: HasCompact + Copy + Into<U256> + TryFrom<U256> + 'static,
+impl<Number, Hash> TypeInfo for Header<Number, Hash> where
+	Number: HasCompact + Copy + Into<U256> + TryFrom<U256> + TypeInfo + 'static,
 	Hash: HashT,
-	Hash::Output: scale_info::TypeInfo,
+	Hash::Output: TypeInfo,
 {
 	type Identity = Self;
 
 	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
-		// todo [AJ] provide accurate custom TypeInfo impl
 		scale_info::Type::builder()
 			.path(scale_info::Path::new("Header", module_path!()))
-			.composite(scale_info::build::Fields::unit())
+			.docs(&["Abstraction over a block header for a substrate chain."])
+			.composite(scale_info::build::Fields::named()
+				.field(|f| f
+					.name("parent_hash").ty::<Hash::Output>().type_name("Hash::Output")
+				)
+				.field(|f| f
+					.name("number").compact::<Number>().type_name("Number")
+				)
+				.field(|f| f
+					.name("state_root").ty::<Hash::Output>().type_name("Hash::Output")
+				)
+				.field(|f| f
+					.name("extrinsics_root").ty::<Hash::Output>().type_name("Hash::Output")
+				)
+				.field(|f| f
+					.name("digest").ty::<Digest<Hash::Output>>().type_name("Digest<Hash::Output>")
+				)
+			)
 	}
 }
 
