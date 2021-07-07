@@ -86,6 +86,7 @@ std = [
 	"primitive-types/rustc-hex",
 	"impl-serde",
 	"codec/std",
+	"scale-info/std",
 	"hash256-std-hasher/std",
 	"hash-db/std",
 	"sp-std/std",

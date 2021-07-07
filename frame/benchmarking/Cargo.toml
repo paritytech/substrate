@@ -35,6 +35,7 @@ serde = "1.0.101"
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime-interface/std",
 	"sp-runtime/std",
 	"sp-api/std",

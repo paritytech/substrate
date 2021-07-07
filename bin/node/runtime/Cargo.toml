@@ -101,7 +101,6 @@ sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 default = ["std"]
 with-tracing = [ "frame-executive/with-tracing" ]
 std = [
-	"scale-info/std",
 	"sp-authority-discovery/std",
 	"pallet-assets/std",
 	"pallet-authority-discovery/std",
@@ -112,6 +111,7 @@ std = [
 	"pallet-bounties/std",
 	"sp-block-builder/std",
 	"codec/std",
+	"scale-info/std",
 	"pallet-collective/std",
 	"pallet-contracts/std",
 	"pallet-contracts-primitives/std",

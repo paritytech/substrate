@@ -29,6 +29,7 @@ serde = { version = "1.0.101" }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"frame-support/std",
 	"frame-system/std",
 	"sp-core/std",

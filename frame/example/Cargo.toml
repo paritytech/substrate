@@ -31,6 +31,7 @@ sp-core = { version = "3.0.0", path = "../../primitives/core", default-features 
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",

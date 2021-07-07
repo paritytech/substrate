@@ -32,6 +32,7 @@ pallet-balances = { version = "3.0.0", path = "../balances" }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-core/std",
 	"sp-runtime/std",

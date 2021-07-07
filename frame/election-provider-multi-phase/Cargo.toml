@@ -51,6 +51,7 @@ frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"log/std",
 
 	"frame-support/std",

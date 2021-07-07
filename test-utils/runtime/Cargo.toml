@@ -69,6 +69,7 @@ std = [
 	"sp-consensus-babe/std",
 	"sp-block-builder/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-inherents/std",
 	"sp-keyring",
 	"log/std",

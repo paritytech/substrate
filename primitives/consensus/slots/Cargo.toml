@@ -22,6 +22,7 @@ sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../ari
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime/std",
 	"sp-arithmetic/std",
 ]

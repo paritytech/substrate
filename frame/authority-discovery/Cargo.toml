@@ -34,6 +34,7 @@ std = [
 	"sp-application-crypto/std",
 	"sp-authority-discovery/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"pallet-session/std",
 	"sp-runtime/std",

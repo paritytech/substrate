@@ -31,6 +31,7 @@ default = ["std"]
 std = [
 	"safe-mix/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"frame-system/std",

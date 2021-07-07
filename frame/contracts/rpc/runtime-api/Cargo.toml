@@ -27,6 +27,7 @@ default = ["std"]
 std = [
 	"sp-api/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"pallet-contracts-primitives/std",

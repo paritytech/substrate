@@ -28,6 +28,7 @@ sp-core = { version = "3.0.0", path = "../../primitives/core" }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-io/std",
 	"sp-runtime/std",

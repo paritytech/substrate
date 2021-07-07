@@ -41,6 +41,7 @@ runtime-benchmarks = [
 std = [
 	"serde",
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",

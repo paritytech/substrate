@@ -29,6 +29,7 @@ substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-runtime/std",
 	"frame-benchmarking/std",
 	"frame-support/std",

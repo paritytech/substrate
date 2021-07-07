@@ -29,6 +29,7 @@ log = { version = "0.4.14", default-features = false }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"frame-support/std",
 	"frame-system/std",
 	"lite-json/std",

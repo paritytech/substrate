@@ -33,6 +33,7 @@ default = ["std"]
 std = [
 	"pallet-balances/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"serde",
 	"sp-runtime/std",

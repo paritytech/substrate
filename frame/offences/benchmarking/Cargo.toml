@@ -55,4 +55,5 @@ std = [
 	"frame-election-provider-support/std",
 	"sp-std/std",
 	"codec/std",
+	"scale-info/std",
 ]

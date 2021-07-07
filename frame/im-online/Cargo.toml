@@ -37,6 +37,7 @@ std = [
 	"sp-application-crypto/std",
 	"pallet-authorship/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-core/std",
 	"sp-std/std",
 	"sp-io/std",

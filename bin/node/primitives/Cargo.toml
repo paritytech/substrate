@@ -26,6 +26,7 @@ pretty_assertions = "0.6.1"
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"frame-system/std",
 	"sp-application-crypto/std",
 	"sp-core/std",

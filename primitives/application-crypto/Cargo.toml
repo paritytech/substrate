@@ -28,6 +28,7 @@ std = [
 	"full_crypto",
 	"sp-core/std",
 	"codec/std",
+	"scale-info/std",
 	"serde",
 	"sp-std/std",
 	"sp-io/std",

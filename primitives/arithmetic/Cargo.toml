@@ -34,6 +34,7 @@ primitive-types = "0.10.0"
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"num-traits/std",
 	"sp-std/std",
 	"serde",

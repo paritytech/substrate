@@ -33,6 +33,7 @@ default = ["std"]
 std = [
 	"sp-keyring",
 	"codec/std",
+	"scale-info/std",
 	"sp-core/std",
 	"sp-std/std",
 	"sp-io/std",

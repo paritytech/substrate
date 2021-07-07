@@ -25,6 +25,7 @@ default = ["std"]
 std = [
 	"sp-application-crypto/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-api/std",
 	"sp-runtime/std"

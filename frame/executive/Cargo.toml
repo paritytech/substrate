@@ -40,6 +40,7 @@ with-tracing = [
 ]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"frame-support/std",
 	"frame-system/std",
 	"sp-core/std",

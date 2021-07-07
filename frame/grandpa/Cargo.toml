@@ -45,6 +45,7 @@ frame-election-provider-support = { version = "3.0.0", path = "../election-provi
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"frame-benchmarking/std",
 	"sp-application-crypto/std",
 	"sp-core/std",

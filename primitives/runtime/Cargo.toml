@@ -47,6 +47,7 @@ std = [
 	"sp-application-crypto/std",
 	"sp-arithmetic/std",
 	"codec/std",
+	"scale-info/std",
 	"log/std",
 	"sp-core/std",
 	"rand",

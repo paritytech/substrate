@@ -37,6 +37,7 @@ default = ["std"]
 std = [
 	"sp-inherents/std",
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"frame-benchmarking/std",

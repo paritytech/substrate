@@ -33,6 +33,7 @@ hex-literal = "0.3.1"
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"frame-support/std",
