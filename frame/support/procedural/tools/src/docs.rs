@@ -18,23 +18,23 @@
 #[cfg(feature = "metadata-docs")]
 /// Return all doc attributes literals found.
 pub fn get_doc_literals(attrs: &Vec<syn::Attribute>) -> Vec<syn::Lit> {
-    attrs.iter()
-        .filter_map(|attr| {
-            if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
-                if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
-                    Some(meta.lit)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect()
+	attrs.iter()
+		.filter_map(|attr| {
+			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
+				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
+					Some(meta.lit)
+				} else {
+					None
+				}
+			} else {
+				None
+			}
+		})
+		.collect()
 }
 
 #[cfg(not(feature = "metadata-docs"))]
 /// No-op, returns empty Vec unless the "metadata-docs" feature is enabled.
 pub fn get_doc_literals(_attrs: &Vec<syn::Attribute>) -> Vec<syn::Lit> {
-    Vec::new()
+	Vec::new()
 }
