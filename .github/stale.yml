@@ -5,6 +5,15 @@ daysUntilClose: 14
 # Issues with these labels will never be considered stale
 exemptLabels:
   - "D9-needsaudit 👮"
+  - "I5-documentation 📄"
+  - "I6-refactor 🧹"
+  - "I7-footprint 👣"
+  - "I8-enhancement 🎁"
+  - "I9-meta 📦"
+  - "P7-nicetohave"
+  - "P9-somedaymaybe"
+  - "Z1-mentor"
+  - "Z2-bounty"
 # Label to use when marking an issue as stale
 staleLabel: "A3-stale"
 # Comment to post when marking an issue as stale. Set to `false` to disable
