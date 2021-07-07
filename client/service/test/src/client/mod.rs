@@ -50,7 +50,7 @@ use sp_consensus::{
 	BlockOrigin, SelectChain, BlockImport, Error as ConsensusError, BlockCheckParams, ImportResult,
 	BlockStatus, BlockImportParams, ForkChoiceStrategy,
 };
-use sp_storage::StorageKey;
+use sp_storage::{StorageKey, ChildInfo};
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_runtime::{generic::BlockId, DigestItem, Justifications};
 use hex_literal::hex;
@@ -1999,15 +1999,26 @@ fn imports_blocks_with_changes_tries_config_change() {
 
 #[test]
 fn storage_keys_iter_prefix_and_start_key_works() {
-	let client = substrate_test_runtime_client::new();
+	let child_info = ChildInfo::new_default(b"child");
+	let client = TestClientBuilder::new()
+		.add_extra_child_storage(&child_info, b"first".to_vec(), vec![0u8; 32])
+		.add_extra_child_storage(&child_info, b"second".to_vec(), vec![0u8; 32])
+		.add_extra_child_storage(&child_info, b"third".to_vec(), vec![0u8; 32])
+		.build();
 
+	let child_root = b":child_storage:default:child".to_vec();
 	let prefix = StorageKey(hex!("3a").to_vec());
+	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
-	assert_eq!(res, [hex!("3a636f6465").to_vec(), hex!("3a686561707061676573").to_vec()]);
+	assert_eq!(res, [
+		child_root.clone(),
+		hex!("3a636f6465").to_vec(),
+		hex!("3a686561707061676573").to_vec(),
+	]);
 
 	let res: Vec<_> = client.storage_keys_iter(&BlockId::Number(0), Some(&prefix), Some(&StorageKey(hex!("3a636f6465").to_vec())))
 		.unwrap()
@@ -2020,6 +2031,26 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 		.map(|x| x.0)
 		.collect();
 	assert_eq!(res, Vec::<Vec<u8>>::new());
+
+	let res: Vec<_> = client.child_storage_keys_iter(
+		&BlockId::Number(0),
+		child_info.clone(),
+		Some(&child_prefix),
+		None,
+	).unwrap()
+		.map(|x| x.0)
+		.collect();
+	assert_eq!(res, [b"second".to_vec()]);
+
+	let res: Vec<_> = client.child_storage_keys_iter(
+		&BlockId::Number(0),
+		child_info,
+		None,
+		Some(&StorageKey(b"second".to_vec())),
+	).unwrap()
+		.map(|x| x.0)
+		.collect();
+	assert_eq!(res, [b"third".to_vec()]);
 }
 
 #[test]
