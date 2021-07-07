@@ -606,7 +606,7 @@ impl<T: Config> Pallet<T> {
 				let schedule2 = *schedules.get(idx2).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
 
 				// The length of `schedules` decreases by 2 here since we filter out 2 schedules.
-				// Thus we know below that we can pushed the new merged schedule without error (assuming
+				// Thus we know below that we can push the new merged schedule without error (assuming
 				// initial state was valid).
 				let (mut schedules, mut locked_now) =
 					Self::report_schedule_updates(schedules.to_vec(), action);
