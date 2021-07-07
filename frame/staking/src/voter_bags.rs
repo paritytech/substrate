@@ -669,7 +669,7 @@ pub mod make_bags {
 	fn path_to_header_file() -> Option<PathBuf> {
 		let repo = git2::Repository::open_from_env().ok()?;
 		let workdir = repo.workdir()?;
-		for file_name in ["HEADER-APACHE2", "HEADER-GPL3", "HEADER"] {
+		for file_name in ["HEADER-APACHE2", "HEADER-GPL3", "HEADER", "file_header.txt"] {
 			let path = workdir.join(file_name);
 			if path.exists() {
 				return Some(path);
