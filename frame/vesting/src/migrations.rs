@@ -59,7 +59,7 @@ pub(crate) mod v1 {
 
 		for (_key, schedules) in Vesting::<T>::iter() {
 			// Assert the new bound vec respects size.
-			assert!(schedules.len() == 0, "A bounded vec with incorrect count of items was created.");
+			assert!(schedules.len() == 1, "A bounded vec with incorrect count of items was created.");
 
 			for s in schedules {
 				// Check for infinite schedules.

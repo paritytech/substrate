@@ -456,15 +456,9 @@ impl<T: Config> Pallet<T> {
 		let locked = schedule1
 			.locked_at::<T::BlockNumberToBalance>(now)
 			.saturating_add(schedule2.locked_at::<T::BlockNumberToBalance>(now));
-		// This shouldn't happen because we know at least one ending block is greater than now.
+		// This shouldn't happen because we know at least one ending block is greater than now,
+		// thus at least a schedule a some locked balance.
 		debug_assert!(!locked.is_zero(), "merge_vesting_info validation checks failed to catch a locked of 0");
-		if locked.is_zero() {
-			log::warn!(
-				target: LOG_TARGET,
-				"merge_vesting_info validation checks failed to catch a locked of 0"
-			);
-			return Ok(None);
-		}
 
 		let ending_block = schedule1_ending_block.max(schedule2_ending_block);
 		let starting_block = now.max(schedule1.starting_block()).max(schedule2.starting_block());
