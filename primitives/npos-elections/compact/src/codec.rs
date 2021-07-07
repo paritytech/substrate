@@ -260,13 +260,13 @@ fn scale_info_impl(
 
 			fn type_info() -> _npos::scale_info::Type<_npos::scale_info::form::MetaForm> {
 				_npos::scale_info::Type::builder()
-				   .path(_npos::scale_info::Path::new(stringify!(#ident), module_path!()))
-				   .composite(
-					   _npos::scale_info::build::Fields::named()
-						   #scale_info_impl_single
-						   #scale_info_impl_double
-						   #scale_info_impl_rest
-				   )
+					.path(_npos::scale_info::Path::new(stringify!(#ident), module_path!()))
+					.composite(
+						_npos::scale_info::build::Fields::named()
+						#scale_info_impl_single
+						#scale_info_impl_double
+						#scale_info_impl_rest
+					)
 			}
 		}
    )
