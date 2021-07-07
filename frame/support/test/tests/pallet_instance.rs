@@ -161,7 +161,10 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode, scale_info::TypeInfo)]
+	#[derive(
+		EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode,
+		scale_info::TypeInfo
+	)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T, I = ()>(PhantomData<(T, I)>);
 
@@ -892,7 +895,8 @@ fn metadata() {
 		]
 	};
 
-	let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
+	let expected_metadata: RuntimeMetadataPrefixed =
+		RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
 	let expected_metadata = match expected_metadata.1 {
 		RuntimeMetadata::V14(metadata) => {
 			metadata

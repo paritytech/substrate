@@ -261,7 +261,10 @@ mod test {
 	use super::pallet;
 	use super::pallet_old;
 	use codec::{Decode, Encode};
-	use scale_info::form::PortableForm;
+	use scale_info::{
+		form::PortableForm,
+		Variant,
+	};
 
 	#[test]
 	fn metadata() {
@@ -292,7 +295,7 @@ mod test {
 			}
 		};
 
-		let assert_enum_variants = |vs1: &[scale_info::Variant<PortableForm>], vs2: &[scale_info::Variant<PortableForm>]| {
+		let assert_enum_variants = |vs1: &[Variant<PortableForm>], vs2: &[Variant<PortableForm>]| {
 			assert_eq!(vs1.len(), vs2.len());
 			for i in 0..vs1.len() {
 				let v1 = &vs2[i];

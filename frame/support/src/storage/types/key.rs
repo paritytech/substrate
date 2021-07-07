@@ -97,7 +97,8 @@ impl<H: StorageHasher, K: FullCodec + StaticTypeInfo> KeyGenerator for Key<H, K>
 	}
 }
 
-impl<H: StorageHasher, K: FullCodec + MaxEncodedLen + StaticTypeInfo> KeyGeneratorMaxEncodedLen for Key<H, K> {
+impl<H: StorageHasher, K: FullCodec + MaxEncodedLen + StaticTypeInfo> KeyGeneratorMaxEncodedLen
+for Key<H, K> {
 	fn key_max_encoded_len() -> usize {
 		H::max_len::<K>()
 	}

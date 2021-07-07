@@ -271,7 +271,10 @@ macro_rules! impl_outer_origin {
 		}
 
 		$crate::paste::item! {
-			#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug, $crate::codec::Encode, $crate::codec::Decode, $crate::scale_info::TypeInfo)]
+			#[derive(
+				Clone, PartialEq, Eq, $crate::RuntimeDebug, $crate::codec::Encode,
+				$crate::codec::Decode, $crate::scale_info::TypeInfo
+			)]
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $caller_name {

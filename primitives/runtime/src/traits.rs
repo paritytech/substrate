@@ -27,7 +27,7 @@ use std::str::FromStr;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode, MaxEncodedLen};
-use crate::scale_info::TypeInfo;
+use crate::scale_info::{TypeInfo, StaticTypeInfo};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 	UnknownTransaction,
@@ -234,7 +234,7 @@ impl<AccountId, AccountIndex> StaticLookup for AccountIdLookup<AccountId, Accoun
 where
 	AccountId: Codec + Clone + PartialEq + Debug,
 	AccountIndex: Codec + Clone + PartialEq + Debug,
-	crate::MultiAddress<AccountId, AccountIndex>: Codec + scale_info::StaticTypeInfo,
+	crate::MultiAddress<AccountId, AccountIndex>: Codec + StaticTypeInfo,
 {
 	type Source = crate::MultiAddress<AccountId, AccountIndex>;
 	type Target = AccountId;
@@ -742,7 +742,7 @@ impl Dispatchable for () {
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
-pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq + scale_info::StaticTypeInfo {
+pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq + StaticTypeInfo {
 	/// Unique identifier of this signed extension.
 	///
 	/// This will be exposed in the metadata to identify the signed extension used

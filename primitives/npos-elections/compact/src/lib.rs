@@ -173,7 +173,12 @@ fn struct_def(
 		}
 	} else {
 		// automatically derived.
-		quote!(#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode, _npos::scale_info::TypeInfo)])
+		quote! {
+			#[derive(
+				Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode,
+				_npos::scale_info::TypeInfo,
+			)]
+		}
 	};
 
 	let from_impl = assignment::from_impl(count);
