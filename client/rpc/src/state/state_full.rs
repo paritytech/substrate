@@ -260,17 +260,6 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		Box::new(result(r))
 	}
 
-	fn storage_keys(
-		&self,
-		block: Option<Block::Hash>,
-		prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(
-			self.block_or_best(block)
-				.and_then(|block| self.client.storage_keys(&BlockId::Hash(block), &prefix))
-				.map_err(client_err)))
-	}
-
 	fn storage_pairs(
 		&self,
 		block: Option<Block::Hash>,
@@ -594,28 +583,6 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 				})
 				.map_err(client_err),
 		))
-	}
-
-	fn storage_keys(
-		&self,
-		block: Option<Block::Hash>,
-		storage_key: PrefixedStorageKey,
-		prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(
-			self.block_or_best(block)
-				.and_then(|block| {
-					let child_info = match ChildType::from_prefixed_key(&storage_key) {
-						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-						None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
-					};
-					self.client.child_storage_keys(
-						&BlockId::Hash(block),
-						&child_info,
-						&prefix,
-					)
-				})
-				.map_err(client_err)))
 	}
 
 	fn storage_keys_paged(

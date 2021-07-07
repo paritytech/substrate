@@ -61,13 +61,6 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		call_data: Bytes,
 	) -> FutureResult<Bytes>;
 
-	/// Returns the keys with prefix, leave empty to get all the keys.
-	fn storage_keys(
-		&self,
-		block: Option<Block::Hash>,
-		prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>>;
-
 	/// Returns the keys with prefix along with their values, leave empty to get all the pairs.
 	fn storage_pairs(
 		&self,
@@ -253,14 +246,6 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		self.backend.call(block, method, data)
 	}
 
-	fn storage_keys(
-		&self,
-		key_prefix: StorageKey,
-		block: Option<Block::Hash>,
-	) -> FutureResult<Vec<StorageKey>> {
-		self.backend.storage_keys(block, key_prefix)
-	}
-
 	fn storage_pairs(
 		&self,
 		key_prefix: StorageKey,
@@ -393,15 +378,6 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		keys: Vec<StorageKey>,
 	) -> FutureResult<ReadProof<Block::Hash>>;
 
-	/// Returns the keys with prefix from a child storage,
-	/// leave prefix empty to get all the keys.
-	fn storage_keys(
-		&self,
-		block: Option<Block::Hash>,
-		storage_key: PrefixedStorageKey,
-		prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>>;
-
 	/// Returns the keys with prefix from a child storage with pagination support.
 	fn storage_keys_paged(
 		&self,
@@ -468,15 +444,6 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<StorageData>> {
 		self.backend.storage(block, storage_key, key)
-	}
-
-	fn storage_keys(
-		&self,
-		storage_key: PrefixedStorageKey,
-		key_prefix: StorageKey,
-		block: Option<Block::Hash>
-	) -> FutureResult<Vec<StorageKey>> {
-		self.backend.storage_keys(block, storage_key, key_prefix)
 	}
 
 	fn storage_keys_paged(

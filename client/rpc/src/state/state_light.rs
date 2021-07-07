@@ -190,14 +190,6 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		).boxed().compat())
 	}
 
-	fn storage_keys(
-		&self,
-		_block: Option<Block::Hash>,
-		_prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
-	}
-
 	fn storage_pairs(
 		&self,
 		_block: Option<Block::Hash>,
@@ -497,15 +489,6 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 		_storage_key: PrefixedStorageKey,
 		_keys: Vec<StorageKey>,
 	) -> FutureResult<ReadProof<Block::Hash>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
-	}
-
-	fn storage_keys(
-		&self,
-		_block: Option<Block::Hash>,
-		_storage_key: PrefixedStorageKey,
-		_prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 

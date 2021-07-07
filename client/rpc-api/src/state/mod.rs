@@ -42,11 +42,6 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_call", alias("state_callAt"))]
 	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> FutureResult<Bytes>;
 
-	/// DEPRECATED: Please use `state_getKeysPaged` with proper paging support.
-	/// Returns the keys with prefix, leave empty to get all the keys.
-	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
-
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[rpc(name = "state_getPairs")]
 	fn storage_pairs(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<(StorageKey, StorageData)>>;
