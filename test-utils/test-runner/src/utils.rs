@@ -16,13 +16,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_service::{BasePath, ChainSpec, Configuration, TaskExecutor, DatabaseConfig, KeepBlocks, TransactionStorageMode};
+use sc_service::{
+	BasePath, ChainSpec, Configuration, TaskExecutor,
+	DatabaseConfig, KeepBlocks, TransactionStorageMode, TaskType,
+};
 use sp_keyring::sr25519::Keyring::Alice;
 use sc_network::{multiaddr, config::{NetworkConfiguration, TransportConfig, Role}};
 use sc_informant::OutputFormat;
 use sc_service::config::KeystoreConfig;
 use sc_executor::WasmExecutionMethod;
 use sc_client_api::execution_extensions::ExecutionStrategies;
+use tokio::runtime::Handle;
+use futures::FutureExt;
+
+pub use sc_cli::build_runtime;
 
 /// Base db path gotten from env
 pub fn base_path() -> BasePath {
@@ -116,4 +123,16 @@ pub fn default_config(task_executor: TaskExecutor, mut chain_spec: Box<dyn Chain
 		state_pruning: Default::default(),
 		transaction_storage: TransactionStorageMode::BlockBody,
 	}
+}
+
+/// Produce a task executor given a handle to a tokio runtime
+pub fn task_executor(handle: Handle) -> TaskExecutor {
+	let task_executor = move |fut, task_type| match task_type {
+		TaskType::Async => handle.spawn(fut).map(drop),
+		TaskType::Blocking => handle
+			.spawn_blocking(move || futures::executor::block_on(fut))
+			.map(drop),
+	};
+
+	task_executor.into()
 }

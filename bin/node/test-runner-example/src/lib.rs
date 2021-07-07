@@ -73,20 +73,24 @@ impl ChainInfo for NodeTemplateChainInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use test_runner::{client_parts, ConfigOrChainSpec};
+	use test_runner::{client_parts, ConfigOrChainSpec, build_runtime, task_executor};
 
 	#[test]
 	fn test_runner() {
-		let (rpc, mut tokio_runtime, task_manager, client, pool, command_sink, backend) =
-			client_parts::<NodeTemplateChainInfo>(ConfigOrChainSpec::ChainSpec(Box::new(development_config())))
-				.unwrap();
+		let mut tokio_runtime = build_runtime().unwrap();
+		let task_executor = task_executor(tokio_runtime.handle().clone());
+		let (rpc, task_manager, client, pool, command_sink, backend) =
+			client_parts::<NodeTemplateChainInfo>(
+				ConfigOrChainSpec::ChainSpec(Box::new(development_config()), task_executor)
+			).unwrap();
 		let node = Node::<NodeTemplateChainInfo>::new(rpc, task_manager, client, pool, command_sink, backend);
+
 		tokio_runtime.block_on(async {
 			// seals blocks
 			node.seal_blocks(1).await;
 			// submit extrinsics
 			let alice = MultiSigner::from(Alice.public()).into_account();
-			let hash = node.submit_extrinsic(frame_system::Call::remark((b"hello world").to_vec()), alice)
+			let _hash = node.submit_extrinsic(frame_system::Call::remark((b"hello world").to_vec()), alice)
 				.await
 				.unwrap();
 

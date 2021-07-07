@@ -23,14 +23,13 @@ use manual_seal::consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvi
 use sp_keyring::sr25519::Keyring::Alice;
 use std::str::FromStr;
 use sp_runtime::traits::Header;
-use futures::{FutureExt, channel::mpsc};
+use futures::channel::mpsc;
 use jsonrpc_core::MetaIoHandler;
 use manual_seal::{run_manual_seal, EngineCommand, ManualSealParams, import_queue, rpc::{ManualSeal, ManualSealApi}};
-use sc_cli::build_runtime;
 use sc_client_api::backend::Backend;
 use sc_service::{
     build_network, spawn_tasks, BuildNetworkParams, SpawnTasksParams, TFullBackend,
-    TFullClient, TaskManager, TaskType, new_full_parts, Configuration, ChainSpec,
+    TFullClient, TaskManager, new_full_parts, Configuration, ChainSpec, TaskExecutor,
 };
 use sc_transaction_pool::BasicPool;
 use sp_api::{ApiExt, ConstructRuntimeApi, Core, Metadata};
@@ -42,7 +41,6 @@ use std::sync::Arc;
 
 type ClientParts<T> = (
     Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
-    tokio::runtime::Runtime,
     TaskManager,
     Arc<TFullClient<<T as ChainInfo>::Block, <T as ChainInfo>::RuntimeApi, <T as ChainInfo>::Executor>>,
     Arc<dyn TransactionPool<
@@ -63,9 +61,9 @@ pub enum ConfigOrChainSpec {
     /// Configuration object
     Config(Configuration),
     /// Chain spec object
-    ChainSpec(Box<dyn ChainSpec>)
+    ChainSpec(Box<dyn ChainSpec>, TaskExecutor)
 }
-/// creates all the client parts you need for [`Node`]
+/// Creates all the client parts you need for [`Node`]
 pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<ClientParts<T>, sc_service::Error>
     where
         T: ChainInfo + 'static,
@@ -78,18 +76,11 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
         <<<T as ChainInfo>::Block as BlockT>::Header as Header>::Number: num_traits::cast::AsPrimitive<usize>,
 {
     use sp_consensus_babe::AuthorityId;
-    let tokio_runtime = build_runtime().unwrap();
-    let runtime_handle = tokio_runtime.handle().clone();
-    let task_executor = move |fut, task_type| match task_type {
-        TaskType::Async => runtime_handle.spawn(fut).map(drop),
-        TaskType::Blocking => runtime_handle
-            .spawn_blocking(move || futures::executor::block_on(fut))
-            .map(drop),
-    };
-
     let config = match config_or_chain_spec {
         ConfigOrChainSpec::Config(config) => config,
-        ConfigOrChainSpec::ChainSpec(chain_spec) => default_config(task_executor.into(), chain_spec),
+        ConfigOrChainSpec::ChainSpec(chain_spec, task_executor) => {
+            default_config(task_executor, chain_spec)
+        },
     };
 
     let (client, backend, keystore, mut task_manager) =
@@ -218,7 +209,6 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
 
     Ok((
         rpc_handler,
-        tokio_runtime,
         task_manager,
         client,
         transaction_pool,
