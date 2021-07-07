@@ -18,7 +18,7 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-use std::{cell::{Ref, RefCell}, ops::Range, rc::Rc, str, sync::Arc};
+use std::{cell::RefCell, rc::Rc, str, sync::Arc};
 use wasmi::{
 	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
 	RuntimeValue::{I32, I64, self}, TableRef, memory_units::Pages,

@@ -25,7 +25,7 @@ use log::trace;
 use codec::{Encode, Decode};
 use sc_executor_common::util::MemoryTransfer;
 use sp_allocator::FreeingBumpHeapAllocator;
-use sc_executor_common::{error::Result, util};
+use sc_executor_common::error::Result;
 use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex};
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
