@@ -349,6 +349,10 @@ impl Sandbox for HostState {
 	}
 }
 
+/// Wasmtime specific implementation of `SandboxCapabilitiesHolder` that provides
+/// sandbox with a scoped thread local access to a function executor.
+/// This is a way to calm down the borrow checker since host function closures
+/// require exclusive access to it.
 struct CapsHolder;
 
 impl SandboxCapabilitiesHolder for CapsHolder {
@@ -362,6 +366,10 @@ impl SandboxCapabilitiesHolder for CapsHolder {
 	}
 }
 
+/// Wasmtime specific implementation of `DispatchThunkHolder` that provides
+/// sandbox with a scoped thread local access to a dispatch thunk.
+/// This is a way to calm down the borrow checker since host function closures
+/// require exclusive access to it.
 struct ThunkHolder;
 
 scoped_tls::scoped_thread_local!(static DISPATCH_THUNK: SupervisorFuncRef);

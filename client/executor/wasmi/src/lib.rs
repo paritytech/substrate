@@ -321,6 +321,10 @@ impl Sandbox for FunctionExecutor {
 	}
 }
 
+/// Wasmi specific implementation of `SandboxCapabilitiesHolder` that provides
+/// sandbox with a scoped thread local access to a function executor.
+/// This is a way to calm down the borrow checker since host function closures
+/// require exclusive access to it.
 struct CapsHolder;
 
 scoped_tls::scoped_thread_local!(static EXECUTOR: FunctionExecutor);
@@ -335,6 +339,10 @@ impl sandbox::SandboxCapabilitiesHolder for CapsHolder {
 	}
 }
 
+/// Wasmi specific implementation of `DispatchThunkHolder` that provides
+/// sandbox with a scoped thread local access to a dispatch thunk.
+/// This is a way to calm down the borrow checker since host function closures
+/// require exclusive access to it.
 struct ThunkHolder;
 
 scoped_tls::scoped_thread_local!(static DISPATCH_THUNK: wasmi::FuncRef);
