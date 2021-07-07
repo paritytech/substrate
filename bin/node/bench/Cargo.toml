@@ -21,8 +21,8 @@ serde = "1.0.101"
 serde_json = "1.0.41"
 structopt = "0.3"
 derive_more = "0.99.2"
-kvdb = "0.9.0"
-kvdb-rocksdb = "0.11.0"
+kvdb = "0.10.0"
+kvdb-rocksdb = "0.12.0"
 sp-trie = { version = "3.0.0", path = "../../../primitives/trie" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
@@ -37,7 +37,7 @@ fs_extra = "1"
 hex = "0.4.0"
 rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
-parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 parity-db = { version = "0.2.4" }
 sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-pool" }
 futures = { version = "0.3.4", features = ["thread-pool"] }
