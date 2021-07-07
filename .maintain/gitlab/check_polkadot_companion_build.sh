@@ -93,9 +93,7 @@ diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 # NOTE: There's no way to only update patched crates, so we use a heuristic
 # of updating a crucial Substrate crate (`sp-core`)
 # We're using `--offline` to minimize impact of updating unrelated dependencies
-# SP_CORE_VERSION=$(cat ../primitives/core/Cargo.toml  | grep -oP '(?<=version = ")[a-zA-z0-9|\.|-]+(?="\w*$)')
-SP_CORE_VERSIONS=$(cat Cargo.lock  | grep -oP '(?<=sp-core) [a-zA-Z0-9|\.|-]*' | sort | uniq)
-for vers in ${SP_CORE_VERSIONS[@]}
+for vers in $(grep -oP '(?<=sp-core) [a-zA-Z0-9|\.|-]*' < Cargo.lock | sort | uniq)
 do
   cargo update -p sp-core:${vers} --offline
 done
