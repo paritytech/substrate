@@ -97,7 +97,7 @@ impl Config for Test {
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = system::Pallet<Test>;
+	type AccountStore = frame_system::Pallet<Test>;
 	type MaxLocks = ();
 	type MaxReserves = MaxReserves;
 	type ReserveIdentifier = [u8; 8];
