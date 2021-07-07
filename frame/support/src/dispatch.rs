@@ -25,7 +25,9 @@ pub use crate::weights::{
 	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
-pub use crate::traits::{UnfilteredDispatchable, GetPalletVersion};
+pub use crate::traits::{
+	CallMetadata, GetCallMetadata, GetCallName, UnfilteredDispatchable, GetPalletVersion,
+};
 
 /// The return typ of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
@@ -1987,6 +1989,32 @@ macro_rules! decl_module {
 			}
 		}
 
+		// Implement GetCallName for the Call.
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetCallName
+			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn get_call_name(&self) -> &'static str {
+				match *self {
+					$(
+						$call_type::$fn_name( $( ref $param_name ),* ) => {
+							// Don't generate any warnings for unused variables
+							let _ = ( $( $param_name ),* );
+							stringify!($fn_name)
+						},
+					)*
+					$call_type::__PhantomItem(_, _) => unreachable!("__PhantomItem should never be used."),
+				}
+			}
+
+			fn get_call_names() -> &'static [&'static str] {
+				&[
+					$(
+						stringify!($fn_name),
+					)*
+				]
+			}
+		}
+
 		// Bring `GetPalletVersion` into scope to make it easily usable.
 		pub use $crate::traits::GetPalletVersion as _;
 		// Implement `GetPalletVersion` for `Module`
@@ -2162,7 +2190,36 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		}
+		impl $crate::dispatch::GetCallMetadata for $call_type {
+			fn get_call_metadata(&self) -> $crate::dispatch::CallMetadata {
+				use $crate::dispatch::GetCallName;
+				match self {
+					$( $call_type::$camelcase(call) => {
+						let function_name = call.get_call_name();
+						let pallet_name = stringify!($camelcase);
+						$crate::dispatch::CallMetadata { function_name, pallet_name }
+					}, )*
+				}
+			}
 
+			fn get_module_names() -> &'static [&'static str] {
+				&[$(
+					stringify!($camelcase),
+				)*]
+			}
+
+			fn get_call_names(module: &str) -> &'static [&'static str] {
+				use $crate::dispatch::{Callable, GetCallName};
+				match module {
+					$(
+						stringify!($camelcase) =>
+							<<$camelcase as Callable<$runtime>>::Call
+								as GetCallName>::get_call_names(),
+					)*
+					_ => unreachable!(),
+				}
+			}
+		}
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Config = $call_type;
@@ -2588,7 +2645,10 @@ macro_rules! __check_reserved_fn_name {
 mod tests {
 	use super::*;
 	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
-	use crate::traits::{OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade, IntegrityTest, Get, PalletInfo};
+	use crate::traits::{
+		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade,
+		IntegrityTest, Get, PalletInfo,
+	};
 	use crate::metadata::*;
 
 	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
@@ -2868,6 +2928,26 @@ mod tests {
 			Call::<TraitImpl>::aux_3().get_dispatch_info(),
 			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
 		);
+	}
+
+	#[test]
+	fn call_name() {
+		let name = Call::<TraitImpl>::aux_3().get_call_name();
+		assert_eq!("aux_3", name);
+	}
+
+	#[test]
+	fn call_metadata() {
+		let call = OuterCall::Test(Call::<TraitImpl>::aux_3());
+		let metadata = call.get_call_metadata();
+		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: "Test".into() };
+		assert_eq!(metadata, expected);
+	}
+
+	#[test]
+	fn get_call_names() {
+		let call_names = Call::<TraitImpl>::get_call_names();
+		assert_eq!(["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"], call_names);
 	}
 
 	#[test]

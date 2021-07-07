@@ -18,7 +18,7 @@
 use frame_support::{
 	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
 	traits::{
-		GetPalletVersion, OnInitialize, OnFinalize, OnRuntimeUpgrade, OnGenesis,
+		GetCallName, GetPalletVersion, OnInitialize, OnFinalize, OnRuntimeUpgrade, OnGenesis,
 	},
 	dispatch::UnfilteredDispatchable,
 	storage::unhashed,
@@ -326,6 +326,11 @@ fn call_expand() {
 			pays_fee: Pays::Yes,
 		}
 	);
+	assert_eq!(call_foo.get_call_name(), "foo");
+	assert_eq!(
+		pallet::Call::<Runtime>::get_call_names(),
+		&["foo", "foo_transactional"],
+	);
 
 	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo(3);
 	assert_eq!(
@@ -335,6 +340,11 @@ fn call_expand() {
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes,
 		}
+	);
+	assert_eq!(call_foo.get_call_name(), "foo");
+	assert_eq!(
+		pallet::Call::<Runtime, pallet::Instance1>::get_call_names(),
+		&["foo", "foo_transactional"],
 	);
 }
 

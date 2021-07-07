@@ -179,6 +179,21 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
+		impl<#type_impl_gen> #frame_support::dispatch::GetCallName for #call_ident<#type_use_gen>
+			#where_clause
+		{
+			fn get_call_name(&self) -> &'static str {
+				match *self {
+					#( Self::#fn_name(..) => stringify!(#fn_name), )*
+					Self::__Ignore(_, _) => unreachable!("__PhantomItem cannot be used."),
+				}
+			}
+
+			fn get_call_names() -> &'static [&'static str] {
+				&[ #( stringify!(#fn_name), )* ]
+			}
+		}
+
 		impl<#type_impl_gen> #frame_support::traits::UnfilteredDispatchable
 			for #call_ident<#type_use_gen>
 			#where_clause
