@@ -202,7 +202,7 @@ pub mod pallet {
 		type ApprovalDeposit: Get<DepositBalanceOf<Self, I>>;
 
 		/// The maximum length of a name or symbol stored on-chain.
-		type StringLimit: Get<u32> + scale_info::TypeInfo;
+		type StringLimit: Get<u32>;
 
 		/// A hook to allow a per-asset, per-account minimum balance to be enforced. This must be
 		/// respected in all permissionless operations.
