@@ -18,14 +18,12 @@
 
 //! Basic example of end to end runtime tests.
 
-use test_runner::{Node, ChainInfo, SignatureVerificationOverride};
+use test_runner::{ChainInfo, SignatureVerificationOverride};
 use grandpa::GrandpaBlockImport;
 use sc_service::{TFullBackend, TFullClient};
 use sc_consensus_babe::BabeBlockImport;
-use sp_keyring::sr25519::Keyring::Alice;
 use sc_consensus_manual_seal::consensus::babe::SlotTimestampProvider;
-use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
-use node_cli::chain_spec::development_config;
+use sp_runtime::generic::Era;
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -73,7 +71,10 @@ impl ChainInfo for NodeTemplateChainInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use test_runner::{client_parts, ConfigOrChainSpec, build_runtime, task_executor};
+	use test_runner::{Node, client_parts, ConfigOrChainSpec, build_runtime, task_executor};
+	use sp_keyring::sr25519::Keyring::Alice;
+	use node_cli::chain_spec::development_config;
+	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
 	#[test]
 	fn test_runner() {
