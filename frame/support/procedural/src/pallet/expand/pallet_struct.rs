@@ -180,7 +180,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 				#storage_version
 			}
 
-			fn active_storage_version() -> #frame_support::traits::StorageVersion {
+			fn on_chain_storage_version() -> #frame_support::traits::StorageVersion {
 				#frame_support::traits::StorageVersion::get::<Self>()
 			}
 		}

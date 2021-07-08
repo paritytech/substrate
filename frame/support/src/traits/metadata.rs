@@ -166,8 +166,8 @@ impl PartialOrd<u16> for StorageVersion {
 pub trait GetStorageVersion {
 	/// Returns the current storage version as supported by the pallet.
 	fn current_storage_version() -> StorageVersion;
-	/// Returns the active storage version of the pallet as stored in the storage.
-	fn active_storage_version() -> StorageVersion;
+	/// Returns the on-chain storage version of the pallet as stored in the storage.
+	fn on_chain_storage_version() -> StorageVersion;
 }
 
 #[cfg(test)]

@@ -837,11 +837,11 @@ fn pallet_hooks_expand() {
 #[test]
 fn pallet_on_genesis() {
 	TestExternalities::default().execute_with(|| {
-		assert_eq!(pallet::Pallet::<Runtime>::active_storage_version(), StorageVersion::new(0));
+		assert_eq!(pallet::Pallet::<Runtime>::on_chain_storage_version(), StorageVersion::new(0));
 		pallet::Pallet::<Runtime>::on_genesis();
 		assert_eq!(
 			pallet::Pallet::<Runtime>::current_storage_version(),
-			pallet::Pallet::<Runtime>::active_storage_version(),
+			pallet::Pallet::<Runtime>::on_chain_storage_version(),
 		);
 	})
 }
@@ -868,9 +868,9 @@ fn migrate_from_pallet_version_to_storage_version() {
 		sp_io::storage::set(&pallet_version_key(System::name()), &[1, 2, 3]);
 
 		// Check that everyone currently is at version 0
-		assert_eq!(Example::active_storage_version(), StorageVersion::new(0));
-		assert_eq!(Example2::active_storage_version(), StorageVersion::new(0));
-		assert_eq!(System::active_storage_version(), StorageVersion::new(0));
+		assert_eq!(Example::on_chain_storage_version(), StorageVersion::new(0));
+		assert_eq!(Example2::on_chain_storage_version(), StorageVersion::new(0));
+		assert_eq!(System::on_chain_storage_version(), StorageVersion::new(0));
 
 		frame_support::migrations::migrate_from_pallet_version_to_storage_version::<AllPalletsWithSystem>();
 
@@ -879,9 +879,9 @@ fn migrate_from_pallet_version_to_storage_version() {
 		assert!(sp_io::storage::get(&pallet_version_key(Example2::name())).is_none());
 		assert!(sp_io::storage::get(&pallet_version_key(System::name())).is_none());
 
-		assert_eq!(Example::active_storage_version(), pallet::STORAGE_VERSION);
-		assert_eq!(Example2::active_storage_version(), StorageVersion::new(0));
-		assert_eq!(System::active_storage_version(), StorageVersion::new(0));
+		assert_eq!(Example::on_chain_storage_version(), pallet::STORAGE_VERSION);
+		assert_eq!(Example2::on_chain_storage_version(), StorageVersion::new(0));
+		assert_eq!(System::on_chain_storage_version(), StorageVersion::new(0));
 	});
 }
 
