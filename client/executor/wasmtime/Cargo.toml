@@ -13,17 +13,22 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+libc = "0.2.90"
+cfg-if = "1.0"
 log = "0.4.8"
 scoped-tls = "1.0"
-parity-wasm = "0.41.0"
+parity-wasm = "0.42.0"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-executor-common = { version = "0.9.0", path = "../common" }
 sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "3.0.0", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }
-wasmtime = "0.24.0"
-pwasm-utils = "0.14.0"
+sc-allocator = { version = "3.0.0", path = "../../allocator" }
+wasmtime = { version = "0.27.0", default-features = false, features = ["cache", "parallel-compilation"] }
+pwasm-utils = { version = "0.18" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
+sc-runtime-test = { version = "2.0.0", path = "../runtime-test" }
+sp-io = { version = "3.0.0", path = "../../../primitives/io" }
+wat = "1.0"

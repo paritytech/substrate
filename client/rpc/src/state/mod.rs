@@ -182,6 +182,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
 	deny_unsafe: DenyUnsafe,
+	rpc_max_payload: Option<usize>,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
@@ -193,9 +194,11 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		Client::Api: Metadata<Block>,
 {
 	let child_backend = Box::new(
-		self::state_full::FullState::new(client.clone(), subscriptions.clone())
+		self::state_full::FullState::new(
+			client.clone(), subscriptions.clone(), rpc_max_payload
+		)
 	);
-	let backend = Box::new(self::state_full::FullState::new(client, subscriptions));
+	let backend = Box::new(self::state_full::FullState::new(client, subscriptions, rpc_max_payload));
 	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
@@ -382,6 +385,14 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		Block: BlockT + 'static,
 		Client: Send + Sync + 'static,
 {
+	/// Returns proof of storage for a child key entries at a specific block's state.
+	fn read_child_proof(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<ReadProof<Block::Hash>>;
+
 	/// Returns the keys with prefix from a child storage,
 	/// leave prefix empty to get all the keys.
 	fn storage_keys(
@@ -389,6 +400,16 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
+	) -> FutureResult<Vec<StorageKey>>;
+
+	/// Returns the keys with prefix from a child storage with pagination support.
+	fn storage_keys_paged(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a child storage entry at a specific block's state.
@@ -431,6 +452,15 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 {
 	type Metadata = crate::Metadata;
 
+	fn read_child_proof(
+		&self,
+		child_storage_key: PrefixedStorageKey,
+		keys: Vec<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> FutureResult<ReadProof<Block::Hash>> {
+		self.backend.read_child_proof(block, child_storage_key, keys)
+	}
+
 	fn storage(
 		&self,
 		storage_key: PrefixedStorageKey,
@@ -447,6 +477,17 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 		block: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys(block, storage_key, key_prefix)
+	}
+
+	fn storage_keys_paged(
+		&self,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<StorageKey>> {
+		self.backend.storage_keys_paged(block, storage_key, prefix, count, start_key)
 	}
 
 	fn storage_hash(
@@ -466,6 +507,7 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 	) -> FutureResult<Option<u64>> {
 		self.backend.storage_size(block, storage_key, key)
 	}
+
 }
 
 fn client_err(err: sp_blockchain::Error) -> Error {

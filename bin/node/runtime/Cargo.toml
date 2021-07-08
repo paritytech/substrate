@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 
 # third-party dependencies
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.1", optional = true }
 log = { version = "0.4.14", default-features = false }
@@ -43,6 +43,7 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../.
 frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
+frame-election-provider-support = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-support" }
 frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 frame-try-runtime = { version = "0.9.0", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-assets = { version = "3.0.0", default-features = false, path = "../../../frame/assets" }
@@ -59,7 +60,7 @@ pallet-democracy = { version = "3.0.0", default-features = false, path = "../../
 pallet-election-provider-multi-phase = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-multi-phase" }
 pallet-elections-phragmen = { version = "4.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
 pallet-gilt = { version = "3.0.0", default-features = false, path = "../../../frame/gilt" }
-pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../../frame/grandpa" }
+pallet-grandpa = { version = "3.1.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "3.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "3.0.0", default-features = false, path = "../../../frame/indices" }
 pallet-identity = { version = "3.0.0", default-features = false, path = "../../../frame/identity" }
@@ -85,6 +86,8 @@ pallet-treasury = { version = "3.0.0", default-features = false, path = "../../.
 pallet-utility = { version = "3.0.0", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
+pallet-transaction-storage = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-storage" }
+pallet-uniques = { version = "3.0.0", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "3.0.0", default-features = false, path = "../../../frame/vesting" }
 
 [build-dependencies]
@@ -149,12 +152,14 @@ std = [
 	"pallet-tips/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
+	"pallet-transaction-storage/std",
 	"pallet-treasury/std",
 	"sp-transaction-pool/std",
 	"pallet-utility/std",
 	"sp-version/std",
 	"pallet-society/std",
 	"pallet-recovery/std",
+	"pallet-uniques/std",
 	"pallet-vesting/std",
 	"log/std",
 	"frame-try-runtime/std",
@@ -189,8 +194,10 @@ runtime-benchmarks = [
 	"pallet-staking/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-tips/runtime-benchmarks",
+	"pallet-transaction-storage/runtime-benchmarks",
 	"pallet-treasury/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
+	"pallet-uniques/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-offences-benchmarking",
 	"pallet-session-benchmarking",
@@ -234,6 +241,12 @@ try-runtime = [
 	"pallet-utility/try-runtime",
 	"pallet-society/try-runtime",
 	"pallet-recovery/try-runtime",
+	"pallet-uniques/try-runtime",
 	"pallet-vesting/try-runtime",
 	"pallet-gilt/try-runtime",
+]
+# Make contract callable functions marked as __unstable__ available. Do not enable
+# on live chains as those are subject to change.
+contracts-unstable-interface = [
+	"pallet-contracts/unstable-interface"
 ]

@@ -212,6 +212,14 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	pub fn extract_proof(&self) -> StorageProof {
 		self.0.essence().backend_storage().proof_recorder.to_storage_proof()
 	}
+
+	/// Returns the estimated encoded size of the proof.
+	///
+	/// The estimation is maybe bigger (by in maximum 4 bytes), but never smaller than the actual
+	/// encoded proof.
+	pub fn estimate_encoded_size(&self) -> usize {
+		self.0.essence().backend_storage().proof_recorder.estimate_encoded_size()
+	}
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
@@ -260,12 +268,24 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.child_storage(child_info, key)
 	}
 
-	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
+	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
 		&self,
-		child_info: &ChildInfo,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+		allow_missing: bool,
+	) -> Result<bool, Self::Error> {
+		self.0.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
+	}
+
+	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
 		f: F,
 	) {
-		self.0.apply_to_child_keys_while(child_info, f)
+		self.0.apply_to_keys_while(child_info, prefix, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -328,7 +348,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.child_storage_root(child_info, delta)
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) { }
 
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.0.usage_info()

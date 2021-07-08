@@ -34,10 +34,11 @@ use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One, Zero};
 
 /// A future returned by a `VotingRule` to restrict a given vote, if any restriction is necessary.
 pub type VotingRuleResult<Block> =
-	Pin<Box<dyn Future<Output = Option<(<Block as BlockT>::Hash, NumberFor<Block>)>> + Send + Sync>>;
+	Pin<Box<dyn Future<Output = Option<(<Block as BlockT>::Hash, NumberFor<Block>)>> + Send>>;
 
 /// A trait for custom voting rules in GRANDPA.
-pub trait VotingRule<Block, B>: DynClone + Send + Sync where
+pub trait VotingRule<Block, B>: DynClone + Send + Sync
+where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {

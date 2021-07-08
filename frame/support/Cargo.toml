@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
 frame-metadata = { version = "13.0.0", default-features = false, path = "../metadata" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
@@ -36,7 +36,7 @@ log = { version = "0.4.14", default-features = false }
 [dev-dependencies]
 pretty_assertions = "0.6.1"
 frame-system = { version = "3.0.0", path = "../system" }
-parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 
 [features]
 default = ["std"]

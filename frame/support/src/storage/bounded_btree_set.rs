@@ -23,19 +23,37 @@ use sp_std::{
 };
 use crate::{
 	storage::StorageDecodeLength,
-	traits::{Get, MaxEncodedLen},
+	traits::Get,
 };
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 
 /// A bounded set based on a B-Tree.
 ///
 /// B-Trees represent a fundamental compromise between cache-efficiency and actually minimizing
 /// the amount of work performed in a search. See [`BTreeSet`] for more details.
 ///
-/// Unlike a standard `BTreeSet`, there is a static, enforced upper limit to the number of items
-/// in the set. All internal operations ensure this bound is respected.
-#[derive(Encode, Decode)]
+/// Unlike a standard `BTreeSet`, there is an enforced upper limit to the number of items in the
+/// set. All internal operations ensure this bound is respected.
+#[derive(Encode)]
 pub struct BoundedBTreeSet<T, S>(BTreeSet<T>, PhantomData<S>);
+
+impl<T, S> Decode for BoundedBTreeSet<T, S>
+where
+	T: Decode + Ord,
+	S: Get<u32>,
+{
+	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+		let inner = BTreeSet::<T>::decode(input)?;
+		if inner.len() > S::get() as usize {
+			return Err("BoundedBTreeSet exceeds its limit".into());
+		}
+		Ok(Self(inner, PhantomData))
+	}
+
+	fn skip<I: codec::Input>(input: &mut I) -> Result<(), codec::Error> {
+		BTreeSet::<T>::skip(input)
+	}
+}
 
 impl<T, S> BoundedBTreeSet<T, S>
 where
@@ -57,44 +75,6 @@ where
 	/// Does not allocate.
 	pub fn new() -> Self {
 		BoundedBTreeSet(BTreeSet::new(), PhantomData)
-	}
-
-	/// Create `Self` from a primitive `BTreeSet` without any checks.
-	unsafe fn unchecked_from(set: BTreeSet<T>) -> Self {
-		Self(set, Default::default())
-	}
-
-	/// Create `Self` from a primitive `BTreeSet` without any checks.
-	///
-	/// Logs warnings if the bound is not being respected. The scope is mentioned in the log message
-	/// to indicate where overflow is happening.
-	///
-	/// # Example
-	///
-	/// ```
-	/// # use sp_std::collections::btree_set::BTreeSet;
-	/// # use frame_support::{parameter_types, storage::bounded_btree_set::BoundedBTreeSet};
-	/// parameter_types! {
-	/// 	pub const Size: u32 = 5;
-	/// }
-	/// let mut set = BTreeSet::new();
-	/// set.insert("foo");
-	/// set.insert("bar");
-	/// let bounded_set = unsafe {BoundedBTreeSet::<_, Size>::force_from(set, "demo")};
-	/// ```
-	pub unsafe fn force_from<Scope>(set: BTreeSet<T>, scope: Scope) -> Self
-	where
-		Scope: Into<Option<&'static str>>,
-	{
-		if set.len() > Self::bound() {
-			log::warn!(
-				target: crate::LOG_TARGET,
-				"length of a bounded btreeset in scope {} is not respected.",
-				scope.into().unwrap_or("UNKNOWN"),
-			);
-		}
-
-		Self::unchecked_from(set)
 	}
 
 	/// Consume self, and return the inner `BTreeSet`.
@@ -123,14 +103,15 @@ where
 		self.0.clear()
 	}
 
-	/// Exactly the same semantics as [`BTreeSet::insert`], but returns an `Err` (and is a noop) if the
-	/// new length of the set exceeds `S`.
-	pub fn try_insert(&mut self, item: T) -> Result<(), ()> {
-		if self.len() < Self::bound() {
-			self.0.insert(item);
-			Ok(())
+	/// Exactly the same semantics as [`BTreeSet::insert`], but returns an `Err` (and is a noop) if
+	/// the new length of the set exceeds `S`.
+	///
+	/// In the `Err` case, returns the inserted item so it can be further used without cloning.
+	pub fn try_insert(&mut self, item: T) -> Result<bool, T> {
+		if self.len() < Self::bound() || self.0.contains(&item) {
+			Ok(self.0.insert(item))
 		} else {
-			Err(())
+			Err(item)
 		}
 	}
 
@@ -403,5 +384,59 @@ pub mod test {
 	fn btree_map_eq_works() {
 		let bounded = boundedmap_from_keys::<u32, Seven>(&[1, 2, 3, 4, 5, 6]);
 		assert_eq!(bounded, map_from_keys(&[1, 2, 3, 4, 5, 6]));
+	}
+
+	#[test]
+	fn too_big_fail_to_decode() {
+		let v: Vec<u32> = vec![1, 2, 3, 4, 5];
+		assert_eq!(
+			BoundedBTreeSet::<u32, Four>::decode(&mut &v.encode()[..]),
+			Err("BoundedBTreeSet exceeds its limit".into()),
+		);
+	}
+
+	#[test]
+	fn unequal_eq_impl_insert_works() {
+		// given a struct with a strange notion of equality
+		#[derive(Debug)]
+		struct Unequal(u32, bool);
+
+		impl PartialEq for Unequal {
+			fn eq(&self, other: &Self) -> bool {
+				self.0 == other.0
+			}
+		}
+		impl Eq for Unequal {}
+
+		impl Ord for Unequal {
+			fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+				self.0.cmp(&other.0)
+			}
+		}
+
+		impl PartialOrd for Unequal {
+			fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+				Some(self.cmp(other))
+			}
+		}
+
+		let mut set = BoundedBTreeSet::<Unequal, Four>::new();
+
+		// when the set is full
+
+		for i in 0..4 {
+			set.try_insert(Unequal(i, false)).unwrap();
+		}
+
+		// can't insert a new distinct member
+		set.try_insert(Unequal(5, false)).unwrap_err();
+
+		// but _can_ insert a distinct member which compares equal, though per the documentation,
+		// neither the set length nor the actual member are changed
+		set.try_insert(Unequal(0, true)).unwrap();
+		assert_eq!(set.len(), 4);
+		let zero_item = set.get(&Unequal(0, true)).unwrap();
+		assert_eq!(zero_item.0, 0);
+		assert_eq!(zero_item.1, false);
 	}
 }

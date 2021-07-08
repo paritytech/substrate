@@ -375,6 +375,7 @@ mod tests {
 			writes,
 			repeat_writes: 0,
 			proof_size: 0,
+			keys: vec![],
 		}
 	}
 

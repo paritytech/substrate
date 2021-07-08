@@ -93,4 +93,13 @@ pub trait WasmInstance: Send {
 	///
 	/// This method is only suitable for getting immutable globals.
 	fn get_global_const(&self, name: &str) -> Result<Option<Value>, Error>;
+
+	/// **Testing Only**. This function returns the base address of the linear memory.
+	///
+	/// This is meant to be the starting address of the memory mapped area for the linear memory.
+	///
+	/// This function is intended only for a specific test that measures physical memory consumption.
+	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
+		None
+	}
 }

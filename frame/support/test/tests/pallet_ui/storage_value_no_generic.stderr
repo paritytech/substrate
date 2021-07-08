@@ -1,4 +1,4 @@
-error: pallet::storage unexpected number of generic argument, expected at least 2 args, found none
+error: Invalid pallet::storage, invalid number of generic generic arguments, expect more that 0 generic arguments.
   --> $DIR/storage_value_no_generic.rs:19:16
    |
 19 |     type Foo<T> = StorageValue;

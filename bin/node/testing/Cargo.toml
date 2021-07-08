@@ -19,7 +19,7 @@ sc-client-db = { version = "0.9.0", path = "../../../client/db/", features = ["k
 sc-client-api = { version = "3.0.0", path = "../../../client/api/" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 pallet-contracts = { version = "3.0.0", path = "../../../frame/contracts" }
-pallet-grandpa = { version = "3.0.0", path = "../../../frame/grandpa" }
+pallet-grandpa = { version = "3.1.0", path = "../../../frame/grandpa" }
 pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
 sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
 node-executor = { version = "2.0.0", path = "../executor" }

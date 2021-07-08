@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Scored Pool Module
+//! # Scored Pool Pallet
 //!
-//! The module maintains a scored membership pool. Each entity in the
+//! The pallet maintains a scored membership pool. Each entity in the
 //! pool can be attributed a `Score`. From this pool a set `Members`
 //! is constructed. This set contains the `MemberCount` highest
 //! scoring entities. Unscored entities are never part of `Members`.
@@ -39,7 +39,7 @@
 //!
 //! - [`Config`]
 //! - [`Call`]
-//! - [`Module`]
+//! - [`Pallet`]
 //!
 //! ## Interface
 //!
@@ -66,7 +66,7 @@
 //! 		pub fn candidate(origin) -> dispatch::DispatchResult {
 //! 			let who = ensure_signed(origin)?;
 //!
-//! 			let _ = <scored_pool::Module<T>>::submit_candidacy(
+//! 			let _ = <scored_pool::Pallet<T>>::submit_candidacy(
 //! 				T::Origin::from(Some(who.clone()).into())
 //! 			);
 //! 			Ok(())
@@ -79,7 +79,7 @@
 //!
 //! ## Dependencies
 //!
-//! This module depends on the [System module](../frame_system/index.html).
+//! This pallet depends on the [System pallet](../frame_system/index.html).
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -96,12 +96,11 @@ use sp_std::{
 	prelude::*,
 };
 use frame_support::{
-	decl_module, decl_storage, decl_event, ensure, decl_error,
-	traits::{EnsureOrigin, ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
-	weights::Weight,
+	ensure,
+	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
-use frame_system::{ensure_root, ensure_signed};
-use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup};
+use sp_runtime::traits::{AtLeast32Bit, Zero, StaticLookup};
+pub use pallet::*;
 
 type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type PoolT<T, I> = Vec<(<T as frame_system::Config>::AccountId, Option<<T as Config<I>>::Score>)>;
@@ -116,69 +115,135 @@ enum ChangeReceiver {
 	MembershipChanged,
 }
 
-pub trait Config<I=DefaultInstance>: frame_system::Config {
-	/// The currency used for deposits.
-	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
+#[frame_support::pallet]
+pub mod pallet {
+	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, weights::Weight};
+	use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
+	use sp_runtime::traits::MaybeSerializeDeserialize;
+	use super::*;
 
-	/// The score attributed to a member or candidate.
-	type Score:
-		AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T, I = ()>(_);
 
-	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
+	#[pallet::config]
+	pub trait Config<I: 'static = ()>: frame_system::Config {
+		/// The currency used for deposits.
+		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
-	// The deposit which is reserved from candidates if they want to
-	// start a candidacy. The deposit gets returned when the candidacy is
-	// withdrawn or when the candidate is kicked.
-	type CandidateDeposit: Get<BalanceOf<Self, I>>;
+		/// The score attributed to a member or candidate.
+		type Score:
+			AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
 
-	/// Every `Period` blocks the `Members` are filled with the highest scoring
-	/// members in the `Pool`.
-	type Period: Get<Self::BlockNumber>;
+		/// The overarching event type.
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
-	/// The receiver of the signal for when the membership has been initialized.
-	/// This happens pre-genesis and will usually be the same as `MembershipChanged`.
-	/// If you need to do something different on initialization, then you can change
-	/// this accordingly.
-	type MembershipInitialized: InitializeMembers<Self::AccountId>;
+		// The deposit which is reserved from candidates if they want to
+		// start a candidacy. The deposit gets returned when the candidacy is
+		// withdrawn or when the candidate is kicked.
+		type CandidateDeposit: Get<BalanceOf<Self, I>>;
 
-	/// The receiver of the signal for when the members have changed.
-	type MembershipChanged: ChangeMembers<Self::AccountId>;
+		/// Every `Period` blocks the `Members` are filled with the highest scoring
+		/// members in the `Pool`.
+		type Period: Get<Self::BlockNumber>;
 
-	/// Allows a configurable origin type to set a score to a candidate in the pool.
-	type ScoreOrigin: EnsureOrigin<Self::Origin>;
+		/// The receiver of the signal for when the membership has been initialized.
+		/// This happens pre-genesis and will usually be the same as `MembershipChanged`.
+		/// If you need to do something different on initialization, then you can change
+		/// this accordingly.
+		type MembershipInitialized: InitializeMembers<Self::AccountId>;
 
-	/// Required origin for removing a member (though can always be Root).
-	/// Configurable origin which enables removing an entity. If the entity
-	/// is part of the `Members` it is immediately replaced by the next
-	/// highest scoring candidate, if available.
-	type KickOrigin: EnsureOrigin<Self::Origin>;
-}
+		/// The receiver of the signal for when the members have changed.
+		type MembershipChanged: ChangeMembers<Self::AccountId>;
 
-decl_storage! {
-	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as ScoredPool {
-		/// The current pool of candidates, stored as an ordered Vec
-		/// (ordered descending by score, `None` last, highest first).
-		Pool get(fn pool) config(): PoolT<T, I>;
+		/// Allows a configurable origin type to set a score to a candidate in the pool.
+		type ScoreOrigin: EnsureOrigin<Self::Origin>;
 
-		/// A Map of the candidates. The information in this Map is redundant
-		/// to the information in the `Pool`. But the Map enables us to easily
-		/// check if a candidate is already in the pool, without having to
-		/// iterate over the entire pool (the `Pool` is not sorted by
-		/// `T::AccountId`, but by `T::Score` instead).
-		CandidateExists get(fn candidate_exists): map hasher(twox_64_concat) T::AccountId => bool;
-
-		/// The current membership, stored as an ordered Vec.
-		Members get(fn members): Vec<T::AccountId>;
-
-		/// Size of the `Members` set.
-		MemberCount get(fn member_count) config(): u32;
+		/// Required origin for removing a member (though can always be Root).
+		/// Configurable origin which enables removing an entity. If the entity
+		/// is part of the `Members` it is immediately replaced by the next
+		/// highest scoring candidate, if available.
+		type KickOrigin: EnsureOrigin<Self::Origin>;
 	}
-	add_extra_genesis {
-		config(members): Vec<T::AccountId>;
-		config(phantom): sp_std::marker::PhantomData<I>;
-		build(|config| {
-			let mut pool = config.pool.clone();
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config<I>, I: 'static = ()> {
+		/// The given member was removed. See the transaction for who.
+		MemberRemoved,
+		/// An entity has issued a candidacy. See the transaction for who.
+		CandidateAdded,
+		/// An entity withdrew candidacy. See the transaction for who.
+		CandidateWithdrew,
+		/// The candidacy was forcefully removed for an entity.
+		/// See the transaction for who.
+		CandidateKicked,
+		/// A score was attributed to the candidate.
+		/// See the transaction for who.
+		CandidateScored,
+	}
+
+	/// Error for the scored-pool pallet.
+	#[pallet::error]
+	pub enum Error<T, I = ()> {
+		/// Already a member.
+		AlreadyInPool,
+		/// Index out of bounds.
+		InvalidIndex,
+		/// Index does not match requested account.
+		WrongAccountIndex,
+	}
+
+	/// The current pool of candidates, stored as an ordered Vec
+	/// (ordered descending by score, `None` last, highest first).
+	#[pallet::storage]
+	#[pallet::getter(fn pool)]
+	pub(crate) type Pool<T: Config<I>, I: 'static = ()> = StorageValue<_, PoolT<T, I>, ValueQuery>;
+
+	/// A Map of the candidates. The information in this Map is redundant
+	/// to the information in the `Pool`. But the Map enables us to easily
+	/// check if a candidate is already in the pool, without having to
+	/// iterate over the entire pool (the `Pool` is not sorted by
+	/// `T::AccountId`, but by `T::Score` instead).
+	#[pallet::storage]
+	#[pallet::getter(fn candidate_exists)]
+	pub(crate) type CandidateExists<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat, T::AccountId,
+		bool,
+		ValueQuery,
+	>;
+
+	/// The current membership, stored as an ordered Vec.
+	#[pallet::storage]
+	#[pallet::getter(fn members)]
+	pub(crate) type Members<T: Config<I>, I: 'static = ()> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+
+	/// Size of the `Members` set.
+	#[pallet::storage]
+	#[pallet::getter(fn member_count)]
+	pub(crate) type MemberCount<T, I=()> = StorageValue<_, u32, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub pool: PoolT<T, I>,
+		pub member_count: u32,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self {
+				pool: Default::default(),
+				member_count: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			let mut pool = self.pool.clone();
 
 			// reserve balance for each candidate in the pool.
 			// panicking here is ok, since this just happens one time, pre-genesis.
@@ -196,64 +261,27 @@ decl_storage! {
 				Reverse(maybe_score.unwrap_or_default())
 			);
 
+			<MemberCount<T, I>>::put(self.member_count);
 			<Pool<T, I>>::put(&pool);
-			<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipInitialized);
-		})
+			<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipInitialized);
+		}
 	}
-}
 
-decl_event!(
-	pub enum Event<T, I=DefaultInstance> where
-		<T as frame_system::Config>::AccountId,
-	{
-		/// The given member was removed. See the transaction for who.
-		MemberRemoved,
-		/// An entity has issued a candidacy. See the transaction for who.
-		CandidateAdded,
-		/// An entity withdrew candidacy. See the transaction for who.
-		CandidateWithdrew,
-		/// The candidacy was forcefully removed for an entity.
-		/// See the transaction for who.
-		CandidateKicked,
-		/// A score was attributed to the candidate.
-		/// See the transaction for who.
-		CandidateScored,
-		/// Phantom member, never used.
-		Dummy(sp_std::marker::PhantomData<(AccountId, I)>),
-	}
-);
-
-decl_error! {
-	/// Error for the scored-pool module.
-	pub enum Error for Module<T: Config<I>, I: Instance> {
-		/// Already a member.
-		AlreadyInPool,
-		/// Index out of bounds.
-		InvalidIndex,
-		/// Index does not match requested account.
-		WrongAccountIndex,
-	}
-}
-
-decl_module! {
-	pub struct Module<T: Config<I>, I: Instance=DefaultInstance>
-		for enum Call
-		where origin: T::Origin
-	{
-		type Error = Error<T, I>;
-
-		fn deposit_event() = default;
-
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if n % T::Period::get() == Zero::zero() {
 				let pool = <Pool<T, I>>::get();
-				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
+				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
 			0
 		}
+	}
 
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Add `origin` to the pool of candidates.
 		///
 		/// This results in `CandidateDeposit` being reserved from
@@ -265,8 +293,8 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[weight = 0]
-		pub fn submit_candidacy(origin) {
+		#[pallet::weight(0)]
+		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
 
@@ -279,7 +307,8 @@ decl_module! {
 
 			<CandidateExists<T, I>>::insert(&who, true);
 
-			Self::deposit_event(RawEvent::CandidateAdded);
+			Self::deposit_event(Event::<T, I>::CandidateAdded);
+			Ok(())
 		}
 
 		/// An entity withdraws candidacy and gets its deposit back.
@@ -292,18 +321,19 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[weight = 0]
+		#[pallet::weight(0)]
 		pub fn withdraw_candidacy(
-			origin,
+			origin: OriginFor<T>,
 			index: u32
-		) {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let pool = <Pool<T, I>>::get();
 			Self::ensure_index(&pool, &who, index)?;
 
 			Self::remove_member(pool, who, index)?;
-			Self::deposit_event(RawEvent::CandidateWithdrew);
+			Self::deposit_event(Event::<T, I>::CandidateWithdrew);
+			Ok(())
 		}
 
 		/// Kick a member `who` from the set.
@@ -312,12 +342,12 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
-		#[weight = 0]
+		#[pallet::weight(0)]
 		pub fn kick(
-			origin,
+			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
 			index: u32
-		) {
+		) -> DispatchResult {
 			T::KickOrigin::ensure_origin(origin)?;
 
 			let who = T::Lookup::lookup(dest)?;
@@ -326,7 +356,8 @@ decl_module! {
 			Self::ensure_index(&pool, &who, index)?;
 
 			Self::remove_member(pool, who, index)?;
-			Self::deposit_event(RawEvent::CandidateKicked);
+			Self::deposit_event(Event::<T, I>::CandidateKicked);
+			Ok(())
 		}
 
 		/// Score a member `who` with `score`.
@@ -335,13 +366,13 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
-		#[weight = 0]
+		#[pallet::weight(0)]
 		pub fn score(
-			origin,
+			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
 			index: u32,
 			score: T::Score
-		) {
+		) -> DispatchResult {
 			T::ScoreOrigin::ensure_origin(origin)?;
 
 			let who = T::Lookup::lookup(dest)?;
@@ -365,7 +396,8 @@ decl_module! {
 			pool.insert(location, item);
 
 			<Pool<T, I>>::put(&pool);
-			Self::deposit_event(RawEvent::CandidateScored);
+			Self::deposit_event(Event::<T, I>::CandidateScored);
+			Ok(())
 		}
 
 		/// Dispatchable call to change `MemberCount`.
@@ -374,15 +406,16 @@ decl_module! {
 		/// (this happens each `Period`).
 		///
 		/// May only be called from root.
-		#[weight = 0]
-		pub fn change_member_count(origin, count: u32) {
+		#[pallet::weight(0)]
+		pub fn change_member_count(origin: OriginFor<T>, count: u32) -> DispatchResult {
 			ensure_root(origin)?;
-			<MemberCount<I>>::put(&count);
+			MemberCount::<T, I>::put(&count);
+			Ok(())
 		}
 	}
 }
 
-impl<T: Config<I>, I: Instance> Module<T, I> {
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Fetches the `MemberCount` highest scoring members from
 	/// `Pool` and puts them into `Members`.
@@ -393,7 +426,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		pool: PoolT<T, I>,
 		notify: ChangeReceiver
 	) {
-		let count = <MemberCount<I>>::get();
+		let count = MemberCount::<T, I>::get();
 
 		let mut new_members: Vec<T::AccountId> = pool
 			.into_iter()
@@ -426,7 +459,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		remove: T::AccountId,
 		index: u32
 	) -> Result<(), Error<T, I>> {
-		// all callers of this function in this module also check
+		// all callers of this function in this pallet also check
 		// the index for validity before calling this function.
 		// nevertheless we check again here, to assert that there was
 		// no mistake when invoking this sensible function.
@@ -445,7 +478,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 		T::Currency::unreserve(&remove, T::CandidateDeposit::get());
 
-		Self::deposit_event(RawEvent::MemberRemoved);
+		Self::deposit_event(Event::<T, I>::MemberRemoved);
 		Ok(())
 	}
 

@@ -20,26 +20,54 @@
 
 use structopt::clap::arg_enum;
 
-arg_enum! {
-	/// How to execute Wasm runtime code
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy)]
-	pub enum WasmExecutionMethod {
-		// Uses an interpreter.
-		Interpreted,
-		// Uses a compiled runtime.
-		Compiled,
+/// How to execute Wasm runtime code.
+#[derive(Debug, Clone, Copy)]
+pub enum WasmExecutionMethod {
+	/// Uses an interpreter.
+	Interpreted,
+	/// Uses a compiled runtime.
+	Compiled,
+}
+
+impl std::fmt::Display for WasmExecutionMethod {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Interpreted => write!(f, "Interpreted"),
+			Self::Compiled => write!(f, "Compiled"),
+		}
+	}
+}
+
+impl std::str::FromStr for WasmExecutionMethod {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, String> {
+		if s.eq_ignore_ascii_case("interpreted-i-know-what-i-do") {
+			Ok(Self::Interpreted)
+		} else if s.eq_ignore_ascii_case("compiled") {
+			#[cfg(feature = "wasmtime")]
+			{
+				Ok(Self::Compiled)
+			}
+			#[cfg(not(feature = "wasmtime"))]
+			{
+				Err(format!("`Compiled` variant requires the `wasmtime` feature to be enabled"))
+			}
+		} else {
+			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
+		}
 	}
 }
 
 impl WasmExecutionMethod {
-	/// Returns list of variants that are not disabled by feature flags.
-	pub fn enabled_variants() -> Vec<&'static str> {
-		Self::variants()
-			.iter()
-			.cloned()
-			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
-			.collect()
+	/// Returns all the variants of this enum to be shown in the cli.
+	pub fn variants() -> &'static [&'static str] {
+		let variants = &["interpreted-i-know-what-i-do", "compiled"];
+		if cfg!(feature = "wasmtime") {
+			variants
+		} else {
+			&variants[..1]
+		}
 	}
 }
 
@@ -181,7 +209,7 @@ impl std::str::FromStr for Database {
 		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
 			Ok(Self::ParityDb)
 		} else {
-			Err(format!("Unknwon variant `{}`, known variants: {:?}", s, Self::variants()))
+			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
 		}
 	}
 }
@@ -201,6 +229,30 @@ arg_enum! {
 		Always,
 		Never,
 		WhenValidating,
+	}
+}
+
+arg_enum! {
+	/// Syncing mode.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy)]
+	pub enum SyncMode {
+		// Full sync. Donwnload end verify all blocks.
+		Full,
+		// Download blocks without executing them. Download latest state with proofs.
+		Fast,
+		// Download blocks without executing them. Download latest state without proofs.
+		FastUnsafe,
+	}
+}
+
+impl Into<sc_network::config::SyncMode> for SyncMode {
+	fn into(self) -> sc_network::config::SyncMode {
+		match self {
+			SyncMode::Full => sc_network::config::SyncMode::Full,
+			SyncMode::Fast => sc_network::config::SyncMode::Fast { skip_proofs: false },
+			SyncMode::FastUnsafe => sc_network::config::SyncMode::Fast { skip_proofs: true },
+		}
 	}
 }
 

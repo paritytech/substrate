@@ -41,7 +41,7 @@ use wasm_timer::Instant;
 // this cache should take about 256 KB of memory.
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 8192;
 
-const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
+const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_millis(750);
 
 pub(crate) const PERIODIC_MAINTENANCE_INTERVAL: time::Duration = time::Duration::from_millis(1100);
 
@@ -197,11 +197,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, network: &mut dyn Network<B>, who: PeerId, role: ObservedRole) {
-		// light nodes are not valid targets for consensus gossip messages
-		if role.is_light() {
-			return;
-		}
-
 		tracing::trace!(
 			target:"gossip",
 			%who,

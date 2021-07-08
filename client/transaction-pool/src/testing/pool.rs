@@ -19,7 +19,6 @@
 use crate::*;
 use sp_transaction_pool::TransactionStatus;
 use futures::executor::{block_on, block_on_stream};
-use txpool::{self, Pool};
 use sp_runtime::{
 	generic::BlockId,
 	transaction_validity::{ValidTransaction, TransactionSource, InvalidTransaction},
@@ -307,31 +306,6 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 }
 
 #[test]
-fn should_revalidate_transaction_multiple_times() {
-	let xt = uxt(Alice, 209);
-
-	let (pool, _guard, mut notifier) = maintained_pool();
-
-	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
-	assert_eq!(pool.status().ready, 1);
-
-	let header = pool.api.push_block(1, vec![xt.clone()], true);
-
-	block_on(pool.maintain(block_event(header)));
-
-	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
-	assert_eq!(pool.status().ready, 1);
-
-	let header = pool.api.push_block(2, vec![], true);
-	pool.api.add_invalid(&xt);
-
-	block_on(pool.maintain(block_event(header)));
-	block_on(notifier.next());
-
-	assert_eq!(pool.status().ready, 0);
-}
-
-#[test]
 fn should_revalidate_across_many_blocks() {
 	let xt1 = uxt(Alice, 209);
 	let xt2 = uxt(Alice, 210);
@@ -361,7 +335,7 @@ fn should_revalidate_across_many_blocks() {
 
 
 #[test]
-fn should_push_watchers_during_maintaince() {
+fn should_push_watchers_during_maintenance() {
 	fn alice_uxt(nonce: u64) -> Extrinsic {
 		uxt(Alice, 209 + nonce)
 	}
@@ -935,7 +909,11 @@ fn should_not_accept_old_signatures() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
-		BasicPool::new_test(Arc::new(FullChainApi::new(client, None))).0
+		BasicPool::new_test(Arc::new(FullChainApi::new(
+			client,
+			None,
+			&sp_core::testing::TaskExecutor::new(),
+		))).0
 	);
 
 	let transfer = Transfer {
@@ -971,7 +949,11 @@ fn import_notification_to_pool_maintain_works() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
-		BasicPool::new_test(Arc::new(FullChainApi::new(client.clone(), None))).0
+		BasicPool::new_test(Arc::new(FullChainApi::new(
+			client.clone(),
+			None,
+			&sp_core::testing::TaskExecutor::new(),
+		))).0
 	);
 
 	// Prepare the extrisic, push it to the pool and check that it was added.
@@ -1002,21 +984,13 @@ fn pruning_a_transaction_should_remove_it_from_best_transaction() {
 	let xt1 = Extrinsic::IncludeData(Vec::new());
 
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt1.clone())).expect("1. Imported");
+	assert_eq!(pool.status().ready, 1);
 	let header = pool.api.push_block(1, vec![xt1.clone()], true);
 
 	// This will prune `xt1`.
 	block_on(pool.maintain(block_event(header)));
 
-	// Submit the tx again.
-	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt1.clone())).expect("2. Imported");
-
-	let mut iterator = block_on(pool.ready_at(1));
-
-	assert_eq!(iterator.next().unwrap().data, xt1.clone());
-
-	// If the tx was not removed from the best txs, the tx would be
-	// returned a second time by the iterator.
-	assert!(iterator.next().is_none());
+	assert_eq!(pool.status().ready, 0);
 }
 
 #[test]
@@ -1037,4 +1011,80 @@ fn only_revalidate_on_best_block() {
 	block_on(notifier.next());
 
 	assert_eq!(pool.status().ready, 1);
+}
+
+#[test]
+fn stale_transactions_are_pruned() {
+	sp_tracing::try_init_simple();
+
+	// Our initial transactions
+	let xts = vec![
+		Transfer {
+			from: Alice.into(),
+			to: Bob.into(),
+			nonce: 1,
+			amount: 1,
+		},
+		Transfer {
+			from: Alice.into(),
+			to: Bob.into(),
+			nonce: 2,
+			amount: 1,
+		},
+		Transfer {
+			from: Alice.into(),
+			to: Bob.into(),
+			nonce: 3,
+			amount: 1,
+		},
+	];
+
+	let (pool, _guard, _notifier) = maintained_pool();
+
+	xts.into_iter().for_each(|xt| {
+		block_on(
+			pool.submit_one(&BlockId::number(0), SOURCE, xt.into_signed_tx()),
+		).expect("1. Imported");
+	});
+	assert_eq!(pool.status().ready, 0);
+	assert_eq!(pool.status().future, 3);
+
+	// Almost the same as our initial transactions, but with some different `amount`s to make them
+	// generate a different hash
+	let xts = vec![
+		Transfer {
+			from: Alice.into(),
+			to: Bob.into(),
+			nonce: 1,
+			amount: 2,
+		}.into_signed_tx(),
+		Transfer {
+			from: Alice.into(),
+			to: Bob.into(),
+			nonce: 2,
+			amount: 2,
+		}.into_signed_tx(),
+		Transfer {
+			from: Alice.into(),
+			to: Bob.into(),
+			nonce: 3,
+			amount: 2,
+		}.into_signed_tx(),
+	];
+
+	// Import block
+	let header = pool.api.push_block(1, xts, true);
+	block_on(pool.maintain(block_event(header)));
+	// The imported transactions have a different hash and should not evict our initial
+	// transactions.
+	assert_eq!(pool.status().future, 3);
+
+	// Import enough blocks to make our transactions stale
+	for n in 1..66 {
+		let header = pool.api.push_block(n, vec![], true);
+		block_on(pool.maintain(block_event(header)));
+	}
+
+	assert_eq!(pool.status().future, 0);
+	assert_eq!(pool.status().ready, 0);
 }

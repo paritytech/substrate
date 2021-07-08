@@ -48,7 +48,7 @@ use crate::{
 		Protocol,
 		Ready,
 		event::Event,
-		sync::SyncState,
+		sync::{SyncState, Status as SyncStatus},
 	},
 	transactions,
 	transport, ReputationChange,
@@ -196,6 +196,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			protocol::ProtocolConfig {
 				roles: From::from(&params.role),
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
+				sync_mode: params.network_config.sync_mode.clone(),
 			},
 			params.chain.clone(),
 			params.protocol_id.clone(),
@@ -299,20 +300,20 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let yamux_maximum_buffer_size = {
 					let requests_max = params.network_config
 						.request_response_protocols.iter()
-						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::max_value()));
+						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::MAX));
 					let responses_max = params.network_config
 						.request_response_protocols.iter()
-						.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::max_value()));
+						.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::MAX));
 					let notifs_max = params.network_config
 						.extra_sets.iter()
-						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::max_value()));
+						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::MAX));
 
 					// A "default" max is added to cover all the other protocols: ping, identify,
 					// kademlia, block announces, and transactions.
 					let default_max = cmp::max(
 						1024 * 1024,
 						usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
-							.unwrap_or(usize::max_value())
+							.unwrap_or(usize::MAX)
 					);
 
 					iter::once(default_max)
@@ -331,7 +332,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 
 			let behaviour = {
-				let bitswap = if params.network_config.ipfs_server { Some(Bitswap::new(client)) } else { None };
+				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -339,6 +340,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					light_client_request_sender,
 					discovery_config,
 					params.block_request_protocol_config,
+					params.state_request_protocol_config,
 					bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
@@ -442,14 +444,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 	/// High-level network status information.
 	pub fn status(&self) -> NetworkStatus<B> {
+		let status = self.sync_state();
 		NetworkStatus {
-			sync_state: self.sync_state(),
+			sync_state: status.state,
 			best_seen_block: self.best_seen_block(),
 			num_sync_peers: self.num_sync_peers(),
 			num_connected_peers: self.num_connected_peers(),
 			num_active_peers: self.num_active_peers(),
 			total_bytes_inbound: self.total_bytes_inbound(),
 			total_bytes_outbound: self.total_bytes_outbound(),
+			state_sync: status.state_sync,
 		}
 	}
 
@@ -474,7 +478,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// Current global sync state.
-	pub fn sync_state(&self) -> SyncState {
+	pub fn sync_state(&self) -> SyncStatus<B> {
 		self.network_service.behaviour().user_protocol().sync_state()
 	}
 
@@ -888,7 +892,44 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		});
 	}
 
-	/// You may call this when new transactons are imported by the transaction pool.
+	/// High-level network status information.
+	///
+	/// Returns an error if the `NetworkWorker` is no longer running.
+	pub async fn status(&self) -> Result<NetworkStatus<B>, ()> {
+		let (tx, rx) = oneshot::channel();
+
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::NetworkStatus {
+			pending_response: tx,
+		});
+
+		match rx.await {
+			Ok(v) => v.map_err(|_| ()),
+			// The channel can only be closed if the network worker no longer exists.
+			Err(_) => Err(()),
+		}
+	}
+
+	/// Get network state.
+	///
+	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literally
+	/// everywhere about this. Please don't use this function to retrieve actual information.
+	///
+	/// Returns an error if the `NetworkWorker` is no longer running.
+	pub async fn network_state(&self) -> Result<NetworkState, ()> {
+		let (tx, rx) = oneshot::channel();
+
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::NetworkState {
+			pending_response: tx,
+		});
+
+		match rx.await {
+			Ok(v) => v.map_err(|_| ()),
+			// The channel can only be closed if the network worker no longer exists.
+			Err(_) => Err(()),
+		}
+	}
+
+	/// You may call this when new transactions are imported by the transaction pool.
 	///
 	/// All transactions will be fetched from the `TransactionPool` that was passed at
 	/// initialization as part of the configuration and propagated to peers.
@@ -937,6 +978,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
+	}
+
+	/// Clear all pending justification requests.
+	pub fn clear_justification_requests(&self) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::ClearJustificationRequests);
 	}
 
 	/// Are we in the process of downloading the chain?
@@ -1182,6 +1230,16 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
 	}
 }
 
+impl<B: BlockT, H: ExHashT> sp_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		NetworkService::request_justification(self, hash, number);
+	}
+
+	fn clear_justification_requests(&self) {
+		NetworkService::clear_justification_requests(self);
+	}
+}
+
 impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	where
 		B: sp_runtime::traits::Block,
@@ -1286,6 +1344,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	PropagateTransaction(H),
 	PropagateTransactions,
 	RequestJustification(B::Hash, NumberFor<B>),
+	ClearJustificationRequests,
 	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
@@ -1306,6 +1365,12 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
+	},
+	NetworkStatus {
+		pending_response: oneshot::Sender<Result<NetworkStatus<B>, RequestFailure>>,
+	},
+	NetworkState {
+		pending_response: oneshot::Sender<Result<NetworkState, RequestFailure>>,
 	},
 	DisconnectPeer(PeerId, Cow<'static, str>),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
@@ -1401,6 +1466,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.behaviour_mut().user_protocol_mut().announce_block(hash, data),
 				ServiceToWorkerMsg::RequestJustification(hash, number) =>
 					this.network_service.behaviour_mut().user_protocol_mut().request_justification(&hash, number),
+				ServiceToWorkerMsg::ClearJustificationRequests =>
+					this.network_service.behaviour_mut().user_protocol_mut().clear_justification_requests(),
 				ServiceToWorkerMsg::PropagateTransaction(hash) =>
 					this.tx_handler_controller.propagate_transaction(hash),
 				ServiceToWorkerMsg::PropagateTransactions =>
@@ -1433,6 +1500,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.event_streams.push(sender),
 				ServiceToWorkerMsg::Request { target, protocol, request, pending_response, connect } => {
 					this.network_service.behaviour_mut().send_request(&target, &protocol, request, pending_response, connect);
+				},
+				ServiceToWorkerMsg::NetworkStatus { pending_response } => {
+					let _ = pending_response.send(Ok(this.status()));
+				},
+				ServiceToWorkerMsg::NetworkState { pending_response } => {
+					let _ = pending_response.send(Ok(this.network_state()));
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who, protocol_name) =>
 					this.network_service.behaviour_mut().user_protocol_mut().disconnect_peer(&who, &protocol_name),
@@ -1549,7 +1622,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
-						peers_notifications_sinks.insert((remote.clone(), protocol.clone()), notifications_sink);
+						let _previous_value = peers_notifications_sinks
+							.insert((remote.clone(), protocol.clone()), notifications_sink);
+						debug_assert!(_previous_value.is_none());
 					}
 					this.event_streams.send(Event::NotificationStreamOpened {
 						remote,
@@ -1569,6 +1644,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							target: "sub-libp2p",
 							"NotificationStreamReplaced for non-existing substream"
 						);
+						debug_assert!(false);
 					}
 
 					// TODO: Notifications might have been lost as a result of the previous
@@ -1603,7 +1679,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					});
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
-						peers_notifications_sinks.remove(&(remote.clone(), protocol));
+						let _previous_value = peers_notifications_sinks
+							.remove(&(remote.clone(), protocol));
+						debug_assert!(_previous_value.is_some());
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationsReceived { remote, messages })) => {
@@ -1795,7 +1873,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			*this.external_addresses.lock() = external_addresses;
 		}
 
-		let is_major_syncing = match this.network_service.behaviour_mut().user_protocol_mut().sync_state() {
+		let is_major_syncing = match this.network_service.behaviour_mut().user_protocol_mut().sync_state().state {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
 		};

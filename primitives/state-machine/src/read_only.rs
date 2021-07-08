@@ -136,7 +136,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("kill_child_storage is not supported in ReadOnlyExternalities")
 	}
 
-	fn clear_prefix(&mut self, _prefix: &[u8]) {
+	fn clear_prefix(&mut self, _prefix: &[u8], _limit: Option<u32>) -> (bool, u32) {
 		unimplemented!("clear_prefix is not supported in ReadOnlyExternalities")
 	}
 
@@ -144,7 +144,8 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		&mut self,
 		_child_info: &ChildInfo,
 		_prefix: &[u8],
-	) {
+		_limit: Option<u32>,
+	) -> (bool, u32) {
 		unimplemented!("clear_child_prefix is not supported in ReadOnlyExternalities")
 	}
 
@@ -201,6 +202,10 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
+	}
+
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
+		unimplemented!("get_read_and_written_keys is not supported in ReadOnlyExternalities")
 	}
 }
 

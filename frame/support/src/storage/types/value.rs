@@ -17,16 +17,18 @@
 
 //! Storage value type. Implements StorageValue trait and its method directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
+use codec::{FullCodec, Decode, EncodeLike, Encode, MaxEncodedLen};
 use crate::{
 	storage::{
-		StorageAppend, StorageDecodeLength,
-		bounded_vec::BoundedVec,
+		StorageAppend, StorageTryAppend, StorageDecodeLength,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
+		generator::{StorageValue as StorageValueT},
 	},
-	traits::{GetDefault, StorageInstance, Get},
+	traits::{GetDefault, StorageInstance, StorageInfo},
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
+use sp_arithmetic::traits::SaturatedConversion;
+use sp_std::prelude::*;
 
 /// A type that allow to store a value.
 ///
@@ -58,26 +60,6 @@ where
 	}
 	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
 		QueryKind::from_query_to_optional_value(v)
-	}
-}
-
-impl<Prefix, QueryKind, OnEmpty, VecValue, VecBound>
-	StorageValue<Prefix, BoundedVec<VecValue, VecBound>, QueryKind, OnEmpty>
-where
-	Prefix: StorageInstance,
-	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
-	VecValue: FullCodec,
-	VecBound: Get<u32>,
-{
-	/// Try and append the given item to the value in the storage.
-	///
-	/// Is only available if `Value` of the storage is [`BoundedVec`].
-	pub fn try_append<EncodeLikeItem>(item: EncodeLikeItem) -> Result<(), ()>
-	where
-		EncodeLikeItem: EncodeLike<VecValue>,
-	{
-		<Self as crate::storage::bounded_vec::TryAppendValue<VecValue, VecBound>>::try_append(item)
 	}
 }
 
@@ -190,6 +172,18 @@ where
 	pub fn decode_len() -> Option<usize> where Value: StorageDecodeLength {
 		<Self as crate::storage::StorageValue<Value>>::decode_len()
 	}
+
+	/// Try and append the given item to the value in the storage.
+	///
+	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
+	pub fn try_append<Item, EncodeLikeItem>(item: EncodeLikeItem) -> Result<(), ()>
+	where
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		Value: StorageTryAppend<Item>,
+	{
+		<Self as crate::storage::TryAppendValue<Value, Item>>::try_append(item)
+	}
 }
 
 /// Part of storage metadata for storage value.
@@ -210,6 +204,54 @@ impl<Prefix, Value, QueryKind, OnEmpty> StorageValueMetadata
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
 	const DEFAULT: DefaultByteGetter =
 		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
+}
+
+impl<Prefix, Value, QueryKind, OnEmpty>
+	crate::traits::StorageInfoTrait for
+	StorageValue<Prefix, Value, QueryKind, OnEmpty>
+where
+	Prefix: StorageInstance,
+	Value: FullCodec + MaxEncodedLen,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+{
+	fn storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::hashed_key().to_vec(),
+				max_values: Some(1),
+				max_size: Some(
+					Value::max_encoded_len()
+						.saturated_into(),
+				),
+			}
+		]
+	}
+}
+
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Value, QueryKind, OnEmpty>
+	crate::traits::PartialStorageInfoTrait for
+	StorageValue<Prefix, Value, QueryKind, OnEmpty>
+where
+	Prefix: StorageInstance,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::hashed_key().to_vec(),
+				max_values: Some(1),
+				max_size: None,
+			}
+		]
+	}
 }
 
 #[cfg(test)]

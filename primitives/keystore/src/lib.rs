@@ -194,6 +194,25 @@ pub trait CryptoStore: Send + Sync {
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
 	) -> Result<Option<VRFSignature>, Error>;
+
+	/// Generate an ECDSA signature for a given pre-hashed message.
+	///
+	/// Receives [`KeyTypeId`] and an [`ecdsa::Public`] key to be able to map
+	/// them to a private key that exists in the keystore. This private key is,
+	/// in turn, used for signing the provided pre-hashed message.
+	///
+	/// The `msg` argument provided should be a hashed message for which an
+	/// ECDSA signature should be generated. 
+	/// 
+	/// Returns an [`ecdsa::Signature`] or `None` in case the given `id` and
+	/// `public` combination doesn't exist in the keystore. An `Err` will be
+	/// returned if generating the signature itself failed.
+	async fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<ecdsa::Signature>, Error>;
 }
 
 /// Sync version of the CryptoStore
@@ -353,6 +372,25 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
 	) -> Result<Option<VRFSignature>, Error>;
+
+	/// Generate an ECDSA signature for a given pre-hashed message.
+	///
+	/// Receives [`KeyTypeId`] and an [`ecdsa::Public`] key to be able to map
+	/// them to a private key that exists in the keystore. This private key is,
+	/// in turn, used for signing the provided pre-hashed message.
+	///
+	/// The `msg` argument provided should be a hashed message for which an
+	/// ECDSA signature should be generated. 
+	/// 
+	/// Returns an [`ecdsa::Signature`] or `None` in case the given `id` and
+	/// `public` combination doesn't exist in the keystore. An `Err` will be
+	/// returned if generating the signature itself failed.
+	fn ecdsa_sign_prehashed(
+		&self,
+		id: KeyTypeId,
+		public: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<ecdsa::Signature>, Error>;
 }
 
 /// A pointer to a keystore.

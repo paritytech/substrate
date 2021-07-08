@@ -27,6 +27,12 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use structopt::StructOpt;
 use std::path::PathBuf;
 
+#[cfg(feature = "wasmtime")]
+const WASM_METHOD_DEFAULT: &str = "Compiled";
+
+#[cfg(not(feature = "wasmtime"))]
+const WASM_METHOD_DEFAULT: &str = "interpreted-i-know-what-i-do";
+
 /// Parameters for block import.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ImportParams {
@@ -50,9 +56,9 @@ pub struct ImportParams {
 	#[structopt(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::enabled_variants(),
+		possible_values = &WasmExecutionMethod::variants(),
 		case_insensitive = true,
-		default_value = "Interpreted"
+		default_value = WASM_METHOD_DEFAULT
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
@@ -76,7 +82,6 @@ pub struct ImportParams {
 }
 
 impl ImportParams {
-
 	/// Specify the state cache size.
 	pub fn state_cache_size(&self) -> usize {
 		self.state_cache_size

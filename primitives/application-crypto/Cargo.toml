@@ -23,7 +23,14 @@ sp-io = { version = "3.0.0", default-features = false, path = "../io" }
 
 [features]
 default = [ "std" ]
-std = [ "full_crypto", "sp-core/std", "codec/std", "serde", "sp-std/std", "sp-io/std" ]
+std = [
+	"full_crypto",
+	"sp-core/std",
+	"codec/std",
+	"serde",
+	"sp-std/std",
+	"sp-io/std",
+]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
 # or Intel SGX.

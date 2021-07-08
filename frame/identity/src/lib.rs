@@ -74,284 +74,24 @@
 
 #[cfg(test)]
 mod tests;
+mod types;
 mod benchmarking;
 pub mod weights;
 
 use sp_std::prelude::*;
-use sp_std::{fmt::Debug, ops::Add, iter::once};
-use enumflags2::BitFlags;
-use codec::{Encode, Decode};
-use sp_runtime::RuntimeDebug;
+use sp_std::convert::TryInto;
 use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput, Saturating};
-use frame_support::traits::{Currency, ReservableCurrency, OnUnbalanced, BalanceStatus};
+use frame_support::traits::{BalanceStatus, Currency, OnUnbalanced, ReservableCurrency};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
+pub use types::{
+	Data, IdentityField, IdentityFields, IdentityInfo, Judgement, RegistrarIndex,
+	RegistrarInfo, Registration,
+};
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
-
-/// Either underlying data blob if it is at most 32 bytes, or a hash of it. If the data is greater
-/// than 32-bytes then it will be truncated when encoding.
-///
-/// Can also be `None`.
-#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
-pub enum Data {
-	/// No data here.
-	None,
-	/// The data is stored directly.
-	Raw(Vec<u8>),
-	/// Only the Blake2 hash of the data is stored. The preimage of the hash may be retrieved
-	/// through some hash-lookup service.
-	BlakeTwo256([u8; 32]),
-	/// Only the SHA2-256 hash of the data is stored. The preimage of the hash may be retrieved
-	/// through some hash-lookup service.
-	Sha256([u8; 32]),
-	/// Only the Keccak-256 hash of the data is stored. The preimage of the hash may be retrieved
-	/// through some hash-lookup service.
-	Keccak256([u8; 32]),
-	/// Only the SHA3-256 hash of the data is stored. The preimage of the hash may be retrieved
-	/// through some hash-lookup service.
-	ShaThree256([u8; 32]),
-}
-
-impl Decode for Data {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
-		let b = input.read_byte()?;
-		Ok(match b {
-			0 => Data::None,
-			n @ 1 ..= 33 => {
-				let mut r = vec![0u8; n as usize - 1];
-				input.read(&mut r[..])?;
-				Data::Raw(r)
-			}
-			34 => Data::BlakeTwo256(<[u8; 32]>::decode(input)?),
-			35 => Data::Sha256(<[u8; 32]>::decode(input)?),
-			36 => Data::Keccak256(<[u8; 32]>::decode(input)?),
-			37 => Data::ShaThree256(<[u8; 32]>::decode(input)?),
-			_ => return Err(codec::Error::from("invalid leading byte")),
-		})
-	}
-}
-
-impl Encode for Data {
-	fn encode(&self) -> Vec<u8> {
-		match self {
-			Data::None => vec![0u8; 1],
-			Data::Raw(ref x) => {
-				let l = x.len().min(32);
-				let mut r = vec![l as u8 + 1; l + 1];
-				&mut r[1..].copy_from_slice(&x[..l as usize]);
-				r
-			}
-			Data::BlakeTwo256(ref h) => once(34u8).chain(h.iter().cloned()).collect(),
-			Data::Sha256(ref h) => once(35u8).chain(h.iter().cloned()).collect(),
-			Data::Keccak256(ref h) => once(36u8).chain(h.iter().cloned()).collect(),
-			Data::ShaThree256(ref h) => once(37u8).chain(h.iter().cloned()).collect(),
-		}
-	}
-}
-impl codec::EncodeLike for Data {}
-
-impl Default for Data {
-	fn default() -> Self {
-		Self::None
-	}
-}
-
-/// An identifier for a single name registrar/identity verification service.
-pub type RegistrarIndex = u32;
-
-/// An attestation of a registrar over how accurate some `IdentityInfo` is in describing an account.
-///
-/// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
-/// which fields their attestation is relevant for by off-chain means.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub enum Judgement<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
-> {
-	/// The default value; no opinion is held.
-	Unknown,
-	/// No judgement is yet in place, but a deposit is reserved as payment for providing one.
-	FeePaid(Balance),
-	/// The data appears to be reasonably acceptable in terms of its accuracy, however no in depth
-	/// checks (such as in-person meetings or formal KYC) have been conducted.
-	Reasonable,
-	/// The target is known directly by the registrar and the registrar can fully attest to the
-	/// the data's accuracy.
-	KnownGood,
-	/// The data was once good but is currently out of date. There is no malicious intent in the
-	/// inaccuracy. This judgement can be removed through updating the data.
-	OutOfDate,
-	/// The data is imprecise or of sufficiently low-quality to be problematic. It is not
-	/// indicative of malicious intent. This judgement can be removed through updating the data.
-	LowQuality,
-	/// The data is erroneous. This may be indicative of malicious intent. This cannot be removed
-	/// except by the registrar.
-	Erroneous,
-}
-
-impl<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
-> Judgement<Balance> {
-	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
-	/// it should not be cleared or replaced except by an operation which utilizes the deposit.
-	fn has_deposit(&self) -> bool {
-		match self {
-			Judgement::FeePaid(_) => true,
-			_ => false,
-		}
-	}
-
-	/// Returns `true` if this judgement is one that should not be generally be replaced outside
-	/// of specialized handlers. Examples include "malicious" judgements and deposit-holding
-	/// judgements.
-	fn is_sticky(&self) -> bool {
-		match self {
-			Judgement::FeePaid(_) | Judgement::Erroneous => true,
-			_ => false,
-		}
-	}
-}
-
-/// The fields that we use to identify the owner of an account with. Each corresponds to a field
-/// in the `IdentityInfo` struct.
-#[repr(u64)]
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug)]
-pub enum IdentityField {
-	Display        = 0b0000000000000000000000000000000000000000000000000000000000000001,
-	Legal          = 0b0000000000000000000000000000000000000000000000000000000000000010,
-	Web            = 0b0000000000000000000000000000000000000000000000000000000000000100,
-	Riot           = 0b0000000000000000000000000000000000000000000000000000000000001000,
-	Email          = 0b0000000000000000000000000000000000000000000000000000000000010000,
-	PgpFingerprint = 0b0000000000000000000000000000000000000000000000000000000000100000,
-	Image          = 0b0000000000000000000000000000000000000000000000000000000001000000,
-	Twitter        = 0b0000000000000000000000000000000000000000000000000000000010000000,
-}
-
-/// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
-#[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
-pub struct IdentityFields(BitFlags<IdentityField>);
-
-impl Eq for IdentityFields {}
-impl Encode for IdentityFields {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.bits().using_encoded(f)
-	}
-}
-impl Decode for IdentityFields {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
-		let field = u64::decode(input)?;
-		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
-	}
-}
-
-/// Information concerning the identity of the controller of an account.
-///
-/// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
-/// fields in a backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-#[cfg_attr(test, derive(Default))]
-pub struct IdentityInfo {
-	/// Additional fields of the identity that are not catered for with the struct's explicit
-	/// fields.
-	pub additional: Vec<(Data, Data)>,
-
-	/// A reasonable display name for the controller of the account. This should be whatever it is
-	/// that it is typically known as and should not be confusable with other entities, given
-	/// reasonable context.
-	///
-	/// Stored as UTF-8.
-	pub display: Data,
-
-	/// The full legal name in the local jurisdiction of the entity. This might be a bit
-	/// long-winded.
-	///
-	/// Stored as UTF-8.
-	pub legal: Data,
-
-	/// A representative website held by the controller of the account.
-	///
-	/// NOTE: `https://` is automatically prepended.
-	///
-	/// Stored as UTF-8.
-	pub web: Data,
-
-	/// The Riot/Matrix handle held by the controller of the account.
-	///
-	/// Stored as UTF-8.
-	pub riot: Data,
-
-	/// The email address of the controller of the account.
-	///
-	/// Stored as UTF-8.
-	pub email: Data,
-
-	/// The PGP/GPG public key of the controller of the account.
-	pub pgp_fingerprint: Option<[u8; 20]>,
-
-	/// A graphic image representing the controller of the account. Should be a company,
-	/// organization or project logo or a headshot in the case of a human.
-	pub image: Data,
-
-	/// The Twitter identity. The leading `@` character may be elided.
-	pub twitter: Data,
-}
-
-/// Information concerning the identity of the controller of an account.
-///
-/// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
-/// backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
-pub struct Registration<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
-> {
-	/// Judgements from the registrars on this identity. Stored ordered by `RegistrarIndex`. There
-	/// may be only a single judgement from each registrar.
-	pub judgements: Vec<(RegistrarIndex, Judgement<Balance>)>,
-
-	/// Amount held on deposit for this information.
-	pub deposit: Balance,
-
-	/// Information on the identity.
-	pub info: IdentityInfo,
-}
-
-impl <
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
-> Registration<Balance> {
-	fn total_deposit(&self) -> Balance {
-		self.deposit + self.judgements.iter()
-			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
-			.fold(Zero::zero(), |a, i| a + i)
-	}
-}
-
-impl<
-	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq,
-> Decode for Registration<Balance> {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
-		let (judgements, deposit, info) = Decode::decode(&mut AppendZerosInput::new(input))?;
-		Ok(Self { judgements, deposit, info })
-	}
-}
-
-/// Information concerning a registrar.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub struct RegistrarInfo<
-	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
-	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
-> {
-	/// The account of the registrar.
-	pub account: AccountId,
-
-	/// Amount required to be given to the registrar for them to provide judgement.
-	pub fee: Balance,
-
-	/// Relevant fields for this registrar. Registrar judgements are limited to attestations on
-	/// these fields.
-	pub fields: IdentityFields,
-}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -411,6 +151,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// Information that is pertinent to identify the entity behind an account.
@@ -422,7 +163,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Registration<BalanceOf<T>>,
+		Registration<BalanceOf<T>, T::MaxRegistrars, T::MaxAdditionalFields>,
 		OptionQuery,
 	>;
 
@@ -449,7 +190,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		(BalanceOf<T>, Vec<T::AccountId>),
+		(BalanceOf<T>, BoundedVec<T::AccountId, T::MaxSubAccounts>),
 		ValueQuery,
 	>;
 
@@ -461,7 +202,7 @@ pub mod pallet {
 	#[pallet::getter(fn registrars)]
 	pub(super) type Registrars<T: Config> = StorageValue<
 		_,
-		Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>,
+		BoundedVec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>, T::MaxRegistrars>,
 		ValueQuery,
 	>;
 
@@ -532,9 +273,6 @@ pub mod pallet {
 		SubIdentityRevoked(T::AccountId, T::AccountId, BalanceOf<T>),
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	#[pallet::call]
 	/// Identity pallet declaration.
 	impl<T: Config> Pallet<T> {
@@ -552,15 +290,15 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::add_registrar(T::MaxRegistrars::get()))]
-		pub(super) fn add_registrar(origin: OriginFor<T>, account: T::AccountId) -> DispatchResultWithPostInfo {
+		pub fn add_registrar(origin: OriginFor<T>, account: T::AccountId) -> DispatchResultWithPostInfo {
 			T::RegistrarOrigin::ensure_origin(origin)?;
 
 			let (i, registrar_count) = <Registrars<T>>::try_mutate(
 				|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
-					ensure!(registrars.len() < T::MaxRegistrars::get() as usize, Error::<T>::TooManyRegistrars);
-					registrars.push(Some(RegistrarInfo {
+					registrars.try_push(Some(RegistrarInfo {
 						account, fee: Zero::zero(), fields: Default::default()
-					}));
+					}))
+					.map_err(|_| Error::<T>::TooManyRegistrars)?;
 					Ok(((registrars.len() - 1) as RegistrarIndex, registrars.len()))
 				}
 			)?;
@@ -593,7 +331,7 @@ pub mod pallet {
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		))]
-		pub(super) fn set_identity(origin: OriginFor<T>, info: IdentityInfo) -> DispatchResultWithPostInfo {
+		pub fn set_identity(origin: OriginFor<T>, info: IdentityInfo<T::MaxAdditionalFields>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
 			ensure!(extra_fields <= T::MaxAdditionalFields::get(), Error::<T>::TooManyFields);
@@ -606,7 +344,7 @@ pub mod pallet {
 					id.info = info;
 					id
 				}
-				None => Registration { info, judgements: Vec::new(), deposit: Zero::zero() },
+				None => Registration { info, judgements: BoundedVec::default(), deposit: Zero::zero() },
 			};
 
 			let old_deposit = id.deposit;
@@ -659,7 +397,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_subs_old(T::MaxSubAccounts::get()) // P: Assume max sub accounts removed.
 			.saturating_add(T::WeightInfo::set_subs_new(subs.len() as u32)) // S: Assume all subs are new.
 		)]
-		pub(super) fn set_subs(origin: OriginFor<T>, subs: Vec<(T::AccountId, Data)>) -> DispatchResultWithPostInfo {
+		pub fn set_subs(origin: OriginFor<T>, subs: Vec<(T::AccountId, Data)>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::contains_key(&sender), Error::<T>::NotFound);
 			ensure!(subs.len() <= T::MaxSubAccounts::get() as usize, Error::<T>::TooManySubAccounts);
@@ -681,10 +419,11 @@ pub mod pallet {
 			for s in old_ids.iter() {
 				<SuperOf<T>>::remove(s);
 			}
-			let ids = subs.into_iter().map(|(id, name)| {
+			let mut ids = BoundedVec::<T::AccountId, T::MaxSubAccounts>::default();
+			for (id, name) in subs {
 				<SuperOf<T>>::insert(&id, (sender.clone(), name));
-				id
-			}).collect::<Vec<_>>();
+				ids.try_push(id).expect("subs length is less than T::MaxSubAccounts; qed");
+			}
 			let new_subs = ids.len();
 
 			if ids.is_empty() {
@@ -722,7 +461,7 @@ pub mod pallet {
 			T::MaxSubAccounts::get().into(), // S
 			T::MaxAdditionalFields::get().into(), // X
 		))]
-		pub(super) fn clear_identity(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn clear_identity(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&sender);
@@ -771,7 +510,7 @@ pub mod pallet {
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		))]
-		pub(super) fn request_judgement(origin: OriginFor<T>,
+		pub fn request_judgement(origin: OriginFor<T>,
 			#[pallet::compact] reg_index: RegistrarIndex,
 			#[pallet::compact] max_fee: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
@@ -789,7 +528,10 @@ pub mod pallet {
 				} else {
 					id.judgements[i] = item
 				},
-				Err(i) => id.judgements.insert(i, item),
+				Err(i) => id
+					.judgements
+					.try_insert(i, item)
+					.map_err(|_| Error::<T>::TooManyRegistrars)?,
 			}
 
 			T::Currency::reserve(&sender, registrar.fee)?;
@@ -827,7 +569,7 @@ pub mod pallet {
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		))]
-		pub(super) fn cancel_request(origin: OriginFor<T>, reg_index: RegistrarIndex) -> DispatchResultWithPostInfo {
+		pub fn cancel_request(origin: OriginFor<T>, reg_index: RegistrarIndex) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or(Error::<T>::NoIdentity)?;
 
@@ -867,7 +609,7 @@ pub mod pallet {
 		/// - Benchmark: 7.315 + R * 0.329 µs (min squares analysis)
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_fee(T::MaxRegistrars::get()))] // R
-		pub(super) fn set_fee(origin: OriginFor<T>,
+		pub fn set_fee(origin: OriginFor<T>,
 			#[pallet::compact] index: RegistrarIndex,
 			#[pallet::compact] fee: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
@@ -897,7 +639,7 @@ pub mod pallet {
 		/// - Benchmark: 8.823 + R * 0.32 µs (min squares analysis)
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_account_id(T::MaxRegistrars::get()))] // R
-		pub(super) fn set_account_id(origin: OriginFor<T>,
+		pub fn set_account_id(origin: OriginFor<T>,
 			#[pallet::compact] index: RegistrarIndex,
 			new: T::AccountId,
 		) -> DispatchResultWithPostInfo {
@@ -927,7 +669,7 @@ pub mod pallet {
 		/// - Benchmark: 7.464 + R * 0.325 µs (min squares analysis)
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_fields(T::MaxRegistrars::get()))] // R
-		pub(super) fn set_fields(origin: OriginFor<T>,
+		pub fn set_fields(origin: OriginFor<T>,
 			#[pallet::compact] index: RegistrarIndex,
 			fields: IdentityFields,
 		) -> DispatchResultWithPostInfo {
@@ -968,7 +710,7 @@ pub mod pallet {
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		))]
-		pub(super) fn provide_judgement(origin: OriginFor<T>,
+		pub fn provide_judgement(origin: OriginFor<T>,
 			#[pallet::compact] reg_index: RegistrarIndex,
 			target: <T::Lookup as StaticLookup>::Source,
 			judgement: Judgement<BalanceOf<T>>,
@@ -991,7 +733,10 @@ pub mod pallet {
 					}
 					id.judgements[position] = item
 				}
-				Err(position) => id.judgements.insert(position, item),
+				Err(position) => id
+					.judgements
+					.try_insert(position, item)
+					.map_err(|_| Error::<T>::TooManyRegistrars)?,
 			}
 
 			let judgements = id.judgements.len();
@@ -1029,7 +774,7 @@ pub mod pallet {
 			T::MaxSubAccounts::get().into(), // S
 			T::MaxAdditionalFields::get().into(), // X
 		))]
-		pub(super) fn kill_identity(
+		pub fn kill_identity(
 			origin: OriginFor<T>, target: <T::Lookup as StaticLookup>::Source
 		) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::ensure_origin(origin)?;
@@ -1063,7 +808,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
 		#[pallet::weight(T::WeightInfo::add_sub(T::MaxSubAccounts::get()))]
-		pub(super) fn add_sub(origin: OriginFor<T>, sub: <T::Lookup as StaticLookup>::Source, data: Data) -> DispatchResult {
+		pub fn add_sub(origin: OriginFor<T>, sub: <T::Lookup as StaticLookup>::Source, data: Data) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let sub = T::Lookup::lookup(sub)?;
 			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
@@ -1078,7 +823,7 @@ pub mod pallet {
 				T::Currency::reserve(&sender, deposit)?;
 
 				SuperOf::<T>::insert(&sub, (sender.clone(), data));
-				sub_ids.push(sub.clone());
+				sub_ids.try_push(sub.clone()).expect("sub ids length checked above; qed");
 				*subs_deposit = subs_deposit.saturating_add(deposit);
 
 				Self::deposit_event(Event::SubIdentityAdded(sub, sender.clone(), deposit));
@@ -1091,7 +836,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
 		#[pallet::weight(T::WeightInfo::rename_sub(T::MaxSubAccounts::get()))]
-		pub(super) fn rename_sub(
+		pub fn rename_sub(
 			origin: OriginFor<T>, sub: <T::Lookup as StaticLookup>::Source, data: Data
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -1110,7 +855,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
 		#[pallet::weight(T::WeightInfo::remove_sub(T::MaxSubAccounts::get()))]
-		pub(super) fn remove_sub(origin: OriginFor<T>, sub: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
+		pub fn remove_sub(origin: OriginFor<T>, sub: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
 			let sub = T::Lookup::lookup(sub)?;
@@ -1139,7 +884,7 @@ pub mod pallet {
 		/// NOTE: This should not normally be used, but is provided in the case that the non-
 		/// controller of an account is maliciously registered as a sub-account.
 		#[pallet::weight(T::WeightInfo::quit_sub(T::MaxSubAccounts::get()))]
-		pub(super) fn quit_sub(origin: OriginFor<T>) -> DispatchResult {
+		pub fn quit_sub(origin: OriginFor<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let (sup, _) = SuperOf::<T>::take(&sender).ok_or(Error::<T>::NotSub)?;
 			SubsOf::<T>::mutate(&sup, |(ref mut subs_deposit, ref mut sub_ids)| {
@@ -1164,4 +909,3 @@ impl<T: Config> Pallet<T> {
 			.collect()
 	}
 }
-

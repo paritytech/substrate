@@ -127,6 +127,34 @@ pub trait Saturating {
 	/// Saturating exponentiation. Compute `self.pow(exp)`, saturating at the numeric bounds
 	/// instead of overflowing.
 	fn saturating_pow(self, exp: usize) -> Self;
+
+	/// Increment self by one, saturating.
+	fn saturating_inc(&mut self) where Self: One {
+		let mut o = Self::one();
+		sp_std::mem::swap(&mut o, self);
+		*self = o.saturating_add(One::one());
+	}
+
+	/// Decrement self by one, saturating at zero.
+	fn saturating_dec(&mut self) where Self: One {
+		let mut o = Self::one();
+		sp_std::mem::swap(&mut o, self);
+		*self = o.saturating_sub(One::one());
+	}
+
+	/// Increment self by some `amount`, saturating.
+	fn saturating_accrue(&mut self, amount: Self) where Self: One {
+		let mut o = Self::one();
+		sp_std::mem::swap(&mut o, self);
+		*self = o.saturating_add(amount);
+	}
+
+	/// Decrement self by some `amount`, saturating at zero.
+	fn saturating_reduce(&mut self, amount: Self) where Self: One {
+		let mut o = Self::one();
+		sp_std::mem::swap(&mut o, self);
+		*self = o.saturating_sub(amount);
+	}
 }
 
 impl<T: Clone + Zero + One + PartialOrd + CheckedMul + Bounded + num_traits::Saturating> Saturating for T {

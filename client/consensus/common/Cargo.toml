@@ -13,6 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+async-trait = "0.1"
 sc-client-api = { version = "3.0.0", path = "../../api" }
 sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }

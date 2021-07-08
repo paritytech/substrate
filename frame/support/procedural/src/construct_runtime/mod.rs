@@ -15,15 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod expand;
 mod parse;
 
 use frame_support_procedural_tools::syn_ext as ext;
 use frame_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
-use parse::{PalletDeclaration, RuntimeDefinition, WhereSection, PalletPart};
+use parse::{PalletDeclaration, PalletPart, PalletPath, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
-use proc_macro2::{TokenStream as TokenStream2};
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Ident, Result, TypePath};
+use syn::{Ident, Result};
 use std::collections::HashMap;
 
 /// The fixed name of the system pallet.
@@ -34,7 +35,7 @@ const SYSTEM_PALLET_NAME: &str = "System";
 pub struct Pallet {
 	pub name: Ident,
 	pub index: u8,
-	pub pallet: Ident,
+	pub path: PalletPath,
 	pub instance: Option<Ident>,
 	pub pallet_parts: Vec<PalletPart>,
 }
@@ -100,7 +101,7 @@ fn complete_pallets(decl: impl Iterator<Item = PalletDeclaration>) -> syn::Resul
 			Ok(Pallet {
 				name: pallet.name,
 				index: final_index,
-				pallet: pallet.pallet,
+				path: pallet.path,
 				instance: pallet.instance,
 				pallet_parts: pallet.pallet_parts,
 			})
@@ -134,46 +135,27 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 	let pallets = complete_pallets(pallets.into_iter())?;
 
-	let system_pallet = pallets.iter()
-		.find(|decl| decl.name == SYSTEM_PALLET_NAME)
-		.ok_or_else(|| syn::Error::new(
-			pallets_token.span,
-			"`System` pallet declaration is missing. \
-			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
-		))?;
-
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
 
-	let all_but_system_pallets = pallets.iter().filter(|pallet| pallet.name != SYSTEM_PALLET_NAME);
+	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 
-	let outer_event = decl_outer_event(
-		&name,
-		pallets.iter(),
-		&scrate,
-	)?;
-
-	let outer_origin = decl_outer_origin(
-		&name,
-		all_but_system_pallets,
-		&system_pallet,
-		&scrate,
-	)?;
+	let outer_origin = expand::expand_outer_origin(&name, &pallets, pallets_token, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter());
 	let pallet_to_index = decl_pallet_runtime_setup(&pallets, &scrate);
 
-	let dispatch = decl_outer_dispatch(&name, pallets.iter(), &scrate);
-	let metadata = decl_runtime_metadata(&name, pallets.iter(), &scrate, &unchecked_extrinsic);
-	let outer_config = decl_outer_config(&name, pallets.iter(), &scrate);
-	let inherent = decl_outer_inherent(
+	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate);
+	let metadata = expand::expand_runtime_metadata(&name, &pallets, &scrate, &unchecked_extrinsic);
+	let outer_config = expand::expand_outer_config(&name, &pallets, &scrate);
+	let inherent = expand::expand_outer_inherent(
 		&name,
 		&block,
 		&unchecked_extrinsic,
-		pallets.iter(),
+		&pallets,
 		&scrate,
 	);
-	let validate_unsigned = decl_validate_unsigned(&name, pallets.iter(), &scrate);
+	let validate_unsigned = expand::expand_outer_validate_unsigned(&name, &pallets, &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 
 	let res = quote!(
@@ -218,228 +200,6 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	Ok(res)
 }
 
-fn decl_validate_unsigned<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations
-		.filter(|pallet_declaration| pallet_declaration.exists_part("ValidateUnsigned"))
-		.map(|pallet_declaration| &pallet_declaration.name);
-	quote!(
-		#scrate::impl_outer_validate_unsigned!(
-			impl ValidateUnsigned for #runtime {
-				#( #pallets_tokens )*
-			}
-		);
-	)
-}
-
-fn decl_outer_inherent<'a>(
-	runtime: &'a Ident,
-	block: &'a syn::TypePath,
-	unchecked_extrinsic: &'a syn::TypePath,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations.filter_map(|pallet_declaration| {
-		let maybe_config_part = pallet_declaration.find_part("Inherent");
-		maybe_config_part.map(|_| {
-			let name = &pallet_declaration.name;
-			quote!(#name,)
-		})
-	});
-	quote!(
-		#scrate::impl_outer_inherent!(
-			impl Inherents where
-				Block = #block,
-				UncheckedExtrinsic = #unchecked_extrinsic,
-				Runtime = #runtime,
-			{
-				#(#pallets_tokens)*
-			}
-		);
-	)
-}
-
-fn decl_outer_config<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations
-		.filter_map(|pallet_declaration| {
-			pallet_declaration.find_part("Config").map(|part| {
-				let transformed_generics: Vec<_> = part
-					.generics
-					.params
-					.iter()
-					.map(|param| quote!(<#param>))
-					.collect();
-				(pallet_declaration, transformed_generics)
-			})
-		})
-		.map(|(pallet_declaration, generics)| {
-			let pallet = &pallet_declaration.pallet;
-			let name = Ident::new(
-				&format!("{}Config", pallet_declaration.name),
-				pallet_declaration.name.span(),
-			);
-			let instance = pallet_declaration.instance.as_ref().into_iter();
-			quote!(
-				#name =>
-					#pallet #(#instance)* #(#generics)*,
-			)
-		});
-	quote!(
-		#scrate::impl_outer_config! {
-			pub struct GenesisConfig for #runtime where AllPalletsWithSystem = AllPalletsWithSystem {
-				#(#pallets_tokens)*
-			}
-		}
-	)
-}
-
-fn decl_runtime_metadata<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-	extrinsic: &TypePath,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations
-		.filter_map(|pallet_declaration| {
-			pallet_declaration.find_part("Pallet").map(|_| {
-				let filtered_names: Vec<_> = pallet_declaration
-					.pallet_parts()
-					.iter()
-					.filter(|part| part.name() != "Pallet")
-					.map(|part| part.ident())
-					.collect();
-				(pallet_declaration, filtered_names)
-			})
-		})
-		.map(|(pallet_declaration, filtered_names)| {
-			let pallet = &pallet_declaration.pallet;
-			let name = &pallet_declaration.name;
-			let instance = pallet_declaration
-				.instance
-				.as_ref()
-				.map(|name| quote!(<#name>))
-				.into_iter();
-
-			let index = pallet_declaration.index;
-
-			quote!(
-				#pallet::Pallet #(#instance)* as #name { index #index } with #(#filtered_names)*,
-			)
-		});
-	quote!(
-		#scrate::impl_runtime_metadata!{
-			for #runtime with pallets where Extrinsic = #extrinsic
-				#(#pallets_tokens)*
-		}
-	)
-}
-
-fn decl_outer_dispatch<'a>(
-	runtime: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> TokenStream2 {
-	let pallets_tokens = pallet_declarations
-		.filter(|pallet_declaration| pallet_declaration.exists_part("Call"))
-		.map(|pallet_declaration| {
-			let pallet = &pallet_declaration.pallet;
-			let name = &pallet_declaration.name;
-			let index = pallet_declaration.index;
-			quote!(#[codec(index = #index)] #pallet::#name)
-		});
-
-	quote!(
-		#scrate::impl_outer_dispatch! {
-			pub enum Call for #runtime where origin: Origin {
-				#(#pallets_tokens,)*
-			}
-		}
-	)
-}
-
-fn decl_outer_origin<'a>(
-	runtime_name: &'a Ident,
-	pallets_except_system: impl Iterator<Item = &'a Pallet>,
-	system_pallet: &'a Pallet,
-	scrate: &'a TokenStream2,
-) -> syn::Result<TokenStream2> {
-	let mut pallets_tokens = TokenStream2::new();
-	for pallet_declaration in pallets_except_system {
-		if let Some(pallet_entry) = pallet_declaration.find_part("Origin") {
-			let pallet = &pallet_declaration.pallet;
-			let instance = pallet_declaration.instance.as_ref();
-			let generics = &pallet_entry.generics;
-			if instance.is_some() && generics.params.is_empty() {
-				let msg = format!(
-					"Instantiable pallet with no generic `Origin` cannot \
-					 be constructed: pallet `{}` must have generic `Origin`",
-					pallet_declaration.name
-				);
-				return Err(syn::Error::new(pallet_declaration.name.span(), msg));
-			}
-			let index = pallet_declaration.index;
-			let tokens = quote!(#[codec(index = #index)] #pallet #instance #generics,);
-			pallets_tokens.extend(tokens);
-		}
-	}
-
-	let system_name = &system_pallet.pallet;
-	let system_index = system_pallet.index;
-
-	Ok(quote!(
-		#scrate::impl_outer_origin! {
-			pub enum Origin for #runtime_name where
-				system = #system_name,
-				system_index = #system_index
-			{
-				#pallets_tokens
-			}
-		}
-	))
-}
-
-fn decl_outer_event<'a>(
-	runtime_name: &'a Ident,
-	pallet_declarations: impl Iterator<Item = &'a Pallet>,
-	scrate: &'a TokenStream2,
-) -> syn::Result<TokenStream2> {
-	let mut pallets_tokens = TokenStream2::new();
-	for pallet_declaration in pallet_declarations {
-		if let Some(pallet_entry) = pallet_declaration.find_part("Event") {
-			let pallet = &pallet_declaration.pallet;
-			let instance = pallet_declaration.instance.as_ref();
-			let generics = &pallet_entry.generics;
-			if instance.is_some() && generics.params.is_empty() {
-				let msg = format!(
-					"Instantiable pallet with no generic `Event` cannot \
-					 be constructed: pallet `{}` must have generic `Event`",
-					pallet_declaration.name,
-				);
-				return Err(syn::Error::new(pallet_declaration.name.span(), msg));
-			}
-
-			let index = pallet_declaration.index;
-			let tokens = quote!(#[codec(index = #index)] #pallet #instance #generics,);
-			pallets_tokens.extend(tokens);
-		}
-	}
-
-	Ok(quote!(
-		#scrate::impl_outer_event! {
-			pub enum Event for #runtime_name {
-				#pallets_tokens
-			}
-		}
-	))
-}
-
 fn decl_all_pallets<'a>(
 	runtime: &'a Ident,
 	pallet_declarations: impl Iterator<Item = &'a Pallet>,
@@ -448,7 +208,7 @@ fn decl_all_pallets<'a>(
 	let mut names = Vec::new();
 	for pallet_declaration in pallet_declarations {
 		let type_name = &pallet_declaration.name;
-		let pallet = &pallet_declaration.pallet;
+		let pallet = &pallet_declaration.path;
 		let mut generics = vec![quote!(#runtime)];
 		generics.extend(
 			pallet_declaration
@@ -540,7 +300,7 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 
 			#[test]
 			pub fn runtime_integrity_tests() {
-				<AllPallets as #scrate::traits::IntegrityTest>::integrity_test();
+				<AllPalletsWithSystem as #scrate::traits::IntegrityTest>::integrity_test();
 			}
 		}
 	)

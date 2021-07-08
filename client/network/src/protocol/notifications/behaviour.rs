@@ -1765,7 +1765,7 @@ impl NetworkBehaviour for Notifications {
 							*c == connection && matches!(s, ConnectionState::Opening))
 						{
 							if !any_open {
-								trace!(target: "sub-libp2p", "External API <= Open({:?})", source);
+								trace!(target: "sub-libp2p", "External API <= Open({}, {:?})", source, set_id);
 								let event = NotificationsOut::CustomProtocolOpen {
 									peer_id: source,
 									set_id,
@@ -1851,9 +1851,10 @@ impl NetworkBehaviour for Notifications {
 							trace!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
 							self.peerset.dropped(set_id, source.clone(), sc_peerset::DropReason::Refused);
 
+							let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 							*entry.into_mut() = PeerState::Disabled {
 								connections,
-								backoff_until: None
+								backoff_until: Some(Instant::now() + Duration::from_secs(ban_dur))
 							};
 						} else {
 							*entry.into_mut() = PeerState::Enabled { connections };

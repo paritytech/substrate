@@ -247,7 +247,7 @@ impl offchain::Externalities for TestOffchainExt {
 	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<RequestId, ()> {
 		let mut state = self.0.write();
 		let id = RequestId(state.requests.len() as u16);
-		state.requests.insert(id.clone(), PendingRequest {
+		state.requests.insert(id, PendingRequest {
 			method: method.into(),
 			uri: uri.into(),
 			meta: meta.into(),

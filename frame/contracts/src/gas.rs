@@ -23,6 +23,7 @@ use frame_support::{
 		DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo, DispatchError,
 	},
 	weights::Weight,
+	DefaultNoBound,
 };
 use sp_core::crypto::UncheckedFrom;
 
@@ -73,6 +74,7 @@ pub struct ErasedToken {
 	pub token: Box<dyn Any>,
 }
 
+#[derive(DefaultNoBound)]
 pub struct GasMeter<T: Config> {
 	gas_limit: Weight,
 	/// Amount of gas left from initial gas limit. Can reach zero.
@@ -80,18 +82,6 @@ pub struct GasMeter<T: Config> {
 	_phantom: PhantomData<T>,
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
-}
-
-impl<T: Config> Default for GasMeter<T> {
-	fn default() -> Self {
-		Self {
-			gas_limit: Default::default(),
-			gas_left: Default::default(),
-			_phantom: Default::default(),
-			#[cfg(test)]
-			tokens: Default::default(),
-		}
-	}
 }
 
 impl<T: Config> GasMeter<T>
@@ -175,15 +165,6 @@ where
 	pub fn adjust_gas<Tok: Token<T>>(&mut self, charged_amount: ChargedAmount, token: Tok) {
 		let adjustment = charged_amount.0.saturating_sub(token.weight());
 		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
-	}
-
-	/// Refund previously charged gas back to the gas meter.
-	///
-	/// This can be used if a gas worst case estimation must be charged before
-	/// performing a certain action. This way the difference can be refundend when
-	/// the worst case did not happen.
-	pub fn refund(&mut self, amount: ChargedAmount) {
-		self.gas_left = self.gas_left.saturating_add(amount.0).min(self.gas_limit)
 	}
 
 	/// Returns how much gas was used.

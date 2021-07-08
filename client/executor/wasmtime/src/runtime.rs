@@ -31,7 +31,7 @@ use sc_executor_common::{
 	runtime_blob::{DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob},
 	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
 };
-use sp_allocator::FreeingBumpHeapAllocator;
+use sc_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize, Value};
 use wasmtime::{Engine, Store};
@@ -150,7 +150,13 @@ impl WasmInstance for WasmtimeInstance {
 				globals_snapshot.apply(&**instance_wrapper);
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator)
+				let result = perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator);
+
+				// Signal to the OS that we are done with the linear memory and that it can be
+				// reclaimed.
+				instance_wrapper.decommit();
+
+				result
 			}
 			Strategy::RecreateInstance(instance_creator) => {
 				let instance_wrapper = instance_creator.instantiate()?;
@@ -171,6 +177,19 @@ impl WasmInstance for WasmtimeInstance {
 			Strategy::RecreateInstance(instance_creator) => {
 				instance_creator.instantiate()?.get_global_val(name)
 			}
+		}
+	}
+
+	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
+		match &self.strategy {
+			Strategy::RecreateInstance(_) => {
+				// We do not keep the wasm instance around, therefore there is no linear memory
+				// associated with it.
+				None
+			}
+			Strategy::FastInstanceReuse {
+				instance_wrapper, ..
+			} => Some(instance_wrapper.base_ptr()),
 		}
 	}
 }
@@ -213,10 +232,75 @@ directory = \"{cache_dir}\"
 	Ok(())
 }
 
-fn common_config() -> wasmtime::Config {
+fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config, WasmError> {
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
-	config
+	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
+
+	if let Some(DeterministicStackLimit {
+		native_stack_max, ..
+	}) = semantics.deterministic_stack_limit
+	{
+		config
+			.max_wasm_stack(native_stack_max as usize)
+			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {}", e)))?;
+	}
+
+	// Be clear and specific about the extensions we support. If an update brings new features
+	// they should be introduced here as well.
+	config.wasm_reference_types(false);
+	config.wasm_simd(false);
+	config.wasm_bulk_memory(false);
+	config.wasm_multi_value(false);
+	config.wasm_multi_memory(false);
+	config.wasm_module_linking(false);
+	config.wasm_threads(false);
+
+	Ok(config)
+}
+
+/// Knobs for deterministic stack height limiting.
+///
+/// The WebAssembly standard defines a call/value stack but it doesn't say anything about its
+/// size except that it has to be finite. The implementations are free to choose their own notion
+/// of limit: some may count the number of calls or values, others would rely on the host machine
+/// stack and trap on reaching a guard page.
+///
+/// This obviously is a source of non-determinism during execution. This feature can be used
+/// to instrument the code so that it will count the depth of execution in some deterministic
+/// way (the machine stack limit should be so high that the deterministic limit always triggers
+/// first).
+///
+/// The deterministic stack height limiting feature allows to instrument the code so that it will
+/// count the number of items that may be on the stack. This counting will only act as an rough
+/// estimate of the actual stack limit in wasmtime. This is because wasmtime measures it's stack
+/// usage in bytes.
+///
+/// The actual number of bytes consumed by a function is not trivial to compute  without going through
+/// full compilation. Therefore, it's expected that `native_stack_max` is grealy overestimated and
+/// thus never reached in practice. The stack overflow check introduced by the instrumentation and
+/// that relies on the logical item count should be reached first.
+///
+/// See [here][stack_height] for more details of the instrumentation
+///
+/// [stack_height]: https://github.com/paritytech/wasm-utils/blob/d9432baf/src/stack_height/mod.rs#L1-L50
+pub struct DeterministicStackLimit {
+	/// A number of logical "values" that can be pushed on the wasm stack. A trap will be triggered
+	/// if exceeded.
+	///
+	/// A logical value is a local, an argument or a value pushed on operand stack.
+	pub logical_max: u32,
+	/// The maximum number of bytes for stack used by wasmtime JITed code.
+	///
+	/// It's not specified how much bytes will be consumed by a stack frame for a given wasm function
+	/// after translation into machine code. It is also not quite trivial.
+	///
+	/// Therefore, this number should be choosen conservatively. It must be so large so that it can
+	/// fit the [`logical_max`] logical values on the stack, according to the current instrumentation
+	/// algorithm.
+	///
+	/// This value cannot be 0.
+	pub native_stack_max: u32,
 }
 
 pub struct Semantics {
@@ -235,24 +319,30 @@ pub struct Semantics {
 	/// is used.
 	pub fast_instance_reuse: bool,
 
-	/// The WebAssembly standard defines a call/value stack but it doesn't say anything about its
-	/// size except that it has to be finite. The implementations are free to choose their own notion
-	/// of limit: some may count the number of calls or values, others would rely on the host machine
-	/// stack and trap on reaching a guard page.
+	/// Specifiying `Some` will enable deterministic stack height. That is, all executor invocations
+	/// will reach stack overflow at the exactly same point across different wasmtime versions and
+	/// architectures.
 	///
-	/// This obviously is a source of non-determinism during execution. This feature can be used
-	/// to instrument the code so that it will count the depth of execution in some deterministic
-	/// way (the machine stack limit should be so high that the deterministic limit always triggers
-	/// first).
-	///
-	/// See [here][stack_height] for more details of the instrumentation
+	/// This is achieved by a combination of running an instrumentation pass on input code and
+	/// configuring wasmtime accordingly.
 	///
 	/// Since this feature depends on instrumentation, it can be set only if [`CodeSupplyMode::Verbatim`]
 	/// is used.
+	pub deterministic_stack_limit: Option<DeterministicStackLimit>,
+
+	/// Controls whether wasmtime should compile floating point in a way that doesn't allow for
+	/// non-determinism.
 	///
-	/// [stack_height]: https://github.com/paritytech/wasm-utils/blob/d9432baf/src/stack_height/mod.rs#L1-L50
-	pub stack_depth_metering: bool,
-	// Other things like nan canonicalization can be added here.
+	/// By default, the wasm spec allows some local non-determinism wrt. certain floating point
+	/// operations. Specifically, those operations that are not defined to operate on bits (e.g. fneg)
+	/// can produce NaN values. The exact bit pattern for those is not specified and may depend
+	/// on the particular machine that executes wasmtime generated JITed machine code. That is
+	/// a source of non-deterministic values.
+	///
+	/// The classical runtime environment for Substrate allowed it and punted this on the runtime
+	/// developers. For PVFs, we want to ensure that execution is deterministic though. Therefore,
+	/// for PVF execution this flag is meant to be turned on.
+	pub canonicalize_nans: bool,
 }
 
 pub struct Config {
@@ -272,7 +362,7 @@ pub struct Config {
 	pub semantics: Semantics,
 }
 
-pub enum CodeSupplyMode<'a> {
+enum CodeSupplyMode<'a> {
 	/// The runtime is instantiated using the given runtime blob.
 	Verbatim {
 		// Rationale to take the `RuntimeBlob` here is so that the client will be able to reuse
@@ -295,15 +385,48 @@ pub enum CodeSupplyMode<'a> {
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
-///
-/// The `cache_path` designates where this executor implementation can put compiled artifacts.
 pub fn create_runtime(
+	blob: RuntimeBlob,
+	config: Config,
+	host_functions: Vec<&'static dyn Function>,
+) -> std::result::Result<WasmtimeRuntime, WasmError> {
+	// SAFETY: this is safe because it doesn't use `CodeSupplyMode::Artifact`.
+	unsafe { do_create_runtime(CodeSupplyMode::Verbatim { blob }, config, host_functions) }
+}
+
+/// The same as [`create_runtime`] but takes a precompiled artifact, which makes this function
+/// considerably faster than [`create_runtime`].
+///
+/// # Safety
+///
+/// The caller must ensure that the compiled artifact passed here was produced by [`prepare_runtime_artifact`].
+/// Otherwise, there is a risk of arbitrary code execution with all implications.
+///
+/// It is ok though if the `compiled_artifact` was created by code of another version or with different
+/// configuration flags. In such case the caller will receive an `Err` deterministically.
+pub unsafe fn create_runtime_from_artifact(
+	compiled_artifact: &[u8],
+	config: Config,
+	host_functions: Vec<&'static dyn Function>,
+) -> std::result::Result<WasmtimeRuntime, WasmError> {
+	do_create_runtime(
+		CodeSupplyMode::Artifact { compiled_artifact },
+		config,
+		host_functions,
+	)
+}
+
+/// # Safety
+///
+/// This is only unsafe if called with [`CodeSupplyMode::Artifact`]. See [`create_runtime_from_artifact`]
+/// to get more details.
+unsafe fn do_create_runtime(
 	code_supply_mode: CodeSupplyMode<'_>,
 	config: Config,
 	host_functions: Vec<&'static dyn Function>,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
 	// Create the engine, store and finally the module from the given code.
-	let mut wasmtime_config = common_config();
+	let mut wasmtime_config = common_config(&config.semantics)?;
 	if let Some(ref cache_path) = config.cache_path {
 		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut wasmtime_config) {
 			log::warn!(
@@ -313,11 +436,12 @@ pub fn create_runtime(
 		}
 	}
 
-	let engine = Engine::new(&wasmtime_config);
+	let engine = Engine::new(&wasmtime_config)
+		.map_err(|e| WasmError::Other(format!("cannot create the engine for runtime: {}", e)))?;
 
 	let (module, snapshot_data) = match code_supply_mode {
-		CodeSupplyMode::Verbatim { mut blob } => {
-			instrument(&mut blob, &config.semantics);
+		CodeSupplyMode::Verbatim { blob } => {
+			let blob = instrument(blob, &config.semantics)?;
 
 			if config.semantics.fast_instance_reuse {
 				let data_segments_snapshot = DataSegmentsSnapshot::take(&blob).map_err(|e| {
@@ -341,6 +465,8 @@ pub fn create_runtime(
 			}
 		}
 		CodeSupplyMode::Artifact { compiled_artifact } => {
+			// SAFETY: The unsafity of `deserialize` is covered by this function. The
+			//         responsibilities to maintain the invariants are passed to the caller.
 			let module = wasmtime::Module::deserialize(&engine, compiled_artifact)
 				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {}", e)))?;
 
@@ -357,30 +483,36 @@ pub fn create_runtime(
 	})
 }
 
-fn instrument(blob: &mut RuntimeBlob, semantics: &Semantics) {
+fn instrument(
+	mut blob: RuntimeBlob,
+	semantics: &Semantics,
+) -> std::result::Result<RuntimeBlob, WasmError> {
+	if let Some(DeterministicStackLimit { logical_max, .. }) = semantics.deterministic_stack_limit {
+		blob = blob.inject_stack_depth_metering(logical_max)?;
+	}
+
+	// If enabled, this should happen after all other passes that may introduce global variables.
 	if semantics.fast_instance_reuse {
 		blob.expose_mutable_globals();
 	}
 
-	if semantics.stack_depth_metering {
-		// TODO: implement deterministic stack metering https://github.com/paritytech/substrate/issues/8393
-	}
+	Ok(blob)
 }
 
 /// Takes a [`RuntimeBlob`] and precompiles it returning the serialized result of compilation. It
 /// can then be used for calling [`create_runtime`] avoiding long compilation times.
 pub fn prepare_runtime_artifact(
-	mut blob: RuntimeBlob,
+	blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<Vec<u8>, WasmError> {
-	instrument(&mut blob, semantics);
+	let blob = instrument(blob, semantics)?;
 
-	let engine = Engine::new(&common_config());
-	let module = wasmtime::Module::new(&engine, &blob.serialize())
-		.map_err(|e| WasmError::Other(format!("cannot compile module: {}", e)))?;
-	module
-		.serialize()
-		.map_err(|e| WasmError::Other(format!("cannot serialize module: {}", e)))
+	let engine = Engine::new(&common_config(semantics)?)
+		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;
+
+	engine
+		.precompile_module(&blob.serialize())
+		.map_err(|e| WasmError::Other(format!("cannot precompile module: {}", e)))
 }
 
 fn perform_call(

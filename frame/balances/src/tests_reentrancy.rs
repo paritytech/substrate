@@ -106,6 +106,7 @@ impl OnUnbalanced<NegativeImbalance<Test>> for OnDustRemoval {
 }
 parameter_types! {
 	pub const MaxLocks: u32 = 50;
+	pub const MaxReserves: u32 = 2;
 }
 impl Config for Test {
 	type Balance = u64;
@@ -119,6 +120,8 @@ impl Config for Test {
 		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
 
@@ -185,8 +188,8 @@ fn transfer_dust_removal_tst1_should_work() {
 			// Number of events expected is 8
 			assert_eq!(System::events().len(), 11);
 
-			System::assert_has_event(Event::pallet_balances(crate::Event::Transfer(2, 3, 450)));
-			System::assert_has_event(Event::pallet_balances(crate::Event::DustLost(2, 50)));
+			System::assert_has_event(Event::Balances(crate::Event::Transfer(2, 3, 450)));
+			System::assert_has_event(Event::Balances(crate::Event::DustLost(2, 50)));
 		}
 	);
 }
@@ -217,8 +220,8 @@ fn transfer_dust_removal_tst2_should_work() {
 			// Number of events expected is 8
 			assert_eq!(System::events().len(), 9);
 
-			System::assert_has_event(Event::pallet_balances(crate::Event::Transfer(2, 1, 450)));
-			System::assert_has_event(Event::pallet_balances(crate::Event::DustLost(2, 50)));
+			System::assert_has_event(Event::Balances(crate::Event::Transfer(2, 1, 450)));
+			System::assert_has_event(Event::Balances(crate::Event::DustLost(2, 50)));
 		}
 	);
 }
@@ -258,11 +261,11 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 			// Number of events expected is 10
 			assert_eq!(System::events().len(), 10);
 
-			System::assert_has_event(Event::pallet_balances(
+			System::assert_has_event(Event::Balances(
 				crate::Event::ReserveRepatriated(2, 1, 450, Status::Free),
 			));
 
-			System::assert_last_event(Event::pallet_balances(crate::Event::DustLost(2, 50)));
+			System::assert_last_event(Event::Balances(crate::Event::DustLost(2, 50)));
 		}
 	);
 }

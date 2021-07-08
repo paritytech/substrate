@@ -76,10 +76,6 @@
 //! * [`ink`](https://github.com/paritytech/ink) is
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
-//!
-//! ## Related Modules
-//!
-//! * [Balances](../pallet_balances/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit="512")]
@@ -100,7 +96,11 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 
-pub use crate::{pallet::*, schedule::Schedule, exec::Frame};
+pub use crate::{
+	pallet::*,
+	schedule::{Schedule, Limits, InstructionWeights, HostFnWeights},
+	exec::Frame,
+};
 use crate::{
 	gas::GasMeter,
 	exec::{Stack as ExecStack, Executable},
@@ -275,9 +275,7 @@ pub mod pallet {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[pallet::weight(T::WeightInfo::call(T::Schedule::get().limits.code_len / 1024)
-			.saturating_add(*gas_limit)
-		)]
+		#[pallet::weight(T::WeightInfo::call().saturating_add(*gas_limit))]
 		pub fn call(
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -289,13 +287,10 @@ pub mod pallet {
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = T::Schedule::get();
-			let (result, code_len) = match ExecStack::<T, PrefabWasmModule<T>>::run_call(
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
 				origin, dest, &mut gas_meter, &schedule, value, data, None,
-			) {
-				Ok((output, len)) => (Ok(output), len),
-				Err((err, len)) => (Err(err), len),
-			};
-			gas_meter.into_dispatch_result(result, T::WeightInfo::call(code_len / 1024))
+			);
+			gas_meter.into_dispatch_result(result, T::WeightInfo::call())
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -357,10 +352,7 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(
-				T::Schedule::get().limits.code_len / 1024, salt.len() as u32 / 1024
-			)
-			.saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32 / 1024).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -374,13 +366,12 @@ pub mod pallet {
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = T::Schedule::get();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
-			let code_len = executable.code_len();
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
 			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
-				T::WeightInfo::instantiate(code_len / 1024, salt.len() as u32 / 1024),
+				T::WeightInfo::instantiate(salt.len() as u32 / 1024),
 			)
 		}
 
@@ -388,7 +379,7 @@ pub mod pallet {
 		/// producer fails to do so, a regular users will be allowed to claim the reward.
 		///
 		/// In case of a successful eviction no fees are charged from the sender. However, the
-		/// reward is capped by the total amount of rent that was payed by the contract while
+		/// reward is capped by the total amount of rent that was paid by the contract while
 		/// it was alive.
 		///
 		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
@@ -421,10 +412,10 @@ pub mod pallet {
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			match Rent::<T, PrefabWasmModule<T>>::try_eviction(&dest, handicap)? {
-				(Some(rent_payed), code_len) => {
+				(Some(rent_paid), code_len) => {
 					T::Currency::deposit_into_existing(
 						&rewarded,
-						T::SurchargeReward::get().min(rent_payed),
+						T::SurchargeReward::get().min(rent_paid),
 					)
 					.map(|_| PostDispatchInfo {
 						actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),
@@ -535,9 +526,20 @@ pub mod pallet {
 		/// Performing a call was denied because the calling depth reached the limit
 		/// of what is specified in the schedule.
 		MaxCallDepthReached,
-		/// The contract that was called is either no contract at all (a plain account)
-		/// or is a tombstone.
-		NotCallable,
+		/// No contract was found at the specified address.
+		ContractNotFound,
+		/// A tombstone exist at the specified address.
+		///
+		/// Tombstone cannot be called. Anyone can use `seal_restore_to` in order to revive
+		/// the contract, though.
+		ContractIsTombstone,
+		/// The called contract does not have enough balance to pay for its storage.
+		///
+		/// The contract ran out of balance and is therefore eligible for eviction into a
+		/// tombstone. Anyone can evict the contract by submitting a `claim_surcharge`
+		/// extrinsic. Alternatively, a plain balance transfer can be used in order to
+		/// increase the contracts funds so that it can be called again.
+		RentNotPaid,
 		/// The code supplied to `instantiate_with_code` exceeds the limit specified in the
 		/// current schedule.
 		CodeTooLarge,
@@ -551,12 +553,11 @@ pub mod pallet {
 		ContractTrapped,
 		/// The size defined in `T::MaxValueSize` was exceeded.
 		ValueTooLarge,
-		/// The action performed is not allowed while the contract performing it is already
-		/// on the call stack. Those actions are contract self destruction and restoration
-		/// of a tombstone.
-		ReentranceDenied,
-		/// `seal_input` was called twice from the same contract execution context.
-		InputAlreadyRead,
+		/// Termination of a contract is not allowed while the contract is already
+		/// on the call stack. Can be triggered by `seal_terminate` or `seal_restore_to.
+		TerminatedWhileReentrant,
+		/// `seal_call` forwarded this contracts input. It therefore is no longer available.
+		InputForwarded,
 		/// The subject passed to `seal_random` exceeds the limit.
 		RandomSubjectTooLong,
 		/// The amount of topics passed to `seal_deposit_events` exceeds the limit.
@@ -591,6 +592,8 @@ pub mod pallet {
 		TerminatedInConstructor,
 		/// The debug message specified to `seal_debug_message` does contain invalid UTF-8.
 		DebugMessageInvalidUTF8,
+		/// A call tried to invoke a contract that is flagged as non-reentrant.
+		ReentranceDenied,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -654,7 +657,7 @@ where
 			origin, dest, &mut gas_meter, &schedule, value, input_data, debug_message.as_mut(),
 		);
 		ContractExecResult {
-			result: result.map(|r| r.0).map_err(|r| r.0.error),
+			result: result.map_err(|r| r.error),
 			gas_consumed: gas_meter.gas_spent(),
 			debug_message: debug_message.unwrap_or_default(),
 		}

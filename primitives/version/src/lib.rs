@@ -35,6 +35,9 @@ pub use sp_std;
 #[cfg(feature = "std")]
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 
+#[cfg(feature = "std")]
+pub mod embed;
+
 /// An attribute that accepts a version declaration of a runtime and generates a custom wasm section
 /// with the equivalent contents.
 ///
@@ -44,6 +47,8 @@ use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 ///
 /// A shortcoming of this macro is that it is unable to embed information regarding supported APIs.
 /// This is supported by the `construct_runtime!` macro.
+///
+/// # Usage
 ///
 /// This macro accepts a const item like the following:
 ///
@@ -78,6 +83,18 @@ use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 /// - `apis` doesn't have any specific constraints. This is because this information doesn't get into
 ///   the custom section and is not parsed.
 ///
+/// # Compilation Target & "std" feature
+///
+/// This macro assumes it will be used within a runtime. By convention, a runtime crate defines a
+/// feature named "std". This feature is enabled when the runtime is compiled to native code and
+/// disabled when it is compiled to the wasm code.
+///
+/// The custom section can only be emitted while compiling to wasm. In order to detect the compilation
+/// target we use the "std" feature. This macro will emit the custom section only if the "std" feature
+/// is **not** enabled.
+///
+/// Including this macro in the context where there is no "std" feature and the code is not compiled
+/// to wasm can lead to cryptic linking errors.
 pub use sp_version_proc_macro::runtime_version;
 
 /// The identity of a particular API interface that the runtime might provide.
@@ -183,6 +200,11 @@ impl RuntimeVersion {
 		predicate: P,
 	) -> bool {
 		self.apis.iter().any(|(s, v)| s == id && predicate(*v))
+	}
+
+	/// Returns the api version found for api with `id`.
+	pub fn api_version(&self, id: &ApiId) -> Option<u32> {
+		self.apis.iter().find_map(|a| (a.0 == *id).then(|| a.1))
 	}
 }
 

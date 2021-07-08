@@ -105,7 +105,7 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Request response configuration for the block request protocol.
 	///
-	/// [`RequestResponseConfig`] [`name`] is used to tag outgoing block requests with the correct
+	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
 	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
 	/// requests, if enabled.
 	///
@@ -123,6 +123,15 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// [`crate::light_client_requests::handler::LightClientRequestHandler::new`] allowing
 	/// both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
+
+	/// Request response configuration for the state request protocol.
+	///
+	/// Can be constructed either via
+	/// [`crate::state_requests::generate_protocol_config`] allowing outgoing but not
+	/// incoming requests, or constructed via
+	/// [`crate::state_requests::handler::StateRequestHandler::new`] allowing
+	/// both outgoing and incoming requests.
+	pub state_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.
@@ -140,6 +149,11 @@ impl Role {
 	/// True for `Role::Authority`
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Role::Authority { .. })
+	}
+
+	/// True for `Role::Light`
+	pub fn is_light(&self) -> bool {
+		matches!(self, Role::Light { .. })
 	}
 }
 
@@ -166,7 +180,7 @@ pub enum TransactionImport {
 	None,
 }
 
-/// Fuure resolving to transaction import result.
+/// Future resolving to transaction import result.
 pub type TransactionImportFuture = Pin<Box<dyn Future<Output=TransactionImport> + Send>>;
 
 /// Transaction pool interface
@@ -368,6 +382,24 @@ impl From<multiaddr::Error> for ParseErr {
 	}
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Sync operation mode.
+pub enum SyncMode {
+	/// Full block download and verification.
+	Full,
+	/// Download blocks and the latest state.
+	Fast {
+		/// Skip state proof download and verification.
+		skip_proofs: bool
+	},
+}
+
+impl Default for SyncMode {
+	fn default() -> Self {
+		SyncMode::Full
+	}
+}
+
 /// Network service configuration.
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
@@ -395,6 +427,8 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Initial syncing mode.
+	pub sync_mode: SyncMode,
 
 	/// True if Kademlia random discovery should be enabled.
 	///
@@ -457,6 +491,7 @@ impl NetworkConfiguration {
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: 5,
+			sync_mode: SyncMode::Full,
 			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
@@ -594,8 +629,7 @@ pub enum TransportConfig {
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
-		/// been passed in [`NetworkConfiguration::reserved_nodes`] or
-		/// [`NetworkConfiguration::boot_nodes`].
+		/// been passed in [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we

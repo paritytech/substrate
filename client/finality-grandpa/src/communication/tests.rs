@@ -20,7 +20,7 @@
 
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use futures::prelude::*;
-use sc_network::{Event as NetworkEvent, ObservedRole, PeerId};
+use sc_network::{config::Role, Event as NetworkEvent, ObservedRole, PeerId};
 use sc_network_test::{Block, Hash};
 use sc_network_gossip::Validator;
 use std::sync::Arc;
@@ -137,7 +137,7 @@ fn config() -> crate::Config {
 		justification_period: 256,
 		keystore: None,
 		name: None,
-		is_authority: true,
+		local_role: Role::Authority,
 		observer_enabled: true,
 		telemetry: None,
 	}

@@ -39,7 +39,9 @@ use futures_timer::Delay;
 use log::{debug, error, info, warn};
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
+use sp_consensus::{
+	BlockImport, CanAuthorWith, JustificationSyncLink, Proposer, SelectChain, SlotData, SyncOracle,
+};
 use sp_consensus_slots::Slot;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
@@ -91,6 +93,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// A handle to a `SyncOracle`.
 	type SyncOracle: SyncOracle;
+
+	/// A handle to a `JustificationSyncLink`, allows hooking into the sync module to control the
+	/// justification sync process.
+	type JustificationSyncLink: JustificationSyncLink<B>;
 
 	/// The type of future resolving to the proposer.
 	type CreateProposer: Future<Output = Result<Self::Proposer, sp_consensus::Error>>
@@ -177,6 +183,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// Returns a handle to a `SyncOracle`.
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle;
+
+	/// Returns a handle to a `JustificationSyncLink`.
+	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink;
 
 	/// Returns a `Proposer` to author on top of the given block.
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
@@ -392,27 +401,37 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		let header = block_import_params.post_header();
-		if let Err(err) = block_import
+		match block_import
 			.import_block(block_import_params, Default::default())
 			.await
 		{
-			warn!(
-				target: logging_target,
-				"Error with block built on {:?}: {:?}",
-				parent_hash,
-				err,
-			);
+			Ok(res) => {
+				res.handle_justification(
+					&header.hash(),
+					*header.number(),
+					self.justification_sync_link(),
+				);
+			}
+			Err(err) => {
+				warn!(
+					target: logging_target,
+					"Error with block built on {:?}: {:?}", parent_hash, err,
+				);
 
-			telemetry!(
-				telemetry;
-				CONSENSUS_WARN;
-				"slots.err_with_block_built_on";
-				"hash" => ?parent_hash,
-				"err" => ?err,
-			);
+				telemetry!(
+					telemetry;
+					CONSENSUS_WARN;
+					"slots.err_with_block_built_on";
+					"hash" => ?parent_hash,
+					"err" => ?err,
+				);
+			}
 		}
 
-		Some(SlotResult { block: B::new(header, body), storage_proof })
+		Some(SlotResult {
+			block: B::new(header, body),
+			storage_proof,
+		})
 	}
 }
 
@@ -428,10 +447,10 @@ impl<B: BlockT, T: SimpleSlotWorker<B> + Send> SlotWorker<B, <T::Proposer as Pro
 
 /// Slot specific extension that the inherent data provider needs to implement.
 pub trait InherentDataProviderExt {
-	/// The current timestamp that will be found in the [`InherentData`].
+	/// The current timestamp that will be found in the [`InherentData`](`sp_inherents::InherentData`).
 	fn timestamp(&self) -> Timestamp;
 
-	/// The current slot that will be found in the [`InherentData`].
+	/// The current slot that will be found in the [`InherentData`](`sp_inherents::InherentData`).
 	fn slot(&self) -> Slot;
 }
 
@@ -481,7 +500,7 @@ where
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub async fn start_slot_worker<B, C, W, T, SO, CAW, CIDP, Proof>(
+pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
 	slot_duration: SlotDuration<T>,
 	client: C,
 	mut worker: W,
@@ -495,9 +514,9 @@ where
 	W: SlotWorker<B, Proof>,
 	SO: SyncOracle + Send,
 	T: SlotData + Clone,
-	CAW: CanAuthorWith<B> + Send,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
+	CAW: CanAuthorWith<B> + Send,
 {
 	let SlotDuration(slot_duration) = slot_duration;
 
@@ -584,7 +603,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
 	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> sp_blockchain::Result<Self> where
-		C: sc_client_api::backend::AuxStore,
+		C: sc_client_api::backend::AuxStore + sc_client_api::UsageProvider<B>,
 		C: ProvideRuntimeApi<B>,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> sp_blockchain::Result<T>,
 		T: SlotData + Encode + Decode + Debug,
@@ -599,19 +618,20 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 					})
 				}),
 			None => {
-				use sp_runtime::traits::Zero;
-				let genesis_slot_duration =
-					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
+				let best_hash = client.usage_info().chain.best_hash;
+				let slot_duration =
+					cb(client.runtime_api(), &BlockId::hash(best_hash))?;
 
 				info!(
-					"⏱  Loaded block-time = {:?} from genesis on first-launch",
-					genesis_slot_duration.slot_duration()
+					"⏱  Loaded block-time = {:?} from block {:?}",
+					slot_duration.slot_duration(),
+					best_hash,
 				);
 
-				genesis_slot_duration
+				slot_duration
 					.using_encoded(|s| client.insert_aux(&[(T::SLOT_KEY, &s[..])], &[]))?;
 
-				Ok(SlotDuration(genesis_slot_duration))
+				Ok(SlotDuration(slot_duration))
 			}
 		}?;
 
@@ -643,6 +663,96 @@ impl SlotProportion {
 	/// Returns the inner that is guaranted to be in the range `[0,1]`.
 	pub fn get(&self) -> f32 {
 		self.0
+	}
+}
+
+/// The strategy used to calculate the slot lenience used to increase the block proposal time when
+/// slots have been skipped with no blocks authored.
+pub enum SlotLenienceType {
+	/// Increase the lenience linearly with the number of skipped slots.
+	Linear,
+	/// Increase the lenience exponentially with the number of skipped slots.
+	Exponential,
+}
+
+impl SlotLenienceType {
+	fn as_str(&self) -> &'static str {
+		match self {
+			SlotLenienceType::Linear => "linear",
+			SlotLenienceType::Exponential => "exponential",
+		}
+	}
+}
+
+/// Calculate the remaining duration for block proposal taking into account whether any slots have
+/// been skipped and applying the given lenience strategy. If `max_block_proposal_slot_portion` is
+/// not none this method guarantees that the returned duration must be lower or equal to
+/// `slot_info.duration * max_block_proposal_slot_portion`.
+pub fn proposing_remaining_duration<Block: BlockT>(
+	parent_slot: Option<Slot>,
+	slot_info: &SlotInfo<Block>,
+	block_proposal_slot_portion: &SlotProportion,
+	max_block_proposal_slot_portion: Option<&SlotProportion>,
+	slot_lenience_type: SlotLenienceType,
+	log_target: &str,
+) -> Duration {
+	use sp_runtime::traits::Zero;
+
+	let proposing_duration = slot_info
+		.duration
+		.mul_f32(block_proposal_slot_portion.get());
+
+	let slot_remaining = slot_info
+		.ends_at
+		.checked_duration_since(std::time::Instant::now())
+		.unwrap_or_default();
+
+	let proposing_duration = std::cmp::min(slot_remaining, proposing_duration);
+
+	// If parent is genesis block, we don't require any lenience factor.
+	if slot_info.chain_head.number().is_zero() {
+		return proposing_duration;
+	}
+
+	let parent_slot = match parent_slot {
+		Some(parent_slot) => parent_slot,
+		None => return proposing_duration,
+	};
+
+	let slot_lenience = match slot_lenience_type {
+		SlotLenienceType::Exponential => slot_lenience_exponential(parent_slot, slot_info),
+		SlotLenienceType::Linear => slot_lenience_linear(parent_slot, slot_info),
+	};
+
+	if let Some(slot_lenience) = slot_lenience {
+		let lenient_proposing_duration =
+			proposing_duration + slot_lenience.mul_f32(block_proposal_slot_portion.get());
+
+		// if we defined a maximum portion of the slot for proposal then we must make sure the
+		// lenience doesn't go over it
+		let lenient_proposing_duration =
+			if let Some(ref max_block_proposal_slot_portion) = max_block_proposal_slot_portion {
+				std::cmp::min(
+					lenient_proposing_duration,
+					slot_info
+						.duration
+						.mul_f32(max_block_proposal_slot_portion.get()),
+				)
+			} else {
+				lenient_proposing_duration
+			};
+
+		debug!(
+			target: log_target,
+			"No block for {} slots. Applying {} lenience, total proposing duration: {}",
+			slot_info.slot.saturating_sub(parent_slot + 1),
+			slot_lenience_type.as_str(),
+			lenient_proposing_duration.as_secs(),
+		);
+
+		lenient_proposing_duration
+	} else {
+		proposing_duration
 	}
 }
 
@@ -683,7 +793,7 @@ pub fn slot_lenience_exponential<Block: BlockT>(
 /// a linear backoff of at most `20 * slot_duration`, if no slots were skipped
 /// this method will return `None.`
 pub fn slot_lenience_linear<Block: BlockT>(
-	parent_slot: u64,
+	parent_slot: Slot,
 	slot_info: &SlotInfo<Block>,
 ) -> Option<Duration> {
 	// never give more than 20 times more lenience.
@@ -819,7 +929,7 @@ mod test {
 			duration: SLOT_DURATION,
 			timestamp: Default::default(),
 			inherent_data: Default::default(),
-			ends_at: Instant::now(),
+			ends_at: Instant::now() + SLOT_DURATION,
 			chain_head: Header::new(
 				1,
 				Default::default(),
@@ -874,6 +984,36 @@ mod test {
 		assert_eq!(
 			super::slot_lenience_exponential(1u64.into(), &slot(19)),
 			Some(SLOT_DURATION * 2u32.pow(7)),
+		);
+	}
+
+	#[test]
+	fn proposing_remaining_duration_should_apply_lenience_based_on_proposal_slot_proportion() {
+		assert_eq!(
+			proposing_remaining_duration(
+				Some(0.into()),
+				&slot(2),
+				&SlotProportion(0.25),
+				None,
+				SlotLenienceType::Linear,
+				"test",
+			),
+			SLOT_DURATION.mul_f32(0.25 * 2.0),
+		);
+	}
+
+	#[test]
+	fn proposing_remaining_duration_should_never_exceed_max_proposal_slot_proportion() {
+		assert_eq!(
+			proposing_remaining_duration(
+				Some(0.into()),
+				&slot(100),
+				&SlotProportion(0.25),
+				Some(SlotProportion(0.9)).as_ref(),
+				SlotLenienceType::Exponential,
+				"test",
+			),
+			SLOT_DURATION.mul_f32(0.9),
 		);
 	}
 
