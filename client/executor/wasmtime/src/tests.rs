@@ -182,8 +182,8 @@ fn test_stack_depth_reaching() {
 #[test]
 fn test_max_memory_pages() {
 	fn try_instantiate(
-		wat: &'static str,
 		max_memory_pages: Option<u32>,
+		wat: &'static str,
 	) -> Result<(), Box<dyn std::error::Error>> {
 		let runtime = {
 			let mut builder = RuntimeBuilder::new_on_demand();
@@ -198,6 +198,7 @@ fn test_max_memory_pages() {
 
 	// check the old behavior if preserved. That is, if no limit is set we allow 4 GiB of memory.
 	try_instantiate(
+		None,
 		r#"
 		(module
 			;; we want to allocate the maximum number of pages supported in wasm for this test.
@@ -218,7 +219,6 @@ fn test_max_memory_pages() {
 			)
 		)
 		"#,
-		None,
 	)
 	.unwrap();
 
@@ -226,6 +226,7 @@ fn test_max_memory_pages() {
 	//
 	// max_memory_pages = 1 (initial) + 1024 (heap_pages)
 	try_instantiate(
+		Some(1 + 1024),
 		r#"
 		(module
 
@@ -238,12 +239,12 @@ fn test_max_memory_pages() {
 			)
 		)
 		"#,
-		Some(1 + 1024),
 	)
 	.unwrap();
 
 	// max is specified explicitly to 2048 pages.
 	try_instantiate(
+		Some(1 + 1024),
 		r#"
 		(module
 
@@ -256,12 +257,12 @@ fn test_max_memory_pages() {
 			)
 		)
 		"#,
-		Some(1 + 1024),
 	)
 	.unwrap();
 
 	// memory grow should work as long as it doesn't exceed 1025 pages in total.
 	try_instantiate(
+		Some(0 + 1024 + 25),
 		r#"
 		(module
 			(import "env" "memory" (memory 0)) ;; <- zero starting pages.
@@ -285,12 +286,12 @@ fn test_max_memory_pages() {
 			)
 		)
 		"#,
-		Some(0 + 1024 + 25),
 	)
 	.unwrap();
 
 	// We start with 1025 pages and try to grow at least one.
 	try_instantiate(
+		Some(1 + 1024),
 		r#"
 		(module
 			(import "env" "memory" (memory 1))  ;; <- initial=1, meaning after heap pages mount the
@@ -314,7 +315,6 @@ fn test_max_memory_pages() {
 			)
 		)
 		"#,
-		Some(1 + 1024),
 	)
 	.unwrap();
 }
