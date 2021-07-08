@@ -427,7 +427,7 @@ pub mod pallet {
 				})
 				.collect::<Vec<_>>()
 				.try_into()
-				.map_err(|_| Error::<T>::TooManySubAccounts)?;
+				.expect("subs is less than T::MaxSubAccounts; qed");
 			let new_subs = ids.len();
 
 			if ids.is_empty() {
