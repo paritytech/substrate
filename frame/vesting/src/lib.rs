@@ -235,7 +235,7 @@ pub mod pallet {
 				let locked = balance.saturating_sub(liquid);
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
-				let vesting_info = VestingInfo::new::<T>(locked, per_block, begin);
+				let vesting_info = VestingInfo::new(locked, per_block, begin);
 				vesting_info.validate::<T::BlockNumberToBalance, T>()
 					.expect("Invalid VestingInfo params at genesis");
 
@@ -480,7 +480,7 @@ impl<T: Config> Pallet<T> {
 
 		// While `per_block` should never be 0, it is possible that the created schedule would end
 		// after the highest possible block, which is a case we are ok with, but `validate` fails.
-		let schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
+		let schedule = VestingInfo::new(locked, per_block, starting_block);
 
 		Ok(Some(schedule))
 	}
@@ -687,9 +687,11 @@ where
 		per_block: BalanceOf<T>,
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
-		if locked.is_zero() { return Ok(()); }
+		if locked.is_zero() {
+			return Ok(());
+		}
 
-		let vesting_schedule = VestingInfo::new::<T>(locked, per_block, starting_block);
+		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0 and ending block greater than max block.
 		vesting_schedule.validate::<T::BlockNumberToBalance, T>()?;
 
@@ -718,7 +720,7 @@ where
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0 and ending block greater than max block.
-		VestingInfo::new::<T>(locked, per_block, starting_block)
+		VestingInfo::new(locked, per_block, starting_block)
 			.validate::<T::BlockNumberToBalance, T>()?;
 
 		ensure!(

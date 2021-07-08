@@ -37,7 +37,7 @@ where
 	BlockNumber: AtLeast32BitUnsigned + Copy + Bounded,
 {
 	/// Instantiate a new `VestingInfo`.
-	pub fn new<T: Config>(
+	pub fn new(
 		locked: Balance,
 		per_block: Balance,
 		starting_block: BlockNumber,
@@ -86,19 +86,22 @@ where
 		&self,
 		n: BlockNumber,
 	) -> Balance {
-		// Number of blocks that count toward vesting
-		// Saturating to 0 when n < starting_block
+		// Number of blocks that count toward vesting;
+		// saturating to 0 when n < starting_block.
 		let vested_block_count = n.saturating_sub(self.starting_block);
 		let vested_block_count = BlockNumberToBalance::convert(vested_block_count);
-		// Return amount that is still locked in vesting
+		// Return amount that is still locked in vesting.
 		vested_block_count
-			.checked_mul(&self.per_block()) // per_block accessor guarantees at least 1.
+			.checked_mul(&self.per_block()) // `per_block` accessor guarantees at least 1.
 			.map(|to_unlock| self.locked.saturating_sub(to_unlock))
 			.unwrap_or(Zero::zero())
 	}
 
 	/// Block number at which the schedule ends (as type `Balance`).
-	pub fn ending_block_as_balance<BlockNumberToBalance: Convert<BlockNumber, Balance>, T: Config>(
+	pub fn ending_block_as_balance<
+		BlockNumberToBalance: Convert<BlockNumber, Balance>,
+		T: Config,
+	>(
 		&self,
 	) -> Result<Balance, DispatchError> {
 		let starting_block = BlockNumberToBalance::convert(self.starting_block);
@@ -112,7 +115,7 @@ where
 					Zero::zero()
 				} else {
 					// `per_block` does not perfectly divide `locked`, so we need an extra block to
-					// unlock some amount less than per_block
+					// unlock some amount less than `per_block`.
 					One::one()
 				}
 		};
