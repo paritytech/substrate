@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Client parts
-use sp_transaction_pool::{runtime_api::TaggedTransactionQueue, TransactionPool};
+use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_consensus_babe::BabeApi;
 use crate::{ChainInfo, default_config};
 use manual_seal::consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider};
@@ -32,6 +32,7 @@ use sc_service::{
     TFullClient, TaskManager, new_full_parts, Configuration, ChainSpec, TaskExecutor,
 };
 use sc_transaction_pool::BasicPool;
+use sc_transaction_pool_api::TransactionPool;
 use sp_api::{ApiExt, ConstructRuntimeApi, Core, Metadata};
 use sp_block_builder::BlockBuilder;
 use sp_runtime::traits::Block as BlockT;
@@ -47,7 +48,7 @@ type ClientParts<T> = (
         Block = <T as ChainInfo>::Block,
         Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
         Error = sc_transaction_pool::error::Error,
-        InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+        InPoolTransaction = sc_transaction_pool::Transaction<
             <<T as ChainInfo>::Block as BlockT>::Hash,
             <<T as ChainInfo>::Block as BlockT>::Extrinsic,
         >,
@@ -192,7 +193,7 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
         block_import,
         env,
         client: client.clone(),
-        pool: transaction_pool.pool().clone(),
+        pool: transaction_pool.clone(),
         commands_stream,
         select_chain,
         consensus_data_provider: Some(Box::new(consensus_data_provider)),

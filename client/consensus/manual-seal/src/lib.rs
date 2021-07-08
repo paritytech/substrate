@@ -29,7 +29,6 @@ use sp_blockchain::HeaderBackend;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justifications, ConsensusEngineId};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
-use sc_transaction_pool::{ChainApi, Pool};
 use std::{sync::Arc, marker::PhantomData};
 use prometheus_endpoint::Registry;
 
@@ -48,6 +47,7 @@ pub use self::{
 	rpc::{EngineCommand, CreatedBlock},
 };
 use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sc_transaction_pool_api::TransactionPool;
 
 /// The `ConsensusEngineId` of Manual Seal.
 pub const MANUAL_SEAL_ENGINE_ID: ConsensusEngineId = [b'm', b'a', b'n', b'l'];
@@ -94,7 +94,7 @@ pub fn import_queue<Block, Transaction>(
 }
 
 /// Params required to start the instant sealing authorship task.
-pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: ChainApi, SC, CS, CIDP> {
+pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, CS, CIDP> {
 	/// Block import instance for well. importing blocks.
 	pub block_import: BI,
 
@@ -105,7 +105,7 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: ChainA
 	pub client: Arc<C>,
 
 	/// Shared reference to the transaction pool.
-	pub pool: Arc<Pool<A>>,
+	pub pool: Arc<TP>,
 
 	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending commands to
 	/// the authorship task.
@@ -122,7 +122,7 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: ChainA
 }
 
 /// Params required to start the manual sealing authorship task.
-pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: ChainApi, SC, CIDP> {
+pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, TP, SC, CIDP> {
 	/// Block import instance for well. importing blocks.
 	pub block_import: BI,
 
@@ -133,7 +133,7 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: Chain
 	pub client: Arc<C>,
 
 	/// Shared reference to the transaction pool.
-	pub pool: Arc<Pool<A>>,
+	pub pool: Arc<TP>,
 
 	/// SelectChain strategy.
 	pub select_chain: SC,
@@ -146,7 +146,7 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: Chain
 }
 
 /// Creates the background authorship task for the manual seal engine.
-pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS, CIDP>(
+pub async fn run_manual_seal<B, BI, CB, E, C, TP, SC, CS, CIDP>(
 	ManualSealParams {
 		mut block_import,
 		mut env,
@@ -156,10 +156,9 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS, CIDP>(
 		select_chain,
 		consensus_data_provider,
 		create_inherent_data_providers,
-	}: ManualSealParams<B, BI, E, C, A, SC, CS, CIDP>
+	}: ManualSealParams<B, BI, E, C, TP, SC, CS, CIDP>
 )
 	where
-		A: ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
 		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
 			+ Send + Sync + 'static,
@@ -170,6 +169,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS, CIDP>(
 		CS: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
 		TransactionFor<C, B>: 'static,
+		TP: TransactionPool<Block = B>,
 		CIDP: CreateInherentDataProviders<B, ()>,
 {
 	while let Some(command) = commands_stream.next().await {
@@ -215,7 +215,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS, CIDP>(
 /// runs the background authorship task for the instant seal engine.
 /// instant-seal creates a new block for every transaction imported into
 /// the transaction pool.
-pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, CIDP>(
+pub async fn run_instant_seal<B, BI, CB, E, C, TP, SC, CIDP>(
 	InstantSealParams {
 		block_import,
 		env,
@@ -224,10 +224,9 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, CIDP>(
 		select_chain,
 		consensus_data_provider,
 		create_inherent_data_providers,
-	}: InstantSealParams<B, BI, E, C, A, SC, CIDP>
+	}: InstantSealParams<B, BI, E, C, TP, SC, CIDP>
 )
 	where
-		A: ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
 		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
 			+ Send + Sync + 'static,
@@ -237,12 +236,12 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, CIDP>(
 		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
 		SC: SelectChain<B> + 'static,
 		TransactionFor<C, B>: 'static,
+		TP: TransactionPool<Block = B>,
 		CIDP: CreateInherentDataProviders<B, ()>,
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
-	let commands_stream = pool.validated_pool()
-		.import_notification_stream()
+	let commands_stream = pool.import_notification_stream()
 		.map(|_| {
 			EngineCommand::SealNewBlock {
 				create_empty: false,
@@ -277,7 +276,7 @@ mod tests {
 	};
 	use sc_transaction_pool::{BasicPool, RevalidationType, Options};
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
-	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool, TransactionSource};
+	use sc_transaction_pool_api::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;
 	use sp_consensus::ImportedAux;
 	use sc_basic_authorship::ProposerFactory;
@@ -331,7 +330,7 @@ mod tests {
 				block_import: client.clone(),
 				env,
 				client: client.clone(),
-				pool: pool.pool().clone(),
+				pool: pool.clone(),
 				commands_stream,
 				select_chain,
 				create_inherent_data_providers: |_, _| async { Ok(()) },
@@ -395,7 +394,7 @@ mod tests {
 				block_import: client.clone(),
 				env,
 				client: client.clone(),
-				pool: pool.pool().clone(),
+				pool: pool.clone(),
 				commands_stream,
 				select_chain,
 				consensus_data_provider: None,
@@ -476,7 +475,7 @@ mod tests {
 				block_import: client.clone(),
 				env,
 				client: client.clone(),
-				pool: pool.pool().clone(),
+				pool: pool.clone(),
 				commands_stream,
 				select_chain,
 				consensus_data_provider: None,
@@ -522,7 +521,7 @@ mod tests {
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
 		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
-		pool.maintain(sp_transaction_pool::ChainEvent::NewBestBlock {
+		pool.maintain(sc_transaction_pool_api::ChainEvent::NewBestBlock {
 			hash: header.hash(),
 			tree_route: None,
 		}).await;

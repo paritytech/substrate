@@ -33,7 +33,7 @@ use sp_runtime::{
 	transaction_validity::TransactionSource, MultiSignature, MultiAddress
 };
 use crate::ChainInfo;
-use sp_transaction_pool::TransactionPool;
+use sc_transaction_pool_api::TransactionPool;
 use sp_state_machine::Ext;
 
 /// This holds a reference to a running node on another thread,
@@ -51,7 +51,7 @@ pub struct Node<T: ChainInfo> {
 		Block = <T as ChainInfo>::Block,
 		Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
 		Error = sc_transaction_pool::error::Error,
-		InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+		InPoolTransaction = sc_transaction_pool::Transaction<
 			<<T as ChainInfo>::Block as BlockT>::Hash,
 			<<T as ChainInfo>::Block as BlockT>::Extrinsic,
 		>,
@@ -80,7 +80,7 @@ impl<T> Node<T>
 			Block = <T as ChainInfo>::Block,
 			Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
 			Error = sc_transaction_pool::error::Error,
-			InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+			InPoolTransaction = sc_transaction_pool::Transaction<
 				<<T as ChainInfo>::Block as BlockT>::Hash,
 				<<T as ChainInfo>::Block as BlockT>::Extrinsic,
 			>,
