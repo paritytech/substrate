@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use codec::{Encode, Decode, MaxEncodedLen};
-use scale_info::TypeInfo;
+use scale_info::{build::{Fields, Variants}, Path, Type, TypeInfo};
 use enumflags2::BitFlags;
 use frame_support::{
     traits::{ConstU32, Get},
@@ -34,7 +34,7 @@ use super::*;
 /// than 32-bytes then it will be truncated when encoding.
 ///
 /// Can also be `None`.
-#[derive(Clone, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)] // todo: [AJ] custom TypeInfo
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
 pub enum Data {
 	/// No data here.
 	None,
@@ -93,6 +93,55 @@ impl Encode for Data {
 	}
 }
 impl codec::EncodeLike for Data {}
+
+/// Add a Raw variant with the given index and a fixed sized byte array
+macro_rules! data_raw_variants {
+    ($variants:ident, $(($index:literal, $size:literal)),* ) => {
+		$variants
+		$(
+			.variant(stringify!(Raw$size), |v| v
+				.index($index)
+				.fields(Fields::unnamed().field(|f| f.ty::<[u8; $size]>()))
+			)
+		)*
+    }
+}
+
+impl TypeInfo for Data {
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		let variants = Variants::new()
+			.variant("None", |v| v.index(0));
+
+		// create a variant for all sizes of Raw data from 0-32
+		let variants = data_raw_variants!(variants,
+			(1, 0),   (2, 1),   (3, 2),   (4, 3),   (5, 4),   (6, 5),   (7, 6),   (8, 7),
+			(9, 8),   (10, 9),  (11, 10), (12, 11), (13, 12), (14, 13), (15, 14), (16, 15),
+			(17, 16), (18, 17), (19, 18), (20, 19), (21, 20), (22, 21), (23, 22), (24, 23),
+			(25, 24), (26, 25), (27, 26), (28, 27), (29, 28), (30, 29), (31, 30), (32, 31), (33, 32)
+		);
+
+		let variants =
+			variants
+				.variant("BlakeTwo256", |v| v
+					.index(34)
+					.fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>())))
+				.variant("Sha256", |v| v
+					.index(35)
+					.fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>())))
+				.variant("Keccak256", |v| v
+					.index(36)
+					.fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>())))
+				.variant("ShaThree256", |v| v
+					.index(37)
+					.fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>())));
+
+		Type::builder()
+			.path(Path::new("Data", module_path!()))
+			.variant(variants)
+	}
+}
 
 impl Default for Data {
 	fn default() -> Self {
@@ -201,11 +250,11 @@ impl Decode for IdentityFields {
 impl TypeInfo for IdentityFields {
 	type Identity = Self;
 
-	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
-		scale_info::Type::builder()
-			.path(scale_info::Path::new("IdentityFields", module_path!()))
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("IdentityFields", module_path!()))
 			.composite(
-				scale_info::build::Fields::unnamed()
+				Fields::unnamed()
 					.field(|f| f.ty::<IdentityField>()
 						.type_name("BitFlags<IdentityField>")
 					)
