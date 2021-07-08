@@ -44,7 +44,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAllFilter;
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
 	type Call = Call;
 	type PalletInfo = PalletInfo;

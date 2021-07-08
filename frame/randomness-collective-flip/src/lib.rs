@@ -195,7 +195,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = frame_support::traits::AllowAllFilter;
+		type BaseCallFilter = frame_support::traits::AllowAll;
 		type BlockWeights = ();
 		type BlockLength = BlockLength;
 		type DbWeight = ();

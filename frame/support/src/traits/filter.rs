@@ -26,16 +26,16 @@ pub trait Filter<T> {
 }
 
 /// A [`Filter`] that allows any value.
-pub enum AllowAllFilter {}
+pub enum AllowAll {}
 
 /// A [`Filter`] that denies any value.
-pub enum DenyAllFilter {}
+pub enum DenyAll {}
 
-impl<T> Filter<T> for AllowAllFilter {
+impl<T> Filter<T> for AllowAll {
 	fn filter(_: &T) -> bool { true }
 }
 
-impl<T> Filter<T> for DenyAllFilter {
+impl<T> Filter<T> for DenyAll {
 	fn filter(_: &T) -> bool { false }
 }
 

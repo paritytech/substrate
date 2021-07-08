@@ -488,7 +488,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = frame_support::traits::AllowAllFilter;
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;

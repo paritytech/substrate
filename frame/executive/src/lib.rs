@@ -694,7 +694,7 @@ mod tests {
 		};
 	}
 	impl frame_system::Config for Runtime {
-		type BaseCallFilter = frame_support::traits::AllowAllFilter;
+		type BaseCallFilter = frame_support::traits::AllowAll;
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();

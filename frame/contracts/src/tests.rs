@@ -213,7 +213,7 @@ parameter_types! {
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::AllowAllFilter;
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
