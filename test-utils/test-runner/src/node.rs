@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use futures::{FutureExt, SinkExt, channel::{mpsc, oneshot}};
 use jsonrpc_core::MetaIoHandler;
-use parking_lot::Mutex;
 use manual_seal::EngineCommand;
 use sc_client_api::{backend::{self, Backend}, CallExecutor, ExecutorProvider};
 use sc_service::{TFullBackend, TFullCallExecutor, TFullClient, TaskManager};
@@ -43,7 +42,7 @@ pub struct Node<T: ChainInfo> {
 	/// rpc handler for communicating with the node over rpc.
 	rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
 	/// handle to the running node.
-	task_manager: Mutex<Option<TaskManager>>,
+	task_manager: Option<TaskManager>,
 	/// client instance
 	client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
 	/// transaction pool
@@ -87,16 +86,16 @@ impl<T> Node<T>
 		>>,
 		command_sink: mpsc::Sender<EngineCommand<<T::Block as BlockT>::Hash>>,
 		backend: Arc<TFullBackend<T::Block>>,
-	) -> Arc<Self> {
-		Arc::new(Self {
+	) -> Self {
+		Self {
 			rpc_handler,
-			task_manager: Mutex::new(Some(task_manager)),
+			task_manager: Some(task_manager),
 			client: client.clone(),
 			pool,
 			backend,
 			manual_seal_command_sink: command_sink,
 			initial_block_number: client.info().best_number,
-		})
+		}
 	}
 
 	/// Returns a reference to the rpc handlers.
@@ -217,8 +216,8 @@ impl<T> Node<T>
 	}
 
 	/// so you've decided to run the test runner as a binary, use this to shutdown gracefully.
-	pub async fn until_shutdown(&self) {
-		let manager = self.task_manager.lock().take();
+	pub async fn until_shutdown(mut self) {
+		let manager = self.task_manager.take();
 		if let Some(mut task_manager) = manager {
 			let task = task_manager.future().fuse();
 			let signal = tokio::signal::ctrl_c();
