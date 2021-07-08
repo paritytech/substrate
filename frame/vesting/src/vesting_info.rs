@@ -98,10 +98,7 @@ where
 	}
 
 	/// Block number at which the schedule ends (as type `Balance`).
-	pub fn ending_block_as_balance<
-		BlockNumberToBalance: Convert<BlockNumber, Balance>,
-		T: Config,
-	>(
+	pub fn ending_block_as_balance<BlockNumberToBalance: Convert<BlockNumber, Balance>>(
 		&self,
 	) -> Balance {
 		let starting_block = BlockNumberToBalance::convert(self.starting_block);
