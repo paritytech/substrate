@@ -19,8 +19,6 @@
 
 use super::*;
 
-const LOG_TARGET: &'static str = "runtime::vesting";
-
 // Migration from single schedule to multiple schedules.
 pub(crate) mod v1 {
 	use super::*;
@@ -30,7 +28,7 @@ pub(crate) mod v1 {
 		assert!(StorageVersion::<T>::get() == Releases::V0, "Storage version too high.");
 
 		log::debug!(
-			target: LOG_TARGET,
+			target: "runtime::vesting",
 			"Vesting storage version v1 PRE migration checks succesful!"
 		);
 
@@ -74,7 +72,7 @@ pub(crate) mod v1 {
 		}
 
 		log::debug!(
-			target: LOG_TARGET,
+			target: "runtime::vesting",
 			"Vesting storage version v1 POST migration checks succesful!"
 		);
 		Ok(())

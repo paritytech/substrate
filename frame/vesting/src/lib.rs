@@ -245,11 +245,11 @@ pub mod pallet {
 		T::AccountId = "AccountId", BalanceOf<T> = "Balance", T::BlockNumber = "BlockNumber"
 	)]
 	pub enum Event<T: Config> {
-		/// The amount vested has been updated. This could indicate more funds are available. The
+		/// The amount vested has been updated. This could indicate a change in funds available. The
 		/// balance given is the amount which is left unvested (and thus locked).
 		/// \[account, unvested\]
 		VestingUpdated(T::AccountId, BalanceOf<T>),
-		/// An \[account\] has become fully vested. No further vesting can happen.
+		/// An \[account\] has become fully vested.
 		VestingCompleted(T::AccountId),
 	}
 
@@ -328,6 +328,8 @@ pub mod pallet {
 		///
 		/// Emits `VestingCreated`.
 		///
+		/// NOTE: This will unlock all schedules through the current block.
+		///
 		/// # <weight>
 		/// - `O(1)`.
 		/// - DbWeight: 3 Reads, 3 Writes
@@ -356,6 +358,8 @@ pub mod pallet {
 		/// - `schedule`: The vesting schedule attached to the transfer.
 		///
 		/// Emits `VestingCreated`.
+		///
+		/// NOTE: This will unlock all schedules through the current block.
 		///
 		/// # <weight>
 		/// - `O(1)`.
