@@ -190,6 +190,10 @@ impl Externalities for AsyncExternalities {
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in AsyncExternalities")
 	}
+
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
+		unimplemented!("get_read_and_written_keys is not supported in AsyncExternalities")
+	}
 }
 
 impl sp_externalities::ExtensionStore for AsyncExternalities {

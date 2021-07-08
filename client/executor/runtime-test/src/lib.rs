@@ -109,6 +109,12 @@ sp_core::wasm_export_functions! {
 
 	fn test_exhaust_heap() -> Vec<u8> { Vec::with_capacity(16777216) }
 
+	fn test_fp_f32add(a: [u8; 4], b: [u8; 4]) -> [u8; 4] {
+		let a = f32::from_le_bytes(a);
+		let b = f32::from_le_bytes(b);
+		f32::to_le_bytes(a + b)
+	}
+
 	fn test_panic() { panic!("test panic") }
 
 	fn test_conditional_panic(input: Vec<u8>) -> Vec<u8> {
@@ -211,7 +217,6 @@ sp_core::wasm_export_functions! {
 		code
 	}
 
-
 	fn test_sandbox_get_global_val(code: Vec<u8>) -> i64 {
 		let env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		let instance = if let Ok(i) = sp_sandbox::Instance::new(&code, &env_builder, &mut ()) {
@@ -227,11 +232,9 @@ sp_core::wasm_export_functions! {
 		}
 	}
 
-
 	fn test_offchain_index_set() {
 		sp_io::offchain_index::set(b"k", b"v");
 	}
-
 
 	fn test_offchain_local_storage() -> bool {
 		let kind = sp_core::offchain::StorageKind::PERSISTENT;
@@ -284,11 +287,6 @@ sp_core::wasm_export_functions! {
 		};
 
 		run().is_some()
-	}
-
-	// Just some test to make sure that `sp-allocator` compiles on `no_std`.
-	fn test_sp_allocator_compiles() {
-		sp_allocator::FreeingBumpHeapAllocator::new(0);
 	}
 
 	fn test_enter_span() -> u64 {

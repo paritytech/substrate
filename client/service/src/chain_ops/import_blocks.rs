@@ -236,7 +236,7 @@ impl<B: BlockT> Speedometer<B> {
 			// algebraic approach and we stay within the realm of integers.
 			let one_thousand = NumberFor::<B>::from(1_000u32);
 			let elapsed = NumberFor::<B>::from(
-				<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::max_value())
+				<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::MAX)
 			);
 
 			let speed = diff.saturating_mul(one_thousand).checked_div(&elapsed)

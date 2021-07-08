@@ -158,11 +158,11 @@ pub mod weights;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
-use codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode, MaxEncodedLen};
 use frame_support::{
 	ensure, WeakBoundedVec,
 	traits::{
-		Currency, OnUnbalanced, TryDrop, StoredMap, MaxEncodedLen,
+		Currency, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::{AllowDeath, KeepAlive},
 		NamedReservableCurrency,

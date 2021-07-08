@@ -108,11 +108,13 @@ Hence every hash retrieved from `provided_tags` is always present in `ready`;
 qed
 "#;
 
+/// Validated transactions that are block ready with all their dependencies met.
 #[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
-	/// Insertion id
+	/// Next free insertion id (used to indicate when a transaction was inserted into the pool).
 	insertion_id: u64,
 	/// tags that are provided by Ready transactions
+	/// (only a single transaction can provide a specific tag)
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
 	ready: TrackedMap<Hash, ReadyTx<Hash, Ex>>,
@@ -235,7 +237,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 			.fold(None, f)
 	}
 
-	/// Returns true if given hash is part of the queue.
+	/// Returns true if given transaction is part of the queue.
 	pub fn contains(&self, hash: &Hash) -> bool {
 		self.ready.read().contains_key(hash)
 	}
@@ -659,7 +661,7 @@ mod tests {
 			bytes: 1,
 			hash: 5,
 			priority: 1,
-			valid_till: u64::max_value(),	// use the max_value() here for testing.
+			valid_till: u64::MAX,	// use the max here for testing.
 			requires: vec![tx1.provides[0].clone()],
 			provides: vec![],
 			propagate: true,
@@ -692,7 +694,7 @@ mod tests {
 			bytes: 1,
 			hash: 5,
 			priority: 1,
-			valid_till: u64::max_value(),	// use the max_value() here for testing.
+			valid_till: u64::MAX,	// use the max here for testing.
 			requires: vec![],
 			provides: vec![],
 			propagate: true,
