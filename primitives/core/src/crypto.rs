@@ -589,6 +589,10 @@ ss58_address_format!(
 		(99, "polkafoundry", "PolkaFoundry Network, standard account (*25519).")
   OriginTrailAccount =>
 		(101, "origintrail-parachain", "OriginTrail Parachain, ethereumm account (ECDSA).")
+	HeikoAccount =>
+		(110, "heiko", "Heiko, session key (*25519).")
+	ParallelAccount =>
+		(172, "parallel", "Parallel, session key (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
 	Moonbeam =>
