@@ -29,7 +29,7 @@ use sp_runtime::transaction_validity::{
 };
 use wasm_timer::Instant;
 
-use crate::base_pool::Transaction;
+use super::base_pool::Transaction;
 
 #[cfg_attr(not(target_os = "unknown"), derive(parity_util_mem::MallocSizeOf))]
 /// Transaction with partially satisfied dependencies.

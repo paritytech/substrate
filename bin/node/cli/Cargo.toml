@@ -56,13 +56,13 @@ sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
 sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
 sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
 
 # client dependencies
 sc-client-api = { version = "3.0.0", path = "../../../client/api" }
 sc-chain-spec = { version = "3.0.0", path = "../../../client/chain-spec" }
 sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
 sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-pool" }
+sc-transaction-pool-api = { version = "3.0.0", path = "../../../client/transaction-pool/api" }
 sc-network = { version = "0.9.0", path = "../../../client/network" }
 sc-consensus-slots = { version = "0.9.0", path = "../../../client/consensus/slots" }
 sc-consensus-babe = { version = "0.9.0", path = "../../../client/consensus/babe" }

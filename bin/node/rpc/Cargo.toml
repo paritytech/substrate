@@ -34,5 +34,5 @@ sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.9.0", path = "../../../primitives/consensus/babe" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
+sc-transaction-pool-api = { version = "3.0.0", path = "../../../client/transaction-pool/api" }
 substrate-frame-rpc-system = { version = "3.0.0", path = "../../../utils/frame/rpc/system" }
