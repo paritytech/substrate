@@ -167,8 +167,15 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			assert!(T::MinVestedTransfer::get() >= <T as Config>::Currency::minimum_balance());
-			assert!(T::MaxVestingSchedules::get() > 0);
+			sp_std::if_std! {
+				sp_io::TestExternalities::new_empty().execute_with(||
+					assert!(
+						T::MinVestedTransfer::get() >= <T as Config>::Currency::minimum_balance()
+						&& T::MaxVestingSchedules::get() > 0,
+						"`MinVestedTransfer` must >= existential deposit and `MaxVestingSchedules` cannot == 0"
+					)
+				);
+			}
 		}
 	}
 
