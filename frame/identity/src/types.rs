@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use codec::{Encode, Decode, MaxEncodedLen};
+use scale_info::TypeInfo;
 use enumflags2::BitFlags;
 use frame_support::{
     traits::{ConstU32, Get},
@@ -33,7 +34,7 @@ use super::*;
 /// than 32-bytes then it will be truncated when encoding.
 ///
 /// Can also be `None`.
-#[derive(Clone, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)] // todo: [AJ] custom TypeInfo
 pub enum Data {
 	/// No data here.
 	None,
@@ -106,7 +107,7 @@ pub type RegistrarIndex = u32;
 ///
 /// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
 /// which fields their attestation is relevant for by off-chain means.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub enum Judgement<
 	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq
 > {
@@ -157,7 +158,7 @@ impl<
 /// The fields that we use to identify the owner of an account with. Each corresponds to a field
 /// in the `IdentityInfo` struct.
 #[repr(u64)]
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug, TypeInfo)]
 pub enum IdentityField {
 	Display        = 0b0000000000000000000000000000000000000000000000000000000000000001,
 	Legal          = 0b0000000000000000000000000000000000000000000000000000000000000010,
@@ -197,14 +198,32 @@ impl Decode for IdentityFields {
 		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
 	}
 }
+impl TypeInfo for IdentityFields {
+	type Identity = Self;
+
+	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("IdentityFields", module_path!()))
+			.composite(
+				scale_info::build::Fields::unnamed()
+					.field(|f| f.ty::<IdentityField>()
+						.type_name("BitFlags<IdentityField>")
+					)
+			)
+	}
+}
 
 /// Information concerning the identity of the controller of an account.
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
-#[derive(CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound)]
+#[derive(
+	CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound,
+	TypeInfo,
+)]
 #[codec(mel_bound(FieldLimit: Get<u32>))]
 #[cfg_attr(test, derive(frame_support::DefaultNoBound))]
+#[scale_info(skip_type_params(FieldLimit))]
 pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
 	/// fields.
@@ -255,12 +274,13 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(CloneNoBound, Encode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound)]
+#[derive(CloneNoBound, Encode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound, TypeInfo)]
 #[codec(mel_bound(
 	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
 	MaxJudgements: Get<u32>,
 	MaxAdditionalFields: Get<u32>,
 ))]
+#[scale_info(skip_type_params(MaxJudgements, MaxAdditionalFields))]
 pub struct Registration<
 	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,
 	MaxJudgements: Get<u32>,
@@ -301,7 +321,7 @@ impl<
 }
 
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
