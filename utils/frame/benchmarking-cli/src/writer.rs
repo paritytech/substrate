@@ -17,7 +17,7 @@
 
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use core::convert::TryInto;
@@ -26,8 +26,12 @@ use serde::Serialize;
 use inflector::Inflector;
 
 use crate::BenchmarkCmd;
-use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis, AnalysisChoice, RegressionModel};
+use frame_benchmarking::{
+	BenchmarkBatch, BenchmarkSelector, Analysis, AnalysisChoice, RegressionModel, BenchmarkResults,
+};
+use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::Zero;
+use frame_support::traits::StorageInfo;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const TEMPLATE: &str = include_str!("./template.hbs");
@@ -59,6 +63,7 @@ struct BenchmarkData {
 	component_weight: Vec<ComponentSlope>,
 	component_reads: Vec<ComponentSlope>,
 	component_writes: Vec<ComponentSlope>,
+	comments: Vec<String>,
 }
 
 // This forwards some specific metadata from the `BenchmarkCmd`
@@ -108,6 +113,7 @@ fn io_error(s: &str) -> std::io::Error {
 // ```
 fn map_results(
 	batches: &[BenchmarkBatch],
+	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
@@ -123,7 +129,7 @@ fn map_results(
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
-		let benchmark_data = get_benchmark_data(batch, analysis_choice);
+		let benchmark_data = get_benchmark_data(batch, storage_info, analysis_choice);
 		pallet_benchmarks.push(benchmark_data);
 
 		// Check if this is the end of the iterator
@@ -157,8 +163,12 @@ fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item=u128> +
 // Analyze and return the relevant results for a given benchmark.
 fn get_benchmark_data(
 	batch: &BenchmarkBatch,
+	storage_info: &[StorageInfo],
 	analysis_choice: &AnalysisChoice,
 ) -> BenchmarkData {
+	// You can use this to put any additional comments with the benchmarking output.
+	let mut comments = Vec::<String>::new();
+
 	// Analyze benchmarks to get the linear regression.
 	let analysis_function = match analysis_choice {
 		AnalysisChoice::MinSquares => Analysis::min_squares_iqr,
@@ -229,6 +239,9 @@ fn get_benchmark_data(
 		})
 		.collect::<Vec<_>>();
 
+	// We add additional comments showing which storage items were touched.
+	add_storage_comments(&mut comments, &batch.results, storage_info);
+
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
 		components,
@@ -238,12 +251,14 @@ fn get_benchmark_data(
 		component_weight: used_extrinsic_time,
 		component_reads: used_reads,
 		component_writes: used_writes,
+		comments,
 	}
 }
 
 // Create weight file from benchmark data and Handlebars template.
 pub fn write_results(
 	batches: &[BenchmarkBatch],
+	storage_info: &[StorageInfo],
 	path: &PathBuf,
 	cmd: &BenchmarkCmd,
 ) -> Result<(), std::io::Error> {
@@ -298,7 +313,7 @@ pub fn write_results(
 	handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
 	// Organize results by pallet into a JSON map
-	let all_results = map_results(batches, &analysis_choice)?;
+	let all_results = map_results(batches, storage_info, &analysis_choice)?;
 	for ((pallet, instance), results) in all_results.iter() {
 		let mut file_path = path.clone();
 		// If a user only specified a directory...
@@ -330,6 +345,57 @@ pub fn write_results(
 			.map_err(|e| io_error(&e.to_string()))?;
 	}
 	Ok(())
+}
+
+// This function looks at the keys touched during the benchmark, and the storage info we collected
+// from the pallets, and creates comments with information about the storage keys touched during
+// each benchmark.
+fn add_storage_comments(
+	comments: &mut Vec<String>,
+	results: &[BenchmarkResults],
+	storage_info: &[StorageInfo],
+) {
+	let storage_info_map = storage_info.iter().map(|info| (info.prefix.clone(), info))
+		.collect::<HashMap<_, _>>();
+	// This tracks the keys we already identified, so we only generate a single comment.
+	let mut identified = HashSet::<Vec<u8>>::new();
+
+	for result in results.clone() {
+		for (key, reads, writes, whitelisted) in &result.keys {
+			// skip keys which are whitelisted
+			if *whitelisted { continue; }
+			let prefix_length = key.len().min(32);
+			let prefix = key[0..prefix_length].to_vec();
+			if identified.contains(&prefix) {
+				// skip adding comments for keys we already identified
+				continue;
+			} else {
+				// track newly identified keys
+				identified.insert(prefix.clone());
+			}
+			match storage_info_map.get(&prefix) {
+				Some(key_info) => {
+					let comment = format!(
+						"Storage: {} {} (r:{} w:{})",
+						String::from_utf8(key_info.pallet_name.clone()).expect("encoded from string"),
+						String::from_utf8(key_info.storage_name.clone()).expect("encoded from string"),
+						reads,
+						writes,
+					);
+					comments.push(comment)
+				},
+				None => {
+					let comment = format!(
+						"Storage: unknown [0x{}] (r:{} w:{})",
+						HexDisplay::from(key),
+						reads,
+						writes,
+					);
+					comments.push(comment)
+				}
+			}
+		}
+	}
 }
 
 // Add an underscore after every 3rd character, i.e. a separator for large numbers.
@@ -422,6 +488,7 @@ mod test {
 					writes: (base + slope * i).into(),
 					repeat_writes: 0,
 					proof_size: 0,
+					keys: vec![],
 				}
 			)
 		}
@@ -475,11 +542,15 @@ mod test {
 
 	#[test]
 	fn map_results_works() {
-		let mapped_results = map_results(&[
-			test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
-			test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
-			test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
-		], &AnalysisChoice::default()).unwrap();
+		let mapped_results = map_results(
+			&[
+				test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
+				test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
+				test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
+			],
+			&[],
+			&AnalysisChoice::default(),
+		).unwrap();
 
 		let first_benchmark = &mapped_results.get(
 			&("first_pallet".to_string(), "instance".to_string())
