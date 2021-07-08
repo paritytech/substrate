@@ -445,8 +445,8 @@ impl<T: Config> Pallet<T> {
 		schedule1: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 		schedule2: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 	) -> Result<Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>, DispatchError> {
-		let schedule1_ending_block = schedule1.ending_block_as_balance::<T::BlockNumberToBalance, T>()?;
-		let schedule2_ending_block = schedule2.ending_block_as_balance::<T::BlockNumberToBalance, T>()?;
+		let schedule1_ending_block = schedule1.ending_block_as_balance::<T::BlockNumberToBalance, T>();
+		let schedule2_ending_block = schedule2.ending_block_as_balance::<T::BlockNumberToBalance, T>();
 		let now_as_balance = T::BlockNumberToBalance::convert(now);
 
 		// Check if one or both schedules have ended.

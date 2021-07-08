@@ -103,7 +103,7 @@ where
 		T: Config,
 	>(
 		&self,
-	) -> Result<Balance, DispatchError> {
+	) -> Balance {
 		let starting_block = BlockNumberToBalance::convert(self.starting_block);
 		let duration = if self.per_block() >= self.locked {
 			// If `per_block` is bigger than `locked`, the schedule will end
@@ -120,6 +120,6 @@ where
 				}
 		};
 
-		Ok(starting_block.saturating_add(duration))
+		starting_block.saturating_add(duration)
 	}
 }
