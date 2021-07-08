@@ -228,7 +228,7 @@ impl<T> Node<T>
 
 impl<T: ChainInfo> Drop for Node<T> {
 	fn drop(&mut self) {
-		/// Revert all blocks added since creation of the node.
+		// Revert all blocks added since creation of the node.
 		let diff = self.client.info().best_number - self.initial_block_number;
 		self.revert_blocks(diff);
 	}

@@ -49,7 +49,6 @@ frame-system = { version = "3.0.0", path = "../../frame/system" }
 log = "0.4.8"
 futures = { package = "futures", version = "0.3", features = ["compat"] }
 tokio = { version = "0.2", features = ["signal"] }
-parking_lot = "0.11.1"
 # Calling RPC
 jsonrpc-core = "15.1"
 num-traits = "0.2.14"

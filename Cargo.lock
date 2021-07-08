@@ -9902,7 +9902,6 @@ dependencies = [
  "jsonrpc-core",
  "log",
  "num-traits",
- "parking_lot 0.11.1",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
