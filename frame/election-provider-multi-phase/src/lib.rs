@@ -1305,7 +1305,7 @@ impl<T: Config> Pallet<T> {
 		<DesiredTargets<T>>::put(desired_targets);
 
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
-		// encode it without storing it anywhere, this should not cause any allocation.
+		// `encoded_size` encodes it without storing it anywhere, this should not cause any allocation.
 		let snapshot = RoundSnapshot { voters, targets };
 		let size = snapshot.encoded_size();
 		log!(info, "snapshot pre-calculated size {:?}", size);
