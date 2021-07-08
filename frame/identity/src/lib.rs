@@ -419,15 +419,11 @@ pub mod pallet {
 			for s in old_ids.iter() {
 				<SuperOf<T>>::remove(s);
 			}
-			let ids: BoundedVec<_, _> = subs
-				.into_iter()
-				.map(|(id, name)| {
-					<SuperOf<T>>::insert(&id, (sender.clone(), name));
-					id
-				})
-				.collect::<Vec<_>>()
-				.try_into()
-				.expect("subs is less than T::MaxSubAccounts; qed");
+			let mut ids = BoundedVec::<T::AccountId, T::MaxSubAccounts>::default();
+			for (id, name) in subs {
+				<SuperOf<T>>::insert(&id, (sender.clone(), name));
+				ids.try_push(id).expect("subs length is less than T::MaxSubAccounts; qed");
+			}
 			let new_subs = ids.len();
 
 			if ids.is_empty() {
