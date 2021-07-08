@@ -223,13 +223,6 @@ impl RuntimeCache {
 		let code_hash = &runtime_code.hash;
 		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
 
-		log::trace!(
-			target: "wasm-runtime",
-			"with_instance: using {} heap pages in {:?} context",
-			heap_pages,
-			runtime_code.context,
-		);
-
 		let mut runtimes = self.runtimes.lock(); // this must be released prior to calling f
 		let pos = runtimes.iter().position(|r| r.as_ref().map_or(
 			false,
