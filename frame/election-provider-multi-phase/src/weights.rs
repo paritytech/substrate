@@ -54,16 +54,6 @@ pub trait WeightInfo {
 	fn submit(c: u32, ) -> Weight;
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
-	fn on_initialize_nothing() -> Weight;
-	fn on_initialize_open_signed() -> Weight;
-	fn on_initialize_open_unsigned_with_snapshot() -> Weight;
-	fn finalize_signed_phase_accept_solution() -> Weight;
-	fn finalize_signed_phase_reject_solution() -> Weight;
-	fn on_initialize_open_unsigned_without_snapshot() -> Weight;
-	fn elect_queued(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
-	fn submit(c: u32, ) -> Weight;
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
 }
 
 /// Weights for pallet_election_provider_multi_phase using the Substrate node and recommended hardware.
@@ -141,152 +131,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((4_178_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 	}
-	fn on_initialize_nothing() -> Weight {
-		(33_564_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(8 as Weight))
-	}
-	fn on_initialize_open_signed() -> Weight {
-		(114_561_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(10 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
-	}
-	fn on_initialize_open_unsigned_with_snapshot() -> Weight {
-		(114_070_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(10 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
-	}
-	fn finalize_signed_phase_accept_solution() -> Weight {
-		(59_765_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-	}
-	fn finalize_signed_phase_reject_solution() -> Weight {
-		(39_894_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn on_initialize_open_unsigned_without_snapshot() -> Weight {
-		(23_591_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn elect_queued(v: u32, _t: u32, a: u32, d: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((19_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 1_000
-			.saturating_add((1_959_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 14_000
-			.saturating_add((392_000 as Weight).saturating_mul(d as Weight))
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
-			.saturating_add(T::DbWeight::get().writes(8 as Weight))
-	}
-	fn submit(c: u32, ) -> Weight {
-		(77_616_000 as Weight)
-			// Standard Error: 18_000
-			.saturating_add((213_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 8_000
-			.saturating_add((3_701_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 42_000
-			.saturating_add((75_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 14_000
-			.saturating_add((11_268_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 107_000
-			.saturating_add((5_019_000 as Weight).saturating_mul(d as Weight))
-			.saturating_add(T::DbWeight::get().reads(7 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn feasibility_check(v: u32, _t: u32, a: u32, d: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 7_000
-			.saturating_add((3_632_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 12_000
-			.saturating_add((9_664_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 95_000
-			.saturating_add((4_264_000 as Weight).saturating_mul(d as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn on_initialize_nothing() -> Weight {
-		(33_170_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
-	}
-	fn on_initialize_open_signed() -> Weight {
-		(113_680_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(10 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
-	}
-	fn on_initialize_open_unsigned_with_snapshot() -> Weight {
-		(113_619_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(10 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
-	}
-	fn finalize_signed_phase_accept_solution() -> Weight {
-		(60_184_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-	}
-	fn finalize_signed_phase_reject_solution() -> Weight {
-		(40_151_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn on_initialize_open_unsigned_without_snapshot() -> Weight {
-		(23_833_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn elect_queued(v: u32, _t: u32, a: u32, d: u32, ) -> Weight {
-		(51_573_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((9_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 2_000
-			.saturating_add((1_957_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 18_000
-			.saturating_add((588_000 as Weight).saturating_mul(d as Weight))
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(8 as Weight))
-	}
-	fn submit(c: u32, ) -> Weight {
-		(77_469_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((281_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((3_667_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 29_000
-			.saturating_add((497_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 9_000
-			.saturating_add((11_228_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 73_000
-			.saturating_add((4_432_000 as Weight).saturating_mul(d as Weight))
-			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((3_613_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 23_000
-			.saturating_add((286_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 7_000
-			.saturating_add((9_677_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 58_000
-			.saturating_add((4_178_000 as Weight).saturating_mul(d as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-	}
 	fn on_initialize_nothing() -> Weight {
 		(33_564_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
