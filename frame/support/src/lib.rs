@@ -62,6 +62,16 @@ pub mod traits;
 pub mod weights;
 pub mod instances;
 
+#[doc(hidden)]
+pub mod unsigned {
+	#[doc(hidden)]
+	pub use crate::sp_runtime::traits::ValidateUnsigned;
+	#[doc(hidden)]
+	pub use crate::sp_runtime::transaction_validity::{
+		TransactionValidity, UnknownTransaction, TransactionValidityError, TransactionSource,
+	};
+}
+
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
 	StorageHasher, ReversibleStorageHasher
