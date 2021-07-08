@@ -45,14 +45,13 @@ where
 	}
 
 	/// Validate parameters for `VestingInfo`. Note that this does not check
-	/// against `MinVestedTransfer` or the current block.
-	pub fn validate<T: Config>(&self) -> Result<(), Error<T>> {
-		ensure!(
-			!self.locked.is_zero() && !self.raw_per_block().is_zero(),
-			Error::<T>::InvalidScheduleParams
-		);
-
-		Ok(())
+	/// against `MinVestedTransfer`.
+	pub fn validate(&self) -> Result<(), ()> {
+		if self.locked.is_zero() || self.raw_per_block().is_zero() {
+			Err(())
+		} else {
+			Ok(())
+		}
 	}
 
 	/// Locked amount at schedule creation.

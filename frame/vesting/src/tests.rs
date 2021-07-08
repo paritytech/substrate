@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::EncodeLike};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, assert_err, dispatch::EncodeLike};
 use frame_system::RawOrigin;
 use sp_runtime::traits::{BadOrigin, Identity};
 
@@ -1101,26 +1101,16 @@ fn merge_vesting_handles_per_block_0() {
 fn vesting_info_validate_works() {
 	let min_transfer = <Test as Config>::MinVestedTransfer::get();
 	// Does not check for min transfer.
-	match VestingInfo::new(min_transfer - 1, 1u64, 10u64).validate::<Test>() {
-		Ok(_) => (),
-		_ => panic!(),
-	}
+	assert_ok!(VestingInfo::new(min_transfer - 1, 1u64, 10u64).validate());
 
 	// `locked` cannot be 0.
-	match VestingInfo::new(0, 1u64, 10u64).validate::<Test>() {
-		Err(Error::<Test>::InvalidScheduleParams) => (),
-		_ => panic!(),
-	}
+	assert_err!(VestingInfo::new(0, 1u64, 10u64).validate(), ());
 
 	// `per_block` cannot be 0.
-	match VestingInfo::new(min_transfer + 1, 0u64, 10u64).validate::<Test>() {
-		Err(Error::<Test>::InvalidScheduleParams) => (),
-		_ => panic!(),
-	}
+	assert_err!(VestingInfo::new(min_transfer + 1, 0u64, 10u64).validate(), ());
 
 	// With valid inputs it does not error.
-	let valid = VestingInfo::new(min_transfer, 1u64, 10u64);
-	assert_ok!(valid.validate::<Test>());
+	assert_ok!(VestingInfo::new(min_transfer, 1u64, 10u64).validate());
 }
 
 #[test]

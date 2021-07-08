@@ -236,7 +236,7 @@ pub mod pallet {
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
-				vesting_info.validate::<T>()
+				vesting_info.validate()
 					.expect("Invalid VestingInfo params at genesis");
 
 				Vesting::<T>::try_append(who, vesting_info)
@@ -493,8 +493,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
-		schedule.validate::<T>()?;
-
+		schedule.validate().map_err(|_| Error::<T>::InvalidScheduleParams)?;
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
 
@@ -693,7 +692,7 @@ where
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0.
-		vesting_schedule.validate::<T>()?;
+		vesting_schedule.validate().map_err(|_| Error::<T>::InvalidScheduleParams)?;
 
 		let mut schedules = Self::vesting(who).unwrap_or_default();
 
@@ -720,7 +719,9 @@ where
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
-		VestingInfo::new(locked, per_block, starting_block).validate::<T>()?;
+		VestingInfo::new(locked, per_block, starting_block)
+			.validate()
+			.map_err(|_| Error::<T>::InvalidScheduleParams)?;
 
 		ensure!(
 			Vesting::<T>::decode_len(who).unwrap_or_default() <
