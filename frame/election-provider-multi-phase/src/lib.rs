@@ -401,6 +401,8 @@ pub enum ElectionCompute {
 	Signed,
 	/// Election was computed with an unsigned submission.
 	Unsigned,
+	/// Election was computed with emergency status.
+	Emergency,
 }
 
 impl Default for ElectionCompute {
@@ -895,13 +897,19 @@ pub mod pallet {
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_emergency_election_result(
 			origin: OriginFor<T>,
-			solution: ReadySolution<T::AccountId>,
+			supports: Supports<T::AccountId>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
+			
+			let solution = ReadySolution {
+				supports,
+				score: [0, 0, 0],
+				compute: ElectionCompute::Emergency,
+			};
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
@@ -982,7 +990,10 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(<T as frame_system::Config>::AccountId = "AccountId")]
+	#[pallet::metadata(
+		<T as frame_system::Config>::AccountId = "AccountId",
+		BalanceOf<T> = "Balance"
+	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
@@ -996,9 +1007,9 @@ pub mod pallet {
 		/// election failed, `None`.
 		ElectionFinalized(Option<ElectionCompute>),
 		/// An account has been rewarded for their signed submission being finalized.
-		Rewarded(<T as frame_system::Config>::AccountId),
+		Rewarded(<T as frame_system::Config>::AccountId, BalanceOf<T>),
 		/// An account has been slashed for submitting an invalid signed submission.
-		Slashed(<T as frame_system::Config>::AccountId),
+		Slashed(<T as frame_system::Config>::AccountId, BalanceOf<T>),
 		/// The signed phase of the given round has started.
 		SignedPhaseStarted(u32),
 		/// The unsigned phase of the given round has started.

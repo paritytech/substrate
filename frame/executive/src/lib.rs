@@ -474,9 +474,17 @@ where
 	pub fn validate_transaction(
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
+		block_hash: Block::Hash,
 	) -> TransactionValidity {
 		sp_io::init_tracing();
 		use sp_tracing::{enter_span, within_span};
+
+		<frame_system::Pallet<System>>::initialize(
+			&(frame_system::Pallet::<System>::block_number() + One::one()),
+			&block_hash,
+			&Default::default(),
+			frame_system::InitKind::Inspection,
+		);
 
 		enter_span!{ sp_tracing::Level::TRACE, "validate_transaction" };
 
@@ -1006,11 +1014,19 @@ mod tests {
 		default_with_prio_3.priority = 3;
 		t.execute_with(|| {
 			assert_eq!(
-				Executive::validate_transaction(TransactionSource::InBlock, valid.clone()),
+				Executive::validate_transaction(
+					TransactionSource::InBlock,
+					valid.clone(),
+					Default::default(),
+				),
 				Ok(default_with_prio_3),
 			);
 			assert_eq!(
-				Executive::validate_transaction(TransactionSource::InBlock, invalid.clone()),
+				Executive::validate_transaction(
+					TransactionSource::InBlock,
+					invalid.clone(),
+					Default::default(),
+				),
 				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator)),
 			);
 			assert_eq!(Executive::apply_extrinsic(valid), Ok(Err(DispatchError::BadOrigin)));

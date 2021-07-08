@@ -20,7 +20,6 @@
 // end::description[]
 
 use crate::{sr25519, ed25519};
-use max_encoded_len::MaxEncodedLen;
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
 use sp_std::str;
@@ -31,7 +30,7 @@ use sp_std::convert::TryFrom;
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
@@ -590,8 +589,12 @@ ss58_address_format!(
 		(99, "polkafoundry", "PolkaFoundry Network, standard account (*25519).")
     OriginTrailAccount =>
 		(101, "origintrail-parachain", "OriginTrail Parachain, ethereumm account (ECDSA).")
-    CloverAccount =>
-        (128, "clover", "Clover Finance, standard account (*25519).")
+	HeikoAccount =>
+		(110, "heiko", "Heiko, session key (*25519).")
+	CloverAccount =>
+		(128, "clover", "Clover Finance, standard account (*25519).")
+	ParallelAccount =>
+		(172, "parallel", "Parallel, session key (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
 	Moonbeam =>
