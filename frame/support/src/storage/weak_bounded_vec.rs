@@ -89,6 +89,14 @@ impl<T, S> WeakBoundedVec<T, S> {
 	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
 		self.0.retain(f)
 	}
+
+	/// Exactly the same semantics as [`Vec::get_mut`].
+	pub fn get_mut<I: SliceIndex<[T]>>(
+		&mut self,
+		index: I,
+	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
+		self.0.get_mut(index)
+	}
 }
 
 impl<T, S: Get<u32>> WeakBoundedVec<T, S> {
