@@ -72,7 +72,7 @@ where
 
 	/// Get the unmodified `per_block`. Generally should not be used, but is useful for
 	/// validating `per_block`.
-	pub fn raw_per_block(&self) -> Balance {
+	pub(crate) fn raw_per_block(&self) -> Balance {
 		self.per_block
 	}
 
