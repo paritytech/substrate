@@ -1459,6 +1459,29 @@ pub trait BlockIdTo<Block: self::Block> {
 	) -> Result<Option<NumberFor<Block>>, Self::Error>;
 }
 
+/// Get current block number
+pub trait BlockNumberProvider {
+	/// Type of `BlockNumber` to provide.
+	type BlockNumber: Codec + Clone + Ord + Eq + AtLeast32BitUnsigned;
+
+	/// Returns the current block number.
+	///
+	/// Provides an abstraction over an arbitrary way of providing the
+	/// current block number.
+	///
+	/// In case of using crate `sp_runtime` with the crate `frame-system`,
+	/// it is already implemented for
+	/// `frame_system::Pallet<T: Config>` as:
+	///
+	/// ```ignore
+	/// fn current_block_number() -> Self {
+	///     frame_system::Pallet<Config>::block_number()
+	/// }
+	/// ```
+	/// .
+	fn current_block_number() -> Self::BlockNumber;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

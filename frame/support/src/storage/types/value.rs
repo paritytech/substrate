@@ -22,6 +22,7 @@ use crate::{
 	storage::{
 		StorageAppend, StorageTryAppend, StorageDecodeLength,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
+		generator::{StorageValue as StorageValueT},
 	},
 	traits::{GetDefault, StorageInstance, StorageInfo},
 };
@@ -217,7 +218,9 @@ where
 	fn storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
-				prefix: Self::hashed_key(),
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::hashed_key().to_vec(),
 				max_values: Some(1),
 				max_size: Some(
 					Value::max_encoded_len()
@@ -241,7 +244,9 @@ where
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
-				prefix: Self::hashed_key(),
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::hashed_key().to_vec(),
 				max_values: Some(1),
 				max_size: None,
 			}
