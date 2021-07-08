@@ -18,13 +18,13 @@
 //! Storage map type. Implements StorageMap, StorageIterableMap, StoragePrefixedMap traits and their
 //! methods directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
+use codec::{FullCodec, Decode, EncodeLike, Encode, MaxEncodedLen};
 use crate::{
 	storage::{
 		StorageAppend, StorageTryAppend, StorageDecodeLength, StoragePrefixedMap,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
-	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
+	traits::{GetDefault, StorageInstance, Get, StorageInfo},
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -363,7 +363,9 @@ where
 	fn storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
-				prefix: Self::final_prefix(),
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::final_prefix().to_vec(),
 				max_values: MaxValues::get(),
 				max_size: Some(
 					Hasher::max_len::<Key>()
@@ -391,7 +393,9 @@ where
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
-				prefix: Self::final_prefix(),
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::final_prefix().to_vec(),
 				max_values: MaxValues::get(),
 				max_size: None,
 			}

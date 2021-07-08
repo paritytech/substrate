@@ -280,6 +280,7 @@ pub trait AuxStore {
 /// An `Iterator` that iterates keys in a given block under a prefix.
 pub struct KeyIterator<'a, State, Block> {
 	state: State,
+	child_storage: Option<ChildInfo>,
 	prefix: Option<&'a StorageKey>,
 	current_key: Vec<u8>,
 	_phantom: PhantomData<Block>,
@@ -290,6 +291,23 @@ impl <'a, State, Block> KeyIterator<'a, State, Block> {
 	pub fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
 		Self {
 			state,
+			child_storage: None,
+			prefix,
+			current_key,
+			_phantom: PhantomData,
+		}
+	}
+
+	/// Create a `KeyIterator` instance for a child storage.
+	pub fn new_child(
+		state: State,
+		child_info: ChildInfo,
+		prefix: Option<&'a StorageKey>,
+		current_key: Vec<u8>,
+	) -> Self {
+		Self {
+			state,
+			child_storage: Some(child_info),
 			prefix,
 			current_key,
 			_phantom: PhantomData,
@@ -304,10 +322,11 @@ impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
 	type Item = StorageKey;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let next_key = self.state
-			.next_storage_key(&self.current_key)
-			.ok()
-			.flatten()?;
+		let next_key = if let Some(child_info) = self.child_storage.as_ref() {
+			self.state.next_child_storage_key(child_info, &self.current_key)
+		} else {
+			self.state.next_storage_key(&self.current_key)
+		}.ok().flatten()?;
 		// this terminates the iterator the first time it fails.
 		if let Some(prefix) = self.prefix {
 			if !next_key.starts_with(&prefix.0[..]) {
@@ -360,6 +379,16 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		child_info: &ChildInfo,
 		key_prefix: &StorageKey
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
+
+	/// Given a `BlockId` and a key `prefix` and a child storage key,
+	/// return a `KeyIterator` that iterates matching storage keys in that block.
+	fn child_storage_keys_iter<'a>(
+		&self,
+		id: &BlockId<Block>,
+		child_info: ChildInfo,
+		prefix: Option<&'a StorageKey>,
+		start_key: Option<&StorageKey>
+	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
 
 	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that block.
 	fn child_storage_hash(

@@ -401,6 +401,8 @@ pub enum ElectionCompute {
 	Signed,
 	/// Election was computed with an unsigned submission.
 	Unsigned,
+	/// Election was computed with emergency status.
+	Emergency,
 }
 
 impl Default for ElectionCompute {
@@ -895,13 +897,19 @@ pub mod pallet {
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_emergency_election_result(
 			origin: OriginFor<T>,
-			solution: ReadySolution<T::AccountId>,
+			supports: Supports<T::AccountId>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
+			
+			let solution = ReadySolution {
+				supports,
+				score: [0, 0, 0],
+				compute: ElectionCompute::Emergency,
+			};
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())

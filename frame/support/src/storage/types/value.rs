@@ -17,13 +17,14 @@
 
 //! Storage value type. Implements StorageValue trait and its method directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
+use codec::{FullCodec, Decode, EncodeLike, Encode, MaxEncodedLen};
 use crate::{
 	storage::{
 		StorageAppend, StorageTryAppend, StorageDecodeLength,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
+		generator::{StorageValue as StorageValueT},
 	},
-	traits::{GetDefault, StorageInstance, MaxEncodedLen, StorageInfo},
+	traits::{GetDefault, StorageInstance, StorageInfo},
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -217,7 +218,9 @@ where
 	fn storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
-				prefix: Self::hashed_key(),
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::hashed_key().to_vec(),
 				max_values: Some(1),
 				max_size: Some(
 					Value::max_encoded_len()
@@ -241,7 +244,9 @@ where
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
-				prefix: Self::hashed_key(),
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::hashed_key().to_vec(),
 				max_values: Some(1),
 				max_size: None,
 			}
