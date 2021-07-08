@@ -39,7 +39,10 @@ use sp_consensus_babe::{
 	digests::{PreDigest, SecondaryPlainPreDigest, NextEpochDescriptor}, BabeAuthorityWeight,
 };
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
-use sp_runtime::{traits::{DigestItemFor, DigestFor, Block as BlockT, Zero, Header}, generic::{Digest, BlockId}, Justifications};
+use sp_runtime::{
+	traits::{DigestItemFor, DigestFor, Block as BlockT, Zero, Header},
+	generic::{Digest, BlockId}, Justifications,
+};
 use sp_timestamp::{InherentType, INHERENT_IDENTIFIER, TimestampInherentData};
 use sp_consensus::import_queue::{Verifier, CacheKeyId};
 
