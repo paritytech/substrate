@@ -29,7 +29,7 @@ use sp_blockchain::HeaderBackend;
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::{BlockId, UncheckedExtrinsic},
-	traits::{Block as BlockT, Extrinsic, NumberFor},
+	traits::{Block as BlockT, Header, Extrinsic, NumberFor},
 	transaction_validity::TransactionSource, MultiSignature, MultiAddress
 };
 use crate::ChainInfo;
@@ -66,7 +66,11 @@ pub struct Node<T: ChainInfo> {
 
 type EventRecord<T> = frame_system::EventRecord<<T as frame_system::Config>::Event, <T as frame_system::Config>::Hash>;
 
-impl<T: ChainInfo> Node<T> {
+impl<T> Node<T>
+	where
+		T: ChainInfo,
+		<<T::Block as BlockT>::Header as Header>::Number: From<u32>,
+{
 	/// Creates a new node.
 	pub fn new(
 		rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
@@ -206,7 +210,7 @@ impl<T: ChainInfo> Node<T> {
 	/// Revert all blocks added since creation of the node.
 	pub fn clean(&self) {
 		// if the initial block number wasn't 0, then revert blocks
-		if self.initial_block_number != 0 {
+		if self.initial_block_number != 0u32.into() {
 			let diff = self.client.info().best_number - self.initial_block_number;
 			self.revert_blocks(diff);
 		}
