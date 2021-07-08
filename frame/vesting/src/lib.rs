@@ -167,12 +167,13 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
+			assert!(T::MaxVestingSchedules::get() > 0, "`MaxVestingSchedules` must ge greater than 0");
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
+					// `Currency::minimum_balance()` needs `TestExternalities`.
 					assert!(
-						T::MinVestedTransfer::get() >= <T as Config>::Currency::minimum_balance()
-						&& T::MaxVestingSchedules::get() > 0,
-						"`MinVestedTransfer` must >= existential deposit and `MaxVestingSchedules` cannot == 0"
+						T::MinVestedTransfer::get() >= <T as Config>::Currency::minimum_balance(),
+						"`MinVestedTransfer` must greater than or equal to minimum balance for Currency."
 					)
 				);
 			}
