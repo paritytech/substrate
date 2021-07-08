@@ -98,7 +98,13 @@ impl<T> Node<T>
 		}
 	}
 
-	/// Returns a reference to the rpc handlers.
+	/// Returns a reference to the rpc handlers, use this to send rpc requests.
+	/// eg
+	/// ```ignore
+	/// 	let request = r#"{"jsonrpc":"2.0","method":"engine_createBlock","params": [true, true],"id":1}"#;
+	///		let response = node.rpc_handler()
+	/// 		.handle_request_sync(request, Default::default());
+	/// ```
 	pub fn rpc_handler(&self) -> Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
 		self.rpc_handler.clone()
 	}
@@ -206,15 +212,6 @@ impl<T> Node<T>
 		self.backend.revert(count, true).expect("Failed to revert blocks: ");
 	}
 
-	/// Revert all blocks added since creation of the node.
-	pub fn clean(&self) {
-		// if the initial block number wasn't 0, then revert blocks
-		if self.initial_block_number != 0u32.into() {
-			let diff = self.client.info().best_number - self.initial_block_number;
-			self.revert_blocks(diff);
-		}
-	}
-
 	/// so you've decided to run the test runner as a binary, use this to shutdown gracefully.
 	pub async fn until_shutdown(mut self) {
 		let manager = self.task_manager.take();
@@ -231,6 +228,8 @@ impl<T> Node<T>
 
 impl<T: ChainInfo> Drop for Node<T> {
 	fn drop(&mut self) {
-		self.clean();
+		/// Revert all blocks added since creation of the node.
+		let diff = self.client.info().best_number - self.initial_block_number;
+		self.revert_blocks(diff);
 	}
 }
