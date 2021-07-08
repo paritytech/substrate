@@ -95,7 +95,7 @@ pub mod pallet {
 		/// Each node of the MMR is inserted both on-chain and off-chain via Indexing API.
 		/// The former does not store full leaf content, just it's compact version (hash),
 		/// and some of the inner mmr nodes might be pruned from on-chain storage.
-		/// The later will contain all the entries in their full form.
+		/// The latter will contain all the entries in their full form.
 		///
 		/// Each node is stored in the Off-chain DB under key derived from the [`Self::INDEXING_PREFIX`] and
 		/// it's in-tree index (MMR position).
