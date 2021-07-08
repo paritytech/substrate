@@ -52,16 +52,16 @@ pub struct DDCNode {
 
 struct Metric {
     app_id: String,
-    storage_bytes: u128,
-    wcu_used: u128,
-    rcu_used: u128,
+    storage_bytes: u64,
+    wcu_used: u64,
+    rcu_used: u64,
 }
 
 struct MetricDDN {
     p2p_id: String,
-    storage_bytes: u128,
-    wcu_used: u128,
-    rcu_used: u128,
+    storage_bytes: u64,
+    wcu_used: u64,
+    rcu_used: u64,
 }
 
 #[derive(Deserialize)]
@@ -69,9 +69,9 @@ struct MetricDDN {
 #[allow(non_snake_case)]
 struct ApiMetric {
     appPubKey: String,
-    storageBytes: u128,
-    wcuUsed: u128,
-    rcuUsed: u128,
+    storageBytes: u64,
+    wcuUsed: u64,
+    rcuUsed: u64,
 }
 
 /// Defines application identifier for crypto keys of this module.
@@ -654,9 +654,9 @@ impl<T: Trait> Module<T> {
     fn encode_report_metrics(
         app_id: &AccountId32,
         day_start_ms: u64,
-        storage_bytes: u128,
-        wcu_used: u128,
-        rcu_used: u128,
+        storage_bytes: u64,
+        wcu_used: u64,
+        rcu_used: u64,
     ) -> Vec<u8> {
         let mut call_data = REPORT_METRICS_SELECTOR.to_vec();
         app_id.encode_to(&mut call_data);
@@ -671,9 +671,9 @@ impl<T: Trait> Module<T> {
     fn encode_report_metrics_ddn(
         p2p_id: String,
         day_start_ms: u64,
-        storage_bytes: u128,
-        wcu_used: u128,
-        rcu_used: u128,
+        storage_bytes: u64,
+        wcu_used: u64,
+        rcu_used: u64,
     ) -> Vec<u8> {
         let mut call_data = REPORT_METRICS_DDN_SELECTOR.to_vec();
         p2p_id.encode_to(&mut call_data);
