@@ -18,7 +18,6 @@
 //! Module to enforce private fields on `VestingInfo`.
 
 use super::*;
-use codec::MaxEncodedLen;
 
 /// Struct to encode the vesting schedule of an individual account.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
@@ -47,9 +46,7 @@ where
 
 	/// Validate parameters for `VestingInfo`. Note that this does not check
 	/// against `MinVestedTransfer` or the current block.
-	pub fn validate<BlockNumberToBalance: Convert<BlockNumber, Balance>, T: Config>(
-		&self,
-	) -> Result<(), Error<T>> {
+	pub fn validate<T: Config>(&self) -> Result<(), Error<T>> {
 		ensure!(
 			!self.locked.is_zero() && !self.raw_per_block().is_zero(),
 			Error::<T>::InvalidScheduleParams

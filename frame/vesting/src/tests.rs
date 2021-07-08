@@ -1101,26 +1101,26 @@ fn merge_vesting_handles_per_block_0() {
 fn vesting_info_validate_works() {
 	let min_transfer = <Test as Config>::MinVestedTransfer::get();
 	// Does not check for min transfer.
-	match VestingInfo::new(min_transfer - 1, 1u64, 10u64).validate::<Identity, Test>() {
+	match VestingInfo::new(min_transfer - 1, 1u64, 10u64).validate::<Test>() {
 		Ok(_) => (),
 		_ => panic!(),
 	}
 
 	// `locked` cannot be 0.
-	match VestingInfo::new(0, 1u64, 10u64).validate::<Identity, Test>() {
+	match VestingInfo::new(0, 1u64, 10u64).validate::<Test>() {
 		Err(Error::<Test>::InvalidScheduleParams) => (),
 		_ => panic!(),
 	}
 
 	// `per_block` cannot be 0.
-	match VestingInfo::new(min_transfer + 1, 0u64, 10u64).validate::<Identity, Test>() {
+	match VestingInfo::new(min_transfer + 1, 0u64, 10u64).validate::<Test>() {
 		Err(Error::<Test>::InvalidScheduleParams) => (),
 		_ => panic!(),
 	}
 
 	// With valid inputs it does not error.
 	let valid = VestingInfo::new(min_transfer, 1u64, 10u64);
-	assert_ok!(valid.validate::<Identity, Test>());
+	assert_ok!(valid.validate::<Test>());
 }
 
 #[test]
