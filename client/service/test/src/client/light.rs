@@ -201,7 +201,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_id: &BlockId<Block>,
 		_method: &str,
 		_call_data: &[u8],
-		_strategy: sp_state_machine::ExecutionConfig,
+		_config: sp_state_machine::ExecutionConfig,
 		_extensions: Option<Extensions>,
 	) -> Result<Vec<u8>, ClientError> {
 		Ok(vec![42])
