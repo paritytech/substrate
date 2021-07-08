@@ -21,6 +21,7 @@ use frame_support_procedural_tools::get_doc_literals;
 /// * Add derive trait on Pallet
 /// * Implement GetPalletVersion on Pallet
 /// * Implement OnGenesis on Pallet
+/// * Implement `fn error_metadata` on Pallet
 /// * declare Module type alias for construct_runtime
 /// * replace the first field type of `struct Pallet` with `PhantomData` if it is `_`
 /// * implementation of `PalletInfoAccess` information
