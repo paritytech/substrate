@@ -913,7 +913,7 @@ pub mod pallet {
 
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
-			
+
 			let solution = ReadySolution {
 				supports,
 				score: [0, 0, 0],
