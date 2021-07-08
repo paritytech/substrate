@@ -24,7 +24,7 @@ use sp_runtime::{RuntimeDebug, traits::{Saturating, Zero}};
 use crate::{Conviction, ReferendumIndex, Delegations};
 
 /// A number of lock periods, plus a vote, one way or the other.
-#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug, TypeInfo)]
+#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug, TypeInfo)] // todo: [AJ] custom TypeInfo
 pub struct Vote {
 	pub aye: bool,
 	pub conviction: Conviction,
