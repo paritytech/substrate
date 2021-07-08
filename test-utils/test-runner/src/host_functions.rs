@@ -19,6 +19,7 @@
 /// Use this to override host functions.
 /// eg
 /// ```rust
+/// use test_runner::override_host_functions;
 /// pub struct SignatureVerificationOverride;
 ///
 /// impl sp_wasm_interface::HostFunctions for SignatureVerificationOverride {
