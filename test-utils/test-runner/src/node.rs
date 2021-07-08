@@ -205,8 +205,8 @@ impl<T: ChainInfo> Node<T> {
 
 	/// Revert all blocks added since creation of the node.
 	pub fn clean(&self) {
-		// if a db path was specified, revert all blocks we've added
-		if let Some(_) = std::env::var("DB_BASE_PATH").ok() {
+		// if the initial block number wasn't 0, then revert blocks
+		if self.initial_block_number != 0 {
 			let diff = self.client.info().best_number - self.initial_block_number;
 			self.revert_blocks(diff);
 		}
