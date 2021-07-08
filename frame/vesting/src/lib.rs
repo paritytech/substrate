@@ -692,7 +692,7 @@ where
 		}
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
-		// Check for `per_block` or `locked` of 0 and ending block greater than max block.
+		// Check for `per_block` or `locked` of 0.
 		vesting_schedule.validate::<T>()?;
 
 		let mut schedules = Self::vesting(who).unwrap_or_default();
@@ -719,7 +719,7 @@ where
 		per_block: BalanceOf<T>,
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
-		// Check for `per_block` or `locked` of 0 and ending block greater than max block.
+		// Check for `per_block` or `locked` of 0.
 		VestingInfo::new(locked, per_block, starting_block).validate::<T>()?;
 
 		ensure!(
