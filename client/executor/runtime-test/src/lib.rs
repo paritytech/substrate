@@ -109,6 +109,12 @@ sp_core::wasm_export_functions! {
 
 	fn test_exhaust_heap() -> Vec<u8> { Vec::with_capacity(16777216) }
 
+	fn test_fp_f32add(a: [u8; 4], b: [u8; 4]) -> [u8; 4] {
+		let a = f32::from_le_bytes(a);
+		let b = f32::from_le_bytes(b);
+		f32::to_le_bytes(a + b)
+	}
+
 	fn test_panic() { panic!("test panic") }
 
 	fn test_conditional_panic(input: Vec<u8>) -> Vec<u8> {

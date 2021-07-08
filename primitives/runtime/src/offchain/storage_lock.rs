@@ -62,7 +62,7 @@
 //! ```
 
 use crate::offchain::storage::{StorageRetrievalError, MutateStorageError, StorageValueRef};
-use crate::traits::AtLeast32BitUnsigned;
+use crate::traits::BlockNumberProvider;
 use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
@@ -438,29 +438,6 @@ where
 			},
 		}
 	}
-}
-
-/// Bound for a block number source
-/// used with [`BlockAndTime<BlockNumberProvider>`](BlockAndTime).
-pub trait BlockNumberProvider {
-	/// Type of `BlockNumber` to provide.
-	type BlockNumber: Codec + Clone + Ord + Eq + AtLeast32BitUnsigned;
-	/// Returns the current block number.
-	///
-	/// Provides an abstraction over an arbitrary way of providing the
-	/// current block number.
-	///
-	/// In case of using crate `sp_runtime` without the crate `frame`
-	/// system, it is already implemented for
-	/// `frame_system::Pallet<T: Config>` as:
-	///
-	/// ```ignore
-	/// fn current_block_number() -> Self {
-	///     frame_system::Pallet<Config>::block_number()
-	/// }
-	/// ```
-	/// .
-	fn current_block_number() -> Self::BlockNumber;
 }
 
 #[cfg(test)]

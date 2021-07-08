@@ -13,14 +13,13 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 log = { version = "0.4.14", default-features = false }
-max-encoded-len = { version = "3.0.0", default-features = false, path = "../../max-encoded-len", features = [ "derive" ] }
 
 [dev-dependencies]
 sp-io = { version = "3.0.0", path = "../../primitives/io" }
@@ -37,7 +36,6 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"log/std",
-	"max-encoded-len/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]

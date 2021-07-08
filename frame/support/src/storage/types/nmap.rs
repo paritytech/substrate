@@ -26,9 +26,9 @@ use crate::{
 		},
 		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength, StoragePrefixedMap,
 	},
-	traits::{Get, GetDefault, StorageInstance, StorageInfo, MaxEncodedLen},
+	traits::{Get, GetDefault, StorageInstance, StorageInfo},
 };
-use codec::{Decode, Encode, EncodeLike, FullCodec};
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_runtime::SaturatedConversion;
 use sp_std::prelude::*;
@@ -418,7 +418,9 @@ where
 	fn storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
-				prefix: Self::final_prefix(),
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::final_prefix().to_vec(),
 				max_values: MaxValues::get(),
 				max_size: Some(
 					Key::key_max_encoded_len()
@@ -430,6 +432,30 @@ where
 	}
 }
 
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::PartialStorageInfoTrait for
+	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Key: super::key::KeyGenerator,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::final_prefix().to_vec(),
+				max_values: MaxValues::get(),
+				max_size: None,
+			}
+		]
+	}
+}
 #[cfg(test)]
 mod test {
 	use super::*;

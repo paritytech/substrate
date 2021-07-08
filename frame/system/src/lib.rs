@@ -78,9 +78,8 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError,
+		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError, BlockNumberProvider,
 	},
-	offchain::storage_lock::BlockNumberProvider,
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
@@ -88,7 +87,7 @@ use frame_support::{
 	Parameter, storage,
 	traits::{
 		SortedMembers, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
-		StoredMap, EnsureOrigin, OriginTrait, Filter, MaxEncodedLen,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
@@ -96,7 +95,7 @@ use frame_support::{
 	},
 	dispatch::{DispatchResultWithPostInfo, DispatchResult},
 };
-use codec::{Encode, Decode, FullCodec, EncodeLike};
+use codec::{Encode, Decode, FullCodec, EncodeLike, MaxEncodedLen};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
