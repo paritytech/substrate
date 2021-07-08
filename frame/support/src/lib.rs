@@ -68,6 +68,7 @@ pub mod error;
 pub mod traits;
 pub mod weights;
 pub mod instances;
+pub mod migrations;
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
@@ -658,20 +659,6 @@ pub use frame_support_procedural::DefaultNoBound;
 /// }
 /// ```
 pub use frame_support_procedural::require_transactional;
-
-/// Extracts the [`PalletVersion`](crate::traits::PalletVersion) as defined in the `Cargo.toml`.
-///
-/// The pallet version can be stored under `package.metadata.frame.pallet_version` in the
-/// `Cargo.toml` file. If no pallet version is specified in the `Cargo.toml`, this will return `1`
-/// as pallet version.
-///
-/// # Example
-///
-/// ```
-/// # use frame_support::{traits::PalletVersion, pallet_version};
-/// const Version: PalletVersion = pallet_version!();
-/// ```
-pub use frame_support_procedural::pallet_version;
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
@@ -1272,7 +1259,7 @@ pub mod pallet_prelude {
 		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
 		traits::{
-			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
+			Get, Hooks, IsType, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
 			ConstU32, GetDefault,
 		},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
@@ -1397,6 +1384,19 @@ pub mod pallet_prelude {
 /// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
 /// and value types must bound [`traits::MaxEncodedLen`].
 ///
+/// As the macro implements [`traits::GetStorageVersion`], the current storage version needs to be
+/// communicated to the macro. This can be done by using the `storage_version` attribute:
+///
+/// ```ignore
+/// const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
+///
+/// #[pallet::pallet]
+/// #[pallet::storage_version(STORAGE_VERSION)]
+/// pub struct Pallet<T>(_);
+/// ```
+///
+/// If not present, the current storage version is set to the default value.
+///
 /// ### Macro expansion:
 ///
 /// The macro add this attribute to the struct definition:
@@ -1411,7 +1411,7 @@ pub mod pallet_prelude {
 /// and replace the type `_` by `PhantomData<T>`.
 ///
 /// It implements on pallet:
-/// * [`traits::GetPalletVersion`]
+/// * [`traits::GetStorageVersion`]
 /// * [`traits::OnGenesis`]: contains some logic to write pallet version into storage.
 /// * `ModuleErrorMetadata`: using error declared or no metadata.
 ///

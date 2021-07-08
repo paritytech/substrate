@@ -60,6 +60,3 @@ std = [
 ]
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]
-
-[package.metadata.frame]
-pallet-version = 4
