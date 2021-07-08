@@ -326,7 +326,7 @@ impl InstanceWrapper {
 		Ok(buffer)
 	}
 
-	/// Read data from a slice of memory into a destination buffer.
+	/// Read data from the instance memory into a slice.
 	///
 	/// Returns an error if the read would go out of the memory bounds.
 	pub fn read_memory_into(&self, source_addr: Pointer<u8>, dest: &mut [u8]) -> Result<()> {
@@ -342,7 +342,7 @@ impl InstanceWrapper {
 		}
 	}
 
-	/// Write data to a slice of memory.
+	/// Write data to the instance memory from a slice.
 	///
 	/// Returns an error if the write would go out of the memory bounds.
 	pub fn write_memory_from(&self, dest_addr: Pointer<u8>, data: &[u8]) -> Result<()> {
