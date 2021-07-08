@@ -29,7 +29,6 @@ sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-block-builder = { version = "3.0.0", path = "../../primitives/block-builder" }
 sp-api = { version = "3.0.0", path = "../../primitives/api" }
-sp-io = { version = "3.0.0", path = "../../primitives/io" }
 sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
 sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }
 sp-keystore = { version = "0.9.0", path = "../../primitives/keystore" }
@@ -47,13 +46,10 @@ sp-runtime-interface = { version = "3.0.0", path = "../../primitives/runtime-int
 # pallets
 frame-system = { version = "3.0.0", path = "../../frame/system" }
 
-env_logger = "0.7.1"
 log = "0.4.8"
 futures = { package = "futures", version = "0.3", features = ["compat"] }
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "0.2", features = ["signal"] }
 parking_lot = "0.11.1"
 # Calling RPC
 jsonrpc-core = "15.1"
-jsonrpc-core-client = "15.1"
-jsonrpc-derive = "15.1"
 num-traits = "0.2.14"

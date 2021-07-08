@@ -9897,12 +9897,9 @@ dependencies = [
 name = "test-runner"
 version = "0.9.0"
 dependencies = [
- "env_logger 0.7.1",
  "frame-system",
  "futures 0.3.15",
  "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
  "log",
  "num-traits",
  "parking_lot 0.11.1",
@@ -9929,7 +9926,6 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-inherents",
- "sp-io",
  "sp-keyring",
  "sp-keystore",
  "sp-offchain",
@@ -10124,7 +10120,6 @@ dependencies = [
  "libc",
  "memchr",
  "mio",
- "mio-named-pipes",
  "mio-uds",
  "num_cpus",
  "pin-project-lite 0.1.12",

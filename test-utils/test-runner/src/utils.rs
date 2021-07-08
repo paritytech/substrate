@@ -129,9 +129,7 @@ pub fn default_config(task_executor: TaskExecutor, mut chain_spec: Box<dyn Chain
 pub fn task_executor(handle: Handle) -> TaskExecutor {
 	let task_executor = move |fut, task_type| match task_type {
 		TaskType::Async => handle.spawn(fut).map(drop),
-		TaskType::Blocking => handle
-			.spawn_blocking(move || futures::executor::block_on(fut))
-			.map(drop),
+		TaskType::Blocking => handle.spawn_blocking(move || futures::executor::block_on(fut)).map(drop),
 	};
 
 	task_executor.into()
