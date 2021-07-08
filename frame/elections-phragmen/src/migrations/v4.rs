@@ -40,7 +40,7 @@ pub fn migrate<
 		);
 		return 0;
 	}
-	let storage_version = StorageVersion::get::<T::PalletInfo, crate::Pallet<T>>();
+	let storage_version = StorageVersion::get::<crate::Pallet<T>>();
 	log::info!(
 		target: "runtime::elections-phragmen",
 		"Running migration to v4 for elections-phragmen with storage version {:?}",
@@ -54,7 +54,7 @@ pub fn migrate<
 			new_pallet_name.as_ref().as_bytes(),
 		);
 
-		StorageVersion::new(4).put::<T::PalletInfo, crate::Pallet<T>>();
+		StorageVersion::new(4).put::<crate::Pallet<T>>();
 
 		<T as frame_system::Config>::BlockWeights::get().max_block
 	} else {
@@ -92,7 +92,7 @@ pub fn pre_migration<T: crate::Config, N: AsRef<str>>(new: N) {
 		sp_core::hexdisplay::HexDisplay::from(&sp_io::storage::next_key(new.as_bytes()).unwrap())
 	);
 	// ensure storage version is 3.
-	assert_eq!(StorageVersion::get::<T::PalletInfo, crate::Pallet<T>>(), 3);
+	assert_eq!(StorageVersion::get::<crate::Pallet<T>>(), 3);
 }
 
 /// Some checks for after migration. This can be linked to
@@ -102,5 +102,5 @@ pub fn pre_migration<T: crate::Config, N: AsRef<str>>(new: N) {
 pub fn post_migration<T : crate::Config>() {
 	log::info!("post-migration elections-phragmen");
 	// ensure we've been updated to v4 by the automatic write of crate version -> storage version.
-	assert_eq!(StorageVersion::get::<T::PalletInfo, crate::Pallet<T>>(), 4);
+	assert_eq!(StorageVersion::get::<crate::Pallet<T>>(), 4);
 }

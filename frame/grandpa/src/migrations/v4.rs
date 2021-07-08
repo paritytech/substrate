@@ -39,7 +39,7 @@ pub fn migrate<
 		);
 		return 0;
 	}
-	let storage_version = StorageVersion::get::<T::PalletInfo, crate::Pallet<T>>();
+	let storage_version = StorageVersion::get::<crate::Pallet<T>>();
 	log::info!(
 		target: "runtime::afg",
 		"Running migration to v3.1 for grandpa with storage version {:?}",
@@ -53,7 +53,7 @@ pub fn migrate<
 			new_pallet_name.as_ref().as_bytes(),
 		);
 
-		StorageVersion::new(4).put::<T::PalletInfo, crate::Pallet<T>>();
+		StorageVersion::new(4).put::<crate::Pallet<T>>();
 
 		<T as frame_system::Config>::BlockWeights::get().max_block
 	} else {
@@ -77,7 +77,7 @@ pub fn pre_migration<
 	assert!(next_key.starts_with(&twox_128(OLD_PREFIX)));
 
 	// The pallet version is already stored using the pallet name
-	let storage_key = StorageVersion::storage_key::<T::PalletInfo, crate::Pallet<T>>().unwrap();
+	let storage_key = StorageVersion::storage_key::<crate::Pallet<T>>();
 
 	// ensure nothing is stored in the new prefix.
 	assert!(
@@ -97,7 +97,7 @@ pub fn pre_migration<
 		),
 	);
 	// ensure storage version is 3.
-	assert_eq!(StorageVersion::get::<T::PalletInfo, crate::Pallet<T>>(), 3);
+	assert_eq!(StorageVersion::get::<crate::Pallet<T>>(), 3);
 }
 
 /// Some checks for after migration. This can be linked to

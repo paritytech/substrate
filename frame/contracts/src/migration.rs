@@ -21,7 +21,7 @@ use frame_support::{storage::migration, traits::{StorageVersion, PalletInfoAcces
 pub fn migrate<T: Config>() -> Weight {
 	let mut weight: Weight = 0;
 
-	if StorageVersion::get::<T::PalletInfo, Pallet<T>>() == 3 {
+	if StorageVersion::get::<Pallet<T>>() == 3 {
 		weight = weight.saturating_add(T::DbWeight::get().writes(1));
 		migration::remove_storage_prefix(
 			<Pallet<T>>::name().as_bytes(),
@@ -29,7 +29,7 @@ pub fn migrate<T: Config>() -> Weight {
 			b"",
 		);
 
-		StorageVersion::new(4).put::<T::PalletInfo, Pallet<T>>();
+		StorageVersion::new(4).put::<Pallet<T>>();
 	}
 
 	weight

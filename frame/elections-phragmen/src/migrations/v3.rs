@@ -20,7 +20,7 @@
 use codec::{Encode, Decode, FullCodec};
 use sp_std::prelude::*;
 use frame_support::{
-	RuntimeDebug, Twox64Concat, traits::{PalletInfo, StorageVersion}, weights::Weight,
+	RuntimeDebug, Twox64Concat, traits::{PalletInfoAccess, StorageVersion}, weights::Weight,
 };
 
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
@@ -40,10 +40,7 @@ struct Voter<AccountId, Balance> {
 /// Trait to implement to give information about types used for migration
 pub trait V2ToV3 {
 	/// The elections-phragmen pallet.
-	type Pallet: 'static;
-
-	/// Information about the pallets in the runtime.
-	type PalletInfo: PalletInfo;
+	type Pallet: 'static + PalletInfoAccess;
 
 	/// System config account id
 	type AccountId: 'static + FullCodec;
@@ -78,7 +75,7 @@ frame_support::generate_storage_alias!(
 /// Be aware that this migration is intended to be used only for the mentioned versions. Use
 /// with care and run at your own risk.
 pub fn apply<T: V2ToV3>(old_voter_bond: T::Balance, old_candidacy_bond: T::Balance) -> Weight {
-	let storage_version = StorageVersion::get::<T::PalletInfo, T::Pallet>();
+	let storage_version = StorageVersion::get::<T::Pallet>();
 	log::info!(
 		target: "runtime::elections-phragmen",
 		"Running migration for elections-phragmen with storage version {:?}",
@@ -91,7 +88,7 @@ pub fn apply<T: V2ToV3>(old_voter_bond: T::Balance, old_candidacy_bond: T::Balan
 		migrate_runners_up_to_recorded_deposit::<T>(old_candidacy_bond);
 		migrate_members_to_recorded_deposit::<T>(old_candidacy_bond);
 
-		StorageVersion::new(3).put::<T::PalletInfo, T::Pallet>();
+		StorageVersion::new(3).put::<T::Pallet>();
 
 		Weight::max_value()
 	} else {
