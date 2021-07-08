@@ -321,7 +321,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
-		config.default_heap_pages, // TODO: this is ALWAYS None now. Maybe we should actually remove it???
+		config.default_heap_pages,remove it???
 		config.max_runtime_instances,
 	);
 
