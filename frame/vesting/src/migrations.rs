@@ -46,6 +46,10 @@ pub(crate) mod v1 {
 					BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>,
 				> = vec![vesting_info].try_into().ok();
 
+				if v.is_none() {
+					log::warn!(target: "runtime::vesting", "migration failed to move a vesting schedule into a BoundedVec");
+				}
+
 				v
 			},
 		);
@@ -64,8 +68,8 @@ pub(crate) mod v1 {
 			for s in schedules {
 				// It is ok if this does not pass, but ideally pre-existing schedules would pass
 				// this validation logic so we can be more confident about edge cases.
-				debug_assert!(
-					s.validate::<T::BlockNumberToBalance, T>().is_ok(),
+				assert!(
+					s.validate::<T>().is_ok(),
 					"A schedule does not pass new validation logic"
 				);
 			}
