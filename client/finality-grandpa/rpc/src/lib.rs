@@ -23,8 +23,8 @@ use std::sync::Arc;
 use futures::{future, FutureExt, StreamExt};
 use log::warn;
 
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError as JsonRpseeCallError};
-use jsonrpsee_ws_server::{RpcModule, SubscriptionSink};
+use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};
+use jsonrpsee::{RpcModule, SubscriptionSink};
 
 mod error;
 mod finality;
@@ -104,7 +104,7 @@ where
 					.subscribe()
 					.map(|x: sc_finality_grandpa::GrandpaJustification<Block>| JustificationNotification::from(x));
 
-				fn log_err(err: jsonrpsee_types::Error) -> bool {
+				fn log_err(err: JsonRpseeError) -> bool {
 					log::error!("Could not send data to grandpa_justifications subscription. Error: {:?}", err);
 					false
 				}
@@ -128,8 +128,8 @@ where
 }
 
 // TODO: (dp) make available to other code?
-fn to_jsonrpsee_call_error(err: error::Error) -> JsonRpseeCallError {
-	JsonRpseeCallError::Failed(Box::new(err))
+fn to_jsonrpsee_call_error(err: error::Error) -> CallError {
+	CallError::Failed(Box::new(err))
 }
 
 #[cfg(test)]

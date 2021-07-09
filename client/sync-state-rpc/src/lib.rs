@@ -25,7 +25,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_blockchain::HeaderBackend;
 use std::sync::Arc;
 use sp_runtime::generic::BlockId;
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError};
+use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};
 use jsonrpsee::RpcModule;
 
 type SharedAuthoritySet<TBl> =

@@ -18,7 +18,7 @@
 
 //! Offchain RPC errors.
 
-use jsonrpsee_types::error::CallError;
+use jsonrpsee::types::error::CallError;
 
 /// Offchain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;

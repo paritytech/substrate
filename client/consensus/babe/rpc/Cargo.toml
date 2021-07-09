@@ -15,8 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 sc-consensus-babe = { version = "0.9.0", path = "../" }
 sc-rpc-api = { version = "0.9.0", path = "../../../rpc-api" }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
-jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "dp-expose-more-types-in-facade-crate", features = ["server"] }
 sp-consensus-babe = { version = "0.9.0", path = "../../../../primitives/consensus/babe" }
 serde = { version = "1.0.104", features=["derive"] }
 sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" }

@@ -22,7 +22,7 @@ use std::{marker::PhantomData, sync::Arc, fmt::Display};
 use codec::{self, Codec, Decode, Encode};
 use futures::{future, FutureExt};
 use jsonrpsee::RpcModule;
-use jsonrpsee_types::{error::CallError, Error as JsonRpseeError};
+use jsonrpsee::types::{error::CallError, Error as JsonRpseeError};
 use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
 use sc_rpc_api::DenyUnsafe;
 use sp_block_builder::BlockBuilder;

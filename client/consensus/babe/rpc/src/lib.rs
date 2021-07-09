@@ -20,7 +20,7 @@
 
 use sc_consensus_babe::{Epoch, authorship, Config};
 use futures::{FutureExt as _, TryFutureExt as _};
-use jsonrpsee_types::error::Error as JsonRpseeError;
+use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};
 use jsonrpsee::RpcModule;
 
 use sc_consensus_epochs::{descendent_query, Epoch as EpochT, SharedEpochChanges};
@@ -175,9 +175,9 @@ pub enum Error {
 
 impl std::error::Error for Error {}
 
-impl From<Error> for jsonrpsee_types::error::CallError {
+impl From<Error> for CallError {
 	fn from(error: Error) -> Self {
-		jsonrpsee_types::error::CallError::Failed(Box::new(error))
+		CallError::Failed(Box::new(error))
 	}
 }
 

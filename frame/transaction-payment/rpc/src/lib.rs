@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::convert::TryInto;
 use codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError};
+use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};
 use jsonrpsee::RpcModule;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay}};
 use sp_api::ProvideRuntimeApi;

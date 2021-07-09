@@ -18,7 +18,7 @@
 
 //! Authoring RPC module errors.
 
-use jsonrpsee_types::{error::CallError, JsonRawValue, to_json_raw_value};
+use jsonrpsee::types::{error::CallError, JsonRawValue, to_json_raw_value};
 use sp_runtime::transaction_validity::InvalidTransaction;
 
 /// Author RPC Result type.

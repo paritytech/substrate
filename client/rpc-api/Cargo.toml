@@ -27,4 +27,6 @@ serde_json = "1.0.41"
 sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
 sp-rpc = { version = "3.0.0", path = "../../primitives/rpc" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
-jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
+# TODO: (dp) why?
+# jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "dp-expose-more-types-in-facade-crate", features = ["server"] }

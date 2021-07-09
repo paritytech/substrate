@@ -287,6 +287,9 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	}
 }
 
+// TODO: (dp) This is **not** dead code; used in polkadot and cumulus for testing. See https://github.com/paritytech/substrate/pull/9264
+// 		 We need a solution for this.
+
 // /// The output of an RPC transaction.
 // pub struct RpcTransactionOutput {
 // 	/// The output string of the transaction if any.

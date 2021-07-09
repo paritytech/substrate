@@ -24,7 +24,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Encode};
 use jsonrpsee::RpcModule;
-use jsonrpsee_types::{error::CallError, Error as JsonRpseeError};
+use jsonrpsee::types::{error::CallError, Error as JsonRpseeError};
 use pallet_mmr_primitives::{Error as MmrError, Proof};
 use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
