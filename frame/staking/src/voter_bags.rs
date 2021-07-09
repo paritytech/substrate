@@ -682,9 +682,9 @@ pub fn existential_weight<T: Config>() -> VoteWeight {
 ///    ```
 #[cfg(feature = "make-bags")]
 pub mod make_bags {
-	use crate::{AccountIdOf, Config, voter_bags::existential_weight};
+	use crate::{Config, voter_bags::existential_weight};
 	use frame_election_provider_support::VoteWeight;
-	use frame_support::traits::{Currency, CurrencyToVote, Get};
+	use frame_support::traits::Get;
 	use std::{io::Write, path::{Path, PathBuf}};
 
 	/// Return the path to a header file used in this repository if is exists.
