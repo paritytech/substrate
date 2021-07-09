@@ -838,11 +838,14 @@ pub mod pallet {
 		/// putting their authoring reward at risk.
 		///
 		/// No deposit or reward is associated with this submission.
-		#[pallet::weight(T::WeightInfo::submit_unsigned(
-			witness.voters,
-			witness.targets,
-			solution.compact.voter_count() as u32,
-			solution.compact.unique_targets().len() as u32
+		#[pallet::weight((
+			T::WeightInfo::submit_unsigned(
+				witness.voters,
+				witness.targets,
+				solution.compact.voter_count() as u32,
+				solution.compact.unique_targets().len() as u32
+			),
+			DispatchClass::Operational,
 		))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
