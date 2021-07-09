@@ -109,7 +109,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause{
 
 			#[doc(hidden)]
-			pub fn module_constants_metadata()
+			pub fn pallet_constants_metadata()
 				-> #frame_support::sp_std::vec::Vec<#frame_support::metadata::PalletConstantMetadata>
 			{
 				#frame_support::sp_std::vec![ #( #consts ),* ]

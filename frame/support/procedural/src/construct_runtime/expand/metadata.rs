@@ -159,7 +159,7 @@ fn expand_pallet_metadata_constants(
 	let instance = decl.instance.as_ref().into_iter();
 
 	quote!{
-		#path::Pallet::<#runtime #(, #path::#instance)*>::module_constants_metadata()
+		#path::Pallet::<#runtime #(, #path::#instance)*>::pallet_constants_metadata()
 	}
 }
 
