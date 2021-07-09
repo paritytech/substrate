@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2]
+
+### Changed
+
+- Added CI/CD scripts for E2E testing of OCW + DDC_SC + DDC_NODE
+- Removed Node-Template runtime
+- Removed hardcoded SC address configuration from runtime
+- Added DDN status reporting
+- Added DDN metrics
+- Added period finalization call
+- Updated tests
+
 ## [2.3.1]
 
 ### Changed

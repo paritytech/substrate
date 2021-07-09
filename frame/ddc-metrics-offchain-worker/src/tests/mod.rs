@@ -112,10 +112,10 @@ fn test_encode_report_metrics() {
             53, 50, 11, 190, // Selector
             2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
             2, 2, 2, // 32 bytes, app_id
-			3, 4, 0, 0, 0, 0, 0, 0, // 8 bytes, day_start_ms
-			5, 0, 6, 0, 0, 0, 0, 0, // 8 bytes, storage_bytes
-			7, 0, 0, 8, 0, 0, 0, 0, // 8 bytes, wcu_used
-			9, 0, 0, 16, 0, 0, 0, 0 // 8 bytes, rcu_used
+            3, 4, 0, 0, 0, 0, 0, 0, // 8 bytes, day_start_ms
+            5, 0, 6, 0, 0, 0, 0, 0, // 8 bytes, storage_bytes
+            7, 0, 0, 8, 0, 0, 0, 0, // 8 bytes, wcu_used
+            9, 0, 0, 16, 0, 0, 0, 0 // 8 bytes, rcu_used
         ]
     );
 }
