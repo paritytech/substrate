@@ -1652,7 +1652,8 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(err_amount.is_zero());
 				Self::deposit_event(Event::<T>::PreimageUsed(proposal_hash, provider, deposit));
 
-				let res = proposal.dispatch(frame_system::RawOrigin::Root.into());
+				let res = proposal.dispatch(frame_system::RawOrigin::Root.into())
+					.map(|_| ()).map_err(|e| e.error);
 				Self::deposit_event(Event::<T>::Executed(index, res));
 
 				Ok(())
