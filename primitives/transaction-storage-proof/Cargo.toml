@@ -27,6 +27,7 @@ async-trait = { version = "0.1.48", optional = true }
 default = [ "std" ]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-inherents/std",
 	"sp-runtime/std",
