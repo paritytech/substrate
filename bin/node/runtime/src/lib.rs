@@ -1036,13 +1036,12 @@ impl pallet_vesting::Config for Runtime {
 }
 
 impl pallet_mmr::Config for Runtime {
-	type Hash = <Runtime as frame_system::Config>::Hash;
+	const INDEXING_PREFIX: &'static [u8] = b"mmr";
 	type Hashing = <Runtime as frame_system::Config>::Hashing;
+	type Hash = <Runtime as frame_system::Config>::Hash;
 	type LeafData = frame_system::Pallet<Self>;
 	type OnNewRoot = ();
 	type WeightInfo = ();
-
-	const INDEXING_PREFIX: &'static [u8] = b"mmr";
 }
 
 parameter_types! {
