@@ -1538,7 +1538,7 @@ mod test {
 	}
 
 	#[test]
-	fn prefix_iterator_pagination() {
+	fn prefix_iterator_pagination_works() {
 		TestExternalities::default().execute_with(|| {
 			use crate::storage::generator::StorageMap;
 			use crate::hash::Twox64Concat;
@@ -1584,10 +1584,7 @@ mod test {
 			let iter = PrefixIterator::new(
 				prefix,
 				stored_key,
-				|raw_key_without_prefix, mut raw_value| {
-					let mut key_material = Twox64Concat::reverse(raw_key_without_prefix);
-					Ok((u64::decode(&mut key_material)?, u64::decode(&mut raw_value)?))
-				},
+				MyStorageMap::key_value_decode_fn,
 			);
 			assert_eq!(iter.collect::<Vec<_>>().len(), 8);
 		});
