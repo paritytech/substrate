@@ -24,7 +24,7 @@ use sp_runtime::{RuntimeDebug, traits::{Saturating, Zero}};
 use crate::{Conviction, ReferendumIndex, Delegations};
 
 /// A number of lock periods, plus a vote, one way or the other.
-#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug, TypeInfo)] // todo: [AJ] custom TypeInfo
+#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct Vote {
 	pub aye: bool,
 	pub conviction: Conviction,
@@ -46,6 +46,18 @@ impl Decode for Vote {
 			conviction: Conviction::try_from(b & 0b0111_1111)
 				.map_err(|_| codec::Error::from("Invalid conviction"))?,
 		})
+	}
+}
+
+impl TypeInfo for Vote {
+	type Identity = Self;
+
+	fn type_info() -> scale_info::Type {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("Vote", module_path!()))
+			.composite(scale_info::build::Fields::unnamed()
+				.field(|f| f.ty::<u8>().docs(&["Raw vote byte, encodes aye + conviction"]))
+			)
 	}
 }
 

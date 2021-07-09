@@ -123,7 +123,7 @@ impl<Number, Hash> TypeInfo for Header<Number, Hash> where
 {
 	type Identity = Self;
 
-	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
+	fn type_info() -> scale_info::Type {
 		scale_info::Type::builder()
 			.path(scale_info::Path::new("Header", module_path!()))
 			.docs(&["Abstraction over a block header for a substrate chain."])
