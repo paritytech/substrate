@@ -115,8 +115,8 @@ impl TypeId for PalletId {
 /// // generate a double map from `(u32, u32)` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// generate_storage_alias!(
 /// 	OtherPrefix, OtherStorageName => DoubleMap<
-/// 		(u32, u32),
-/// 		(u32, u32),
+/// 		((u32, u32), Twox64Concat),
+/// 		((u32, u32), Twox64Concat),
 /// 		Vec<u8>
 /// 	>
 /// );
@@ -124,7 +124,7 @@ impl TypeId for PalletId {
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// generate_storage_alias!(
-/// 	Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
+/// 	Prefix, GenericStorage<T: Config> => Map<(T::AccountId, Twox64Concat), Vec<u8>>
 /// );
 /// # fn main() {}
 /// ```
