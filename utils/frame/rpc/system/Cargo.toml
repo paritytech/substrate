@@ -26,7 +26,7 @@ sp-api = { version = "3.0.0", path = "../../../../primitives/api" }
 frame-system-rpc-runtime-api = { version = "3.0.0", path = "../../../../frame/system/rpc/runtime-api" }
 sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
 sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" }
-sp-transaction-pool = { version = "3.0.0", path = "../../../../primitives/transaction-pool" }
+sc-transaction-pool-api = { version = "3.0.0", path = "../../../../client/transaction-pool/api" }
 sp-block-builder = { version = "3.0.0", path = "../../../../primitives/block-builder" }
 sc-rpc-api = { version = "0.9.0", path = "../../../../client/rpc-api" }
 

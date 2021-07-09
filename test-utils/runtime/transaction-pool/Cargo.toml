@@ -17,7 +17,7 @@ parking_lot = "0.11.1"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
-sc-transaction-graph = { version = "3.0.0", path = "../../../client/transaction-pool/graph" }
+sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-pool", features = ["test-helpers"] }
+sc-transaction-pool-api = { version = "3.0.0", path = "../../../client/transaction-pool/api" }
 futures = { version = "0.3.1", features = ["compat"] }
 derive_more = "0.99.2"

@@ -28,6 +28,6 @@ sp-runtime = { path = "../../primitives/runtime" , version = "3.0.0"}
 sc-chain-spec = { path = "../chain-spec" , version = "3.0.0"}
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
-sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
+sc-transaction-pool-api = { version = "3.0.0", path = "../transaction-pool/api" }
 sp-rpc = { version = "3.0.0", path = "../../primitives/rpc" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }

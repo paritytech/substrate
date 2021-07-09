@@ -29,9 +29,9 @@ use sp_runtime::traits::Member;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
-use sp_transaction_pool::error;
+use sc_transaction_pool_api::error;
 
-use crate::{
+use super::{
 	base_pool::Transaction,
 	future::WaitingTransaction,
 	tracked_map::{self, ReadOnlyTrackedMap, TrackedMap},
@@ -149,7 +149,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	///
 	/// Transactions are returned in order:
 	/// 1. First by the dependencies:
-	///	- never return transaction that requires a tag, which was not provided by one of the previously returned transactions
+	///	- never return transaction that requires a tag, which was not provided by one of the previously
+	/// returned transactions
 	/// 2. Then by priority:
 	/// - If there are two transactions with all requirements satisfied the one with higher priority goes first.
 	/// 3. Then by the ttl that's left

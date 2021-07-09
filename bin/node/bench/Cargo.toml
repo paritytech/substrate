@@ -26,7 +26,6 @@ kvdb-rocksdb = "0.12.0"
 sp-trie = { version = "3.0.0", path = "../../../primitives/trie" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
 sc-basic-authorship = { version = "0.9.0", path = "../../../client/basic-authorship" }
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 sp-timestamp = { version = "3.0.0", default-features = false, path = "../../../primitives/timestamp" }
@@ -40,4 +39,5 @@ lazy_static = "1.4.0"
 parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 parity-db = { version = "0.2.4" }
 sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-pool" }
+sc-transaction-pool-api = { version = "3.0.0", path = "../../../client/transaction-pool/api" }
 futures = { version = "0.3.4", features = ["thread-pool"] }
