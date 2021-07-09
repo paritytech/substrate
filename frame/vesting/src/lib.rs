@@ -251,8 +251,7 @@ pub mod pallet {
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
-				vesting_info.validate()
-					.expect("Invalid VestingInfo params at genesis");
+				if !vesting_info.is_valid() { panic!("Invalid VestingInfo params at genesis") };
 
 				Vesting::<T>::try_append(who, vesting_info)
 					.expect("Too many vesting schedules at genesis.");
@@ -494,7 +493,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// While `per_block` should never be 0, it is possible that the created schedule would end
-		// after the highest possible block, which is a case we are ok with, but `validate` fails.
+		// after the highest possible block, which is a case we are ok with, but `is_valid` fails.
 		let schedule = VestingInfo::new(locked, per_block, starting_block);
 
 		Ok(Some(schedule))
@@ -508,7 +507,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
-		schedule.validate().map_err(|_| Error::<T>::InvalidScheduleParams)?;
+		if !schedule.is_valid() { return Err(Error::<T>::InvalidScheduleParams.into()); };
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
 
@@ -705,7 +704,7 @@ where
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0.
-		vesting_schedule.validate().map_err(|_| Error::<T>::InvalidScheduleParams)?;
+		if !vesting_schedule.is_valid() { return Err(Error::<T>::InvalidScheduleParams.into()); };
 
 		let mut schedules = Self::vesting(who).unwrap_or_default();
 
@@ -732,9 +731,9 @@ where
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
-		VestingInfo::new(locked, per_block, starting_block)
-			.validate()
-			.map_err(|_| Error::<T>::InvalidScheduleParams)?;
+		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {
+			return Err(Error::<T>::InvalidScheduleParams.into())
+		}
 
 		ensure!(
 			Vesting::<T>::decode_len(who).unwrap_or_default() <

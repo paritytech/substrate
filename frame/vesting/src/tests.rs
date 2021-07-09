@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{assert_noop, assert_ok, assert_storage_noop, assert_err, dispatch::EncodeLike};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::EncodeLike};
 use frame_system::RawOrigin;
 use sp_runtime::traits::{BadOrigin, Identity};
 
@@ -1101,16 +1101,16 @@ fn merge_vesting_handles_per_block_0() {
 fn vesting_info_validate_works() {
 	let min_transfer = <Test as Config>::MinVestedTransfer::get();
 	// Does not check for min transfer.
-	assert_ok!(VestingInfo::new(min_transfer - 1, 1u64, 10u64).validate());
+	assert_eq!(VestingInfo::new(min_transfer - 1, 1u64, 10u64).is_valid(), true);
 
 	// `locked` cannot be 0.
-	assert_err!(VestingInfo::new(0, 1u64, 10u64).validate(), ());
+	assert_eq!(VestingInfo::new(0, 1u64, 10u64).is_valid(), false);
 
 	// `per_block` cannot be 0.
-	assert_err!(VestingInfo::new(min_transfer + 1, 0u64, 10u64).validate(), ());
+	assert_eq!(VestingInfo::new(min_transfer + 1, 0u64, 10u64).is_valid(), false);
 
 	// With valid inputs it does not error.
-	assert_ok!(VestingInfo::new(min_transfer, 1u64, 10u64).validate());
+	assert_eq!(VestingInfo::new(min_transfer, 1u64, 10u64).is_valid(), true);
 }
 
 #[test]

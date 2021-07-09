@@ -46,12 +46,8 @@ where
 
 	/// Validate parameters for `VestingInfo`. Note that this does not check
 	/// against `MinVestedTransfer`.
-	pub fn validate(&self) -> Result<(), ()> {
-		if self.locked.is_zero() || self.raw_per_block().is_zero() {
-			Err(())
-		} else {
-			Ok(())
-		}
+	pub fn is_valid(&self) -> bool {
+		!self.locked.is_zero() && !self.raw_per_block().is_zero()
 	}
 
 	/// Locked amount at schedule creation.
