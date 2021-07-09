@@ -1568,6 +1568,17 @@ pub mod pallet {
 						T::VoterBagThresholds::get().windows(2).all(|window| window[1] > window[0]),
 						"Voter bag thresholds must strictly increase",
 					);
+
+					assert!(
+						{
+							let existential_weight = voter_bags::existential_weight::<T>();
+							T::VoterBagThresholds::get()
+								.first()
+								.map(|&lowest_threshold| lowest_threshold >= existential_weight)
+								.unwrap_or(true)
+						},
+						"Smallest bag should not be smaller than existential weight",
+					);
 				});
 			}
 		}

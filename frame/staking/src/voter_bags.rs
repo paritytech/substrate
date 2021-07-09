@@ -621,6 +621,20 @@ pub enum VoterType {
 	Nominator,
 }
 
+/// Compute the existential weight for the specified configuration.
+///
+/// Note that this value depends on the current issuance, a quantity known to change over time.
+/// This makes the project of computing a static value suitable for inclusion in a static,
+/// generated file _excitingly unstable_.
+#[cfg(any(feature = "std", feature = "make-bags"))]
+pub fn existential_weight<T: Config>() -> VoteWeight {
+	use frame_support::traits::{Currency, CurrencyToVote};
+
+	let existential_deposit = <T::Currency as Currency<AccountIdOf<T>>>::minimum_balance();
+	let issuance = <T::Currency as Currency<AccountIdOf<T>>>::total_issuance();
+	T::CurrencyToVote::to_vote(existential_deposit, issuance)
+}
+
 /// Support code to ease the process of generating voter bags.
 ///
 /// The process of adding voter bags to a runtime requires only four steps.
@@ -657,7 +671,7 @@ pub enum VoterType {
 ///    ```
 #[cfg(feature = "make-bags")]
 pub mod make_bags {
-	use crate::{AccountIdOf, Config};
+	use crate::{AccountIdOf, Config, voter_bags::existential_weight};
 	use frame_election_provider_support::VoteWeight;
 	use frame_support::traits::{Currency, CurrencyToVote, Get};
 	use std::{io::Write, path::{Path, PathBuf}};
@@ -685,17 +699,6 @@ pub mod make_bags {
 			.separator("_")
 			.build()
 			.expect("format described here meets all constraints")
-	}
-
-	/// Compute the existential weight for the specified configuration.
-	///
-	/// Note that this value depends on the current issuance, a quantity known to change over time.
-	/// This makes the project of computing a static value suitable for inclusion in a static,
-	/// generated file _excitingly unstable_.
-	pub fn existential_weight<T: Config>() -> VoteWeight {
-		let existential_deposit = <T::Currency as Currency<AccountIdOf<T>>>::minimum_balance();
-		let issuance = <T::Currency as Currency<AccountIdOf<T>>>::total_issuance();
-		T::CurrencyToVote::to_vote(existential_deposit, issuance)
 	}
 
 	/// Compute the constant ratio for the thresholds.
