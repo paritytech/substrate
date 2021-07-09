@@ -351,10 +351,7 @@ impl<
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: |raw_key_without_prefix, mut raw_value| {
-				let mut key_material = G::Hasher2::reverse(raw_key_without_prefix);
-				Ok((K2::decode(&mut key_material)?, V::decode(&mut raw_value)?))
-			},
+			closure: <Self as storage::IterableStorageDoubleMap<K1, K2, V>>::partial_key_value_decode_fn,
 		}
 	}
 
@@ -364,10 +361,7 @@ impl<
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: |raw_key_without_prefix| {
-				let mut key_material = G::Hasher2::reverse(raw_key_without_prefix);
-				K2::decode(&mut key_material)
-			}
+			closure: <Self as storage::IterableStorageDoubleMap<K1, K2, V>>::partial_key_decode_fn,
 		}
 	}
 
@@ -383,13 +377,7 @@ impl<
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: |raw_key_without_prefix, mut raw_value| {
-				let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
-				let k1 = K1::decode(&mut k1_k2_material)?;
-				let mut k2_material = G::Hasher2::reverse(k1_k2_material);
-				let k2 = K2::decode(&mut k2_material)?;
-				Ok((k1, k2, V::decode(&mut raw_value)?))
-			},
+			closure: <Self as storage::IterableStorageDoubleMap<K1, K2, V>>::full_key_value_decode_fn,
 		}
 	}
 
@@ -399,13 +387,7 @@ impl<
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: |raw_key_without_prefix| {
-				let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
-				let k1 = K1::decode(&mut k1_k2_material)?;
-				let mut k2_material = G::Hasher2::reverse(k1_k2_material);
-				let k2 = K2::decode(&mut k2_material)?;
-				Ok((k1, k2))
-			}
+			closure: <Self as storage::IterableStorageDoubleMap<K1, K2, V>>::full_key_decode_fn,
 		}
 	}
 
@@ -413,6 +395,38 @@ impl<
 		let mut iterator = Self::iter();
 		iterator.drain = true;
 		iterator
+	}
+
+	fn partial_key_value_decode_fn(
+		raw_key_without_prefix: &[u8],
+		mut raw_value: &[u8],
+	) -> Result<(K2, V), codec::Error> {
+		let mut key_material = G::Hasher2::reverse(raw_key_without_prefix);
+		Ok((K2::decode(&mut key_material)?, V::decode(&mut raw_value)?))
+	}
+
+	fn partial_key_decode_fn(raw_key_without_prefix: &[u8]) -> Result<K2, codec::Error> {
+		let mut key_material = G::Hasher2::reverse(raw_key_without_prefix);
+		K2::decode(&mut key_material)
+	}
+
+	fn full_key_value_decode_fn(
+		raw_key_without_prefix: &[u8],
+		mut raw_value: &[u8],
+	) -> Result<(K1, K2, V), codec::Error> {
+		let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
+		let k1 = K1::decode(&mut k1_k2_material)?;
+		let mut k2_material = G::Hasher2::reverse(k1_k2_material);
+		let k2 = K2::decode(&mut k2_material)?;
+		Ok((k1, k2, V::decode(&mut raw_value)?))
+	}
+
+	fn full_key_decode_fn(raw_key_without_prefix: &[u8]) -> Result<(K1, K2), codec::Error> {
+		let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
+		let k1 = K1::decode(&mut k1_k2_material)?;
+		let mut k2_material = G::Hasher2::reverse(k1_k2_material);
+		let k2 = K2::decode(&mut k2_material)?;
+		Ok((k1, k2))
 	}
 
 	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(mut f: F) {

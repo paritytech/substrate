@@ -325,6 +325,17 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// alter the map while doing this, you'll get undefined results.
 	fn iter_keys() -> Self::KeyIterator;
 
+	/// The decode function used while iterating through the key-value pairs in
+	/// [`IterableStorageMap::iter`].
+	fn key_value_decode_fn(
+		raw_key_without_prefix: &[u8],
+		raw_value: &[u8],
+	) -> Result<(K, V), codec::Error>;
+
+	/// The decode function used while iterating through the keys in
+	/// [`IterableStorageMap::iter_keys`].
+	fn key_decode_fn(raw_key_without_prefix: &[u8]) -> Result<K, codec::Error>;
+
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
@@ -381,6 +392,28 @@ pub trait IterableStorageDoubleMap<
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
 
+	/// The decode function used while iterating through the partial key-value pairs in
+	/// [`IterableStorageDoubleMap::iter_prefix`].
+	fn partial_key_value_decode_fn(
+		raw_key_without_prefix: &[u8],
+		raw_value: &[u8],
+	) -> Result<(K2, V), codec::Error>;
+
+	/// The decode function used while iterating through the partial keys in
+	/// [`IterableStorageDoubleMap::iter_key_prefix`].
+	fn partial_key_decode_fn(raw_key_without_prefix: &[u8]) -> Result<K2, codec::Error>;
+
+	/// The decode function used while iterating through the full key-value pairs in
+	/// [`IterableStorageDoubleMap::iter`].
+	fn full_key_value_decode_fn(
+		raw_key_without_prefix: &[u8],
+		raw_value: &[u8],
+	) -> Result<(K1, K2, V), codec::Error>;
+
+	/// The decode function used while iterating through the full key pairs in
+	/// [`IterableStorageDoubleMap::iter_keys`].
+	fn full_key_decode_fn(raw_key_without_prefix: &[u8]) -> Result<(K1, K2), codec::Error>;
+
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
@@ -426,6 +459,36 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
+
+	/// The decode function used while iterating through the prefix key-value pairs in
+	/// [`IterableStorageNMap::iter_prefix`].
+	///
+	/// A type parameter `KP` denoting the type of the key prefix must be provided. See 
+	fn partial_key_value_decode_fn<KP>(
+		raw_key_without_prefix: &[u8],
+		raw_value: &[u8],
+	) -> Result<(<K as HasKeyPrefix<KP>>::Suffix, V), codec::Error>
+	where K: HasReversibleKeyPrefix<KP>;
+
+	/// The decode function used while iterating through the prefix keys in
+	/// [`IterableStorageNMap::iter_key_prefix`].
+	///
+	/// A type parameter denoting the type of the key prefix must be provided. See
+	fn partial_key_decode_fn<KP>(
+		raw_key_without_prefix: &[u8],
+	) -> Result<<K as HasKeyPrefix<KP>>::Suffix, codec::Error>
+	where K: HasReversibleKeyPrefix<KP>;
+
+	/// The decode function used while iterating through the key-value pairs in
+	/// [`IterableStorageNMap::iter`].
+	fn full_key_value_decode_fn(
+		raw_key_without_prefix: &[u8],
+		raw_value: &[u8],
+	) -> Result<(K::Key, V), codec::Error>;
+
+	/// The decode function used while iterating through the keys in
+	/// [`IterableStorageNMap::iter_keys`].
+	fn full_key_decode_fn(raw_key_without_prefix: &[u8]) -> Result<K::Key, codec::Error>;
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
