@@ -28,4 +28,21 @@ jobs:
         run: |
           docker build . -t $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
           echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA"
+          docker image tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+  trigger:
+    needs: build-and-push
+    strategy:
+      matrix:
+        repo: ['Cerebellum-Network/ddc-e2e-tests']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Cerebellum-Network/ddc-e2e-tests repository
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.TRIGGER_GITHUB_TOKEN }}
+          repository: ${{ matrix.repo }}
+          event-type: POS_NODE_VERSION_TRIGGER
+          client-payload: '{"POS_NODE_VERSION": "${{ github.sha }}"}'

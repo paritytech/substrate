@@ -41,6 +41,9 @@ docker cp $id::/ddc-smart-contract/artifacts/ ./artifacts/
 docker rm -v $id
 ```
 
+## Test new ddc-node version with e2e tests
+- check ddc-e2e-tests repository workflow results with new version of pos-node [here](https://github.com/Cerebellum-Network/ddc-e2e-tests/actions/workflows/run-tests-on-new-version-of-pos-node.yml)
+
 ## Versioning strategy
 
 The package must follow **Semantic Versioning** (SemVer).

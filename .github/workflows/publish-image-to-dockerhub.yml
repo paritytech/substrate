@@ -31,7 +31,6 @@ jobs:
         run: |
           docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
           docker image tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA $DOCKERHUB_REPOSITORY/$PACKAGE_NAME:${GITHUB_REF##*/}
-          docker image tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA $DOCKERHUB_REPOSITORY/$PACKAGE_NAME:latest
       - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
@@ -41,6 +40,24 @@ jobs:
         id: docker_publish
         run: |
           docker push $DOCKERHUB_REPOSITORY/$PACKAGE_NAME:${GITHUB_REF##*/}
-          docker push $DOCKERHUB_REPOSITORY/$PACKAGE_NAME:latest
       - name: Image digest
         run: echo ${{ steps.docker_publish.outputs.digest }}
+
+  trigger:
+    needs: build-and-push
+    strategy:
+      matrix:
+        repo: ['Cerebellum-Network/ddc-e2e-tests']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the current short branch name (VERSION)
+        shell: bash
+        run: echo "::set-output name=VERSION::${GITHUB_REF##*/}"
+        id: get-version
+      - name: Trigger Cerebellum-Network/ddc-e2e-tests repository
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.TRIGGER_GITHUB_TOKEN }}
+          repository: ${{ matrix.repo }}
+          event-type: POS_NODE_VERSION_TRIGGER
+          client-payload: '{"POS_NODE_VERSION": "${{ steps.get-version.outputs.VERSION }}"}'
