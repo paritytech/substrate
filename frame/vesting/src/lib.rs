@@ -98,6 +98,7 @@ impl Default for Releases {
 }
 
 /// Actions to take on a user's `Vesting` storage entry.
+#[derive(Clone, Copy)]
 enum VestingAction {
 	/// Do not actively remove any schedules.
 	Passive,
@@ -115,6 +116,20 @@ impl VestingAction {
 			Self::Remove(index1) => *index1 == index,
 			Self::Merge(index1, index2) => *index1 == index || *index2 == index,
 		}
+	}
+
+	/// Pick the schedules that this action dictates should continue vesting undisturbed.
+	fn pick_schedules<'a, T: Config>(
+		&'a self,
+		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
+	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>> + 'a  {
+		schedules.into_iter().enumerate().filter_map(move |(index, schedule)| {
+			if self.should_remove(index) {
+				None
+			} else {
+				Some(schedule)
+			}
+		})
 	}
 }
 
@@ -541,15 +556,13 @@ impl<T: Config> Pallet<T> {
 		let now = <frame_system::Pallet<T>>::block_number();
 
 		let mut total_locked_now: BalanceOf<T> = Zero::zero();
-		let filtered_schedules = schedules
-			.into_iter()
-			.enumerate()
-			.filter_map(|(index, schedule)| {
+		let filtered_schedules = action
+			.pick_schedules::<T>(schedules)
+			.filter_map(|schedule| {
 				let locked_now = schedule.locked_at::<T::BlockNumberToBalance>(now);
-				if locked_now.is_zero() || action.should_remove(index) {
+				if locked_now.is_zero() {
 					None
 				} else {
-					// We track the locked amount only if the schedule is included.
 					total_locked_now = total_locked_now.saturating_add(locked_now);
 					Some(schedule)
 				}
