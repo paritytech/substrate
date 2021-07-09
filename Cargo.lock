@@ -446,6 +446,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bae"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec107f431ee3d8a8e45e6dd117adab769556ef463959e77bf6a4888d5fd500cf"
+dependencies = [
+ "heck",
+ "proc-macro-error 0.4.12",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "base-x"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2886,7 +2899,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8b65edf8ce083cd0239d6c2ffb0d6dc1a4bfd042"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#360a7f31d64a549c78b450375ed6b156c8d67b5b"
 dependencies = [
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
@@ -2900,10 +2913,11 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8b65edf8ce083cd0239d6c2ffb0d6dc1a4bfd042"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#360a7f31d64a549c78b450375ed6b156c8d67b5b"
 dependencies = [
  "async-trait",
  "fnv",
+ "futures 0.3.15",
  "hyper 0.14.5",
  "hyper-rustls 0.22.1",
  "jsonrpsee-types",
@@ -2912,13 +2926,14 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "tokio 1.6.0",
  "url 2.2.1",
 ]
 
 [[package]]
 name = "jsonrpsee-http-server"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8b65edf8ce083cd0239d6c2ffb0d6dc1a4bfd042"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#360a7f31d64a549c78b450375ed6b156c8d67b5b"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2939,9 +2954,10 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8b65edf8ce083cd0239d6c2ffb0d6dc1a4bfd042"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#360a7f31d64a549c78b450375ed6b156c8d67b5b"
 dependencies = [
  "Inflector",
+ "bae",
  "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
@@ -2951,7 +2967,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8b65edf8ce083cd0239d6c2ffb0d6dc1a4bfd042"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#360a7f31d64a549c78b450375ed6b156c8d67b5b"
 dependencies = [
  "async-trait",
  "beef",
@@ -2968,7 +2984,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-utils"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8b65edf8ce083cd0239d6c2ffb0d6dc1a4bfd042"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#360a7f31d64a549c78b450375ed6b156c8d67b5b"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2986,7 +3002,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8b65edf8ce083cd0239d6c2ffb0d6dc1a4bfd042"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#360a7f31d64a549c78b450375ed6b156c8d67b5b"
 dependencies = [
  "async-trait",
  "fnv",
@@ -3009,7 +3025,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-server"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=master#8b65edf8ce083cd0239d6c2ffb0d6dc1a4bfd042"
+source = "git+https://github.com/paritytech/jsonrpsee?branch=master#360a7f31d64a549c78b450375ed6b156c8d67b5b"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3972,7 +3988,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85ee3c48cb9d9b275ad967a0e96715badc13c6029adb92f34fa17b9ff28fd81f"
 dependencies = [
  "proc-macro-crate 0.1.5",
- "proc-macro-error",
+ "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
  "syn",
@@ -6206,14 +6222,40 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-error"
+version = "0.4.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18f33027081eba0a6d8aba6d1b1c3a3be58cbb12106341c2d5759fcd9b5277e7"
+dependencies = [
+ "proc-macro-error-attr 0.4.12",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "version_check",
+]
+
+[[package]]
+name = "proc-macro-error"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
 dependencies = [
- "proc-macro-error-attr",
+ "proc-macro-error-attr 1.0.4",
  "proc-macro2",
  "quote",
  "syn",
+ "version_check",
+]
+
+[[package]]
+name = "proc-macro-error-attr"
+version = "0.4.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a5b4b77fdb63c1eca72173d68d24501c54ab1269409f6b672c85deb18af69de"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "syn-mid",
  "version_check",
 ]
 
@@ -9460,7 +9502,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ba9cdfda491b814720b6b06e0cac513d922fc407582032e8706e9f137976f90"
 dependencies = [
  "heck",
- "proc-macro-error",
+ "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
  "syn",
@@ -9764,6 +9806,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "syn-mid"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baa8e7560a164edb1621a55d18a0c59abf49d360f47aa7b821061dd7eea7fac9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
