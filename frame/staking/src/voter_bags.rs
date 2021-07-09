@@ -104,7 +104,18 @@ impl<T: Config> VoterList<T> {
 
 	/// Decode the length of the voter list.
 	pub fn decode_len() -> Option<usize> {
-		crate::VoterCount::<T>::try_get().ok().map(|n| n.saturated_into())
+		let maybe_len = crate::VoterCount::<T>::try_get().ok().map(|n| n.saturated_into());
+		debug_assert_eq!(
+			maybe_len.unwrap_or_default(),
+			crate::VoterNodes::<T>::iter().count(),
+			"stored length must match count of nodes",
+		);
+		debug_assert_eq!(
+			maybe_len.unwrap_or_default() as u32,
+			crate::CounterForNominators::<T>::get() + crate::CounterForValidators::<T>::get(),
+			"voter count must be sum of validator and nominator count",
+		);
+		maybe_len
 	}
 
 	/// Iterate over all nodes in all bags in the voter list.
