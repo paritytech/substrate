@@ -1690,8 +1690,8 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.15.0"
-source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info#c6e1612b93a20574513d542f2a4e628c693a455c"
+version = "0.14.3"
+source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info#e7cdb8781c51f2f02d1dc24de5b50f811be1309f"
 dependencies = [
  "either",
  "futures 0.3.15",
