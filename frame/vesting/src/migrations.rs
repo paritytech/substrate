@@ -29,7 +29,7 @@ pub(crate) mod v1 {
 
 		log::debug!(
 			target: "runtime::vesting",
-			"Vesting storage version v1 PRE migration checks succesful!"
+			"migration: Vesting storage version v1 PRE migration checks succesful!"
 		);
 
 		Ok(())
@@ -47,7 +47,10 @@ pub(crate) mod v1 {
 				> = vec![vesting_info].try_into().ok();
 
 				if v.is_none() {
-					log::warn!(target: "runtime::vesting", "migration failed to move a vesting schedule into a BoundedVec");
+					log::warn!(
+						target: "runtime::vesting",
+						"migration: Failed to move a vesting schedule into a BoundedVec"
+					);
 				}
 
 				v
@@ -68,16 +71,18 @@ pub(crate) mod v1 {
 			for s in schedules {
 				// It is ok if this does not pass, but ideally pre-existing schedules would pass
 				// this validation logic so we can be more confident about edge cases.
-				assert!(
-					s.validate::<T>().is_ok(),
-					"A schedule does not pass new validation logic"
-				);
+				if !s.is_valid() {
+					log::warn!(
+						target: "runtime::vesting",
+						"migration: A schedule does not pass new validation logic.",
+					)
+				}
 			}
 		}
 
 		log::debug!(
 			target: "runtime::vesting",
-			"Vesting storage version v1 POST migration checks succesful!"
+			"migration: Vesting storage version v1 POST migration checks succesful!"
 		);
 		Ok(())
 	}

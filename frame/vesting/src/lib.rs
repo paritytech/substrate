@@ -571,22 +571,6 @@ impl<T: Config> Pallet<T> {
 		(filtered_schedules, total_locked_now)
 	}
 
-	fn track_locked(schedules: impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>> ) -> (impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>>, BalanceOf<T>) {
-		let now = <frame_system::Pallet<T>>::block_number();
-		let mut total_locked_now: BalanceOf<T> = Zero::zero();
-		let locked_schedules = schedules.filter_map(|schedule| {
-			let locked_now = schedule.locked_at::<T::BlockNumberToBalance>(now);
-			if locked_now.is_zero() {
-				None
-			} else {
-				total_locked_now = total_locked_now.saturating_add(locked_now);
-				Some(schedule)
-			}
-		});
-
-		(locked_schedules, total_locked_now)
-	}
-
 	/// Write an accounts updated vesting lock to storage.
 	fn write_lock(who: &T::AccountId, total_locked_now: BalanceOf<T>) {
 		if total_locked_now.is_zero() {
