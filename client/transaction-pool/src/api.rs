@@ -37,7 +37,7 @@ use sp_api::{ProvideRuntimeApi, ApiExt};
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sp_core::traits::SpawnEssentialNamed;
 
-use crate::{metrics::{ApiMetrics, ApiMetricsExt}, error::{self, Error}};
+use crate::{metrics::{ApiMetrics, ApiMetricsExt}, error::{self, Error}, graph};
 
 /// The transaction pool logic for full client.
 pub struct FullChainApi<Client, Block> {
@@ -103,7 +103,7 @@ impl<Client, Block> FullChainApi<Client, Block> {
 	}
 }
 
-impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block>
+impl<Client, Block> graph::ChainApi for FullChainApi<Client, Block>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
@@ -125,7 +125,7 @@ where
 		&self,
 		at: &BlockId<Self::Block>,
 		source: TransactionSource,
-		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
+		uxt: graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let (tx, rx) = oneshot::channel();
 		let client = self.client.clone();
@@ -158,21 +158,21 @@ where
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
+	) -> error::Result<Option<graph::NumberFor<Self>>> {
 		self.client.to_number(at).map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
 	}
 
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
+	) -> error::Result<Option<graph::BlockHash<Self>>> {
 		self.client.to_hash(at).map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
 	}
 
 	fn hash_and_length(
 		&self,
-		ex: &sc_transaction_graph::ExtrinsicFor<Self>,
-	) -> (sc_transaction_graph::ExtrinsicHash<Self>, usize) {
+		ex: &graph::ExtrinsicFor<Self>,
+	) -> (graph::ExtrinsicHash<Self>, usize) {
 		ex.using_encoded(|x| {
 			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
 		})
@@ -192,7 +192,7 @@ fn validate_transaction_blocking<Client, Block>(
 	client: &Client,
 	at: &BlockId<Block>,
 	source: TransactionSource,
-	uxt: sc_transaction_graph::ExtrinsicFor<FullChainApi<Client, Block>>,
+	uxt: graph::ExtrinsicFor<FullChainApi<Client, Block>>,
 ) -> error::Result<TransactionValidity>
 where
 	Block: BlockT,
@@ -269,7 +269,7 @@ where
 		&self,
 		at: &BlockId<Block>,
 		source: TransactionSource,
-		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
+		uxt: graph::ExtrinsicFor<Self>,
 	) -> error::Result<TransactionValidity> {
 		validate_transaction_blocking(&*self.client, at, source, uxt)
 	}
@@ -293,7 +293,7 @@ impl<Client, F, Block> LightChainApi<Client, F, Block> {
 	}
 }
 
-impl<Client, F, Block> sc_transaction_graph::ChainApi for
+impl<Client, F, Block> graph::ChainApi for
 	LightChainApi<Client, F, Block> where
 		Block: BlockT,
 		Client: HeaderBackend<Block> + 'static,
@@ -315,7 +315,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for
 		&self,
 		at: &BlockId<Self::Block>,
 		source: TransactionSource,
-		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
+		uxt: graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let header_hash = self.client.expect_block_hash_from_id(at);
 		let header_and_hash = header_hash
@@ -349,21 +349,21 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
+	) -> error::Result<Option<graph::NumberFor<Self>>> {
 		Ok(self.client.block_number_from_id(at)?)
 	}
 
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
+	) -> error::Result<Option<graph::BlockHash<Self>>> {
 		Ok(self.client.block_hash_from_id(at)?)
 	}
 
 	fn hash_and_length(
 		&self,
-		ex: &sc_transaction_graph::ExtrinsicFor<Self>,
-	) -> (sc_transaction_graph::ExtrinsicHash<Self>, usize) {
+		ex: &graph::ExtrinsicFor<Self>,
+	) -> (graph::ExtrinsicHash<Self>, usize) {
 		ex.using_encoded(|x| {
 			(<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len())
 		})

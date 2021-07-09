@@ -22,5 +22,5 @@ sc-client-api = { version = "3.0.0", path = "../api" }
 sc-network = { version = "0.9.0", path = "../network" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
-sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
+sc-transaction-pool-api = { version = "3.0.0", path = "../transaction-pool/api" }
 wasm-timer = "0.2"
