@@ -35,9 +35,9 @@ use sp_core::Bytes;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::generic;
-use sp_transaction_pool::{
-	TransactionPool, TransactionFor, InPoolTransaction, TransactionSource,
-	TxHash, error::IntoPoolError,
+use sc_transaction_pool_api::{
+	TransactionPool, InPoolTransaction, TransactionSource,
+	TxHash, TransactionFor, error::IntoPoolError,
 };
 use sp_session::SessionKeys;
 

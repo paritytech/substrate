@@ -447,6 +447,16 @@ pub trait ChildStateBackend<Block, Client>: Send + Sync + 'static
 		prefix: StorageKey,
 	) -> Result<Vec<StorageKey>, Error>;
 
+	/// Returns the keys with prefix from a child storage with pagination support.
+	async fn storage_keys_paged(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+	) -> Result<Vec<StorageKey>, Error>;
+
 	/// Returns a child storage entry at a specific block's state.
 	async fn storage(
 		&self,
@@ -488,9 +498,9 @@ impl<Block, Client> ChildState<Block, Client>
 {
 	/// Convert this to a RPC module.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut ctx_module = RpcModule::new(self);
+		let mut module = RpcModule::new(self);
 
-		ctx_module.register_async_method("childstate_getStorage", |params, state| {
+		module.register_async_method("childstate_getStorage", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
 				Err(e) => return Box::pin(future::err(e)),
@@ -502,7 +512,7 @@ impl<Block, Client> ChildState<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("childstate_getKeys", |params, state| {
+		module.register_async_method("childstate_getKeys", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
 				Err(e) => return Box::pin(future::err(e)),
@@ -514,7 +524,7 @@ impl<Block, Client> ChildState<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("childstate_getStorageHash", |params, state| {
+		module.register_async_method("childstate_getStorageHash", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
 				Err(e) => return Box::pin(future::err(e)),
@@ -526,7 +536,7 @@ impl<Block, Client> ChildState<Block, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("childstate_getStorageSize", |params, state| {
+		module.register_async_method("childstate_getStorageSize", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
 				Err(e) => return Box::pin(future::err(e)),
@@ -538,7 +548,7 @@ impl<Block, Client> ChildState<Block, Client>
 			}.boxed()
 		})?;
 
-		Ok(ctx_module)
+		Ok(module)
 	}
 
 }

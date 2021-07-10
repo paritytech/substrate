@@ -497,6 +497,18 @@ where
 		Err(client_err(ClientError::NotAvailableOnLightClient))
 	}
 
+	// TODO: (dp) port this
+	async fn storage_keys_paged(
+		&self,
+		_block: Option<Block::Hash>,
+		_storage_key: PrefixedStorageKey,
+		_prefix: Option<StorageKey>,
+		_count: u32,
+		_start_key: Option<StorageKey>,
+	) -> Result<Vec<StorageKey>, Error> {
+		Err(client_err(ClientError::NotAvailableOnLightClient))
+	}
+
 	async fn storage(
 		&self,
 		block: Option<Block::Hash>,

@@ -42,7 +42,7 @@ use sp_session::SessionKeys;
 // TODO(niklasad1): this is a hack.
 use sp_state_machine::Ext;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use sp_transaction_pool::TransactionPool;
+use sc_transaction_pool_api::TransactionPool;
 
 use crate::{ChainInfo, utils::logger};
 use log::LevelFilter;
@@ -65,7 +65,7 @@ pub struct Node<T: ChainInfo> {
 			Block = T::Block,
 			Hash = <T::Block as BlockT>::Hash,
 			Error = sc_transaction_pool::error::Error,
-			InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+			InPoolTransaction = sc_transaction_pool::Transaction<
 				<T::Block as BlockT>::Hash,
 				<T::Block as BlockT>::Extrinsic,
 			>,
@@ -190,7 +190,7 @@ impl<T: ChainInfo> Node<T> {
 			block_import,
 			env,
 			client: client.clone(),
-			pool: transaction_pool.pool().clone(),
+			pool: transaction_pool.clone(),
 			commands_stream,
 			select_chain,
 			consensus_data_provider,

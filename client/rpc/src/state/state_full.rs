@@ -291,7 +291,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 					&BlockId::Hash(block), prefix.as_ref(), start_key.as_ref()
 				)
 			)
-			.map(|v| v.take(count as usize).collect())
+			.map(|iter| iter.take(count as usize).collect())
 			.map_err(client_err)
 	}
 
@@ -602,6 +602,31 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 				)
 			})
 			.map_err(client_err)
+	}
+
+	// TODO: (dp) port this.
+	async fn storage_keys_paged(
+		&self,
+		_block: Option<Block::Hash>,
+		_storage_key: PrefixedStorageKey,
+		_prefix: Option<StorageKey>,
+		_count: u32,
+		_start_key: Option<StorageKey>,
+	) -> std::result::Result<Vec<StorageKey>, Error> {
+		todo!()
+		// Box::new(result(
+		// 	self.block_or_best(block)
+		// 		.and_then(|block| {
+		// 			let child_info = match ChildType::from_prefixed_key(&storage_key) {
+		// 				Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+		// 				None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
+		// 			};
+		// 			self.client.child_storage_keys_iter(
+		// 				&BlockId::Hash(block), child_info, prefix.as_ref(), start_key.as_ref(),
+		// 			)
+		// 		})
+		// 		.map(|iter| iter.take(count as usize).collect())
+		// 		.map_err(client_err)))
 	}
 
 	async fn storage(

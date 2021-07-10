@@ -33,7 +33,7 @@ pub enum Error {
 	Client(Box<dyn std::error::Error + Send + Sync>),
 	/// Transaction pool error,
 	#[display(fmt="Transaction pool error: {}", _0)]
-	Pool(sp_transaction_pool::error::Error),
+	Pool(sc_transaction_pool_api::error::Error),
 	/// Verification error
 	#[display(fmt="Extrinsic verification error: {}", _0)]
 	#[from(ignore)]
@@ -101,7 +101,7 @@ const POOL_UNACTIONABLE: i32 = POOL_INVALID_TX + 8;
 
 impl From<Error> for CallError {
 	fn from(e: Error) -> Self {
-		use sp_transaction_pool::error::{Error as PoolError};
+		use sc_transaction_pool_api::error::{Error as PoolError};
 
 		match e {
 			Error::BadFormat(e) => Self::Custom {
