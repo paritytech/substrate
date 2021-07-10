@@ -78,9 +78,8 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError,
+		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError, BlockNumberProvider,
 	},
-	offchain::storage_lock::BlockNumberProvider,
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
@@ -88,7 +87,7 @@ use frame_support::{
 	Parameter, storage,
 	traits::{
 		SortedMembers, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
-		StoredMap, EnsureOrigin, OriginTrait, Filter, MaxEncodedLen,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
@@ -96,7 +95,7 @@ use frame_support::{
 	},
 	dispatch::{DispatchResultWithPostInfo, DispatchResult},
 };
-use codec::{Encode, Decode, FullCodec, EncodeLike};
+use codec::{Encode, Decode, FullCodec, EncodeLike, MaxEncodedLen};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -581,7 +580,7 @@ pub mod pallet {
 	/// Events deposited for the current block.
 	#[pallet::storage]
 	#[pallet::getter(fn events)]
-	pub(super) type Events<T: Config> =
+	pub type Events<T: Config> =
 		StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
@@ -778,7 +777,7 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 /// This type alias represents an index of an event.
 ///
 /// We use `u32` here because this index is used as index for `Events<T>`
-/// which can't contain more than `u32::max_value()` items.
+/// which can't contain more than `u32::MAX` items.
 type EventIndex = u32;
 
 /// Type used to encode the number of references an account has.

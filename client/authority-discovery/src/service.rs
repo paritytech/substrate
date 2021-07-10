@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use std::fmt::Debug;
+
 use crate::ServicetoWorkerMsg;
 
 use futures::channel::{mpsc, oneshot};
@@ -28,6 +30,12 @@ use sp_authority_discovery::AuthorityId;
 #[derive(Clone)]
 pub struct Service {
 	to_worker: mpsc::Sender<ServicetoWorkerMsg>,
+}
+
+impl Debug for Service {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_tuple("AuthorityDiscoveryService").finish()
+	}
 }
 
 /// A [`Service`] allows to interact with a [`crate::Worker`], e.g. by querying the

@@ -41,7 +41,7 @@ hyper-rustls = "0.21.0"
 sc-client-db = { version = "0.9.0", default-features = true, path = "../db" }
 sc-block-builder = { version = "0.9.0", path = "../block-builder" }
 sc-transaction-pool = { version = "3.0.0", path = "../transaction-pool" }
-sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
+sc-transaction-pool-api = { version = "3.0.0", path = "../transaction-pool/api" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

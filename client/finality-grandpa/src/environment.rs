@@ -503,19 +503,19 @@ where
 
 		let is_descendent_of = is_descendent_of(&*self.client, None);
 
-		// TODO: add proper async support here
-		let best_header = futures::executor::block_on(
-			self.select_chain
-				.best_chain()
-				.map_err(|e| Error::Blockchain(e.to_string())),
-		)?;
+		let (best_block_hash, best_block_number) = {
+			// TODO [#9158]: Use SelectChain::best_chain() to get a potentially
+			// more accurate best block
+			let info = self.client.info();
+			(info.best_hash, info.best_number)
+		};
 
 		let authority_set = self.authority_set.inner();
 
 		// block hash and number of the next pending authority set change in the
 		// given best chain.
 		let next_change = authority_set
-			.next_change(&best_header.hash(), &is_descendent_of)
+			.next_change(&best_block_hash, &is_descendent_of)
 			.map_err(|e| Error::Safety(e.to_string()))?;
 
 		// find the hash of the latest block in the current set
@@ -528,7 +528,7 @@ where
 			// the next set starts at `n` so the current one lasts until `n - 1`. if
 			// `n` is later than the best block, then the current set is still live
 			// at best block.
-			Some((_, n)) if n > *best_header.number() => best_header.hash(),
+			Some((_, n)) if n > best_block_number => best_block_hash,
 			Some((h, _)) => {
 				// this is the header at which the new set will start
 				let header = self.client.header(BlockId::Hash(h))?.expect(
@@ -541,7 +541,7 @@ where
 			}
 			// there is no pending change, the latest block for the current set is
 			// the best block.
-			None => best_header.hash(),
+			None => best_block_hash,
 		};
 
 		// generate key ownership proof at that block
@@ -570,7 +570,7 @@ where
 		self.client
 			.runtime_api()
 			.submit_report_equivocation_unsigned_extrinsic(
-				&BlockId::Hash(best_header.hash()),
+				&BlockId::Hash(best_block_hash),
 				equivocation_proof,
 				key_owner_proof,
 			)

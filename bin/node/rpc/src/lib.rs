@@ -48,7 +48,7 @@ use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sp_consensus::SelectChain;
 use sp_consensus_babe::BabeApi;
 use sc_rpc::SubscriptionTaskExecutor;
-use sp_transaction_pool::TransactionPool;
+use sc_transaction_pool_api::TransactionPool;
 use sc_client_api::AuxStore;
 
 /// Light client extra dependencies.

@@ -19,5 +19,5 @@ log = "0.4.11"
 sc-client-api = { version = "3.0.0", path = "../api" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
-parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 parity-util-mem-derive = "0.1.0"
