@@ -120,7 +120,8 @@ impl<T: Config> VoterList<T> {
 
 	/// Iterate over all nodes in all bags in the voter list.
 	///
-	/// Full iteration can be expensive; it's recommended to limit the number of items with `.take(n)`.
+	/// Full iteration can be expensive; it's recommended to limit the number of items with
+	/// `.take(n)`.
 	pub fn iter() -> impl Iterator<Item = Node<T>> {
 		// We need a touch of special handling here: because we permit `T::VoterBagThresholds` to
 		// omit the final bound, we need to ensure that we explicitly include that threshold in the
@@ -157,14 +158,14 @@ impl<T: Config> VoterList<T> {
 	}
 
 	/// Insert a new voter into the appropriate bag in the voter list.
-	pub fn insert(voter: VoterOf<T>, weight_of: impl Fn(&T::AccountId) -> VoteWeight) {
+	fn insert(voter: VoterOf<T>, weight_of: impl Fn(&T::AccountId) -> VoteWeight) {
 		Self::insert_many(sp_std::iter::once(voter), weight_of);
 	}
 
 	/// Insert several voters into the appropriate bags in the voter list.
 	///
 	/// This is more efficient than repeated calls to `Self::insert`.
-	pub fn insert_many(
+	fn insert_many(
 		voters: impl IntoIterator<Item = VoterOf<T>>,
 		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
 	) -> u32 {
@@ -459,7 +460,17 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
 	/// `self.put()` and `node.put()` after use.
 	fn remove_node(&mut self, node: &Node<T>) {
-		node.excise();
+		// TODO: we could merge this function here.
+		// node.excise();
+		if let Some(mut prev) = node.prev() {
+			prev.next = self.next.clone();
+			prev.put();
+		}
+		if let Some(mut next) = node.next() {
+			next.prev = self.prev.clone();
+			next.put();
+		}
+		// IDEA: debug_assert! prev.next.prev == self
 
 		// clear the bag head/tail pointers as necessary
 		if self.head.as_ref() == Some(&node.voter.id) {
@@ -487,6 +498,7 @@ pub struct Node<T: Config> {
 impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
 	pub fn get(bag_upper: VoteWeight, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
+		// debug_assert!(bag_upper is in Threshold)
 		crate::VoterNodes::<T>::try_get(account_id).ok().map(|mut node| {
 			node.bag_upper = bag_upper;
 			node

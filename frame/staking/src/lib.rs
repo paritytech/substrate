@@ -1907,7 +1907,6 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
-			VoterList::<T>::remove(&ledger.stash);
 			Ok(())
 		}
 
@@ -2964,8 +2963,6 @@ impl<T: Config> Pallet<T> {
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
 
-		VoterList::<T>::remove(stash);
-
 		frame_system::Pallet::<T>::dec_consumers(stash);
 
 		Ok(())
@@ -3089,6 +3086,10 @@ impl<T: Config> Pallet<T> {
 	/// and keep track of the `CounterForNominators`.
 	///
 	/// If the nominator already exists, their nominations will be updated.
+	///
+	/// NOTE: you must ALWAYS use this function to add a nominator to the system. Any access to
+	/// `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
 		if !Nominators::<T>::contains_key(who) {
 			CounterForNominators::<T>::mutate(|x| x.saturating_inc())
@@ -3102,6 +3103,10 @@ impl<T: Config> Pallet<T> {
 	/// and keep track of the `CounterForNominators`.
 	///
 	/// Returns true if `who` was removed from `Nominators`, otherwise false.
+	///
+	/// NOTE: you must ALWAYS use this function to remove a nominator from the system. Any access to
+	/// `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// wrong.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
@@ -3114,10 +3119,14 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// This function will add a validator to the `Validators` storage map,
-	/// and keep track of the `CounterForValidators`.
+	/// This function will add a validator to the `Validators` storage map, and keep track of the
+	/// `CounterForValidators`.
 	///
 	/// If the validator already exists, their preferences will be updated.
+	///
+	/// NOTE: you must ALWAYS use this function to add a validator to the system. Any access to
+	/// `Validators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
 			CounterForValidators::<T>::mutate(|x| x.saturating_inc())
@@ -3131,6 +3140,10 @@ impl<T: Config> Pallet<T> {
 	/// and keep track of the `CounterForValidators`.
 	///
 	/// Returns true if `who` was removed from `Validators`, otherwise false.
+	///
+	/// NOTE: you must ALWAYS use this function to remove a validator from the system. Any access to
+	/// `Validators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// wrong.
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);

@@ -31,6 +31,7 @@ pub const EXISTENTIAL_WEIGHT: u64 = 1;
 pub const CONSTANT_RATIO: f64 = 2.0000000000000000;
 
 /// Upper thresholds delimiting the bag list.
+pub const THRESHOLDS: [u64; 65] = [5, 15, 25, 50, 100, 1000, 2000, 3000]
 pub const THRESHOLDS: [u64; 65] = [
 	                         1,
 	                         2,
