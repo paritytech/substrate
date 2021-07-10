@@ -1785,6 +1785,7 @@ dependencies = [
  "Inflector",
  "chrono",
  "frame-benchmarking",
+ "frame-support",
  "handlebars",
  "parity-scale-codec",
  "sc-cli",
@@ -4111,6 +4112,7 @@ dependencies = [
  "sc-cli",
  "sc-client-api",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-consensus",
@@ -4120,7 +4122,6 @@ dependencies = [
  "sp-state-machine",
  "sp-timestamp",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-trie",
  "structopt",
  "tempfile",
@@ -4199,6 +4200,7 @@ dependencies = [
  "sc-telemetry",
  "sc-tracing",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "soketto 0.4.2",
@@ -4312,6 +4314,7 @@ dependencies = [
  "sc-rpc",
  "sc-rpc-api",
  "sc-sync-state-rpc",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -4319,7 +4322,6 @@ dependencies = [
  "sp-consensus-babe",
  "sp-keystore",
  "sp-runtime",
- "sp-transaction-pool",
  "substrate-frame-rpc-system",
 ]
 
@@ -4437,6 +4439,7 @@ dependencies = [
  "sc-service",
  "sc-telemetry",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -4447,7 +4450,6 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-timestamp",
- "sp-transaction-pool",
  "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
@@ -7036,13 +7038,13 @@ dependencies = [
  "sc-proposer-metrics",
  "sc-telemetry",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
  "sp-inherents",
  "sp-runtime",
- "sp-transaction-pool",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
 ]
@@ -7146,6 +7148,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-executor",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
@@ -7159,7 +7162,6 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-test-primitives",
- "sp-transaction-pool",
  "sp-trie",
  "sp-utils",
  "sp-version",
@@ -7372,6 +7374,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "sp-api",
  "sp-blockchain",
@@ -7384,7 +7387,6 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-timestamp",
- "sp-transaction-pool",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
@@ -7664,9 +7666,9 @@ dependencies = [
  "parity-util-mem",
  "sc-client-api",
  "sc-network",
+ "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime",
- "sp-transaction-pool",
  "wasm-timer",
 ]
 
@@ -7839,13 +7841,13 @@ dependencies = [
  "sc-keystore",
  "sc-network",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-consensus",
  "sp-core",
  "sp-offchain",
  "sp-runtime",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-utils",
  "substrate-test-runtime-client",
  "threadpool",
@@ -7897,6 +7899,7 @@ dependencies = [
  "sc-rpc-api",
  "sc-tracing",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde_json",
  "sp-api",
  "sp-blockchain",
@@ -7909,7 +7912,6 @@ dependencies = [
  "sp-session",
  "sp-state-machine",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-utils",
  "sp-version",
  "substrate-test-runtime-client",
@@ -7930,13 +7932,13 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-chain-spec",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-core",
  "sp-rpc",
  "sp-runtime",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-version",
 ]
 
@@ -8007,6 +8009,7 @@ dependencies = [
  "sc-telemetry",
  "sc-tracing",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-api",
@@ -8060,6 +8063,7 @@ dependencies = [
  "sc-light",
  "sc-network",
  "sc-service",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
@@ -8070,7 +8074,6 @@ dependencies = [
  "sp-state-machine",
  "sp-storage",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-trie",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
@@ -8177,59 +8180,53 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-transaction-graph"
+name = "sc-transaction-pool"
 version = "4.0.0-dev"
 dependencies = [
  "assert_matches",
  "criterion",
  "derive_more",
  "futures 0.3.15",
+ "hex",
+ "intervalier",
  "linked-hash-map",
  "log",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.11.1",
  "retain_mut",
- "serde",
- "sp-blockchain",
- "sp-core",
- "sp-runtime",
- "sp-transaction-pool",
- "sp-utils",
- "substrate-test-runtime",
- "thiserror",
- "wasm-timer",
-]
-
-[[package]]
-name = "sc-transaction-pool"
-version = "4.0.0-dev"
-dependencies = [
- "assert_matches",
- "futures 0.3.15",
- "hex",
- "intervalier",
- "log",
- "parity-scale-codec",
- "parity-util-mem",
- "parking_lot 0.11.1",
  "sc-block-builder",
  "sc-client-api",
- "sc-transaction-graph",
+ "sc-transaction-pool-api",
+ "serde",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-keyring",
  "sp-runtime",
  "sp-tracing",
  "sp-transaction-pool",
  "sp-utils",
  "substrate-prometheus-endpoint",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "thiserror",
  "wasm-timer",
+]
+
+[[package]]
+name = "sc-transaction-pool-api"
+version = "4.0.0-dev"
+dependencies = [
+ "derive_more",
+ "futures 0.3.15",
+ "log",
+ "parity-scale-codec",
+ "serde",
+ "sp-blockchain",
+ "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -9367,15 +9364,8 @@ dependencies = [
 name = "sp-transaction-pool"
 version = "4.0.0-dev"
 dependencies = [
- "derive_more",
- "futures 0.3.15",
- "log",
- "parity-scale-codec",
- "serde",
  "sp-api",
- "sp-blockchain",
  "sp-runtime",
- "thiserror",
 ]
 
 [[package]]
@@ -9653,6 +9643,7 @@ dependencies = [
  "sc-client-api",
  "sc-rpc-api",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "sp-api",
  "sp-block-builder",
@@ -9660,7 +9651,6 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-tracing",
- "sp-transaction-pool",
  "substrate-test-runtime-client",
 ]
 
@@ -9777,10 +9767,10 @@ dependencies = [
  "futures 0.3.15",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "sc-transaction-graph",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime",
- "sp-transaction-pool",
  "substrate-test-runtime-client",
 ]
 
@@ -9923,8 +9913,8 @@ dependencies = [
  "sc-rpc",
  "sc-rpc-server",
  "sc-service",
- "sc-transaction-graph",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",

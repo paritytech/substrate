@@ -27,7 +27,7 @@ sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
-sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sc-consensus-aura = { version = "0.10.0-dev", path = "../../../client/consensus/aura" }
 sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
