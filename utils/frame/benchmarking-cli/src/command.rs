@@ -22,15 +22,15 @@ use frame_support::traits::StorageInfo;
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
-use sp_state_machine::StateMachine;
-use sp_externalities::Extensions;
 use sc_service::{Configuration, NativeExecutionDispatch};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_core::offchain::{OffchainWorkerExt, testing::TestOffchainExt};
-use sp_keystore::{
-	SyncCryptoStorePtr, KeystoreExt,
-	testing::KeyStore,
+use sp_core::offchain::{
+	testing::{TestOffchainExt, TestTransactionPoolExt},
+	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 };
+use sp_externalities::Extensions;
+use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_state_machine::StateMachine;
 use std::{fmt::Debug, sync::Arc};
 
 impl BenchmarkCmd {
@@ -73,7 +73,10 @@ impl BenchmarkCmd {
 		let mut extensions = Extensions::default();
 		extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 		let (offchain, _) = TestOffchainExt::new();
-		extensions.register(OffchainWorkerExt::new(offchain));
+		let (pool, _) = TestTransactionPoolExt::new();
+		extensions.register(OffchainWorkerExt::new(offchain.clone()));
+		extensions.register(OffchainDbExt::new(offchain));
+		extensions.register(TransactionPoolExt::new(pool));
 
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,

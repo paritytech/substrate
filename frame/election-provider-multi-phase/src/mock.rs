@@ -330,11 +330,11 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::submit(c)
 		}
 	}
-	fn elect_queued() -> Weight {
+	fn elect_queued(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::elect_queued()
+			<() as multi_phase::weights::WeightInfo>::elect_queued(v, t, a, d)
 		}
 	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -437,6 +437,32 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	) {
 		Targets::set(targets);
 		Voters::set(voters);
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn clear() {
+		Targets::set(vec![]);
+		Voters::set(vec![]);
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn add_voter(voter: AccountId, weight: VoteWeight, targets: Vec<AccountId>) {
+		let mut current = Voters::get();
+		current.push((voter, weight, targets));
+		Voters::set(current);
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn add_target(target: AccountId) {
+		let mut current = Targets::get();
+		current.push(target);
+		Targets::set(current);
+
+		// to be on-par with staking, we add a self vote as well. the stake is really not that
+		// important.
+		let mut current = Voters::get();
+		current.push((target, ExistentialDeposit::get() as u64, vec![target]));
+		Voters::set(current);
 	}
 }
 
