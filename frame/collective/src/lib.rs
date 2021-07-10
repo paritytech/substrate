@@ -211,7 +211,15 @@ decl_storage! {
 	add_extra_genesis {
 		config(phantom): sp_std::marker::PhantomData<I>;
 		config(members): Vec<T::AccountId>;
-		build(|config| Module::<T, I>::initialize_members(&config.members))
+		build(|config| {
+			// TODO: tests
+			// Make sure that members are unique.
+			let has_dupes = (1..config.members.len())
+				.any(|i| config.members[i..].contains(&config.members[i - 1]));
+			assert!(!has_dupes, "Members cannot contain duplicate accounts.");
+
+			Module::<T, I>::initialize_members(&config.members)
+		});
 	}
 }
 
