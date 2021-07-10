@@ -331,6 +331,7 @@ unleash-check:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash de-dev-deps
     # Reuse build artifacts when running checks (cuts down check time by 3x)
+    # TODO: Implement this optimization in cargo-unleash rather than here
     - mkdir -p target/unleash
     - export CARGO_TARGET_DIR=target/unleash
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
