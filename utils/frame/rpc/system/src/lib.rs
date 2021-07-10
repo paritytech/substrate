@@ -24,8 +24,6 @@ use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequ
 use futures::{future, FutureExt};
 use jsonrpsee::RpcModule;
 use jsonrpsee_types::{error::CallError, Error as JsonRpseeError};
-// TODO: (dp) needed?
-// use futures::future::{ready, TryFutureExt};
 use sp_blockchain::{
 	HeaderBackend,
 	Error as ClientError

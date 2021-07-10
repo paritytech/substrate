@@ -497,7 +497,6 @@ where
 		Err(client_err(ClientError::NotAvailableOnLightClient))
 	}
 
-	// TODO: (dp) port this
 	async fn storage_keys_paged(
 		&self,
 		_block: Option<Block::Hash>,
