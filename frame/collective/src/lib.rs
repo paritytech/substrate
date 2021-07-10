@@ -1343,6 +1343,45 @@ mod tests {
 	}
 
 	#[test]
+	fn propose_with_no_self_vote_works() {
+		new_test_ext().execute_with(|| {
+			let proposal = make_proposal(42);
+			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+			let hash = proposal.blake2_256().into();
+			let end = 4;
+			assert_ok!(Collective::propose(
+				Origin::signed(1),
+				3,
+				Box::new(proposal.clone()),
+				proposal_len,
+				false, // Do not include an aye vote on behalf of the caller.
+			));
+			assert_eq!(*Collective::proposals(), vec![hash]);
+			assert_eq!(Collective::proposal_of(&hash), Some(proposal));
+			assert_eq!(
+				Collective::voting(&hash),
+				// No aye (or nay) votes leaked into storage while proposing.
+				Some(Votes { index: 0, threshold: 3, ayes: vec![], nays: vec![], end })
+			);
+
+			assert_eq!(
+				System::events(),
+				vec![EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Collective(RawEvent::Proposed(
+						1,
+						0,
+						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"]
+							.into(),
+						3,
+					)),
+					topics: vec![],
+				}]
+			);
+		});
+	}
+
+	#[test]
 	fn limit_active_proposals() {
 		new_test_ext().execute_with(|| {
 			for i in 0..MaxProposals::get() {
