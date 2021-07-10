@@ -19,6 +19,7 @@ grandpa = { package = "sc-finality-grandpa", path = "../../client/finality-grand
 sp-consensus-babe = { path = "../../primitives/consensus/babe" }
 sc-consensus-babe = { path = "../../client/consensus/babe" }
 sc-consensus = { path = "../../client/consensus/common" }
+sc-consensus-api = { path = "../../client/consensus/api" }
 sc-transaction-pool-api = { path = "../../client/transaction-pool/api" }
 sc-client-api = { path = "../../client/api" }
 sc-rpc-server = { path = "../../client/rpc-servers" }
