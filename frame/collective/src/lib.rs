@@ -405,6 +405,9 @@ decl_module! {
 		/// `threshold` determines whether `proposal` is executed directly (`threshold < 2`)
 		/// or put up for voting.
 		///
+		/// `include_aye_vote` determines wether or not the caller will include an aye vote for
+		/// the proposal.
+		///
 		/// # <weight>
 		/// ## Weight
 		/// - `O(B + M + P1)` or `O(B + M + P2)` where:
@@ -443,7 +446,8 @@ decl_module! {
 		fn propose(origin,
 			#[compact] threshold: MemberCount,
 			proposal: Box<<T as Config<I>>::Proposal>,
-			#[compact] length_bound: u32
+			#[compact] length_bound: u32,
+			include_aye_vote: bool,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
@@ -476,8 +480,13 @@ decl_module! {
 				let index = Self::proposal_count();
 				<ProposalCount<I>>::mutate(|i| *i += 1);
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
-				let end = system::Pallet::<T>::block_number() + T::MotionDuration::get();
-				let votes = Votes { index, threshold, ayes: vec![who.clone()], nays: vec![], end };
+
+				let votes = {
+					let end = system::Pallet::<T>::block_number() + T::MotionDuration::get();
+					let ayes = if include_aye_vote { vec![who.clone()] } else { vec![] };
+					Votes { index, threshold, ayes, nays: vec![], end }
+				};
+
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
 				Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
@@ -1093,7 +1102,7 @@ mod tests {
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
 
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 
 			System::set_block_number(3);
@@ -1124,7 +1133,7 @@ mod tests {
 			let hash = BlakeTwo256::hash_of(&proposal);
 			// Set 1 as prime voter
 			Prime::<Test, Instance1>::set(Some(1));
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			// With 1's prime vote, this should pass
 			System::set_block_number(4);
 			assert_noop!(
@@ -1143,7 +1152,7 @@ mod tests {
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
 
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			// No votes, this proposal wont pass
 			System::set_block_number(4);
 			assert_ok!(
@@ -1161,7 +1170,7 @@ mod tests {
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(3), MaxMembers::get()));
 
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 
 			System::set_block_number(4);
@@ -1186,7 +1195,7 @@ mod tests {
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(1), MaxMembers::get()));
 
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 
 			System::set_block_number(4);
@@ -1212,7 +1221,7 @@ mod tests {
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(CollectiveMajority::set_members(Origin::root(), vec![1, 2, 3, 4, 5], Some(5), MaxMembers::get()));
 
-			assert_ok!(CollectiveMajority::propose(Origin::signed(1), 5, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(CollectiveMajority::propose(Origin::signed(1), 5, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(CollectiveMajority::vote(Origin::signed(2), hash.clone(), 0, true));
 			assert_ok!(CollectiveMajority::vote(Origin::signed(3), hash.clone(), 0, true));
 
@@ -1238,7 +1247,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			let end = 4;
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1253,7 +1262,7 @@ mod tests {
 			let proposal = make_proposal(69);
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::propose(Origin::signed(2), 2, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(2), 2, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(3), hash.clone(), 1, false));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1274,7 +1283,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			let end = 4;
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1289,7 +1298,7 @@ mod tests {
 			let proposal = make_proposal(69);
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::propose(Origin::signed(2), 2, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(2), 2, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(3), hash.clone(), 1, false));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1310,7 +1319,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash = proposal.blake2_256().into();
 			let end = 4;
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_eq!(*Collective::proposals(), vec![hash]);
 			assert_eq!(Collective::proposal_of(&hash), Some(proposal));
 			assert_eq!(
@@ -1339,12 +1348,12 @@ mod tests {
 			for i in 0..MaxProposals::get() {
 				let proposal = make_proposal(i as u64);
 				let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
-				assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+				assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			}
 			let proposal = make_proposal(MaxProposals::get() as u64 + 1);
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			assert_noop!(
-				Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len),
+				Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true),
 				Error::<Test, Instance1>::TooManyProposals
 			);
 		})
@@ -1355,7 +1364,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MaxMembers::get()));
 			let length = proposal.encode().len() as u32;
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), length));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), length, true));
 
 			let hash = BlakeTwo256::hash_of(&proposal);
 			let weight = proposal.get_dispatch_info().weight;
@@ -1385,7 +1394,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			assert_noop!(
-				Collective::propose(Origin::signed(42), 3, Box::new(proposal.clone()), proposal_len),
+				Collective::propose(Origin::signed(42), 3, Box::new(proposal.clone()), proposal_len, true),
 				Error::<Test, Instance1>::NotMember
 			);
 		});
@@ -1397,7 +1406,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_noop!(
 				Collective::vote(Origin::signed(42), hash.clone(), 0, true),
 				Error::<Test, Instance1>::NotMember,
@@ -1412,7 +1421,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_noop!(
 				Collective::vote(Origin::signed(2), hash.clone(), 1, true),
 				Error::<Test, Instance1>::WrongIndex,
@@ -1427,7 +1436,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash: H256 = proposal.blake2_256().into();
 			let end = 4;
-			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len, true));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![], end })
@@ -1485,6 +1494,7 @@ mod tests {
 					2,
 					Box::new(proposal.clone()),
 					proposal_len,
+					true
 				)
 			);
 			assert_eq!(
@@ -1569,11 +1579,11 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
 			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len));
 			assert_eq!(*Collective::proposals(), vec![]);
-			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len, true));
 			assert_eq!(*Collective::proposals(), vec![hash]);
 		});
 	}
@@ -1585,7 +1595,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
 			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len));
 
@@ -1637,7 +1647,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len, true));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len));
 
@@ -1698,7 +1708,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len, true));
 			// First we make the proposal succeed
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 			// It will not close with bad weight/len information
@@ -1724,7 +1734,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len, true));
 			// Proposal would normally succeed
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 			// But Root can disapprove and remove it anyway
