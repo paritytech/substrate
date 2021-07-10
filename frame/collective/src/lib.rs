@@ -405,7 +405,7 @@ decl_module! {
 		/// `threshold` determines whether `proposal` is executed directly (`threshold < 2`)
 		/// or put up for voting.
 		///
-		/// `include_aye_vote` determines wether or not the caller will include an aye vote for
+		/// `include_aye_vote` determines whether or not the caller will record an aye vote for
 		/// the proposal.
 		///
 		/// # <weight>
