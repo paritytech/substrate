@@ -409,7 +409,7 @@ benchmarks_instance! {
 		)?;
 
 		// Have almost everyone vote nay on last proposal, while keeping it from failing.
-		for j in 1 .. m - 1 {
+		for j in 2 .. m - 1 {
 			let voter = &members[j as usize];
 			let approve = false;
 			Collective::<T, _>::vote(
@@ -537,7 +537,7 @@ benchmarks_instance! {
 		Collective::<T, _>::set_members(
 			SystemOrigin::Root.into(),
 			members.clone(),
-			Some(caller.clone()), // Set caller as the prime member.
+			Some(caller.clone()),
 			T::MaxMembers::get(),
 		)?;
 
