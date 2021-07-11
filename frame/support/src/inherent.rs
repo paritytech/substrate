@@ -226,7 +226,7 @@ macro_rules! impl_outer_inherent {
 		}
 
 		impl $crate::traits::EnsureInherentsAreFirst<$block> for $runtime {
-			fn ensure_inherents_are_first(block: &$block) -> Result<Some<u32>, u32> {
+			fn ensure_inherents_are_first(block: &$block) -> Result<Option<u32>, u32> {
 				use $crate::inherent::ProvideInherent;
 				use $crate::traits::{IsSubType, ExtrinsicCall};
 				use $crate::sp_runtime::traits::Block as _;
