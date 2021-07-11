@@ -19,6 +19,7 @@ use frame_support::{
 	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
 	traits::{
 		GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade, GetPalletVersion, OnGenesis,
+		OnPostInherent,
 	},
 	dispatch::{UnfilteredDispatchable, Parameter},
 	storage::unhashed,
@@ -112,6 +113,12 @@ pub mod pallet {
 			T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
 			10
+		}
+		fn on_post_inherent(_: BlockNumberFor<T>) -> Weight {
+			T::AccountId::from(SomeType1); // Test for where clause
+			T::AccountId::from(SomeType2); // Test for where clause
+			Self::deposit_event(Event::Something(15));
+			15
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			T::AccountId::from(SomeType1); // Test for where clause
@@ -822,6 +829,7 @@ fn pallet_hooks_expand() {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
 		assert_eq!(AllPallets::on_initialize(1), 10);
+		assert_eq!(AllPallets::on_post_inherent(1), 15);
 		AllPallets::on_finalize(1);
 
 		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
@@ -831,16 +839,22 @@ fn pallet_hooks_expand() {
 			Some(pallet::Pallet::<Runtime>::current_version()),
 		);
 
+		let events = frame_system::Pallet::<Runtime>::events();
+		assert_eq!(events.len(), 4);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Example(pallet::Event::Something(20)),
+			Event::Example(pallet::Event::Something(15)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
 			Event::Example(pallet::Event::Something(30)),
 		);
 	})
