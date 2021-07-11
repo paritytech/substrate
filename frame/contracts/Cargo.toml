@@ -1,6 +1,6 @@
 [package]
 name = "pallet-contracts"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -26,16 +26,16 @@ rand = { version = "0.8", optional = true, default-features = false }
 rand_pcg = { version = "0.3", optional = true }
 
 # Substrate Dependencies
-frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
-pallet-contracts-primitives = { version = "3.0.0", default-features = false, path = "common" }
-pallet-contracts-proc-macro = { version = "3.0.0", path = "proc-macro" }
-sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-sandbox = { version = "0.9.0", default-features = false, path = "../../primitives/sandbox" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-contracts-primitives = { version = "4.0.0-dev", default-features = false, path = "common" }
+pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 assert_matches = "1"
@@ -45,9 +45,9 @@ pretty_assertions = "0.7"
 wat = "1"
 
 # Substrate Dependencies
-pallet-balances = { version = "3.0.0", path = "../balances" }
-pallet-timestamp = { version = "3.0.0", path = "../timestamp" }
-pallet-randomness-collective-flip = { version = "3.0.0", path = "../randomness-collective-flip" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
+pallet-randomness-collective-flip = { version = "4.0.0-dev", path = "../randomness-collective-flip" }
 
 [features]
 default = ["std"]

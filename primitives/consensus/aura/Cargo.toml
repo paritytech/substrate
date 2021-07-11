@@ -1,6 +1,6 @@
 [package]
 name = "sp-consensus-aura"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Aura consensus"
 edition = "2018"
@@ -13,15 +13,15 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../application-crypto" }
+sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../application-crypto" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-sp-std = { version = "3.0.0", default-features = false, path = "../../std" }
-sp-api = { version = "3.0.0", default-features = false, path = "../../api" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtime" }
-sp-inherents = { version = "3.0.0", default-features = false, path = "../../inherents" }
-sp-timestamp = { version = "3.0.0", default-features = false, path = "../../timestamp" }
-sp-consensus-slots = { version = "0.9.0", default-features = false, path = "../slots" }
-sp-consensus = { version = "0.9.0", path = "../common", optional = true }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../std" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../inherents" }
+sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../timestamp" }
+sp-consensus-slots = { version = "0.10.0-dev", default-features = false, path = "../slots" }
+sp-consensus = { version = "0.10.0-dev", path = "../common", optional = true }
 async-trait = { version = "0.1.48", optional = true }
 
 [features]

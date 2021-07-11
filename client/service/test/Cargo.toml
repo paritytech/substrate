@@ -19,26 +19,26 @@ futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
 fdlimit = "0.2.1"
 parking_lot = "0.11.1"
-sc-light = { version = "3.0.0", path = "../../light" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-sp-state-machine = { version = "0.9.0", path = "../../../primitives/state-machine" }
-sp-externalities = { version = "0.9.0", path = "../../../primitives/externalities" }
-sp-trie = { version = "3.0.0", path = "../../../primitives/trie" }
-sp-storage = { version = "3.0.0", path = "../../../primitives/storage" }
-sc-client-db = { version = "0.9.0", default-features = false, path = "../../db" }
+sc-light = { version = "4.0.0-dev", path = "../../light" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-state-machine = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
+sp-externalities = { version = "0.10.0-dev", path = "../../../primitives/externalities" }
+sp-trie = { version = "4.0.0-dev", path = "../../../primitives/trie" }
+sp-storage = { version = "4.0.0-dev", path = "../../../primitives/storage" }
+sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../db" }
 futures = { version = "0.3.1", features = ["compat"] }
-sc-service = { version = "0.9.0", features = ["test-helpers"], path = "../../service" }
-sc-network = { version = "0.9.0", path = "../../network" }
-sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sc-transaction-pool-api = { version = "3.0.0", path = "../../../client/transaction-pool/api" }
+sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
+sc-network = { version = "0.10.0-dev", path = "../../network" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sc-client-api = { version = "3.0.0", path = "../../api" }
-sc-block-builder = { version = "0.9.0", path = "../../block-builder" }
-sc-executor = { version = "0.9.0", path = "../../executor" }
+sc-client-api = { version = "4.0.0-dev", path = "../../api" }
+sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
+sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sp-panic-handler = { version = "3.0.0", path = "../../../primitives/panic-handler" }
 parity-scale-codec = "2.0.0"
-sp-tracing = { version = "3.0.0", path = "../../../primitives/tracing" }
+sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
