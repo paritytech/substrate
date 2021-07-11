@@ -226,12 +226,12 @@ macro_rules! impl_outer_inherent {
 		}
 
 		impl $crate::traits::EnsureInherentsAreFirst<$block> for $runtime {
-			fn ensure_inherents_are_first(block: &$block) -> Result<(), u32> {
+			fn ensure_inherents_are_first(block: &$block) -> Result<u32, u32> {
 				use $crate::inherent::ProvideInherent;
 				use $crate::traits::{IsSubType, ExtrinsicCall};
 				use $crate::sp_runtime::traits::Block as _;
 
-				let mut first_signed_observed = false;
+				let mut first_signed_observed = 0;
 
 				for (i, xt) in block.extrinsics().iter().enumerate() {
 					let is_signed = $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false);
@@ -253,15 +253,15 @@ macro_rules! impl_outer_inherent {
 					};
 
 					if !is_inherent {
-						first_signed_observed = true;
+						first_signed_observed = i as u32;
 					}
 
-					if first_signed_observed && is_inherent {
+					if first_signed_observed > 0 && is_inherent {
 						return Err(i as u32)
 					}
 				}
 
-				Ok(())
+				Ok(first_signed_observed)
 			}
 		}
 	};

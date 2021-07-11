@@ -657,7 +657,7 @@ fn inherent_expand() {
 		],
 	);
 
-	assert!(Runtime::ensure_inherents_are_first(&block).is_ok());
+	assert_eq!(Runtime::ensure_inherents_are_first(&block).ok().unwrap(), 1);
 
 	let block = Block::new(
 		Header::new(
