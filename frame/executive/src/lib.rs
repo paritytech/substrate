@@ -377,8 +377,8 @@ where
 				if let Err(e) = Self::apply_extrinsic(ext) {
 					let err: &'static str = e.into();
 					panic!("{}", err)
-			}
-		});
+				}
+			});
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
