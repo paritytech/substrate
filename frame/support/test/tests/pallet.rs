@@ -630,13 +630,27 @@ fn inherent_expand() {
 	inherent.put_data(*b"required", &true).unwrap();
 	assert!(inherent.check_extrinsics(&block).fatal_error());
 
+	// First non-inherent is an unsigned extrinsic
 	let block = Block::new(
 		header.clone(),
 		vec![
 			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
 			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
 			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
-			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: Some((1, (), ())) },
+		],
+	);
+
+	assert_eq!(Runtime::ensure_inherents_are_first(&block).ok().unwrap(), Some(1));
+
+	// First non-inherent is a signed extrinsic
+	let block = Block::new(
+		header.clone(),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: Some((1, (), ())) },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: Some((1, (), ())) },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None},
 		],
 	);
 

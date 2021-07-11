@@ -189,7 +189,7 @@ pub fn expand_outer_inherent(
 					};
 
 					if !is_inherent && first_non_inherent_observed.is_none() {
-						first_signed_observed = Some(i as u32);
+						first_non_inherent_observed = Some(i as u32);
 					}
 
 					if first_non_inherent_observed.is_some() && is_inherent {
