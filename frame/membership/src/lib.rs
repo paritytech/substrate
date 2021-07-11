@@ -85,8 +85,6 @@ decl_storage! {
 		build(|config: &Self| {
 			let mut members = config.members.clone();
 
-			// TODO: tests
-			// Assert that members are unique.
 			let has_dupes = (1..members.len())
 				.any(|i| members[i..].contains(&members[i - 1]));
 			assert!(!has_dupes, "Members cannot contain duplicate accounts.");

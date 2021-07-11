@@ -212,7 +212,6 @@ decl_storage! {
 		config(phantom): sp_std::marker::PhantomData<I>;
 		config(members): Vec<T::AccountId>;
 		build(|config| {
-			// Make sure that members are unique.
 			let has_dupes = (1..config.members.len())
 				.any(|i| config.members[i..].contains(&config.members[i - 1]));
 			assert!(!has_dupes, "Members cannot contain duplicate accounts.");
