@@ -305,7 +305,7 @@ where
 		}
 	}
 
-	/// Checks the block is valid, and returns the index of the first signed extrinsic in the block.
+	/// Checks the block is valid, and returns the index of the first non-inherent in the block.
 	fn initial_checks(block: &Block) -> Option<u32> {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
