@@ -335,7 +335,8 @@ where
 
 			Self::initialize_block(block.header());
 
-			// any initial checks, and retrieve the first signed index.
+			// any initial checks, and retrieve the index of the first signed extrinsic from the
+			// `extrinsics` vec.
 			let first_signed_index = Self::initial_checks(&block);
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
