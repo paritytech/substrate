@@ -76,7 +76,6 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				MAX_BYTES,
-				true, // Include aye vote on behalf of proposer.
 			)?;
 			let hash = T::Hashing::hash_of(&proposal);
 			// Vote on the proposal to increase state relevant for `set_members`.
@@ -160,7 +159,7 @@ benchmarks_instance! {
 		let proposal: T::Proposal = SystemCall::<T>::remark(vec![1; b as usize]).into();
 		let threshold = 1;
 
-	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()), bytes_in_storage, true)
+	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()), bytes_in_storage)
 	verify {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
@@ -197,7 +196,6 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal),
 				bytes_in_storage,
-				true, // Include aye vote on behalf of proposer.
 			)?;
 		}
 
@@ -205,7 +203,7 @@ benchmarks_instance! {
 
 		let proposal: T::Proposal = SystemCall::<T>::remark(vec![p as u8; b as usize]).into();
 
-	}: propose(SystemOrigin::Signed(caller.clone()), threshold, Box::new(proposal.clone()), bytes_in_storage, true)
+	}: propose(SystemOrigin::Signed(caller.clone()), threshold, Box::new(proposal.clone()), bytes_in_storage)
 	verify {
 		// New proposal is recorded
 		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
@@ -246,15 +244,13 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
-				true, // Include aye vote on behalf of proposer.
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
 
 		let index = p - 1;
 		// Have almost everyone vote aye on last proposal, while keeping it from passing.
-		// Proposer already voted aye so we start at 1.
-		for j in 1 .. m - 3 {
+		for j in 0 .. m - 3 {
 			let voter = &members[j as usize];
 			let approve = true;
 			Collective::<T, _>::vote(
@@ -323,15 +319,13 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
-				true, // Include aye vote on behalf of proposer.
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
 
 		let index = p - 1;
 		// Have most everyone vote aye on last proposal, while keeping it from passing.
-		// Proposer already voted aye so we start at 1.
-		for j in 1 .. m - 2 {
+		for j in 0 .. m - 2 {
 			let voter = &members[j as usize];
 			let approve = true;
 			Collective::<T, _>::vote(
@@ -402,7 +396,6 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
-				true, // Include aye vote on behalf of proposer.
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -416,7 +409,7 @@ benchmarks_instance! {
 		)?;
 
 		// Have almost everyone vote nay on last proposal, while keeping it from failing.
-		for j in 2 .. m - 1 {
+		for j in 1 .. m - 1 {
 			let voter = &members[j as usize];
 			let approve = false;
 			Collective::<T, _>::vote(
@@ -489,7 +482,6 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
-				true, // Include aye vote on behalf of proposer.
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -545,7 +537,7 @@ benchmarks_instance! {
 		Collective::<T, _>::set_members(
 			SystemOrigin::Root.into(),
 			members.clone(),
-			Some(caller.clone()),
+			Some(caller.clone()), // Set caller as the prime member.
 			T::MaxMembers::get(),
 		)?;
 
@@ -562,10 +554,17 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
-				true, // Include aye vote on behalf of proposer.
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
+
+		// The prime member votes aye, so abstentions default to aye.
+		Collective::<T, _>::vote(
+			SystemOrigin::Signed(caller.clone()).into(),
+			last_hash.clone(),
+			p - 1,
+			true // Vote aye.
+		)?;
 
 		// Have almost everyone vote nay on last proposal, while keeping it from failing.
 		// A few abstainers will be the aye votes needed to pass the vote.
@@ -626,7 +625,6 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
-				true, // Include aye vote on behalf of proposer.
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
