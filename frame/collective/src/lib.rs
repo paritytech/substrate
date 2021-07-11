@@ -212,7 +212,6 @@ decl_storage! {
 		config(phantom): sp_std::marker::PhantomData<I>;
 		config(members): Vec<T::AccountId>;
 		build(|config| {
-			// TODO: tests
 			// Make sure that members are unique.
 			let has_dupes = (1..config.members.len())
 				.any(|i| config.members[i..].contains(&config.members[i - 1]));
@@ -1744,5 +1743,14 @@ mod tests {
 				record(Event::Collective(RawEvent::Disapproved(hash.clone()))),
 			]);
 		})
+	}
+
+	#[test]
+	#[should_panic(expected = "Members cannot contain duplicate accounts.")]
+	fn genesis_build_panics_with_duplicate_members() {
+		collective::GenesisConfig::<Test> {
+			members: vec![1, 2, 3, 1],
+			phantom: Default::default(),
+		}.build_storage().unwrap();
 	}
 }
