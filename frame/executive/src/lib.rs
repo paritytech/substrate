@@ -120,8 +120,8 @@ use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 	traits::{
-		OnInitialize, OnIdle, OnFinalize, OnRuntimeUpgrade, OffchainWorker, ExecuteBlock,
-		EnsureInherentsAreFirst,
+		OnInitialize, OnPostInherent, OnIdle, OnFinalize, OnRuntimeUpgrade, OffchainWorker,
+		ExecuteBlock, EnsureInherentsAreFirst,
 	},
 	dispatch::PostDispatchInfo,
 };
@@ -163,6 +163,7 @@ impl<
 	AllPallets:
 		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
+		OnPostInherent<System::BlockNumber> +
 		OnIdle<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber>,
@@ -190,6 +191,7 @@ impl<
 		UnsignedValidator,
 		AllPallets: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
+			+ OnPostInherent<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
@@ -303,7 +305,8 @@ where
 		}
 	}
 
-	fn initial_checks(block: &Block) {
+	/// Checks the block is valid, and returns the index of the first signed extrinsic in the block.
+	fn initial_checks(block: &Block) -> u32 {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
 
@@ -315,8 +318,12 @@ where
 			"Parent hash should be valid.",
 		);
 
-		if let Err(i) = System::ensure_inherents_are_first(block) {
-			panic!("Invalid inherent position for extrinsic at index {}", i);
+
+		match System::ensure_inherents_are_first(block) {
+			Ok(i) => return i,
+			Err(i) => {
+				panic!("Invalid inherent position for extrinsic at index {}", i);
+			}
 		}
 	}
 
@@ -328,14 +335,14 @@ where
 
 			Self::initialize_block(block.header());
 
-			// any initial checks
-			Self::initial_checks(&block);
+			// any initial checks, and retrieve the first signed index.
+			let first_signed_index = Self::initial_checks(&block);
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
-			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+			Self::execute_extrinsics_with_book_keeping(extrinsics, first_signed_index, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
@@ -349,11 +356,27 @@ where
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(
 		extrinsics: Vec<Block::Extrinsic>,
+		first_signed_index: u32,
 		block_number: NumberFor<Block>,
 	) {
-		extrinsics.into_iter().for_each(|e| if let Err(e) = Self::apply_extrinsic(e) {
-			let err: &'static str = e.into();
-			panic!("{}", err)
+		extrinsics.into_iter()
+			.enumerate()
+			.for_each(|(i, ext)| {
+				// When this is true, we finished processing inherents.
+				if i as u32 == first_signed_index {
+					let mut weight = 0;
+					weight = weight.saturating_add(
+						<frame_system::Pallet<System> as OnPostInherent<System::BlockNumber>>::on_post_inherent(block_number)
+					);
+					weight = weight.saturating_add(
+						<AllPallets as OnPostInherent<System::BlockNumber>>::on_post_inherent(block_number)
+					);
+					<frame_system::Pallet::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
+				}
+				if let Err(e) = Self::apply_extrinsic(ext) {
+					let err: &'static str = e.into();
+					panic!("{}", err)
+			}
 		});
 
 		// post-extrinsics book-keeping
