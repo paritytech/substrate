@@ -306,7 +306,7 @@ where
 	}
 
 	/// Checks the block is valid, and returns the index of the first signed extrinsic in the block.
-	fn initial_checks(block: &Block) -> u32 {
+	fn initial_checks(block: &Block) -> Option<u32> {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
 
@@ -336,14 +336,14 @@ where
 			Self::initialize_block(block.header());
 
 			// any initial checks, and retrieve the index of the first signed extrinsic from the
-			// `extrinsics` vec.
-			let first_signed_index = Self::initial_checks(&block);
+			// `extrinsics` vec if one exists.
+			let maybe_first_signed_index = Self::initial_checks(&block);
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
-			Self::execute_extrinsics_with_book_keeping(extrinsics, first_signed_index, *header.number());
+			Self::execute_extrinsics_with_book_keeping(extrinsics, maybe_first_signed_index, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
@@ -357,28 +357,38 @@ where
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(
 		extrinsics: Vec<Block::Extrinsic>,
-		first_signed_index: u32,
+		maybe_first_signed_index: Option<u32>,
 		block_number: NumberFor<Block>,
 	) {
+
+		let do_on_post_inherent = || {
+			let mut weight = 0;
+			weight = weight.saturating_add(
+				<frame_system::Pallet<System> as OnPostInherent<System::BlockNumber>>::on_post_inherent(block_number)
+			);
+			weight = weight.saturating_add(
+				<AllPallets as OnPostInherent<System::BlockNumber>>::on_post_inherent(block_number)
+			);
+			<frame_system::Pallet::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
+		};
+
 		extrinsics.into_iter()
 			.enumerate()
 			.for_each(|(i, ext)| {
-				// When this is true, we finished processing inherents.
-				if i as u32 == first_signed_index {
-					let mut weight = 0;
-					weight = weight.saturating_add(
-						<frame_system::Pallet<System> as OnPostInherent<System::BlockNumber>>::on_post_inherent(block_number)
-					);
-					weight = weight.saturating_add(
-						<AllPallets as OnPostInherent<System::BlockNumber>>::on_post_inherent(block_number)
-					);
-					<frame_system::Pallet::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
+				if Some(i as  u32) == maybe_first_signed_index {
+					do_on_post_inherent();
 				}
 				if let Err(e) = Self::apply_extrinsic(ext) {
 					let err: &'static str = e.into();
 					panic!("{}", err)
 				}
 			});
+
+		// In this case, all the extrinsics in this block are inherents, so we would have never
+		// executed `on_post_inherent` in the loop above, so we do so now.
+		if maybe_first_signed_index.is_none() {
+			do_on_post_inherent();
+		}
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();

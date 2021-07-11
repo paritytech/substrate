@@ -162,13 +162,12 @@ pub fn expand_outer_inherent(
 		}
 
 		impl #scrate::traits::EnsureInherentsAreFirst<#block> for #runtime {
-			fn ensure_inherents_are_first(block: &#block) -> Result<u32, u32> {
+			fn ensure_inherents_are_first(block: &#block) -> Result<Option<u32>, u32> {
 				use #scrate::inherent::ProvideInherent;
 				use #scrate::traits::{IsSubType, ExtrinsicCall};
 				use #scrate::sp_runtime::traits::Block as _;
 
-				let mut first_signed_observed = false;
-				let mut first_signed_index = 0;
+				let mut first_signed_observed = None;
 
 				for (i, xt) in block.extrinsics().iter().enumerate() {
 					let is_signed = #scrate::inherent::Extrinsic::is_signed(xt).unwrap_or(false);
@@ -189,20 +188,16 @@ pub fn expand_outer_inherent(
 						is_inherent
 					};
 
-					if !first_signed_observed {
-						first_signed_index = i as u32;
+					if !is_inherent && first_signed_observed.is_none() {
+						first_signed_observed = Some(i as u32);
 					}
 
-					if !is_inherent {
-						first_signed_observed = true;
-					}
-
-					if first_signed_observed && is_inherent {
+					if first_signed_observed.is_some() && is_inherent {
 						return Err(i as u32)
 					}
 				}
 
-				Ok(first_signed_index)
+				Ok(first_signed_observed)
 			}
 		}
 	}
