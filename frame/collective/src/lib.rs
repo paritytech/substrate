@@ -1447,35 +1447,30 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let hash: H256 = proposal.blake2_256().into();
 			let end = 4;
-			assert_ok!(Collective::propose(
-				Origin::signed(1),
-				2,
-				Box::new(proposal.clone()),
-				proposal_len
-			));
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
 			// Initially there a no votes when the motion is proposed.
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![], end })
 			);
-			// Cast first vote as aye.
+			// Cast first aye vote.
 			assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, true));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![], end })
 			);
-			// Try to cast a duplicate aye.
+			// Try to cast a duplicate aye vote.
 			assert_noop!(
 				Collective::vote(Origin::signed(1), hash.clone(), 0, true),
 				Error::<Test, Instance1>::DuplicateVote,
 			);
-			// Cast a vote as nay.
+			// Cast a nay vote.
 			assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, false));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 2, ayes: vec![], nays: vec![1], end })
 			);
-			// Try to cast a duplicate nay.
+			// Try to cast a duplicate nay vote.
 			assert_noop!(
 				Collective::vote(Origin::signed(1), hash.clone(), 0, false),
 				Error::<Test, Instance1>::DuplicateVote,
