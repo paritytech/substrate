@@ -360,7 +360,6 @@ where
 		maybe_first_signed_index: Option<u32>,
 		block_number: NumberFor<Block>,
 	) {
-
 		let do_on_post_inherent = || {
 			let mut weight = 0;
 			weight = weight.saturating_add(
