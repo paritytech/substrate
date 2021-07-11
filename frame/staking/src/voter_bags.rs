@@ -21,18 +21,20 @@
 //! - It's efficient to iterate over the top* N voters by stake, where the precise ordering of
 //!   voters doesn't particularly matter.
 
-use crate::{
-	AccountIdOf, Config, Nominations, Nominators, Pallet, Validators, VoteWeight, VoterBagFor,
-	VotingDataOf, slashing::SlashingSpans,
-};
-use codec::{Encode, Decode};
-use frame_support::{DefaultNoBound, traits::Get};
+use codec::{Decode, Encode};
+use frame_support::{traits::Get, DefaultNoBound};
 use sp_runtime::SaturatedConversion;
 use sp_std::{
 	boxed::Box,
+	cmp::PartialEq,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter,
 	marker::PhantomData,
+};
+
+use crate::{
+	slashing::SlashingSpans, AccountIdOf, Config, Nominations, Nominators, Pallet, Validators,
+	VoteWeight, VoterBagFor, VotingDataOf,
 };
 
 /// [`Voter`] parametrized by [`Config`] instead of by `AccountId`.
@@ -460,17 +462,25 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
 	/// `self.put()` and `node.put()` after use.
 	fn remove_node(&mut self, node: &Node<T>) {
-		// TODO: we could merge this function here.
-		// node.excise();
+		// Excise `node`.
 		if let Some(mut prev) = node.prev() {
-			prev.next = self.next.clone();
+			debug_assert!(prev != *node, "node.prev circularly points at node");
+
+			prev.next = node.next.clone();
+			debug_assert!(prev.next().unwrap().prev().unwrap() == *node);
+
 			prev.put();
 		}
 		if let Some(mut next) = node.next() {
-			next.prev = self.prev.clone();
+			// if there is a node.next, we know their should be a node.prev
+			debug_assert!(next != *node, "node.next circularly points at node");
+			debug_assert!(node.prev().unwrap() != next, "node.prev circularly points at node.next");
+
+			next.prev = node.prev.clone();
+			debug_assert!(next.prev().unwrap().next().unwrap() == next);
+
 			next.put();
 		}
-		// IDEA: debug_assert! prev.next.prev == self
 
 		// clear the bag head/tail pointers as necessary
 		if self.head.as_ref() == Some(&node.voter.id) {
@@ -484,7 +494,7 @@ impl<T: Config> Bag<T> {
 
 /// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
 #[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, PartialEq))]
 pub struct Node<T: Config> {
 	voter: Voter<AccountIdOf<T>>,
 	prev: Option<AccountIdOf<T>>,
@@ -498,7 +508,7 @@ pub struct Node<T: Config> {
 impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
 	pub fn get(bag_upper: VoteWeight, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
-		// debug_assert!(bag_upper is in Threshold)
+		debug_assert!(T::VoterBagThresholds::get().contains(&bag_upper));
 		crate::VoterNodes::<T>::try_get(account_id).ok().map(|mut node| {
 			node.bag_upper = bag_upper;
 			node
@@ -566,6 +576,7 @@ impl<T: Config> Node<T> {
 	/// Remove this node from the linked list.
 	///
 	/// Modifies storage, but only modifies the adjacent nodes. Does not modify `self` or any bag.
+	#[allow(dead_code)] // TODO: do we keep? (equivalent code in `fn remove_node`)
 	fn excise(&self) {
 		if let Some(mut prev) = self.prev() {
 			prev.next = self.next.clone();
