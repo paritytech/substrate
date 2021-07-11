@@ -190,7 +190,7 @@ pub fn expand_outer_inherent(
 					};
 
 					if !first_signed_observed {
-						first_signed_index = i;
+						first_signed_index = i as u32;
 					}
 
 					if !is_inherent {
