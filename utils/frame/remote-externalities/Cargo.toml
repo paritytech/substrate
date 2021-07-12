@@ -13,8 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
-jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", branch = "master" }
+jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", branch = "mh-start-with-module" }
+jsonrpsee-proc-macros = { git = "https://github.com/paritytech/jsonrpsee", branch = "mh-start-with-module" }
 
 hex = "0.4.0"
 env_logger = "0.8.2"
