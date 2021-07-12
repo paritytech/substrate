@@ -322,7 +322,10 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: <Self as storage::IterableStorageNMap<K, V>>::partial_key_value_decode_fn::<KP>,
+			closure: |raw_key_without_prefix, mut raw_value| {
+				let partial_key = K::decode_partial_key(raw_key_without_prefix)?;
+				Ok((partial_key, V::decode(&mut raw_value)?))
+			},
 		}
 	}
 
@@ -335,7 +338,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: <Self as storage::IterableStorageNMap<K, V>>::partial_key_decode_fn::<KP>,
+			closure: K::decode_partial_key,
 		}
 	}
 
@@ -354,7 +357,10 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: <Self as storage::IterableStorageNMap<K, V>>::full_key_value_decode_fn,
+			closure: |raw_key_without_prefix, mut raw_value| {
+				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
+				Ok((final_key, V::decode(&mut raw_value)?))
+			},
 		}
 	}
 
@@ -364,7 +370,10 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: <Self as storage::IterableStorageNMap<K, V>>::full_key_decode_fn,
+			closure: |raw_key_without_prefix| {
+				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
+				Ok(final_key)
+			}
 		}
 	}
 
@@ -372,39 +381,6 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		let mut iterator = Self::iter();
 		iterator.drain = true;
 		iterator
-	}
-
-	fn partial_key_value_decode_fn<KP>(
-		raw_key_without_prefix: &[u8],
-		mut raw_value: &[u8],
-	) -> Result<(<K as HasKeyPrefix<KP>>::Suffix, V), codec::Error>
-	where
-		K: HasReversibleKeyPrefix<KP>,
-	{
-		let partial_key = K::decode_partial_key(raw_key_without_prefix)?;
-		Ok((partial_key, V::decode(&mut raw_value)?))
-	}
-
-	fn partial_key_decode_fn<KP>(
-		raw_key_without_prefix: &[u8],
-	) -> Result<<K as HasKeyPrefix<KP>>::Suffix, codec::Error>
-	where
-		K: HasReversibleKeyPrefix<KP>,
-	{
-		K::decode_partial_key(raw_key_without_prefix)
-	}
-
-	fn full_key_value_decode_fn(
-		raw_key_without_prefix: &[u8],
-		mut raw_value: &[u8],
-	) -> Result<(K::Key, V), codec::Error> {
-		let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
-		Ok((final_key, V::decode(&mut raw_value)?))
-	}
-
-	fn full_key_decode_fn(raw_key_without_prefix: &[u8]) -> Result<K::Key, codec::Error> {
-		let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
-		Ok(final_key)
 	}
 
 	fn translate<O: Decode, F: FnMut(K::Key, O) -> Option<V>>(mut f: F) {

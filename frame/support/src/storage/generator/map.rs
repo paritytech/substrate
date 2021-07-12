@@ -149,7 +149,10 @@ impl<
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: <Self as storage::IterableStorageMap<K, V>>::key_value_decode_fn,
+			closure: |raw_key_without_prefix, mut raw_value| {
+				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
+				Ok((K::decode(&mut key_material)?, V::decode(&mut raw_value)?))
+			},
 		}
 	}
 
@@ -160,23 +163,11 @@ impl<
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: <Self as storage::IterableStorageMap<K, V>>::key_decode_fn,
+			closure: |raw_key_without_prefix| {
+				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
+				K::decode(&mut key_material)
+			}
 		}
-	}
-
-	/// Decode function used in iter.
-	fn key_value_decode_fn(
-		raw_key_without_prefix: &[u8],
-		mut raw_value: &[u8],
-	) -> Result<(K, V), codec::Error> {
-		let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
-		Ok((K::decode(&mut key_material)?, V::decode(&mut raw_value)?))
-	}
-
-	/// Decode function used in iter_keys.
-	fn key_decode_fn(raw_key_without_prefix: &[u8]) -> Result<K, codec::Error> {
-		let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
-		K::decode(&mut key_material)
 	}
 
 	/// Enumerate all elements in the map.
