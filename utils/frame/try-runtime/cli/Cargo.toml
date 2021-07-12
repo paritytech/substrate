@@ -1,6 +1,6 @@
 [package]
 name = "try-runtime-cli"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -18,19 +18,18 @@ parity-scale-codec = { version = "2.0.0" }
 serde = "1.0.0"
 structopt = "0.3.8"
 
-sc-service = { version = "0.9.0", default-features = false, path = "../../../../client/service" }
-sc-cli = { version = "0.9.0", path = "../../../../client/cli" }
-sc-executor = { version = "0.9.0", path = "../../../../client/executor" }
-sc-client-api = { version = "3.0.0", path = "../../../../client/api" }
-sc-chain-spec = { version = "3.0.0", path = "../../../../client/chain-spec" }
-sp-state-machine = { version = "0.9.0", path = "../../../../primitives/state-machine" }
-sp-api = { version = "3.0.0", path = "../../../../primitives/api" }
-sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" }
-sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
-sp-externalities = { version = "0.9.0", path = "../../../../primitives/externalities" }
-sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
-sp-io = { version = "3.0.0", path = "../../../../primitives/io" }
-sp-keystore = { version = "0.9.0", path = "../../../../primitives/keystore" }
-frame-try-runtime = { version = "0.9.0", path = "../../../../frame/try-runtime" }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
+sc-cli = { version = "0.10.0-dev", path = "../../../../client/cli" }
+sc-executor = { version = "0.10.0-dev", path = "../../../../client/executor" }
+sc-client-api = { version = "4.0.0-dev", path = "../../../../client/api" }
+sc-chain-spec = { version = "4.0.0-dev", path = "../../../../client/chain-spec" }
+sp-state-machine = { version = "0.10.0-dev", path = "../../../../primitives/state-machine" }
+sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
+sp-externalities = { version = "0.10.0-dev", path = "../../../../primitives/externalities" }
+sp-core = { version = "4.0.0-dev", path = "../../../../primitives/core" }
+sp-keystore = { version = "0.10.0-dev", path = "../../../../primitives/keystore" }
+frame-try-runtime = { version = "0.10.0-dev", path = "../../../../frame/try-runtime" }
 
-remote-externalities = { version = "0.9.0", path = "../../remote-externalities" }
+remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }

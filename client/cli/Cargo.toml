@@ -1,6 +1,6 @@
 [package]
 name = "sc-cli"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
 edition = "2018"
@@ -24,22 +24,22 @@ hex = "0.4.2"
 rand = "0.7.3"
 tiny-bip39 = "0.8.0"
 serde_json = "1.0.41"
-sc-keystore = { version = "3.0.0", path = "../keystore" }
+sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sp-panic-handler = { version = "3.0.0", path = "../../primitives/panic-handler" }
-sc-client-api = { version = "3.0.0", path = "../api" }
-sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
-sc-network = { version = "0.9.0", path = "../network" }
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
-sp-utils = { version = "3.0.0", path = "../../primitives/utils" }
-sp-version = { version = "3.0.0", path = "../../primitives/version" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-sp-keystore = { version = "0.9.0", path = "../../primitives/keystore" }
-sc-service = { version = "0.9.0", default-features = false, path = "../service" }
-sc-telemetry = { version = "3.0.0", path = "../telemetry" }
-sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
+sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sc-network = { version = "0.10.0-dev", path = "../network" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
+sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../service" }
+sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
+sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.8"
-sc-tracing = { version = "3.0.0", path = "../tracing" }
+sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 chrono = "0.4.10"
 serde = "1.0.111"
 thiserror = "1.0.21"

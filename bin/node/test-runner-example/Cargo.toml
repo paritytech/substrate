@@ -8,33 +8,33 @@ publish = false
 [dependencies]
 test-runner = { path = "../../../test-utils/test-runner", version = "0.9.0" }
 
-frame-system = { version = "3.0.0", path = "../../../frame/system" }
-frame-support = { path = "../../../frame/support", version = "3.0.0" }
-frame-benchmarking = { path = "../../../frame/benchmarking", version = "3.0.0" }
-pallet-balances = { path = "../../../frame/balances", version = "3.0.0" }
-pallet-sudo = { path = "../../../frame/sudo", version = "3.0.0" }
-pallet-transaction-payment = { version = "3.0.0", path = "../../../frame/transaction-payment" }
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+frame-support = { path = "../../../frame/support", version = "4.0.0-dev"}
+frame-benchmarking = { path = "../../../frame/benchmarking", version = "4.0.0-dev"}
+pallet-balances = { path = "../../../frame/balances", version = "4.0.0-dev"}
+pallet-sudo = { path = "../../../frame/sudo", version = "4.0.0-dev"}
+pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
 
-node-runtime = { path = "../runtime", version = "2.0.1" }
+node-runtime = { path = "../runtime", version = "3.0.0-dev"}
 node-primitives = { version = "2.0.0", path = "../primitives" }
-node-cli = { path = "../cli", version = "2.0.0" }
+node-cli = { path = "../cli", version = "3.0.0-dev"}
 
-grandpa = { version = "0.9.0", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-sp-consensus-babe = { version = "0.9.0", path = "../../../primitives/consensus/babe" }
-sc-consensus-babe = { version = "0.9.0", path = "../../../client/consensus/babe" }
-sc-consensus-manual-seal = { version = "0.9.0", path = "../../../client/consensus/manual-seal" }
-sc-service = { version = "0.9.0", default-features = false, path = "../../../client/service" }
-sc-executor = { version = "0.9.0", path = "../../../client/executor" }
-sc-client-api = { version = "3.0.0", path = "../../../client/api" }
-sc-network = { version = "0.9.0", path = "../../../client/network" }
-sc-informant = { version = "0.9.0", path = "../../../client/informant" }
-sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
+grandpa = { version = "0.10.0-dev", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
+sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
+sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
+sc-consensus-manual-seal = { version = "0.10.0-dev", path = "../../../client/consensus/manual-seal" }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
+sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
+sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
+sc-network = { version = "0.10.0-dev", path = "../../../client/network" }
+sc-informant = { version = "0.10.0-dev", path = "../../../client/informant" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 
-sp-runtime = { path = "../../../primitives/runtime", version = "3.0.0" }
-sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
-sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
-sp-api = { version = "3.0.0",  path = "../../../primitives/api" }
-sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
-sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
+sp-runtime = { path = "../../../primitives/runtime", version = "4.0.0-dev"}
+sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
+sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+sp-api = { version = "4.0.0-dev",  path = "../../../primitives/api" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
 
 log = "0.4.14"
