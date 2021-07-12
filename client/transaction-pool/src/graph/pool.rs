@@ -29,13 +29,14 @@ use sp_runtime::{
 		TransactionValidity, TransactionTag as Tag, TransactionValidityError, TransactionSource,
 	},
 };
-use sp_transaction_pool::error;
+use sc_transaction_pool_api::error;
 use wasm_timer::Instant;
 use futures::channel::mpsc::Receiver;
 
-use crate::{base_pool as base, watcher::Watcher};
-use crate::validated_pool::ValidatedPool;
-pub use crate::validated_pool::{IsValidator, ValidatedTransaction};
+use super::{
+	base_pool as base, watcher::Watcher,
+	validated_pool::{IsValidator, ValidatedTransaction, ValidatedPool},
+};
 
 /// Modification notification event stream type;
 pub type EventStream<H> = Receiver<H>;
@@ -462,7 +463,7 @@ mod tests {
 	use parking_lot::Mutex;
 	use futures::executor::block_on;
 	use super::*;
-	use sp_transaction_pool::TransactionStatus;
+	use sc_transaction_pool_api::TransactionStatus;
 	use sp_runtime::{
 		traits::Hash,
 		transaction_validity::{ValidTransaction, InvalidTransaction, TransactionSource},
@@ -471,7 +472,7 @@ mod tests {
 	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId, Hashing};
 	use assert_matches::assert_matches;
 	use wasm_timer::Instant;
-	use crate::base_pool::Limit;
+	use super::super::base_pool::Limit;
 
 	const INVALID_NONCE: u64 = 254;
 	const SOURCE: TransactionSource = TransactionSource::External;

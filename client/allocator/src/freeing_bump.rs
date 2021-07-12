@@ -38,9 +38,9 @@
 //! allocation size is capped, therefore the number of orders and thus the linked lists is as well
 //! limited. Currently, the maximum size of an allocation is 32 MiB.
 //!
-//! When the allocator serves an allocation request it first checks the linked list for the respective
-//! order. If it doesn't have any free chunks, the allocator requests memory from the bump allocator.
-//! In any case the order is stored in the header of the allocation.
+//! When the allocator serves an allocation request it first checks the linked list for the
+//! respective order. If it doesn't have any free chunks, the allocator requests memory from the
+//! bump allocator. In any case the order is stored in the header of the allocation.
 //!
 //! Upon deallocation we get the order of the allocation from its header and then add that
 //! allocation to the linked list for the respective order.
@@ -59,12 +59,13 @@
 //!   allocator was consumed by the 32 MiB allocation, allocations of all sizes except 32 MiB will
 //!   fail.
 //!
-//! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001 MiB
-//!   will be put into the bucket of 4 MiB. Therefore, any allocation of size `(N, 2N]` will take
-//!   up to `2N`, thus assuming a uniform distribution of allocation sizes, the average amount in use
-//!   of a `2N` space on the heap will be `(3N + ε) / 2`. So average utilisation is going to be around
-//!   75% (`(3N + ε) / 2 / 2N`) meaning that around 25% of the space in allocation will be wasted.
-//!   This is more pronounced (in terms of absolute heap amounts) with larger allocation sizes.
+//! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001
+//!   MiB will be put into the bucket of 4 MiB. Therefore, any allocation of size `(N, 2N]` will
+//!   take up to `2N`, thus assuming a uniform distribution of allocation sizes, the average amount
+//!   in use of a `2N` space on the heap will be `(3N + ε) / 2`. So average utilization is going to
+//!   be around 75% (`(3N + ε) / 2 / 2N`) meaning that around 25% of the space in allocation will be
+//!   wasted. This is more pronounced (in terms of absolute heap amounts) with larger allocation
+//!   sizes.
 
 use crate::Error;
 use std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};

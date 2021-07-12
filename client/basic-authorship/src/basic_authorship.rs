@@ -31,7 +31,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 };
-use sp_transaction_pool::{TransactionPool, InPoolTransaction};
+use sc_transaction_pool_api::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
@@ -472,7 +472,7 @@ mod tests {
 	use substrate_test_runtime_client::{
 		prelude::*, TestClientBuilder, runtime::{Extrinsic, Transfer}, TestClientBuilderExt,
 	};
-	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
+	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool, TransactionSource};
 	use sc_transaction_pool::BasicPool;
 	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;

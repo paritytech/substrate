@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-babe"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "BABE consensus algorithm for substrate"
 edition = "2018"
@@ -15,31 +15,31 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
-sp-consensus-babe = { version = "0.9.0", path = "../../../primitives/consensus/babe" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-application-crypto = { version = "3.0.0", path = "../../../primitives/application-crypto" }
-sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
+sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-application-crypto = { version = "4.0.0-dev", path = "../../../primitives/application-crypto" }
+sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
 num-bigint = "0.2.3"
 num-rational = "0.2.2"
 num-traits = "0.2.8"
 serde = { version = "1.0.104", features = ["derive"] }
-sp-version = { version = "3.0.0", path = "../../../primitives/version" }
-sp-io = { version = "3.0.0", path = "../../../primitives/io" }
-sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
-sc-telemetry = { version = "3.0.0", path = "../../telemetry" }
-sc-keystore = { version = "3.0.0", path = "../../keystore" }
-sc-client-api = { version = "3.0.0", path = "../../api" }
-sc-consensus-epochs = { version = "0.9.0", path = "../epochs" }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builder" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-sp-consensus-slots = { version = "0.9.0", path = "../../../primitives/consensus/slots" }
-sp-consensus-vrf = { version = "0.9.0", path = "../../../primitives/consensus/vrf" }
-sc-consensus-uncles = { version = "0.9.0", path = "../uncles" }
-sc-consensus-slots = { version = "0.9.0", path = "../slots" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-utils = { version = "3.0.0", path = "../../../primitives/utils" }
+sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
+sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
+sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
+sc-client-api = { version = "4.0.0-dev", path = "../../api" }
+sc-consensus-epochs = { version = "0.10.0-dev", path = "../epochs" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
+sp-consensus-vrf = { version = "0.10.0-dev", path = "../../../primitives/consensus/vrf" }
+sc-consensus-uncles = { version = "0.10.0-dev", path = "../uncles" }
+sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-utils = { version = "4.0.0-dev", path = "../../../primitives/utils" }
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}
 futures = "0.3.9"
@@ -55,14 +55,14 @@ retain_mut = "0.1.3"
 async-trait = "0.1.42"
 
 [dev-dependencies]
-sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
-sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
-sp-tracing = { version = "3.0.0", path = "../../../primitives/tracing" }
-sc-executor = { version = "0.9.0", path = "../../executor" }
-sc-network = { version = "0.9.0", path = "../../network" }
+sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
+sp-tracing = { version = "4.0.0-dev", path = "../../../primitives/tracing" }
+sc-executor = { version = "0.10.0-dev", path = "../../executor" }
+sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sc-service = { version = "0.9.0", default-features = false, path = "../../service" }
+sc-service = { version = "0.10.0-dev", default-features = false, path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sc-block-builder = { version = "0.9.0", path = "../../block-builder" }
+sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 rand_chacha = "0.2.2"
 tempfile = "3.1.0"
