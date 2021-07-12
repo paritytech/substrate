@@ -23,7 +23,7 @@ use codec::{self, Codec, Decode, Encode};
 use sc_client_api::light::{self, future_header, RemoteBlockchain, RemoteCallRequest};
 use futures::{future, FutureExt};
 use jsonrpsee::RpcModule;
-use jsonrpsee_types::{error::CallError, Error as JsonRpseeError};
+use jsonrpsee::types::{error::CallError, Error as JsonRpseeError};
 use sp_blockchain::{
 	HeaderBackend,
 	Error as ClientError

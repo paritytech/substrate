@@ -18,7 +18,7 @@
 
 //! State RPC errors.
 
-use jsonrpsee_types::error::{Error as JsonRpseeError, CallError};
+use jsonrpsee::types::error::{Error as JsonRpseeError, CallError};
 
 /// State RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;

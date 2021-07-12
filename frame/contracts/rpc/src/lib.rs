@@ -23,7 +23,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use codec::Codec;
 use jsonrpsee::RpcModule;
-use jsonrpsee_types::error::{CallError, Error as JsonRpseeError};
+use jsonrpsee::types::error::{CallError, Error as JsonRpseeError};
 use pallet_contracts_primitives::{
 	Code, ContractExecResult, ContractInstantiateResult, RentProjection,
 };

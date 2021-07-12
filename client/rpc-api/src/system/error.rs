@@ -19,7 +19,7 @@
 //! System RPC module errors.
 
 use crate::system::helpers::Health;
-use jsonrpsee_types::{to_json_raw_value, error::CallError};
+use jsonrpsee::types::{to_json_raw_value, error::CallError};
 use serde::Serialize;
 
 /// System RPC Result type.
