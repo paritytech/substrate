@@ -31,7 +31,7 @@ pub trait OnInitialize<BlockNumber> {
 	/// Return the non-negotiable weight consumed in the block.
 	///
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
-	/// including inherent extrinsics. Hence for instance, if you runtime includes
+	/// including inherent extrinsics. Hence, for instance, if your runtime includes
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	///
 	/// If you want to execute something after inherents, implement `OnPostInherent`.
