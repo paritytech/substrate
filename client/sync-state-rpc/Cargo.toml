@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 thiserror = "1.0.21"
 anyhow = "1"
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "dp-expose-more-types-in-facade-crate", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
 sc-chain-spec = { version = "3.0.0", path = "../chain-spec" }
 sc-client-api = { version = "3.0.0", path = "../api" }
 sc-consensus-babe = { version = "0.9.0", path = "../consensus/babe" }

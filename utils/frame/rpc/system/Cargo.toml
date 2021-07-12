@@ -19,7 +19,7 @@ serde_json = "1"
 sc-client-api = { version = "3.0.0", path = "../../../../client/api" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = { version = "0.3.4", features = ["compat"] }
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "dp-expose-more-types-in-facade-crate", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
 log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
 sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
