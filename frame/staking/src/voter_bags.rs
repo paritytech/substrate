@@ -994,6 +994,8 @@ mod tests {
 
 
 			let voters: Vec<_> = VoterList::<Test>::iter()
+				// take 4/5 from [41, 101],[11, 21, 31], demonstrating that we can do a
+				// take that stops mid bag.
 				.take(4)
 				.map(|node| node.voter.id)
 				.collect();
