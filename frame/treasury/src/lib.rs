@@ -227,6 +227,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl GenesisConfig {
 		/// Direct implementation of `GenesisBuild::assimilate_storage`.
+		#[deprecated(note = "use `<GensisConfig<T, I> as GenesisBuild<T, I>>::assimilate_storage` instead")]
 		pub fn assimilate_storage<T: Config<I>, I: 'static>(
 			&self,
 			storage: &mut sp_runtime::Storage
