@@ -20,7 +20,7 @@
 use super::*;
 use frame_support::pallet_prelude::*;
 
-use frame_support::traits::fungible;
+use frame_support::traits::{fungible, tokens::BalanceConversion};
 use sp_runtime::{FixedPointNumber, FixedPointOperand, FixedU128};
 use sp_runtime::traits::Convert;
 
@@ -182,12 +182,6 @@ impl From<TransferFlags> for DebitFlags {
 	}
 }
 
-/// Converts a balance value into an asset balance.
-pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
-	type Error;
-	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
-}
-
 /// Possible errors when converting between external and asset balances.
 #[derive(Eq, PartialEq, Copy, Clone, RuntimeDebug, Encode, Decode)]
 pub enum ConversionError {
@@ -199,9 +193,12 @@ pub enum ConversionError {
 	AssetNotSufficient,
 }
 
+// Type alias for `frame_system`'s account id.
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+// This pallet's asset id and balance type.
 type AssetIdOf<T, I> = <T as Config<I>>::AssetId;
 type AssetBalanceOf<T, I> = <T as Config<I>>::Balance;
+// Generic fungible balance type.
 type BalanceOf<F, T> = <F as fungible::Inspect<AccountIdOf<T>>>::Balance;
 
 /// Converts a balance value into an asset balance based on the ratio between the fungible's
