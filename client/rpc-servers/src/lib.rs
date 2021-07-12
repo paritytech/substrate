@@ -94,7 +94,7 @@ mod inner {
 				// TODO: (dp) DRY this up; it's the same as the WS code
 				let handle = server.stop_handle();
 				let mut methods_api = RpcModule::new(());
-				let mut available_methods = module.method_names().collect::<Vec<&'static str>>();
+				let mut available_methods = module.method_names().collect::<Vec<_>>();
 				available_methods.sort();
 
 				// TODO: (dp) not sure this is correct; shouldn't the `rpc_methods` also be listed?
