@@ -737,7 +737,7 @@ impl<T> PrefixIterator<T> {
 		}
 	}
 
-	/// Get the next key that is about to be iterated upon and return it.
+	/// Get the last key that has been iterated upon and return it.
 	pub fn next_key(&self) -> &[u8] {
 		&self.previous_key
 	}
@@ -832,7 +832,7 @@ impl<T> KeyPrefixIterator<T> {
 		}
 	}
 
-	/// Get the next key that is about to be iterated upon and return it.
+	/// Get the last key that has been iterated upon and return it.
 	pub fn next_key(&self) -> &[u8] {
 		&self.previous_key
 	}
