@@ -85,9 +85,9 @@ decl_storage! {
 		build(|config: &Self| {
 			let mut members = config.members.clone();
 
-			let has_dupes = (1..members.len())
-				.any(|i| members[i..].contains(&members[i - 1]));
-			assert!(!has_dupes, "Members cannot contain duplicate accounts.");
+			use sp_std::collections::btree_set::BTreeSet;
+			let members_set: BTreeSet<_> = config.members.iter().collect();
+			assert!(members_set.len() == config.members.len(), "Members cannot contain duplicate accounts.");
 
 			members.sort();
 			T::MembershipInitialized::initialize_members(&members);
