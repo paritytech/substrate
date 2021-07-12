@@ -374,7 +374,7 @@ where
 		extrinsics.into_iter()
 			.enumerate()
 			.for_each(|(i, ext)| {
-				if Some(i as  u32) == maybe_first_signed_index {
+				if Some(i as u32) == maybe_first_signed_index {
 					// At this point, we have executed all the inherents, and we are about to
 					// execute our first signed extrinsic, so we call `on_post_inherent` first.
 					do_on_post_inherent();
