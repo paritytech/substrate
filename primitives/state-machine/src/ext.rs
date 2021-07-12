@@ -749,6 +749,10 @@ where
 	fn proof_size(&self) -> Option<u32> {
 		self.backend.proof_size()
 	}
+
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
+		self.backend.get_read_and_written_keys()
+	}
 }
 
 impl<'a, H, N, B> Ext<'a, H, N, B>

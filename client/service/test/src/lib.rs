@@ -47,7 +47,7 @@ use sp_blockchain::HeaderBackend;
 use sc_network::{multiaddr, Multiaddr};
 use sc_network::config::{NetworkConfiguration, TransportConfig};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use sp_transaction_pool::TransactionPool;
+use sc_transaction_pool_api::TransactionPool;
 use sc_client_api::{Backend, CallExecutor};
 use parking_lot::Mutex;
 
@@ -575,7 +575,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	let first_user_data = &network.full_nodes[0].2;
 	let best_block = BlockId::number(first_service.client().info().best_number);
 	let extrinsic = extrinsic_factory(&first_service, first_user_data);
-	let source = sp_transaction_pool::TransactionSource::External;
+	let source = sc_transaction_pool_api::TransactionSource::External;
 
 	futures::executor::block_on(
 		first_service.transaction_pool().submit_one(&best_block, source, extrinsic)

@@ -19,15 +19,16 @@
 //! Extrinsics status updates.
 
 use futures::Stream;
-use sp_transaction_pool::TransactionStatus;
+use sc_transaction_pool_api::TransactionStatus;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 /// Extrinsic watcher.
 ///
-/// Represents a stream of status updates for particular extrinsic.
+/// Represents a stream of status updates for a particular extrinsic.
 #[derive(Debug)]
 pub struct Watcher<H, BH> {
 	receiver: TracingUnboundedReceiver<TransactionStatus<H, BH>>,
+	/// transaction hash of watched extrinsic
 	hash: H,
 }
 

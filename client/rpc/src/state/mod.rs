@@ -252,7 +252,7 @@ impl<Block, Client> StateApi<Block, Client>
 			};
 
 			async move {
-				state.backend.call(block, method, data).await.map_err(to_jsonrpsee_call_error)
+				state.backend.call(block, method, data).await.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -264,7 +264,7 @@ impl<Block, Client> StateApi<Block, Client>
 				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
-				state.backend.storage_keys(block, key_prefix).await.map_err(to_jsonrpsee_call_error)
+				state.backend.storage_keys(block, key_prefix).await.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -275,7 +275,7 @@ impl<Block, Client> StateApi<Block, Client>
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.storage_pairs(block, key_prefix).await.map_err(to_jsonrpsee_call_error)
+				state.backend.storage_pairs(block, key_prefix).await.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -294,7 +294,7 @@ impl<Block, Client> StateApi<Block, Client>
 				}
 				state.backend.storage_keys_paged(block, prefix, count,start_key)
 					.await
-					.map_err(to_jsonrpsee_call_error)
+					.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -306,7 +306,7 @@ impl<Block, Client> StateApi<Block, Client>
 				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
-				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
+				state.backend.storage(block, key).await.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -318,7 +318,7 @@ impl<Block, Client> StateApi<Block, Client>
 				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
-				state.backend.storage(block, key).await.map_err(to_jsonrpsee_call_error)
+				state.backend.storage(block, key).await.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -330,7 +330,7 @@ impl<Block, Client> StateApi<Block, Client>
 				Err(e) => return Box::pin(future::err(e)),
 			};
 			async move {
-				state.backend.storage_size(block, key).await.map_err(to_jsonrpsee_call_error)
+				state.backend.storage_size(block, key).await.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -339,7 +339,7 @@ impl<Block, Client> StateApi<Block, Client>
 		module.register_async_method("state_getMetadata", |params, state| {
 			let maybe_block = params.one().ok();
 			async move {
-				state.backend.metadata(maybe_block).await.map_err(to_jsonrpsee_call_error)
+				state.backend.metadata(maybe_block).await.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -347,7 +347,7 @@ impl<Block, Client> StateApi<Block, Client>
 			let at = params.one().ok();
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.runtime_version(at).await.map_err(to_jsonrpsee_call_error)
+				state.backend.runtime_version(at).await.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -361,7 +361,7 @@ impl<Block, Client> StateApi<Block, Client>
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.query_storage(from, to, keys).await
-					.map_err(to_jsonrpsee_call_error)
+					.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -373,7 +373,7 @@ impl<Block, Client> StateApi<Block, Client>
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.query_storage_at(keys, at).await
-					.map_err(to_jsonrpsee_call_error)
+					.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -384,7 +384,7 @@ impl<Block, Client> StateApi<Block, Client>
 			};
 			async move {
 				state.deny_unsafe.check_if_safe()?;
-				state.backend.read_proof(block, keys).await.map_err(to_jsonrpsee_call_error)
+				state.backend.read_proof(block, keys).await.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -396,7 +396,7 @@ impl<Block, Client> StateApi<Block, Client>
 			async move {
 				state.deny_unsafe.check_if_safe()?;
 				state.backend.trace_block(block, targets, storage_keys).await
-					.map_err(to_jsonrpsee_call_error)
+					.map_err(call_err)
 			}.boxed()
 		})?;
 
@@ -447,6 +447,16 @@ pub trait ChildStateBackend<Block, Client>: Send + Sync + 'static
 		prefix: StorageKey,
 	) -> Result<Vec<StorageKey>, Error>;
 
+	/// Returns the keys with prefix from a child storage with pagination support.
+	async fn storage_keys_paged(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+	) -> Result<Vec<StorageKey>, Error>;
+
 	/// Returns a child storage entry at a specific block's state.
 	async fn storage(
 		&self,
@@ -488,21 +498,11 @@ impl<Block, Client> ChildState<Block, Client>
 {
 	/// Convert this to a RPC module.
 	pub fn into_rpc_module(self) -> Result<RpcModule<Self>, JsonRpseeError> {
-		let mut ctx_module = RpcModule::new(self);
+		let mut module = RpcModule::new(self);
 
-		ctx_module.register_async_method("childstate_getStorage", |params, state| {
-			let (storage_key, key, block) = match params.parse() {
-				Ok(params) => params,
-				Err(e) => return Box::pin(future::err(e)),
-			};
-			async move {
-				state.backend.storage(block, storage_key, key)
-					.await
-					.map_err(to_jsonrpsee_call_error)
-			}.boxed()
-		})?;
-
-		ctx_module.register_async_method("childstate_getKeys", |params, state| {
+		// DEPRECATED: Please use `childstate_getKeysPaged` with proper paging support.
+		// Returns the keys with prefix from a child storage, leave empty to get all the keys
+		module.register_async_method("childstate_getKeys", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
 				Err(e) => return Box::pin(future::err(e)),
@@ -510,11 +510,42 @@ impl<Block, Client> ChildState<Block, Client>
 			async move {
 				state.backend.storage_keys(block, storage_key, key)
 					.await
-					.map_err(to_jsonrpsee_call_error)
+					.map_err(call_err)
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("childstate_getStorageHash", |params, state| {
+		// Returns the keys with prefix from a child storage with pagination support.
+		// Up to `count` keys will be returned.
+		// If `start_key` is passed, return next keys in storage in lexicographic order.
+		module.register_async_method("childstate_getKeysPaged", |params, state| {
+			// TODO: (dp) what is the order of the params here? https://polkadot.js.org/docs/substrate/rpc/#getkeyspagedkey-storagekey-count-u32-startkey-storagekey-at-blockhash-vecstoragekey is a bit unclear on what the `prefix` is here.
+			let (storage_key, prefix, count, start_key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(future::err(e)),
+			};
+
+			async move {
+				state.backend.storage_keys_paged(block, storage_key, prefix, count, start_key)
+        			.await
+        			.map_err(call_err)
+			}.boxed()
+		})?;
+
+		// Returns a child storage entry at a specific block's state.
+		module.register_async_method("childstate_getStorage", |params, state| {
+			let (storage_key, key, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(future::err(e)),
+			};
+			async move {
+				state.backend.storage(block, storage_key, key)
+					.await
+					.map_err(call_err)
+			}.boxed()
+		})?;
+
+		// Returns the hash of a child storage entry at a block's state.
+		module.register_async_method("childstate_getStorageHash", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
 				Err(e) => return Box::pin(future::err(e)),
@@ -522,11 +553,12 @@ impl<Block, Client> ChildState<Block, Client>
 			async move {
 				state.backend.storage_hash(block, storage_key, key)
 					.await
-					.map_err(to_jsonrpsee_call_error)
+					.map_err(call_err)
 			}.boxed()
 		})?;
 
-		ctx_module.register_async_method("childstate_getStorageSize", |params, state| {
+		// Returns the size of a child storage entry at a block's state.
+		module.register_async_method("childstate_getStorageSize", |params, state| {
 			let (storage_key, key, block) = match params.parse() {
 				Ok(params) => params,
 				Err(e) => return Box::pin(future::err(e)),
@@ -534,11 +566,26 @@ impl<Block, Client> ChildState<Block, Client>
 			async move {
 				state.backend.storage_size(block, storage_key, key)
 					.await
-					.map_err(to_jsonrpsee_call_error)
+					.map_err(call_err)
 			}.boxed()
 		})?;
 
-		Ok(ctx_module)
+		// Returns proof of storage for child key entries at a specific block's state.
+		module.register_async_method("childstate_getChildReadProof", |params, state| {
+			let (storage_key, keys, block) = match params.parse() {
+				Ok(params) => params,
+				Err(e) => return Box::pin(future::err(e))
+			};
+			async move {
+				state.backend.read_child_proof(block, storage_key, keys)
+        			.await
+        			.map_err(call_err)
+			}.boxed()
+		})?;
+
+		module.register_alias("childstate_getChildReadProof", "state_getChildReadProof")?;
+
+		Ok(module)
 	}
 
 }
@@ -547,7 +594,6 @@ fn client_err(err: sp_blockchain::Error) -> Error {
 	Error::Client(Box::new(err))
 }
 
-// TODO: (dp) make available to other code?
-fn to_jsonrpsee_call_error(err: Error) -> JsonRpseeCallError {
+fn call_err(err: Error) -> JsonRpseeCallError {
 	JsonRpseeCallError::Failed(Box::new(err))
 }

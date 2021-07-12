@@ -35,9 +35,9 @@ use sp_core::Bytes;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::generic;
-use sp_transaction_pool::{
-	TransactionPool, TransactionFor, InPoolTransaction, TransactionSource,
-	TxHash, error::IntoPoolError,
+use sc_transaction_pool_api::{
+	TransactionPool, InPoolTransaction, TransactionSource,
+	TxHash, TransactionFor, error::IntoPoolError,
 };
 use sp_session::SessionKeys;
 
@@ -87,9 +87,9 @@ impl<P, Client> Author<P, Client>
 {
 	/// Convert a [`Author`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
 	pub fn into_rpc_module(self) -> std::result::Result<RpcModule<Self>, JsonRpseeError> {
-		let mut ctx_module = RpcModule::new(self);
+		let mut module = RpcModule::new(self);
 
-		ctx_module.register_method("author_insertKey", |params, author| {
+		module.register_method("author_insertKey", |params, author| {
 			author.deny_unsafe.check_if_safe()?;
 			let (key_type, suri, public): (String, String, Bytes) = params.parse()?;
 			let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
@@ -102,7 +102,7 @@ impl<P, Client> Author<P, Client>
 			Ok(())
 		})?;
 
-		ctx_module.register_method::<Bytes, _>("author_rotateKeys", |_params, author| {
+		module.register_method::<Bytes, _>("author_rotateKeys", |_params, author| {
 			author.deny_unsafe.check_if_safe()?;
 
 			let best_block_hash = author.client.info().best_hash;
@@ -114,7 +114,7 @@ impl<P, Client> Author<P, Client>
 			.map_err(|api_err| Error::Client(Box::new(api_err)).into())
 		})?;
 
-		ctx_module.register_method("author_hasSessionKeys", |params, author| {
+		module.register_method("author_hasSessionKeys", |params, author| {
 			author.deny_unsafe.check_if_safe()?;
 
 			let session_keys: Bytes = params.one()?;
@@ -128,17 +128,15 @@ impl<P, Client> Author<P, Client>
 			Ok(SyncCryptoStore::has_keys(&*author.keystore, &keys))
 		})?;
 
-		ctx_module.register_method("author_hasKey", |params, author| {
+		module.register_method("author_hasKey", |params, author| {
 			author.deny_unsafe.check_if_safe()?;
 
-			// TODO: this compiles, but I don't know how it could actually work...?
-			// let (public_key, key_type)  = params.parse::<(Vec<u8>, KeyTypeId)>()?;
 			let (public_key, key_type)  = params.parse::<(Vec<u8>, String)>()?;
 			let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
 			Ok(SyncCryptoStore::has_keys(&*author.keystore, &[(public_key, key_type)]))
 		})?;
 
-		ctx_module.register_async_method::<TxHash<P>, _>("author_submitExtrinsic", |params, author| {
+		module.register_async_method::<TxHash<P>, _>("author_submitExtrinsic", |params, author| {
 			let ext: Bytes = match params.one() {
 				Ok(ext) => ext,
 				Err(e) => return Box::pin(futures::future::err(e)),
@@ -157,11 +155,11 @@ impl<P, Client> Author<P, Client>
 			}.boxed()
 		})?;
 
-		ctx_module.register_method::<Vec<Bytes>, _>("author_pendingExtrinsics", |_, author| {
+		module.register_method::<Vec<Bytes>, _>("author_pendingExtrinsics", |_, author| {
 			Ok(author.pool.ready().map(|tx| tx.data().encode().into()).collect())
 		})?;
 
-		ctx_module.register_method::<Vec<TxHash<P>>, _>("author_removeExtrinsic", |params, author| {
+		module.register_method::<Vec<TxHash<P>>, _>("author_removeExtrinsic", |params, author| {
 			author.deny_unsafe.check_if_safe()?;
 
 			let bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>> = params.parse()?;
@@ -184,7 +182,7 @@ impl<P, Client> Author<P, Client>
 			)
 		})?;
 
-		ctx_module.register_subscription(
+		module.register_subscription(
 			"author_submitAndWatchExtrinsic",
 			"author_unwatchExtrinsic",
 			|params, mut sink, ctx|
@@ -216,7 +214,7 @@ impl<P, Client> Author<P, Client>
 			Ok(())
 		})?;
 
-		Ok(ctx_module)
+		Ok(module)
 	}
 }
 

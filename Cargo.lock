@@ -1797,6 +1797,7 @@ dependencies = [
  "Inflector",
  "chrono",
  "frame-benchmarking",
+ "frame-support",
  "handlebars",
  "parity-scale-codec",
  "sc-cli",
@@ -4060,6 +4061,7 @@ dependencies = [
  "sc-cli",
  "sc-client-api",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-consensus",
@@ -4069,7 +4071,6 @@ dependencies = [
  "sp-state-machine",
  "sp-timestamp",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-trie",
  "structopt",
  "tempfile",
@@ -4153,6 +4154,7 @@ dependencies = [
  "sc-telemetry",
  "sc-tracing",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "soketto 0.4.2",
@@ -4168,7 +4170,6 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-timestamp",
- "sp-transaction-pool",
  "sp-trie",
  "structopt",
  "substrate-browser-utils",
@@ -4364,6 +4365,7 @@ dependencies = [
  "sc-service",
  "sc-telemetry",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -4374,7 +4376,6 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-timestamp",
- "sp-transaction-pool",
  "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
@@ -6315,9 +6316,9 @@ dependencies = [
 
 [[package]]
 name = "pwasm-utils"
-version = "0.18.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0e517f47d9964362883182404b68d0b6949382c0baa40aa5ffca94f5f1e3481"
+checksum = "f0c1a2f10b47d446372a4f397c58b329aaea72b2daf9395a623a411cb8ccb54f"
 dependencies = [
  "byteorder",
  "log",
@@ -6904,7 +6905,6 @@ version = "3.0.0"
 dependencies = [
  "log",
  "sp-core",
- "sp-std",
  "sp-wasm-interface",
  "thiserror",
 ]
@@ -6955,13 +6955,13 @@ dependencies = [
  "sc-proposer-metrics",
  "sc-telemetry",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
  "sp-inherents",
  "sp-runtime",
- "sp-transaction-pool",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
 ]
@@ -7065,6 +7065,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-executor",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
@@ -7078,7 +7079,6 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-test-primitives",
- "sp-transaction-pool",
  "sp-trie",
  "sp-utils",
  "sp-version",
@@ -7289,6 +7289,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "sp-api",
  "sp-blockchain",
@@ -7301,7 +7302,6 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-timestamp",
- "sp-transaction-pool",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
@@ -7394,6 +7394,7 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-io",
+ "sp-maybe-compressed-blob",
  "sp-panic-handler",
  "sp-runtime",
  "sp-runtime-interface",
@@ -7451,13 +7452,17 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-wasm 0.42.2",
+ "pwasm-utils",
  "sc-allocator",
  "sc-executor-common",
+ "sc-runtime-test",
  "scoped-tls",
  "sp-core",
+ "sp-io",
  "sp-runtime-interface",
  "sp-wasm-interface",
  "wasmtime",
+ "wat",
 ]
 
 [[package]]
@@ -7577,9 +7582,9 @@ dependencies = [
  "parity-util-mem",
  "sc-client-api",
  "sc-network",
+ "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime",
- "sp-transaction-pool",
  "wasm-timer",
 ]
 
@@ -7752,13 +7757,13 @@ dependencies = [
  "sc-keystore",
  "sc-network",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-consensus",
  "sp-core",
  "sp-offchain",
  "sp-runtime",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-utils",
  "substrate-test-runtime-client",
  "threadpool",
@@ -7813,6 +7818,7 @@ dependencies = [
  "sc-rpc-api",
  "sc-tracing",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde_json",
  "sp-api",
  "sp-blockchain",
@@ -7825,7 +7831,6 @@ dependencies = [
  "sp-session",
  "sp-state-machine",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-utils",
  "sp-version",
  "substrate-test-runtime-client",
@@ -7842,13 +7847,13 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-chain-spec",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-core",
  "sp-rpc",
  "sp-runtime",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-version",
 ]
 
@@ -7870,7 +7875,6 @@ dependencies = [
 name = "sc-runtime-test"
 version = "2.0.0"
 dependencies = [
- "sc-allocator",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -7916,6 +7920,7 @@ dependencies = [
  "sc-telemetry",
  "sc-tracing",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-api",
@@ -7969,6 +7974,7 @@ dependencies = [
  "sc-light",
  "sc-network",
  "sc-service",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
@@ -7979,7 +7985,6 @@ dependencies = [
  "sp-state-machine",
  "sp-storage",
  "sp-tracing",
- "sp-transaction-pool",
  "sp-trie",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
@@ -8084,59 +8089,53 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-transaction-graph"
+name = "sc-transaction-pool"
 version = "3.0.0"
 dependencies = [
  "assert_matches",
  "criterion",
  "derive_more",
  "futures 0.3.15",
+ "hex",
+ "intervalier",
  "linked-hash-map",
  "log",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.11.1",
  "retain_mut",
- "serde",
- "sp-blockchain",
- "sp-core",
- "sp-runtime",
- "sp-transaction-pool",
- "sp-utils",
- "substrate-test-runtime",
- "thiserror",
- "wasm-timer",
-]
-
-[[package]]
-name = "sc-transaction-pool"
-version = "3.0.0"
-dependencies = [
- "assert_matches",
- "futures 0.3.15",
- "hex",
- "intervalier",
- "log",
- "parity-scale-codec",
- "parity-util-mem",
- "parking_lot 0.11.1",
  "sc-block-builder",
  "sc-client-api",
- "sc-transaction-graph",
+ "sc-transaction-pool-api",
+ "serde",
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-keyring",
  "sp-runtime",
  "sp-tracing",
  "sp-transaction-pool",
  "sp-utils",
  "substrate-prometheus-endpoint",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "thiserror",
  "wasm-timer",
+]
+
+[[package]]
+name = "sc-transaction-pool-api"
+version = "3.0.0"
+dependencies = [
+ "derive_more",
+ "futures 0.3.15",
+ "log",
+ "parity-scale-codec",
+ "serde",
+ "sp-blockchain",
+ "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -8178,26 +8177,6 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
-
-[[package]]
-name = "scroll"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fda28d4b4830b807a8b43f7b0e6b5df875311b3e7621d84577188c175b6ec1ec"
-dependencies = [
- "scroll_derive",
-]
-
-[[package]]
-name = "scroll_derive"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaaae8f38bb311444cfb7f1979af0bc9240d95795f75f9ceddf6a59b79ceffa0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "sct"
@@ -9294,15 +9273,8 @@ dependencies = [
 name = "sp-transaction-pool"
 version = "3.0.0"
 dependencies = [
- "derive_more",
- "futures 0.3.15",
- "log",
- "parity-scale-codec",
- "serde",
  "sp-api",
- "sp-blockchain",
  "sp-runtime",
- "thiserror",
 ]
 
 [[package]]
@@ -9354,10 +9326,12 @@ version = "3.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
+ "parity-wasm 0.42.2",
  "serde",
  "sp-runtime",
  "sp-std",
  "sp-version-proc-macro",
+ "thiserror",
 ]
 
 [[package]]
@@ -9553,6 +9527,7 @@ dependencies = [
  "sc-client-api",
  "sc-rpc-api",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-api",
@@ -9561,7 +9536,6 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-tracing",
- "sp-transaction-pool",
  "substrate-test-runtime-client",
 ]
 
@@ -9678,10 +9652,10 @@ dependencies = [
  "futures 0.3.15",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "sc-transaction-graph",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime",
- "sp-transaction-pool",
  "substrate-test-runtime-client",
 ]
 
@@ -9836,8 +9810,8 @@ dependencies = [
  "sc-rpc",
  "sc-rpc-server",
  "sc-service",
- "sc-transaction-graph",
  "sc-transaction-pool",
+ "sc-transaction-pool-api",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -10960,11 +10934,9 @@ dependencies = [
  "wasmparser",
  "wasmtime-cache",
  "wasmtime-environ",
- "wasmtime-fiber",
  "wasmtime-jit",
  "wasmtime-profiling",
  "wasmtime-runtime",
- "wat",
  "winapi 0.3.9",
 ]
 
@@ -11040,17 +11012,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmtime-fiber"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a089d44cd7e2465d41a53b840a5b4fca1bf6d1ecfebc970eac9592b34ea5f0b3"
-dependencies = [
- "cc",
- "libc",
- "winapi 0.3.9",
-]
-
-[[package]]
 name = "wasmtime-jit"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11105,11 +11066,8 @@ checksum = "e24364d522dcd67c897c8fffc42e5bdfc57207bbb6d7eeade0da9d4a7d70105b"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
- "gimli 0.24.0",
  "lazy_static",
  "libc",
- "object 0.24.0",
- "scroll",
  "serde",
  "target-lexicon",
  "wasmtime-environ",
@@ -11137,7 +11095,6 @@ dependencies = [
  "region",
  "thiserror",
  "wasmtime-environ",
- "wasmtime-fiber",
  "winapi 0.3.9",
 ]
 

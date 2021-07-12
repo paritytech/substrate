@@ -15,7 +15,7 @@ sc-cli = { version = "0.9.0", path = "../../client/cli" }
 sc-basic-authorship = { version = "0.9.0", path = "../../client/basic-authorship" }
 sc-rpc = { version = "3.0.0", path = "../../client/rpc" }
 sc-transaction-pool = { version = "3.0.0", path = "../../client/transaction-pool" }
-sc-transaction-graph = { version = "3.0.0", path = "../../client/transaction-pool/graph" }
+sc-transaction-pool-api = { version = "3.0.0", path = "../../client/transaction-pool/api" }
 sc-client-api = { version = "3.0.0", path = "../../client/api" }
 sc-rpc-server = { version = "3.0.0", path = "../../client/rpc-servers" }
 manual-seal = { package = "sc-consensus-manual-seal", version = "0.9.0", path = "../../client/consensus/manual-seal" }

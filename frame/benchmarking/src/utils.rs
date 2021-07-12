@@ -21,6 +21,7 @@ use codec::{Encode, Decode};
 use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
 use sp_storage::TrackedStorageKey;
+use frame_support::traits::StorageInfo;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
@@ -63,6 +64,7 @@ pub struct BenchmarkResults {
 	pub writes: u32,
 	pub repeat_writes: u32,
 	pub proof_size: u32,
+	pub keys: Vec<(Vec<u8>, u32, u32, bool)>,
 }
 
 /// Configuration used to setup and run runtime benchmarks.
@@ -90,7 +92,8 @@ sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
 		/// Dispatch the given benchmark.
-		fn dispatch_benchmark(config: BenchmarkConfig) -> Result<Vec<BenchmarkBatch>, sp_runtime::RuntimeString>;
+		fn dispatch_benchmark(config: BenchmarkConfig)
+			-> Result<(Vec<BenchmarkBatch>, Vec<StorageInfo>), sp_runtime::RuntimeString>;
 	}
 }
 
@@ -143,11 +146,9 @@ pub trait Benchmarking {
 		match whitelist.iter_mut().find(|x| x.key == add.key) {
 			// If we already have this key in the whitelist, update to be the most constrained value.
 			Some(item) => {
-				*item = TrackedStorageKey {
-					key: add.key,
-					has_been_read: item.has_been_read || add.has_been_read,
-					has_been_written: item.has_been_written || add.has_been_written,
-				}
+				item.reads += add.reads;
+				item.writes += add.writes;
+				item.whitelisted = item.whitelisted || add.whitelisted;
 			},
 			// If the key does not exist, add it.
 			None => {
@@ -162,6 +163,10 @@ pub trait Benchmarking {
 		let mut whitelist = self.get_whitelist();
 		whitelist.retain(|x| x.key != remove);
 		self.set_whitelist(whitelist);
+	}
+
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
+		self.get_read_and_written_keys()
 	}
 
 	/// Get current estimated proof size.

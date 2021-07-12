@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 frame-benchmarking = { version = "3.1.0", path = "../../../frame/benchmarking" }
+frame-support = { version = "3.0.0", path = "../../../frame/support" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sc-service = { version = "0.9.0", default-features = false, path = "../../../client/service" }
 sc-cli = { version = "0.9.0", path = "../../../client/cli" }

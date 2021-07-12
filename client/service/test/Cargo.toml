@@ -33,7 +33,7 @@ sc-network = { version = "0.9.0", path = "../../network" }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
+sc-transaction-pool-api = { version = "3.0.0", path = "../../../client/transaction-pool/api" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sc-client-api = { version = "3.0.0", path = "../../api" }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,6 +16,30 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Tests for top-level transaction pool api
+//! Generic Transaction Pool
+//!
+//! The pool is based on dependency graph between transactions
+//! and their priority.
+//! The pool is able to return an iterator that traverses transaction
+//! graph in the correct order taking into account priorities and dependencies.
 
+#![warn(missing_docs)]
+#![warn(unused_extern_crates)]
+
+mod future;
+mod listener;
 mod pool;
+mod ready;
+mod rotator;
+mod validated_pool;
+mod tracked_map;
+
+pub mod base_pool;
+pub mod watcher;
+
+pub use self::base_pool::Transaction;
+pub use validated_pool::{IsValidator, ValidatedTransaction};
+pub use self::pool::{
+	BlockHash, ChainApi, EventStream, ExtrinsicFor, ExtrinsicHash,
+	NumberFor, Options, Pool, TransactionFor,
+};
