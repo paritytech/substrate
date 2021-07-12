@@ -464,7 +464,6 @@ impl<T: Config> Bag<T> {
 	fn remove_node(&mut self, node: &Node<T>) {
 		// Excise `node`.
 		if let Some(mut prev) = node.prev() {
-			debug_assert!(prev.voter.id != node.voter.id, "node.prev circularly points at node");
 			debug_assert!(
 				self.head.as_ref() != Some(&node.voter.id),
 				"node is the head, but has Some prev"
@@ -488,7 +487,6 @@ impl<T: Config> Bag<T> {
 			prev.put();
 		}
 		if let Some(mut next) = node.next() {
-			debug_assert!(next.voter.id != node.voter.id, "node.next circularly points at node");
 			debug_assert!(
 				self.tail.as_ref() != Some(&node.voter.id),
 				"node is the tail, but has Some next"
@@ -934,6 +932,8 @@ mod tests {
 			// initialize the voters' deposits
 			let existential_deposit = <Test as Config>::Currency::minimum_balance();
 			let mut balance = existential_deposit + 1;
+			assert_eq!(T::VoterBagThresholds[1], balance);
+			assert_eq!(balance, 2);
 			for voter_id in voters.iter().rev() {
 				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
 				let controller = Staking::bonded(voter_id).unwrap();
