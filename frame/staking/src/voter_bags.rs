@@ -439,9 +439,9 @@ impl<T: Config> Bag<T> {
 		node.put();
 
 		// update the previous tail
-		if let Some(mut tail) = self.tail() {
-			tail.next = Some(id.clone());
-			tail.put();
+		if let Some(mut old_tail) = self.tail() {
+			old_tail.next = Some(id.clone());
+			old_tail.put();
 		}
 
 		// update the internal bag links
@@ -459,7 +459,8 @@ impl<T: Config> Bag<T> {
 	/// the first place. Generally, use [`VoterList::remove`] instead.
 	///
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
-	/// `self.put()` and `node.put()` after use.
+	/// `self.put()`, `VoterNodes::remove(voter_id)` and `VoterBagFor::remove(voter_id)`
+	/// to update storage for the bag and `node`.
 	fn remove_node(&mut self, node: &Node<T>) {
 		// Excise `node`.
 		if let Some(mut prev) = node.prev() {
@@ -468,26 +469,33 @@ impl<T: Config> Bag<T> {
 				self.head.as_ref() != Some(&node.voter.id),
 				"node is the head, but has Some prev"
 			);
+			debug_assert!(
+				prev.prev().is_some() || self.head.as_ref() == Some(&prev.voter.id),
+				"node.prev.prev should be Some OR node.prev should be the head"
+			);
 
 			prev.next = node.next.clone();
 			debug_assert!(
 				prev.next().and_then(|prev_next|
-					// prev.next.prev should should point at node prior to being reassigned
+					// prev.next.prev should point at node prior to being reassigned
 					Some(prev_next.prev().unwrap().voter.id == node.voter.id)
 				)
 				// unless prev.next is None, in which case node has to be the tail
 				.unwrap_or(self.tail.as_ref() == Some(&node.voter.id)),
-				"prev.next.prev should should point at node prior to being reassigned (if node is not the tail)"
+				"prev.next.prev should point at node prior to being reassigned OR node should be the tail"
 			);
 
 			prev.put();
 		}
 		if let Some(mut next) = node.next() {
-			// if there is a node.next, we know their should be a node.prev
 			debug_assert!(next.voter.id != node.voter.id, "node.next circularly points at node");
 			debug_assert!(
 				self.tail.as_ref() != Some(&node.voter.id),
 				"node is the tail, but has Some next"
+			);
+			debug_assert!(
+				next.next().is_some() || self.tail.as_ref() == Some(&next.voter.id),
+				"node.next.next should be Some OR node.next should be the head"
 			);
 
 			next.prev = node.prev.clone();
@@ -498,7 +506,7 @@ impl<T: Config> Bag<T> {
 				)
 				// unless next.prev is None, in which case node has to be the head
 				.unwrap_or_else(|| self.head.as_ref() == Some(&node.voter.id)),
-				"next.prev.next should point at next after being reassigned (if node is not the head)"
+				"next.prev.next should point at next after being reassigned OR node should be the head"
 			);
 
 			next.put();
@@ -530,7 +538,10 @@ pub struct Node<T: Config> {
 impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
 	pub fn get(bag_upper: VoteWeight, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
-		debug_assert!(T::VoterBagThresholds::get().contains(&bag_upper));
+		debug_assert!(
+			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			"it is a logic error to attempt to get a bag which is not in the thresholds list"
+		);
 		crate::VoterNodes::<T>::try_get(account_id).ok().map(|mut node| {
 			node.bag_upper = bag_upper;
 			node
