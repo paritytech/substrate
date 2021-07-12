@@ -337,13 +337,13 @@ where
 
 			// any initial checks, and retrieve the index of the first signed extrinsic from the
 			// `extrinsics` vec if one exists.
-			let maybe_first_signed_index = Self::initial_checks(&block);
+			let maybe_first_non_inherent_index = Self::initial_checks(&block);
 
 			let signature_batching = sp_runtime::SignatureBatching::start();
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
-			Self::execute_extrinsics_with_book_keeping(extrinsics, maybe_first_signed_index, *header.number());
+			Self::execute_extrinsics_with_book_keeping(extrinsics, maybe_first_non_inherent_index, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
@@ -357,7 +357,7 @@ where
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(
 		extrinsics: Vec<Block::Extrinsic>,
-		maybe_first_signed_index: Option<u32>,
+		maybe_first_non_inherent_index: Option<u32>,
 		block_number: NumberFor<Block>,
 	) {
 		let do_on_post_inherent = || {
@@ -374,7 +374,7 @@ where
 		extrinsics.into_iter()
 			.enumerate()
 			.for_each(|(i, ext)| {
-				if Some(i as u32) == maybe_first_signed_index {
+				if Some(i as u32) == maybe_first_non_inherent_index {
 					// At this point, we have executed all the inherents, and we are about to
 					// execute our first signed extrinsic, so we call `on_post_inherent` first.
 					do_on_post_inherent();
@@ -387,7 +387,7 @@ where
 
 		// In this case, all the extrinsics in this block are inherents, so we would have never
 		// executed `on_post_inherent` in the loop above, so we do so now.
-		if maybe_first_signed_index.is_none() {
+		if maybe_first_non_inherent_index.is_none() {
 			do_on_post_inherent();
 		}
 
