@@ -64,7 +64,7 @@ pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,
 };
-pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
+pub use sc_transaction_pool_api::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_executor::NativeExecutionDispatch;
@@ -456,7 +456,7 @@ where
 	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
-	E: IntoPoolError + From<sp_transaction_pool::error::Error>,
+	E: IntoPoolError + From<sc_transaction_pool_api::error::Error>,
 {
 	pool.ready()
 		.filter(|t| t.is_propagable())
@@ -475,7 +475,7 @@ where
 	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
-	E: 'static + IntoPoolError + From<sp_transaction_pool::error::Error>,
+	E: 'static + IntoPoolError + From<sc_transaction_pool_api::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
 		transactions_to_propagate(&*self.pool)
@@ -505,12 +505,12 @@ where
 
 		let best_block_id = BlockId::hash(self.client.info().best_hash);
 
-		let import_future = self.pool.submit_one(&best_block_id, sp_transaction_pool::TransactionSource::External, uxt);
+		let import_future = self.pool.submit_one(&best_block_id, sc_transaction_pool_api::TransactionSource::External, uxt);
 		Box::pin(async move {
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sp_transaction_pool::error::Error::AlreadyImported(_)) => TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => TransactionImport::KnownGood,
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad

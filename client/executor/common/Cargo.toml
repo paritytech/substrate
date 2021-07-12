@@ -1,6 +1,6 @@
 [package]
 name = "sc-executor-common"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -18,10 +18,10 @@ derive_more = "0.99.2"
 pwasm-utils = "0.18.0"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 wasmi = "0.9.0"
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sc-allocator = { version = "3.0.0", path = "../../allocator" }
-sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
-sp-maybe-compressed-blob = { version = "3.0.0", path = "../../../primitives/maybe-compressed-blob" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sc-allocator = { version = "4.0.0-dev", path = "../../allocator" }
+sp-wasm-interface = { version = "4.0.0-dev", path = "../../../primitives/wasm-interface" }
+sp-maybe-compressed-blob = { version = "4.0.0-dev", path = "../../../primitives/maybe-compressed-blob" }
 sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
 thiserror = "1.0.21"
 

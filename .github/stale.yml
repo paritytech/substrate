@@ -7,6 +7,8 @@ exemptLabels:
   - "D9-needsaudit 👮"
 # Label to use when marking an issue as stale
 staleLabel: "A3-stale"
+# we only bother with pull requests
+only: pulls
 # Comment to post when marking an issue as stale. Set to `false` to disable
 markComment: >
   Hey, is anyone still working on this? Due to the inactivity this issue has

@@ -418,7 +418,9 @@ where
 	fn storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
-				prefix: Self::final_prefix(),
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::final_prefix().to_vec(),
 				max_values: MaxValues::get(),
 				max_size: Some(
 					Key::key_max_encoded_len()
@@ -445,7 +447,9 @@ where
 	fn partial_storage_info() -> Vec<StorageInfo> {
 		vec![
 			StorageInfo {
-				prefix: Self::final_prefix(),
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::final_prefix().to_vec(),
 				max_values: MaxValues::get(),
 				max_size: None,
 			}

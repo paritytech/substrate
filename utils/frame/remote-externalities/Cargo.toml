@@ -1,6 +1,6 @@
 [package]
 name = "remote-externalities"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -23,14 +23,14 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde_json = "1.0"
 serde = "1.0.0"
 
-sp-io = { version = "3.0.0", path = "../../../primitives/io" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
-pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "4.0.0" }
-frame-support = { path = "../../../frame/support", version = "3.0.0" }
+pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "5.0.0-dev"}
+frame-support = { path = "../../../frame/support", version = "4.0.0-dev"}
 
 [features]
 remote-test = []

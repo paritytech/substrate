@@ -1,6 +1,6 @@
 [package]
 name = "sc-transaction-graph"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -20,11 +20,11 @@ log = "0.4.8"
 parking_lot = "0.11.1"
 serde = { version = "1.0.101", features = ["derive"] }
 wasm-timer = "0.2"
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-utils = { version = "3.0.0", path = "../../../primitives/utils" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-utils = { version = "4.0.0-dev", path = "../../../primitives/utils" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
 linked-hash-map = "0.5.2"
 retain_mut = "0.1.3"

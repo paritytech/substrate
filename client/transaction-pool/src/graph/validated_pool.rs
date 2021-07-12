@@ -29,17 +29,15 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionTag as Tag, ValidTransaction, TransactionSource},
 };
-use sp_transaction_pool::{error, PoolStatus};
+use sc_transaction_pool_api::{error, PoolStatus};
 use wasm_timer::Instant;
 use futures::channel::mpsc::{channel, Sender};
 use retain_mut::RetainMut;
 
-use crate::base_pool::{self as base, PruneStatus};
-use crate::listener::Listener;
-use crate::rotator::PoolRotator;
-use crate::watcher::Watcher;
-use crate::pool::{
-	EventStream, Options, ChainApi, BlockHash, ExtrinsicHash, ExtrinsicFor, TransactionFor,
+use super::{
+	base_pool::{self as base, PruneStatus}, watcher::Watcher,
+	listener::Listener, rotator::PoolRotator,
+	pool::{EventStream, Options, ChainApi, BlockHash, ExtrinsicHash, ExtrinsicFor, TransactionFor},
 };
 
 /// Pre-validated transaction. Validated pool only accepts transactions wrapped in this enum.
@@ -211,7 +209,11 @@ impl<B: ChainApi> ValidatedPool<B> {
 								Ok(()) => true,
 								Err(e) => {
 									if e.is_full() {
-										log::warn!(target: "txpool", "[{:?}] Trying to notify an import but the channel is full", hash);
+										log::warn!(
+											target: "txpool",
+											"[{:?}] Trying to notify an import but the channel is full",
+											hash,
+										);
 										true
 									} else {
 										false
@@ -548,7 +550,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Get rotator reference.
-	#[cfg(test)]
+	#[cfg(feature = "test-helpers")]
 	pub fn rotator(&self) -> &PoolRotator<ExtrinsicHash<B>> {
 		&self.rotator
 	}

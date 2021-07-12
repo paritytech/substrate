@@ -19,7 +19,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use futures::{future::{ready, Ready}, executor::block_on};
-use sc_transaction_graph::*;
+use sc_transaction_pool::{*, test_helpers::*};
 use codec::Encode;
 use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 use sp_runtime::{
@@ -51,15 +51,15 @@ fn to_tag(nonce: u64, from: AccountId) -> Tag {
 
 impl ChainApi for TestApi {
 	type Block = Block;
-	type Error = sp_transaction_pool::error::Error;
-	type ValidationFuture = Ready<sp_transaction_pool::error::Result<TransactionValidity>>;
-	type BodyFuture = Ready<sp_transaction_pool::error::Result<Option<Vec<Extrinsic>>>>;
+	type Error = sc_transaction_pool_api::error::Error;
+	type ValidationFuture = Ready<sc_transaction_pool_api::error::Result<TransactionValidity>>;
+	type BodyFuture = Ready<sc_transaction_pool_api::error::Result<Option<Vec<Extrinsic>>>>;
 
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
 		_source: TransactionSource,
-		uxt: ExtrinsicFor<Self>,
+		uxt: test_helpers::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let nonce = uxt.transfer().nonce;
 		let from = uxt.transfer().from.clone();
@@ -89,7 +89,7 @@ impl ChainApi for TestApi {
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<NumberFor<Self>>, Self::Error> {
+	) -> Result<Option<test_helpers::NumberFor<Self>>, Self::Error> {
 		Ok(match at {
 			BlockId::Number(num) => Some(*num),
 			BlockId::Hash(_) => None,
@@ -99,14 +99,14 @@ impl ChainApi for TestApi {
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<BlockHash<Self>>, Self::Error> {
+	) -> Result<Option<test_helpers::BlockHash<Self>>, Self::Error> {
 		Ok(match at {
 			BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
 			BlockId::Hash(_) => None,
 		})
 	}
 
-	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (H256, usize) {
+	fn hash_and_length(&self, uxt: &test_helpers::ExtrinsicFor<Self>) -> (H256, usize) {
 		let encoded = uxt.encode();
 		(blake2_256(&encoded).into(), encoded.len())
 	}
