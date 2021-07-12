@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-pow"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "PoW consensus algorithm for substrate"
 edition = "2018"
@@ -14,15 +14,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-sc-client-api = { version = "3.0.0", path = "../../api" }
-sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builder" }
-sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
-sp-consensus-pow = { version = "0.9.0", path = "../../../primitives/consensus/pow" }
-sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sc-client-api = { version = "4.0.0-dev", path = "../../api" }
+sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sp-consensus-pow = { version = "0.10.0-dev", path = "../../../primitives/consensus/pow" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
 futures = { version = "0.3.1", features = ["compat"] }
 futures-timer = "3.0.1"
