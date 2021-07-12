@@ -27,7 +27,7 @@ use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes, DatabaseType};
 
 use sc_transaction_pool::BasicPool;
 use sp_runtime::generic::BlockId;
-use sp_transaction_pool::{TransactionPool, TransactionSource};
+use sc_transaction_pool_api::{TransactionPool, TransactionSource};
 
 use crate::core::{self, Path, Mode};
 

@@ -52,7 +52,7 @@ pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use frame_support::{
-	impl_outer_origin, parameter_types,
+	parameter_types,
 	traits::KeyOwnerProofSystem,
 	weights::RuntimeDbWeight,
 };
@@ -430,8 +430,61 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-impl_outer_origin!{
-	pub enum Origin for Runtime where system = frame_system {}
+#[derive(Clone, RuntimeDebug)]
+pub struct Origin;
+
+impl From<frame_system::Origin<Runtime>> for Origin {
+	fn from(_o: frame_system::Origin<Runtime>) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+impl Into<Result<frame_system::Origin<Runtime>, Origin>> for Origin {
+	fn into(self) -> Result<frame_system::Origin<Runtime>, Origin> {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+impl frame_support::traits::OriginTrait for Origin {
+	type Call = <Runtime as frame_system::Config>::Call;
+	type PalletsOrigin = Origin;
+	type AccountId = <Runtime as frame_system::Config>::AccountId;
+
+	fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn reset_filter(&mut self) {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn set_caller_from(&mut self, _other: impl Into<Self>) {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn filter_call(&self, _call: &Self::Call) -> bool {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn caller(&self) -> &Self::PalletsOrigin {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn try_with_caller<R>(
+		self,
+		_f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
+	) -> Result<R, Self> {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn none() -> Self {
+		unimplemented!("Not required in tests!")
+	}
+	fn root() -> Self {
+		unimplemented!("Not required in tests!")
+	}
+	fn signed(_by: <Runtime as frame_system::Config>::AccountId) -> Self {
+		unimplemented!("Not required in tests!")
+	}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]

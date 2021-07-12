@@ -26,7 +26,7 @@ use serde::Serialize;
 use log::{debug, trace};
 use sp_runtime::traits;
 
-use crate::{watcher, ChainApi, ExtrinsicHash, BlockHash};
+use super::{watcher, ChainApi, ExtrinsicHash, BlockHash};
 
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq, C: ChainApi> {

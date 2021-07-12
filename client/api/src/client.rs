@@ -31,6 +31,7 @@ use crate::blockchain::Info;
 use crate::notifications::StorageEventStream;
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain;
+use sc_transaction_pool_api::ChainEvent;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = TracingUnboundedReceiver<BlockImportNotification<Block>>;
@@ -278,7 +279,7 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub header: Block::Header,
 }
 
-impl<B: BlockT> TryFrom<BlockImportNotification<B>> for sp_transaction_pool::ChainEvent<B> {
+impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
 	type Error = ();
 
 	fn try_from(n: BlockImportNotification<B>) -> Result<Self, ()> {
@@ -293,7 +294,7 @@ impl<B: BlockT> TryFrom<BlockImportNotification<B>> for sp_transaction_pool::Cha
 	}
 }
 
-impl<B: BlockT> From<FinalityNotification<B>> for sp_transaction_pool::ChainEvent<B> {
+impl<B: BlockT> From<FinalityNotification<B>> for ChainEvent<B> {
 	fn from(n: FinalityNotification<B>) -> Self {
 		Self::Finalized {
 			hash: n.hash,
