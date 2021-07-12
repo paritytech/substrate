@@ -1,7 +1,7 @@
 [package]
 description = "Substrate offchain workers"
 name = "sc-offchain"
-version = "3.0.0"
+version = "4.0.0-dev"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -23,14 +23,14 @@ log = "0.4.8"
 num_cpus = "1.10"
 parking_lot = "0.11.1"
 rand = "0.7.2"
-sc-client-api = { version = "3.0.0", path = "../api" }
-sc-keystore = { version = "3.0.0", path = "../keystore" }
-sc-network = { version = "0.9.0", path = "../network" }
-sp-api = { version = "3.0.0", path = "../../primitives/api" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-sp-offchain = { version = "3.0.0", path = "../../primitives/offchain" }
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
-sp-utils = { version = "3.0.0", path = "../../primitives/utils" }
+sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
+sc-network = { version = "0.10.0-dev", path = "../network" }
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
 threadpool = "1.7"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
@@ -38,12 +38,12 @@ hyper = "0.13.9"
 hyper-rustls = "0.21.0"
 
 [dev-dependencies]
-sc-client-db = { version = "0.9.0", default-features = true, path = "../db" }
-sc-block-builder = { version = "0.9.0", path = "../block-builder" }
-sc-transaction-pool = { version = "3.0.0", path = "../transaction-pool" }
-sc-transaction-pool-api = { version = "3.0.0", path = "../transaction-pool/api" }
-sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
-sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }
+sc-client-db = { version = "0.10.0-dev", default-features = true, path = "../db" }
+sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
+sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
+sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 tokio = "0.2"
 lazy_static = "1.4.0"

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-tips"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -15,19 +15,19 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
-pallet-treasury = { version = "3.0.0", default-features = false, path = "../treasury" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-treasury = { version = "4.0.0-dev", default-features = false, path = "../treasury" }
 
-frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-io ={ version = "3.0.0", path = "../../primitives/io" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
-pallet-balances = { version = "3.0.0", path = "../balances" }
+sp-io ={ version = "4.0.0-dev", path = "../../primitives/io" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]
 default = ["std"]

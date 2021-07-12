@@ -8,6 +8,7 @@ license = "Unlicense"
 build = "build.rs"
 homepage = "https://substrate.dev"
 repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
+publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -18,39 +19,39 @@ name = "node-template"
 [dependencies]
 structopt = "0.3.8"
 
-sc-cli = { version = "0.9.0", path = "../../../client/cli", features = ["wasmtime"] }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sc-executor = { version = "0.9.0", path = "../../../client/executor", features = ["wasmtime"] }
-sc-service = { version = "0.9.0", path = "../../../client/service", features = ["wasmtime"] }
-sc-telemetry = { version = "3.0.0", path = "../../../client/telemetry" }
-sc-keystore = { version = "3.0.0", path = "../../../client/keystore" }
-sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
-sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-pool" }
-sc-transaction-pool-api = { version = "3.0.0", path = "../../../client/transaction-pool/api" }
-sc-consensus-aura = { version = "0.9.0", path = "../../../client/consensus/aura" }
-sp-consensus-aura = { version = "0.9.0", path = "../../../primitives/consensus/aura" }
-sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
-sc-finality-grandpa = { version = "0.9.0", path = "../../../client/finality-grandpa" }
-sp-finality-grandpa = { version = "3.0.0", path = "../../../primitives/finality-grandpa" }
-sc-client-api = { version = "3.0.0", path = "../../../client/api" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
+sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", features = ["wasmtime"] }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sc-executor = { version = "0.10.0-dev", path = "../../../client/executor", features = ["wasmtime"] }
+sc-service = { version = "0.10.0-dev", path = "../../../client/service", features = ["wasmtime"] }
+sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
+sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
+sc-consensus-aura = { version = "0.10.0-dev", path = "../../../client/consensus/aura" }
+sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+sc-finality-grandpa = { version = "0.10.0-dev", path = "../../../client/finality-grandpa" }
+sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
+sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 
 # These dependencies are used for the node template's RPCs
 jsonrpc-core = "15.1.0"
-sc-rpc = { version = "3.0.0", path = "../../../client/rpc" }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-sc-rpc-api = { version = "0.9.0", path = "../../../client/rpc-api" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builder" }
-sc-basic-authorship = { version = "0.9.0", path = "../../../client/basic-authorship" }
-substrate-frame-rpc-system = { version = "3.0.0", path = "../../../utils/frame/rpc/system" }
-pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/transaction-payment/rpc/" }
+sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sc-rpc-api = { version = "0.10.0-dev", path = "../../../client/rpc-api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
+sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
+substrate-frame-rpc-system = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/system" }
+pallet-transaction-payment-rpc = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/rpc/" }
 
 # These dependencies are used for runtime benchmarking
-frame-benchmarking = { version = "3.1.0", path = "../../../frame/benchmarking" }
-frame-benchmarking-cli = { version = "3.0.0", path = "../../../utils/frame/benchmarking-cli" }
+frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
+frame-benchmarking-cli = { version = "4.0.0-dev", path = "../../../utils/frame/benchmarking-cli" }
 
 node-template-runtime = { version = "3.0.0", path = "../runtime" }
 

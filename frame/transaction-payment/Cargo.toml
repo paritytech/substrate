@@ -1,6 +1,6 @@
 [package]
 name = "pallet-transaction-payment"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -17,18 +17,18 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 serde = { version = "1.0.101", optional = true }
 smallvec = "1.4.1"
 
-sp-core = { version = "3.0.0", path = "../../primitives/core", default-features = false }
-sp-io = { version = "3.0.0", path = "../../primitives/io", default-features = false }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
 serde_json = "1.0.41"
-sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
-pallet-balances = { version = "3.0.0", path = "../balances" }
+sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
 [features]
 default = ["std"]

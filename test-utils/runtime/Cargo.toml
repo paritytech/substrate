@@ -13,36 +13,36 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-consensus-aura = { version = "0.9.0", default-features = false, path = "../../primitives/consensus/aura" }
-sp-consensus-babe = { version = "0.9.0", default-features = false, path = "../../primitives/consensus/babe" }
-sp-block-builder = { version = "3.0.0", default-features = false, path = "../../primitives/block-builder" }
+sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
+sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-inherents = { version = "3.0.0", default-features = false, path = "../../primitives/inherents" }
-sp-keyring = { version = "3.0.0", optional = true, path = "../../primitives/keyring" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
+sp-keyring = { version = "4.0.0-dev", optional = true, path = "../../primitives/keyring" }
 memory-db = { version = "0.27.0", default-features = false }
-sp-offchain = { path = "../../primitives/offchain", default-features = false, version = "3.0.0"}
-sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime-interface = { path = "../../primitives/runtime-interface", default-features = false, version = "3.0.0"}
-sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
-frame-support = { version = "3.0.0", default-features = false, path = "../../frame/support" }
-sp-version = { version = "3.0.0", default-features = false, path = "../../primitives/version" }
-sp-session = { version = "3.0.0", default-features = false, path = "../../primitives/session" }
-sp-api = { version = "3.0.0", default-features = false, path = "../../primitives/api" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-pallet-babe = { version = "3.0.0", default-features = false, path = "../../frame/babe" }
-frame-system = { version = "3.0.0", default-features = false, path = "../../frame/system" }
-frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../frame/system/rpc/runtime-api" }
-pallet-timestamp = { version = "3.0.0", default-features = false, path = "../../frame/timestamp" }
-sp-finality-grandpa = { version = "3.0.0", default-features = false, path = "../../primitives/finality-grandpa" }
-sp-trie = { version = "3.0.0", default-features = false, path = "../../primitives/trie" }
-sp-transaction-pool = { version = "3.0.0", default-features = false, path = "../../primitives/transaction-pool" }
+sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-runtime-interface = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime-interface" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
+sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
+sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
+frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
+pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
+sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-trie = { version = "4.0.0-dev", default-features = false, path = "../../primitives/trie" }
+sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.22.6", default-features = false }
 parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
-sc-service = { version = "0.9.0", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
-sp-state-machine = { version = "0.9.0", default-features = false, path = "../../primitives/state-machine" }
-sp-externalities = { version = "0.9.0", default-features = false, path = "../../primitives/externalities" }
+sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
+sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../../primitives/state-machine" }
+sp-externalities = { version = "0.10.0-dev", default-features = false, path = "../../primitives/externalities" }
 
 # 3rd party
 cfg-if = "1.0"
@@ -50,13 +50,13 @@ log = { version = "0.4.14", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 
 [dev-dependencies]
-sc-block-builder = { version = "0.9.0", path = "../../client/block-builder" }
-sc-executor = { version = "0.9.0", path = "../../client/executor" }
+sc-block-builder = { version = "0.10.0-dev", path = "../../client/block-builder" }
+sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
 futures = "0.3.9"
 
 [build-dependencies]
-substrate-wasm-builder = { version = "4.0.0", path = "../../utils/wasm-builder" }
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder" }
 
 [features]
 default = [
