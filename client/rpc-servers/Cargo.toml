@@ -21,5 +21,5 @@ sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 futures-channel = "0.3"
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "mh-start-with-module", features = ["server"] }
+jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
 tokio = { version = "1", features = ["full"] }
