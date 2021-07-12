@@ -150,13 +150,3 @@ pub enum WasmError {
 }
 
 impl std::error::Error for WasmError {}
-
-/// Possible transfer errors
-#[derive(Debug, derive_more::Display)]
-pub enum TransferError {
-	/// Source memory is too small to contain all of the requested data
-	SourceTooSmall,
-
-	/// Destination memory is too small to fit all of the transferred data
-	DestTooSmall,
-}
