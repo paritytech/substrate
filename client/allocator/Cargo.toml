@@ -1,6 +1,6 @@
 [package]
 name = "sc-allocator"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-sp-wasm-interface = { version = "3.0.0", path = "../../primitives/wasm-interface" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-wasm-interface = { version = "4.0.0-dev", path = "../../primitives/wasm-interface" }
 log = "0.4.11"
 thiserror = "1.0.21"

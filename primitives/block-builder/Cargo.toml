@@ -1,6 +1,6 @@
 [package]
 name = "sp-block-builder"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,11 +13,11 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
-sp-api = { version = "3.0.0", default-features = false, path = "../api" }
-sp-std = { version = "3.0.0", default-features = false, path = "../std" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-sp-inherents = { version = "3.0.0", default-features = false, path = "../inherents" }
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
 
 [features]
 default = [ "std" ]

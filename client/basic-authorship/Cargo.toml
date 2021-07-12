@@ -1,6 +1,6 @@
 [package]
 name = "sc-basic-authorship"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -18,19 +18,19 @@ futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0"}
-sp-api = { version = "3.0.0", path = "../../primitives/api" }
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
-sc-client-api = { version = "3.0.0", path = "../api" }
-sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }
-sp-inherents = { version = "3.0.0", path = "../../primitives/inherents" }
-sc-telemetry = { version = "3.0.0", path = "../telemetry" }
-sc-transaction-pool-api = { version = "3.0.0", path = "../../client/transaction-pool/api" }
-sc-block-builder = { version = "0.9.0", path = "../block-builder" }
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
+sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../client/transaction-pool/api" }
+sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-proposer-metrics = { version = "0.9.0", path = "../proposer-metrics" }
 
 [dev-dependencies]
-sc-transaction-pool = { version = "3.0.0", path = "../transaction-pool" }
+sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 parking_lot = "0.11.1"
