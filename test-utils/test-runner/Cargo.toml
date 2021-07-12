@@ -7,46 +7,48 @@ publish = false
 
 [dependencies]
 # client deps
-sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
-sc-service = { version = "0.10.0-dev", path = "../../client/service" }
-sc-informant = { version = "0.10.0-dev", path = "../../client/informant" }
-sc-network = { version = "0.10.0-dev", path = "../../client/network" }
-sc-cli = { version = "0.10.0-dev", path = "../../client/cli" }
-sc-basic-authorship = { version = "0.10.0-dev", path = "../../client/basic-authorship" }
-sc-rpc = { version = "4.0.0-dev", path = "../../client/rpc" }
-sc-transaction-pool = { version = "4.0.0-dev", path = "../../client/transaction-pool" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../client/transaction-pool/api" }
-sc-client-api = { version = "4.0.0-dev", path = "../../client/api" }
-sc-rpc-server = { version = "4.0.0-dev", path = "../../client/rpc-servers" }
-manual-seal = { package = "sc-consensus-manual-seal", version = "0.10.0-dev", path = "../../client/consensus/manual-seal" }
+sc-executor = { path = "../../client/executor" }
+sc-service = { path = "../../client/service" }
+sc-informant = { path = "../../client/informant" }
+sc-network = { path = "../../client/network" }
+sc-cli = { path = "../../client/cli" }
+sc-basic-authorship = { path = "../../client/basic-authorship" }
+sc-rpc = { path = "../../client/rpc" }
+sc-transaction-pool = { path = "../../client/transaction-pool" }
+grandpa = { package = "sc-finality-grandpa", path = "../../client/finality-grandpa" }
+sp-consensus-babe = { path = "../../primitives/consensus/babe" }
+sc-consensus-babe = { path = "../../client/consensus/babe" }
+sc-consensus = { path = "../../client/consensus/common" }
+sc-transaction-pool-api = { path = "../../client/transaction-pool/api" }
+sc-client-api = { path = "../../client/api" }
+sc-rpc-server = { path = "../../client/rpc-servers" }
+manual-seal = { package = "sc-consensus-manual-seal", path = "../../client/consensus/manual-seal" }
 
 # primitive deps
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
-sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
-sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
-sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
-sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
-sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
+sp-core = { path = "../../primitives/core" }
+sp-blockchain = { path = "../../primitives/blockchain" }
+sp-block-builder = { path = "../../primitives/block-builder" }
+sp-api = { path = "../../primitives/api" }
+sp-transaction-pool = { path = "../../primitives/transaction-pool" }
+sp-consensus = { path = "../../primitives/consensus/common" }
+sp-keystore = { path = "../../primitives/keystore" }
+sp-runtime = { path = "../../primitives/runtime" }
+sp-session = { path = "../../primitives/session" }
+sp-offchain = { path = "../../primitives/offchain" }
+sp-inherents = { path = "../../primitives/inherents" }
+sp-keyring = { path = "../../primitives/keyring" }
 
-sp-externalities = { version = "0.10.0-dev", path = "../../primitives/externalities" }
-sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
-sp-wasm-interface = { version = "4.0.0-dev", path = "../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "4.0.0-dev", path = "../../primitives/runtime-interface" }
+sp-externalities = { path = "../../primitives/externalities" }
+sp-state-machine = { path = "../../primitives/state-machine" }
+sp-wasm-interface = { path = "../../primitives/wasm-interface" }
+sp-runtime-interface = { path = "../../primitives/runtime-interface" }
 
 # pallets
-frame-system = { version = "4.0.0-dev", path = "../../frame/system" }
+frame-system = { path = "../../frame/system" }
 
-env_logger = "0.7.1"
 log = "0.4.8"
 futures = { package = "futures", version = "0.3", features = ["compat"] }
-tokio = { version = "0.2", features = ["full"] }
-
+tokio = { version = "0.2", features = ["signal"] }
 # Calling RPC
 jsonrpc-core = "15.1"
+num-traits = "0.2.14"
