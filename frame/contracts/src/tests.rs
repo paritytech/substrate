@@ -40,13 +40,14 @@ use sp_io::hashing::blake2_256;
 use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo,
 	parameter_types, assert_storage_noop,
-	traits::{Currency, ReservableCurrency, OnInitialize},
+	traits::{Currency, ReservableCurrency, OnInitialize, Filter},
 	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
 	storage::child,
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::assert_eq;
+use std::cell::RefCell;
 
 use crate as pallet_contracts;
 
@@ -63,6 +64,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Randomness: pallet_randomness_collective_flip::{Pallet, Storage},
+		Utility: pallet_utility::{Pallet, Call, Storage, Event},
 		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -125,7 +127,7 @@ pub mod test_utils {
 }
 
 thread_local! {
-	static TEST_EXTENSION: sp_std::cell::RefCell<TestExtension> = Default::default();
+	static TEST_EXTENSION: RefCell<TestExtension> = Default::default();
 }
 
 pub struct TestExtension {
@@ -211,7 +213,7 @@ parameter_types! {
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
@@ -256,6 +258,11 @@ impl pallet_timestamp::Config for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
+impl pallet_utility::Config for Test {
+	type Event = Event;
+	type Call = Call;
+	type WeightInfo = ();
+}
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;
 	pub const TombstoneDeposit: u64 = 16;
@@ -269,9 +276,6 @@ parameter_types! {
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
 	pub const MaxCodeSize: u32 = 2 * 1024;
 	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
-}
-
-parameter_types! {
 	pub const TransactionByteFee: u64 = 0;
 }
 
@@ -281,11 +285,32 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 	}
 }
 
+/// A filter whose filter function can be swapped at runtime.
+pub struct TestFilter;
+
+thread_local! {
+	static CALL_FILTER: RefCell<fn(&Call) -> bool> = RefCell::new(|_| true);
+}
+
+impl TestFilter {
+	pub fn set_filter(filter: fn(&Call) -> bool) {
+		CALL_FILTER.with(|fltr| *fltr.borrow_mut() = filter);
+	}
+}
+
+impl Filter<Call> for TestFilter {
+	fn filter(call: &Call) -> bool {
+		CALL_FILTER.with(|fltr| fltr.borrow()(call))
+	}
+}
+
 impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
 	type Currency = Balances;
 	type Event = Event;
+	type Call = Call;
+	type CallFilter = TestFilter;
 	type RentPayment = ();
 	type SignedClaimHandicap = SignedClaimHandicap;
 	type TombstoneDeposit = TombstoneDeposit;
@@ -2944,8 +2969,8 @@ fn debug_message_invalid_utf8() {
 }
 
 #[test]
-fn gas_estimation_correct() {
-	let (caller_code, caller_hash) = compile_module::<Test>("call_return_code").unwrap();
+fn gas_estimation_nested_call_fixed_limit() {
+	let (caller_code, caller_hash) = compile_module::<Test>("call_with_limit").unwrap();
 	let (callee_code, callee_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let subsistence = Pallet::<Test>::subsistence_threshold();
@@ -2976,24 +3001,93 @@ fn gas_estimation_correct() {
 		);
 		let addr_callee = Contracts::contract_address(&ALICE, &callee_hash, &[1]);
 
+		let input: Vec<u8> = AsRef::<[u8]>::as_ref(&addr_callee)
+			.iter()
+			.cloned()
+			.chain((GAS_LIMIT / 5).to_le_bytes())
+			.collect();
+
 		// Call in order to determine the gas that is required for this call
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_caller.clone(),
 			0,
 			GAS_LIMIT,
-			AsRef::<[u8]>::as_ref(&addr_callee).to_vec(),
+			input.clone(),
 			false,
 		);
-		assert_ok!(result.result);
+		assert_ok!(&result.result);
+
+		assert!(result.gas_required > result.gas_consumed);
 
 		// Make the same call using the estimated gas. Should succeed.
 		assert_ok!(Contracts::bare_call(
 			ALICE,
 			addr_caller,
 			0,
-			result.gas_consumed,
-			AsRef::<[u8]>::as_ref(&addr_callee).to_vec(),
+			result.gas_required,
+			input,
+			false,
+		).result);
+	});
+}
+
+#[test]
+#[cfg(feature = "unstable-interface")]
+fn gas_estimation_call_runtime() {
+	let (caller_code, caller_hash) = compile_module::<Test>("call_runtime").unwrap();
+	let (callee_code, callee_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Pallet::<Test>::subsistence_threshold();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
+
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				subsistence * 100,
+				GAS_LIMIT,
+				caller_code,
+				vec![],
+				vec![0],
+			),
+		);
+		let addr_caller = Contracts::contract_address(&ALICE, &caller_hash, &[0]);
+
+		assert_ok!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				subsistence * 100,
+				GAS_LIMIT,
+				callee_code,
+				vec![],
+				vec![1],
+			),
+		);
+		let addr_callee = Contracts::contract_address(&ALICE, &callee_hash, &[1]);
+
+		// Call something trivial with a huge gas limit so that we can observe the effects
+		// of pre-charging. This should create a difference between consumed and required.
+		let call = Call::Contracts(crate::Call::call(addr_callee, 0, GAS_LIMIT / 3, vec![]));
+		let result = Contracts::bare_call(
+			ALICE,
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			call.encode(),
+			false,
+		);
+		assert_ok!(&result.result);
+
+		assert!(result.gas_required > result.gas_consumed);
+
+		// Make the same call using the required gas. Should succeed.
+		assert_ok!(Contracts::bare_call(
+			ALICE,
+			addr_caller,
+			0,
+			result.gas_required,
+			call.encode(),
 			false,
 		).result);
 	});
