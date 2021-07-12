@@ -180,7 +180,6 @@ frame_benchmarking::benchmarks! {
 		// NOTE: this benchmark currently doesn't have any components because the length of a db
 		// read/write is not captured. Otherwise, it is quite influenced by how much data
 		// `T::ElectionDataProvider` is reading and passing on.
-		// TODO well it is about time to change this.
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
