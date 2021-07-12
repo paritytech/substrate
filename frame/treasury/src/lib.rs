@@ -172,7 +172,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type Burn: Get<Permill>;
 
-		/// The treasury's module id, used for deriving its sovereign account ID.
+		/// The treasury's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
