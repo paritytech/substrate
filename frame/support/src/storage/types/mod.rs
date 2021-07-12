@@ -105,7 +105,7 @@ where
 
 /// Provide metadata for a storage entry.
 ///
-/// Implemented by each of the storage entry kinds: value, map and doublemap.
+/// Implemented by each of the storage entry kinds: value, map, doublemap and nmap.
 pub trait StorageEntryMetadata {
 	const MODIFIER: StorageEntryModifier;
 	const NAME: &'static str;
