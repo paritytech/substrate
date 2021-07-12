@@ -897,10 +897,11 @@ pub mod make_bags {
 
 #[cfg(test)]
 mod tests {
-	use crate::mock::{ExtBuilder, Staking, Test};
 	use frame_support::traits::Currency;
 	use substrate_test_utils::assert_eq_uvec;
+
 	use super::*;
+	use crate::mock::*;
 
 	const GENESIS_VOTER_IDS: [u64; 5] = [11, 21, 31, 41, 101];
 
@@ -932,8 +933,9 @@ mod tests {
 			// initialize the voters' deposits
 			let existential_deposit = <Test as Config>::Currency::minimum_balance();
 			let mut balance = existential_deposit + 1;
-			assert_eq!(T::VoterBagThresholds[1], balance);
+			assert_eq!(VoterBagThresholds::get()[1] as u128, balance);
 			assert_eq!(balance, 2);
+
 			for voter_id in voters.iter().rev() {
 				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
 				let controller = Staking::bonded(voter_id).unwrap();
@@ -950,4 +952,49 @@ mod tests {
 			assert_eq!(voters, have_voters);
 		});
 	}
+
+	/// This tests that we can `take` x voters, even if that quantity ends midway through a list.
+	#[test]
+	fn take_works() {
+		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
+			// initialize the voters' deposits
+			let existential_deposit = <Test as Config>::Currency::minimum_balance();
+			let mut balance = existential_deposit + 1;
+			assert_eq!(VoterBagThresholds::get()[1] as u128, balance);
+			assert_eq!(balance, 2);
+
+			for (idx, voter_id) in GENESIS_VOTER_IDS.iter().enumerate() {
+				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
+				let controller = Staking::bonded(voter_id).unwrap();
+				let mut ledger = Staking::ledger(&controller).unwrap();
+				ledger.total = balance;
+				ledger.active = balance;
+				Staking::update_ledger(&controller, &ledger);
+				Staking::do_rebag(voter_id);
+
+				if idx % 3 == 0 {
+					// This increases the balance by a constant factor of 2, which is
+					// is the factor used to generate the mock bags. Thus this will
+					// increase the balance by 1 bag.
+					//
+					// This will create 2 bags, the lower threshold bag having
+					// 3 voters, and the higher threshold bag having 2 voters.
+					balance *= 2;
+				}
+			}
+
+			// assert! Bag(balance) == list(11, 21)
+			// assert! Bag(balance / 2) == list(31, 41, 101)
+
+			let voters: Vec<_> = VoterList::<Test>::iter()
+				.take(4)
+				.map(|node| node.voter.id)
+				.collect();
+
+			assert_eq!(voters, vec![101, 21, 31, 41]);
+		});
+	}
+
+	// TODO:
+	// - storage is cleaned up when a voter is removed
 }
