@@ -601,26 +601,33 @@ benchmarks! {
 		assert_eq!(targets.len() as u32, v);
 	}
 
-	update_staking_limits {
+	set_staking_limits {
 		// This function always does the same thing... just write to 4 storage items.
 	}: _(
 		RawOrigin::Root,
 		BalanceOf::<T>::max_value(),
 		BalanceOf::<T>::max_value(),
 		Some(u32::MAX),
-		Some(u32::MAX)
+		Some(u32::MAX),
+		Some(Percent::max_value())
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::MAX));
 		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::MAX));
+		assert_eq!(ChillThreshold::<T>::get(), Some(Percent::from_percent(100)));
 	}
 
 	chill_other {
 		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
 		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), ValidatorPrefs::default())?;
-		Staking::<T>::update_staking_limits(
-			RawOrigin::Root.into(), BalanceOf::<T>::max_value(), BalanceOf::<T>::max_value(), None, None,
+		Staking::<T>::set_staking_limits(
+			RawOrigin::Root.into(),
+			BalanceOf::<T>::max_value(),
+			BalanceOf::<T>::max_value(),
+			Some(0),
+			Some(0),
+			Some(Percent::from_percent(0))
 		)?;
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), controller.clone())

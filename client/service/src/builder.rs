@@ -60,7 +60,7 @@ use sc_telemetry::{
 	TelemetryHandle,
 	SUBSTRATE_INFO,
 };
-use sp_transaction_pool::MaintainedTransactionPool;
+use sc_transaction_pool_api::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::{

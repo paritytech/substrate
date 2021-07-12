@@ -1212,9 +1212,15 @@ pub mod pallet {
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.
 	///
-	/// This is set to v6.0.0 for new networks.
+	/// This is set to v7.0.0 for new networks.
 	#[pallet::storage]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
+
+	/// The threshold for when users can start calling `chill_other` for other validators / nominators.
+	/// The threshold is compared to the actual number of validators / nominators (`CountFor*`) in
+	/// the system compared to the configured max (`Max*Count`).
+	#[pallet::storage]
+	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -1258,7 +1264,7 @@ pub mod pallet {
 			ForceEra::<T>::put(self.force_era);
 			CanceledSlashPayout::<T>::put(self.canceled_payout);
 			SlashRewardFraction::<T>::put(self.slash_reward_fraction);
-			StorageVersion::<T>::put(Releases::V6_0_0);
+			StorageVersion::<T>::put(Releases::V7_0_0);
 			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 
@@ -1323,6 +1329,9 @@ pub mod pallet {
 		Kicked(T::AccountId, T::AccountId),
 		/// The election failed. No new era is planned.
 		StakingElectionFailed,
+		/// An account has stopped participating as either a validator or nominator.
+		/// \[stash\]
+		Chilled(T::AccountId),
 	}
 
 	#[pallet::error]
@@ -1438,7 +1447,6 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
 		/// Emits `Bonded`.
-		///
 		/// # <weight>
 		/// - Independent of the arguments. Moderate complexity.
 		/// - O(1).
@@ -1447,10 +1455,6 @@ pub mod pallet {
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned
 		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
 		/// ------------------
-		/// Weight: O(1)
-		/// DB Weight:
-		/// - Read: Bonded, Ledger, [Origin Account], Current Era, History Depth, Locks
-		/// - Write: Bonded, Payee, [Origin Account], Locks, Ledger
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::bond())]
 		pub fn bond(
@@ -1504,23 +1508,17 @@ pub mod pallet {
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up
 		/// for staking.
 		///
+		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
+		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		/// Unlike [`bond`] or [`unbond`] this function does not impose any limitation on the amount
 		/// that can be added.
-		///
-		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller and
-		/// it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// Emits `Bonded`.
 		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - O(1).
-		/// - One DB entry.
-		/// ------------
-		/// DB Weight:
-		/// - Read: Era Election Status, Bonded, Ledger, [Origin Account], Locks
-		/// - Write: [Origin Account], Locks, Ledger
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::bond_extra())]
 		pub fn bond_extra(
@@ -1550,6 +1548,8 @@ pub mod pallet {
 		/// period ends. If this leaves an amount actively bonded less than
 		/// T::Currency::minimum_balance(), then it is increased to the full amount.
 		///
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
 		///
@@ -1560,27 +1560,9 @@ pub mod pallet {
 		/// If a user encounters the `InsufficientBond` error when calling this extrinsic,
 		/// they should call `chill` first in order to free up their bonded funds.
 		///
-		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
-		///
 		/// Emits `Unbonded`.
 		///
 		/// See also [`Call::withdraw_unbonded`].
-		///
-		/// # <weight>
-		/// - Independent of the arguments. Limited but potentially exploitable complexity.
-		/// - Contains a limited number of reads.
-		/// - Each call (requires the remainder of the bonded balance to be above `minimum_balance`)
-		///   will cause a new entry to be inserted into a vector (`Ledger.unlocking`) kept in storage.
-		///   The only way to clean the aforementioned storage item is also user-controlled via
-		///   `withdraw_unbonded`.
-		/// - One DB entry.
-		/// ----------
-		/// Weight: O(1)
-		/// DB Weight:
-		/// - Read: EraElectionStatus, Ledger, CurrentEra, Locks, BalanceOf Stash,
-		/// - Write: Locks, Ledger, BalanceOf Stash,
-		/// </weight>
 		#[pallet::weight(T::WeightInfo::unbond())]
 		pub fn unbond(origin: OriginFor<T>, #[pallet::compact] value: BalanceOf<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
@@ -1627,30 +1609,14 @@ pub mod pallet {
 		/// This essentially frees up that balance to be used by the stash account to do
 		/// whatever it wants.
 		///
-		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
+		/// The dispatch origin for this call must be _Signed_ by the controller.
 		///
 		/// Emits `Withdrawn`.
 		///
 		/// See also [`Call::unbond`].
 		///
 		/// # <weight>
-		/// - Could be dependent on the `origin` argument and how much `unlocking` chunks exist.
-		///  It implies `consolidate_unlocked` which loops over `Ledger.unlocking`, which is
-		///  indirectly user-controlled. See [`unbond`] for more detail.
-		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
-		/// - Writes are limited to the `origin` account key.
-		/// ---------------
 		/// Complexity O(S) where S is the number of slashing spans to remove
-		/// Update:
-		/// - Reads: EraElectionStatus, Ledger, Current Era, Locks, [Origin Account]
-		/// - Writes: [Origin Account], Locks, Ledger
-		/// Kill:
-		/// - Reads: EraElectionStatus, Ledger, Current Era, Bonded, Slashing Spans, [Origin
-		///   Account], Locks, BalanceOf stash
-		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators,
-		///   [Origin Account], Locks, BalanceOf stash.
-		/// - Writes Each: SpanSlash * S
 		/// NOTE: Weight annotation is the kill scenario, we refund otherwise.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans))]
@@ -1698,32 +1664,23 @@ pub mod pallet {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
-		///
-		/// # <weight>
-		/// - Independent of the arguments. Insignificant complexity.
-		/// - Contains a limited number of reads.
-		/// - Writes are limited to the `origin` account key.
-		/// -----------
-		/// Weight: O(1)
-		/// DB Weight:
-		/// - Read: Era Election Status, Ledger
-		/// - Write: Nominators, Validators
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::validate())]
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			// If this error is reached, we need to adjust the `MinValidatorBond` and start calling `chill_other`.
-			// Until then, we explicitly block new validators to protect the runtime.
-			if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
-				ensure!(CounterForValidators::<T>::get() < max_validators, Error::<T>::TooManyValidators);
-			}
-
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
-
 			let stash = &ledger.stash;
+
+			// Only check limits if they are not already a validator.
+			if !Validators::<T>::contains_key(stash) {
+				// If this error is reached, we need to adjust the `MinValidatorBond` and start calling `chill_other`.
+				// Until then, we explicitly block new validators to protect the runtime.
+				if let Some(max_validators) = MaxValidatorsCount::<T>::get() {
+					ensure!(CounterForValidators::<T>::get() < max_validators, Error::<T>::TooManyValidators);
+				}
+			}
+
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs);
 			Ok(())
@@ -1731,22 +1688,14 @@ pub mod pallet {
 
 		/// Declare the desire to nominate `targets` for the origin controller.
 		///
-		/// Effects will be felt at the beginning of the next era. This can only be called when
-		/// [`EraElectionStatus`] is `Closed`.
+		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets` (N)
 		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
 		/// - Both the reads and writes follow a similar pattern.
-		/// ---------
-		/// Weight: O(N)
-		/// where N is the number of targets
-		/// DB Weight:
-		/// - Reads: Era Election Status, Ledger, Current Era
-		/// - Writes: Validators, Nominators
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::nominate(targets.len() as u32))]
 		pub fn nominate(
@@ -1755,16 +1704,19 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			// If this error is reached, we need to adjust the `MinNominatorBond` and start calling `chill_other`.
-			// Until then, we explicitly block new nominators to protect the runtime.
-			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
-				ensure!(CounterForNominators::<T>::get() < max_nominators, Error::<T>::TooManyNominators);
-			}
-
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
-
 			let stash = &ledger.stash;
+
+			// Only check limits if they are not already a nominator.
+			if !Nominators::<T>::contains_key(stash) {
+				// If this error is reached, we need to adjust the `MinNominatorBond` and start calling `chill_other`.
+				// Until then, we explicitly block new nominators to protect the runtime.
+				if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
+					ensure!(CounterForNominators::<T>::get() < max_nominators, Error::<T>::TooManyNominators);
+				}
+			}
+
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
 
@@ -1796,17 +1748,11 @@ pub mod pallet {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains one read.
 		/// - Writes are limited to the `origin` account key.
-		/// --------
-		/// Weight: O(1)
-		/// DB Weight:
-		/// - Read: EraElectionStatus, Ledger
-		/// - Write: Validators, Nominators
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
@@ -2085,8 +2031,6 @@ pub mod pallet {
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// This can only be called when [`EraElectionStatus`] is `Closed`.
-		///
 		/// # <weight>
 		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
 		/// - Contains a limited number of reads and writes.
@@ -2095,11 +2039,6 @@ pub mod pallet {
 		/// Weight:
 		/// - Reward Destination Staked: O(N)
 		/// - Reward Destination Controller (Creating): O(N)
-		/// DB Weight:
-		/// - Read: EraElectionStatus, CurrentEra, HistoryDepth, ErasValidatorReward,
-		///         ErasStakersClipped, ErasRewardPoints, ErasValidatorPrefs (8 items)
-		/// - Read Each: Bonded, Ledger, Payee, Locks, System Account (5 items)
-		/// - Write Each: System Account, Locks, Ledger (3 items)
 		///
 		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
@@ -2116,17 +2055,12 @@ pub mod pallet {
 
 		/// Rebond a portion of the stash scheduled to be unlocked.
 		///
-		/// The dispatch origin must be signed by the controller, and it can be only called when
-		/// [`EraElectionStatus`] is `Closed`.
+		/// The dispatch origin must be signed by the controller.
 		///
 		/// # <weight>
 		/// - Time complexity: O(L), where L is unlocking chunks
 		/// - Bounded by `MAX_UNLOCKING_CHUNKS`.
 		/// - Storage changes: Can't increase storage, only decrease it.
-		/// ---------------
-		/// - DB Weight:
-		///     - Reads: EraElectionStatus, Ledger, Locks, [Origin Account]
-		///     - Writes: [Origin Account], Locks, Ledger
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::rebond(MAX_UNLOCKING_CHUNKS as u32))]
 		pub fn rebond(
@@ -2223,8 +2157,6 @@ pub mod pallet {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
-		/// And, it can be only called when [`EraElectionStatus`] is `Closed`. The controller
-		/// account should represent a validator.
 		///
 		/// - `who`: A list of nominator stash accounts who are nominating this validator which
 		///   should no longer be nominating this validator.
@@ -2266,31 +2198,42 @@ pub mod pallet {
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
 		/// to kick people under the new limits, `chill_other` should be called.
-		#[pallet::weight(T::WeightInfo::update_staking_limits())]
-		pub fn update_staking_limits(
+		#[pallet::weight(T::WeightInfo::set_staking_limits())]
+		pub fn set_staking_limits(
 			origin: OriginFor<T>,
 			min_nominator_bond: BalanceOf<T>,
 			min_validator_bond: BalanceOf<T>,
 			max_nominator_count: Option<u32>,
 			max_validator_count: Option<u32>,
+			threshold: Option<Percent>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			MinNominatorBond::<T>::set(min_nominator_bond);
 			MinValidatorBond::<T>::set(min_validator_bond);
 			MaxNominatorsCount::<T>::set(max_nominator_count);
 			MaxValidatorsCount::<T>::set(max_validator_count);
+			ChillThreshold::<T>::set(threshold);
 			Ok(())
 		}
 
-		/// Declare a `controller` as having no desire to either validator or nominate.
+		/// Declare a `controller` to stop participating as either a validator or nominator.
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_, but can be called by anyone.
 		///
-		/// If the caller is the same as the controller being targeted, then no further checks
-		/// are enforced. However, this call can also be made by an third party user who witnesses
-		/// that this controller does not satisfy the minimum bond requirements to be in their role.
+		/// If the caller is the same as the controller being targeted, then no further checks are
+		/// enforced, and this function behaves just like `chill`.
+		///
+		/// If the caller is different than the controller being targeted, the following conditions
+		/// must be met:
+		/// * A `ChillThreshold` must be set and checked which defines how close to the max
+		///   nominators or validators we must reach before users can start chilling one-another.
+		/// * A `MaxNominatorCount` and `MaxValidatorCount` must be set which is used to determine
+		///   how close we are to the threshold.
+		/// * A `MinNominatorBond` and `MinValidatorBond` must be set and checked, which determines
+		///   if this is a person that should be chilled because they have not met the threshold
+		///   bond required.
 		///
 		/// This can be helpful if bond requirements are updated, and we need to remove old users
 		/// who do not satisfy these requirements.
@@ -2307,14 +2250,27 @@ pub mod pallet {
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = ledger.stash;
 
-			// If the caller is not the controller, we want to check that the minimum bond
-			// requirements are not satisfied, and thus we have reason to chill this user.
+			// In order for one user to chill another user, the following conditions must be met:
+			// * A `ChillThreshold` is set which defines how close to the max nominators or
+			//   validators we must reach before users can start chilling one-another.
+			// * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
+			//   we are to the threshold.
+			// * A `MinNominatorBond` and `MinValidatorBond` which is the final condition checked to
+			//   determine this is a person that should be chilled because they have not met the
+			//   threshold bond required.
 			//
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
 			if caller != controller {
+				let threshold = ChillThreshold::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
 				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
+					let max_nominator_count = MaxNominatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
+					let current_nominator_count = CounterForNominators::<T>::get();
+					ensure!(threshold * max_nominator_count < current_nominator_count, Error::<T>::CannotChillOther);
 					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&stash) {
+					let max_validator_count = MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
+					let current_validator_count = CounterForValidators::<T>::get();
+					ensure!(threshold * max_validator_count < current_validator_count, Error::<T>::CannotChillOther);
 					MinValidatorBond::<T>::get()
 				} else {
 					Zero::zero()
@@ -2487,8 +2443,11 @@ impl<T: Config> Pallet<T> {
 
 	/// Chill a stash account.
 	fn chill_stash(stash: &T::AccountId) {
-		Self::do_remove_validator(stash);
-		Self::do_remove_nominator(stash);
+		let chilled_as_validator = Self::do_remove_validator(stash);
+		let chilled_as_nominator = Self::do_remove_nominator(stash);
+		if chilled_as_validator || chilled_as_nominator {
+			Self::deposit_event(Event::<T>::Chilled(stash.clone()));
+		}
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -2978,10 +2937,15 @@ impl<T: Config> Pallet<T> {
 
 	/// This function will remove a nominator from the `Nominators` storage map,
 	/// and keep track of the `CounterForNominators`.
-	pub fn do_remove_nominator(who: &T::AccountId) {
+	///
+	/// Returns true if `who` was removed from `Nominators`, otherwise false.
+	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
 			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
+			true
+		} else {
+			false
 		}
 	}
 
@@ -2998,10 +2962,15 @@ impl<T: Config> Pallet<T> {
 
 	/// This function will remove a validator from the `Validators` storage map,
 	/// and keep track of the `CounterForValidators`.
-	pub fn do_remove_validator(who: &T::AccountId) {
+	///
+	/// Returns true if `who` was removed from `Validators`, otherwise false.
+	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
+			true
+		} else {
+			false
 		}
 	}
 }
@@ -3078,6 +3047,57 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		now.saturating_add(
 			until_this_session_end.saturating_add(sessions_left.saturating_mul(session_length)),
 		)
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
+		use sp_std::convert::TryFrom;
+		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
+			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
+		});
+		<Bonded<T>>::insert(voter.clone(), voter.clone());
+		<Ledger<T>>::insert(
+			voter.clone(),
+			StakingLedger {
+				stash: voter.clone(),
+				active: stake,
+				total: stake,
+				unlocking: vec![],
+				claimed_rewards: vec![],
+			},
+		);
+		Self::do_add_nominator(
+			&voter,
+			Nominations { targets: targets, submitted_in: 0, suppressed: false },
+		);
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn add_target(target: T::AccountId) {
+		let stake = MinValidatorBond::<T>::get() * 100u32.into();
+		<Bonded<T>>::insert(target.clone(), target.clone());
+		<Ledger<T>>::insert(
+			target.clone(),
+			StakingLedger {
+				stash: target.clone(),
+				active: stake,
+				total: stake,
+				unlocking: vec![],
+				claimed_rewards: vec![],
+			},
+		);
+		Self::do_add_validator(
+			&target,
+			ValidatorPrefs { commission: Perbill::zero(), blocked: false },
+		);
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn clear() {
+		<Bonded<T>>::remove_all(None);
+		<Ledger<T>>::remove_all(None);
+		<Validators<T>>::remove_all(None);
+		<Nominators<T>>::remove_all(None);
 	}
 
 	#[cfg(any(feature = "runtime-benchmarks", test))]
