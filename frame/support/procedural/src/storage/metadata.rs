@@ -40,7 +40,6 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 					hasher: #scrate::metadata::#hasher,
 					key: #scrate::scale_info::meta_type::<#key>(),
 					value: #scrate::scale_info::meta_type::<#value_type>(),
-					unused: false,
 				}
 			}
 		},

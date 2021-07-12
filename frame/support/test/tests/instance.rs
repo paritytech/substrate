@@ -413,7 +413,6 @@ fn expected_metadata() -> PalletStorageMetadata {
 					hasher: StorageHasher::Identity,
 					key: scale_info::meta_type::<u64>(),
 					value: scale_info::meta_type::<u64>(),
-					unused: false,
 				},
 				default: [0u8; 8].to_vec(),
 				documentation: vec![],

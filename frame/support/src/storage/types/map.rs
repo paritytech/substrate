@@ -339,7 +339,6 @@ impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMeta
 			hasher: Hasher::METADATA,
 			key: scale_info::meta_type::<Key>(),
 			value: scale_info::meta_type::<Value>(),
-			unused: false
 		}
 	}
 

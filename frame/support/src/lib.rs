@@ -1124,7 +1124,6 @@ pub mod tests {
 						hasher: StorageHasher::Twox64Concat,
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u64>(),
-						unused: false,
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					documentation: vec![],
@@ -1136,7 +1135,6 @@ pub mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
-						unused: false,
 					},
 					default: vec![0],
 					documentation: vec![],
@@ -1148,7 +1146,6 @@ pub mod tests {
 						hasher: StorageHasher::Identity,
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
-						unused: false
 					},
 					default: vec![0, 0, 0, 0],
 					documentation: vec![],
@@ -1160,7 +1157,6 @@ pub mod tests {
 						hasher: StorageHasher::Blake2_128Concat,
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
-						unused: false
 					},
 					default: vec![0],
 					documentation: vec![],
