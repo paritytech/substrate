@@ -26,7 +26,6 @@ use frame_support::{traits::Get, DefaultNoBound};
 use sp_runtime::SaturatedConversion;
 use sp_std::{
 	boxed::Box,
-	cmp::PartialEq,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter,
 	marker::PhantomData,
@@ -464,20 +463,43 @@ impl<T: Config> Bag<T> {
 	fn remove_node(&mut self, node: &Node<T>) {
 		// Excise `node`.
 		if let Some(mut prev) = node.prev() {
-			debug_assert!(prev != *node, "node.prev circularly points at node");
+			debug_assert!(prev.voter.id != node.voter.id, "node.prev circularly points at node");
+			debug_assert!(
+				self.head.as_ref() != Some(&node.voter.id),
+				"node is the head, but has Some prev"
+			);
 
 			prev.next = node.next.clone();
-			debug_assert!(prev.next().unwrap().prev().unwrap() == *node);
+			debug_assert!(
+				prev.next().and_then(|prev_next|
+					// prev.next.prev should should point at node prior to being reassigned
+					Some(prev_next.prev().unwrap().voter.id == node.voter.id)
+				)
+				// unless prev.next is None, in which case node has to be the tail
+				.unwrap_or(self.tail.as_ref() == Some(&node.voter.id)),
+				"prev.next.prev should should point at node prior to being reassigned (if node is not the tail)"
+			);
 
 			prev.put();
 		}
 		if let Some(mut next) = node.next() {
 			// if there is a node.next, we know their should be a node.prev
-			debug_assert!(next != *node, "node.next circularly points at node");
-			debug_assert!(node.prev().unwrap() != next, "node.prev circularly points at node.next");
+			debug_assert!(next.voter.id != node.voter.id, "node.next circularly points at node");
+			debug_assert!(
+				self.tail.as_ref() != Some(&node.voter.id),
+				"node is the tail, but has Some next"
+			);
 
 			next.prev = node.prev.clone();
-			debug_assert!(next.prev().unwrap().next().unwrap() == next);
+			debug_assert!(
+				next.prev().and_then(|next_prev|
+					// next.prev.next should point at next after being reassigned
+					Some(next_prev.next().unwrap().voter.id == next.voter.id)
+				)
+				// unless next.prev is None, in which case node has to be the head
+				.unwrap_or_else(|| self.head.as_ref() == Some(&node.voter.id)),
+				"next.prev.next should point at next after being reassigned (if node is not the head)"
+			);
 
 			next.put();
 		}
@@ -494,7 +516,7 @@ impl<T: Config> Bag<T> {
 
 /// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
 #[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, PartialEq))]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 pub struct Node<T: Config> {
 	voter: Voter<AccountIdOf<T>>,
 	prev: Option<AccountIdOf<T>>,

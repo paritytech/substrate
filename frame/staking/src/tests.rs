@@ -153,7 +153,7 @@ fn basic_setup_works() {
 		// for these stash ids, see
 		// https://github.com/paritytech/substrate/
 		//   blob/631d4cdbcad438248c2597213918d8207d85bf6e/frame/staking/src/mock.rs#L435-L441
-		for genesis_stash_account_id in [11, 21, 31, 101] {
+		for genesis_stash_account_id in &[11, 21, 31, 101] {
 			let node = crate::voter_bags::Node::<Test>::from_id(&genesis_stash_account_id)
 				.expect(&format!("node was created for account {}", genesis_stash_account_id));
 			assert!(!node.is_misplaced(&weight_of));
