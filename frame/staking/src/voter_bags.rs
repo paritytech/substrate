@@ -463,6 +463,7 @@ impl<T: Config> Bag<T> {
 	/// to update storage for the bag and `node`.
 	fn remove_node(&mut self, node: &Node<T>) {
 		// Excise `node`.
+		// Update previous node. 
 		if let Some(mut prev) = node.prev() {
 			debug_assert!(
 				self.head.as_ref() != Some(&node.voter.id),
@@ -486,14 +487,11 @@ impl<T: Config> Bag<T> {
 
 			prev.put();
 		}
+		// Update next node. 
 		if let Some(mut next) = node.next() {
 			debug_assert!(
 				self.tail.as_ref() != Some(&node.voter.id),
 				"node is the tail, but has Some next"
-			);
-			debug_assert!(
-				next.next().is_some() || self.tail.as_ref() == Some(&next.voter.id),
-				"node.next.next should be Some OR node.next should be the head"
 			);
 
 			next.prev = node.prev.clone();
