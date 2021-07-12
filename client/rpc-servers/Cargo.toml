@@ -1,6 +1,6 @@
 [package]
 name = "sc-rpc-server"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -20,7 +20,7 @@ log = "0.4.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0"}
 serde = "1.0.101"
 serde_json = "1.0.41"
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 http = { package = "jsonrpc-http-server", version = "15.1.0" }

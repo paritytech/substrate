@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-slots"
-version = "0.9.0"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic slots-based utilities for consensus"
 edition = "2018"
@@ -15,20 +15,20 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sc-client-api = { version = "3.0.0", path = "../../api" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-trie = { version = "3.0.0", path = "../../../primitives/trie" }
-sp-application-crypto = { version = "3.0.0", path = "../../../primitives/application-crypto" }
-sp-arithmetic = { version = "3.0.0", path = "../../../primitives/arithmetic" }
-sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-consensus-slots = { version = "0.9.0", path = "../../../primitives/consensus/slots" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.9.0", path = "../../../primitives/state-machine" }
-sp-api = { version = "3.0.0", path = "../../../primitives/api" }
-sc-telemetry = { version = "3.0.0", path = "../../telemetry" }
-sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
-sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
-sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
+sc-client-api = { version = "4.0.0-dev", path = "../../api" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-trie = { version = "4.0.0-dev", path = "../../../primitives/trie" }
+sp-application-crypto = { version = "4.0.0-dev", path = "../../../primitives/application-crypto" }
+sp-arithmetic = { version = "4.0.0-dev", path = "../../../primitives/arithmetic" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.10.0-dev", path = "../../../primitives/state-machine" }
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.11"

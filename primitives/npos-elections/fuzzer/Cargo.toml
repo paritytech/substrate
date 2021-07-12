@@ -17,10 +17,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 honggfuzz = "0.5"
 rand = { version = "0.7.3", features = ["std", "small_rng"] }
-sp-arithmetic = { version = "3.0.0", path = "../../arithmetic" }
-sp-npos-elections = { version = "3.0.0", path = ".." }
-sp-runtime = { version = "3.0.0", path = "../../runtime" }
-sp-std = { version = "3.0.0", path = "../../std" }
+sp-arithmetic = { version = "4.0.0-dev", path = "../../arithmetic" }
+sp-npos-elections = { version = "4.0.0-dev", path = ".." }
+sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
+sp-std = { version = "4.0.0-dev", path = "../../std" }
 structopt = "0.3.21"
 
 [[bin]]
