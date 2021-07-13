@@ -302,12 +302,21 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
-			$name { $( $code )* }: {
+			$name {
+				$( $code )*
+				let __call = $crate::frame_support::codec::Encode::encode(
+					&<Call<T $(, $instance )?>>::$dispatch($( $arg ),*)
+				);
+			}: {
+				let __call = <
+					Call<T $(, $instance )?>
+					as $crate::frame_support::codec::Decode
+				>::decode(&mut &__call[..])
+					.expect("call is encoded above, encoding must be correct");
+
 				<
 					Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
-				>::dispatch_bypass_filter(
-					Call::<T $(, $instance)? >::$dispatch($($arg),*), $origin.into()
-				)?;
+				>::dispatch_bypass_filter(__call, $origin.into())?;
 			}
 			verify $postcode
 			$( $rest )*
