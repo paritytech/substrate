@@ -25,7 +25,7 @@ use std::cell::RefCell;
 
 use frame_support::{
 	assert_noop, assert_ok, parameter_types, weights::Weight, traits::OnInitialize,
-	PalletId
+	PalletId, pallet_prelude::GenesisBuild,
 };
 
 use sp_core::H256;
@@ -146,7 +146,7 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
-type TreasuryError = pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>;
+type TreasuryError = pallet_treasury::Error::<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -154,7 +154,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
 	t.into()
 }
 
@@ -268,7 +268,7 @@ fn reject_already_rejected_spend_proposal_fails() {
 fn reject_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(Treasury::reject_proposal(Origin::root(), 0),
-		pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>::InvalidIndex);
+		pallet_treasury::Error::<Test, _>::InvalidIndex);
 	});
 }
 
@@ -457,7 +457,7 @@ fn close_bounty_works() {
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
 		assert_eq!(Bounties::bounties(0), None);
-		assert!(!pallet_treasury::Proposals::<Test>::contains_key(0));
+		assert!(!pallet_treasury::Proposals::<Test, _>::contains_key(0));
 
 		assert_eq!(Bounties::bounty_descriptions(0), None);
 	});
@@ -897,7 +897,7 @@ fn genesis_funding_works() {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {
