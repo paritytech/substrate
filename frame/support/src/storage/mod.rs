@@ -321,9 +321,17 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
+	/// Enumerate all elements in the map starting from a specified `starting_key` in no particular
+	/// order. If you alter the map while doing this, you'll get undefined results.
+	fn iter_from(starting_key: Vec<u8>) -> Self::Iterator;
+
 	/// Enumerate all keys in the map in no particular order, skipping over the elements. If you
 	/// alter the map while doing this, you'll get undefined results.
 	fn iter_keys() -> Self::KeyIterator;
+
+	/// Enumerate all keys in the map starting from a specified `starting_key` in no particular
+	/// order. If you alter the map while doing this, you'll get undefined results.
+	fn iter_keys_from(starting_key: Vec<u8>) -> Self::KeyIterator;
 
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
@@ -359,10 +367,23 @@ pub trait IterableStorageDoubleMap<
 	/// results.
 	fn iter_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
 
+	/// Enumerate all elements in the map with first key `k1` starting from a specified
+	/// `starting_key`in no particular order. If you add or remove values whose first key is `k1`
+	/// to the map while doing this, you'll get undefined results.
+	fn iter_prefix_from(k1: impl EncodeLike<K1>, starting_key: Vec<u8>) -> Self::PrefixIterator;
+
 	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
 	/// order. If you add or remove values whose first key is `k1` to the map while doing this,
 	/// you'll get undefined results.
 	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::PartialKeyIterator;
+
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` starting from a
+	/// specified `starting_key` in no particular order. If you add or remove values whose first
+	/// key is `k1` to the map while doing this, you'll get undefined results.
+	fn iter_key_prefix_from(
+		k1: impl EncodeLike<K1>,
+		starting_key: Vec<u8>,
+	) -> Self::PartialKeyIterator;
 
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order. If you add elements with first key `k1` to the map while doing this,
@@ -373,9 +394,19 @@ pub trait IterableStorageDoubleMap<
 	/// the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
+	/// Enumerate all elements in the map starting from a specified `starting_key` in no particular
+	/// order. If you add or remove values to the map while doing this, you'll get undefined
+	/// results.
+	fn iter_from(starting_key: Vec<u8>) -> Self::Iterator;
+
 	/// Enumerate all keys `k1` and `k2` in the map in no particular order. If you add or remove
 	/// values to the map while doing this, you'll get undefined results.
 	fn iter_keys() -> Self::FullKeyIterator;
+
+	/// Enumerate all keys `k1` and `k2` in the map starting from a specified `starting_key` in no
+	/// particular order. If you add or remove values to the map while doing this, you'll get
+	/// undefined results.
+	fn iter_keys_from(starting_key: Vec<u8>) -> Self::FullKeyIterator;
 
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
@@ -403,10 +434,28 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	fn iter_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where K: HasReversibleKeyPrefix<KP>;
 
+	/// Enumerate all elements in the map with prefix key `kp` starting from a specified
+	/// `starting_key` in no particular order. If you add or remove values whose prefix is `kp` to
+	/// the map while doing this, you'll get undefined results.
+	fn iter_prefix_from<KP>(
+		kp: KP,
+		starting_key: Vec<u8>,
+	) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where K: HasReversibleKeyPrefix<KP>;
+
 	/// Enumerate all suffix keys in the map with prefix key `kp` in no particular order. If you
 	/// add or remove values whose prefix is `kp` to the map while doing this, you'll get undefined
 	/// results.
 	fn iter_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where K: HasReversibleKeyPrefix<KP>;
+
+	/// Enumerate all suffix keys in the map with prefix key `kp` starting from a specified
+	/// `starting_key` in no particular order. If you add or remove values whose prefix is `kp` to
+	/// the map while doing this, you'll get undefined results.
+	fn iter_key_prefix_from<KP>(
+		kp: KP,
+		starting_key: Vec<u8>,
+	) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
 	where K: HasReversibleKeyPrefix<KP>;
 
 	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
@@ -419,9 +468,18 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	/// the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
+	/// Enumerate all elements in the map starting from a specified `starting_key` in no particular
+	/// order. If you add or remove values to the map while doing this, you'll get undefined
+	/// results.
+	fn iter_from(starting_key: Vec<u8>) -> Self::Iterator;
+
 	/// Enumerate all keys in the map in no particular order. If you add or remove values to the
 	/// map while doing this, you'll get undefined results.
 	fn iter_keys() -> Self::KeyIterator;
+
+	/// Enumerate all keys in the map starting from `starting_key` in no particular order. If you
+	/// add or remove values to the map while doing this, you'll get undefined results.
+	fn iter_keys_from(starting_key: Vec<u8>) -> Self::KeyIterator;
 
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
@@ -747,6 +805,11 @@ impl<T> PrefixIterator<T> {
 		&self.prefix
 	}
 
+	/// Set the next key that the iterator should start iterating upon.
+	pub fn set_next_key(&mut self, next_key: Vec<u8>) {
+		self.previous_key = next_key;
+	}
+
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
 	pub fn drain(mut self) -> Self {
 		self.drain = true;
@@ -840,6 +903,11 @@ impl<T> KeyPrefixIterator<T> {
 	/// Get the prefix that is being iterated upon for this iterator and return it.
 	pub fn prefix(&self) -> &[u8] {
 		&self.prefix
+	}
+
+	/// Set the next key that the iterator should start iterating upon.
+	pub fn set_next_key(&mut self, next_key: Vec<u8>) {
+		self.previous_key = next_key;
 	}
 
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
@@ -1477,28 +1545,10 @@ mod test {
 	#[test]
 	fn prefix_iterator_pagination() {
 		TestExternalities::default().execute_with(|| {
-			use crate::storage::generator::StorageMap;
 			use crate::hash::Twox64Concat;
-			struct MyStorageMap;
-			impl StorageMap<u64, u64> for MyStorageMap {
-				type Query = u64;
-				type Hasher = Twox64Concat;
-
-				fn module_prefix() -> &'static [u8] {
-					b"MyModule"
-				}
-
-				fn storage_prefix() -> &'static [u8] {
-					b"MyStorageMap"
-				}
-
-				fn from_optional_value_to_query(v: Option<u64>) -> Self::Query {
-					v.unwrap_or_default()
-				}
-
-				fn from_query_to_optional_value(v: Self::Query) -> Option<u64> {
-					Some(v)
-				}
+			crate::generate_storage_alias! {
+				MyModule,
+				MyStorageMap => Map<(u64, Twox64Concat), u64>
 			}
 
 			MyStorageMap::insert(1, 10);
@@ -1516,16 +1566,8 @@ mod test {
 			assert!(iter.next().is_some());
 			assert!(iter.next().is_some());
 
-			let prefix = iter.prefix().to_owned();
 			let stored_key = iter.next_key().to_owned();
-			let iter = PrefixIterator::new(
-				prefix,
-				stored_key,
-				|raw_key_without_prefix, mut raw_value| {
-					let mut key_material = Twox64Concat::reverse(raw_key_without_prefix);
-					Ok((u64::decode(&mut key_material)?, u64::decode(&mut raw_value)?))
-				},
-			);
+			let iter = MyStorageMap::iter_from(stored_key);
 			assert_eq!(iter.collect::<Vec<_>>().len(), 8);
 		});
 	}
