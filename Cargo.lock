@@ -1840,7 +1840,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "14.0.0"
-source = "git+https://github.com/paritytech/frame-metadata?branch=aj-additional-signed#54f626afbb22db34f4f495121547ce3ca9e9471d"
+source = "git+https://github.com/paritytech/frame-metadata?branch=main#9cfeeeeab8ec01f2acc370e6132adc5ed48cd920"
 dependencies = [
  "cfg-if 1.0.0",
  "parity-scale-codec",

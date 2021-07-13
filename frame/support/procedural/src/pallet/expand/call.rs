@@ -234,13 +234,13 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				let calls = #frame_support::sp_std::vec![ #(
 					#frame_support::metadata::FunctionMetadata {
 						name: stringify!(#fn_name),
-						arguments: #frame_support::sp_std::vec![ #(
+						args: #frame_support::sp_std::vec![ #(
 							#frame_support::metadata::FunctionArgumentMetadata {
 								name: stringify!(#args_name),
 								ty: #frame_support::scale_info::meta_type::<#args_meta_type>(),
 							},
 						)* ],
-						documentation: #frame_support::sp_std::vec![ #( #fn_doc ),* ],
+						docs: #frame_support::sp_std::vec![ #( #fn_doc ),* ],
 					},
 				)* ];
 				#frame_support::metadata::PalletCallMetadata { ty, calls }

@@ -172,7 +172,7 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 				modifier: #modifier,
 				ty: #ty,
 				default: #default_byte_getter_struct_instance.default_byte(),
-				documentation: #scrate::sp_std::vec![ #( #docs ),* ],
+				docs: #scrate::sp_std::vec![ #( #docs ),* ],
 			},
 		};
 

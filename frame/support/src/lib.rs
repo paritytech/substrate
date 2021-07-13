@@ -1129,7 +1129,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					documentation: vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "OptionLinkedMap",
@@ -1140,7 +1140,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
-					documentation: vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "GenericData",
@@ -1151,7 +1151,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
-					documentation: vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "GenericData2",
@@ -1162,7 +1162,7 @@ pub mod tests {
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
-					documentation: vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "DataDM",
@@ -1175,7 +1175,7 @@ pub mod tests {
 						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					documentation: vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "GenericDataDM",
@@ -1188,7 +1188,7 @@ pub mod tests {
 						key2_hasher: StorageHasher::Identity,
 					},
 					default: vec![0, 0, 0, 0],
-					documentation: vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "GenericData2DM",
@@ -1201,7 +1201,7 @@ pub mod tests {
 						key2_hasher: StorageHasher::Twox64Concat,
 					},
 					default: vec![0],
-					documentation: vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "AppendableDM",
@@ -1214,7 +1214,7 @@ pub mod tests {
 						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
 					default: vec![0],
-					documentation: vec![],
+					docs: vec![],
 				},
 			],
 		}

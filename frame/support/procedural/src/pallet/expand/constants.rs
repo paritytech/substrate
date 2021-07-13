@@ -100,7 +100,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 					name: #ident_str,
 					ty: #frame_support::scale_info::meta_type::<#const_type>(),
 					value: #default_byte_getter::<#type_use_gen>(Default::default()).default_byte(),
-					documentation: #frame_support::sp_std::vec![ #( #doc ),* ],
+					docs: #frame_support::sp_std::vec![ #( #doc ),* ],
 				}
 			})
 		});

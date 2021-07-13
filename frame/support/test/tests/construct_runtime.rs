@@ -588,8 +588,8 @@ fn test_metadata() {
 				ty: scale_info::meta_type::<system::Call<Runtime>>(),
 				calls: vec![FunctionMetadata {
 					name: "noop",
-					arguments: vec![],
-					documentation: vec![],
+					args: vec![],
+					docs: vec![],
 				}],
 			}),
 			event: Some(PalletEventMetadata {
@@ -609,8 +609,8 @@ fn test_metadata() {
 				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance1>>(),
 				calls: vec![FunctionMetadata {
 					name: "fail",
-					arguments: vec![],
-					documentation: vec![],
+					args: vec![],
+					docs: vec![],
 				}],
 			}),
 			event: Some(PalletEventMetadata {
@@ -630,8 +630,8 @@ fn test_metadata() {
 				ty: scale_info::meta_type::<module2::Call<Runtime>>(),
 				calls: vec![FunctionMetadata {
 					name: "fail",
-					arguments: vec![],
-					documentation: vec![],
+					args: vec![],
+					docs: vec![],
 				}],
 			}),
 			event: Some(PalletEventMetadata {
@@ -651,8 +651,8 @@ fn test_metadata() {
 				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance2>>(),
 				calls: vec![FunctionMetadata {
 					name: "fail",
-					arguments: vec![],
-					documentation: vec![],
+					args: vec![],
+					docs: vec![],
 				}],
 			}),
 			event: Some(PalletEventMetadata {
@@ -681,8 +681,8 @@ fn test_metadata() {
 				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance4>>(),
 				calls: vec![FunctionMetadata {
 					name: "fail",
-					arguments: vec![],
-					documentation: vec![],
+					args: vec![],
+					docs: vec![],
 				}],
 			}),
 			event: None,
@@ -711,8 +711,8 @@ fn test_metadata() {
 				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance6>>(),
 				calls: vec![FunctionMetadata {
 					name: "fail",
-					arguments: vec![],
-					documentation: vec![],
+					args: vec![],
+					docs: vec![],
 				}],
 			}),
 			event: Some(PalletEventMetadata {
@@ -732,8 +732,8 @@ fn test_metadata() {
 				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance7>>(),
 				calls: vec![FunctionMetadata {
 					name: "fail",
-					arguments: vec![],
-					documentation: vec![],
+					args: vec![],
+					docs: vec![],
 				}],
 			}),
 			event: Some(PalletEventMetadata {
@@ -753,8 +753,8 @@ fn test_metadata() {
 				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance8>>(),
 				calls: vec![FunctionMetadata {
 					name: "fail",
-					arguments: vec![],
-					documentation: vec![],
+					args: vec![],
+					docs: vec![],
 				}],
 			}),
 			event: Some(PalletEventMetadata {
@@ -774,8 +774,8 @@ fn test_metadata() {
 				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance9>>(),
 				calls: vec![FunctionMetadata {
 					name: "fail",
-					arguments: vec![],
-					documentation: vec![],
+					args: vec![],
+					docs: vec![],
 				}],
 			}),
 			event: Some(PalletEventMetadata {

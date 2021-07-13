@@ -177,7 +177,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 					modifier: <#full_ident as #frame_support::storage::StorageEntryMetadata>::MODIFIER,
 					ty: <#full_ident as #frame_support::storage::StorageEntryMetadata>::ty(),
 					default: <#full_ident as #frame_support::storage::StorageEntryMetadata>::default(),
-					documentation: #frame_support::sp_std::vec![
+					docs: #frame_support::sp_std::vec![
 						#( #docs, )*
 					],
 				}

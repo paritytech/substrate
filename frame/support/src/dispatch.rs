@@ -2321,9 +2321,9 @@ macro_rules! __impl_module_constants_metadata {
 								Default::default()
 							).default_byte(),
 							#[cfg(feature = "metadata-docs")]
-							documentation: $crate::sp_std::vec![ $( $doc_attr ),* ],
+							docs: $crate::sp_std::vec![ $( $doc_attr ),* ],
 							#[cfg(not(feature = "metadata-docs"))]
-							documentation: $crate::sp_std::vec![],
+							docs: $crate::sp_std::vec![],
 						}
 					),*
 				]
@@ -2403,7 +2403,7 @@ macro_rules! __function_to_metadata {
 	) => {
 		$crate::metadata::FunctionMetadata {
 			name: stringify!($fn_name),
-			arguments: $crate::sp_std::vec![
+			args: $crate::sp_std::vec![
 				$(
 					$crate::metadata::FunctionArgumentMetadata {
 						name: stringify!($param_name),
@@ -2414,9 +2414,9 @@ macro_rules! __function_to_metadata {
 				),*
 			],
 			#[cfg(feature = "metadata-docs")]
-			documentation: $crate::sp_std::vec![ $( $fn_doc ),* ],
+			docs: $crate::sp_std::vec![ $( $fn_doc ),* ],
 			#[cfg(not(feature = "metadata-docs"))]
-			documentation: $crate::sp_std::vec![],
+			docs: $crate::sp_std::vec![],
 		}
 	};
 
@@ -2573,24 +2573,24 @@ mod tests {
 		vec![
 			FunctionMetadata {
 				name: "aux_0",
-				arguments: vec![],
-				documentation: vec![
+				args: vec![],
+				docs: vec![
 					" Hi, this is a comment."
 				]
 			},
 			FunctionMetadata {
 				name: "aux_1",
-				arguments: vec![
+				args: vec![
 					FunctionArgumentMetadata {
 						name: "_data",
 						ty: scale_info::meta_type::<codec::Compact<u32>>(),
 					}
 				],
-				documentation: vec![],
+				docs: vec![],
 			},
 			FunctionMetadata {
 				name: "aux_2",
-				arguments: vec![
+				args: vec![
 					FunctionArgumentMetadata {
 						name: "_data",
 						ty: scale_info::meta_type::<i32>(),
@@ -2600,26 +2600,26 @@ mod tests {
 						ty: scale_info::meta_type::<String>(),
 					}
 				],
-				documentation: vec![],
+				docs: vec![],
 			},
 			FunctionMetadata {
 				name: "aux_3",
-				arguments: vec![],
-				documentation: vec![],
+				args: vec![],
+				docs: vec![],
 			},
 			FunctionMetadata {
 				name: "aux_4",
-				arguments: vec![
+				args: vec![
 					FunctionArgumentMetadata {
 						name: "_data",
 						ty: scale_info::meta_type::<i32>(),
 					}
 				],
-				documentation: vec![],
+				docs: vec![],
 			},
 			FunctionMetadata {
 				name: "aux_5",
-				arguments: vec![
+				args: vec![
 					FunctionArgumentMetadata {
 						name: "_data",
 						ty: scale_info::meta_type::<i32>(),
@@ -2629,12 +2629,12 @@ mod tests {
 						ty: scale_info::meta_type::<codec::Compact<u32>>()
 					}
 				],
-				documentation: vec![],
+				docs: vec![],
 			},
 			FunctionMetadata {
 				name: "operational",
-				arguments: vec![],
-				documentation: vec![],
+				args: vec![],
+				docs: vec![],
 			},
 		]
 	}

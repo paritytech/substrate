@@ -404,7 +404,7 @@ fn expected_metadata() -> PalletStorageMetadata {
 				modifier: StorageEntryModifier::Default,
 				ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 				default: vec![0, 0, 0, 0],
-				documentation: vec![],
+				docs: vec![],
 			},
 			StorageEntryMetadata {
 				name: "Map",
@@ -415,7 +415,7 @@ fn expected_metadata() -> PalletStorageMetadata {
 					value: scale_info::meta_type::<u64>(),
 				},
 				default: [0u8; 8].to_vec(),
-				documentation: vec![],
+				docs: vec![],
 			},
 			StorageEntryMetadata {
 				name: "DoubleMap",
@@ -428,7 +428,7 @@ fn expected_metadata() -> PalletStorageMetadata {
 					value: scale_info::meta_type::<u64>(),
 				},
 				default: [0u8; 8].to_vec(),
-				documentation: vec![],
+				docs: vec![],
 			},
 		]
 	}
