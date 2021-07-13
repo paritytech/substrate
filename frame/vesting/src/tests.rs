@@ -217,13 +217,13 @@ fn vested_balance_should_transfer_with_multi_sched() {
 		assert_eq!(Vesting::vesting(&1).unwrap(), vec![sched0, sched0]);
 
 		let user1_free_balance = Balances::free_balance(&1);
-			assert_eq!(user1_free_balance, 3840); // Account 1 has free balance
+		assert_eq!(user1_free_balance, 3840); // Account 1 has free balance
 
-			// Account 1 has only 256 units unlocking at block 1 (plus 1280 unvested)
-			assert_eq!(Vesting::vesting_balance(&1), Some(2304));
-			assert_ok!(Vesting::vest(Some(1).into()));
-			assert_ok!(Balances::transfer(Some(1).into(), 2, 1536));
-		});
+		// Account 1 has only 256 units unlocking at block 1 (plus 1280 already fee).
+		assert_eq!(Vesting::vesting_balance(&1), Some(2304));
+		assert_ok!(Vesting::vest(Some(1).into()));
+		assert_ok!(Balances::transfer(Some(1).into(), 2, 1536));
+	});
 }
 
 #[test]
@@ -263,7 +263,7 @@ fn vested_balance_should_transfer_using_vest_other_with_multi_sched() {
 			let user1_free_balance = Balances::free_balance(&1);
 			assert_eq!(user1_free_balance, 3840); // Account 1 has free balance
 
-			// Account 1 has only 256 units unlocking at block 1 (plus 1280 unvested)
+			// Account 1 has only 256 units unlocking at block 1 (plus 1280 already free).
 			assert_eq!(Vesting::vesting_balance(&1), Some(2304));
 			assert_ok!(Vesting::vest_other(Some(2).into(), 1));
 			assert_ok!(Balances::transfer(Some(1).into(), 2, 1536));
