@@ -796,7 +796,7 @@ impl<T> PrefixIterator<T> {
 	}
 
 	/// Get the last key that has been iterated upon and return it.
-	pub fn next_key(&self) -> &[u8] {
+	pub fn last_key(&self) -> &[u8] {
 		&self.previous_key
 	}
 
@@ -806,7 +806,7 @@ impl<T> PrefixIterator<T> {
 	}
 
 	/// Set the next key that the iterator should start iterating upon.
-	pub fn set_next_key(&mut self, next_key: Vec<u8>) {
+	pub fn set_last_key(&mut self, next_key: Vec<u8>) {
 		self.previous_key = next_key;
 	}
 
@@ -896,7 +896,7 @@ impl<T> KeyPrefixIterator<T> {
 	}
 
 	/// Get the last key that has been iterated upon and return it.
-	pub fn next_key(&self) -> &[u8] {
+	pub fn last_key(&self) -> &[u8] {
 		&self.previous_key
 	}
 
@@ -906,7 +906,7 @@ impl<T> KeyPrefixIterator<T> {
 	}
 
 	/// Set the next key that the iterator should start iterating upon.
-	pub fn set_next_key(&mut self, next_key: Vec<u8>) {
+	pub fn set_last_key(&mut self, next_key: Vec<u8>) {
 		self.previous_key = next_key;
 	}
 
@@ -1574,7 +1574,7 @@ mod test {
 			assert!(elem.is_some());
 			final_vec.push(op(elem.unwrap()));
 
-			let stored_key = iter.next_key().to_owned();
+			let stored_key = iter.last_key().to_owned();
 			let iter = MyStorageMap::iter_from(stored_key).map(op);
 			let remaining = iter.collect::<Vec<_>>();
 			assert_eq!(remaining.len(), 8);
