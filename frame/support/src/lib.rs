@@ -112,7 +112,8 @@ impl TypeId for PalletId {
 /// // generate a storage value with type u32.
 /// generate_storage_alias!(Prefix, StorageName => Value<u32>);
 ///
-/// // generate a double map from `(u32, u32)` (with hasher `Twox64Concat`) to `Vec<u8>`
+/// // generate a double map from `(u32, u32)` (with hashers `Twox64Concat` for each key) 
+/// // to `Vec<u8>`
 /// generate_storage_alias!(
 /// 	OtherPrefix, OtherStorageName => DoubleMap<
 /// 		((u32, u32), Twox64Concat),
