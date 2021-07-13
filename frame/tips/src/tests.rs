@@ -25,7 +25,7 @@ use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
 	weights::Weight, traits::SortedMembers,
-	PalletId
+	PalletId, pallet_prelude::GenesisBuild,
 };
 use sp_runtime::Permill;
 use sp_core::H256;
