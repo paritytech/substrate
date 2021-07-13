@@ -59,7 +59,7 @@ mod inner {
 		worker_threads: Option<usize>,
 		_cors: Option<&Vec<String>>,
 		maybe_max_payload_mb: Option<usize>,
-		module: RpcModule<M>,
+		mut module: RpcModule<M>,
 	) -> Result<HttpStopHandle, String>  {
 
 		let (tx, rx) = oneshot::channel::<Result<HttpStopHandle, String>>();
@@ -81,7 +81,7 @@ mod inner {
 			};
 
 			rt.block_on(async move {
-				let mut server = match HttpServerBuilder::default()
+				let server = match HttpServerBuilder::default()
 					.max_request_body_size(max_request_body_size as u32)
 					.build(addr)
 				{
@@ -91,24 +91,23 @@ mod inner {
 						return;
 					}
 				};
-
+				// TODO: (dp) DRY this up; it's the same as the WS code
 				let handle = server.stop_handle();
-
-				server.register_module(module).expect("infallible already checked; qed");
 				let mut methods_api = RpcModule::new(());
-				let mut methods = server.method_names();
-				methods.sort();
+				let mut available_methods = module.method_names().collect::<Vec<_>>();
+				available_methods.sort_unstable();
 
+				// TODO: (dp) not sure this is correct; shouldn't the `rpc_methods` also be listed?
 				methods_api.register_method("rpc_methods", move |_, _| {
 					Ok(serde_json::json!({
 						"version": 1,
-						"methods": methods,
+						"methods": available_methods,
 					}))
 				}).expect("infallible all other methods have their own address space; qed");
 
-				server.register_module(methods_api).unwrap();
+				module.merge(methods_api).expect("infallible already checked; qed");
 				let _ = tx.send(Ok(handle));
-				let _ = server.start().await;
+				let _ = server.start(module).await;
 			});
 		});
 
@@ -124,7 +123,7 @@ mod inner {
 		max_connections: Option<usize>,
 		_cors: Option<&Vec<String>>,
 		maybe_max_payload_mb: Option<usize>,
-		module: RpcModule<M>,
+		mut module: RpcModule<M>,
 	) -> Result<WsStopHandle, String> {
 		let (tx, rx) = oneshot::channel::<Result<WsStopHandle, String>>();
 		let max_request_body_size = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
@@ -146,7 +145,7 @@ mod inner {
 			};
 
 			rt.block_on(async move {
-				let mut server = match WsServerBuilder::default()
+				let server = match WsServerBuilder::default()
 					.max_request_body_size(max_request_body_size as u32)
 					.max_connections(max_connections as u64)
 					.build(addr)
@@ -158,23 +157,23 @@ mod inner {
 						return;
 					}
 				};
-
+				// TODO: (dp) DRY this up; it's the same as the HTTP code
 				let handle = server.stop_handle();
-				server.register_module(module).expect("infallible already checked; qed");
 				let mut methods_api = RpcModule::new(());
-				let mut methods = server.method_names();
-				methods.sort();
+				let mut available_methods = module.method_names().collect::<Vec<_>>();
+				available_methods.sort();
 
+				// TODO: (dp) not sure this is correct; shouldn't the `rpc_methods` also be listed?
 				methods_api.register_method("rpc_methods", move |_, _| {
 					Ok(serde_json::json!({
 						"version": 1,
-						"methods": methods,
+						"methods": available_methods,
 					}))
 				}).expect("infallible all other methods have their own address space; qed");
 
-				server.register_module(methods_api).unwrap();
+				module.merge(methods_api).expect("infallible already checked; qed");
 				let _ = tx.send(Ok(handle));
-				let _ = server.start().await;
+				let _ = server.start(module).await;
 			});
 		});
 
