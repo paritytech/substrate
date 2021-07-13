@@ -360,7 +360,7 @@ impl<
 
 	fn iter_prefix_from(k1: impl EncodeLike<K1>, starting_key: Vec<u8>) -> Self::PrefixIterator {
 		let mut iter = Self::iter_prefix(k1);
-		iter.set_last_key(starting_key);
+		iter.set_last_raw_key(starting_key);
 		iter
 	}
 
@@ -382,7 +382,7 @@ impl<
 		starting_key: Vec<u8>,
 	) -> Self::PartialKeyIterator {
 		let mut iter = Self::iter_key_prefix(k1);
-		iter.set_last_key(starting_key);
+		iter.set_last_raw_key(starting_key);
 		iter
 	}
 

@@ -337,7 +337,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		K: HasReversibleKeyPrefix<KP>,
 	{
 		let mut iter = Self::iter_prefix(kp);
-		iter.set_last_key(starting_key);
+		iter.set_last_raw_key(starting_key);
 		iter
 	}
 
@@ -362,7 +362,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		K: HasReversibleKeyPrefix<KP>,
 	{
 		let mut iter = Self::iter_key_prefix(kp);
-		iter.set_last_key(starting_key);
+		iter.set_last_raw_key(starting_key);
 		iter
 	}
 
