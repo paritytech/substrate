@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Storge proof primitives. Constains types and basic code to extract storage
+//! Storage proof primitives. Constains types and basic code to extract storage
 //! proofs for indexed transactions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -49,6 +49,8 @@ impl IsFatalError for InherentError {
 	}
 }
 
+/// Holds a chunk of data retrieved from storage along with
+/// a proof that the data was stored at that location in the trie.
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct TransactionStorageProof {
 	/// Data chunk that is proved to exist.
@@ -108,7 +110,7 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	}
 }
 
-/// An utility function to extract chunk index from the source of randomness.
+/// A utility function to extract a chunk index from the source of randomness.
 pub fn random_chunk(random_hash: &[u8], total_chunks: u32) -> u32 {
 	let mut buf = [0u8; 8];
 	buf.copy_from_slice(&random_hash[0..8]);
@@ -116,18 +118,24 @@ pub fn random_chunk(random_hash: &[u8], total_chunks: u32) -> u32 {
 	(random_u64 % total_chunks as u64) as u32
 }
 
-/// An utility function to enocde transaction index as trie key.
+/// A utility function to encode transaction index as trie key.
 pub fn encode_index(input: u32) -> Vec<u8> {
 	codec::Encode::encode(&codec::Compact(input))
 }
 
 /// An interface to request indexed data from the client.
 pub trait IndexedBody<B: BlockT> {
+	/// Get all indexed transactions for a block,
+	/// including renewed transactions.
+	///
+	/// Note that this will only fetch transactions
+	/// that are indexed by the runtime with `storage_index_transaction`.
 	fn block_indexed_body(
 		&self,
 		number: NumberFor<B>,
 	) -> Result<Option<Vec<Vec<u8>>>, Error>;
 
+	/// Get block number for a block hash.
 	fn number(
 		&self,
 		hash: B::Hash,
@@ -237,4 +245,3 @@ pub mod registration {
 		).unwrap();
 	}
 }
-

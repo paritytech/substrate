@@ -52,7 +52,7 @@ pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use frame_support::{
-	impl_outer_origin, parameter_types,
+	parameter_types,
 	traits::KeyOwnerProofSystem,
 	weights::RuntimeDbWeight,
 };
@@ -343,9 +343,6 @@ cfg_if! {
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
 				fn take_block_number() -> Option<u64>;
-				/// Returns if no block was initialized.
-				#[skip_initialize_block]
-				fn without_initialize_block() -> bool;
 				/// Test that `ed25519` crypto works in the runtime.
 				///
 				/// Returns the signature generated for the message `ed25519` and the public key.
@@ -396,9 +393,6 @@ cfg_if! {
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
 				fn take_block_number() -> Option<u64>;
-				/// Returns if no block was initialized.
-				#[skip_initialize_block]
-				fn without_initialize_block() -> bool;
 				/// Test that `ed25519` crypto works in the runtime.
 				///
 				/// Returns the signature generated for the message `ed25519` and the public key.
@@ -436,8 +430,61 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-impl_outer_origin!{
-	pub enum Origin for Runtime where system = frame_system {}
+#[derive(Clone, RuntimeDebug)]
+pub struct Origin;
+
+impl From<frame_system::Origin<Runtime>> for Origin {
+	fn from(_o: frame_system::Origin<Runtime>) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+impl Into<Result<frame_system::Origin<Runtime>, Origin>> for Origin {
+	fn into(self) -> Result<frame_system::Origin<Runtime>, Origin> {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+impl frame_support::traits::OriginTrait for Origin {
+	type Call = <Runtime as frame_system::Config>::Call;
+	type PalletsOrigin = Origin;
+	type AccountId = <Runtime as frame_system::Config>::AccountId;
+
+	fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn reset_filter(&mut self) {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn set_caller_from(&mut self, _other: impl Into<Self>) {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn filter_call(&self, _call: &Self::Call) -> bool {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn caller(&self) -> &Self::PalletsOrigin {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn try_with_caller<R>(
+		self,
+		_f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
+	) -> Result<R, Self> {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn none() -> Self {
+		unimplemented!("Not required in tests!")
+	}
+	fn root() -> Self {
+		unimplemented!("Not required in tests!")
+	}
+	fn signed(_by: <Runtime as frame_system::Config>::AccountId) -> Self {
+		unimplemented!("Not required in tests!")
+	}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
@@ -494,7 +541,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;
@@ -635,6 +682,7 @@ cfg_if! {
 				fn validate_transaction(
 					_source: TransactionSource,
 					utx: <Block as BlockT>::Extrinsic,
+					_: <Block as BlockT>::Hash,
 				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
@@ -718,10 +766,6 @@ cfg_if! {
 
 				fn get_block_number() -> u64 {
 					system::get_block_number().expect("Block number is initialized")
-				}
-
-				fn without_initialize_block() -> bool {
-					system::get_block_number().is_none()
 				}
 
 				fn take_block_number() -> Option<u64> {
@@ -888,6 +932,7 @@ cfg_if! {
 				fn validate_transaction(
 					_source: TransactionSource,
 					utx: <Block as BlockT>::Extrinsic,
+					_: <Block as BlockT>::Hash,
 				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{
@@ -975,10 +1020,6 @@ cfg_if! {
 
 				fn get_block_number() -> u64 {
 					system::get_block_number().expect("Block number is initialized")
-				}
-
-				fn without_initialize_block() -> bool {
-					system::get_block_number().is_none()
 				}
 
 				fn take_block_number() -> Option<u64> {

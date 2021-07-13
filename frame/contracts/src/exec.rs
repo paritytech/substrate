@@ -28,12 +28,13 @@ use sp_std::{
 };
 use sp_runtime::{Perbill, traits::{Convert, Saturating}};
 use frame_support::{
-	dispatch::{DispatchResult, DispatchError},
+	dispatch::{DispatchResult, DispatchError, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
-	traits::{ExistenceRequirement, Currency, Time, Randomness, Get},
+	traits::{ExistenceRequirement, Currency, Time, Randomness, Get, OriginTrait, Filter},
 	weights::Weight,
 	ensure, DefaultNoBound,
 };
+use frame_system::RawOrigin;
 use pallet_contracts_primitives::{ExecReturnValue};
 use smallvec::{SmallVec, Array};
 
@@ -300,6 +301,9 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// Returns `true` if debug message recording is enabled. Otherwise `false` is returned.
 	fn append_debug_buffer(&mut self, msg: &str) -> bool;
+
+	/// Call some dispatchable and return the result.
+	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -1291,6 +1295,12 @@ where
 			false
 		}
 	}
+
+	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
+		let mut origin: T::Origin = RawOrigin::Signed(self.address().clone()).into();
+		origin.add_filter(T::CallFilter::filter);
+		call.dispatch(origin)
+	}
 }
 
 fn deposit_event<T: Config>(
@@ -1326,10 +1336,10 @@ mod sealing {
 mod tests {
 	use super::*;
 	use crate::{
-		gas::GasMeter, tests::{ExtBuilder, Test, Event as MetaEvent},
+		gas::GasMeter,
 		storage::Storage,
 		tests::{
-			ALICE, BOB, CHARLIE,
+			ALICE, BOB, CHARLIE, Call, TestFilter, ExtBuilder, Test, Event as MetaEvent,
 			test_utils::{place_contract, set_balance, get_balance},
 		},
 		exec::ExportedFunction::*,
@@ -1337,12 +1347,15 @@ mod tests {
 	};
 	use codec::{Encode, Decode};
 	use sp_core::Bytes;
-	use sp_runtime::DispatchError;
+	use sp_runtime::{DispatchError, traits::{BadOrigin, Hash}};
 	use assert_matches::assert_matches;
 	use std::{cell::RefCell, collections::HashMap, rc::Rc};
 	use pretty_assertions::{assert_eq, assert_ne};
 	use pallet_contracts_primitives::ReturnFlags;
 	use frame_support::{assert_ok, assert_err};
+	use frame_system::{EventRecord, Phase};
+
+	type System = frame_system::Pallet<Test>;
 
 	type MockStack<'a> = Stack<'a, Test, MockExecutable>;
 
@@ -1353,7 +1366,7 @@ mod tests {
 	}
 
 	fn events() -> Vec<Event<Test>> {
-		<frame_system::Pallet<Test>>::events()
+		System::events()
 			.into_iter()
 			.filter_map(|meta| match meta.event {
 				MetaEvent::Contracts(contract_event) => Some(contract_event),
@@ -2501,6 +2514,116 @@ mod tests {
 				).map_err(|e| e.error),
 				<Error<Test>>::ReentranceDenied,
 			);
+		});
+	}
+
+	#[test]
+	fn call_runtime_works() {
+		let code_hash = MockLoader::insert(Call, |ctx, _| {
+			let call = Call::System(frame_system::Call::remark_with_event(b"Hello World".to_vec()));
+			ctx.ext.call_runtime(call).unwrap();
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, subsistence * 10);
+			place_contract(&BOB, code_hash);
+			System::reset_events();
+			MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			).unwrap();
+
+			let remark_hash = <Test as frame_system::Config>::Hashing::hash(b"Hello World");
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
+					topics: vec![],
+				},
+			]);
+		});
+	}
+
+	#[test]
+	fn call_runtime_filter() {
+		let code_hash = MockLoader::insert(Call, |ctx, _| {
+			use frame_system::Call as SysCall;
+			use pallet_balances::Call as BalanceCall;
+			use pallet_utility::Call as UtilCall;
+
+			// remark should still be allowed
+			let allowed_call = Call::System(SysCall::remark_with_event(b"Hello".to_vec()));
+
+			// transfers are disallowed by the `TestFiler` (see below)
+			let forbidden_call = Call::Balances(BalanceCall::transfer(CHARLIE, 22));
+
+			// simple cases: direct call
+			assert_err!(
+				ctx.ext.call_runtime(forbidden_call.clone()),
+				BadOrigin,
+			);
+
+			// as part of a patch: return is OK (but it interrupted the batch)
+			assert_ok!(
+				ctx.ext.call_runtime(Call::Utility(UtilCall::batch(vec![
+					allowed_call.clone(), forbidden_call, allowed_call
+				]))),
+			);
+
+			// the transfer wasn't performed
+			assert_eq!(get_balance(&CHARLIE), 0);
+
+			exec_success()
+		});
+
+		TestFilter::set_filter(|call| {
+			match call {
+				Call::Balances(pallet_balances::Call::transfer(_, _)) => false,
+				_ => true,
+			}
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = <Test as Config>::Schedule::get();
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, subsistence * 10);
+			place_contract(&BOB, code_hash);
+			System::reset_events();
+			MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut gas_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			).unwrap();
+
+			let remark_hash = <Test as frame_system::Config>::Hashing::hash(b"Hello");
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::System(frame_system::Event::Remarked(BOB, remark_hash)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::Utility(
+						pallet_utility::Event::BatchInterrupted(1, BadOrigin.into()),
+					),
+					topics: vec![],
+				},
+			]);
 		});
 	}
 }
