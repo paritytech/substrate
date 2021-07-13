@@ -24,7 +24,7 @@ pallet-session = { version = "4.0.0-dev", default-features = false, path = "../.
 rand = { version = "0.7.2", default-features = false }
 
 [dev-dependencies]
-serde = { version = "1.0.101" }
+serde = { version = "1.0.126" }
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }

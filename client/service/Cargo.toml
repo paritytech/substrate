@@ -38,7 +38,7 @@ wasm-timer = "0.2"
 exit-future = "0.2.0"
 pin-project = "1.0.4"
 hash-db = "0.15.2"
-serde = "1.0.101"
+serde = "1.0.126"
 serde_json = "1.0.41"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
