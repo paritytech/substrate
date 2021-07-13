@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.101", features = ["derive"] }
+serde = { version = "1.0.126", features = ["derive"] }
 sp-core = { version = "4.0.0-dev", path = "../core" }
 tracing-core = "0.1.17"
 rustc-hash = "1.1.0"

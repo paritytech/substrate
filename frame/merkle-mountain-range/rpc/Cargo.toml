@@ -18,7 +18,7 @@ jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-derive = "15.1.0"
 pallet-mmr-primitives = { version = "4.0.0-dev", path = "../primitives" }
-serde = { version = "1.0.101", features = ["derive"] }
+serde = { version = "1.0.126", features = ["derive"] }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
