@@ -1027,12 +1027,12 @@ parameter_types! {
 }
 
 impl pallet_vesting::Config for Runtime {
-	type BlockNumberToBalance = ConvertInto;
-	type Currency = Balances;
 	type Event = Event;
-	type MaxVestingSchedules = MaxVestingSchedules;
+	type Currency = Balances;
+	type BlockNumberToBalance = ConvertInto;
 	type MinVestedTransfer = MinVestedTransfer;
 	type WeightInfo = pallet_vesting::weights::SubstrateWeight<Runtime>;
+	type MaxVestingSchedules = MaxVestingSchedules;
 }
 
 impl pallet_mmr::Config for Runtime {
