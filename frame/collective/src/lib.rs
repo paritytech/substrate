@@ -211,7 +211,13 @@ decl_storage! {
 	add_extra_genesis {
 		config(phantom): sp_std::marker::PhantomData<I>;
 		config(members): Vec<T::AccountId>;
-		build(|config| Module::<T, I>::initialize_members(&config.members))
+		build(|config| {
+			use sp_std::collections::btree_set::BTreeSet;
+			let members_set: BTreeSet<_> = config.members.iter().collect();
+			assert!(members_set.len() == config.members.len(), "Members cannot contain duplicate accounts.");
+
+			Module::<T, I>::initialize_members(&config.members)
+		});
 	}
 }
 
@@ -1836,5 +1842,14 @@ mod tests {
 				record(Event::Collective(RawEvent::Disapproved(hash.clone()))),
 			]);
 		})
+	}
+
+	#[test]
+	#[should_panic(expected = "Members cannot contain duplicate accounts.")]
+	fn genesis_build_panics_with_duplicate_members() {
+		collective::GenesisConfig::<Test> {
+			members: vec![1, 2, 3, 1],
+			phantom: Default::default(),
+		}.build_storage().unwrap();
 	}
 }

@@ -84,6 +84,11 @@ decl_storage! {
 		config(phantom): sp_std::marker::PhantomData<I>;
 		build(|config: &Self| {
 			let mut members = config.members.clone();
+
+			use sp_std::collections::btree_set::BTreeSet;
+			let members_set: BTreeSet<_> = config.members.iter().collect();
+			assert!(members_set.len() == config.members.len(), "Members cannot contain duplicate accounts.");
+
 			members.sort();
 			T::MembershipInitialized::initialize_members(&members);
 			<Members<T, I>>::put(members);
@@ -705,5 +710,14 @@ mod tests {
 			assert_eq!(Membership::prime(), None);
 			assert_eq!(PRIME.with(|m| *m.borrow()), Membership::prime());
 		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Members cannot contain duplicate accounts.")]
+	fn genesis_build_panics_with_duplicate_members() {
+		pallet_membership::GenesisConfig::<Test> {
+			members: vec![1, 2, 3, 1],
+			phantom: Default::default(),
+		}.build_storage().unwrap();
 	}
 }
