@@ -646,7 +646,9 @@ publish-s3-doc:
         echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
         exit 1
       )
-    - aws s3 sync --delete --size-only --only-show-errors
+    # FIXME
+    # --only-show-errors
+    - aws s3 sync --delete --size-only --exclude .lock
         ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
