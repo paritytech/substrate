@@ -649,7 +649,8 @@ publish-s3-doc:
     # FIXME
     # --only-show-errors
     - ls -lah crate-docs
-    - aws s3 sync --delete --size-only --exclude "./crate-docs/.lock"
+    - rm -f ./crate-docs/.lock
+    - aws s3 sync --delete --size-only
         ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
