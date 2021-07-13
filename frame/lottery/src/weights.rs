@@ -56,33 +56,33 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn buy_ticket() -> Weight {
-		(89_015_000 as Weight)
+		(72_703_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn set_calls(n: u32, ) -> Weight {
-		(19_654_000 as Weight)
+		(15_536_000 as Weight)
 			// Standard Error: 5_000
-			.saturating_add((384_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((786_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn start_lottery() -> Weight {
-		(72_310_000 as Weight)
+		(57_937_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn stop_repeat() -> Weight {
-		(9_068_000 as Weight)
+		(7_468_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn on_initialize_end() -> Weight {
-		(140_884_000 as Weight)
+		(114_880_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn on_initialize_repeat() -> Weight {
-		(146_739_000 as Weight)
+		(119_713_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -91,33 +91,33 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn buy_ticket() -> Weight {
-		(89_015_000 as Weight)
+		(72_703_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn set_calls(n: u32, ) -> Weight {
-		(19_654_000 as Weight)
+		(15_536_000 as Weight)
 			// Standard Error: 5_000
-			.saturating_add((384_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((786_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn start_lottery() -> Weight {
-		(72_310_000 as Weight)
+		(57_937_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn stop_repeat() -> Weight {
-		(9_068_000 as Weight)
+		(7_468_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn on_initialize_end() -> Weight {
-		(140_884_000 as Weight)
+		(114_880_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn on_initialize_repeat() -> Weight {
-		(146_739_000 as Weight)
+		(119_713_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
