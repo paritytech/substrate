@@ -29,6 +29,7 @@ sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"sp-std/std",
 	"sp-npos-elections/std",
 	"sp-arithmetic/std",

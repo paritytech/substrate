@@ -13,7 +13,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-scale-info = { version = "0.9.0", default-features = false, features = ["derive"] }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
