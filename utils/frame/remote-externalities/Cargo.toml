@@ -13,8 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee-ws-client = { version = "0.2.0", default-features = false, features = ["tokio02"] }
-jsonrpsee-proc-macros = "0.2.0"
+jsonrpsee-ws-client = { version = "0.3.0", default-features = false, features = ["tokio02"] }
+jsonrpsee-proc-macros = "0.3.0"
 
 hex = "0.4.0"
 env_logger = "0.8.2"
