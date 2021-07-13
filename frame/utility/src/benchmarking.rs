@@ -32,10 +32,9 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 benchmarks! {
 	batch {
 		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::Call> = Vec::new();
+		let mut calls = Vec::new();
 		for i in 0 .. c {
-			let call = frame_system::Call::remark(vec![]).into();
-			calls.push(call);
+			calls.push(Box::new(frame_system::Call::remark(vec![]).into()));
 		}
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), calls)
@@ -53,10 +52,9 @@ benchmarks! {
 
 	batch_all {
 		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::Call> = Vec::new();
+		let mut calls = Vec::new();
 		for i in 0 .. c {
-			let call = frame_system::Call::remark(vec![]).into();
-			calls.push(call);
+			calls.push(Box::new(frame_system::Call::remark(vec![]).into()));
 		}
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), calls)
