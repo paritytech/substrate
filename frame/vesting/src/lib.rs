@@ -182,6 +182,7 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
+			// NOTE: Migration v1 will delete vesting schedules if `MaxVestingSchedules < 1`.
 			assert!(T::MaxVestingSchedules::get() > 0, "`MaxVestingSchedules` must ge greater than 0");
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||

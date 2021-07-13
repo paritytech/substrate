@@ -35,7 +35,8 @@ pub(crate) mod v1 {
 		Ok(())
 	}
 
-	/// Migrate from single schedule to multi schedule storage
+	/// Migrate from single schedule to multi schedule storage.
+	/// WARNING: This migration will delete schedules if `MaxVestingSchedules < 1`.
 	pub(crate) fn migrate<T: Config>() -> Weight {
 		let mut reads_writes = 0;
 
