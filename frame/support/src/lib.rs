@@ -116,8 +116,8 @@ impl TypeId for PalletId {
 /// // to `Vec<u8>`
 /// generate_storage_alias!(
 /// 	OtherPrefix, OtherStorageName => DoubleMap<
-/// 		((u32, u32), Twox64Concat),
-/// 		((u32, u32), Twox64Concat),
+/// 		(u32, Twox64Concat),
+/// 		(u32, Twox64Concat),
 /// 		Vec<u8>
 /// 	>
 /// );
