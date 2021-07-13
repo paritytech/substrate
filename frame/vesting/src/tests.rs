@@ -213,7 +213,7 @@ fn vested_balance_should_transfer_with_multi_sched() {
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let sched0 = VestingInfo::new(5 * ED, 128, 0);
 		assert_ok!(Vesting::vested_transfer(Some(13).into(), 1, sched0));
-		// Total of 2560 of locked for all the schedules.
+		// Total of 10*ED of locked for all the schedules.
 		assert_eq!(Vesting::vesting(&1).unwrap(), vec![sched0, sched0]);
 
 		let user1_free_balance = Balances::free_balance(&1);
@@ -227,7 +227,7 @@ fn vested_balance_should_transfer_with_multi_sched() {
 }
 
 #[test]
-fn vest_correctly_fails() {
+fn non_vested_cannot_vest() {
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		assert!(!<VestingStorage<Test>>::contains_key(4));
 		assert_noop!(Vesting::vest(Some(4).into()), Error::<Test>::NotVesting);
@@ -257,7 +257,7 @@ fn vested_balance_should_transfer_using_vest_other_with_multi_sched() {
 		.execute_with(|| {
 			let sched0 = VestingInfo::new(5*ED, 128, 0);
 			assert_ok!(Vesting::vested_transfer(Some(13).into(), 1, sched0));
-			// Total of 2560 of locked for all the schedules.
+			// Total of 10*ED of locked for all the schedules.
 			assert_eq!(Vesting::vesting(&1).unwrap(), vec![sched0, sched0]);
 
 			let user1_free_balance = Balances::free_balance(&1);
@@ -271,7 +271,7 @@ fn vested_balance_should_transfer_using_vest_other_with_multi_sched() {
 }
 
 #[test]
-fn vest_other_correctly_fails() {
+fn non_vested_cannot_vest_other() {
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		assert!(!<VestingStorage<Test>>::contains_key(4));
 		assert_noop!(Vesting::vest_other(Some(3).into(), 4), Error::<Test>::NotVesting);
@@ -674,7 +674,7 @@ fn merge_ongoing_schedules() {
 
 		assert_ok!(Vesting::merge_schedules(Some(2).into(), 0, 1));
 
-		// Merging schedules vests all pre-existing schedules prior to merging, which is reflected
+		// Merging schedules un-vests all pre-existing schedules prior to merging, which is reflected
 		// in account 2's updated usable balance.
 		let sched0_vested_now = sched0.per_block() * (cur_block - sched0.starting_block());
 		let sched1_vested_now = sched1.per_block() * (cur_block - sched1.starting_block());
