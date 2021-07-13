@@ -95,7 +95,7 @@ mod inner {
 				let handle = server.stop_handle();
 				let mut methods_api = RpcModule::new(());
 				let mut available_methods = module.method_names().collect::<Vec<_>>();
-				available_methods.sort();
+				available_methods.sort_unstable();
 
 				// TODO: (dp) not sure this is correct; shouldn't the `rpc_methods` also be listed?
 				methods_api.register_method("rpc_methods", move |_, _| {
