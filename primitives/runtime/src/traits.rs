@@ -27,7 +27,7 @@ use std::str::FromStr;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode, MaxEncodedLen};
-use crate::scale_info::{TypeInfo, StaticTypeInfo};
+use crate::scale_info::{MetaType, TypeInfo, StaticTypeInfo};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 	UnknownTransaction,
@@ -757,7 +757,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Any additional data that will go into the signed payload. This may be created dynamically
 	/// from the transaction using the `additional_signed` function.
-	type AdditionalSigned: Encode;
+	type AdditionalSigned: Encode + TypeInfo;
 
 	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
 	type Pre: Default;
@@ -862,16 +862,31 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		Ok(())
 	}
 
-	/// Returns the list of unique identifier for this signed extension.
+	/// Returns the metadata for this signed extension.
 	///
 	/// As a [`SignedExtension`] can be a tuple of [`SignedExtension`]s we need to return a `Vec`
-	/// that holds all the unique identifiers. Each individual `SignedExtension` must return
-	/// *exactly* one identifier.
+	/// that holds the metadata of each one. Each individual `SignedExtension` must return
+	/// *exactly* one [`SignedExtensionMetadata`].
 	///
-	/// This method provides a default implementation that returns `vec![SELF::IDENTIFIER]`.
-	fn identifier() -> Vec<(&'static str, scale_info::MetaType)> {
-		sp_std::vec![(Self::IDENTIFIER, scale_info::meta_type::<Self>())]
+	/// This method provides a default implementation that returns a vec containing a single
+	/// [`SignedExtensionMetadata`].
+	fn metadata() -> Vec<SignedExtensionMetadata> {
+		sp_std::vec![SignedExtensionMetadata {
+			identifier: Self::IDENTIFIER,
+			ty: scale_info::meta_type::<Self>(),
+			additional_signed: scale_info::meta_type::<Self::AdditionalSigned>()
+		}]
 	}
+}
+
+/// Information about a [`SignedExtension`] for the runtime metadata.
+pub struct SignedExtensionMetadata {
+	/// The unique identifier of the [`SignedExtension`].
+	pub identifier: &'static str,
+	/// The type of the [`SignedExtension`].
+	pub ty: MetaType,
+	/// The type of the [`SignedExtension`] additional signed data for the payload.
+	pub additional_signed: MetaType,
 }
 
 #[impl_for_tuples(1, 12)]
@@ -934,9 +949,9 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		Ok(())
 	}
 
-	fn identifier() -> Vec<(&'static str, scale_info::MetaType)> {
+	fn metadata() -> Vec<SignedExtensionMetadata> {
 		let mut ids = Vec::new();
-		for_tuples!( #( ids.extend(Tuple::identifier()); )* );
+		for_tuples!( #( ids.extend(Tuple::metadata()); )* );
 		ids
 	}
 }

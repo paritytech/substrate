@@ -74,11 +74,12 @@ pub fn expand_runtime_metadata(
 								<
 									#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata
 								>::SignedExtensions as #scrate::sp_runtime::traits::SignedExtension
-							>::identifier()
+							>::metadata()
 								.into_iter()
-								.map(|(id, ty)| #scrate::metadata::SignedExtensionMetadata {
-									identifier: id,
-									ty,
+								.map(|meta| #scrate::metadata::SignedExtensionMetadata {
+									identifier: meta.identifier,
+									ty: meta.ty,
+									additional_signed: meta.additional_signed,
 								})
 								.collect(),
 					},

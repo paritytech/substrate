@@ -791,7 +791,11 @@ fn test_metadata() {
 		ty: scale_info::meta_type::<UncheckedExtrinsic>(),
 		version: 4,
 		signed_extensions: vec![
-			SignedExtensionMetadata { identifier: "UnitSignedExtension", ty: scale_info::meta_type::<()>() }
+			SignedExtensionMetadata {
+				identifier: "UnitSignedExtension",
+				ty: scale_info::meta_type::<()>(),
+				additional_signed: scale_info::meta_type::<()>(),
+			}
 		]
 	};
 
