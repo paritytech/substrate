@@ -29,4 +29,4 @@ futures-timer = "3.0.1"
 parking_lot = "0.11.1"
 derive_more = "0.99.2"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}
-async-trait = "0.1.42"
+async-trait = "0.1.50"

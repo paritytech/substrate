@@ -33,4 +33,4 @@ sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-state-machine = { version = "0.10.0-dev", path = "../../primitives/state-machine" }
-async-trait = "0.1.42"
+async-trait = "0.1.50"
