@@ -1562,13 +1562,27 @@ mod test {
 			MyStorageMap::insert(9, 90);
 			MyStorageMap::insert(10, 100);
 
+			let op = |(_, v)| v / 10;
+			let mut final_vec = vec![];
 			let mut iter = MyStorageMap::iter();
-			assert!(iter.next().is_some());
-			assert!(iter.next().is_some());
+		
+			let elem = iter.next();
+			assert!(elem.is_some());
+			final_vec.push(op(elem.unwrap()));
+
+			let elem = iter.next();
+			assert!(elem.is_some());
+			final_vec.push(op(elem.unwrap()));
 
 			let stored_key = iter.next_key().to_owned();
-			let iter = MyStorageMap::iter_from(stored_key);
-			assert_eq!(iter.collect::<Vec<_>>().len(), 8);
+			let iter = MyStorageMap::iter_from(stored_key).map(op);
+			let remaining = iter.collect::<Vec<_>>();
+			assert_eq!(remaining.len(), 8);
+
+			final_vec.extend_from_slice(&remaining);
+			final_vec.sort();
+
+			assert_eq!(final_vec, vec![1,2, 3, 4, 5, 6, 7, 8, 9, 10]);
 		});
 	}
 
