@@ -56,7 +56,7 @@ fn add_registrars<T: Config>(r: u32) -> Result<(), &'static str> {
 fn create_sub_accounts<T: Config>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
 	let mut subs = Vec::new();
 	let who_origin = RawOrigin::Signed(who.clone());
-	let data = Data::Raw(vec![0; 32]);
+	let data = Data::Raw(vec![0; 32].try_into().unwrap());
 
 	for i in 0..s {
 		let sub_account = account("sub", i, SEED);
@@ -84,11 +84,11 @@ fn add_sub_accounts<T: Config>(who: &T::AccountId, s: u32) -> Result<Vec<(T::Acc
 
 // This creates an `IdentityInfo` object with `num_fields` extra fields.
 // All data is pre-populated with some arbitrary bytes.
-fn create_identity_info<T: Config>(num_fields: u32) -> IdentityInfo {
-	let data = Data::Raw(vec![0; 32]);
+fn create_identity_info<T: Config>(num_fields: u32) -> IdentityInfo<T::MaxAdditionalFields> {
+	let data = Data::Raw(vec![0; 32].try_into().unwrap());
 
 	let info = IdentityInfo {
-		additional: vec![(data.clone(), data.clone()); num_fields as usize],
+		additional: vec![(data.clone(), data.clone()); num_fields as usize].try_into().unwrap(),
 		display: data.clone(),
 		legal: data.clone(),
 		web: data.clone(),
@@ -353,7 +353,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let _ = add_sub_accounts::<T>(&caller, s)?;
 		let sub = account("new_sub", 0, SEED);
-		let data = Data::Raw(vec![0; 32]);
+		let data = Data::Raw(vec![0; 32].try_into().unwrap());
 		ensure!(SubsOf::<T>::get(&caller).1.len() as u32 == s, "Subs not set.");
 	}: _(RawOrigin::Signed(caller.clone()), T::Lookup::unlookup(sub), data)
 	verify {
@@ -365,7 +365,7 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		let (sub, _) = add_sub_accounts::<T>(&caller, s)?.remove(0);
-		let data = Data::Raw(vec![1; 32]);
+		let data = Data::Raw(vec![1; 32].try_into().unwrap());
 		ensure!(SuperOf::<T>::get(&sub).unwrap().1 != data, "data already set");
 	}: _(RawOrigin::Signed(caller), T::Lookup::unlookup(sub.clone()), data.clone())
 	verify {
@@ -390,7 +390,7 @@ benchmarks! {
 		let sup = account("super", 0, SEED);
 		let _ = add_sub_accounts::<T>(&sup, s)?;
 		let sup_origin = RawOrigin::Signed(sup).into();
-		Identity::<T>::add_sub(sup_origin, T::Lookup::unlookup(caller.clone()), Data::Raw(vec![0; 32]))?;
+		Identity::<T>::add_sub(sup_origin, T::Lookup::unlookup(caller.clone()), Data::Raw(vec![0; 32].try_into().unwrap()))?;
 		ensure!(SuperOf::<T>::contains_key(&caller), "Sub doesn't exists");
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {

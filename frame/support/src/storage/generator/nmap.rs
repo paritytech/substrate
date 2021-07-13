@@ -37,7 +37,7 @@ use crate::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
 			ReversibleKeyGenerator, TupleToEncodedIter,
 		},
-		unhashed, PrefixIterator, StorageAppend,
+		unhashed, KeyPrefixIterator, PrefixIterator, StorageAppend,
 	},
 	Never,
 };
@@ -310,6 +310,7 @@ where
 impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 	storage::IterableStorageNMap<K, V> for G
 {
+	type KeyIterator = KeyPrefixIterator<K::Key>;
 	type Iterator = PrefixIterator<(K::Key, V)>;
 
 	fn iter_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
@@ -325,6 +326,19 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 				let partial_key = K::decode_partial_key(raw_key_without_prefix)?;
 				Ok((partial_key, V::decode(&mut raw_value)?))
 			},
+		}
+	}
+
+	fn iter_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where
+		K: HasReversibleKeyPrefix<KP>,
+	{
+		let prefix = G::storage_n_map_partial_key(kp);
+		KeyPrefixIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: K::decode_partial_key,
 		}
 	}
 
@@ -347,6 +361,19 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
 				Ok((final_key, V::decode(&mut raw_value)?))
 			},
+		}
+	}
+
+	fn iter_keys() -> Self::KeyIterator {
+		let prefix = G::prefix_hash();
+		Self::KeyIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: |raw_key_without_prefix| {
+				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
+				Ok(final_key)
+			}
 		}
 	}
 
@@ -471,6 +498,11 @@ mod test_iterators {
 				vec![((3, 3), 3), ((0, 0), 0), ((2, 2), 2), ((1, 1), 1)],
 			);
 
+			assert_eq!(
+				NMap::iter_keys().collect::<Vec<_>>(),
+				vec![(3, 3), (0, 0), (2, 2), (1, 1)],
+			);
+
 			assert_eq!(NMap::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1],);
 
 			assert_eq!(
@@ -499,6 +531,11 @@ mod test_iterators {
 			assert_eq!(
 				NMap::iter_prefix((k1,)).collect::<Vec<_>>(),
 				vec![(1, 1), (2, 2), (0, 0), (3, 3)],
+			);
+
+			assert_eq!(
+				NMap::iter_key_prefix((k1,)).collect::<Vec<_>>(),
+				vec![1, 2, 0, 3],
 			);
 
 			assert_eq!(
