@@ -328,7 +328,7 @@ impl BenchmarkingConfig for () {
 }
 
 /// Current phase of the pallet.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
@@ -404,7 +404,7 @@ pub enum FallbackStrategy {
 }
 
 /// The type of `Computation` that provided this election data.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
 pub enum ElectionCompute {
 	/// Election was computed on-chain.
 	OnChain,
@@ -478,7 +478,7 @@ pub struct RoundSnapshot<A> {
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
 /// This is also used in dispatchables as weight witness data and should **only contain the size of
 /// the presented solution**, not the entire snapshot.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default, TypeInfo)]
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
@@ -1307,12 +1307,29 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Only write snapshot if all existed.
-		<SnapshotMetadata<T>>::put(SolutionOrSnapshotSize {
+		let metadata = SolutionOrSnapshotSize {
 			voters: voters.len() as u32,
 			targets: targets.len() as u32,
-		});
+		};
+		log!(debug, "creating a snapshot with metadata {:?}", metadata);
+
+		<SnapshotMetadata<T>>::put(metadata);
 		<DesiredTargets<T>>::put(desired_targets);
-		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
+
+		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
+		// `encoded_size` encodes it without storing it anywhere, this should not cause any allocation.
+		let snapshot = RoundSnapshot { voters, targets };
+		let size = snapshot.encoded_size();
+		log!(info, "snapshot pre-calculated size {:?}", size);
+		let mut buffer = Vec::with_capacity(size);
+		snapshot.encode_to(&mut buffer);
+
+		// do some checks.
+		debug_assert_eq!(buffer, snapshot.encode());
+		// buffer should have not re-allocated since.
+		debug_assert!(buffer.len() == size && size == buffer.capacity());
+
+		sp_io::storage::set(&<Snapshot<T>>::hashed_key(), &buffer);
 		Ok(w1.saturating_add(w2).saturating_add(w3).saturating_add(T::DbWeight::get().writes(3)))
 	}
 

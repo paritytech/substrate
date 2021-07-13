@@ -32,7 +32,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-utils = { version = "4.0.0-dev", path = "../../primitives/utils" }
 wasm-timer = "0.2"
 derive_more = "0.99.2"
-serde = { version = "1.0.101", features = ["derive"] }
+serde = { version = "1.0.126", features = ["derive"] }
 linked-hash-map = "0.5.2"
 retain_mut = "0.1.3"
 
