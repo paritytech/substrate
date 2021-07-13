@@ -1809,7 +1809,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "parity-scale-codec",
- "scale-info",
  "sp-arithmetic",
  "sp-npos-elections",
  "sp-runtime",
