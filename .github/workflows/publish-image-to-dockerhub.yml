@@ -9,7 +9,7 @@ env:
   DOCKERHUB_REPOSITORY: cerebellumnetwork
   PACKAGE_NAME: pos-node
 jobs:
-  build-and-push:
+  tag-and-push:
     runs-on: ubuntu-18.04
     steps:
       - name: Checkout repository
@@ -25,12 +25,14 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-      - name: Pull image from ECR and change name
+      - name: Pull image from ECR and change name, push tagged version to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
           docker image tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA $DOCKERHUB_REPOSITORY/$PACKAGE_NAME:${GITHUB_REF##*/}
+          docker image tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA $ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_REF##*/}
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_REF##*/}
       - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
