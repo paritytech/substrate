@@ -27,7 +27,7 @@ sp-keystore = { version = "0.10.0-dev", default-features = false, path = "../../
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../timestamp", optional = true }
 serde = { version = "1.0.126", features = ["derive"], optional = true }
-async-trait = { version = "0.1.48", optional = true }
+async-trait = { version = "0.1.50", optional = true }
 
 [features]
 default = ["std"]
