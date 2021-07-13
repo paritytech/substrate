@@ -458,7 +458,7 @@ impl<T: Config> Pallet<T> {
 		now: T::BlockNumber,
 		schedule1: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 		schedule2: VestingInfo<BalanceOf<T>, T::BlockNumber>,
-	) -> Result<Option<VestingInfo<BalanceOf<T>, T::BlockNumber>>, DispatchError> {
+	) -> Option<VestingInfo<BalanceOf<T>, T::BlockNumber>> {
 		let schedule1_ending_block = schedule1.ending_block_as_balance::<T::BlockNumberToBalance>();
 		let schedule2_ending_block = schedule2.ending_block_as_balance::<T::BlockNumberToBalance>();
 		let now_as_balance = T::BlockNumberToBalance::convert(now);
@@ -466,11 +466,11 @@ impl<T: Config> Pallet<T> {
 		// Check if one or both schedules have ended.
 		match (schedule1_ending_block <= now_as_balance, schedule2_ending_block <= now_as_balance) {
 			// If both schedules have ended, we don't merge and exit early.
-			(true, true) => return Ok(None),
+			(true, true) => return None,
 			// If one schedule has ended, we treat the one that has not ended as the new
 			// merged schedule.
-			(true, false) => return Ok(Some(schedule2)),
-			(false, true) => return Ok(Some(schedule1)),
+			(true, false) => return Some(schedule2),
+			(false, true) => return Some(schedule1),
 			// If neither schedule has ended don't exit early.
 			_ => {}
 		}
@@ -492,11 +492,10 @@ impl<T: Config> Pallet<T> {
 			(locked / duration).max(One::one())
 		};
 
-		// While `per_block` should never be 0, it is possible that the created schedule would end
-		// after the highest possible block, which is a case we are ok with, but `is_valid` fails.
 		let schedule = VestingInfo::new(locked, per_block, starting_block);
+		debug_assert!(schedule.is_valid(), "merge_vesting_info schedule validation check failed");
 
-		Ok(Some(schedule))
+		Some(schedule)
 	}
 
 	// Execute a vested transfer from `source` to `target` with the given `schedule`.
@@ -635,7 +634,7 @@ impl<T: Config> Pallet<T> {
 					Self::report_schedule_updates(schedules.to_vec(), action);
 
 				let now = <frame_system::Pallet<T>>::block_number();
-				if let Some(new_schedule) = Self::merge_vesting_info(now, schedule1, schedule2)? {
+				if let Some(new_schedule) = Self::merge_vesting_info(now, schedule1, schedule2) {
 					// Merging created a new schedule so we:
 					// 1) need to add it to the accounts vesting schedule collection,
 					schedules.push(new_schedule);

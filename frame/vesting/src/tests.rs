@@ -1093,7 +1093,7 @@ fn merge_vesting_handles_per_block_0() {
 		assert_eq!(sched1.ending_block_as_balance::<Identity>(), 512u64 + 10);
 
 		let merged = VestingInfo::new(764, 1, 10);
-		assert_eq!(Vesting::merge_vesting_info(5, sched0, sched1), Ok(Some(merged)));
+		assert_eq!(Vesting::merge_vesting_info(5, sched0, sched1), Some(merged));
 	});
 }
 
