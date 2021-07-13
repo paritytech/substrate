@@ -53,33 +53,33 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn batch(c: u32, ) -> Weight {
-		(17_673_000 as Weight)
+		(14_802_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((461_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add((836_000 as Weight).saturating_mul(c as Weight))
 	}
 	fn as_derivative() -> Weight {
-		(3_693_000 as Weight)
+		(3_249_000 as Weight)
 	}
 	fn batch_all(c: u32, ) -> Weight {
-		(21_008_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((889_000 as Weight).saturating_mul(c as Weight))
+		(14_248_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_228_000 as Weight).saturating_mul(c as Weight))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn batch(c: u32, ) -> Weight {
-		(17_673_000 as Weight)
+		(14_802_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((461_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add((836_000 as Weight).saturating_mul(c as Weight))
 	}
 	fn as_derivative() -> Weight {
-		(3_693_000 as Weight)
+		(3_249_000 as Weight)
 	}
 	fn batch_all(c: u32, ) -> Weight {
-		(21_008_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((889_000 as Weight).saturating_mul(c as Weight))
+		(14_248_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_228_000 as Weight).saturating_mul(c as Weight))
 	}
 }
