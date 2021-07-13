@@ -77,7 +77,11 @@ benchmarks! {
 		let call = Call::<T>::set_calls(calls);
 		let origin = T::ManagerOrigin::successful_origin();
 		assert!(CallIndices::<T>::get().is_empty());
-	}: { call.dispatch_bypass_filter(origin)? }
+		let call = call.encode();
+	}: {
+		let call = <Call<T>>::decode(&mut &call[..]).expect("encoding is valid");
+		call.dispatch_bypass_filter(origin)?;
+	}
 	verify {
 		if !n.is_zero() {
 			assert!(!CallIndices::<T>::get().is_empty());
