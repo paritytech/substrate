@@ -1476,8 +1476,6 @@ mod tests {
 				Error::<Test, Instance1>::DuplicateVote,
 			);
 
-			let events = System::events();
-			assert_eq!(events.len(), 3);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1755,6 +1753,37 @@ mod tests {
 				}
 			]);
 		});
+	}
+
+	#[test]
+	fn motion_with_no_votes_closes_with_disapproval() {
+		new_test_ext().execute_with(|| {
+			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+			let proposal = make_proposal(42);
+			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+			let proposal_weight = proposal.get_dispatch_info().weight;
+			let hash: H256 = proposal.blake2_256().into();
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
+			assert_eq!(System::events()[0], record(Event::Collective(RawEvent::Proposed(1, 0, hash.clone(), 3))));
+
+			// Closing the motion too early is not possible because it has neither
+			// an approving or disapproving simple majority due to the lack of votes.
+			assert_noop!(
+				Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len),
+				Error::<Test, Instance1>::TooEarly
+			);
+
+			// Once the motion duration passes,
+			let closing_block = System::block_number() + MotionDuration::get();
+			System::set_block_number(closing_block);
+			// we can successfully close the motion.
+			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len));
+
+			// Events show that the close ended in a disapproval.
+			assert_eq!(System::events()[1], record(Event::Collective(RawEvent::Closed(hash.clone(), 0, 3))));
+			assert_eq!(System::events()[2], record(Event::Collective(RawEvent::Disapproved(hash.clone()))));
+		})
+
 	}
 
 	#[test]
