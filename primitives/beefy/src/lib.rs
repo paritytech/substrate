@@ -33,6 +33,7 @@
 //! while GRANDPA uses `ed25519`.
 
 mod commitment;
+pub mod mmr;
 pub mod witness;
 
 pub use commitment::{Commitment, SignedCommitment, VersionedCommitment};
