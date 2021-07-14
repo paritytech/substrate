@@ -25,8 +25,18 @@ pub trait Filter<T> {
 	fn filter(_: &T) -> bool;
 }
 
-impl<T> Filter<T> for () {
+/// A [`Filter`] that allows any value.
+pub enum AllowAll {}
+
+/// A [`Filter`] that denies any value.
+pub enum DenyAll {}
+
+impl<T> Filter<T> for AllowAll {
 	fn filter(_: &T) -> bool { true }
+}
+
+impl<T> Filter<T> for DenyAll {
+	fn filter(_: &T) -> bool { false }
 }
 
 /// Trait to add a constraint onto the filter.

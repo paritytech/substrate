@@ -118,8 +118,9 @@ use sp_runtime::{
 	Perbill,
 };
 use frame_support::{
-	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
-	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo},
+	traits::{OnUnbalanced, Currency, Get, Time, Randomness, Filter},
+	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo, GetDispatchInfo},
+	dispatch::Dispatchable,
 };
 use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
@@ -153,6 +154,41 @@ pub mod pallet {
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The overarching call type.
+		type Call:
+			Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> +
+			GetDispatchInfo +
+			codec::Decode +
+			IsType<<Self as frame_system::Config>::Call>;
+
+		/// Filter that is applied to calls dispatched by contracts.
+		///
+		/// Use this filter to control which dispatchables are callable by contracts.
+		/// This is applied in **addition** to [`frame_system::Config::BaseCallFilter`].
+		/// It is recommended to treat this as a whitelist.
+		///
+		/// # Subsistence Threshold
+		///
+		/// The runtime **must** make sure that any allowed dispatchable makes sure that the
+		/// `total_balance` of the contract stays above [`Pallet::subsistence_threshold()`].
+		/// Otherwise contracts can clutter the storage with their tombstones without
+		/// deposting the correct amount of balance.
+		///
+		/// # Stability
+		///
+		/// The runtime **must** make sure that all dispatchables that are callable by
+		/// contracts remain stable. In addition [`Self::Call`] itself must remain stable.
+		/// This means that no existing variants are allowed to switch their positions.
+		///
+		/// # Note
+		///
+		/// Note that dispatchables that are called via contracts do not spawn their
+		/// own wasm instance for each call (as opposed to when called via a transaction).
+		/// Therefore please make sure to be restrictive about which dispatchables are allowed
+		/// in order to not introduce a new DoS vector like memory allocation patterns that can
+		/// be exploited to drive the runtime into a panic.
+		type CallFilter: Filter<<Self as frame_system::Config>::Call>;
 
 		/// Handler for rent payments.
 		type RentPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -658,7 +694,8 @@ where
 		);
 		ContractExecResult {
 			result: result.map_err(|r| r.error),
-			gas_consumed: gas_meter.gas_spent(),
+			gas_consumed: gas_meter.gas_consumed(),
+			gas_required: gas_meter.gas_required(),
 			debug_message: debug_message.unwrap_or_default(),
 		}
 	}
@@ -699,7 +736,8 @@ where
 			Ok(executable) => executable,
 			Err(error) => return ContractInstantiateResult {
 				result: Err(error.into()),
-				gas_consumed: gas_meter.gas_spent(),
+				gas_consumed: gas_meter.gas_consumed(),
+				gas_required: gas_meter.gas_required(),
 				debug_message: Vec::new(),
 			}
 		};
@@ -727,7 +765,8 @@ where
 		});
 		ContractInstantiateResult {
 			result: result.map_err(|e| e.error),
-			gas_consumed: gas_meter.gas_spent(),
+			gas_consumed: gas_meter.gas_consumed(),
+			gas_required: gas_meter.gas_required(),
 			debug_message: debug_message.unwrap_or_default(),
 		}
 	}

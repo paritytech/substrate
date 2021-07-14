@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 log = "0.4.8"
 parity-scale-codec = { version = "2.0.0" }
-serde = "1.0.0"
+serde = "1.0.126"
 structopt = "0.3.8"
 
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
