@@ -18,23 +18,23 @@
 
 //! Block sealing utilities
 
-use crate::{Error, rpc, CreatedBlock, ConsensusDataProvider};
-use std::sync::Arc;
-use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT},
-	generic::BlockId,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+
 use futures::prelude::*;
-use sp_consensus::{
-	self, BlockImport, Environment, Proposer, ForkChoiceStrategy,
-	BlockImportParams, BlockOrigin, ImportResult, SelectChain, StateAction,
-};
-use sp_blockchain::HeaderBackend;
-use std::collections::HashMap;
-use std::time::Duration;
-use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
-use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sc_transaction_pool_api::TransactionPool;
+use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sp_blockchain::HeaderBackend;
+use sp_consensus::{
+	self, BlockImport, BlockImportParams, BlockOrigin, Environment, ForkChoiceStrategy,
+	ImportResult, Proposer, SelectChain, StateAction,
+};
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
+};
+
+use crate::{rpc, ConsensusDataProvider, CreatedBlock, Error};
 
 /// max duration for creating a proposal in secs
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
@@ -59,7 +59,8 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, TP
 	/// SelectChain object
 	pub select_chain: &'a SC,
 	/// Digest provider for inclusion in blocks.
-	pub consensus_data_provider: Option<&'a dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>,
+	pub consensus_data_provider:
+		Option<&'a dyn ConsensusDataProvider<B, Transaction = TransactionFor<C, B>>>,
 	/// block import object
 	pub block_import: &'a mut BI,
 	/// Something that can create the inherent data providers.
@@ -129,15 +130,18 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 			Default::default()
 		};
 
-		let proposal = proposer.propose(
-			inherent_data.clone(),
-			digest,
-			Duration::from_secs(MAX_PROPOSAL_DURATION),
-			None,
-		).map_err(|err| Error::StringError(format!("{:?}", err))).await?;
+		let proposal = proposer
+			.propose(
+				inherent_data.clone(),
+				digest,
+				Duration::from_secs(MAX_PROPOSAL_DURATION),
+				None,
+			)
+			.map_err(|err| Error::StringError(format!("{:?}", err)))
+			.await?;
 
 		if proposal.block.extrinsics().len() == inherents_len && !create_empty {
-			return Err(Error::EmptyTransactionPool)
+			return Err(Error::EmptyTransactionPool);
 		}
 
 		let (header, body) = proposal.block.deconstruct();
@@ -145,9 +149,9 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 		params.body = Some(body);
 		params.finalized = finalize;
 		params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-		params.state_action = StateAction::ApplyChanges(
-			sp_consensus::StorageChanges::Changes(proposal.storage_changes)
-		);
+		params.state_action = StateAction::ApplyChanges(sp_consensus::StorageChanges::Changes(
+			proposal.storage_changes,
+		));
 
 		if let Some(digest_provider) = digest_provider {
 			digest_provider.append_block_import(&parent, &mut params, &inherent_data)?;
@@ -156,7 +160,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 		match block_import.import_block(params, HashMap::new()).await? {
 			ImportResult::Imported(aux) => {
 				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&header), aux })
-			},
+			}
 			other => Err(other.into()),
 		}
 	};

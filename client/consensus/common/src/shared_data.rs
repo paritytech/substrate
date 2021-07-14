@@ -19,7 +19,8 @@
 //! Provides a generic wrapper around shared data. See [`SharedData`] for more information.
 
 use std::sync::Arc;
-use parking_lot::{Mutex, MappedMutexGuard, Condvar, MutexGuard};
+
+use parking_lot::{Condvar, MappedMutexGuard, Mutex, MutexGuard};
 
 /// Created by [`SharedDataLocked::release_mutex`].
 ///
@@ -75,8 +76,7 @@ impl<'a, T> SharedDataLocked<'a, T> {
 	/// Release the mutex, but keep the shared data locked.
 	pub fn release_mutex(mut self) -> SharedDataLockedUpgradable<T> {
 		SharedDataLockedUpgradable {
-			shared_data: self.shared_data.take()
-				.expect("`shared_data` is only taken on drop; qed"),
+			shared_data: self.shared_data.take().expect("`shared_data` is only taken on drop; qed"),
 		}
 	}
 }
@@ -132,7 +132,7 @@ struct SharedDataInner<T> {
 /// # Example
 ///
 /// ```
-///# use sc_consensus::shared_data::SharedData;
+/// # use sc_consensus::shared_data::SharedData;
 ///
 /// let shared_data = SharedData::new(String::from("hello world"));
 ///
@@ -174,10 +174,7 @@ pub struct SharedData<T> {
 
 impl<T> Clone for SharedData<T> {
 	fn clone(&self) -> Self {
-		Self {
-			inner: self.inner.clone(),
-			cond_var: self.cond_var.clone(),
-		}
+		Self { inner: self.inner.clone(), cond_var: self.cond_var.clone() }
 	}
 }
 
@@ -228,10 +225,7 @@ impl<T> SharedData<T> {
 		debug_assert!(!guard.locked);
 		guard.locked = true;
 
-		SharedDataLocked {
-			inner: guard,
-			shared_data: Some(self.clone()),
-		}
+		SharedDataLocked { inner: guard, shared_data: Some(self.clone()) }
 	}
 }
 
@@ -246,7 +240,7 @@ mod tests {
 
 		let lock = shared_data.shared_data_locked();
 
-		for i in 0..THREADS {
+		for i in 0 .. THREADS {
 			let data = shared_data.clone();
 			std::thread::spawn(move || {
 				if i % 2 == 1 {

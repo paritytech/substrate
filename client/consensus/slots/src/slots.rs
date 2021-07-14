@@ -20,23 +20,22 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::{Slot, InherentDataProviderExt};
+use std::time::{Duration, Instant};
+
+use futures_timer::Delay;
 use sp_consensus::{Error, SelectChain};
-use sp_inherents::{InherentData, CreateInherentDataProviders, InherentDataProvider};
+use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
-use std::time::{Duration, Instant};
-use futures_timer::Delay;
+use super::{InherentDataProviderExt, Slot};
 
 /// Returns current duration since unix epoch.
 pub fn duration_now() -> Duration {
 	use std::time::SystemTime;
 	let now = SystemTime::now();
-	now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|e| panic!(
-		"Current time {:?} is before unix epoch. Something is wrong: {:?}",
-		now,
-		e,
-	))
+	now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|e| {
+		panic!("Current time {:?} is before unix epoch. Something is wrong: {:?}", now, e,)
+	})
 }
 
 /// Returns the duration until the next slot from now.
@@ -104,11 +103,7 @@ pub(crate) struct Slots<Block, C, IDP> {
 
 impl<Block, C, IDP> Slots<Block, C, IDP> {
 	/// Create a new `Slots` stream.
-	pub fn new(
-		slot_duration: Duration,
-		create_inherent_data_providers: IDP,
-		client: C,
-	) -> Self {
+	pub fn new(slot_duration: Duration, create_inherent_data_providers: IDP, client: C) -> Self {
 		Slots {
 			last_slot: 0.into(),
 			slot_duration,
@@ -165,7 +160,8 @@ where
 				}
 			};
 
-			let inherent_data_providers = self.create_inherent_data_providers
+			let inherent_data_providers = self
+				.create_inherent_data_providers
 				.create_inherent_data_providers(chain_head.hash(), ())
 				.await?;
 
@@ -191,7 +187,7 @@ where
 					self.slot_duration,
 					chain_head,
 					None,
-				))
+				));
 			}
 		}
 	}
