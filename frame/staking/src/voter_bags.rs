@@ -463,7 +463,7 @@ impl<T: Config> Bag<T> {
 	/// to update storage for the bag and `node`.
 	fn remove_node(&mut self, node: &Node<T>) {
 		// Excise `node`.
-		// Update previous node. 
+		// Update previous node.
 		if let Some(mut prev) = node.prev() {
 			debug_assert!(
 				self.head.as_ref() != Some(&node.voter.id),
@@ -516,7 +516,32 @@ impl<T: Config> Bag<T> {
 			self.tail = node.prev.clone();
 		}
 	}
-}
+
+// 	#[cfg(debug_assertions)]
+// 	fn sanity_check_voter_list(&self) {
+// 		use sp_std::collections::btree_set::BTreeSet;
+
+// 		// iterate all voters and ensure only those that are head don't have a prev
+// 		assert!(self.head().prev().is_none());
+// 		// iterate all voters and ensure only those that are tail don't have a next
+// 		assert!(self.tail().next().is_none());
+// 		// iterate all voters and ensure that there are no loops
+// 		// Each voter is only seen once, thus there is no cycle within a bag.
+// 		let seen_in_bag = BTreeSet::new();
+// 		assert!(
+// 			self.iter().map(|node| node.voter.id)
+// 				.all(|voter| seen_in_bag.insert(voter))
+// 		);
+
+// 		let seen_in_voter_list = BTreeSet::new();
+// 		assert!(
+// 			VoterList::<T>::iter()
+// 		);
+// 		// iterate all voters and ensure their count is in sync with `VoterCount`
+// 		// ensure VoterCount itself is always `== CounterForValidators + CounterForNominators`
+// 		// anything else..
+// 	}
+// }
 
 /// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
 #[derive(Encode, Decode)]
@@ -1043,12 +1068,21 @@ mod tests {
 			voter_list_storage_items_eq(vec![]);
 			assert_eq!(<Staking as crate::Store>::VoterCount::get(), 0);
 
-			// And we can make sure _everyone_ has been totally removed.
+			// We can make sure _everyone_ has been totally removed,
 			remaining_voters.iter().for_each(|v| {
-				// TODO should anything else be checked?
 				assert!(!<Staking as crate::Store>::VoterNodes::contains_key(v));
 				assert!(!<Staking as crate::Store>::VoterBagFor::contains_key(v));
-			})
+			});
+			// there are no more bags left,
+			assert_eq!(
+				<Staking as crate::Store>::VoterBags::iter().collect::<Vec<_>>().len(),
+				0
+			);
+			// and the voter list has no one in it,
+			assert_eq!(
+				<Staking as crate::Store>::VoterList::<Test>::iter().collect::<Vec<_>>().len(),
+				0
+			);
 		});
 	}
 }
