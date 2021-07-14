@@ -752,7 +752,7 @@ fn test_metadata() {
 			}),
 			constants: vec![],
 			error: None,
-			index: 33,
+			index: 35,
 		},
 		PalletMetadata {
 			name: "Module1_3",
