@@ -255,7 +255,7 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 
 impl system::Config for Runtime {
-	type BaseCallFilter= ();
+	type BaseCallFilter= frame_support::traits::AllowAll;
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;

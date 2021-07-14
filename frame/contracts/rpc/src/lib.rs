@@ -385,7 +385,8 @@ mod tests {
 		}
 		test(r#"{
 			"gasConsumed": 5000,
-			"debugMessage": "0x68656c704f6b",
+			"gasRequired": 8000,
+			"debugMessage": "HelloWorld",
 			"result": {
 			  "Ok": {
 				"flags": 5,
@@ -395,7 +396,8 @@ mod tests {
 		}"#);
 		test(r#"{
 			"gasConsumed": 3400,
-			"debugMessage": "0x68656c70457272",
+			"gasRequired": 5200,
+			"debugMessage": "HelloWorld",
 			"result": {
 			  "Err": "BadOrigin"
 			}
@@ -411,7 +413,8 @@ mod tests {
 		}
 		test(r#"{
 			"gasConsumed": 5000,
-			"debugMessage": "0x68656c704f6b",
+			"gasRequired": 8000,
+			"debugMessage": "HelloWorld",
 			"result": {
 			   "Ok": {
 				  "result": {
@@ -425,7 +428,8 @@ mod tests {
 		}"#);
 		test(r#"{
 			"gasConsumed": 3400,
-			"debugMessage": "0x68656c70457272",
+			"gasRequired": 5200,
+			"debugMessage": "HelloWorld",
 			"result": {
 			  "Err": "BadOrigin"
 			}

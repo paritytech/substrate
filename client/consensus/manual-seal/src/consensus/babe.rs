@@ -32,7 +32,7 @@ use sp_keystore::SyncCryptoStorePtr;
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::BlockImportParams;
+use sp_consensus::{BlockImportParams, BlockOrigin, ForkChoiceStrategy};
 use sp_consensus_slots::Slot;
 use sp_consensus_babe::{
 	BabeApi, inherents::BabeInherentData, ConsensusLog, BABE_ENGINE_ID, AuthorityId,
@@ -41,9 +41,10 @@ use sp_consensus_babe::{
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
 	traits::{DigestItemFor, DigestFor, Block as BlockT, Zero, Header},
-	generic::{Digest, BlockId},
+	generic::{Digest, BlockId}, Justifications,
 };
 use sp_timestamp::{InherentType, INHERENT_IDENTIFIER, TimestampInherentData};
+use sp_consensus::import_queue::{Verifier, CacheKeyId};
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
@@ -62,6 +63,74 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 
 	/// Authorities to be used for this babe chain.
 	authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+}
+
+/// Verifier to be used for babe chains
+pub struct BabeVerifier<B: BlockT, C> {
+	/// Shared epoch changes
+	epoch_changes: SharedEpochChanges<B, Epoch>,
+
+	/// Shared reference to the client.
+	client: Arc<C>,
+}
+
+impl<B: BlockT, C> BabeVerifier<B, C> {
+	/// create a nrew verifier
+	pub fn new(epoch_changes: SharedEpochChanges<B, Epoch>, client: Arc<C>) -> BabeVerifier<B, C> {
+		BabeVerifier {
+			epoch_changes,
+			client,
+		}
+	}
+}
+
+/// The verifier for the manual seal engine; instantly finalizes.
+#[async_trait::async_trait]
+impl<B, C> Verifier<B> for BabeVerifier<B, C>
+	where
+		B: BlockT,
+		C: HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error>
+{
+	async fn verify(
+		&mut self,
+		origin: BlockOrigin,
+		header: B::Header,
+		justifications: Option<Justifications>,
+		body: Option<Vec<B::Extrinsic>>,
+	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		let mut import_params = BlockImportParams::new(origin, header.clone());
+		import_params.justifications = justifications;
+		import_params.body = body;
+		import_params.finalized = false;
+		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+		let pre_digest = find_pre_digest::<B>(&header)?;
+
+		let parent_hash = header.parent_hash();
+		let parent = self.client.header(BlockId::Hash(*parent_hash))
+			.ok()
+			.flatten()
+			.ok_or_else(|| format!("header for block {} not found", parent_hash))?;
+		let epoch_changes = self.epoch_changes.shared_data();
+		let epoch_descriptor = epoch_changes
+			.epoch_descriptor_for_child_of(
+				descendent_query(&*self.client),
+				&parent.hash(),
+				parent.number().clone(),
+				pre_digest.slot(),
+			)
+			.map_err(|e| format!("failed to fetch epoch_descriptor: {}", e))?
+			.ok_or_else(|| format!("{:?}", sp_consensus::Error::InvalidAuthoritiesSet))?;
+		// drop the lock
+		drop(epoch_changes);
+
+		import_params.intermediates.insert(
+			Cow::from(INTERMEDIATE_KEY),
+			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
+		);
+
+		Ok((import_params, None))
+	}
 }
 
 impl<B, C> BabeConsensusDataProvider<B, C>
@@ -166,27 +235,32 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 				.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
 				.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 
-			let epoch_mut = match epoch_descriptor {
+			match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _epoch_header) => {
-					epoch_changes.epoch_mut(&identifier)
-						.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?
+					let epoch_mut = epoch_changes.epoch_mut(&identifier)
+						.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+
+					// mutate the current epoch
+					epoch_mut.authorities = self.authorities.clone();
+
+					let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
+						authorities: self.authorities.clone(),
+						// copy the old randomness
+						randomness: epoch_mut.randomness.clone(),
+					});
+
+					vec![
+						DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
+						DigestItemFor::<B>::Consensus(BABE_ENGINE_ID, next_epoch.encode())
+					]
 				},
-				_ => unreachable!("we couldn't claim a slot, so this isn't the genesis epoch; qed")
-			};
-
-			// mutate the current epoch
-			epoch_mut.authorities = self.authorities.clone();
-
-			let next_epoch = ConsensusLog::NextEpochData(NextEpochDescriptor {
-				authorities: self.authorities.clone(),
-				// copy the old randomness
-				randomness: epoch_mut.randomness.clone(),
-			});
-
-			vec![
-				DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
-				DigestItemFor::<B>::Consensus(BABE_ENGINE_ID, next_epoch.encode())
-			]
+				ViableEpochDescriptor::UnimportedGenesis(_) => {
+					// since this is the genesis, secondary predigest works for now.
+					vec![
+						DigestItemFor::<B>::PreRuntime(BABE_ENGINE_ID, predigest.encode()),
+					]
+				}
+			}
 		};
 
 		Ok(Digest { logs })

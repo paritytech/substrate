@@ -61,14 +61,12 @@ pub trait Inspect<AccountId> {
 
 /// Interface for enumerating assets in existence or owned by a given account over a collection
 /// of NFTs.
-///
-/// WARNING: These may be a heavy operations. Do not use when execution time is limited.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
-	/// Returns the instances of an asset `class` in existence.
-	fn instances() -> Vec<Self::InstanceId>;
+	/// Returns an iterator of the instances of an asset `class` in existence.
+	fn instances() -> Box<dyn Iterator<Item = Self::InstanceId>>;
 
-	/// Returns the asset instances of all classes owned by `who`.
-	fn owned(who: &AccountId) -> Vec<Self::InstanceId>;
+	/// Returns an iterator of the asset instances of all classes owned by `who`.
+	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::InstanceId>>;
 }
 
 /// Trait for providing an interface for NFT-like assets which may be minted, burned and/or have
@@ -148,10 +146,10 @@ impl<
 	A: Get<<F as nonfungibles::Inspect<AccountId>>::ClassId>,
 	AccountId,
 > InspectEnumerable<AccountId> for ItemOf<F, A, AccountId> {
-	fn instances() -> Vec<Self::InstanceId> {
+	fn instances() -> Box<dyn Iterator<Item = Self::InstanceId>> {
 		<F as nonfungibles::InspectEnumerable<AccountId>>::instances(&A::get())
 	}
-	fn owned(who: &AccountId) -> Vec<Self::InstanceId> {
+	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = Self::InstanceId>> {
 		<F as nonfungibles::InspectEnumerable<AccountId>>::owned_in_class(&A::get(), who)
 	}
 }

@@ -48,7 +48,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type DbWeight = ();
 	type BlockWeights = ();
 	type BlockLength = ();
