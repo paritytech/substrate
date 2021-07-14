@@ -67,18 +67,6 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
-	let args_meta_type = methods.iter().map(|method| {
-		method.args.iter()
-			.map(|(is_compact, _, type_)| {
-				if *is_compact {
-					quote::quote_spanned!(type_.span() => #frame_support::codec::Compact<#type_>)
-				} else {
-					quote::quote_spanned!(type_.span() => #type_ )
-				}
-			})
-			.collect::<Vec<_>>()
-	});
-
 	let default_docs = [syn::parse_quote!(
 		r"Contains one variant per dispatchable that can be called by an extrinsic."
 	)];
@@ -230,20 +218,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
 			pub fn call_functions() -> #frame_support::metadata::PalletCallMetadata {
-				let ty = #frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>();
-				let calls = #frame_support::sp_std::vec![ #(
-					#frame_support::metadata::FunctionMetadata {
-						name: stringify!(#fn_name),
-						args: #frame_support::sp_std::vec![ #(
-							#frame_support::metadata::FunctionArgumentMetadata {
-								name: stringify!(#args_name),
-								ty: #frame_support::scale_info::meta_type::<#args_meta_type>(),
-							},
-						)* ],
-						docs: #frame_support::sp_std::vec![ #( #fn_doc ),* ],
-					},
-				)* ];
-				#frame_support::metadata::PalletCallMetadata { ty, calls }
+				#frame_support::scale_info::meta_type::<#call_ident<#type_use_gen>>().into()
 			}
 		}
 	)

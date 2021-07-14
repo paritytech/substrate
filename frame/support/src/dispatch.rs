@@ -2170,11 +2170,7 @@ macro_rules! __dispatch_impl_metadata {
 			#[doc(hidden)]
 			#[allow(dead_code)]
 			pub fn call_functions() -> $crate::metadata::PalletCallMetadata {
-				let ty = $crate::scale_info::meta_type::<$call_type<$trait_instance $(, $instance)?>>();
-				$crate::metadata::PalletCallMetadata {
-					ty,
-					calls: $crate::__call_to_functions!($($rest)*),
-				}
+				$crate::scale_info::meta_type::<$call_type<$trait_instance $(, $instance)?>>().into()
 			}
 		}
 	}
@@ -2324,108 +2320,6 @@ macro_rules! __impl_module_constants_metadata {
 				]
 			}
 		}
-	}
-}
-
-/// Convert the list of calls into their JSON representation, joined by ",".
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __call_to_functions {
-	(
-		$origin_type:ty
-		{
-			$(
-				$(#[doc = $doc_attr:tt])*
-				fn $fn_name:ident($from:ident
-					$(
-						, $(#[$codec_attr:ident])* $param_name:ident : $param:ty
-					)*
-				);
-			)*
-		}
-	) => {
-		$crate::__functions_to_metadata!(0; $origin_type;; $(
-			fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
-			$( $doc_attr ),*;
-		)*)
-	};
-}
-
-
-/// Convert a list of functions into a list of `FunctionMetadata` items.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __functions_to_metadata{
-	(
-		$fn_id:expr;
-		$origin_type:ty;
-		$( $function_metadata:expr ),*;
-		fn $fn_name:ident(
-			$(
-				$(#[$codec_attr:ident])* $param_name:ident : $param:ty
-			),*
-		);
-		$( $fn_doc:expr ),*;
-		$( $rest:tt )*
-	) => {
-		$crate::__functions_to_metadata!(
-			$fn_id + 1; $origin_type;
-			$( $function_metadata, )* $crate::__function_to_metadata!(
-				fn $fn_name($( $(#[$codec_attr])* $param_name : $param ),*); $( $fn_doc ),*; $fn_id;
-			);
-			$($rest)*
-		)
-	};
-	(
-		$fn_id:expr;
-		$origin_type:ty;
-		$( $function_metadata:expr ),*;
-	) => {
-		$crate::sp_std::vec![ $( $function_metadata ),* ]
-	}
-}
-
-/// Convert a function into its metadata representation.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __function_to_metadata {
-	(
-		fn $fn_name:ident(
-			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
-		);
-		$( $fn_doc:expr ),*;
-		$fn_id:expr;
-	) => {
-		$crate::metadata::FunctionMetadata {
-			name: stringify!($fn_name),
-			args: $crate::sp_std::vec![
-				$(
-					$crate::metadata::FunctionArgumentMetadata {
-						name: stringify!($param_name),
-						ty: $crate::__function_to_metadata!(@meta_type
-							$(#[$codec_attr])* $param_name $param
-						),
-					}
-				),*
-			],
-			#[cfg(feature = "metadata-docs")]
-			docs: $crate::sp_std::vec![ $( $fn_doc ),* ],
-			#[cfg(not(feature = "metadata-docs"))]
-			docs: $crate::sp_std::vec![],
-		}
-	};
-
-	(@meta_type #[compact] $param_name:ident $param:ty) => {
-		$crate::scale_info::meta_type::<$crate::codec::Compact<$param>>()
-	};
-	(@meta_type $param_name:ident $param:ty) => {
-		$crate::scale_info::meta_type::<$param>()
-	};
-	(@meta_type $(#[codec_attr:ident])* $param_name:ident, $param:ty) => {
-		compile_error!(concat!(
-			"Invalid attribute for parameter `", stringify!($param_name),
-			"`, the following attributes are supported: `#[compact]`"
-		));
 	}
 }
 

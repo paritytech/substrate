@@ -290,12 +290,6 @@ mod test {
 			_ => unreachable!(),
 		};
 
-		let assert_meta_types = |ty_id1, ty_id2| {
-			let ty1 = types.resolve(ty_id1).map(|ty| ty.type_def());
-			let ty2 = types.resolve(ty_id2).map(|ty| ty.type_def());
-			pretty_assertions::assert_eq!(ty1, ty2);
-		};
-
 		let get_enum_variants = |ty_id| {
 			match types.resolve(ty_id).map(|ty| ty.type_def()) {
 				Some(ty) => {
@@ -328,10 +322,9 @@ mod test {
 		for i in vec![1, 3, 5].into_iter() {
 			pretty_assertions::assert_eq!(pallets[i].storage, pallets[i + 1].storage);
 
-			let calls1 = pallets[i].calls.as_ref().unwrap();
-			let calls2 = pallets[i + 1].calls.as_ref().unwrap();
-			pretty_assertions::assert_eq!(calls1.calls, calls2.calls);
-			assert_meta_types(calls1.ty.id(), calls2.ty.id());
+			let call1_variants = get_enum_variants(pallets[i].calls.as_ref().unwrap().ty.id());
+			let call2_variants = get_enum_variants(pallets[i + 1].calls.as_ref().unwrap().ty.id());
+			assert_enum_variants(call1_variants, call2_variants);
 
 			// event: check variants and fields but ignore the type name which will be different
 			let event1_variants = get_enum_variants(pallets[i].event.as_ref().unwrap().ty.id());

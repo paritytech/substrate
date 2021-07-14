@@ -595,104 +595,7 @@ fn metadata() {
 		index: 0,
 		name: "System",
 		storage: None,
-		calls: Some(PalletCallMetadata {
-			ty: scale_info::meta_type::<frame_system::Call<Runtime>>(),
-			calls: vec![
-				FunctionMetadata {
-					name: "fill_block",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "_ratio",
-							ty: scale_info::meta_type::<sp_arithmetic::per_things::Perbill>()
-						}
-					],
-					docs: vec![
-						" A dispatch that will fill the block weight up to the given ratio.a"
-					]
-				},
-				FunctionMetadata {
-					name: "remark",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "_remark",
-							ty: scale_info::meta_type::<Vec<u8>>(),
-						}],
-					docs: vec![]
-				},
-				FunctionMetadata {
-					name: "set_heap_pages",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "pages",
-							ty: scale_info::meta_type::<u64>(),
-						}
-					],
-					docs: vec![]
-				},
-				FunctionMetadata {
-					name: "set_code",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "code",
-							ty: scale_info::meta_type::<Vec<u8>>(),
-						}
-					],
-					docs: vec![]
-				},
-				FunctionMetadata {
-					name: "set_code_without_checks",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "code",
-							ty: scale_info::meta_type::<Vec<u8>>(),
-						}
-					],
-					docs: vec![]
-				},
-				FunctionMetadata {
-					name: "set_changes_trie_config",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "changes_trie_config",
-							ty: scale_info::meta_type::<Option<sp_core::ChangesTrieConfiguration>>(),
-						}
-					],
-					docs: vec![]					},
-				FunctionMetadata {
-					name: "set_storage",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "items",
-							ty: scale_info::meta_type::<Vec<frame_system::KeyValue>>(),
-						}
-					],
-					docs: vec![]					},
-				FunctionMetadata { name: "kill_storage",
-					args: vec![
-						FunctionArgumentMetadata { name: "keys", ty: scale_info::meta_type::<Vec<frame_system::Key>>() }
-					],
-					docs: vec![]					},
-				FunctionMetadata {
-					name: "kill_prefix",
-					args: vec![
-						FunctionArgumentMetadata { name: "prefix", ty: scale_info::meta_type::<frame_system::Key>() },
-						FunctionArgumentMetadata {
-							name: "_subkeys",
-							ty: scale_info::meta_type::<u32>()
-						}
-					],
-					docs: vec![]					},
-				FunctionMetadata {
-					name: "remark_with_event",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "remark",
-							ty: scale_info::meta_type::<Vec<u8>>(),
-						}
-					],
-					docs: vec![]					}
-			]
-		}),
+		calls: Some(scale_info::meta_type::<frame_system::Call<Runtime>>().into()),
 		event: Some(PalletEventMetadata { ty: scale_info::meta_type::<frame_system::Event<Runtime>>() }),
 		constants: vec![
 			PalletConstantMetadata {
@@ -820,35 +723,7 @@ fn metadata() {
 				},
 			],
 		}),
-		calls: Some(PalletCallMetadata {
-			ty: scale_info::meta_type::<pallet::Call<Runtime>>(),
-			calls: vec![
-				FunctionMetadata {
-					name: "foo",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "_foo",
-							ty: scale_info::meta_type::<codec::Compact<u32>>(),
-						}
-					],
-					docs: vec![
-						" Doc comment put in metadata",
-					],
-				},
-				FunctionMetadata {
-					name: "foo_transactional",
-					args: vec![
-						FunctionArgumentMetadata {
-							name: "_foo",
-							ty: scale_info::meta_type::<codec::Compact<u32>>(),
-						}
-					],
-					docs: vec![
-						" Doc comment put in metadata",
-					],
-				},
-			]
-		}),
+		calls: Some(scale_info::meta_type::<pallet::Call<Runtime>>().into()),
 		event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet::Event<Runtime>>() }),
 		constants: vec![
 			PalletConstantMetadata {

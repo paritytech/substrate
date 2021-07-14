@@ -578,23 +578,15 @@ fn call_subtype_conversion() {
 
 #[test]
 fn test_metadata() {
+	use scale_info::meta_type;
 	use frame_support::metadata::*;
 
 	let pallets = vec![
 		PalletMetadata {
 			name: "System",
 			storage: None,
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<system::Call<Runtime>>(),
-				calls: vec![FunctionMetadata {
-					name: "noop",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<system::Event<Runtime>>(),
-			}),
+			calls: Some(meta_type::<system::Call<Runtime>>().into()),
+			event: Some(meta_type::<system::Event<Runtime>>().into()),
 			constants: vec![],
 			error: None,
 			index: 30,
@@ -605,17 +597,8 @@ fn test_metadata() {
 				prefix: "Instance1Module",
 				entries: vec![],
 			}),
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance1>>(),
-				calls: vec![FunctionMetadata {
-					name: "fail",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance1>>(),
-			}),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance1>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance1>>().into()),
 			constants: vec![],
 			error: None,
 			index: 31,
@@ -626,17 +609,8 @@ fn test_metadata() {
 				prefix: "Module",
 				entries: vec![],
 			}),
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<module2::Call<Runtime>>(),
-				calls: vec![FunctionMetadata {
-					name: "fail",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<module2::Event>(),
-			}),
+			calls: Some(meta_type::<module2::Call<Runtime>>().into()),
+			event: Some(meta_type::<module2::Event>().into()),
 			constants: vec![],
 			error: None,
 			index: 32,
@@ -647,17 +621,8 @@ fn test_metadata() {
 				prefix: "Instance2Module",
 				entries: vec![],
 			}),
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance2>>(),
-				calls: vec![FunctionMetadata {
-					name: "fail",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance2>>(),
-			}),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance2>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance2>>().into()),
 			constants: vec![],
 			error: None,
 			index: 33,
@@ -668,17 +633,8 @@ fn test_metadata() {
 				prefix: "Module",
 				entries: vec![],
 			}),
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<nested::module3::Call<Runtime>>(),
-				calls: vec![FunctionMetadata {
-					name: "fail",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<nested::module3::Event>(),
-			}),
+			calls: Some(meta_type::<nested::module3::Call<Runtime>>().into()),
+			event: Some(meta_type::<nested::module3::Event>().into()),
 			constants: vec![],
 			error: None,
 			index: 34,
@@ -689,67 +645,8 @@ fn test_metadata() {
 				prefix: "Module",
 				entries: vec![],
 			}),
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<module3::Call<Runtime>>(),
-				calls: vec![
-					FunctionMetadata {
-						name: "fail",
-						args: vec![],
-						docs: vec![],
-					},
-					FunctionMetadata {
-						name: "aux_1",
-						args: vec![
-							FunctionArgumentMetadata {
-								name: "_data",
-								ty: scale_info::meta_type::<codec::Compact<u32>>()
-							}
-						],
-						docs: vec![],
-					},
-					FunctionMetadata {
-						name: "aux_2",
-						args: vec![
-							FunctionArgumentMetadata {
-								name: "_data",
-								ty: scale_info::meta_type::<i32>()
-							},
-							FunctionArgumentMetadata {
-								name: "_data2",
-								ty: scale_info::meta_type::<codec::Compact<u32>>()
-							}
-						],
-						docs: vec![],
-					},
-					FunctionMetadata {
-						name: "aux_3",
-						args: vec![
-							FunctionArgumentMetadata {
-								name: "_data",
-								ty: scale_info::meta_type::<i32>()
-							},
-							FunctionArgumentMetadata {
-								name: "_data2",
-								ty: scale_info::meta_type::<String>()
-							}
-						],
-						docs: vec![],
-					},
-					FunctionMetadata {
-						name: "aux_4",
-						args: vec![],
-						docs: vec![],
-					},
-					FunctionMetadata {
-						name: "operational",
-						args: vec![],
-						docs: vec![],
-					},
-				],
-			}),
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<module3::Event>(),
-			}),
+			calls: Some(meta_type::<module3::Call<Runtime>>().into()),
+			event: Some(meta_type::<module3::Event>().into()),
 			constants: vec![],
 			error: None,
 			index: 35,
@@ -769,14 +666,7 @@ fn test_metadata() {
 		PalletMetadata {
 			name: "Module1_4",
 			storage: None,
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance4>>(),
-				calls: vec![FunctionMetadata {
-					name: "fail",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance4>>().into()),
 			event: None,
 			constants: vec![],
 			error: None,
@@ -786,9 +676,7 @@ fn test_metadata() {
 			name: "Module1_5",
 			storage: None,
 			calls: None,
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance5>>(),
-			}),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance5>>().into()),
 			constants: vec![],
 			error: None,
 			index: 4,
@@ -799,17 +687,8 @@ fn test_metadata() {
 				prefix: "Instance6Module",
 				entries: vec![],
 			}),
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance6>>(),
-				calls: vec![FunctionMetadata {
-					name: "fail",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance6>>(),
-			}),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance6>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance6>>().into()),
 			constants: vec![],
 			error: None,
 			index: 1,
@@ -820,16 +699,9 @@ fn test_metadata() {
 				prefix: "Instance7Module",
 				entries: vec![],
 			}),
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance7>>(),
-				calls: vec![FunctionMetadata {
-					name: "fail",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance7>>().into()),
 			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance7>>(),
+				ty: meta_type::<module1::Event<Runtime, module1::Instance7>>(),
 			}),
 			constants: vec![],
 			error: None,
@@ -841,17 +713,8 @@ fn test_metadata() {
 				prefix: "Instance8Module",
 				entries: vec![],
 			}),
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance8>>(),
-				calls: vec![FunctionMetadata {
-					name: "fail",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance8>>(),
-			}),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance8>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance8>>().into()),
 			constants: vec![],
 			error: None,
 			index: 12,
@@ -862,17 +725,8 @@ fn test_metadata() {
 				prefix: "Instance9Module",
 				entries: vec![],
 			}),
-			calls: Some(PalletCallMetadata {
-				ty: scale_info::meta_type::<module1::Call<Runtime, module1::Instance9>>(),
-				calls: vec![FunctionMetadata {
-					name: "fail",
-					args: vec![],
-					docs: vec![],
-				}],
-			}),
-			event: Some(PalletEventMetadata {
-				ty: scale_info::meta_type::<module1::Event<Runtime, module1::Instance9>>(),
-			}),
+			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance9>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance9>>().into()),
 			constants: vec![],
 			error: None,
 			index: 13,
@@ -880,13 +734,13 @@ fn test_metadata() {
 	];
 
 	let extrinsic = ExtrinsicMetadata {
-		ty: scale_info::meta_type::<UncheckedExtrinsic>(),
+		ty: meta_type::<UncheckedExtrinsic>(),
 		version: 4,
 		signed_extensions: vec![
 			SignedExtensionMetadata {
 				identifier: "UnitSignedExtension",
-				ty: scale_info::meta_type::<()>(),
-				additional_signed: scale_info::meta_type::<()>(),
+				ty: meta_type::<()>(),
+				additional_signed: meta_type::<()>(),
 			}
 		]
 	};

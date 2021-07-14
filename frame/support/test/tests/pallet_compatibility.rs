@@ -314,7 +314,6 @@ mod test {
 
 		let calls1 = pallets[1].calls.as_ref().unwrap();
 		let calls2 = pallets[2].calls.as_ref().unwrap();
-		pretty_assertions::assert_eq!(calls1.calls, calls2.calls);
 		assert_meta_types(calls1.ty.id(), calls2.ty.id());
 
 		// event: check variants and fields but ignore the type name which will be different
