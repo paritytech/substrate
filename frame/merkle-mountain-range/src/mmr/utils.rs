@@ -114,7 +114,7 @@ mod tests {
 				let mut mmr = crate::mmr::Mmr::<
 					crate::mmr::storage::RuntimeStorage,
 					crate::mock::Test,
-					crate::DefaultInstance,
+					_,
 					_,
 				>::new(0);
 				for i in 0..*s {
