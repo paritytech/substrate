@@ -38,8 +38,6 @@ use sp_state_machine::Ext;
 /// the node process is dropped when this struct is dropped
 /// also holds logs from the process.
 pub struct Node<T: ChainInfo> {
-	/// rpc handler for communicating with the node over rpc.
-	// rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
 	/// handle to the running node.
 	task_manager: Option<TaskManager>,
 	/// client instance
@@ -71,7 +69,6 @@ impl<T> Node<T>
 {
 	/// Creates a new node.
 	pub fn new(
-		// rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
 		task_manager: TaskManager,
 		client: Arc<TFullClient<T::Block, T::RuntimeApi, T::Executor>>,
 		pool: Arc<dyn TransactionPool<
@@ -87,7 +84,6 @@ impl<T> Node<T>
 		backend: Arc<TFullBackend<T::Block>>,
 	) -> Self {
 		Self {
-			// rpc_handler,
 			task_manager: Some(task_manager),
 			client: client.clone(),
 			pool,

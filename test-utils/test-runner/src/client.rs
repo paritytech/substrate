@@ -40,7 +40,6 @@ use sp_offchain::OffchainWorkerApi;
 use std::sync::Arc;
 
 type ClientParts<T> = (
-    // Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
     TaskManager,
     Arc<TFullClient<<T as ChainInfo>::Block, <T as ChainInfo>::RuntimeApi, <T as ChainInfo>::Executor>>,
     Arc<dyn TransactionPool<
@@ -151,8 +150,6 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
     // Channel for the rpc handler to communicate with the authorship task.
     let (command_sink, commands_stream) = mpsc::channel(10);
 
-    // let rpc_sink = command_sink.clone();
-
     let _rpc_handlers = {
         let params = SpawnTasksParams {
             config,
@@ -207,10 +204,8 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
         .spawn("manual-seal", authorship_future);
 
     network_starter.start_network();
-    // let rpc_handler = rpc_handlers.io_handler();
 
     Ok((
-        // rpc_handler,
         task_manager,
         client,
         transaction_pool,
