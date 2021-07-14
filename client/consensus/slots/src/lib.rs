@@ -456,7 +456,7 @@ pub trait InherentDataProviderExt {
 
 /// Small macro for implementing `InherentDataProviderExt` for inherent data provider tuple.
 macro_rules! impl_inherent_data_provider_ext_tuple {
-	( T, S, $($TN:ident),* ) => {
+	( T, S $(, $TN:ident)* $( , )?) => {
 		impl<T, S, $( $TN ),*>  InherentDataProviderExt for (T, S, $($TN),*)
 		where
 			T: Deref<Target = Timestamp>,
@@ -473,7 +473,7 @@ macro_rules! impl_inherent_data_provider_ext_tuple {
 	}
 }
 
-impl_inherent_data_provider_ext_tuple!(T, S,);
+impl_inherent_data_provider_ext_tuple!(T, S);
 impl_inherent_data_provider_ext_tuple!(T, S, A);
 impl_inherent_data_provider_ext_tuple!(T, S, A, B);
 impl_inherent_data_provider_ext_tuple!(T, S, A, B, C);
