@@ -41,7 +41,7 @@ names = "0.11.0"
 structopt = "0.3.8"
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 chrono = "0.4.10"
-serde = "1.0.111"
+serde = "1.0.126"
 thiserror = "1.0.21"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]

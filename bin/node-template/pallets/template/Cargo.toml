@@ -20,7 +20,7 @@ frame-system = { default-features = false,  version = "4.0.0-dev",  path = "../.
 frame-benchmarking = { default-features = false,  version = "4.0.0-dev",  path = "../../../../frame/benchmarking", optional = true }
 
 [dev-dependencies]
-serde = { version = "1.0.119" }
+serde = { version = "1.0.126" }
 sp-core = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/core" }
 sp-io = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/io" }
 sp-runtime = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/runtime" }

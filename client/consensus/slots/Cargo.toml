@@ -34,7 +34,7 @@ futures-timer = "3.0.1"
 log = "0.4.11"
 thiserror = "1.0.21"
 impl-trait-for-tuples = "0.2.1"
-async-trait = "0.1.42"
+async-trait = "0.1.50"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

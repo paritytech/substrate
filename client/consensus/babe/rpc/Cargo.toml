@@ -17,7 +17,7 @@ jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master"
 sc-consensus-babe = { version = "0.10.0-dev", path = "../" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../rpc-api" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../../primitives/consensus/babe" }
-serde = { version = "1.0.104", features=["derive"] }
+serde = { version = "1.0.126", features=["derive"] }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }

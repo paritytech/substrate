@@ -23,7 +23,7 @@
 use std::collections::{VecDeque, HashSet, HashMap};
 use std::sync::Arc;
 use std::hash::Hash as StdHash;
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
 use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
@@ -222,7 +222,7 @@ impl<B: BlockT> Cache<B> {
 	}
 }
 
-pub type SharedCache<B> = Arc<Mutex<Cache<B>>>;
+pub type SharedCache<B> = Arc<RwLock<Cache<B>>>;
 
 /// Fix lru storage size for hash (small 64ko).
 const FIX_LRU_HASH_SIZE: usize = 65_536;
@@ -234,7 +234,7 @@ pub fn new_shared_cache<B: BlockT>(
 ) -> SharedCache<B> {
 	let top = child_ratio.1.saturating_sub(child_ratio.0);
 	Arc::new(
-		Mutex::new(
+		RwLock::new(
 			Cache {
 				lru_storage: LRUMap(
 					LinkedHashMap::new(), 0, shared_cache_size * top / child_ratio.1
@@ -337,7 +337,7 @@ impl<B: BlockT> CacheChanges<B> {
 		commit_number: Option<NumberFor<B>>,
 		is_best: bool,
 	) {
-		let mut cache = self.shared_cache.lock();
+		let mut cache = self.shared_cache.write();
 		trace!(
 			"Syncing cache, id = (#{:?}, {:?}), parent={:?}, best={}",
 			commit_number,
@@ -527,12 +527,15 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 			return Ok(entry)
 		}
-		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_storage.get(key).map(|a| a.clone()) {
-				trace!("Found in shared cache: {:?}", HexDisplay::from(&key));
-				self.usage.tally_key_read(key, entry.as_ref(), true);
-				return Ok(entry)
+		{
+			let cache = self.cache.shared_cache.upgradable_read();
+			if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
+				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+				if let Some(entry) = cache.lru_storage.get(key).map(|a| a.clone()) {
+					trace!("Found in shared cache: {:?}", HexDisplay::from(&key));
+					self.usage.tally_key_read(key, entry.as_ref(), true);
+					return Ok(entry)
+				}
 			}
 		}
 		trace!("Cache miss: {:?}", HexDisplay::from(&key));
@@ -548,11 +551,14 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 			trace!("Found hash in local cache: {:?}", HexDisplay::from(&key));
 			return Ok(entry)
 		}
-		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0.clone()) {
-				trace!("Found hash in shared cache: {:?}", HexDisplay::from(&key));
-				return Ok(entry)
+		{
+			let cache = self.cache.shared_cache.upgradable_read();
+			if Self::is_allowed(Some(key), None, &self.cache.parent_hash, &cache.modifications) {
+				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+				if let Some(entry) = cache.lru_hashes.get(key).map(|a| a.0.clone()) {
+					trace!("Found hash in shared cache: {:?}", HexDisplay::from(&key));
+					return Ok(entry)
+				}
 			}
 		}
 		trace!("Cache hash miss: {:?}", HexDisplay::from(&key));
@@ -574,13 +580,16 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 				self.usage.tally_child_key_read(&key, entry, true)
 			)
 		}
-		let mut cache = self.cache.shared_cache.lock();
-		if Self::is_allowed(None, Some(&key), &self.cache.parent_hash, &cache.modifications) {
-			if let Some(entry) = cache.lru_child_storage.get(&key).map(|a| a.clone()) {
-				trace!("Found in shared cache: {:?}", key);
-				return Ok(
-					self.usage.tally_child_key_read(&key, entry, true)
-				)
+		{
+			let cache = self.cache.shared_cache.upgradable_read();
+			if Self::is_allowed(None, Some(&key), &self.cache.parent_hash, &cache.modifications) {
+				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+				if let Some(entry) = cache.lru_child_storage.get(&key).map(|a| a.clone()) {
+					trace!("Found in shared cache: {:?}", key);
+					return Ok(
+						self.usage.tally_child_key_read(&key, entry, true)
+					)
+				}
 			}
 		}
 		trace!("Cache miss: {:?}", key);
@@ -1274,7 +1283,7 @@ mod tests {
 			true,
 		);
 		// 32 key, 3 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 35 /* bytes */);
+		assert_eq!(shared.read().used_storage_cache_size(), 35 /* bytes */);
 
 		let key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
@@ -1287,7 +1296,7 @@ mod tests {
 			true,
 		);
 		// 35 + (2 * 32) key, 2 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 101 /* bytes */);
+		assert_eq!(shared.read().used_storage_cache_size(), 101 /* bytes */);
 	}
 
 	#[test]
@@ -1313,7 +1322,7 @@ mod tests {
 			true,
 		);
 		// 32 key, 4 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 36 /* bytes */);
+		assert_eq!(shared.read().used_storage_cache_size(), 36 /* bytes */);
 
 		let key = H256::random()[..].to_vec();
 		s.cache.sync_cache(
@@ -1326,7 +1335,7 @@ mod tests {
 			true,
 		);
 		// 32 key, 2 byte size
-		assert_eq!(shared.lock().used_storage_cache_size(), 34 /* bytes */);
+		assert_eq!(shared.read().used_storage_cache_size(), 34 /* bytes */);
 	}
 
 	#[test]
@@ -1379,7 +1388,7 @@ mod tests {
 
 		// Restart (or unknown block?), clear caches.
 		{
-			let mut cache = s.cache.shared_cache.lock();
+			let mut cache = s.cache.shared_cache.write();
 			let cache = &mut *cache;
 			cache.lru_storage.clear();
 			cache.lru_hashes.clear();
@@ -1426,7 +1435,7 @@ mod tests {
 			Some(1),
 			true,
 		);
-		assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![1]));
+		assert_eq!(shared.write().lru_storage.get(&key).unwrap(), &Some(vec![1]));
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
@@ -1445,7 +1454,7 @@ mod tests {
 			false,
 		);
 
-		assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![1]));
+		assert_eq!(shared.write().lru_storage.get(&key).unwrap(), &Some(vec![1]));
 
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
@@ -1800,7 +1809,7 @@ mod qc {
 
 							std::mem::swap(fork_chain, &mut new_fork);
 
-							self.shared.lock().sync(&retracted, &enacted);
+							self.shared.write().sync(&retracted, &enacted);
 
 							self.head_state(
 								self.canon.last()

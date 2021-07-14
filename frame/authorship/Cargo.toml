@@ -24,7 +24,7 @@ impl-trait-for-tuples = "0.2.1"
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-io ={ version = "4.0.0-dev", path = "../../primitives/io" }
-serde = { version = "1.0.101" }
+serde = { version = "1.0.126" }
 
 [features]
 default = ["std"]

@@ -21,7 +21,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = { version = "0.3.4", features = ["compat"] }
 jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee", branch = "master", features = ["server"] }
 log = "0.4.8"
-serde = { version = "1.0.101", features = ["derive"] }
+serde = { version = "1.0.126", features = ["derive"] }
 sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../../frame/system/rpc/runtime-api" }
