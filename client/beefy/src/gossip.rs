@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use codec::{Decode, Encode};
-use log::{debug, trace};
-use parking_lot::RwLock;
 use std::collections::BTreeMap;
 
 use sc_network::PeerId;
 use sc_network_gossip::{MessageIntent, ValidationResult, Validator, ValidatorContext};
-
 use sp_core::hashing::twox_64;
 use sp_runtime::traits::{Block, Hash, Header, NumberFor};
+
+use codec::{Decode, Encode};
+use log::{debug, trace};
+use parking_lot::RwLock;
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
@@ -103,8 +103,21 @@ where
 		known_votes.get_mut(round).map(|known| known.insert(hash));
 	}
 
+	// Note that we will always keep the most recent unseen round alive.
+	//
+	// This is a preliminary fix and the detailed description why we are
+	// doing this can be found as part of the issue below
+	//
+	// https://github.com/paritytech/grandpa-bridge-gadget/issues/237
+	//
 	fn is_live(known_votes: &KnownVotes<B>, round: &NumberFor<B>) -> bool {
-		known_votes.contains_key(round)
+		let unseen_round = if let Some(max_known_round) = known_votes.keys().last() {
+			round > max_known_round
+		} else {
+			known_votes.is_empty()
+		};
+
+		known_votes.contains_key(round) || unseen_round
 	}
 
 	fn is_known(known_votes: &KnownVotes<B>, round: &NumberFor<B>, hash: &MessageHash) -> bool {
