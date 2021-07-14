@@ -914,11 +914,7 @@ mod tests {
 
 		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
 			// initialize the voters' deposits
-			let existential_deposit = <Test as Config>::Currency::minimum_balance();
-			let mut balance = existential_deposit + 1;
-			assert_eq!(VoterBagThresholds::get()[1] as u128, balance);
-			assert_eq!(balance, 2);
-
+			let mut balance = 10;
 			for voter_id in voters.iter().rev() {
 				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
 				let controller = Staking::bonded(voter_id).unwrap();
@@ -928,7 +924,7 @@ mod tests {
 				Staking::update_ledger(&controller, &ledger);
 				Staking::do_rebag(voter_id);
 
-				balance *= 2;
+				balance += 10;
 			}
 
 			let have_voters: Vec<_> = VoterList::<Test>::iter().map(|node| node.voter.id).collect();
@@ -941,21 +937,16 @@ mod tests {
 	fn take_works() {
 		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
 			// initialize the voters' deposits
-			let existential_deposit = <Test as Config>::Currency::minimum_balance();
-			let mut balance = existential_deposit + 1;
-			assert_eq!(VoterBagThresholds::get()[1] as u128, balance);
-			assert_eq!(balance, 2);
-
+			let mut balance = 0; // This will be 10 on the first loop iteration bc 0 % 3 == 0
 			for (idx, voter_id) in GENESIS_VOTER_IDS.iter().enumerate() {
 				if idx % 3 == 0 {
-					// This increases the balance by a constant factor of 2, which is
-					// is the factor used to generate the mock bags. Thus this will
-					// increase the balance by 1 bag.
+					// This increases the balance by 10, which is the amount each threshold
+					// increases by. Thus this will increase the balance by 1 bag.
 					//
 					// This will create 2 bags, the lower threshold bag having
-					// 3 voters with balance 4, and the higher threshold bag having
-					// 2 voters with balance 8.
-					balance *= 2;
+					// 3 voters with balance 10, and the higher threshold bag having
+					// 2 voters with balance 20.
+					balance += 10;
 				}
 
 				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
@@ -967,19 +958,19 @@ mod tests {
 				Staking::do_rebag(voter_id);
 			}
 
-			let bag_thresh4 = <Staking as crate::Store>::VoterBags::get(&4)
+			let bag_thresh10 = <Staking as crate::Store>::VoterBags::get(&10)
 				.unwrap()
 				.iter()
 				.map(|node| node.voter.id)
 				.collect::<Vec<_>>();
-			assert_eq!(bag_thresh4, vec![11, 21, 31]);
+			assert_eq!(bag_thresh10, vec![11, 21, 31]);
 
-			let bag_thresh8 = <Staking as crate::Store>::VoterBags::get(&8)
+			let bag_thresh20 = <Staking as crate::Store>::VoterBags::get(&20)
 				.unwrap()
 				.iter()
 				.map(|node| node.voter.id)
 				.collect::<Vec<_>>();
-			assert_eq!(bag_thresh8, vec![41, 101]);
+			assert_eq!(bag_thresh20, vec![41, 101]);
 
 			let voters: Vec<_> = VoterList::<Test>::iter()
 				// take 4/5 from [41, 101],[11, 21, 31], demonstrating that we can do a
@@ -996,12 +987,8 @@ mod tests {
 	fn storage_is_cleaned_up_as_voters_are_removed() {
 		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
 			// Initialize voters deposits so there are 5 bags with one voter each.
-			let existential_deposit = <Test as Config>::Currency::minimum_balance();
-			let mut balance = existential_deposit + 1;
+			let mut balance = 10;
 			for voter_id in GENESIS_VOTER_IDS.iter() {
-				// Increase balance to the next threshold.
-				balance *= 2;
-
 				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
 				let controller = Staking::bonded(voter_id).unwrap();
 				let mut ledger = Staking::ledger(&controller).unwrap();
@@ -1009,6 +996,9 @@ mod tests {
 				ledger.active = balance;
 				Staking::update_ledger(&controller, &ledger);
 				Staking::do_rebag(voter_id);
+
+				// Increase balance to the next threshold.
+				balance += 10;
 			}
 
 			let voter_list_storage_items_eq = |mut v: Vec<u64>| {
@@ -1036,24 +1026,25 @@ mod tests {
 				assert_eq!(bags_for, v);
 			};
 
-			let genesis = vec![101, 41, 31, 21, 11];
-			voter_list_storage_items_eq(genesis);
+			let genesis_voters = vec![101, 41, 31, 21, 11];
+			voter_list_storage_items_eq(genesis_voters);
 			assert_eq!(<Staking as crate::Store>::VoterCount::get(), 5);
 
 			// Remove 1 voter,
 			VoterList::<Test>::remove(&101);
-			let remaining = vec![41, 31, 21, 11];
+			let remaining_voters = vec![41, 31, 21, 11];
 			// and assert they have been cleaned up.
-			voter_list_storage_items_eq(remaining.clone());
+			voter_list_storage_items_eq(remaining_voters.clone());
 			assert_eq!(<Staking as crate::Store>::VoterCount::get(), 4);
 
-			// Now remove the remaining so we have no left,
-			remaining.iter().for_each(|v| VoterList::<Test>::remove(v));
+			// Now remove the remaining voters so we have 0 left,
+			remaining_voters.iter().for_each(|v| VoterList::<Test>::remove(v));
 			// and assert all of them have been cleaned up.
 			voter_list_storage_items_eq(vec![]);
 			assert_eq!(<Staking as crate::Store>::VoterCount::get(), 0);
 
-			remaining.iter().for_each(|v| {
+			// And we can make sure _everyone_ has been totally removed.
+			remaining_voters.iter().for_each(|v| {
 				// TODO should anything else be checked?
 				assert!(!<Staking as crate::Store>::VoterNodes::contains_key(v));
 				assert!(!<Staking as crate::Store>::VoterBagFor::contains_key(v));
