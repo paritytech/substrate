@@ -602,21 +602,6 @@ impl<T: Config> Node<T> {
 		}
 	}
 
-	/// Remove this node from the linked list.
-	///
-	/// Modifies storage, but only modifies the adjacent nodes. Does not modify `self` or any bag.
-	#[allow(dead_code)]// TODO: do we keep? (equivalent code in `fn remove_node`)
-	fn excise(&self) {
-		if let Some(mut prev) = self.prev() {
-			prev.next = self.next.clone();
-			prev.put();
-		}
-		if let Some(mut next) = self.next() {
-			next.prev = self.prev.clone();
-			next.put();
-		}
-	}
-
 	/// `true` when this voter is in the wrong bag.
 	pub fn is_misplaced(&self, weight_of: impl Fn(&T::AccountId) -> VoteWeight) -> bool {
 		notional_bag_for::<T>(weight_of(&self.voter.id)) != self.bag_upper
@@ -1002,6 +987,71 @@ mod tests {
 		});
 	}
 
-	// TODO:
-	// - storage is cleaned up when a voter is removed
+	#[test]
+	fn storage_is_cleaned_up_as_voters_are_removed() {
+		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
+			// Initialize voters deposits so there are 5 bags with one voter each.
+			let existential_deposit = <Test as Config>::Currency::minimum_balance();
+			let mut balance = existential_deposit + 1;
+			for voter_id in GENESIS_VOTER_IDS.iter() {
+				// Increase balance to the next threshold.
+				balance *= 2;
+
+				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
+				let controller = Staking::bonded(voter_id).unwrap();
+				let mut ledger = Staking::ledger(&controller).unwrap();
+				ledger.total = balance;
+				ledger.active = balance;
+				Staking::update_ledger(&controller, &ledger);
+				Staking::do_rebag(voter_id);
+			}
+
+			let voter_list_storage_items_eq = |mut v: Vec<u64>| {
+				v.sort();
+				let mut voters: Vec<_> = VoterList::<Test>::iter().map(|node| node.voter.id).collect();
+				voters.sort();
+				assert_eq!(voters, v);
+
+				let mut nodes: Vec<_> = <Staking as crate::Store>::VoterNodes::iter_keys().collect();
+				nodes.sort();
+				assert_eq!(nodes, v);
+
+				let mut flat_bags: Vec<_> = <Staking as crate::Store>::VoterBags::iter()
+					.flat_map(|(_, bag)| bag.iter())
+					.map(|node| node.voter.id)
+					.collect();
+				flat_bags.sort();
+				assert_eq!(flat_bags, v);
+
+				let mut bags_for: Vec<_> = <Staking as crate::Store>::VoterBagFor::iter_keys().collect();
+				bags_for.sort();
+				assert_eq!(bags_for, v);
+			};
+
+			let genesis = vec![101, 41, 31, 21, 11];
+			voter_list_storage_items_eq(genesis);
+			assert_eq!(<Staking as crate::Store>::VoterCount::get(), 5);
+
+			// Remove 1 voter,
+			VoterList::<Test>::remove(&101);
+			let remaining = vec![41, 31, 21, 11];
+			// and assert they have been cleaned up.
+			voter_list_storage_items_eq(remaining.clone());
+			assert_eq!(<Staking as crate::Store>::VoterCount::get(), 4);
+
+			// Now remove the remaining so we have no left,
+			remaining.iter().for_each(|v| VoterList::<Test>::remove(v));
+			// and assert all of them have been cleaned up.
+			voter_list_storage_items_eq(vec![]);
+			assert_eq!(<Staking as crate::Store>::VoterCount::get(), 0);
+
+			remaining.iter().for_each(|v| {
+				// TODO should anything else be checked?
+				assert!(!<Staking as crate::Store>::VoterNodes::contains_key(v));
+				assert!(!<Staking as crate::Store>::VoterBagFor::contains_key(v));
+			})
+
+
+		});
+	}
 }
