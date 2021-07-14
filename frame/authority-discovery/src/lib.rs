@@ -50,7 +50,7 @@ pub mod pallet {
 		Vec<AuthorityId>,
 		ValueQuery,
 	>;
-	
+
 	#[pallet::storage]
 	#[pallet::getter(fn next_keys)]
 	/// Keys of the next authority set.
@@ -212,7 +212,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
+		type BaseCallFilter = frame_support::traits::AllowAll;
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();

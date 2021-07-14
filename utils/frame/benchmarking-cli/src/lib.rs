@@ -85,7 +85,8 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub output_analysis: Option<String>,
 
-	/// Set the heap pages while running benchmarks.
+	/// Set the heap pages while running benchmarks. If not set, the default value from the client
+	/// is used.
 	#[structopt(long)]
 	pub heap_pages: Option<u64>,
 
@@ -93,7 +94,8 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub no_verify: bool,
 
-	/// Display and run extra benchmarks that would otherwise not be needed for weight construction.
+	/// Display and run extra benchmarks that would otherwise not be needed for weight
+	/// construction.
 	#[structopt(long)]
 	pub extra: bool,
 
@@ -120,7 +122,7 @@ pub struct BenchmarkCmd {
 		value_name = "METHOD",
 		possible_values = &WasmExecutionMethod::variants(),
 		case_insensitive = true,
-		default_value = "Interpreted"
+		default_value = "compiled"
 	)]
 	pub wasm_method: WasmExecutionMethod,
 

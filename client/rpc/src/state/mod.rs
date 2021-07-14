@@ -402,6 +402,16 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
 
+	/// Returns the keys with prefix from a child storage with pagination support.
+	fn storage_keys_paged(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+	) -> FutureResult<Vec<StorageKey>>;
+
 	/// Returns a child storage entry at a specific block's state.
 	fn storage(
 		&self,
@@ -467,6 +477,17 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 		block: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys(block, storage_key, key_prefix)
+	}
+
+	fn storage_keys_paged(
+		&self,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<StorageKey>> {
+		self.backend.storage_keys_paged(block, storage_key, prefix, count, start_key)
 	}
 
 	fn storage_hash(

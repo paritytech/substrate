@@ -296,6 +296,13 @@ pub trait Externalities: ExtensionStore {
 	fn proof_size(&self) -> Option<u32> {
 		None
 	}
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Get all the keys that have been read or written to during the benchmark.
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)>;
 }
 
 /// Extension for the [`Externalities`] trait.
