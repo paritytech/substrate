@@ -31,7 +31,9 @@
 //! If the number of leaves is not even, last leave (hash of) is promoted to the upper layer.
 
 #[cfg(not(feature = "std"))]
-use core::vec::Vec;
+extern crate alloc;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 /// Supported hashing output size.
 ///
