@@ -1938,7 +1938,7 @@ dependencies = [
 
 [[package]]
 name = "frame-support-test-pallet"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",
