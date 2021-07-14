@@ -138,7 +138,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 			#[macro_export]
 			#[doc(hidden)]
 			macro_rules! #std_macro_ident {
-				($pallet_name:ident) => {};
+				($pallet_name:ident, $pallet_path:expr) => {};
 			}
 
 			#[doc(hidden)]
