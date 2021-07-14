@@ -61,7 +61,7 @@ fn add_vesting_schedules<T: Config>(
 	for _ in 0 .. n {
 		total_locked += locked;
 
-		let schedule = VestingInfo::new::<T>(locked, per_block, starting_block.into());
+		let schedule = VestingInfo::new(locked, per_block, starting_block.into());
 		assert_ok!(Vesting::<T>::do_vested_transfer(
 			source_lookup.clone(),
 			target.clone(),
@@ -208,7 +208,7 @@ benchmarks! {
 		let per_block = transfer_amount.checked_div(&20u32.into()).unwrap();
 		expected_balance += transfer_amount;
 
-		let vesting_schedule = VestingInfo::new::<T>(
+		let vesting_schedule = VestingInfo::new(
 			transfer_amount,
 			per_block,
 			1u32.into(),
@@ -246,7 +246,7 @@ benchmarks! {
 		let per_block = transfer_amount.checked_div(&20u32.into()).unwrap();
 		expected_balance += transfer_amount;
 
-		let vesting_schedule = VestingInfo::new::<T>(
+		let vesting_schedule = VestingInfo::new(
 			transfer_amount,
 			per_block,
 			1u32.into(),
@@ -290,7 +290,7 @@ benchmarks! {
 		);
 	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, s - 1)
 	verify {
-		let expected_schedule = VestingInfo::new::<T>(
+		let expected_schedule = VestingInfo::new(
 			T::MinVestedTransfer::get() * 20u32.into() * 2u32.into(),
 			T::MinVestedTransfer::get() * 2u32.into(),
 			1u32.into(),
@@ -344,7 +344,7 @@ benchmarks! {
 		assert!(T::Currency::transfer(&caller, &test_dest, expected_balance, ExistenceRequirement::AllowDeath).is_err());
 	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, s - 1)
 	verify {
-		let expected_schedule = VestingInfo::new::<T>(
+		let expected_schedule = VestingInfo::new(
 			T::MinVestedTransfer::get() * 2u32.into() * 10u32.into(),
 			T::MinVestedTransfer::get() * 2u32.into(),
 			11u32.into(),
