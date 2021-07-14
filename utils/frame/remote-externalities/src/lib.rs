@@ -34,7 +34,7 @@ use sp_core::{
 use codec::{Encode, Decode};
 use sp_runtime::traits::Block as BlockT;
 use jsonrpsee_ws_client::{
-	WsClientBuilder, WsClient, v2::params::JsonRpcParams,
+	WsClientBuilder, WsClient, types::v2::params::JsonRpcParams,
 };
 
 pub mod rpc_api;
@@ -275,7 +275,7 @@ impl<B: BlockT> Builder<B> {
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
-		use jsonrpsee_ws_client::traits::Client;
+		use jsonrpsee_ws_client::types::traits::Client;
 		use serde_json::to_value;
 		let keys = self.get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();

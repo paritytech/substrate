@@ -19,7 +19,14 @@
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
 use sp_runtime::{generic::SignedBlock, traits::{Block as BlockT, Header as HeaderT}};
-use jsonrpsee_ws_client::{WsClientBuilder, WsClient, v2::params::JsonRpcParams, traits::Client};
+use jsonrpsee_ws_client::{
+	WsClientBuilder,
+	WsClient,
+	types::{
+		v2::params::JsonRpcParams,
+		traits::Client
+	},
+};
 
 /// Get the header of the block identified by `at`
 pub async fn get_header<Block, S>(from: S, at: Block::Hash) -> Result<Block::Header, String>
