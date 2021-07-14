@@ -1125,7 +1125,7 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
-			{ &'static str }
+			{ __NO_ERROR_DEFINED }
 			{ $( $integrity_test)* }
 			[ $($t)* ]
 			$($rest)*
@@ -1148,7 +1148,7 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
-		{ $error_type:ty }
+		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
@@ -1173,7 +1173,7 @@ macro_rules! decl_module {
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
-			{ $error_type }
+			{ $( $error_type )* }
 			{ $( $integrity_test)* }
 			[
 				$( $dispatchables )*
@@ -1664,7 +1664,6 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
-		$error_type:ty;
 		$ignore:ident;
 		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
@@ -1686,7 +1685,6 @@ macro_rules! decl_module {
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
-		$error_type:ty;
 		$ignore:ident;
 		$(#[$fn_attr:meta])*
 		$vis:vis fn $name:ident (
@@ -1841,7 +1839,7 @@ macro_rules! decl_module {
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
-		{ $error_type:ty }
+		{ $( $error_type:tt )* }
 		{ $( $integrity_test:tt )* }
 	) => {
 		$crate::__check_reserved_fn_name! { $( $fn_name )* }
@@ -1925,7 +1923,6 @@ macro_rules! decl_module {
 					@impl_function
 					$mod_type<$trait_instance: $trait_name $(<I>, $fn_instance: $fn_instantiable)?>;
 					$origin_type;
-					$error_type;
 					$from;
 					$(#[doc = $doc_attr])*
 					///
@@ -2145,7 +2142,7 @@ macro_rules! decl_module {
 		$crate::__impl_error_metadata! {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
 			{ $( $other_where_bounds )* }
-			$error_type
+			$( $error_type )*
 		}
 		$crate::__impl_module_constants_metadata ! {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
@@ -2190,26 +2187,7 @@ macro_rules! __impl_error_metadata {
 	(
 		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
 		{ $( $other_where_bounds:tt )* }
-		$error_type:tt
-		$($rest:tt)*
-	) => {
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
-			where $( $other_where_bounds )*
-		{
-			#[doc(hidden)]
-			#[allow(dead_code)]
-			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
-				Some($crate::metadata::PalletErrorMetadata {
-					ty: $crate::scale_info::meta_type::<$error_type>()
-				})
-			}
-		}
-	};
-	(
-		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
-		{ $( $other_where_bounds:tt )* }
-		{ &'static str }
-		$($rest:tt)*
+		__NO_ERROR_DEFINED
 	) => {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
@@ -2218,6 +2196,23 @@ macro_rules! __impl_error_metadata {
 			#[allow(dead_code)]
 			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
 				None
+			}
+		}
+	};
+	(
+		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
+		{ $( $other_where_bounds:tt )* }
+		$( $error_type:tt )*
+	) => {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
+			#[doc(hidden)]
+			#[allow(dead_code)]
+			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
+				Some($crate::metadata::PalletErrorMetadata {
+					ty: $crate::scale_info::meta_type::<$( $error_type )*>()
+				})
 			}
 		}
 	};
