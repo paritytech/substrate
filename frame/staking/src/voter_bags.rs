@@ -967,14 +967,19 @@ mod tests {
 				Staking::do_rebag(voter_id);
 			}
 
-			let bag_thresh4 = <Staking as crate::Store>::VoterBags::get(&4).unwrap().iter()
-				.map(|node| node.voter.id).collect::<Vec<_>>();
+			let bag_thresh4 = <Staking as crate::Store>::VoterBags::get(&4)
+				.unwrap()
+				.iter()
+				.map(|node| node.voter.id)
+				.collect::<Vec<_>>();
 			assert_eq!(bag_thresh4, vec![11, 21, 31]);
 
-			let bag_thresh8 = <Staking as crate::Store>::VoterBags::get(&8).unwrap().iter()
-				.map(|node| node.voter.id).collect::<Vec<_>>();
+			let bag_thresh8 = <Staking as crate::Store>::VoterBags::get(&8)
+				.unwrap()
+				.iter()
+				.map(|node| node.voter.id)
+				.collect::<Vec<_>>();
 			assert_eq!(bag_thresh8, vec![41, 101]);
-
 
 			let voters: Vec<_> = VoterList::<Test>::iter()
 				// take 4/5 from [41, 101],[11, 21, 31], demonstrating that we can do a
@@ -1008,11 +1013,13 @@ mod tests {
 
 			let voter_list_storage_items_eq = |mut v: Vec<u64>| {
 				v.sort();
-				let mut voters: Vec<_> = VoterList::<Test>::iter().map(|node| node.voter.id).collect();
+				let mut voters: Vec<_> =
+					VoterList::<Test>::iter().map(|node| node.voter.id).collect();
 				voters.sort();
 				assert_eq!(voters, v);
 
-				let mut nodes: Vec<_> = <Staking as crate::Store>::VoterNodes::iter_keys().collect();
+				let mut nodes: Vec<_> =
+					<Staking as crate::Store>::VoterNodes::iter_keys().collect();
 				nodes.sort();
 				assert_eq!(nodes, v);
 
@@ -1023,7 +1030,8 @@ mod tests {
 				flat_bags.sort();
 				assert_eq!(flat_bags, v);
 
-				let mut bags_for: Vec<_> = <Staking as crate::Store>::VoterBagFor::iter_keys().collect();
+				let mut bags_for: Vec<_> =
+					<Staking as crate::Store>::VoterBagFor::iter_keys().collect();
 				bags_for.sort();
 				assert_eq!(bags_for, v);
 			};
@@ -1050,8 +1058,6 @@ mod tests {
 				assert!(!<Staking as crate::Store>::VoterNodes::contains_key(v));
 				assert!(!<Staking as crate::Store>::VoterBagFor::contains_key(v));
 			})
-
-
 		});
 	}
 }
