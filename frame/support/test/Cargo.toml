@@ -18,7 +18,7 @@ scale-info = { version = "0.9.0", default-features = false, features = ["derive"
 sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/arithmetic" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io", default-features = false }
 sp-state-machine = { version = "0.10.0-dev", optional = true, path = "../../../primitives/state-machine" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../" }
+frame-support = { version = "4.0.0-dev", default-features = false, features = ["metadata-docs"], path = "../" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
