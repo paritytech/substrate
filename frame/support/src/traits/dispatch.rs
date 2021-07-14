@@ -41,7 +41,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 /// Type that can be dispatched with an origin but without checking the origin filter.
 ///
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
-/// `construct_runtime` and `impl_outer_dispatch`.
+/// `construct_runtime`.
 pub trait UnfilteredDispatchable {
 	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
 	type Origin;
