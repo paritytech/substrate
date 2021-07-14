@@ -663,6 +663,98 @@ fn test_metadata() {
 			index: 33,
 		},
 		PalletMetadata {
+			name: "NestedModule3",
+			storage: Some(PalletStorageMetadata {
+				prefix: "Module",
+				entries: vec![],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<nested::module3::Call<Runtime>>(),
+				calls: vec![FunctionMetadata {
+					name: "fail",
+					args: vec![],
+					docs: vec![],
+				}],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<nested::module3::Event>(),
+			}),
+			constants: vec![],
+			error: None,
+			index: 34,
+		},
+		PalletMetadata {
+			name: "Module3",
+			storage: Some(PalletStorageMetadata {
+				prefix: "Module",
+				entries: vec![],
+			}),
+			calls: Some(PalletCallMetadata {
+				ty: scale_info::meta_type::<module3::Call<Runtime>>(),
+				calls: vec![
+					FunctionMetadata {
+						name: "fail",
+						args: vec![],
+						docs: vec![],
+					},
+					FunctionMetadata {
+						name: "aux_1",
+						args: vec![
+							FunctionArgumentMetadata {
+								name: "_data",
+								ty: scale_info::meta_type::<codec::Compact<u32>>()
+							}
+						],
+						docs: vec![],
+					},
+					FunctionMetadata {
+						name: "aux_2",
+						args: vec![
+							FunctionArgumentMetadata {
+								name: "_data",
+								ty: scale_info::meta_type::<i32>()
+							},
+							FunctionArgumentMetadata {
+								name: "_data2",
+								ty: scale_info::meta_type::<codec::Compact<u32>>()
+							}
+						],
+						docs: vec![],
+					},
+					FunctionMetadata {
+						name: "aux_3",
+						args: vec![
+							FunctionArgumentMetadata {
+								name: "_data",
+								ty: scale_info::meta_type::<i32>()
+							},
+							FunctionArgumentMetadata {
+								name: "_data2",
+								ty: scale_info::meta_type::<String>()
+							}
+						],
+						docs: vec![],
+					},
+					FunctionMetadata {
+						name: "aux_4",
+						args: vec![],
+						docs: vec![],
+					},
+					FunctionMetadata {
+						name: "operational",
+						args: vec![],
+						docs: vec![],
+					},
+				],
+			}),
+			event: Some(PalletEventMetadata {
+				ty: scale_info::meta_type::<module3::Event>(),
+			}),
+			constants: vec![],
+			error: None,
+			index: 33,
+		},
+		PalletMetadata {
 			name: "Module1_3",
 			storage: Some(PalletStorageMetadata {
 				prefix: "Instance3Module",
