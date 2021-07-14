@@ -86,7 +86,7 @@ impl pallet_balances::Config for Test {
 }
 parameter_types! {
 	// Ideally all tests should use a value <= `MinVestedTransfer` when configuring the
-	// existential deposit. This is ensured the by the integrity test.
+	// existential deposit. In production this is ensured the by the runtime integrity test.
 	pub const MinVestedTransfer: u64 = 256 * 2;
 	pub static ExistentialDeposit: u64 = 0;
 	pub const MaxVestingSchedules: u32 = 3;

@@ -541,12 +541,12 @@ impl<T: Config> Pallet<T> {
 	/// filter out completed and specified schedules.
 	///
 	/// Returns a tuple that consists of:
-	/// - vec of vesting schedules, where completed schedules and those
-	/// 	specified by filter are remove. (Note the vec is not checked for respecting
+	/// - vec of vesting schedules, where completed schedules and those specified
+	/// 	by filter are removed. (Note the vec is not checked for respecting
 	/// 	bounded length.)
 	/// - the amount locked at the current block number based on the given schedules.
 	///
-	/// NOTE: the amount locked does not include any schedules that are filtered out.
+	/// NOTE: the amount locked does not include any schedules that are filtered out via `action`.
 	fn report_schedule_updates(
 		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
 		action: VestingAction,
