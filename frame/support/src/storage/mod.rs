@@ -779,8 +779,8 @@ pub struct PrefixIterator<T> {
 }
 
 impl<T> PrefixIterator<T> {
-	/// Creates a new `PrefixIterator`, iterating after `next_key` and filtering out keys that are
-	/// not prefixed with `prefix`.
+	/// Creates a new `PrefixIterator`, iterating after `previous_key` and filtering out keys that
+	/// are not prefixed with `prefix`.
 	///
 	/// A `decode_fn` function must also be supplied, and it takes in two `&[u8]` parameters,
 	/// returning a `Result` containing the decoded type `T` if successful, and a `codec::Error` on
@@ -789,12 +789,12 @@ impl<T> PrefixIterator<T> {
 	/// undecoded value.
 	pub fn new(
 		prefix: Vec<u8>,
-		next_key: Vec<u8>,
+		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	) -> Self {
 		PrefixIterator {
 			prefix,
-			previous_key: next_key,
+			previous_key,
 			drain: false,
 			closure: decode_fn,
 		}
