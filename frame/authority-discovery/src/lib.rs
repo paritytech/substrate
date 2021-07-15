@@ -24,8 +24,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use frame_support::traits::OneSessionHandler;
+use frame_support::{BoundedVec, traits::OneSessionHandler};
 use sp_authority_discovery::AuthorityId;
+
+use core::convert::TryFrom;
 
 pub use pallet::*;
 
@@ -40,14 +42,17 @@ pub mod pallet {
 
 	#[pallet::config]
 	/// The pallet's config trait.
-	pub trait Config: frame_system::Config + pallet_session::Config {}
+	pub trait Config: frame_system::Config + pallet_session::Config {
+		/// The maximum number of authorities that can be added.
+		type MaxAuthorities: Get<u32>;
+	}
 
 	#[pallet::storage]
 	#[pallet::getter(fn keys)]
 	/// Keys of the current authority set.
 	pub(super) type Keys<T: Config> = StorageValue<
 		_,
-		Vec<AuthorityId>,
+		BoundedVec<AuthorityId, T::MaxAuthorities>,
 		ValueQuery,
 	>;
 
@@ -56,7 +61,7 @@ pub mod pallet {
 	/// Keys of the next authority set.
 	pub(super) type NextKeys<T: Config> = StorageValue<
 		_,
-		Vec<AuthorityId>,
+		BoundedVec<AuthorityId, T::MaxAuthorities>,
 		ValueQuery,
 	>;
 
@@ -85,32 +90,39 @@ impl<T: Config> Pallet<T> {
 	/// Retrieve authority identifiers of the current and next authority set
 	/// sorted and deduplicated.
 	pub fn authorities() -> Vec<AuthorityId> {
-		let mut keys = Keys::<T>::get();
-		let next = NextKeys::<T>::get();
+		let mut keys = Keys::<T>::get().to_vec();
+		let next = NextKeys::<T>::get().to_vec();
 
 		keys.extend(next);
 		keys.sort();
 		keys.dedup();
 
-		keys
+		keys.to_vec()
 	}
 
 	/// Retrieve authority identifiers of the current authority set in the original order.
-	pub fn current_authorities() -> Vec<AuthorityId> {
+	pub fn current_authorities() -> BoundedVec<AuthorityId, T::MaxAuthorities> {
 		Keys::<T>::get()
 	}
 
 	/// Retrieve authority identifiers of the next authority set in the original order.
-	pub fn next_authorities() -> Vec<AuthorityId> {
+	pub fn next_authorities() -> BoundedVec<AuthorityId, T::MaxAuthorities> {
 		NextKeys::<T>::get()
 	}
 
-	fn initialize_keys(keys: &[AuthorityId]) {
+	fn initialize_keys(keys: &Vec<AuthorityId>) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
-			Keys::<T>::put(keys);
-			NextKeys::<T>::put(keys);
+			let bounded_keys = Self::to_bounded_vec((*keys).clone());
+			Keys::<T>::put(bounded_keys.clone());
+			NextKeys::<T>::put(bounded_keys);
 		}
+	}
+
+	fn to_bounded_vec(keys: Vec<AuthorityId>) -> BoundedVec<AuthorityId, T::MaxAuthorities> {
+		let bounded_keys = BoundedVec::<AuthorityId, T::MaxAuthorities>::try_from(keys);
+		assert!(bounded_keys.is_ok(), "More than the maximum number of authorities provided");
+		bounded_keys.unwrap()
 	}
 }
 
@@ -134,10 +146,12 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
-			let keys = validators.map(|x| x.1);
-			Keys::<T>::put(keys.collect::<Vec<_>>());
-			let next_keys = queued_validators.map(|x| x.1);
-			NextKeys::<T>::put(next_keys.collect::<Vec<_>>());
+			let keys = validators.map(|x| x.1).collect::<Vec<_>>();
+			let bounded_keys = Self::to_bounded_vec(keys);
+			Keys::<T>::put(bounded_keys);
+			let next_keys = queued_validators.map(|x| x.1).collect::<Vec<_>>();
+			let next_bounded_keys = Self::to_bounded_vec(next_keys);
+			NextKeys::<T>::put(next_bounded_keys);
 		}
 	}
 
@@ -176,10 +190,13 @@ mod tests {
 		}
 	);
 
-	impl Config for Test {}
-
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+		pub const MaxAuthorities: u32 = 100;
+	}
+
+	impl Config for Test {
+		type MaxAuthorities = MaxAuthorities;
 	}
 
 	impl pallet_session::Config for Test {

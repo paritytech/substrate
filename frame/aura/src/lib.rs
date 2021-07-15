@@ -127,7 +127,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	fn to_bounded_vec(authorities: Vec<T::AuthorityId>) -> BoundedVec<T::AuthorityId, T::MaxAuthorities> {
 		let bounded_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>::try_from(authorities);
-		assert!(bounded_authorities.is_ok(), "More than the maximum number of validators provided");
+		assert!(bounded_authorities.is_ok(), "More than the maximum number of authorities provided");
 		bounded_authorities.unwrap()
 	}
 
