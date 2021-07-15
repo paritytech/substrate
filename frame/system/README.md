@@ -8,7 +8,7 @@ It acts as the base layer for other pallets to interact with the Substrate frame
 ## Overview
 
 The System module defines the core data types used in a Substrate runtime.
-It also provides several utility functions (see [`Module`](https://docs.rs/frame-system/latest/frame_system/struct.Module.html)) for other FRAME pallets.
+It also provides several utility functions (see [`Pallet`](https://docs.rs/frame-system/latest/frame_system/pallet/struct.Pallet.html)) for other FRAME pallets.
 
 In addition, it manages the storage items for extrinsics data, indexes, event records, and digest items,
 among other things that support the execution of the current block.
@@ -24,7 +24,7 @@ The System module does not implement any dispatchable functions.
 
 ### Public Functions
 
-See the [`Module`](https://docs.rs/frame-system/latest/frame_system/struct.Module.html) struct for details of publicly available functions.
+See the [`Pallet`](https://docs.rs/frame-system/latest/frame_system/pallet/struct.Pallet.html) struct for details of publicly available functions.
 
 ### Signed Extensions
 

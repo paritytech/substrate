@@ -24,7 +24,7 @@ use prometheus_endpoint::{register, Gauge, U64, Registry, PrometheusError, Opts,
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
-use sp_transaction_pool::{PoolStatus, MaintainedTransactionPool};
+use sc_transaction_pool_api::{PoolStatus, MaintainedTransactionPool};
 use sp_utils::metrics::register_globals;
 use sc_client_api::{ClientInfo, UsageProvider};
 use sc_network::{config::Role, NetworkStatus, NetworkService};

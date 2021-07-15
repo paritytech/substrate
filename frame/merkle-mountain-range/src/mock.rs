@@ -41,7 +41,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		MMR: pallet_mmr::{Pallet, Call, Storage},
+		MMR: pallet_mmr::{Pallet, Storage},
 	}
 );
 
@@ -49,7 +49,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;

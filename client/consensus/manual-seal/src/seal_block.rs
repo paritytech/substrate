@@ -25,7 +25,6 @@ use sp_runtime::{
 	generic::BlockId,
 };
 use futures::prelude::*;
-use sc_transaction_pool::{ChainApi, Pool};
 use sp_consensus::{
 	self, BlockImport, Environment, Proposer, ForkChoiceStrategy,
 	BlockImportParams, BlockOrigin, ImportResult, SelectChain, StateAction,
@@ -35,12 +34,13 @@ use std::collections::HashMap;
 use std::time::Duration;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
+use sc_transaction_pool_api::TransactionPool;
 
 /// max duration for creating a proposal in secs
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P: ChainApi, CIDP> {
+pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, TP, CIDP> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -51,7 +51,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P:
 	/// sender to report errors/success to the rpc.
 	pub sender: rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
 	/// transaction pool
-	pub pool: Arc<Pool<P>>,
+	pub pool: Arc<TP>,
 	/// header backend
 	pub client: Arc<C>,
 	/// Environment trait object for creating a proposer
@@ -67,7 +67,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, P:
 }
 
 /// seals a new block with the given params
-pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
+pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 	SealBlockParams {
 		create_empty,
 		finalize,
@@ -80,7 +80,7 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 		create_inherent_data_providers,
 		consensus_data_provider: digest_provider,
 		mut sender,
-	}: SealBlockParams<'_, B, BI, SC, C, E, P, CIDP>,
+	}: SealBlockParams<'_, B, BI, SC, C, E, TP, CIDP>,
 ) where
 	B: BlockT,
 	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
@@ -90,13 +90,13 @@ pub async fn seal_block<B, BI, SC, C, E, P, CIDP>(
 	C: HeaderBackend<B> + ProvideRuntimeApi<B>,
 	E: Environment<B>,
 	E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
-	P: ChainApi<Block = B>,
+	TP: TransactionPool<Block = B>,
 	SC: SelectChain<B>,
 	TransactionFor<C, B>: 'static,
 	CIDP: CreateInherentDataProviders<B, ()>,
 {
 	let future = async {
-		if pool.validated_pool().status().ready == 0 && !create_empty {
+		if pool.status().ready == 0 && !create_empty {
 			return Err(Error::EmptyTransactionPool);
 		}
 

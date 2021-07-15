@@ -36,7 +36,7 @@ use sp_runtime::{
 	traits,
 };
 use sp_core::{hexdisplay::HexDisplay, Bytes};
-use sp_transaction_pool::{TransactionPool, InPoolTransaction};
+use sc_transaction_pool_api::{TransactionPool, InPoolTransaction};
 use sp_block_builder::BlockBuilder;
 use sc_rpc_api::DenyUnsafe;
 

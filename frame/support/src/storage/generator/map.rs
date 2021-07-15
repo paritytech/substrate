@@ -20,7 +20,7 @@ use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
 use crate::{
-	storage::{self, unhashed, StorageAppend, PrefixIterator},
+	storage::{self, unhashed, KeyPrefixIterator, StorageAppend, PrefixIterator},
 	Never, hash::{StorageHasher, Twox128, ReversibleStorageHasher},
 };
 
@@ -140,6 +140,7 @@ impl<
 	G::Hasher: ReversibleStorageHasher
 {
 	type Iterator = PrefixIterator<(K, V)>;
+	type KeyIterator = KeyPrefixIterator<K>;
 
 	/// Enumerate all elements in the map.
 	fn iter() -> Self::Iterator {
@@ -152,6 +153,20 @@ impl<
 				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
 				Ok((K::decode(&mut key_material)?, V::decode(&mut raw_value)?))
 			},
+		}
+	}
+
+	/// Enumerate all keys in the map.
+	fn iter_keys() -> Self::KeyIterator {
+		let prefix = G::prefix_hash();
+		KeyPrefixIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: |raw_key_without_prefix| {
+				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
+				K::decode(&mut key_material)
+			}
 		}
 	}
 
@@ -377,6 +392,8 @@ mod test_iterators {
 			}
 
 			assert_eq!(Map::iter().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)]);
+
+			assert_eq!(Map::iter_keys().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
 
 			assert_eq!(Map::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
 

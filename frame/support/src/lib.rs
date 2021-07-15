@@ -50,24 +50,27 @@ pub use log;
 pub use frame_metadata as metadata;
 
 #[macro_use]
-mod origin;
-#[macro_use]
 pub mod dispatch;
 pub mod storage;
 mod hash;
 #[macro_use]
 pub mod event;
-#[macro_use]
-pub mod genesis_config;
-#[macro_use]
 pub mod inherent;
-#[macro_use]
-pub mod unsigned;
 #[macro_use]
 pub mod error;
 pub mod traits;
 pub mod weights;
 pub mod instances;
+
+#[doc(hidden)]
+pub mod unsigned {
+	#[doc(hidden)]
+	pub use crate::sp_runtime::traits::ValidateUnsigned;
+	#[doc(hidden)]
+	pub use crate::sp_runtime::transaction_validity::{
+		TransactionValidity, UnknownTransaction, TransactionValidityError, TransactionSource,
+	};
+}
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
@@ -112,11 +115,12 @@ impl TypeId for PalletId {
 /// // generate a storage value with type u32.
 /// generate_storage_alias!(Prefix, StorageName => Value<u32>);
 ///
-/// // generate a double map from `(u32, u32)` (with hasher `Twox64Concat`) to `Vec<u8>`
+/// // generate a double map from `(u32, u32)` (with hashers `Twox64Concat` for each key) 
+/// // to `Vec<u8>`
 /// generate_storage_alias!(
 /// 	OtherPrefix, OtherStorageName => DoubleMap<
-/// 		(u32, u32),
-/// 		(u32, u32),
+/// 		(u32, Twox64Concat),
+/// 		(u32, Twox64Concat),
 /// 		Vec<u8>
 /// 	>
 /// );
@@ -124,7 +128,7 @@ impl TypeId for PalletId {
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// generate_storage_alias!(
-/// 	Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
+/// 	Prefix, GenericStorage<T: Config> => Map<(T::AccountId, Twox64Concat), Vec<u8>>
 /// );
 /// # fn main() {}
 /// ```
@@ -1274,7 +1278,7 @@ pub mod pallet_prelude {
 		RuntimeDebug, storage,
 		traits::{
 			Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess, StorageInfoTrait,
-			ConstU32, GetDefault, MaxEncodedLen,
+			ConstU32, GetDefault,
 		},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
@@ -1284,7 +1288,7 @@ pub mod pallet_prelude {
 		},
 		storage::bounded_vec::BoundedVec,
 	};
-	pub use codec::{Encode, Decode};
+	pub use codec::{Encode, Decode, MaxEncodedLen};
 	pub use crate::inherent::{InherentData, InherentIdentifier, ProvideInherent};
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
@@ -1396,7 +1400,7 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
-/// and value types must bound [`traits::MaxEncodedLen`].
+/// and value types must bound [`pallet_prelude::MaxEncodedLen`].
 ///
 /// ### Macro expansion:
 ///
@@ -1430,6 +1434,8 @@ pub mod pallet_prelude {
 /// If the attribute set_storage_max_encoded_len is set then the macro call
 /// [`traits::StorageInfoTrait`] for each storage in the implementation of
 /// [`traits::StorageInfoTrait`] for the pallet.
+/// Otherwise it implements [`traits::StorageInfoTrait`] for the pallet using the
+/// [`traits::PartialStorageInfoTrait`] implementation of storages.
 ///
 /// # Hooks: `#[pallet::hooks]` optional
 ///
@@ -2374,7 +2380,3 @@ pub mod pallet_prelude {
 /// * use the newest nightly possible.
 ///
 pub use frame_support_procedural::pallet;
-
-/// The `max_encoded_len` module contains the `MaxEncodedLen` trait and derive macro, which is
-/// useful for computing upper bounds on storage size.
-pub use max_encoded_len;
