@@ -45,6 +45,7 @@ parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 	pub const MinimumPeriod: u64 = 1;
+	pub const MaxAuthorities: u32 = 100;
 }
 
 impl frame_system::Config for Test {
@@ -82,6 +83,7 @@ impl pallet_timestamp::Config for Test {
 
 impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
+	type MaxAuthorities = MaxAuthorities;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
