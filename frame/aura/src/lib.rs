@@ -38,9 +38,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
+use core::convert::TryFrom;
 use codec::{Encode, Decode};
 use frame_support::{
-	Parameter, traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet}, ConsensusEngineId,
+	Parameter, BoundedVec,
+	traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet}, ConsensusEngineId,
 };
 use sp_runtime::{
 	RuntimeAppPublic,
@@ -64,6 +66,9 @@ pub mod pallet {
 	pub trait Config: pallet_timestamp::Config + frame_system::Config {
 		/// The identifier type for an authority.
 		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
+
+		/// The maximum number of authorities that can be added.
+		type MaxAuthorities: Get<u32>;
 	}
 
 	#[pallet::pallet]
@@ -90,7 +95,7 @@ pub mod pallet {
 	/// The current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+	pub(super) type Authorities<T: Config> = StorageValue<_, BoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The current slot of this block.
 	///
@@ -107,7 +112,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { authorities: Vec::new() }
+			Self { authorities: Vec::<T::AuthorityId>::new() }
 		}
 	}
 
@@ -120,8 +125,14 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	fn to_bounded_vec(authorities: Vec<T::AuthorityId>) -> BoundedVec<T::AuthorityId, T::MaxAuthorities> {
+		let bounded_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>::try_from(authorities);
+		assert!(bounded_authorities.is_ok(), "More than the maximum number of validators provided");
+		bounded_authorities.unwrap()
+	}
+
 	fn change_authorities(new: Vec<T::AuthorityId>) {
-		<Authorities<T>>::put(&new);
+		<Authorities<T>>::put(&Self::to_bounded_vec(new.clone()));
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
@@ -130,10 +141,11 @@ impl<T: Config> Pallet<T> {
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 
-	fn initialize_authorities(authorities: &[T::AuthorityId]) {
+	fn initialize_authorities(authorities: &Vec<T::AuthorityId>) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
-			<Authorities<T>>::put(authorities);
+			let bounded_authorities = Self::to_bounded_vec((*authorities).clone());
+			<Authorities<T>>::put(bounded_authorities);
 		}
 	}
 
@@ -179,7 +191,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		if changed {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 			let last_authorities = Self::authorities();
-			if next_authorities != last_authorities {
+			if next_authorities != last_authorities.into_inner() {
 				Self::change_authorities(next_authorities);
 			}
 		}
