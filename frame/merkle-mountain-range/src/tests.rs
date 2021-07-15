@@ -91,14 +91,14 @@ fn should_start_empty() {
 			crate::RootHash::<Test>::get(),
 			"0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()
 		);
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 0);
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 0);
 		assert_eq!(crate::Nodes::<Test>::get(0), None);
 
 		// when
 		let weight = new_block();
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 1);
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 1);
 		assert_eq!(crate::Nodes::<Test>::get(0),
 			Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")));
 		assert_eq!(
@@ -119,7 +119,7 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 		new_block();
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 2);
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 2);
 		assert_eq!((
 			crate::Nodes::<Test>::get(0),
 			crate::Nodes::<Test>::get(1),
@@ -160,7 +160,7 @@ fn should_construct_larger_mmr_correctly() {
 		init_chain(7);
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 7);
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 7);
 		assert_eq!((
 			crate::Nodes::<Test>::get(0),
 			crate::Nodes::<Test>::get(10),
@@ -186,9 +186,9 @@ fn should_generate_proofs_correctly() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when generate proofs for all leaves
-		let proofs = (0_u64..crate::NumberOfLeaves::<DefaultInstance>::get())
+		let proofs = (0_u64..crate::NumberOfLeaves::<Test>::get())
 			.into_iter()
-			.map(|leaf_index| crate::Module::<Test>::generate_proof(leaf_index).unwrap())
+			.map(|leaf_index| crate::Pallet::<Test>::generate_proof(leaf_index).unwrap())
 			.collect::<Vec<_>>();
 
 		// then
@@ -245,7 +245,7 @@ fn should_verify() {
 	register_offchain_ext(&mut ext);
 	let (leaf, proof5) = ext.execute_with(|| {
 		// when
-		crate::Module::<Test>::generate_proof(5).unwrap()
+		crate::Pallet::<Test>::generate_proof(5).unwrap()
 	});
 
 	// Now to verify the proof, we really shouldn't require offchain storage or extension.
@@ -255,7 +255,7 @@ fn should_verify() {
 	ext2.execute_with(|| {
 		init_chain(7);
 		// then
-		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(()));
+		assert_eq!(crate::Pallet::<Test>::verify_leaf(leaf, proof5), Ok(()));
 	});
 }
 
@@ -274,9 +274,9 @@ fn verification_should_be_stateless() {
 	register_offchain_ext(&mut ext);
 	let (leaf, proof5) = ext.execute_with(|| {
 		// when
-		crate::Module::<Test>::generate_proof(5).unwrap()
+		crate::Pallet::<Test>::generate_proof(5).unwrap()
 	});
-	let root = ext.execute_with(|| crate::Module::<Test>::mmr_root_hash());
+	let root = ext.execute_with(|| crate::Pallet::<Test>::mmr_root_hash());
 
 	// Verify proof without relying on any on-chain data.
 	let leaf = crate::primitives::DataOrHash::Data(leaf);
@@ -295,10 +295,10 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 
 	ext.execute_with(|| {
 		// when
-		let (leaf, proof5) = crate::Module::<Test>::generate_proof(5).unwrap();
+		let (leaf, proof5) = crate::Pallet::<Test>::generate_proof(5).unwrap();
 		new_block();
 
 		// then
-		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(()));
+		assert_eq!(crate::Pallet::<Test>::verify_leaf(leaf, proof5), Ok(()));
 	});
 }

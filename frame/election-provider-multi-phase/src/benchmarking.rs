@@ -199,6 +199,18 @@ frame_benchmarking::benchmarks! {
 		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
 	}
 
+	on_initialize_open_unsigned_without_snapshot {
+		// need to assume signed phase was open before
+		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
+		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::current_phase().is_signed());
+	}: {
+		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into()).unwrap();
+	} verify {
+		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
+	}
+
 	finalize_signed_phase_accept_solution {
 		let receiver = account("receiver", 0, SEED);
 		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
@@ -230,18 +242,6 @@ frame_benchmarking::benchmarks! {
 	} verify {
 		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
-	}
-
-	on_initialize_open_unsigned_without_snapshot {
-		// need to assume signed phase was open before
-		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
-		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert!(<MultiPhase<T>>::current_phase().is_signed());
-	}: {
-		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into()).unwrap();
-	} verify {
-		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
 	}
 
 	// a call to `<Pallet as ElectionProvider>::elect` where we only return the queued solution.

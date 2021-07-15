@@ -333,220 +333,6 @@ macro_rules! __events_to_metadata {
 	}
 }
 
-/// Constructs an Event type for a runtime. This is usually called automatically by the
-/// construct_runtime macro.
-#[macro_export]
-macro_rules! impl_outer_event {
-	// Macro transformations (to convert invocations with incomplete parameters to the canonical
-	// form)
-	(
-		$(#[$attr:meta])*
-		pub enum $name:ident for $runtime:ident {
-			$( $rest_events:tt )*
-		}
-	) => {
-		$crate::impl_outer_event!(
-			$( #[$attr] )*;
-			$name;
-			$runtime;
-			Modules { $( $rest_events )* };
-			{};
-		);
-	};
-	// Generic + Instance
-	(
-		$(#[$attr:meta])*;
-		$name:ident;
-		$runtime:ident;
-		Modules {
-			$( #[codec(index = $index:tt)] )? $module:ident $instance:ident<T>,
-			$( $rest_event_generic_instance:tt )*
-		};
-		{ $( $parsed:tt )* };
-	) => {
-		$crate::impl_outer_event!(
-			$( #[$attr] )*;
-			$name;
-			$runtime;
-			Modules { $( $rest_event_generic_instance )* };
-			{ $( $parsed )* $module::Event<$runtime>{ $instance } index { $( $index )? }, };
-		);
-	};
-	// Instance
-	(
-		$(#[$attr:meta])*;
-		$name:ident;
-		$runtime:ident;
-		Modules {
-			$( #[codec(index = $index:tt)] )? $module:ident $instance:ident,
-			$( $rest_event_instance:tt )*
-		};
-		{ $( $parsed:tt )* };
-	) => {
-		$crate::impl_outer_event!(
-			$( #[$attr] )*;
-			$name;
-			$runtime;
-			Modules { $( $rest_event_instance )* };
-			{ $( $parsed )* $module::Event { $instance } index { $( $index )? }, };
-		);
-	};
-	// Generic
-	(
-		$(#[$attr:meta])*;
-		$name:ident;
-		$runtime:ident;
-		Modules {
-			$( #[codec(index = $index:tt)] )? $module:ident<T>,
-			$( $rest_event_generic:tt )*
-		};
-		{ $( $parsed:tt )* };
-	) => {
-		$crate::impl_outer_event!(
-			$( #[$attr] )*;
-			$name;
-			$runtime;
-			Modules { $( $rest_event_generic )* };
-			{ $( $parsed )* $module::Event<$runtime> index { $( $index )? }, };
-		);
-	};
-	// No Generic and no Instance
-	(
-		$(#[$attr:meta])*;
-		$name:ident;
-		$runtime:ident;
-		Modules {
-			$( #[codec(index = $index:tt)] )? $module:ident,
-			$( $rest_event_no_generic_no_instance:tt )*
-		};
-		{ $( $parsed:tt )* };
-	) => {
-		$crate::impl_outer_event!(
-			$( #[$attr] )*;
-			$name;
-			$runtime;
-			Modules { $( $rest_event_no_generic_no_instance )* };
-			{ $( $parsed )* $module::Event index { $( $index )? }, };
-		);
-	};
-
-	// The main macro expansion that actually renders the Event enum code.
-	(
-		$(#[$attr:meta])*;
-		$name:ident;
-		$runtime:ident;
-		Modules {};
-		{
-			$(
-				$module_name:ident::Event
-				$( <$generic_param:ident> )?
-				$( { $generic_instance:ident } )?
-				index { $( $index:tt )? },
-			)*
-		};
-	) => {
-		$crate::paste::item! {
-			#[derive(
-				Clone, PartialEq, Eq,
-				$crate::codec::Encode,
-				$crate::codec::Decode,
-				$crate::RuntimeDebug,
-			)]
-			$(#[$attr])*
-			#[allow(non_camel_case_types)]
-			pub enum $name {
-				$(
-					$( #[codec(index = $index)] )?
-					[< $module_name $(_ $generic_instance )? >](
-						$module_name::Event < $( $generic_param )? $(, $module_name::$generic_instance )? >
-					),
-				)*
-			}
-			$(
-				impl From<$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >> for $name {
-					fn from(x: $module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >) -> Self {
-						$name::[< $module_name $(_ $generic_instance )? >](x)
-					}
-				}
-				impl $crate::sp_std::convert::TryInto<
-					$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >
-				> for $name {
-					type Error = ();
-
-					fn try_into(self) -> $crate::sp_std::result::Result<
-						$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >, Self::Error
-					> {
-						match self {
-							Self::[< $module_name $(_ $generic_instance )? >](evt) => Ok(evt),
-							_ => Err(()),
-						}
-					}
-				}
-			)*
-		}
-		$crate::__impl_outer_event_json_metadata!(
-			$runtime;
-			$name;
-			$(
-				$module_name::Event
-				< $( $generic_param )? $(, $module_name::$generic_instance )? >
-				$( $generic_instance )?,
-			)*;
-		);
-	}
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __impl_outer_event_json_metadata {
-	(
-		$runtime:ident;
-		$event_name:ident;
-		$( $module_name:ident::Event < $( $generic_params:path ),* > $( $instance:ident )?, )*;
-	) => {
-		impl $runtime {
-			#[allow(dead_code)]
-			pub fn outer_event_metadata() -> $crate::event::OuterEventMetadata {
-				$crate::event::OuterEventMetadata {
-					name: $crate::event::DecodeDifferent::Encode(stringify!($event_name)),
-					events: $crate::event::DecodeDifferent::Encode(&[
-						$(
-							(
-								stringify!($module_name),
-								$crate::event::FnEncode(
-									$module_name::Event ::< $( $generic_params ),* > ::metadata
-								)
-							)
-						),*
-					])
-				}
-			}
-
-			$crate::__impl_outer_event_json_metadata! {
-				@DECL_MODULE_EVENT_FNS
-				$( $module_name < $( $generic_params ),* > $( $instance )? ; )*
-			}
-		}
-	};
-
-	(@DECL_MODULE_EVENT_FNS
-		$(
-			$module_name:ident < $( $generic_params:path ),* > $( $instance:ident )? ;
-		)*
-	) => {
-		$crate::paste::item! {
-			$(
-				#[allow(dead_code)]
-				pub fn [< __module_events_ $module_name $( _ $instance )? >] () ->
-					&'static [$crate::event::EventMetadata]
-				{
-					$module_name::Event ::< $( $generic_params ),* > ::metadata()
-				}
-			)*
-		}
-	}
-}
-
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
@@ -697,26 +483,8 @@ mod tests {
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize)]
 	pub struct TestRuntime;
 
-	impl_outer_event! {
-		pub enum TestEvent for TestRuntime {
-			system,
-			event_module<T>,
-			event_module2<T>,
-			event_module3,
-		}
-	}
-
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize)]
 	pub struct TestRuntime2;
-
-	impl_outer_event! {
-		pub enum TestEventSystemRenamed for TestRuntime2 {
-			system_renamed,
-			event_module<T>,
-			#[codec(index = 5)] event_module2<T>,
-			event_module3,
-		}
-	}
 
 	impl event_module::Config for TestRuntime {
 		type Balance = u32;
@@ -733,104 +501,57 @@ mod tests {
 		type DbWeight = ();
 	}
 
-	impl event_module::Config for TestRuntime2 {
-		type Balance = u32;
-	}
-
-	impl event_module2::Config for TestRuntime2 {
-		type Balance = u32;
-	}
-
-	impl system_renamed::Config for TestRuntime2 {
-		type Origin = u32;
-		type BlockNumber = u32;
-		type PalletInfo = crate::tests::PanicPalletInfo;
-		type DbWeight = ();
-	}
-
-	impl system::Config for TestRuntime2 {
-		type Origin = u32;
-		type BlockNumber = u32;
-		type PalletInfo = crate::tests::PanicPalletInfo;
-		type DbWeight = ();
-	}
-
-	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {
-		name: DecodeDifferent::Encode("TestEvent"),
-		events: DecodeDifferent::Encode(&[
-			(
-				"system",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("SystemEvent"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					}
-				])
-			),
-			(
-				"event_module",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "Balance", "Origin" ]),
-						documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("EventWithoutParams"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[ " Dog" ]),
-					},
-				])
-			),
-			(
-				"event_module2",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "BalanceRenamed" ]),
-						documentation: DecodeDifferent::Encode(&[])
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestOrigin"),
-						arguments: DecodeDifferent::Encode(&[ "OriginRenamed" ]),
-						documentation: DecodeDifferent::Encode(&[]),
-					},
-				])
-			),
-			(
-				"event_module3",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("HiEvent"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[])
-					}
-				])
-			)
-		])
-	};
-
 	#[test]
-	fn outer_event_metadata() {
-		assert_eq!(EXPECTED_METADATA, TestRuntime::outer_event_metadata());
-	}
-
-	#[test]
-	fn test_codec() {
-		let runtime_1_event_module_2 = TestEvent::event_module2(
-			event_module2::Event::<TestRuntime>::TestEvent(3)
+	fn event_metadata() {
+		assert_eq!(
+			system_renamed::Event::metadata(),
+			&[
+				EventMetadata {
+					name: DecodeDifferent::Encode("SystemEvent"),
+					arguments: DecodeDifferent::Encode(&[]),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+			]
 		);
-		assert_eq!(runtime_1_event_module_2.encode()[0], 2);
-
-		let runtime_2_event_module_2 = TestEventSystemRenamed::event_module2(
-			event_module2::Event::<TestRuntime2>::TestEvent(3)
+		assert_eq!(
+			event_module::Event::<TestRuntime>::metadata(),
+			&[
+				EventMetadata {
+					name: DecodeDifferent::Encode("TestEvent"),
+					arguments: DecodeDifferent::Encode(&[ "Balance", "Origin" ]),
+					documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
+				},
+				EventMetadata {
+					name: DecodeDifferent::Encode("EventWithoutParams"),
+					arguments: DecodeDifferent::Encode(&[]),
+					documentation: DecodeDifferent::Encode(&[ " Dog" ]),
+				},
+			]
 		);
-		assert_eq!(runtime_2_event_module_2.encode()[0], 5);
-		
-		let runtime_2_event_module_3 = TestEventSystemRenamed::event_module3(
-			event_module3::Event::HiEvent
+		assert_eq!(
+			event_module2::Event::<TestRuntime>::metadata(),
+			&[
+				EventMetadata {
+					name: DecodeDifferent::Encode("TestEvent"),
+					arguments: DecodeDifferent::Encode(&[ "BalanceRenamed" ]),
+					documentation: DecodeDifferent::Encode(&[])
+				},
+				EventMetadata {
+					name: DecodeDifferent::Encode("TestOrigin"),
+					arguments: DecodeDifferent::Encode(&[ "OriginRenamed" ]),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+			]
 		);
-		assert_eq!(runtime_2_event_module_3.encode()[0], 3);
+		assert_eq!(
+			event_module3::Event::metadata(),
+			&[
+				EventMetadata {
+					name: DecodeDifferent::Encode("HiEvent"),
+					arguments: DecodeDifferent::Encode(&[]),
+					documentation: DecodeDifferent::Encode(&[])
+				}
+			],
+		);
 	}
 }

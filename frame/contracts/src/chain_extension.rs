@@ -57,6 +57,7 @@
 use crate::{
 	Error,
 	wasm::{Runtime, RuntimeCosts},
+	gas::ChargedAmount,
 };
 use codec::{Decode, MaxEncodedLen};
 use frame_support::weights::Weight;
@@ -167,11 +168,22 @@ where
 	/// `weight`. It returns `Err` otherwise. In this case the chain extension should
 	/// abort the execution and pass through the error.
 	///
+	/// The returned value can be used to with [`Self::adjust_weight`]. Other than that
+	/// it has no purpose.
+	///
 	/// # Note
 	///
 	/// Weight is synonymous with gas in substrate.
-	pub fn charge_weight(&mut self, amount: Weight) -> Result<()> {
-		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount)).map(|_| ())
+	pub fn charge_weight(&mut self, amount: Weight) -> Result<ChargedAmount> {
+		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount))
+	}
+
+	/// Adjust a previously charged amount down to its actual amount.
+	///
+	/// This is when a maximum a priori amount was charged and then should be partially
+	/// refunded to match the actual amount.
+	pub fn adjust_weight(&mut self, charged: ChargedAmount, actual_weight: Weight) {
+		self.inner.runtime.adjust_gas(charged, RuntimeCosts::ChainExtension(actual_weight))
 	}
 
 	/// Grants access to the execution environment of the current contract call.
