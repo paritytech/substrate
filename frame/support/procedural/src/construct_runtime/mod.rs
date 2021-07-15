@@ -19,110 +19,67 @@ mod expand;
 mod parse;
 
 use frame_support_procedural_tools::{
-	generate_crate_access, generate_hidden_includes, syn_ext as ext,
+	generate_crate_access, generate_crate_access_2018, generate_hidden_includes,
 };
-use parse::{PalletDeclaration, PalletPart, PalletPath, RuntimeDefinition, WhereSection};
+use parse::{
+	ExplicitRuntimeDeclaration, ImplicitRuntimeDeclaration, Pallet, RuntimeDeclaration,
+	WhereSection,
+};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use std::collections::HashMap;
 use syn::{Ident, Result};
 
 /// The fixed name of the system pallet.
 const SYSTEM_PALLET_NAME: &str = "System";
 
-/// The complete definition of a pallet with the resulting fixed index.
-#[derive(Debug, Clone)]
-pub struct Pallet {
-	pub name: Ident,
-	pub index: u8,
-	pub path: PalletPath,
-	pub instance: Option<Ident>,
-	pub pallet_parts: Vec<PalletPart>,
-}
-
-impl Pallet {
-	/// Get resolved pallet parts
-	fn pallet_parts(&self) -> &[PalletPart] {
-		&self.pallet_parts
-	}
-
-	/// Find matching parts
-	fn find_part(&self, name: &str) -> Option<&PalletPart> {
-		self.pallet_parts.iter().find(|part| part.name() == name)
-	}
-
-	/// Return whether pallet contains part
-	fn exists_part(&self, name: &str) -> bool {
-		self.find_part(name).is_some()
-	}
-}
-
-/// Convert from the parsed pallet to their final information.
-/// Assign index to each pallet using same rules as rust for fieldless enum.
-/// I.e. implicit are assigned number incrementedly from last explicit or 0.
-fn complete_pallets(decl: impl Iterator<Item = PalletDeclaration>) -> syn::Result<Vec<Pallet>> {
-	let mut indices = HashMap::new();
-	let mut last_index: Option<u8> = None;
-	let mut names = HashMap::new();
-
-	decl.map(|pallet| {
-		let final_index = match pallet.index {
-			Some(i) => i,
-			None => last_index.map_or(Some(0), |i| i.checked_add(1)).ok_or_else(|| {
-				let msg = "Pallet index doesn't fit into u8, index is 256";
-				syn::Error::new(pallet.name.span(), msg)
-			})?,
-		};
-
-		last_index = Some(final_index);
-
-		if let Some(used_pallet) = indices.insert(final_index, pallet.name.clone()) {
-			let msg = format!(
-				"Pallet indices are conflicting: Both pallets {} and {} are at index {}",
-				used_pallet, pallet.name, final_index,
-			);
-			let mut err = syn::Error::new(used_pallet.span(), &msg);
-			err.combine(syn::Error::new(pallet.name.span(), msg));
-			return Err(err)
-		}
-
-		if let Some(used_pallet) = names.insert(pallet.name.clone(), pallet.name.span()) {
-			let msg = "Two pallets with the same name!";
-
-			let mut err = syn::Error::new(used_pallet, &msg);
-			err.combine(syn::Error::new(pallet.name.span(), &msg));
-			return Err(err)
-		}
-
-		Ok(Pallet {
-			name: pallet.name,
-			index: final_index,
-			path: pallet.path,
-			instance: pallet.instance,
-			pallet_parts: pallet.pallet_parts,
-		})
-	})
-	.collect()
-}
-
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
-	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
-	construct_runtime_parsed(definition)
-		.unwrap_or_else(|e| e.to_compile_error())
-		.into()
+	let input_copy = input.clone();
+	let definition = syn::parse_macro_input!(input as RuntimeDeclaration);
+
+	let res = match definition {
+		RuntimeDeclaration::Implicit(implicit_def) =>
+			construct_runtime_intermediary_expansion(input_copy.into(), implicit_def),
+		RuntimeDeclaration::Explicit(explicit_decl) =>
+			construct_runtime_final_expansion(explicit_decl),
+	};
+
+	res.unwrap_or_else(|e| e.to_compile_error()).into()
 }
 
-fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
-	let RuntimeDefinition {
-		name,
-		where_section: WhereSection { block, node_block, unchecked_extrinsic, .. },
-		pallets:
-			ext::Braces { content: ext::Punctuated { inner: pallets, .. }, token: pallets_token },
-		..
-	} = definition;
+fn construct_runtime_intermediary_expansion(
+	input: TokenStream2,
+	definition: ImplicitRuntimeDeclaration,
+) -> Result<TokenStream2> {
+	let frame_support = generate_crate_access_2018("frame-support")?;
+	let mut expansion = quote::quote!(
+		#frame_support::construct_runtime! { #input }
+	);
+	for pallet in definition.pallets.iter().filter(|pallet| pallet.pallet_parts.is_none()) {
+		let pallet_path = &pallet.path;
+		let pallet_name = &pallet.name;
+		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(::<#instance>));
+		expansion = quote::quote!(
+			#pallet_path::construct_runtime_args! {
+				{ #frame_support }
+				{ #pallet_name: #pallet_path #pallet_instance }
+				#expansion
+			}
+		);
+	}
 
-	let pallets = complete_pallets(pallets.into_iter())?;
+	Ok(expansion.into())
+}
+
+fn construct_runtime_final_expansion(
+	definition: ExplicitRuntimeDeclaration,
+) -> Result<TokenStream2> {
+	let ExplicitRuntimeDeclaration {
+		name,
+		where_section: WhereSection { block, node_block, unchecked_extrinsic },
+		pallets,
+		pallets_token,
+	} = definition;
 
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");

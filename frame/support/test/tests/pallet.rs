@@ -539,11 +539,17 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
-		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Example2: pallet2::{Pallet, Call, Event, Config<T>, Storage},
+		System: frame_system,
+		Example: pallet,
+		Example2: pallet2 exclude_parts { Call },
 	}
 );
+
+fn _ensure_call_is_correctly_excluded_for_pallet2(call: Call) {
+	match call {
+		Call::System(_) | Call::Example(_) => (),
+	}
+}
 
 #[test]
 fn transactional_works() {

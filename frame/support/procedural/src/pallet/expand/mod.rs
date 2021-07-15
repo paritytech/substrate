@@ -18,6 +18,7 @@
 mod call;
 mod config;
 mod constants;
+mod construct_runtime_args;
 mod error;
 mod event;
 mod genesis_build;
@@ -66,6 +67,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let type_values = type_value::expand_type_values(&mut def);
 	let origins = origin::expand_origins(&mut def);
 	let validate_unsigned = validate_unsigned::expand_validate_unsigned(&mut def);
+	let construct_runtime_args = construct_runtime_args::expand_construct_runtime_args(&mut def);
 
 	if get_doc_literals(&def.item.attrs).is_empty() {
 		def.item.attrs.push(syn::parse_quote!(
@@ -95,6 +97,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		#type_values
 		#origins
 		#validate_unsigned
+		#construct_runtime_args
 	);
 
 	def.item

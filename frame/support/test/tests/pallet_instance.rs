@@ -294,13 +294,11 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
-		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Instance1Example: pallet::<Instance1>::{
-			Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
-		},
-		Example2: pallet2::{Pallet, Event<T>, Config<T>, Storage},
-		Instance1Example2: pallet2::<Instance1>::{Pallet, Event<T>, Config<T>, Storage},
+		System: frame_system,
+		Example: pallet,
+		Instance1Example: pallet::<Instance1>,
+		Example2: pallet2,
+		Instance1Example2: pallet2::<Instance1>,
 	}
 );
 

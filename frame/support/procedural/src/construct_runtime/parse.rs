@@ -17,13 +17,13 @@
 
 use frame_support_procedural_tools::syn_ext as ext;
 use proc_macro2::{Span, TokenStream};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use syn::{
 	ext::IdentExt,
 	parse::{Parse, ParseStream},
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token, Error, Ident, Path, PathArguments, PathSegment, Result, Token,
+	token, Error, Ident, Path, Result, Token,
 };
 
 mod keyword {
@@ -38,26 +38,63 @@ mod keyword {
 	syn::custom_keyword!(Origin);
 	syn::custom_keyword!(Inherent);
 	syn::custom_keyword!(ValidateUnsigned);
+	syn::custom_keyword!(exclude_parts);
 }
 
+/// Declaration of a runtime.
+///
+/// Pallet declare their part either explicitly or implicitly (using `exclude_parts` or no part
+/// declaration)
+/// If all pallet have explicit parts then the runtime declaration is explicit, otherwise it is
+/// implicit.
 #[derive(Debug)]
-pub struct RuntimeDefinition {
-	pub visibility_token: Token![pub],
-	pub enum_token: Token![enum],
+pub enum RuntimeDeclaration {
+	Implicit(ImplicitRuntimeDeclaration),
+	Explicit(ExplicitRuntimeDeclaration),
+}
+
+/// Declaration of a runtime with pallet with implicit declaration of parts.
+#[derive(Debug)]
+pub struct ImplicitRuntimeDeclaration {
 	pub name: Ident,
 	pub where_section: WhereSection,
-	pub pallets: ext::Braces<ext::Punctuated<PalletDeclaration, Token![,]>>,
+	pub pallets: Vec<PalletDeclaration>,
 }
 
-impl Parse for RuntimeDefinition {
+/// Declaration of a runtime with all pallet having explicit declaration of parts.
+#[derive(Debug)]
+pub struct ExplicitRuntimeDeclaration {
+	pub name: Ident,
+	pub where_section: WhereSection,
+	pub pallets: Vec<Pallet>,
+	pub pallets_token: token::Brace,
+}
+
+impl Parse for RuntimeDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
-		Ok(Self {
-			visibility_token: input.parse()?,
-			enum_token: input.parse()?,
-			name: input.parse()?,
-			where_section: input.parse()?,
-			pallets: input.parse()?,
-		})
+		input.parse::<Token![pub]>()?;
+		input.parse::<Token![enum]>()?;
+		let name = input.parse::<syn::Ident>()?;
+		let where_section = input.parse()?;
+		let pallets =
+			input.parse::<ext::Braces<ext::Punctuated<PalletDeclaration, Token![,]>>>()?;
+		let pallets_token = pallets.token;
+
+		match convert_pallets(pallets.content.inner.into_iter().collect())? {
+			PalletsConversion::Implicit(pallets) =>
+				Ok(RuntimeDeclaration::Implicit(ImplicitRuntimeDeclaration {
+					name,
+					where_section,
+					pallets,
+				})),
+			PalletsConversion::Explicit(pallets) =>
+				Ok(RuntimeDeclaration::Explicit(ExplicitRuntimeDeclaration {
+					name,
+					where_section,
+					pallets,
+					pallets_token,
+				})),
+		}
 	}
 }
 
@@ -143,7 +180,8 @@ pub struct PalletDeclaration {
 	pub index: Option<u8>,
 	pub path: PalletPath,
 	pub instance: Option<Ident>,
-	pub pallet_parts: Vec<PalletPart>,
+	pub pallet_parts: Option<Vec<PalletPart>>,
+	pub excluded_parts: Option<Vec<ExcludedPalletPart>>,
 }
 
 impl Parse for PalletDeclaration {
@@ -151,38 +189,73 @@ impl Parse for PalletDeclaration {
 		let name = input.parse()?;
 		let _: Token![:] = input.parse()?;
 		let path = input.parse()?;
-		let instance = if input.peek(Token![<]) {
+
+		// Parse for instance.
+		let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
+			let _: Token![::] = input.parse()?;
 			let _: Token![<] = input.parse()?;
 			let res = Some(input.parse()?);
 			let _: Token![>] = input.parse()?;
-			let _: Token![::] = input.parse()?;
 			res
+		} else if !(input.peek(Token![::]) && input.peek3(token::Brace)) &&
+			!input.peek(keyword::exclude_parts) &&
+			!input.peek(Token![=]) &&
+			!input.peek(Token![,]) &&
+			!input.is_empty()
+		{
+			return Err(input.error(
+				"Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `=`, `,`",
+			))
 		} else {
 			None
 		};
 
-		let pallet_parts = parse_pallet_parts(input)?;
+		// Parse for explicit parts
+		let pallet_parts = if input.peek(Token![::]) && input.peek3(token::Brace) {
+			let _: Token![::] = input.parse()?;
+			Some(parse_pallet_parts(input)?)
+		} else if !input.peek(keyword::exclude_parts) &&
+			!input.peek(Token![=]) &&
+			!input.peek(Token![,]) &&
+			!input.is_empty()
+		{
+			return Err(
+				input.error("Unexpected tokens, expected one of `::{`, `exclude_parts`, `=`, `,`")
+			)
+		} else {
+			None
+		};
 
+		// Parse for excluded parts
+		let excluded_parts = if input.peek(keyword::exclude_parts) {
+			let _: keyword::exclude_parts = input.parse()?;
+			Some(parse_excluded_pallet_parts(input)?)
+		} else if !input.peek(Token![=]) && !input.peek(Token![,]) && !input.is_empty() {
+			return Err(input.error("Unexpected tokens, expected one of `exclude_parts`, `=`, `,`"))
+		} else {
+			None
+		};
+
+		// Parse for pallet index
 		let index = if input.peek(Token![=]) {
 			input.parse::<Token![=]>()?;
 			let index = input.parse::<syn::LitInt>()?;
 			let index = index.base10_parse::<u8>()?;
 			Some(index)
+		} else if !input.peek(Token![,]) && !input.is_empty() {
+			return Err(input.error("Unexpected tokens, expected one of `=`, `,`"))
 		} else {
 			None
 		};
 
-		let parsed = Self { name, path, instance, pallet_parts, index };
-
-		Ok(parsed)
+		Ok(Self { name, path, instance, pallet_parts, excluded_parts, index })
 	}
 }
 
 /// A struct representing a path to a pallet. `PalletPath` is almost identical to the standard
 /// Rust path with a few restrictions:
 /// - No leading colons allowed
-/// - Path segments can only consist of identifers; angle-bracketed or parenthesized segments will
-///   result in a parsing error (except when specifying instances)
+/// - Path segments can only consist of identifers separated by colons
 #[derive(Debug, Clone)]
 pub struct PalletPath {
 	pub inner: Path,
@@ -190,34 +263,29 @@ pub struct PalletPath {
 
 impl Parse for PalletPath {
 	fn parse(input: ParseStream) -> Result<Self> {
-		let mut lookahead = input.lookahead1();
-		let mut segments = Punctuated::new();
+		let mut res =
+			PalletPath { inner: Path { leading_colon: None, segments: Punctuated::new() } };
 
+		let lookahead = input.lookahead1();
 		if lookahead.peek(Token![crate]) ||
 			lookahead.peek(Token![self]) ||
 			lookahead.peek(Token![super]) ||
 			lookahead.peek(Ident)
 		{
 			let ident = input.call(Ident::parse_any)?;
-			segments.push(PathSegment { ident, arguments: PathArguments::None });
-			let _: Token![::] = input.parse()?;
-			lookahead = input.lookahead1();
+			res.inner.segments.push(ident.into());
 		} else {
 			return Err(lookahead.error())
 		}
 
-		while lookahead.peek(Ident) {
-			let ident = input.parse()?;
-			segments.push(PathSegment { ident, arguments: PathArguments::None });
-			let _: Token![::] = input.parse()?;
-			lookahead = input.lookahead1();
+		loop {
+			if !input.peek(Token![::]) || !input.peek3(Ident) {
+				return Ok(res)
+			}
+			input.parse::<Token![::]>()?;
+			let ident = input.parse::<Ident>()?;
+			res.inner.segments.push(ident.into());
 		}
-
-		if !lookahead.peek(token::Brace) && !lookahead.peek(Token![<]) {
-			return Err(lookahead.error())
-		}
-
-		Ok(Self { inner: Path { leading_colon: None, segments } })
 	}
 }
 
@@ -378,4 +446,138 @@ fn remove_kind(
 		);
 		Err(input.error(msg))
 	}
+}
+
+/// The declaration of an excluded part
+#[derive(Debug, Clone)]
+pub struct ExcludedPalletPart {
+	keyword: PalletPartKeyword,
+}
+
+impl Parse for ExcludedPalletPart {
+	fn parse(input: ParseStream) -> Result<Self> {
+		Ok(Self { keyword: input.parse()? })
+	}
+}
+
+/// Parse [`ExcludedPalletPart`]'s from a braces enclosed list that is split by commas, e.g.
+///
+/// `{ Call, Event }`
+fn parse_excluded_pallet_parts(input: ParseStream) -> Result<Vec<ExcludedPalletPart>> {
+	let pallet_parts: ext::Braces<ext::Punctuated<ExcludedPalletPart, Token![,]>> =
+		input.parse()?;
+
+	let mut resolved = HashSet::new();
+	for part in pallet_parts.content.inner.iter() {
+		if !resolved.insert(part.keyword.name()) {
+			let msg = format!(
+				"`{}` was already declared before. Please remove the duplicate declaration",
+				part.keyword.name(),
+			);
+			return Err(Error::new(part.keyword.span(), msg))
+		}
+	}
+
+	Ok(pallet_parts.content.inner.into_iter().collect())
+}
+
+/// The complete definition of a pallet with the resulting fixed index and explicit parts.
+#[derive(Debug, Clone)]
+pub struct Pallet {
+	pub name: Ident,
+	pub index: u8,
+	pub path: PalletPath,
+	pub instance: Option<Ident>,
+	pub pallet_parts: Vec<PalletPart>,
+}
+
+impl Pallet {
+	/// Get resolved pallet parts
+	pub fn pallet_parts(&self) -> &[PalletPart] {
+		&self.pallet_parts
+	}
+
+	/// Find matching parts
+	pub fn find_part(&self, name: &str) -> Option<&PalletPart> {
+		self.pallet_parts.iter().find(|part| part.name() == name)
+	}
+
+	/// Return whether pallet contains part
+	pub fn exists_part(&self, name: &str) -> bool {
+		self.find_part(name).is_some()
+	}
+}
+
+/// Result of a conversion of a declaration of pallets.
+enum PalletsConversion {
+	Implicit(Vec<PalletDeclaration>),
+	Explicit(Vec<Pallet>),
+}
+
+/// Convert from the parsed pallet declaration to their final information.
+///
+/// Check if all pallet have explicit declaration of their parts, if so then assign index to each
+/// pallet using same rules as rust for fieldless enum. I.e. implicit are assigned number
+/// incrementedly from last explicit or 0.
+fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConversion> {
+	if pallets.iter().any(|pallet| pallet.pallet_parts.is_none()) {
+		return Ok(PalletsConversion::Implicit(pallets))
+	}
+
+	let mut indices = HashMap::new();
+	let mut last_index: Option<u8> = None;
+	let mut names = HashMap::new();
+
+	let pallets = pallets
+		.into_iter()
+		.map(|pallet| {
+			let final_index = match pallet.index {
+				Some(i) => i,
+				None => last_index.map_or(Some(0), |i| i.checked_add(1)).ok_or_else(|| {
+					let msg = "Pallet index doesn't fit into u8, index is 256";
+					syn::Error::new(pallet.name.span(), msg)
+				})?,
+			};
+
+			last_index = Some(final_index);
+
+			if let Some(used_pallet) = indices.insert(final_index, pallet.name.clone()) {
+				let msg = format!(
+					"Pallet indices are conflicting: Both pallets {} and {} are at index {}",
+					used_pallet, pallet.name, final_index,
+				);
+				let mut err = syn::Error::new(used_pallet.span(), &msg);
+				err.combine(syn::Error::new(pallet.name.span(), msg));
+				return Err(err)
+			}
+
+			if let Some(used_pallet) = names.insert(pallet.name.clone(), pallet.name.span()) {
+				let msg = "Two pallets with the same name!";
+
+				let mut err = syn::Error::new(used_pallet, &msg);
+				err.combine(syn::Error::new(pallet.name.span(), &msg));
+				return Err(err)
+			}
+
+			let mut pallet_parts = pallet.pallet_parts.expect("Checked above");
+
+			// Remove exlcuded parts
+			let excluded_parts = pallet.excluded_parts.unwrap_or(vec![]);
+			pallet_parts.retain(|part| {
+				!excluded_parts
+					.iter()
+					.any(|excluded_part| excluded_part.keyword.name() == part.keyword.name())
+			});
+
+			Ok(Pallet {
+				name: pallet.name,
+				index: final_index,
+				path: pallet.path,
+				instance: pallet.instance,
+				pallet_parts,
+			})
+		})
+		.collect::<Result<Vec<_>>>()?;
+
+	Ok(PalletsConversion::Explicit(pallets))
 }
