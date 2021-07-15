@@ -331,13 +331,13 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 
 	fn iter_prefix_from<KP>(
 		kp: KP,
-		starting_key: Vec<u8>,
+		starting_raw_key: Vec<u8>,
 	) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where
 		K: HasReversibleKeyPrefix<KP>,
 	{
 		let mut iter = Self::iter_prefix(kp);
-		iter.set_last_raw_key(starting_key);
+		iter.set_last_raw_key(starting_raw_key);
 		iter
 	}
 
@@ -356,13 +356,13 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 
 	fn iter_key_prefix_from<KP>(
 		kp: KP,
-		starting_key: Vec<u8>,
+		starting_raw_key: Vec<u8>,
 	) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
 	where
 		K: HasReversibleKeyPrefix<KP>,
 	{
 		let mut iter = Self::iter_key_prefix(kp);
-		iter.set_last_raw_key(starting_key);
+		iter.set_last_raw_key(starting_raw_key);
 		iter
 	}
 
@@ -379,11 +379,11 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		Self::iter_from(G::prefix_hash())
 	}
 
-	fn iter_from(starting_key: Vec<u8>) -> Self::Iterator {
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
 		let prefix = G::prefix_hash();
 		Self::Iterator {
 			prefix,
-			previous_key: starting_key,
+			previous_key: starting_raw_key,
 			drain: false,
 			closure: |raw_key_without_prefix, mut raw_value| {
 				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
@@ -396,11 +396,11 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		Self::iter_keys_from(G::prefix_hash())
 	}
 
-	fn iter_keys_from(starting_key: Vec<u8>) -> Self::KeyIterator {
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator {
 		let prefix = G::prefix_hash();
 		Self::KeyIterator {
 			prefix,
-			previous_key: starting_key,
+			previous_key: starting_raw_key,
 			drain: false,
 			closure: |raw_key_without_prefix| {
 				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;

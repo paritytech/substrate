@@ -147,12 +147,12 @@ impl<
 		Self::iter_from(G::prefix_hash())
 	}
 
-	/// Enumerate all elements in the map starting from a given key.
-	fn iter_from(starting_key: Vec<u8>) -> Self::Iterator {
+	/// Enumerate all elements in the map after a given key.
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
 		let prefix = G::prefix_hash();
 		PrefixIterator {
 			prefix,
-			previous_key: starting_key,
+			previous_key: starting_raw_key,
 			drain: false,
 			closure: |raw_key_without_prefix, mut raw_value| {
 				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
@@ -166,12 +166,12 @@ impl<
 		Self::iter_keys_from(G::prefix_hash())
 	}
 
-	/// Enumerate all keys in the map starting from a given key.
-	fn iter_keys_from(starting_key: Vec<u8>) -> Self::KeyIterator {
+	/// Enumerate all keys in the map after a given key.
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator {
 		let prefix = G::prefix_hash();
 		KeyPrefixIterator {
 			prefix,
-			previous_key: starting_key,
+			previous_key: starting_raw_key,
 			drain: false,
 			closure: |raw_key_without_prefix| {
 				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
