@@ -1064,20 +1064,14 @@ mod tests {
 			voter_list_storage_items_eq(vec![]);
 			assert_eq!(<Staking as crate::Store>::VoterCount::get(), 0);
 
-			// TODO the below is redundant with voter_list_storage_items_eq(vec![]), but slightly
-			// different since it checks length. Practically should be the same, but we do an extra
-			// by checking keys ... probs should remove tho to reduce redundancy.
 
-			// We can make sure _everyone_ has been totally removed,
-			remaining_voters.iter().for_each(|v| {
-				assert!(!<Staking as crate::Store>::VoterNodes::contains_key(v));
-				assert!(!<Staking as crate::Store>::VoterBagFor::contains_key(v));
-			});
 			// TODO bags do not get cleaned up from storages
 			// - is this ok?
 			assert_eq!(<Staking as crate::Store>::VoterBags::iter().collect::<Vec<_>>().len(), 6);
 			// and the voter list has no one in it.
 			assert_eq!(VoterList::<Test>::iter().collect::<Vec<_>>().len(), 0);
+			assert_eq!(<Staking as crate::Store>::VoterBagFor::iter().collect::<Vec<_>>().len(), 0);
+			assert_eq!(<Staking as crate::Store>::VoterNodes::iter().collect::<Vec<_>>().len(), 0);
 		});
 	}
 }
