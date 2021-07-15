@@ -317,27 +317,29 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// The type that itereates over all `key`s.
 	type KeyIterator: Iterator<Item = K>;
 
-	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
-	/// this, you'll get undefined results.
+	/// Enumerate all elements in the map in lexicographical order of the encoded key. If you
+	/// alter the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
-	/// Enumerate all elements in the map after a specified `starting_raw_key` in no particular
-	/// order. If you alter the map while doing this, you'll get undefined results.
+	/// Enumerate all elements in the map after a specified `starting_raw_key` in lexicographical
+	/// order of the encoded key. If you alter the map while doing this, you'll get undefined
+	/// results.
 	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator;
 
-	/// Enumerate all keys in the map in no particular order, skipping over the elements. If you
-	/// alter the map while doing this, you'll get undefined results.
+	/// Enumerate all keys in the map in lexicographical order of the encoded key, skipping over
+	/// the elements. If you alter the map while doing this, you'll get undefined results.
 	fn iter_keys() -> Self::KeyIterator;
 
-	/// Enumerate all keys in the map after a specified `starting_raw_key` in no particular order.
-	/// If you alter the map while doing this, you'll get undefined results.
+	/// Enumerate all keys in the map after a specified `starting_raw_key` in lexicographical order
+	/// of the encoded key. If you alter the map while doing this, you'll get undefined results.
 	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator;
 
-	/// Remove all elements from the map and iterate through them in no particular order. If you
-	/// add elements to the map while doing this, you'll get undefined results.
+	/// Remove all elements from the map and iterate through them in lexicographical order of the
+	/// encoded key. If you add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
 
-	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// Translate the values of all elements by a function `f`, in the map in lexicographical order
+	/// of the encoded key.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
@@ -362,57 +364,58 @@ pub trait IterableStorageDoubleMap<
 	/// The type that iterates over all `(key1, key2, value)`.
 	type Iterator: Iterator<Item = (K1, K2, V)>;
 
-	/// Enumerate all elements in the map with first key `k1` in no particular order. If you add or
-	/// remove values whose first key is `k1` to the map while doing this, you'll get undefined
-	/// results.
+	/// Enumerate all elements in the map with first key `k1` in lexicographical order of the
+	/// encoded key. If you add or remove values whose first key is `k1` to the map while doing
+	/// this, you'll get undefined results.
 	fn iter_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
 
 	/// Enumerate all elements in the map with first key `k1` after a specified `starting_raw_key`
-	/// in no particular order. If you add or remove values whose first key is `k1` to the map
-	/// while doing this, you'll get undefined results.
+	/// in lexicographical order of the encoded key. If you add or remove values whose first key is
+	/// `k1` to the map while doing this, you'll get undefined results.
 	fn iter_prefix_from(k1: impl EncodeLike<K1>, starting_raw_key: Vec<u8>) -> Self::PrefixIterator;
 
-	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
-	/// order. If you add or remove values whose first key is `k1` to the map while doing this,
-	/// you'll get undefined results.
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` in lexicographical
+	/// order of the encoded key. If you add or remove values whose first key is `k1` to the map
+	/// while doing this, you'll get undefined results.
 	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::PartialKeyIterator;
 
 	/// Enumerate all second keys `k2` in the map with the same first key `k1` after a specified
-	/// `starting_raw_key` in no particular order. If you add or remove values whose first key is
-	/// `k1` to the map while doing this, you'll get undefined results.
+	/// `starting_raw_key` in lexicographical order of the encoded key. If you add or remove values
+	/// whose first key is `k1` to the map while doing this, you'll get undefined results.
 	fn iter_key_prefix_from(
 		k1: impl EncodeLike<K1>,
 		starting_raw_key: Vec<u8>,
 	) -> Self::PartialKeyIterator;
 
-	/// Remove all elements from the map with first key `k1` and iterate through them in no
-	/// particular order. If you add elements with first key `k1` to the map while doing this,
-	/// you'll get undefined results.
+	/// Remove all elements from the map with first key `k1` and iterate through them in
+	/// lexicographical order of the encoded key. If you add elements with first key `k1` to the
+	/// map while doing this, you'll get undefined results.
 	fn drain_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
 
-	/// Enumerate all elements in the map in no particular order. If you add or remove values to
-	/// the map while doing this, you'll get undefined results.
+	/// Enumerate all elements in the map in lexicographical order of the encoded key. If you add
+	/// or remove values to the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
-	/// Enumerate all elements in the map after a specified `starting_raw_key` in no particular
-	/// order. If you add or remove values to the map while doing this, you'll get undefined
-	/// results.
+	/// Enumerate all elements in the map after a specified `starting_raw_key` in lexicographical
+	/// order of the encoded key. If you add or remove values to the map while doing this, you'll
+	/// get undefined results.
 	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator;
 
-	/// Enumerate all keys `k1` and `k2` in the map in no particular order. If you add or remove
-	/// values to the map while doing this, you'll get undefined results.
+	/// Enumerate all keys `k1` and `k2` in the map in lexicographical order of the encoded key. If
+	/// you add or remove values to the map while doing this, you'll get undefined results.
 	fn iter_keys() -> Self::FullKeyIterator;
 
-	/// Enumerate all keys `k1` and `k2` in the map after a specified `starting_raw_key` in no
-	/// particular order. If you add or remove values to the map while doing this, you'll get
-	/// undefined results.
+	/// Enumerate all keys `k1` and `k2` in the map after a specified `starting_raw_key` in
+	/// lexicographical order of the encoded key. If you add or remove values to the map while
+	/// doing this, you'll get undefined results.
 	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::FullKeyIterator;
 
-	/// Remove all elements from the map and iterate through them in no particular order. If you
-	/// add elements to the map while doing this, you'll get undefined results.
+	/// Remove all elements from the map and iterate through them in lexicographical order of the
+	/// encoded key. If you add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
 
-	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// Translate the values of all elements by a function `f`, in the map in lexicographical order
+	/// of the encoded key.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
@@ -428,64 +431,66 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	/// The type that iterates over all `(key1, key2, key3, ... keyN), value)` tuples.
 	type Iterator: Iterator<Item = (K::Key, V)>;
 
-	/// Enumerate all elements in the map with prefix key `kp` in no particular order. If you add or
-	/// remove values whose prefix is `kp` to the map while doing this, you'll get undefined
-	/// results.
+	/// Enumerate all elements in the map with prefix key `kp` in lexicographical order of the
+	/// encoded key. If you add or remove values whose prefix is `kp` to the map while doing this,
+	/// you'll get undefined results.
 	fn iter_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where K: HasReversibleKeyPrefix<KP>;
 
 	/// Enumerate all elements in the map with prefix key `kp` after a specified `starting_raw_key`
-	/// in no particular order. If you add or remove values whose prefix is `kp` to the map while
-	/// doing this, you'll get undefined results.
+	/// in lexicographical order of the encoded key. If you add or remove values whose prefix is
+	/// `kp` to the map while doing this, you'll get undefined results.
 	fn iter_prefix_from<KP>(
 		kp: KP,
 		starting_raw_key: Vec<u8>,
 	) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where K: HasReversibleKeyPrefix<KP>;
 
-	/// Enumerate all suffix keys in the map with prefix key `kp` in no particular order. If you
-	/// add or remove values whose prefix is `kp` to the map while doing this, you'll get undefined
-	/// results.
+	/// Enumerate all suffix keys in the map with prefix key `kp` in lexicographical order of the
+	/// encoded key. If you add or remove values whose prefix is `kp` to the map while doing this,
+	/// you'll get undefined results.
 	fn iter_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
 	where K: HasReversibleKeyPrefix<KP>;
 
 	/// Enumerate all suffix keys in the map with prefix key `kp` after a specified
-	/// `starting_raw_key` in no particular order. If you add or remove values whose prefix is `kp`
-	/// to the map while doing this, you'll get undefined results.
+	/// `starting_raw_key` in lexicographical order of the encoded key. If you add or remove values
+	/// whose prefix is `kp` to the map while doing this, you'll get undefined results.
 	fn iter_key_prefix_from<KP>(
 		kp: KP,
 		starting_raw_key: Vec<u8>,
 	) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
 	where K: HasReversibleKeyPrefix<KP>;
 
-	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
-	/// particular order. If you add elements with prefix key `kp` to the map while doing this,
-	/// you'll get undefined results.
+	/// Remove all elements from the map with prefix key `kp` and iterate through them in
+	/// lexicographical order of the encoded key. If you add elements with prefix key `kp` to the
+	/// map while doing this, you'll get undefined results.
 	fn drain_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
 	where K: HasReversibleKeyPrefix<KP>;
 
-	/// Enumerate all elements in the map in no particular order. If you add or remove values to
-	/// the map while doing this, you'll get undefined results.
+	/// Enumerate all elements in the map in lexicographical order of the encoded key. If you add
+	/// or remove values to the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
-	/// Enumerate all elements in the map after a specified `starting_raw_key` in no particular
-	/// order. If you add or remove values to the map while doing this, you'll get undefined
-	/// results.
+	/// Enumerate all elements in the map after a specified `starting_raw_key` in lexicographical
+	/// order of the encoded key. If you add or remove values to the map while doing this, you'll
+	/// get undefined results.
 	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator;
 
-	/// Enumerate all keys in the map in no particular order. If you add or remove values to the
-	/// map while doing this, you'll get undefined results.
+	/// Enumerate all keys in the map in lexicographical order of the encoded key. If you add or
+	/// remove values to the map while doing this, you'll get undefined results.
 	fn iter_keys() -> Self::KeyIterator;
 
-	/// Enumerate all keys in the map after `starting_raw_key` in no particular order. If you add
-	/// or remove values to the map while doing this, you'll get undefined results.
+	/// Enumerate all keys in the map after `starting_raw_key` in lexicographical order of the
+	/// encoded key. If you add or remove values to the map while doing this, you'll get undefined
+	/// results.
 	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator;
 
-	/// Remove all elements from the map and iterate through them in no particular order. If you
-	/// add elements to the map while doing this, you'll get undefined results.
+	/// Remove all elements from the map and iterate through them in lexicographical order of the
+	/// encoded key. If you add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
 
-	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// Translate the values of all elements by a function `f`, in the map in lexicographical order
+	/// of the encoded key.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
