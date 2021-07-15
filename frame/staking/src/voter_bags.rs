@@ -82,6 +82,7 @@ impl<T: Config> VoterList<T> {
 		crate::VoterBagFor::<T>::remove_all(None);
 		crate::VoterBags::<T>::remove_all(None);
 		crate::VoterNodes::<T>::remove_all(None);
+		sanity_check_voter_list::<T>();
 	}
 
 	/// Regenerate voter data from the `Nominators` and `Validators` storage items.
@@ -181,10 +182,12 @@ impl<T: Config> VoterList<T> {
 		}
 
 		for (_, bag) in bags {
+			bag.sanity_check();
 			bag.put();
 		}
 
 		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_add(count));
+		sanity_check_voter_list::<T>();
 		count
 	}
 
@@ -217,10 +220,13 @@ impl<T: Config> VoterList<T> {
 		}
 
 		for (_, bag) in bags {
+			bag.sanity_check();
 			bag.put();
 		}
 
 		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_sub(count));
+
+		sanity_check_voter_list::<T>();
 	}
 
 	/// Update a voter's position in the voter list.
@@ -228,7 +234,7 @@ impl<T: Config> VoterList<T> {
 	/// If the voter was in the correct bag, no effect. If the voter was in the incorrect bag, they
 	/// are moved into the correct bag.
 	///
-	/// Returns `true` if the voter moved.
+	/// Returns `Some((old_idx, new_idx))` if the voter moved, otherwise `None`.
 	///
 	/// This operation is somewhat more efficient than simply calling [`self.remove`] followed by
 	/// [`self.insert`]. However, given large quantities of voters to move, it may be more efficient
@@ -258,7 +264,10 @@ impl<T: Config> VoterList<T> {
 			node.bag_upper = new_idx;
 			let mut bag = Bag::<T>::get_or_make(node.bag_upper);
 			bag.insert_node(node);
+			bag.sanity_check();
 			bag.put();
+
+			sanity_check_voter_list::<T>();
 
 			(old_idx, new_idx)
 		})
@@ -348,6 +357,8 @@ impl<T: Config> VoterList<T> {
 			},
 			"all `bag_upper` in storage must be members of the new thresholds",
 		);
+
+		sanity_check_voter_list::<T>();
 
 		num_affected
 	}
@@ -455,6 +466,9 @@ impl<T: Config> Bag<T> {
 		self.tail = Some(id.clone());
 
 		crate::VoterBagFor::<T>::insert(id, self.bag_upper);
+
+		self.sanity_check();
+		sanity_check_voter_list::<T>();
 	}
 
 	/// Remove a voter node from this bag.
@@ -466,49 +480,14 @@ impl<T: Config> Bag<T> {
 	/// `self.put()`, `VoterNodes::remove(voter_id)` and `VoterBagFor::remove(voter_id)`
 	/// to update storage for the bag and `node`.
 	fn remove_node(&mut self, node: &Node<T>) {
-		// Excise `node`.
 		// Update previous node.
 		if let Some(mut prev) = node.prev() {
-			debug_assert!(
-				self.head.as_ref() != Some(&node.voter.id),
-				"node is the head, but has Some prev"
-			);
-			debug_assert!(
-				prev.prev().is_some() || self.head.as_ref() == Some(&prev.voter.id),
-				"node.prev.prev should be Some OR node.prev should be the head"
-			);
-
 			prev.next = node.next.clone();
-			debug_assert!(
-				prev.next().and_then(|prev_next|
-					// prev.next.prev should point at node prior to being reassigned
-					Some(prev_next.prev().unwrap().voter.id == node.voter.id)
-				)
-				// unless prev.next is None, in which case node has to be the tail
-				.unwrap_or(self.tail.as_ref() == Some(&node.voter.id)),
-				"prev.next.prev should point at node prior to being reassigned OR node should be the tail"
-			);
-
 			prev.put();
 		}
 		// Update next node.
 		if let Some(mut next) = node.next() {
-			debug_assert!(
-				self.tail.as_ref() != Some(&node.voter.id),
-				"node is the tail, but has Some next"
-			);
-
 			next.prev = node.prev.clone();
-			debug_assert!(
-				next.prev().and_then(|next_prev|
-					// next.prev.next should point at next after being reassigned
-					Some(next_prev.next().unwrap().voter.id == next.voter.id)
-				)
-				// unless next.prev is None, in which case node has to be the head
-				.unwrap_or_else(|| self.head.as_ref() == Some(&node.voter.id)),
-				"next.prev.next should point at next after being reassigned OR node should be the head"
-			);
-
 			next.put();
 		}
 
@@ -519,32 +498,55 @@ impl<T: Config> Bag<T> {
 		if self.tail.as_ref() == Some(&node.voter.id) {
 			self.tail = node.prev.clone();
 		}
+
+		// TODO double check these only conditionally make it in with debug builds
+		self.sanity_check();
+		sanity_check_voter_list::<T>();
 	}
 
-// 	#[cfg(debug_assertions)]
-// 	fn sanity_check_voter_list(&self) {
-// 		use sp_std::collections::btree_set::BTreeSet;
+	// Sanity check this bag.
+	#[cfg(debug_assertions)]
+	fn sanity_check(&self) {
+		// Check:
+		// 1) Iterate all voters and ensure only those that are head don't have a prev.
+		assert!(self
+			.head()
+			.and_then(|head| Some(head.prev().is_none()))
+			// if there is no head, then there must not be a tail
+			.unwrap_or_else(|| self.tail.is_none()));
+		// 2) Iterate all voters and ensure only those that are tail don't have a next.
+		assert!(self
+			.tail()
+			.and_then(|tail| Some(tail.next().is_none()))
+			// if there is no head, then there must not be a tail
+			.unwrap_or_else(|| self.head.is_none()));
+		// 3) Iterate all voters and ensure that there are no loops.
+		let mut seen_in_bag = BTreeSet::new();
+		assert!(self
+			.iter()
+			.map(|node| node.voter.id)
+			// each voter is only seen once, thus there is no cycle within a bag
+			.all(|voter| seen_in_bag.insert(voter)));
+	}
+}
 
-// 		// iterate all voters and ensure only those that are head don't have a prev
-// 		assert!(self.head().prev().is_none());
-// 		// iterate all voters and ensure only those that are tail don't have a next
-// 		assert!(self.tail().next().is_none());
-// 		// iterate all voters and ensure that there are no loops
-// 		// Each voter is only seen once, thus there is no cycle within a bag.
-// 		let seen_in_bag = BTreeSet::new();
-// 		assert!(
-// 			self.iter().map(|node| node.voter.id)
-// 				.all(|voter| seen_in_bag.insert(voter))
-// 		);
-
-// 		let seen_in_voter_list = BTreeSet::new();
-// 		assert!(
-// 			VoterList::<T>::iter()
-// 		);
-// 		// iterate all voters and ensure their count is in sync with `VoterCount`
-// 		// ensure VoterCount itself is always `== CounterForValidators + CounterForNominators`
-// 		// anything else..
-// 	}
+// Sanity check the voter list.
+#[cfg(debug_assertions)]
+pub (crate) fn sanity_check_voter_list<T: Config>() {
+	use crate::{CounterForValidators, VoterCount, CounterForNominators};
+	// Check:
+	// 1) Iterate all voters in list and make sure there are no duplicates.
+	let mut seen_in_list = BTreeSet::new();
+	assert!(VoterList::<T>::iter()
+		.map(|node| node.voter.id)
+		.all(|voter| seen_in_list.insert(voter)));
+	// 2) Iterate all voters and ensure their count is in sync with `VoterCount`.
+	assert_eq!(VoterList::<T>::iter().collect::<Vec<_>>().len() as u32, VoterCount::<T>::get());
+	// 3) Ensure VoterCount itself is always `== CounterForValidators + CounterForNominators`
+	// assert_eq!(
+	// 	VoterCount::<T>::get(),
+	// 	CounterForValidators::<T>::get() + CounterForNominators::<T>::get()
+	// );
 }
 
 /// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
@@ -563,14 +565,7 @@ pub struct Node<T: Config> {
 impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
 	pub fn get(bag_upper: VoteWeight, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
-		if !T::VoterBagThresholds::get().contains(&bag_upper) {
-			let n = crate::VoterNodes::<T>::try_get(account_id).ok().map(|mut node| {
-				node.bag_upper = bag_upper;
-				node
-			});
-			println!("node::get bag_upper {}. account id {}. n: {:#?}", bag_upper, account_id, n);
-		}
-		debug_assert!( // TODO: figure out why this breaks test take_works
+		debug_assert!(
 			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
 			"it is a logic error to attempt to get a bag which is not in the thresholds list"
 		);
@@ -1092,15 +1087,9 @@ mod tests {
 			});
 			// TODO bags do not get cleaned up from storages
 			// - is this ok?
-			assert_eq!( 
-				<Staking as crate::Store>::VoterBags::iter().collect::<Vec<_>>().len(),
-				6
-			);
+			assert_eq!(<Staking as crate::Store>::VoterBags::iter().collect::<Vec<_>>().len(), 6);
 			// and the voter list has no one in it.
-			assert_eq!(
-				VoterList::<Test>::iter().collect::<Vec<_>>().len(),
-				0
-			);
+			assert_eq!(VoterList::<Test>::iter().collect::<Vec<_>>().len(), 0);
 		});
 	}
 }
