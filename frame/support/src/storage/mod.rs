@@ -1548,7 +1548,7 @@ mod test {
 	}
 
 	#[test]
-	fn prefix_iterator_pagination() {
+	fn prefix_iterator_pagination_works() {
 		TestExternalities::default().execute_with(|| {
 			use crate::hash::Identity;
 			crate::generate_storage_alias! {
@@ -1580,14 +1580,35 @@ mod test {
 			final_vec.push(op(elem));
 
 			let stored_key = iter.last_raw_key().to_owned();
-			let iter = MyStorageMap::iter_from(stored_key).map(op);
-			let mut remaining = iter.collect::<Vec<_>>();
-			remaining.sort();
-			assert_eq!(remaining.len(), 8);
-			assert_eq!(remaining, vec![3, 4, 5, 6, 7, 8, 9, 10]);
+			let mut expected_key = MyStorageMap::final_prefix().to_vec();
+			expected_key.extend_from_slice(&[2, 0, 0, 0, 0, 0, 0, 0]);
+			assert_eq!(stored_key, expected_key);
+
+			let mut iter = MyStorageMap::iter_from(stored_key.clone());
+
+			final_vec.push(op(iter.next().unwrap()));
+			final_vec.push(op(iter.next().unwrap()));
+			final_vec.push(op(iter.next().unwrap()));
+
+			assert_eq!(final_vec, vec![1, 2, 3, 4, 5]);
+
+			let mut iter = PrefixIterator::new(
+				iter.prefix().to_vec(),
+				stored_key,
+				|mut raw_key_without_prefix, mut raw_value| {
+					let key = u64::decode(&mut raw_key_without_prefix)?;
+					Ok((key, u64::decode(&mut raw_value)?))
+				},
+			);
+			let mut previous_key = MyStorageMap::final_prefix().to_vec();
+			previous_key.extend_from_slice(&[5, 0, 0, 0, 0, 0, 0, 0]);
+			iter.set_last_raw_key(previous_key);
+
+			let remaining = iter.map(op).collect::<Vec<_>>();
+			assert_eq!(remaining.len(), 5);
+			assert_eq!(remaining, vec![6, 7, 8, 9, 10]);
 
 			final_vec.extend_from_slice(&remaining);
-			final_vec.sort();
 
 			assert_eq!(final_vec, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 		});
