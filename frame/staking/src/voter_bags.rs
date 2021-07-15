@@ -82,7 +82,7 @@ impl<T: Config> VoterList<T> {
 		crate::VoterBagFor::<T>::remove_all(None);
 		crate::VoterBags::<T>::remove_all(None);
 		crate::VoterNodes::<T>::remove_all(None);
-		sanity_check_voter_list::<T>();
+		Self::sanity_check();
 	}
 
 	/// Regenerate voter data from the `Nominators` and `Validators` storage items.
@@ -182,12 +182,11 @@ impl<T: Config> VoterList<T> {
 		}
 
 		for (_, bag) in bags {
-			bag.sanity_check();
 			bag.put();
 		}
 
 		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_add(count));
-		sanity_check_voter_list::<T>();
+		Self::sanity_check();
 		count
 	}
 
@@ -220,13 +219,12 @@ impl<T: Config> VoterList<T> {
 		}
 
 		for (_, bag) in bags {
-			bag.sanity_check();
 			bag.put();
 		}
 
 		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_sub(count));
 
-		sanity_check_voter_list::<T>();
+		Self::sanity_check();
 	}
 
 	/// Update a voter's position in the voter list.
@@ -264,10 +262,7 @@ impl<T: Config> VoterList<T> {
 			node.bag_upper = new_idx;
 			let mut bag = Bag::<T>::get_or_make(node.bag_upper);
 			bag.insert_node(node);
-			bag.sanity_check();
 			bag.put();
-
-			sanity_check_voter_list::<T>();
 
 			(old_idx, new_idx)
 		})
@@ -358,9 +353,24 @@ impl<T: Config> VoterList<T> {
 			"all `bag_upper` in storage must be members of the new thresholds",
 		);
 
-		sanity_check_voter_list::<T>();
+		Self::sanity_check();
 
 		num_affected
+	}
+
+	// Sanity check the voter list.
+	#[cfg(debug_assertions)]
+	fn sanity_check() {
+		// Check:
+		// 1) Iterate all voters in list and make sure there are no duplicates.
+		let mut seen_in_list = BTreeSet::new();
+		assert!(Self::iter().map(|node| node.voter.id).all(|voter| seen_in_list.insert(voter)));
+		// 2) Iterate all voters and ensure their count is in sync with `VoterCount`.
+		assert_eq!(Self::iter().collect::<Vec<_>>().len() as u32, crate::VoterCount::<T>::get());
+
+		// NOTE: we don't check `CounterForNominators + CounterForValidators == VoterCount`
+		// because those are updated in lib.rs, and thus tests for just this module do
+		// not update them.
 	}
 }
 
@@ -468,7 +478,6 @@ impl<T: Config> Bag<T> {
 		crate::VoterBagFor::<T>::insert(id, self.bag_upper);
 
 		self.sanity_check();
-		sanity_check_voter_list::<T>();
 	}
 
 	/// Remove a voter node from this bag.
@@ -499,9 +508,7 @@ impl<T: Config> Bag<T> {
 			self.tail = node.prev.clone();
 		}
 
-		// TODO double check these only conditionally make it in with debug builds
 		self.sanity_check();
-		sanity_check_voter_list::<T>();
 	}
 
 	// Sanity check this bag.
@@ -528,25 +535,6 @@ impl<T: Config> Bag<T> {
 			// each voter is only seen once, thus there is no cycle within a bag
 			.all(|voter| seen_in_bag.insert(voter)));
 	}
-}
-
-// Sanity check the voter list.
-#[cfg(debug_assertions)]
-pub (crate) fn sanity_check_voter_list<T: Config>() {
-	use crate::{CounterForValidators, VoterCount, CounterForNominators};
-	// Check:
-	// 1) Iterate all voters in list and make sure there are no duplicates.
-	let mut seen_in_list = BTreeSet::new();
-	assert!(VoterList::<T>::iter()
-		.map(|node| node.voter.id)
-		.all(|voter| seen_in_list.insert(voter)));
-	// 2) Iterate all voters and ensure their count is in sync with `VoterCount`.
-	assert_eq!(VoterList::<T>::iter().collect::<Vec<_>>().len() as u32, VoterCount::<T>::get());
-	// 3) Ensure VoterCount itself is always `== CounterForValidators + CounterForNominators`
-	// assert_eq!(
-	// 	VoterCount::<T>::get(),
-	// 	CounterForValidators::<T>::get() + CounterForNominators::<T>::get()
-	// );
 }
 
 /// A Node is the fundamental element comprising the doubly-linked lists which for each bag.
