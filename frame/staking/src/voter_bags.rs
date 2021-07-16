@@ -956,7 +956,7 @@ mod tests {
 	fn take_works() {
 		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
 			// initialize the voters' deposits
-			let mut balance = 0; // This will be 10 on the first loop iteration bc 0 % 3 == 0
+			let mut balance = 0; // This will be 10 on the first loop iteration because 0 % 3 == 0
 			for (idx, voter_id) in GENESIS_VOTER_IDS.iter().enumerate() {
 				if idx % 3 == 0 {
 					// This increases the balance by 10, which is the amount each threshold

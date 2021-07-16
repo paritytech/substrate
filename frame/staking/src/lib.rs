@@ -274,14 +274,18 @@
 #![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(any(test, feature = "make-bags"))]
-pub mod mock;
-#[cfg(test)]
-mod tests;
-#[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod testing_utils;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
+#[cfg(any(test, feature = "make-bags"))]
+pub mod mock;
+// #[cfg(any(feature = "remote-ext"))]
+#[cfg(feature = "remote-ext")]
+#[cfg(test)]
+mod remote_ext_tests;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod testing_utils;
+#[cfg(test)]
+mod tests;
 
 pub mod inflation;
 pub mod slashing;
