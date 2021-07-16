@@ -554,7 +554,7 @@ mod test {
 
 			{
 				crate::generate_storage_alias!(test, Foo => NMap<
-					(u16, Blake2_128Concat),
+					Key<(u16, Blake2_128Concat)>,
 					u32
 				>);
 

@@ -493,6 +493,47 @@ mod test_iterators {
 	}
 
 	#[test]
+	fn n_map_iter_from() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::hash::Identity;
+			use crate::storage::Key as NMapKey;
+			crate::generate_storage_alias!(
+				MyModule,
+				MyNMap => NMap<Key<(u64, Identity), (u64, Identity), (u64, Identity)>, u64>
+			);
+
+			MyNMap::insert((1, 1, 1), 11);
+			MyNMap::insert((1, 1, 2), 21);
+			MyNMap::insert((1, 1, 3), 31);
+			MyNMap::insert((1, 2, 1), 12);
+			MyNMap::insert((1, 2, 2), 22);
+			MyNMap::insert((1, 2, 3), 32);
+			MyNMap::insert((1, 3, 1), 13);
+			MyNMap::insert((1, 3, 2), 23);
+			MyNMap::insert((1, 3, 3), 33);
+			MyNMap::insert((2, 0, 0), 200);
+
+			type Key = (NMapKey<Identity, u64>, NMapKey<Identity, u64>, NMapKey<Identity, u64>);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 2, 2));
+			let iter = MyNMap::iter_key_prefix_from((1,), starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(2, 3), (3, 1), (3, 2), (3, 3)]);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 3, 1));
+			let iter = MyNMap::iter_prefix_from((1, 3), starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(2, 23), (3, 33)]);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 3, 2));
+			let iter = MyNMap::iter_keys_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(1, 3, 3), (2, 0, 0)]);
+
+			let starting_raw_key = MyNMap::storage_n_map_final_key::<Key, _>((1, 3, 3));
+			let iter = MyNMap::iter_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![((2, 0, 0), 200)]);
+		});
+	}
+
+	#[test]
 	fn n_map_double_map_identical_key() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			NMap::insert((1, 2), 50);

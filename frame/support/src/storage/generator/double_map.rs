@@ -525,6 +525,42 @@ mod test_iterators {
 	}
 
 	#[test]
+	fn double_map_iter_from() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::hash::Identity;
+			crate::generate_storage_alias!(
+				MyModule,
+				MyDoubleMap => DoubleMap<(u64, Identity), (u64, Identity), u64>
+			);
+
+			MyDoubleMap::insert(1, 10, 100);
+			MyDoubleMap::insert(1, 21, 201);
+			MyDoubleMap::insert(1, 31, 301);
+			MyDoubleMap::insert(1, 41, 401);
+			MyDoubleMap::insert(2, 20, 200);
+			MyDoubleMap::insert(3, 30, 300);
+			MyDoubleMap::insert(4, 40, 400);
+			MyDoubleMap::insert(5, 50, 500);
+
+			let starting_raw_key = MyDoubleMap::storage_double_map_final_key(1, 21);
+			let iter = MyDoubleMap::iter_key_prefix_from(1, starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![31, 41]);
+
+			let starting_raw_key = MyDoubleMap::storage_double_map_final_key(1, 31);
+			let iter = MyDoubleMap::iter_prefix_from(1, starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(41, 401)]);
+
+			let starting_raw_key = MyDoubleMap::storage_double_map_final_key(2, 20);
+			let iter = MyDoubleMap::iter_keys_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(3, 30), (4, 40), (5, 50)]);
+
+			let starting_raw_key = MyDoubleMap::storage_double_map_final_key(3, 30);
+			let iter = MyDoubleMap::iter_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(4, 40, 400), (5, 50, 500)]);
+		});
+	}
+
+	#[test]
 	fn double_map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			// All map iterator

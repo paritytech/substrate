@@ -389,6 +389,28 @@ mod test_iterators {
 	}
 
 	#[test]
+	fn map_iter_from() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::hash::Identity;
+			crate::generate_storage_alias!(MyModule, MyMap => Map<(u64, Identity), u64>);
+
+			MyMap::insert(1, 10);
+			MyMap::insert(2, 20);
+			MyMap::insert(3, 30);
+			MyMap::insert(4, 40);
+			MyMap::insert(5, 50);
+
+			let starting_raw_key = MyMap::storage_map_final_key(3);
+			let iter = MyMap::iter_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![(4, 40), (5, 50)]);
+
+			let starting_raw_key = MyMap::storage_map_final_key(2);
+			let iter = MyMap::iter_keys_from(starting_raw_key);
+			assert_eq!(iter.collect::<Vec<_>>(), vec![3, 4, 5]);
+		});
+	}
+
+	#[test]
 	fn map_reversible_reversible_iteration() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			// All map iterator

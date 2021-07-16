@@ -810,9 +810,9 @@ impl<T> PrefixIterator<T> {
 		&self.prefix
 	}
 
-	/// Set the next key that the iterator should start iterating upon.
-	pub fn set_last_raw_key(&mut self, next_key: Vec<u8>) {
-		self.previous_key = next_key;
+	/// Set the key that the iterator should start iterating after.
+	pub fn set_last_raw_key(&mut self, previous_key: Vec<u8>) {
+		self.previous_key = previous_key;
 	}
 
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
@@ -910,9 +910,9 @@ impl<T> KeyPrefixIterator<T> {
 		&self.prefix
 	}
 
-	/// Set the next key that the iterator should start iterating upon.
-	pub fn set_last_raw_key(&mut self, next_key: Vec<u8>) {
-		self.previous_key = next_key;
+	/// Set the key that the iterator should start iterating after.
+	pub fn set_last_raw_key(&mut self, previous_key: Vec<u8>) {
+		self.previous_key = previous_key;
 	}
 
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
@@ -1551,6 +1551,7 @@ mod test {
 	fn prefix_iterator_pagination_works() {
 		TestExternalities::default().execute_with(|| {
 			use crate::hash::Identity;
+			use crate::storage::generator::map::StorageMap;
 			crate::generate_storage_alias! {
 				MyModule,
 				MyStorageMap => Map<(u64, Identity), u64>
@@ -1580,9 +1581,7 @@ mod test {
 			final_vec.push(op(elem));
 
 			let stored_key = iter.last_raw_key().to_owned();
-			let mut expected_key = MyStorageMap::final_prefix().to_vec();
-			expected_key.extend_from_slice(&[2, 0, 0, 0, 0, 0, 0, 0]);
-			assert_eq!(stored_key, expected_key);
+			assert_eq!(stored_key, MyStorageMap::storage_map_final_key(2));
 
 			let mut iter = MyStorageMap::iter_from(stored_key.clone());
 
@@ -1600,8 +1599,7 @@ mod test {
 					Ok((key, u64::decode(&mut raw_value)?))
 				},
 			);
-			let mut previous_key = MyStorageMap::final_prefix().to_vec();
-			previous_key.extend_from_slice(&[5, 0, 0, 0, 0, 0, 0, 0]);
+			let previous_key = MyStorageMap::storage_map_final_key(5);
 			iter.set_last_raw_key(previous_key);
 
 			let remaining = iter.map(op).collect::<Vec<_>>();
