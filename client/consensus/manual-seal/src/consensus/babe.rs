@@ -32,7 +32,7 @@ use sp_keystore::SyncCryptoStorePtr;
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_consensus::{BlockImportParams, BlockOrigin, ForkChoiceStrategy};
+use sc_consensus_api::{BlockImportParams, BlockOrigin, ForkChoiceStrategy, Verifier};
 use sp_consensus_slots::Slot;
 use sp_consensus_babe::{
 	BabeApi, inherents::BabeInherentData, ConsensusLog, BABE_ENGINE_ID, AuthorityId,
@@ -44,7 +44,7 @@ use sp_runtime::{
 	generic::{Digest, BlockId}, Justifications,
 };
 use sp_timestamp::{InherentType, INHERENT_IDENTIFIER, TimestampInherentData};
-use sp_consensus::import_queue::{Verifier, CacheKeyId};
+use sp_consensus::import_queue::CacheKeyId;
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
