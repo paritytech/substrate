@@ -274,3 +274,4 @@ panic = "unwind"
 
 [patch.crates-io]
 finality-grandpa = { git = "https://github.com/paritytech/finality-grandpa", branch = "aj-scale-info" }
+scale-info = { git = "https://github.com/paritytech/scale-info", branch = "aj-substrate", features = ["derive"] }
