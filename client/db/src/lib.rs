@@ -1306,8 +1306,7 @@ impl<Block: BlockT> Backend<Block> {
 				sc_client_api::blockchain::HeaderBackend::hash(
 					&self.blockchain,
 					new_canonical.saturated_into(),
-				)?
-				.ok_or_else(|| sp_blockchain::Error::Backend(format!(
+				)?.ok_or_else(|| sp_blockchain::Error::Backend(format!(
 					"Can't canonicalize missing block number #{} when importing {:?} (#{})",
 					new_canonical,
 					hash,
