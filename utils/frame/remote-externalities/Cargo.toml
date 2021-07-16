@@ -6,7 +6,7 @@ edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "An externalities provided environemnt that can load itself from remote nodes or cache files"
+description = "An externalities provided environment that can load itself from remote nodes or cache files"
 readme = "README.md"
 
 [package.metadata.docs.rs]

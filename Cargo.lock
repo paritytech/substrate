@@ -5535,6 +5535,8 @@ dependencies = [
  "paste 1.0.4",
  "rand 0.8.4",
  "rand_chacha 0.2.2",
+ "remote-externalities",
+ "sc-executor",
  "serde",
  "sp-application-crypto",
  "sp-core",
@@ -5542,11 +5544,14 @@ dependencies = [
  "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
+ "sp-state-machine",
  "sp-std",
  "sp-storage",
  "sp-tracing",
  "static_assertions",
+ "substrate-test-runtime",
  "substrate-test-utils",
+ "tokio 0.2.25",
 ]
 
 [[package]]
