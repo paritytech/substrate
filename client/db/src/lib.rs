@@ -1306,8 +1306,12 @@ impl<Block: BlockT> Backend<Block> {
 				sc_client_api::blockchain::HeaderBackend::hash(
 					&self.blockchain,
 					new_canonical.saturated_into(),
-				)?.expect("existence of block with number `new_canonical` \
-					implies existence of blocks with all numbers before it; qed")
+				)?.ok_or_else(|| sp_blockchain::Error::Backend(format!(
+					"Can't canonicalize missing block number #{} when importing {:?} (#{})",
+					new_canonical,
+					hash,
+					number,
+				)))?
 			};
 			if !sc_client_api::Backend::have_state_at(self, &hash, new_canonical.saturated_into()) {
 				return Ok(())
