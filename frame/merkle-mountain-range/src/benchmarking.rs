@@ -21,24 +21,24 @@
 
 use crate::*;
 use frame_support::traits::OnInitialize;
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::{benchmarks_instance_pallet, impl_benchmark_test_suite};
 
-benchmarks! {
+benchmarks_instance_pallet! {
 	on_initialize {
 		let x in 1 .. 1_000;
 
 		let leaves = x as u64;
 	}: {
 		for b in 0..leaves {
-			Module::<T>::on_initialize((b as u32).into());
+			Pallet::<T, I>::on_initialize((b as u32).into());
 		}
 	} verify {
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), leaves);
+		assert_eq!(crate::NumberOfLeaves::<T, I>::get(), leaves);
 	}
 }
 
 impl_benchmark_test_suite!(
-	Module,
+	Pallet,
 	crate::tests::new_test_ext(),
 	crate::mock::Test,
 );

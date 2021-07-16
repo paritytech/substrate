@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	Config, HashingOf, Instance,
+	Config, HashingOf,
 	mmr::{
 		Node, NodeOf, Hasher,
 		storage::{Storage, OffchainStorage, RuntimeStorage},
@@ -58,7 +58,7 @@ pub fn verify_leaf_proof<H, L>(
 /// vs [Off-chain](crate::mmr::storage::OffchainStorage)).
 pub struct Mmr<StorageType, T, I, L> where
 	T: Config<I>,
-	I: Instance,
+	I: 'static,
 	L: primitives::FullLeaf,
 	Storage<StorageType, T, I, L>: mmr_lib::MMRStore<NodeOf<T, I, L>>,
 {
@@ -72,7 +72,7 @@ pub struct Mmr<StorageType, T, I, L> where
 
 impl<StorageType, T, I, L> Mmr<StorageType, T, I, L> where
 	T: Config<I>,
-	I: Instance,
+	I: 'static,
 	L: primitives::FullLeaf,
 	Storage<StorageType, T, I, L>: mmr_lib::MMRStore<NodeOf<T, I, L>>,
 {
@@ -116,7 +116,7 @@ impl<StorageType, T, I, L> Mmr<StorageType, T, I, L> where
 /// Runtime specific MMR functions.
 impl<T, I, L> Mmr<RuntimeStorage, T, I, L> where
 	T: Config<I>,
-	I: Instance,
+	I: 'static,
 	L: primitives::FullLeaf,
 {
 
@@ -145,7 +145,7 @@ impl<T, I, L> Mmr<RuntimeStorage, T, I, L> where
 /// Off-chain specific MMR functions.
 impl<T, I, L> Mmr<OffchainStorage, T, I, L> where
 	T: Config<I>,
-	I: Instance,
+	I: 'static,
 	L: primitives::FullLeaf + codec::Decode,
 {
 	/// Generate a proof for given leaf index.
