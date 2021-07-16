@@ -344,6 +344,7 @@ fn start_rpc_servers<
 	config: &Configuration,
 	mut gen_handler: H,
 	rpc_metrics: Option<sc_rpc_server::RpcMetrics>,
+	server_metrics: sc_rpc_server::ServerMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
@@ -375,7 +376,8 @@ fn start_rpc_servers<
 			&*path, gen_handler(
 				sc_rpc::DenyUnsafe::No,
 				sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc")
-			)
+			),
+			server_metrics.clone(),
 		)),
 		maybe_start_server(
 			config.rpc_http,
@@ -400,7 +402,8 @@ fn start_rpc_servers<
 					deny_unsafe(&address, &config.rpc_methods),
 					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws")
 				),
-				config.rpc_max_payload
+				config.rpc_max_payload,
+				server_metrics.clone(),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))
@@ -415,6 +418,7 @@ fn start_rpc_servers<
 	_: &Configuration,
 	_: H,
 	_: sc_rpc_server::RpcMetrics,
+	_: sc_rpc_server::ServerMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
 }

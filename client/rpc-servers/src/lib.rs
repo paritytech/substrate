@@ -25,6 +25,7 @@ mod middleware;
 use std::io;
 use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
 use log::error;
+use prometheus_endpoint::{Gauge, PrometheusError, Registry, U64, register};
 use pubsub::PubSubMetadata;
 
 const MEGABYTE: usize = 1024 * 1024;
@@ -68,6 +69,40 @@ pub fn rpc_handler<M: PubSubMetadata>(
 	io
 }
 
+/// RPC server-specific prometheus metrics.
+#[derive(Debug, Clone)]
+pub struct ServerMetrics {
+	/// Number of sessions opened.
+	session_opened: Option<Gauge<U64>>,
+	/// Number of sessions closed.
+	session_closed: Option<Gauge<U64>>,
+}
+
+impl ServerMetrics {
+	/// Create new WebSocket RPC server metrics.
+	pub fn new(registry: Option<&Registry>) -> Result<Self, PrometheusError> {
+		registry.map(|r| Ok(Self {
+			session_opened: register(
+				Gauge::new(
+					"rpc_sessions_opened",
+					"Number of persistent RPC sessions opened",
+				)?,
+				r,
+			)?.into(),
+			session_closed: register(
+				Gauge::new(
+					"rpc_sessions_closed",
+					"Number of persistent RPC sessions closed",
+				)?,
+				r,
+			)?.into(),
+		})).unwrap_or_else(|| Ok(Self {
+			session_opened: None,
+			session_closed: None,
+		}))
+	}
+}
+
 #[cfg(not(target_os = "unknown"))]
 mod inner {
 	use super::*;
@@ -78,6 +113,16 @@ mod inner {
 	pub type HttpServer = http::Server;
 	/// Type alias for ws server
 	pub type WsServer = ws::Server;
+
+	impl ws::SessionStats for ServerMetrics {
+		fn open_session(&self, _id: ws::SessionId) {
+			self.session_opened.as_ref().map(|m| m.inc());
+		}
+
+		fn close_session(&self, _id: ws::SessionId) {
+			self.session_closed.as_ref().map(|m| m.inc());
+		}
+	}
 
 	/// Start HTTP server listening on given address.
 	///
@@ -111,6 +156,7 @@ mod inner {
 	pub fn start_ipc<M: pubsub::PubSubMetadata + Default>(
 		addr: &str,
 		io: RpcHandler<M>,
+		server_metrics: ServerMetrics,
 	) -> io::Result<ipc::Server> {
 		let builder = ipc::ServerBuilder::new(io);
 		#[cfg(target_os = "unix")]
@@ -119,7 +165,9 @@ mod inner {
 			security_attributes.set_mode(0o600)?;
 			security_attributes
 		});
-		builder.start(addr)
+		builder
+			.session_stats(server_metrics)
+			.start(addr)
 	}
 
 	/// Start WS server listening on given address.
@@ -133,6 +181,7 @@ mod inner {
 		cors: Option<&Vec<String>>,
 		io: RpcHandler<M>,
 		maybe_max_payload_mb: Option<usize>,
+		server_metrics: ServerMetrics,
 	) -> io::Result<ws::Server> {
 		let rpc_max_payload = maybe_max_payload_mb.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
@@ -141,6 +190,7 @@ mod inner {
 			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 			.allowed_origins(map_cors(cors))
 			.allowed_hosts(hosts_filtering(cors.is_some()))
+			.session_stats(server_metrics)
 			.start(addr)
 			.map_err(|err| match err {
 				ws::Error::Io(io) => io,
