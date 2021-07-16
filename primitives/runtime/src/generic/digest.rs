@@ -573,7 +573,7 @@ mod tests {
 			let (variant_name, digest_item) =
 				match digest_item_type {
 					DigestItemType::Other =>
-						("Other", DigestItem::Other(Default::default())),
+						("Other", DigestItem::<u32>::Other(Default::default())),
 					DigestItemType::ChangesTrieRoot =>
 						("ChangesTrieRoot", DigestItem::ChangesTrieRoot(Default::default())),
 					DigestItemType::Consensus =>
@@ -588,10 +588,10 @@ mod tests {
 						)),
 				};
 			let encoded = digest_item.encode();
-			let variant = variants.iter().find(|v| &v.name() == variant_name)
+			let variant = variants.iter().find(|v| v.name() == &variant_name)
 				.expect(&format!("Variant {} not found", variant_name));
 
-			assert_eq!(digest_item_type as u8, variant.index())
+			assert_eq!(encoded[0], variant.index())
 		};
 
 		check(DigestItemType::Other);
