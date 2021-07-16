@@ -41,7 +41,11 @@ async fn test_voter_bags_migration() {
 		.unwrap();
 
 	ext.execute_with(|| {
-		// regenerate ...
+		// - check existing data ??
+		// - regenerate ...
+		// - check regenerated data
+		// - stats on how each bag is occupied?
+		// - use real thresholds ..
 		// any other test we need to ...
 	})
 
