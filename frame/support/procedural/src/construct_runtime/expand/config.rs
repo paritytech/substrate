@@ -16,8 +16,9 @@
 // limitations under the License
 
 use crate::construct_runtime::Pallet;
+use inflector::Inflector;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{ToTokens, format_ident, quote};
 use syn::Ident;
 
 pub fn expand_outer_config(
@@ -28,25 +29,34 @@ pub fn expand_outer_config(
 	let mut types = TokenStream::new();
 	let mut fields = TokenStream::new();
 	let mut build_storage_calls = TokenStream::new();
+	let mut query_genesis_config_part_macros = Vec::new();
 
 	for decl in pallet_decls {
 		if let Some(pallet_entry) = decl.find_part("Config") {
-			let config = format_ident!("{}Config", decl.name);
-			let mod_name = decl.pallet.mod_name();
-			let field_name = if let Some(inst) = decl.instance.as_ref() {
-				format_ident!("{}_{}", mod_name, inst)
-			} else {
-				mod_name
-			};
+			let path = &decl.path;
+			let pallet_name = &decl.name;
+			let path_str = path.into_token_stream().to_string();
+			let config = format_ident!("{}Config", pallet_name);
+			let field_name = &Ident::new(
+				&pallet_name.to_string().to_snake_case(),
+				decl.name.span(),
+			);
 			let part_is_generic = !pallet_entry.generics.params.is_empty();
 
 			types.extend(expand_config_types(runtime, decl, &config, part_is_generic));
 			fields.extend(quote!(pub #field_name: #config,));
 			build_storage_calls.extend(expand_config_build_storage_call(scrate, runtime, decl, &field_name));
+			query_genesis_config_part_macros.push(quote! {
+				#path::__substrate_genesis_config_check::is_genesis_config_defined!(#pallet_name);
+				#[cfg(feature = "std")]
+				#path::__substrate_genesis_config_check::is_std_enabled_for_genesis!(#pallet_name, #path_str);
+			});
 		}
 	}
 
-	quote!{
+	quote! {
+		#( #query_genesis_config_part_macros )*
+
 		#types
 
 		#[cfg(any(feature = "std", test))]
@@ -56,7 +66,6 @@ pub fn expand_outer_config(
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		#[serde(crate = "__genesis_config_serde_import__")]
-		#[allow(non_snake_case)]
 		pub struct GenesisConfig {
 			#fields
 		}
@@ -85,7 +94,7 @@ fn expand_config_types(
 	config: &Ident,
 	part_is_generic: bool,
 ) -> TokenStream {
-	let path = &decl.pallet;
+	let path = &decl.path;
 
 	match (decl.instance.as_ref(), part_is_generic) {
 		(Some(inst), true) => quote!{
@@ -109,7 +118,7 @@ fn expand_config_build_storage_call(
 	decl: &Pallet,
 	field_name: &Ident,
 ) -> TokenStream {
-	let path = &decl.pallet;
+	let path = &decl.path;
 	let instance = if let Some(inst) = decl.instance.as_ref() {
 		quote!(#path::#inst)
 	} else {

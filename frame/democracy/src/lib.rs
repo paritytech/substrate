@@ -634,7 +634,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(p)`
 		#[pallet::weight(T::WeightInfo::propose())]
-		pub(crate) fn propose(
+		pub fn propose(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			#[pallet::compact] value: BalanceOf<T>,
@@ -675,7 +675,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(S)` where S is the number of seconds a proposal already has.
 		#[pallet::weight(T::WeightInfo::second(*seconds_upper_bound))]
-		pub(crate) fn second(
+		pub fn second(
 			origin: OriginFor<T>,
 			#[pallet::compact] proposal: PropIndex,
 			#[pallet::compact] seconds_upper_bound: u32,
@@ -706,7 +706,7 @@ pub mod pallet {
 			T::WeightInfo::vote_new(T::MaxVotes::get())
 				.max(T::WeightInfo::vote_existing(T::MaxVotes::get()))
 		)]
-		pub(crate) fn vote(
+		pub fn vote(
 			origin: OriginFor<T>,
 			#[pallet::compact] ref_index: ReferendumIndex,
 			vote: AccountVote<BalanceOf<T>>,
@@ -724,7 +724,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`.
 		#[pallet::weight((T::WeightInfo::emergency_cancel(), DispatchClass::Operational))]
-		pub(crate) fn emergency_cancel(origin: OriginFor<T>, ref_index: ReferendumIndex) -> DispatchResult {
+		pub fn emergency_cancel(origin: OriginFor<T>, ref_index: ReferendumIndex) -> DispatchResult {
 			T::CancellationOrigin::ensure_origin(origin)?;
 
 			let status = Self::referendum_status(ref_index)?;
@@ -746,7 +746,7 @@ pub mod pallet {
 		/// Weight: `O(V)` with V number of vetoers in the blacklist of proposal.
 		///   Decoding vec of length V. Charged as maximum
 		#[pallet::weight(T::WeightInfo::external_propose(MAX_VETOERS))]
-		pub(crate) fn external_propose(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
+		pub fn external_propose(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
 			T::ExternalOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
 			if let Some((until, _)) = <Blacklist<T>>::get(proposal_hash) {
@@ -771,7 +771,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::external_propose_majority())]
-		pub(crate) fn external_propose_majority(
+		pub fn external_propose_majority(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 		) -> DispatchResult {
@@ -792,7 +792,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::external_propose_default())]
-		pub(crate) fn external_propose_default(
+		pub fn external_propose_default(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 		) -> DispatchResult {
@@ -817,7 +817,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::fast_track())]
-		pub(crate) fn fast_track(
+		pub fn fast_track(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			voting_period: T::BlockNumber,
@@ -864,7 +864,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(V + log(V))` where V is number of `existing vetoers`
 		#[pallet::weight(T::WeightInfo::veto_external(MAX_VETOERS))]
-		pub(crate) fn veto_external(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
+		pub fn veto_external(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
 
 			if let Some((e_proposal_hash, _)) = <NextExternal<T>>::get() {
@@ -896,7 +896,7 @@ pub mod pallet {
 		///
 		/// # Weight: `O(1)`.
 		#[pallet::weight(T::WeightInfo::cancel_referendum())]
-		pub(crate) fn cancel_referendum(
+		pub fn cancel_referendum(
 			origin: OriginFor<T>,
 			#[pallet::compact] ref_index: ReferendumIndex,
 		) -> DispatchResult {
@@ -913,7 +913,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(D)` where `D` is the items in the dispatch queue. Weighted as `D = 10`.
 		#[pallet::weight((T::WeightInfo::cancel_queued(10), DispatchClass::Operational))]
-		pub(crate) fn cancel_queued(origin: OriginFor<T>, which: ReferendumIndex) -> DispatchResult {
+		pub fn cancel_queued(origin: OriginFor<T>, which: ReferendumIndex) -> DispatchResult {
 			ensure_root(origin)?;
 			T::Scheduler::cancel_named((DEMOCRACY_ID, which).encode())
 				.map_err(|_| Error::<T>::ProposalMissing)?;
@@ -970,7 +970,7 @@ pub mod pallet {
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
 		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get().into()))]
-		pub(crate) fn undelegate(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn undelegate(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let votes = Self::try_undelegate(who)?;
 			Ok(Some(T::WeightInfo::undelegate(votes)).into())
@@ -982,7 +982,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`.
 		#[pallet::weight(T::WeightInfo::clear_public_proposals())]
-		pub(crate) fn clear_public_proposals(origin: OriginFor<T>) -> DispatchResult {
+		pub fn clear_public_proposals(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			<PublicProps<T>>::kill();
 			Ok(())
@@ -999,7 +999,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
 		#[pallet::weight(T::WeightInfo::note_preimage(encoded_proposal.len() as u32))]
-		pub(crate) fn note_preimage(origin: OriginFor<T>, encoded_proposal: Vec<u8>) -> DispatchResult {
+		pub fn note_preimage(origin: OriginFor<T>, encoded_proposal: Vec<u8>) -> DispatchResult {
 			Self::note_preimage_inner(ensure_signed(origin)?, encoded_proposal)?;
 			Ok(())
 		}
@@ -1009,7 +1009,7 @@ pub mod pallet {
 			T::WeightInfo::note_preimage(encoded_proposal.len() as u32),
 			DispatchClass::Operational,
 		))]
-		pub(crate) fn note_preimage_operational(
+		pub fn note_preimage_operational(
 			origin: OriginFor<T>,
 			encoded_proposal: Vec<u8>,
 		) -> DispatchResult {
@@ -1031,7 +1031,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
 		#[pallet::weight(T::WeightInfo::note_imminent_preimage(encoded_proposal.len() as u32))]
-		pub(crate) fn note_imminent_preimage(
+		pub fn note_imminent_preimage(
 			origin: OriginFor<T>,
 			encoded_proposal: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
@@ -1046,7 +1046,7 @@ pub mod pallet {
 			T::WeightInfo::note_imminent_preimage(encoded_proposal.len() as u32),
 			DispatchClass::Operational,
 		))]
-		pub(crate) fn note_imminent_preimage_operational(
+		pub fn note_imminent_preimage_operational(
 			origin: OriginFor<T>,
 			encoded_proposal: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
@@ -1073,7 +1073,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(D)` where D is length of proposal.
 		#[pallet::weight(T::WeightInfo::reap_preimage(*proposal_len_upper_bound))]
-		pub(crate) fn reap_preimage(
+		pub fn reap_preimage(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			#[pallet::compact] proposal_len_upper_bound: u32,
@@ -1116,7 +1116,7 @@ pub mod pallet {
 			T::WeightInfo::unlock_set(T::MaxVotes::get())
 				.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))
 		)]
-		pub(crate) fn unlock(origin: OriginFor<T>, target: T::AccountId) -> DispatchResult {
+		pub fn unlock(origin: OriginFor<T>, target: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(&target);
 			Ok(())
@@ -1150,7 +1150,7 @@ pub mod pallet {
 		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
 		#[pallet::weight(T::WeightInfo::remove_vote(T::MaxVotes::get()))]
-		pub(crate) fn remove_vote(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
+		pub fn remove_vote(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_remove_vote(&who, index, UnvoteScope::Any)
 		}
@@ -1171,7 +1171,7 @@ pub mod pallet {
 		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
 		#[pallet::weight(T::WeightInfo::remove_other_vote(T::MaxVotes::get()))]
-		pub(crate) fn remove_other_vote(
+		pub fn remove_other_vote(
 			origin: OriginFor<T>,
 			target: T::AccountId,
 			index: ReferendumIndex,
@@ -1184,7 +1184,7 @@ pub mod pallet {
 
 		/// Enact a proposal from a referendum. For now we just make the weight be the maximum.
 		#[pallet::weight(T::BlockWeights::get().max_block)]
-		pub(crate) fn enact_proposal(
+		pub fn enact_proposal(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			index: ReferendumIndex,
@@ -1209,7 +1209,7 @@ pub mod pallet {
 		/// Weight: `O(p)` (though as this is an high-privilege dispatch, we assume it has a
 		///   reasonable value).
 		#[pallet::weight((T::WeightInfo::blacklist(T::MaxProposals::get()), DispatchClass::Operational))]
-		pub(crate) fn blacklist(origin: OriginFor<T>,
+		pub fn blacklist(origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			maybe_ref_index: Option<ReferendumIndex>,
 		) -> DispatchResult {
@@ -1257,7 +1257,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(p)` where `p = PublicProps::<T>::decode_len()`
 		#[pallet::weight(T::WeightInfo::cancel_proposal(T::MaxProposals::get()))]
-		pub(crate) fn cancel_proposal(
+		pub fn cancel_proposal(
 			origin: OriginFor<T>,
 			#[pallet::compact] prop_index: PropIndex,
 		) -> DispatchResult {

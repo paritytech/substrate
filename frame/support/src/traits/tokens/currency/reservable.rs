@@ -166,7 +166,7 @@ pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
 	/// Is a no-op if the value to be unreserved is zero.
 	fn unreserve_all_named(id: &Self::ReserveIdentifier, who: &AccountId) -> Self::Balance {
 		let value = Self::reserved_balance_named(id, who);
-		Self::slash_reserved_named(id, who, value);
+		Self::unreserve_named(id, who, value);
 		value
 	}
 

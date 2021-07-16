@@ -182,6 +182,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
 	deny_unsafe: DenyUnsafe,
+	rpc_max_payload: Option<usize>,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
@@ -193,9 +194,11 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		Client::Api: Metadata<Block>,
 {
 	let child_backend = Box::new(
-		self::state_full::FullState::new(client.clone(), subscriptions.clone())
+		self::state_full::FullState::new(
+			client.clone(), subscriptions.clone(), rpc_max_payload
+		)
 	);
-	let backend = Box::new(self::state_full::FullState::new(client, subscriptions));
+	let backend = Box::new(self::state_full::FullState::new(client, subscriptions, rpc_max_payload));
 	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
@@ -399,6 +402,16 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
 
+	/// Returns the keys with prefix from a child storage with pagination support.
+	fn storage_keys_paged(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+	) -> FutureResult<Vec<StorageKey>>;
+
 	/// Returns a child storage entry at a specific block's state.
 	fn storage(
 		&self,
@@ -464,6 +477,17 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 		block: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys(block, storage_key, key_prefix)
+	}
+
+	fn storage_keys_paged(
+		&self,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<StorageKey>> {
+		self.backend.storage_keys_paged(block, storage_key, prefix, count, start_key)
 	}
 
 	fn storage_hash(

@@ -39,6 +39,14 @@ extern "C" {
 /// the initialized value at the start of a runtime call.
 static mut MUTABLE_STATIC: u64 = 32;
 
+#[cfg(not(feature = "std"))]
+/// This is similar to `MUTABLE_STATIC`. The tests need `MUTABLE_STATIC` for testing that
+/// non-null initialization data is properly restored during instance reusing.
+///
+/// `MUTABLE_STATIC_BSS` on the other hand focuses on the zeroed data. This is important since there
+/// may be differences in handling zeroed and non-zeroed data.
+static mut MUTABLE_STATIC_BSS: u64 = 0;
+
 sp_core::wasm_export_functions! {
 	fn test_calling_missing_external() {
 		unsafe { missing_external() }
@@ -63,13 +71,49 @@ sp_core::wasm_export_functions! {
 	}
 
 	fn test_clear_prefix(input: Vec<u8>) -> Vec<u8> {
-		storage::clear_prefix(&input);
+		storage::clear_prefix(&input, None);
 		b"all ok!".to_vec()
 	}
 
 	fn test_empty_return() {}
 
+	fn test_dirty_plenty_memory(heap_base: u32, heap_pages: u32) {
+		// This piece of code will dirty multiple pages of memory. The number of pages is given by
+		// the `heap_pages`. It's unit is a wasm page (64KiB). The first page to be cleared
+		// is a wasm page that that follows the one that holds the `heap_base` address.
+		//
+		// This function dirties the **host** pages. I.e. we dirty 4KiB at a time and it will take
+		// 16 writes to process a single wasm page.
+
+		let mut heap_ptr = heap_base as usize;
+
+		// Find the next wasm page boundary.
+		let heap_ptr = round_up_to(heap_ptr, 65536);
+
+		// Make it an actual pointer
+		let heap_ptr = heap_ptr as *mut u8;
+
+		// Traverse the host pages and make each one dirty
+		let host_pages = heap_pages as usize * 16;
+		for i in 0..host_pages {
+			unsafe {
+				// technically this is an UB, but there is no way Rust can find this out.
+				heap_ptr.add(i * 4096).write(0);
+			}
+		}
+
+		fn round_up_to(n: usize, divisor: usize) -> usize {
+			(n + divisor - 1) / divisor
+		}
+	}
+
 	fn test_exhaust_heap() -> Vec<u8> { Vec::with_capacity(16777216) }
+
+	fn test_fp_f32add(a: [u8; 4], b: [u8; 4]) -> [u8; 4] {
+		let a = f32::from_le_bytes(a);
+		let b = f32::from_le_bytes(b);
+		f32::to_le_bytes(a + b)
+	}
 
 	fn test_panic() { panic!("test panic") }
 
@@ -173,7 +217,6 @@ sp_core::wasm_export_functions! {
 		code
 	}
 
-
 	fn test_sandbox_get_global_val(code: Vec<u8>) -> i64 {
 		let env_builder = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		let instance = if let Ok(i) = sp_sandbox::Instance::new(&code, &env_builder, &mut ()) {
@@ -189,11 +232,9 @@ sp_core::wasm_export_functions! {
 		}
 	}
 
-
 	fn test_offchain_index_set() {
 		sp_io::offchain_index::set(b"k", b"v");
 	}
-
 
 	fn test_offchain_local_storage() -> bool {
 		let kind = sp_core::offchain::StorageKind::PERSISTENT;
@@ -248,11 +289,6 @@ sp_core::wasm_export_functions! {
 		run().is_some()
 	}
 
-	// Just some test to make sure that `sp-allocator` compiles on `no_std`.
-	fn test_sp_allocator_compiles() {
-		sp_allocator::FreeingBumpHeapAllocator::new(0);
-	}
-
 	fn test_enter_span() -> u64 {
 		wasm_tracing::enter_span(Default::default())
 	}
@@ -276,6 +312,13 @@ sp_core::wasm_export_functions! {
 		unsafe {
 			MUTABLE_STATIC += 1;
 			MUTABLE_STATIC
+		}
+	}
+
+	fn returns_mutable_static_bss() -> u64 {
+		unsafe {
+			MUTABLE_STATIC_BSS += 1;
+			MUTABLE_STATIC_BSS
 		}
 	}
 

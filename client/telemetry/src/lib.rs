@@ -122,21 +122,11 @@ impl TelemetryWorker {
 	///
 	/// Only one is needed per process.
 	pub fn new(buffer_size: usize) -> Result<Self> {
-		let transport = initialize_transport(None)?;
-		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
-		let (register_sender, register_receiver) = mpsc::unbounded();
-
-		Ok(Self {
-			message_receiver,
-			message_sender,
-			register_receiver,
-			register_sender,
-			id_counter: Arc::new(atomic::AtomicU64::new(1)),
-			transport,
-		})
+		Self::with_transport(buffer_size, None)
 	}
 
-	/// Instantiate a new [`TelemetryWorker`] which can run in background.
+	/// Instantiate a new [`TelemetryWorker`] with the given [`ExtTransport`]
+	/// which can run in background.
 	///
 	/// Only one is needed per process.
 	pub fn with_transport(buffer_size: usize, transport: Option<ExtTransport>) -> Result<Self> {
@@ -312,12 +302,6 @@ impl TelemetryWorker {
 
 		for (node_max_verbosity, addr) in nodes {
 			if verbosity > *node_max_verbosity {
-				log::trace!(
-					target: "telemetry",
-					"Skipping {} for log entry with verbosity {:?}",
-					addr,
-					verbosity,
-				);
 				continue;
 			}
 

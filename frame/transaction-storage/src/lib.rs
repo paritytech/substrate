@@ -174,7 +174,7 @@ pub mod pallet {
 		/// Additionally contains a DB write.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::store(data.len() as u32))]
-		pub(super) fn store(
+		pub fn store(
 			origin: OriginFor<T>,
 			data: Vec<u8>,
 		) -> DispatchResult {
@@ -220,7 +220,7 @@ pub mod pallet {
 		/// - Constant.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::renew())]
-		pub(super) fn renew(
+		pub fn renew(
 			origin: OriginFor<T>,
 			block: T::BlockNumber,
 			index: u32,
@@ -261,7 +261,7 @@ pub mod pallet {
 		/// Here we assume a maximum of 100 probed transactions.
 		/// # </weight>
 		#[pallet::weight((T::WeightInfo::check_proof_max(), DispatchClass::Mandatory))]
-		pub(super) fn check_proof(
+		pub fn check_proof(
 			origin: OriginFor<T>,
 			proof: TransactionStorageProof,
 		) -> DispatchResultWithPostInfo {

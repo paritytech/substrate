@@ -286,7 +286,7 @@ pub mod pallet {
 			T::WeightInfo::buy_ticket()
 				.saturating_add(call.get_dispatch_info().weight)
 		)]
-		pub(crate) fn buy_ticket(origin: OriginFor<T>, call: Box<<T as Config>::Call>) -> DispatchResult {
+		pub fn buy_ticket(origin: OriginFor<T>, call: Box<<T as Config>::Call>) -> DispatchResult {
 			let caller = ensure_signed(origin.clone())?;
 			call.clone().dispatch(origin).map_err(|e| e.error)?;
 
@@ -301,7 +301,7 @@ pub mod pallet {
 		///
 		/// This extrinsic must be called by the Manager origin.
 		#[pallet::weight(T::WeightInfo::set_calls(calls.len() as u32))]
-		pub(crate) fn set_calls(origin: OriginFor<T>, calls: Vec<<T as Config>::Call>) -> DispatchResult {
+		pub fn set_calls(origin: OriginFor<T>, calls: Vec<<T as Config>::Call>) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			ensure!(calls.len() <= T::MaxCalls::get() as usize, Error::<T>::TooManyCalls);
 			if calls.is_empty() {
@@ -325,7 +325,7 @@ pub mod pallet {
 		/// * `delay`: How long after the lottery end we should wait before picking a winner.
 		/// * `repeat`: If the lottery should repeat when completed.
 		#[pallet::weight(T::WeightInfo::start_lottery())]
-		pub(crate) fn start_lottery(
+		pub fn start_lottery(
 			origin: OriginFor<T>,
 			price: BalanceOf<T>,
 			length: T::BlockNumber,
@@ -363,7 +363,7 @@ pub mod pallet {
 		///
 		/// This extrinsic must be called by the `ManagerOrigin`.
 		#[pallet::weight(T::WeightInfo::stop_repeat())]
-		pub(crate) fn stop_repeat(origin: OriginFor<T>) -> DispatchResult {
+		pub fn stop_repeat(origin: OriginFor<T>) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			Lottery::<T>::mutate(|mut lottery| {
 				if let Some(config) = &mut lottery {

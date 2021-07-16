@@ -54,7 +54,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -107,9 +107,9 @@ impl Config for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = GenesisConfig {
 		// We use default for brevity, but you can configure as desired if needed.
-		frame_system: Default::default(),
-		pallet_balances: Default::default(),
-		pallet_example: pallet_example::GenesisConfig {
+		system: Default::default(),
+		balances: Default::default(),
+		example: pallet_example::GenesisConfig {
 			dummy: 42,
 			// we configure the map with (key, value) pairs.
 			bar: vec![(1, 2), (2, 3)],
@@ -166,7 +166,7 @@ fn signed_ext_watch_dummy_works() {
 			WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
 				.unwrap()
 				.priority,
-			u64::max_value(),
+			u64::MAX,
 		);
 		assert_eq!(
 			WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),

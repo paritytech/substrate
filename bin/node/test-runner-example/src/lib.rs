@@ -15,23 +15,16 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+#![deny(unused_extern_crates, missing_docs)]
 
 //! Basic example of end to end runtime tests.
 
-use test_runner::{Node, ChainInfo, SignatureVerificationOverride, default_config};
+use test_runner::{ChainInfo, SignatureVerificationOverride};
 use grandpa::GrandpaBlockImport;
-use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, TaskExecutor};
-use std::sync::Arc;
-use sp_inherents::CreateInherentDataProviders;
+use sc_service::{TFullBackend, TFullClient};
 use sc_consensus_babe::BabeBlockImport;
-use sp_keystore::SyncCryptoStorePtr;
-use sp_keyring::sr25519::Keyring::Alice;
-use sp_consensus_babe::AuthorityId;
-use sc_consensus_manual_seal::{
-	ConsensusDataProvider, consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
-};
-use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
-use node_cli::chain_spec::development_config;
+use sc_consensus_manual_seal::consensus::babe::SlotTimestampProvider;
+use sp_runtime::generic::Era;
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -74,137 +67,39 @@ impl ChainInfo for NodeTemplateChainInfo {
 			pallet_transaction_payment::ChargeTransactionPayment::<Self::Runtime>::from(0),
 		)
 	}
-
-	fn config(task_executor: TaskExecutor) -> Configuration {
-		default_config(task_executor, Box::new(development_config()))
-	}
-
-	fn create_client_parts(
-		config: &Configuration,
-	) -> Result<
-		(
-			Arc<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>>,
-			Arc<TFullBackend<Self::Block>>,
-			SyncCryptoStorePtr,
-			TaskManager,
-			Box<dyn CreateInherentDataProviders<
-				Self::Block,
-				(),
-				InherentDataProviders = Self::InherentDataProviders
-			>>,
-			Option<
-				Box<
-					dyn ConsensusDataProvider<
-						Self::Block,
-						Transaction = sp_api::TransactionFor<
-							TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
-							Self::Block,
-						>,
-					>,
-				>,
-			>,
-			Self::SelectChain,
-			Self::BlockImport,
-		),
-		sc_service::Error,
-	> {
-		let (client, backend, keystore, task_manager) =
-			new_full_parts::<Self::Block, Self::RuntimeApi, Self::Executor>(config, None)?;
-		let client = Arc::new(client);
-
-		let select_chain = sc_consensus::LongestChain::new(backend.clone());
-
-		let (grandpa_block_import, ..) =
-			grandpa::block_import(
-				client.clone(),
-				&(client.clone() as Arc<_>),
-				select_chain.clone(),
-				None
-			)?;
-
-		let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
-		let (block_import, babe_link) = sc_consensus_babe::block_import(
-			slot_duration.clone(),
-			grandpa_block_import,
-			client.clone(),
-		)?;
-
-		let consensus_data_provider = BabeConsensusDataProvider::new(
-			client.clone(),
-			keystore.sync_keystore(),
-			babe_link.epoch_changes().clone(),
-			vec![(AuthorityId::from(Alice.public()), 1000)],
-		)
-			.expect("failed to create ConsensusDataProvider");
-
-		Ok((
-			client.clone(),
-			backend,
-			keystore.sync_keystore(),
-			task_manager,
-			Box::new(move |_, _| {
-				let client = client.clone();
-				async move {
-					let timestamp = SlotTimestampProvider::new(client.clone()).map_err(|err| format!("{:?}", err))?;
-					let babe = sp_consensus_babe::inherents::InherentDataProvider::new(timestamp.slot().into());
-					Ok((timestamp, babe))
-				}
-			}),
-			Some(Box::new(consensus_data_provider)),
-			select_chain,
-			block_import,
-		))
-	}
-
-	fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &mut Node<Self>) {
-		let alice = MultiSigner::from(Alice.public()).into_account();
-		let call = pallet_sudo::Call::sudo(Box::new(call));
-		node.submit_extrinsic(call, alice);
-		node.seal_blocks(1);
-	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use test_runner::NodeConfig;
-	use log::LevelFilter;
+	use test_runner::{Node, client_parts, ConfigOrChainSpec, build_runtime, task_executor};
+	use sp_keyring::sr25519::Keyring::Alice;
+	use node_cli::chain_spec::development_config;
+	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
 	#[test]
 	fn test_runner() {
-		let config = NodeConfig {
-			log_targets: vec![
-				("yamux", LevelFilter::Off),
-				("multistream_select", LevelFilter::Off),
-				("libp2p", LevelFilter::Off),
-				("jsonrpc_client_transports", LevelFilter::Off),
-				("sc_network", LevelFilter::Off),
-				("tokio_reactor", LevelFilter::Off),
-				("parity-db", LevelFilter::Off),
-				("sub-libp2p", LevelFilter::Off),
-				("sync", LevelFilter::Off),
-				("peerset", LevelFilter::Off),
-				("ws", LevelFilter::Off),
-				("sc_network", LevelFilter::Off),
-				("sc_service", LevelFilter::Off),
-				("sc_basic_authorship", LevelFilter::Off),
-				("telemetry-logger", LevelFilter::Off),
-				("sc_peerset", LevelFilter::Off),
-				("rpc", LevelFilter::Off),
-				("runtime", LevelFilter::Trace),
-				("babe", LevelFilter::Debug)
-			],
-		};
-		let mut node = Node::<NodeTemplateChainInfo>::new(config).unwrap();
-		// seals blocks
-		node.seal_blocks(1);
-		// submit extrinsics
-		let alice = MultiSigner::from(Alice.public()).into_account();
-		node.submit_extrinsic(frame_system::Call::remark((b"hello world").to_vec()), alice);
+		let mut tokio_runtime = build_runtime().unwrap();
+		let task_executor = task_executor(tokio_runtime.handle().clone());
+		let (rpc, task_manager, client, pool, command_sink, backend) =
+			client_parts::<NodeTemplateChainInfo>(
+				ConfigOrChainSpec::ChainSpec(Box::new(development_config()), task_executor)
+			).unwrap();
+		let node = Node::<NodeTemplateChainInfo>::new(rpc, task_manager, client, pool, command_sink, backend);
 
-		// look ma, I can read state.
-		let _events = node.with_state(|| frame_system::Pallet::<node_runtime::Runtime>::events());
-		// get access to the underlying client.
-		let _client = node.client();
+		tokio_runtime.block_on(async {
+			// seals blocks
+			node.seal_blocks(1).await;
+			// submit extrinsics
+			let alice = MultiSigner::from(Alice.public()).into_account();
+			let _hash = node.submit_extrinsic(frame_system::Call::remark((b"hello world").to_vec()), alice)
+				.await
+				.unwrap();
+
+			// look ma, I can read state.
+			let _events = node.with_state(|| frame_system::Pallet::<node_runtime::Runtime>::events());
+			// get access to the underlying client.
+			let _client = node.client();
+		})
 	}
 }

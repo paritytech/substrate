@@ -67,7 +67,8 @@ struct QueryStorageRange<Block: BlockT> {
 pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
-	_phantom: PhantomData<(BE, Block)>
+	_phantom: PhantomData<(BE, Block)>,
+	rpc_max_payload: Option<usize>,
 }
 
 impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
@@ -78,8 +79,12 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 		Block: BlockT + 'static,
 {
 	/// Create new state API backend for full nodes.
-	pub fn new(client: Arc<Client>, subscriptions: SubscriptionManager) -> Self {
-		Self { client, subscriptions, _phantom: PhantomData }
+	pub fn new(
+		client: Arc<Client>,
+		subscriptions: SubscriptionManager,
+		rpc_max_payload: Option<usize>,
+	) -> Self {
+		Self { client, subscriptions, _phantom: PhantomData, rpc_max_payload }
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
@@ -291,7 +296,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 						&BlockId::Hash(block), prefix.as_ref(), start_key.as_ref()
 					)
 				)
-				.map(|v| v.take(count as usize).collect())
+				.map(|iter| iter.take(count as usize).collect())
 				.map_err(client_err)))
 	}
 
@@ -540,9 +545,15 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		targets: Option<String>,
 		storage_keys: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
+		let block_executor = sc_tracing::block::BlockExecutor::new(
+			self.client.clone(),
+			block,
+			targets,
+			storage_keys,
+			self.rpc_max_payload,
+		);
 		Box::new(result(
-			sc_tracing::block::BlockExecutor::new(self.client.clone(), block, targets, storage_keys)
-				.trace_block()
+			block_executor.trace_block()
 				.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
 		))
 	}
@@ -604,6 +615,29 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 						&prefix,
 					)
 				})
+				.map_err(client_err)))
+	}
+
+	fn storage_keys_paged(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
+	) -> FutureResult<Vec<StorageKey>> {
+		Box::new(result(
+			self.block_or_best(block)
+				.and_then(|block| {
+					let child_info = match ChildType::from_prefixed_key(&storage_key) {
+						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+						None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
+					};
+					self.client.child_storage_keys_iter(
+						&BlockId::Hash(block), child_info, prefix.as_ref(), start_key.as_ref(),
+					)
+				})
+				.map(|iter| iter.take(count as usize).collect())
 				.map_err(client_err)))
 	}
 
