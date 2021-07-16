@@ -18,8 +18,6 @@
 
 //! Middleware for RPC requests.
 
-use std::time::Instant;
-
 use jsonrpc_core::{
 	Middleware as RequestMiddleware, Metadata,
 	FutureResponse, FutureOutput
@@ -149,7 +147,8 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 		F: Fn(jsonrpc_core::Call, M) -> X + Send + Sync,
 		X: Future<Item = Option<jsonrpc_core::Output>, Error = ()> + Send + 'static,
 	{
-		let start = Instant::now();
+		#[cfg(not(target_os = "unknown"))]
+		let start = std::time::Instant::now();
 		let name = call_name(&call).to_owned();
 		let metrics = self.metrics.clone();
 		let transport_label = self.transport_label.clone();
@@ -161,7 +160,11 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 			]).inc();
 		}
 		Either::A(Box::new(next(call, meta).then(move |r| {
+			#[cfg(not(target_os = "unknown"))]
 			let millis = start.elapsed().as_millis();
+			// seems that std::time is not implemented for browser target
+			#[cfg(target_os = "unknown")]
+			let millis = 0;
 			if let Some(ref metrics) = metrics {
 				metrics.calls_time.with_label_values(&[
 					transport_label.as_str(),
