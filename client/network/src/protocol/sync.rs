@@ -624,6 +624,7 @@ impl<B: BlockT> ChainSync<B> {
 			(Some(sync), _) => Some(sync.progress()),
 			_ => None,
 		};
+
 		Status {
 			state: sync_state,
 			best_seen_block: best_seen,
@@ -695,6 +696,7 @@ impl<B: BlockT> ChainSync<B> {
 						}
 					}
 				}
+
 				// If we are at genesis, just start downloading.
 				let (state, req) = if self.best_queued_number.is_zero() {
 					debug!(
