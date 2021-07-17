@@ -1130,7 +1130,9 @@ where
 
 		if block.with_state() {
 			// When importing whole state we don't calculate epoch descriptor, but rather
-			// read it from the state after import.
+			// read it from the state after import. We also skip all verifications
+			// because there's no parent state and we trust the sync module to verify
+			// that the state is correct and finalized.
 			return Ok((block, Default::default()))
 		}
 

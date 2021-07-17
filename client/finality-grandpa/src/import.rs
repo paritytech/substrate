@@ -468,7 +468,8 @@ where
 		let import_result = (&*self.inner).import_block(block, new_cache).await;
 		match import_result {
 			Ok(ImportResult::Imported(aux)) => {
-				// Read authority list and set id from the state.
+				// We've just imported a new state. We trust the sync module that the state
+				// is correct and final. So we can read the authority list and set id from the state.
 				self.authority_set_hard_forks.clear();
 				let block_id = BlockId::hash(hash);
 				let authorities = self.inner.runtime_api().grandpa_authorities(&block_id)
