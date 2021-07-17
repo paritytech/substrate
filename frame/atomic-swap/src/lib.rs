@@ -159,6 +159,7 @@ pub mod pallet {
 		/// If B sees A is on a blockchain with larger proof length limit, then it should kindly refuse
 		/// to accept the atomic swap request if A generates the proof, and asks that B generates the
 		/// proof instead.
+		#[pallet::constant]
 		type ProofLimit: Get<u32>;
 	}
 
