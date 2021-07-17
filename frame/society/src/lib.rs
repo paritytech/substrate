@@ -262,7 +262,7 @@ use sp_runtime::{Percent, RuntimeDebug,
 };
 use frame_support::{
 	decl_error, decl_module, decl_storage, decl_event, ensure,
-	dispatch::DispatchResult, PalletId, BoundedVec,
+	dispatch::DispatchResult, PalletId, WeakBoundedVec,
 };
 use frame_support::weights::Weight;
 use frame_support::traits::{
@@ -433,7 +433,7 @@ decl_storage! {
 		pub Rules get(fn rules): Option<T::Hash>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
-		pub Candidates get(fn candidates): BoundedVec<
+		pub Candidates get(fn candidates): WeakBoundedVec<
 			Bid<T::AccountId, BalanceOf<T, I>>,
 			T::MaxCandidateIntake,
 		>;
@@ -451,7 +451,7 @@ decl_storage! {
 			Option<T::AccountId>;
 
 		/// The current set of members, ordered.
-		pub Members get(fn members): BoundedVec<T::AccountId, MaxMembersGetter<I>>;
+		pub Members get(fn members): WeakBoundedVec<T::AccountId, MaxMembersGetter<I>>;
 
 		/// The set of suspended members.
 		pub SuspendedMembers get(fn suspended_member): map hasher(twox_64_concat) T::AccountId => bool;
@@ -463,7 +463,7 @@ decl_storage! {
 		Vouching get(fn vouching): map hasher(twox_64_concat) T::AccountId => Option<VouchingStatus>;
 
 		/// Pending payouts; ordered by block number, with the amount that should be paid out.
-		Payouts: map hasher(twox_64_concat) T::AccountId => BoundedVec<
+		Payouts: map hasher(twox_64_concat) T::AccountId => WeakBoundedVec<
 			(T::BlockNumber, BalanceOf<T, I>),
 			T::MaxPayouts,
 		>;
@@ -495,7 +495,7 @@ decl_storage! {
 			MaxMembers::<I>::put(config.max_members);
 			let mut m = config.members.clone();
 			m.sort();
-			let bounded_members: BoundedVec<T::AccountId, MaxMembersGetter<I>>
+			let bounded_members: WeakBoundedVec<T::AccountId, MaxMembersGetter<I>>
 				= m.try_into().expect("Too many genesis members");
 			Members::<T, I>::put(bounded_members);
 		})
@@ -1073,15 +1073,15 @@ decl_module! {
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			let mut members: BoundedVec<T::AccountId, MaxMembersGetter<I>> = Default::default();
+			let mut members: WeakBoundedVec<T::AccountId, MaxMembersGetter<I>> = Default::default();
 
 			let mut weight = 0;
 			let weights = T::BlockWeights::get();
 
 			// Run a candidate/membership rotation
 			if (n % T::RotationPeriod::get()).is_zero() {
+				Self::rotate_period(&mut <Members<T, I>>::get().into_inner());
 				members = <Members<T, I>>::get();
-				Self::rotate_period(&mut members);
 
 				weight += weights.max_block / 20;
 			}
@@ -1311,7 +1311,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		match members.binary_search(who) {
 			// Add the new member
 			Err(i) => {
-				members.insert(i, who.clone());
+				members.try_insert(i, who.clone()).expect("members is less than MaxMembers; qed");
 				T::MembershipChanged::change_members_sorted(&[who.clone()], &[], &members);
 				<Members<T, I>>::put(members);
 				Ok(())
@@ -1474,7 +1474,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				members.sort();
 				// NOTE: This may cause member length to surpass `MaxMembers`, but results in no consensus
 				// critical issues or side-effects. This is auto-correcting as members fall out of society.
-				let bounded_members = BoundedVec::<T::AccountId, MaxMembersGetter<I>>::force_from(
+				let bounded_members = WeakBoundedVec::<T::AccountId, MaxMembersGetter<I>>::force_from(
 					members.to_vec(),
 					Some("Society Rotate Period"),
 				);
@@ -1524,7 +1524,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					break;
 				}
 			}
-			let payouts_after = BoundedVec::<_, T::MaxPayouts>::force_from(
+			let payouts_after = WeakBoundedVec::<_, T::MaxPayouts>::force_from(
 				payouts[dropped..].to_vec(),
 				Some("Society Slash Payout"),
 			);
@@ -1535,10 +1535,18 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 	/// Bump the payout amount of `who`, to be unlocked at the given block number.
 	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T, I>) {
-		if !value.is_zero(){
+		if !value.is_zero() {
 			<Payouts<T, I>>::mutate(who, |payouts| match payouts.binary_search_by_key(&when, |x| x.0) {
 				Ok(index) => payouts[index].1 += value,
-				Err(index) => payouts.insert(index, (when, value)),
+				Err(index) => {
+					let mut inner = payouts.clone().into_inner();
+					inner.insert(index, (when, value));
+					let payouts_after = WeakBoundedVec::<_, T::MaxPayouts>::force_from(
+						inner,
+						Some("Society Bump Payout"),
+					);
+					*payouts = payouts_after;
+				}
 			});
 		}
 	}
@@ -1584,7 +1592,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	}
 
 	/// End the current challenge period and start a new one.
-	fn rotate_challenge(members: &mut BoundedVec<T::AccountId, MaxMembersGetter<I>>) {
+	fn rotate_challenge(members: &mut WeakBoundedVec<T::AccountId, MaxMembersGetter<I>>) {
 		// Assume there are members, else don't run this logic.
 		if !members.is_empty() {
 			// End current defender rotation
@@ -1667,7 +1675,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	pub fn take_selected(
 		members_len: usize,
 		pot: BalanceOf<T, I>,
-	) -> BoundedVec<Bid<T::AccountId, BalanceOf<T, I>>, T::MaxCandidateIntake> {
+	) -> WeakBoundedVec<Bid<T::AccountId, BalanceOf<T, I>>, T::MaxCandidateIntake> {
 		let max_members = MaxMembers::<I>::get() as usize;
 		let mut max_selections: usize =
 			(T::MaxCandidateIntake::get() as usize).min(max_members.saturating_sub(members_len));
@@ -1719,7 +1727,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				}
 			}
 			// Length should be less than `max_selections` <= `MaxCandidateIntake`
-			BoundedVec::<_, T::MaxCandidateIntake>::force_from(
+			WeakBoundedVec::<_, T::MaxCandidateIntake>::force_from(
 				selected,
 				Some("Society Take Selected"),
 			)

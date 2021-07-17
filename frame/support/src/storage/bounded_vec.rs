@@ -19,7 +19,7 @@
 //! or a double map.
 
 use sp_std::prelude::*;
-use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
+use sp_std::{convert::TryFrom, fmt, marker::PhantomData, slice::IterMut};
 use codec::{Encode, Decode, EncodeLike, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
@@ -123,12 +123,17 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.retain(f)
 	}
 
-	/// Exactly the same semantics as [`Vec::get_mut`].
+	/// Exactly the same semantics as [`slice::get_mut`].
 	pub fn get_mut<I: SliceIndex<[T]>>(
 		&mut self,
 		index: I,
 	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
 		self.0.get_mut(index)
+	}
+
+	/// Exactly the same semantics as [`slice::iter_mut`].
+	pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+		self.0.iter_mut()
 	}
 }
 
