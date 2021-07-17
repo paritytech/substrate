@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,31 +14,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+pub use pallet::*;
 
-//! Benchmarks for the MMR pallet.
+#[frame_support::pallet]
+pub mod pallet {
+	#[allow(unused_imports)]
+	use frame_support::pallet_prelude::*;
+	#[allow(unused_imports)]
+	use frame_system::pallet_prelude::*;
 
-#![cfg_attr(not(feature = "std"), no_std)]
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
 
-use crate::*;
-use frame_support::traits::OnInitialize;
-use frame_benchmarking::{benchmarks_instance_pallet, impl_benchmark_test_suite};
+	#[pallet::config]
+	pub trait Config: frame_system::Config {}
 
-benchmarks_instance_pallet! {
-	on_initialize {
-		let x in 1 .. 1_000;
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {}
 
-		let leaves = x as u64;
-	}: {
-		for b in 0..leaves {
-			Pallet::<T, I>::on_initialize((b as u32).into());
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self {}
 		}
-	} verify {
-		assert_eq!(crate::NumberOfLeaves::<T, I>::get(), leaves);
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {}
 	}
 }
-
-impl_benchmark_test_suite!(
-	Pallet,
-	crate::tests::new_test_ext(),
-	crate::mock::Test,
-);

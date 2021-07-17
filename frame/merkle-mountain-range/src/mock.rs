@@ -41,7 +41,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		MMR: pallet_mmr::{Pallet, Call, Storage},
+		MMR: pallet_mmr::{Pallet, Storage},
 	}
 );
 
