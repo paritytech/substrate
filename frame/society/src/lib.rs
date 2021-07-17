@@ -251,10 +251,12 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod types;
+
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 use sp_std::{prelude::*, convert::TryInto};
-use codec::{Encode, Decode};
-use sp_runtime::{Percent, RuntimeDebug,
+use codec::Decode;
+use sp_runtime::{Percent,
 	traits::{
 		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
 		TrailingZeroInput, CheckedSub
@@ -271,8 +273,19 @@ use frame_support::traits::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
+pub use types::{Bid, BidKind, Judgement, Payout, StrikeCount, Vote, VouchingStatus};
+
 type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+
+// Note that accessing this struct isn't free. It requires a storage read,
+// but that is pretty much unavoidable.
+pub struct MaxMembersGetter<I>(sp_std::marker::PhantomData<I>);
+impl<I: Instance> Get<u32> for MaxMembersGetter<I> {
+	fn get() -> u32 {
+		MaxMembers::<I>::get()
+	}
+}
 
 /// The module's configuration trait.
 pub trait Config<I = DefaultInstance>: system::Config {
@@ -325,181 +338,6 @@ pub trait Config<I = DefaultInstance>: system::Config {
 
 	/// The maximum number of payouts that can be queued.
 	type MaxPayouts: Get<u32>;
-}
-
-/// A vote by a member on a candidate application.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum Vote {
-	/// The member has been chosen to be skeptic and has not yet taken any action.
-	Skeptic,
-	/// The member has rejected the candidate's application.
-	Reject,
-	/// The member approves of the candidate's application.
-	Approve,
-}
-
-/// A judgement by the suspension judgement origin on a suspended candidate.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum Judgement {
-	/// The suspension judgement origin takes no direct judgment
-	/// and places the candidate back into the bid pool.
-	Rebid,
-	/// The suspension judgement origin has rejected the candidate's application.
-	Reject,
-	/// The suspension judgement origin approves of the candidate's application.
-	Approve,
-}
-
-/// Details of a payout given as a per-block linear "trickle".
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, Default)]
-pub struct Payout<Balance, BlockNumber> {
-	/// Total value of the payout.
-	value: Balance,
-	/// Block number at which the payout begins.
-	begin: BlockNumber,
-	/// Total number of blocks over which the payout is spread.
-	duration: BlockNumber,
-	/// Total value paid out so far.
-	paid: Balance,
-}
-
-/// Status of a vouching member.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum VouchingStatus {
-	/// Member is currently vouching for a user.
-	Vouching,
-	/// Member is banned from vouching for other members.
-	Banned,
-}
-
-/// Number of strikes that a member has against them.
-pub type StrikeCount = u32;
-
-/// A bid for entry into society.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug,)]
-pub struct Bid<AccountId, Balance> {
-	/// The bidder/candidate trying to enter society
-	who: AccountId,
-	/// The kind of bid placed for this bidder/candidate. See `BidKind`.
-	kind: BidKind<AccountId, Balance>,
-	/// The reward that the bidder has requested for successfully joining the society.
-	value: Balance,
-}
-
-/// A vote by a member on a candidate application.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum BidKind<AccountId, Balance> {
-	/// The CandidateDeposit was paid for this bid.
-	Deposit(Balance),
-	/// A member vouched for this bid. The account should be reinstated into `Members` once the
-	/// bid is successful (or if it is rescinded prior to launch).
-	Vouch(AccountId, Balance),
-}
-
-impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
-	fn check_voucher(&self, v: &AccountId) -> DispatchResult {
-		if let BidKind::Vouch(ref a, _) = self {
-			if a == v {
-				Ok(())
-			} else {
-				Err("incorrect identity")?
-			}
-		} else {
-			Err("not vouched")?
-		}
-	}
-}
-
-// Note that accessing this struct isn't free. It requires a storage read,
-// but that is pretty much unavoidable.
-pub struct MaxMembersGetter<I>(sp_std::marker::PhantomData<I>);
-impl<I> Get<u32> for MaxMembersGetter<I>
-	where I: Instance,
-{
-	fn get() -> u32 {
-		MaxMembers::<I>::get()
-	}
-}
-
-// This module's storage items.
-decl_storage! {
-	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Society {
-		/// The first member.
-		pub Founder get(fn founder) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
-			Option<T::AccountId>;
-
-		/// A hash of the rules of this society concerning membership. Can only be set once and
-		/// only by the founder.
-		pub Rules get(fn rules): Option<T::Hash>;
-
-		/// The current set of candidates; bidders that are attempting to become members.
-		pub Candidates get(fn candidates): WeakBoundedVec<
-			Bid<T::AccountId, BalanceOf<T, I>>,
-			T::MaxCandidateIntake,
-		>;
-
-		/// The set of suspended candidates.
-		pub SuspendedCandidates get(fn suspended_candidate):
-			map hasher(twox_64_concat) T::AccountId
-			=> Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
-
-		/// Amount of our account balance that is specifically for the next round's bid(s).
-		pub Pot get(fn pot) config(): BalanceOf<T, I>;
-
-		/// The most primary from the most recently approved members.
-		pub Head get(fn head) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
-			Option<T::AccountId>;
-
-		/// The current set of members, ordered.
-		pub Members get(fn members): WeakBoundedVec<T::AccountId, MaxMembersGetter<I>>;
-
-		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map hasher(twox_64_concat) T::AccountId => bool;
-
-		/// The current bids, stored ordered by the value of the bid.
-		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
-
-		/// Members currently vouching or banned from vouching again
-		Vouching get(fn vouching): map hasher(twox_64_concat) T::AccountId => Option<VouchingStatus>;
-
-		/// Pending payouts; ordered by block number, with the amount that should be paid out.
-		Payouts: map hasher(twox_64_concat) T::AccountId => WeakBoundedVec<
-			(T::BlockNumber, BalanceOf<T, I>),
-			T::MaxPayouts,
-		>;
-
-		/// The ongoing number of losing votes cast by the member.
-		Strikes: map hasher(twox_64_concat) T::AccountId => StrikeCount;
-
-		/// Double map from Candidate -> Voter -> (Maybe) Vote.
-		Votes: double_map
-			hasher(twox_64_concat) T::AccountId,
-			hasher(twox_64_concat) T::AccountId
-		=> Option<Vote>;
-
-		/// The defending member currently being challenged.
-		Defender get(fn defender): Option<T::AccountId>;
-
-		/// Votes for the defender.
-		DefenderVotes: map hasher(twox_64_concat) T::AccountId => Option<Vote>;
-
-		/// The max number of members for the society at one time.
-		MaxMembers get(fn max_members): u32;
-	}
-	add_extra_genesis {
-		config(members): Vec<T::AccountId>;
-		config(max_members): u32;
-		build(|config| {
-			// We need to make sure to set `MaxMembers` first so that we can
-			// correctly create a bounded vec below.
-			MaxMembers::<I>::put(config.max_members);
-			let mut m = config.members.clone();
-			m.sort();
-			let bounded_members: WeakBoundedVec<T::AccountId, MaxMembersGetter<I>>
-				= m.try_into().expect("Too many genesis members");
-			Members::<T, I>::put(bounded_members);
-		})
-	}
 }
 
 // The module's dispatchable functions.
@@ -1102,6 +940,50 @@ decl_module! {
 	}
 }
 
+decl_event! {
+	/// Events for this module.
+	pub enum Event<T, I=DefaultInstance> where
+		AccountId = <T as system::Config>::AccountId,
+		Balance = BalanceOf<T, I>
+	{
+		/// The society is founded by the given identity. \[founder\]
+		Founded(AccountId),
+		/// A membership bid just happened. The given account is the candidate's ID and their offer
+		/// is the second. \[candidate_id, offer\]
+		Bid(AccountId, Balance),
+		/// A membership bid just happened by vouching. The given account is the candidate's ID and
+		/// their offer is the second. The vouching party is the third. \[candidate_id, offer, vouching\]
+		Vouch(AccountId, Balance, AccountId),
+		/// A \[candidate\] was dropped (due to an excess of bids in the system).
+		AutoUnbid(AccountId),
+		/// A \[candidate\] was dropped (by their request).
+		Unbid(AccountId),
+		/// A \[candidate\] was dropped (by request of who vouched for them).
+		Unvouch(AccountId),
+		/// A group of candidates have been inducted. The batch's primary is the first value, the
+		/// batch in full is the second. \[primary, candidates\]
+		Inducted(AccountId, Vec<AccountId>),
+		/// A suspended member has been judged. \[who, judged\]
+		SuspendedMemberJudgement(AccountId, bool),
+		/// A \[candidate\] has been suspended
+		CandidateSuspended(AccountId),
+		/// A \[member\] has been suspended
+		MemberSuspended(AccountId),
+		/// A \[member\] has been challenged
+		Challenged(AccountId),
+		/// A vote has been placed \[candidate, voter, vote\]
+		Vote(AccountId, AccountId, bool),
+		/// A vote has been placed for a defending member \[voter, vote\]
+		DefenderVote(AccountId, bool),
+		/// A new \[max\] member count has been set
+		NewMaxMembers(u32),
+		/// Society is unfounded. \[founder\]
+		Unfounded(AccountId),
+		/// Some funds were deposited into the society account. \[value\]
+		Deposit(Balance),
+	}
+}
+
 decl_error! {
 	/// Errors for this module.
 	pub enum Error for Module<T: Config<I>, I: Instance> {
@@ -1144,47 +1026,84 @@ decl_error! {
 	}
 }
 
-decl_event! {
-	/// Events for this module.
-	pub enum Event<T, I=DefaultInstance> where
-		AccountId = <T as system::Config>::AccountId,
-		Balance = BalanceOf<T, I>
-	{
-		/// The society is founded by the given identity. \[founder\]
-		Founded(AccountId),
-		/// A membership bid just happened. The given account is the candidate's ID and their offer
-		/// is the second. \[candidate_id, offer\]
-		Bid(AccountId, Balance),
-		/// A membership bid just happened by vouching. The given account is the candidate's ID and
-		/// their offer is the second. The vouching party is the third. \[candidate_id, offer, vouching\]
-		Vouch(AccountId, Balance, AccountId),
-		/// A \[candidate\] was dropped (due to an excess of bids in the system).
-		AutoUnbid(AccountId),
-		/// A \[candidate\] was dropped (by their request).
-		Unbid(AccountId),
-		/// A \[candidate\] was dropped (by request of who vouched for them).
-		Unvouch(AccountId),
-		/// A group of candidates have been inducted. The batch's primary is the first value, the
-		/// batch in full is the second. \[primary, candidates\]
-		Inducted(AccountId, Vec<AccountId>),
-		/// A suspended member has been judged. \[who, judged\]
-		SuspendedMemberJudgement(AccountId, bool),
-		/// A \[candidate\] has been suspended
-		CandidateSuspended(AccountId),
-		/// A \[member\] has been suspended
-		MemberSuspended(AccountId),
-		/// A \[member\] has been challenged
-		Challenged(AccountId),
-		/// A vote has been placed \[candidate, voter, vote\]
-		Vote(AccountId, AccountId, bool),
-		/// A vote has been placed for a defending member \[voter, vote\]
-		DefenderVote(AccountId, bool),
-		/// A new \[max\] member count has been set
-		NewMaxMembers(u32),
-		/// Society is unfounded. \[founder\]
-		Unfounded(AccountId),
-		/// Some funds were deposited into the society account. \[value\]
-		Deposit(Balance),
+// This module's storage items.
+decl_storage! {
+	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Society {
+		/// The first member.
+		pub Founder get(fn founder) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
+			Option<T::AccountId>;
+
+		/// A hash of the rules of this society concerning membership. Can only be set once and
+		/// only by the founder.
+		pub Rules get(fn rules): Option<T::Hash>;
+
+		/// The current set of candidates; bidders that are attempting to become members.
+		pub Candidates get(fn candidates): WeakBoundedVec<
+			Bid<T::AccountId, BalanceOf<T, I>>,
+			T::MaxCandidateIntake,
+		>;
+
+		/// The set of suspended candidates.
+		pub SuspendedCandidates get(fn suspended_candidate):
+			map hasher(twox_64_concat) T::AccountId
+			=> Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
+
+		/// Amount of our account balance that is specifically for the next round's bid(s).
+		pub Pot get(fn pot) config(): BalanceOf<T, I>;
+
+		/// The most primary from the most recently approved members.
+		pub Head get(fn head) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
+			Option<T::AccountId>;
+
+		/// The current set of members, ordered.
+		pub Members get(fn members): WeakBoundedVec<T::AccountId, MaxMembersGetter<I>>;
+
+		/// The set of suspended members.
+		pub SuspendedMembers get(fn suspended_member): map hasher(twox_64_concat) T::AccountId => bool;
+
+		/// The current bids, stored ordered by the value of the bid.
+		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
+
+		/// Members currently vouching or banned from vouching again
+		Vouching get(fn vouching): map hasher(twox_64_concat) T::AccountId => Option<VouchingStatus>;
+
+		/// Pending payouts; ordered by block number, with the amount that should be paid out.
+		Payouts: map hasher(twox_64_concat) T::AccountId => WeakBoundedVec<
+			(T::BlockNumber, BalanceOf<T, I>),
+			T::MaxPayouts,
+		>;
+
+		/// The ongoing number of losing votes cast by the member.
+		Strikes: map hasher(twox_64_concat) T::AccountId => StrikeCount;
+
+		/// Double map from Candidate -> Voter -> (Maybe) Vote.
+		Votes: double_map
+			hasher(twox_64_concat) T::AccountId,
+			hasher(twox_64_concat) T::AccountId
+		=> Option<Vote>;
+
+		/// The defending member currently being challenged.
+		Defender get(fn defender): Option<T::AccountId>;
+
+		/// Votes for the defender.
+		DefenderVotes: map hasher(twox_64_concat) T::AccountId => Option<Vote>;
+
+		/// The max number of members for the society at one time.
+		MaxMembers get(fn max_members): u32;
+	}
+	add_extra_genesis {
+		config(members): Vec<T::AccountId>;
+		config(max_members): u32;
+		build(|config| {
+			// We need to make sure to set `MaxMembers` first so that we can
+			// correctly create a bounded vec below.
+			MaxMembers::<I>::put(config.max_members);
+			let mut m = config.members.clone();
+			m.sort();
+			let bounded_members: WeakBoundedVec<T::AccountId, MaxMembersGetter<I>>
+				= m.try_into().expect("Too many genesis members");
+			Members::<T, I>::put(bounded_members);
+		})
 	}
 }
 
