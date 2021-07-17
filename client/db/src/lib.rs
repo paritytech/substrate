@@ -1894,7 +1894,7 @@ fn apply_index_ops<Block: BlockT>(
 fn apply_indexed_body<Block: BlockT>(
 	transaction: &mut Transaction<DbHash>,
 	body: Vec<Vec<u8>>,
-)  {
+) {
 	for extrinsic in body {
 		let hash = sp_runtime::traits::BlakeTwo256::hash(&extrinsic);
 		transaction.store(
