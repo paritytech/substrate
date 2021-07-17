@@ -101,7 +101,7 @@ impl<B: BlockT> InformantDisplay<B> {
 		) {
 			(_, _, _, Some(warp)) => (
 				"⏩",
-				"Warp sync".into(),
+				"Warping".into(),
 				format!(", {}, ({:.2}) Mib", warp.phase, (warp.total_bytes as f32) / (1024f32 * 1024f32)),
 			),
 			(_, _, Some(state), _) => (

@@ -247,6 +247,7 @@ pub(crate) async fn import_single_block_metered<B: BlockT, V: Verifier<B>, Trans
 	import_block.justifications = justifications;
 	import_block.post_hash = Some(hash);
 	import_block.import_existing = block.import_existing;
+	
 	if let Some(state) = block.state {
 		import_block.state_action = StateAction::ApplyChanges(crate::StorageChanges::Import(state));
 	} else if block.skip_execution {

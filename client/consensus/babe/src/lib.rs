@@ -1129,7 +1129,7 @@ where
 		let parent_hash = *block.header.parent_hash();
 
 		if block.with_state() {
-			// When importting whole state we don't calculate epoch descriptor, but rater
+			// When importing whole state we don't calculate epoch descriptor, but rather
 			// read it from the state after import.
 			return Ok((block, Default::default()))
 		}
@@ -1293,7 +1293,7 @@ impl<Block, Client, Inner> BabeBlockImport<Block, Client, Inner> where
 	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
 	Inner::Error: Into<ConsensusError>,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>
-	+ AuxStore + ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync,
+		+ AuxStore + ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync,
 	Client::Api: BabeApi<Block> + ApiExt<Block>,
 {
 	/// Import whole state after warp sync.
