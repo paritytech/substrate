@@ -264,7 +264,6 @@ pub mod state_request_handler;
 pub mod warp_request_handler;
 pub mod config;
 pub mod error;
-pub mod gossip;
 pub mod network_state;
 pub mod transactions;
 

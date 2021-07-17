@@ -74,6 +74,7 @@ use sp_arithmetic::traits::Saturating;
 use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Justifications, Storage};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
+	Hash,
 };
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
@@ -384,6 +385,7 @@ struct PendingBlock<Block: BlockT> {
 	header: Block::Header,
 	justifications: Option<Justifications>,
 	body: Option<Vec<Block::Extrinsic>>,
+	indexed_body: Option<Vec<Vec<u8>>>,
 	leaf_state: NewBlockState,
 }
 
@@ -824,6 +826,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		&mut self,
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
+		indexed_body: Option<Vec<Vec<u8>>>,
 		justifications: Option<Justifications>,
 		leaf_state: NewBlockState,
 	) -> ClientResult<()> {
@@ -834,6 +837,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		self.pending_block = Some(PendingBlock {
 			header,
 			body,
+			indexed_body,
 			justifications,
 			leaf_state,
 		});
@@ -1068,7 +1072,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	fn new_test_with_tx_storage(
+	pub fn new_test_with_tx_storage(
 		keep_blocks: u32,
 		canonicalization_delay: u64,
 		transaction_storage: TransactionStorageMode,
@@ -1394,6 +1398,16 @@ impl<Block: BlockT> Backend<Block> {
 					TransactionStorageMode::StorageChain => {
 						let body = apply_index_ops::<Block>(&mut transaction, body, operation.index_ops);
 						transaction.set_from_vec(columns::BODY, &lookup_key, body);
+					},
+				}
+			}
+			if let Some(body) = pending_block.indexed_body {
+				match self.transaction_storage {
+					TransactionStorageMode::BlockBody => {
+						debug!(target: "db", "Commit: ignored indexed block body");
+					},
+					TransactionStorageMode::StorageChain => {
+						apply_indexed_body::<Block>(&mut transaction, body);
 					},
 				}
 			}
@@ -1883,6 +1897,20 @@ fn apply_index_ops<Block: BlockT>(
 		renewed_map.len()
 	);
 	extrinsic_headers.encode()
+}
+
+fn apply_indexed_body<Block: BlockT>(
+	transaction: &mut Transaction<DbHash>,
+	body: Vec<Vec<u8>>,
+) {
+	for extrinsic in body {
+		let hash = sp_runtime::traits::BlakeTwo256::hash(&extrinsic);
+		transaction.store(
+			columns::TRANSACTION,
+			DbHash::from_slice(hash.as_ref()),
+			extrinsic,
+		);
+	}
 }
 
 impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: BlockT {
@@ -2443,7 +2471,7 @@ pub(crate) mod tests {
 		};
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
-		op.set_block_data(header, Some(body), None, NewBlockState::Best).unwrap();
+		op.set_block_data(header, Some(body), None, None, NewBlockState::Best).unwrap();
 		if let Some(index) = transaction_index {
 			op.update_transaction_index(index).unwrap();
 		}
@@ -2484,6 +2512,7 @@ pub(crate) mod tests {
 					op.set_block_data(
 						header,
 						Some(vec![]),
+						None,
 						None,
 						NewBlockState::Best,
 					).unwrap();
@@ -2541,6 +2570,7 @@ pub(crate) mod tests {
 				header.clone(),
 				Some(vec![]),
 				None,
+				None,
 				NewBlockState::Best,
 			).unwrap();
 
@@ -2582,6 +2612,7 @@ pub(crate) mod tests {
 			op.set_block_data(
 				header,
 				Some(vec![]),
+				None,
 				None,
 				NewBlockState::Best,
 			).unwrap();
@@ -2626,6 +2657,7 @@ pub(crate) mod tests {
 				header,
 				Some(vec![]),
 				None,
+				None,
 				NewBlockState::Best,
 			).unwrap();
 
@@ -2663,6 +2695,7 @@ pub(crate) mod tests {
 				header,
 				Some(vec![]),
 				None,
+				None,
 				NewBlockState::Best,
 			).unwrap();
 
@@ -2699,6 +2732,7 @@ pub(crate) mod tests {
 				header,
 				Some(vec![]),
 				None,
+				None,
 				NewBlockState::Best,
 			).unwrap();
 
@@ -2733,6 +2767,7 @@ pub(crate) mod tests {
 			op.set_block_data(
 				header,
 				Some(vec![]),
+				None,
 				None,
 				NewBlockState::Best,
 			).unwrap();
@@ -3071,6 +3106,7 @@ pub(crate) mod tests {
 				header.clone(),
 				Some(vec![]),
 				None,
+				None,
 				NewBlockState::Best,
 			).unwrap();
 
@@ -3110,6 +3146,7 @@ pub(crate) mod tests {
 				header,
 				Some(vec![]),
 				None,
+				None,
 				NewBlockState::Normal,
 			).unwrap();
 
@@ -3122,7 +3159,7 @@ pub(crate) mod tests {
 			let header = backend.blockchain().header(BlockId::Hash(hash1)).unwrap().unwrap();
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, BlockId::Hash(hash0)).unwrap();
-			op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
+			op.set_block_data(header, None, None, None, NewBlockState::Best).unwrap();
 			backend.commit_operation(op).unwrap();
 		}
 
