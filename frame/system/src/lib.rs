@@ -620,6 +620,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
+	/// The extrinsic index for the first non-inherent extrinsic, if that exists.
+	/// Used within executive to trigger the `on_post_inherents` hook.
+	#[pallet::storage]
+	pub(super) type FirstNonInherentIndex<T: Config> = StorageValue<_, Option<u32>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub changes_trie_config: Option<ChangesTrieConfiguration>,
@@ -1328,6 +1333,7 @@ impl<T: Config> Pallet<T> {
 
 		// Remove previous block data from storage
 		BlockWeight::<T>::kill();
+		FirstNonInherentIndex::<T>::kill();
 
 		// Kill inspectable storage entries in state when `InitKind::Full`.
 		if let InitKind::Full = kind {
@@ -1483,6 +1489,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
+	///
+	/// Returns the next extrinsic index.
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
 		info.weight = extract_actual_weight(r, &info);
 		Self::deposit_event(
@@ -1553,6 +1561,17 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Ok(())
+	}
+
+	/// Get the first non-inherent extrinsic index if one exists.
+	pub fn maybe_first_non_inherent_index() -> Option<u32> {
+		FirstNonInherentIndex::<T>::get()
+	}
+
+	/// Set the first non-inherent extrinsic index. Called by executive in order to set a trigger
+	/// for when the `on_post_inherent` hook should be called.
+	pub fn set_first_non_inherent_index(index: Option<u32>) {
+		FirstNonInherentIndex::<T>::set(index);
 	}
 }
 
