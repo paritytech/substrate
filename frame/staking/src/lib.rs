@@ -2362,7 +2362,7 @@ impl<T: Config> Pallet<T> {
 		let total_reward_points = era_reward_points.total;
 		let validator_reward_points = era_reward_points.individual.get(&ledger.stash)
 			.map(|points| *points)
-			.unwrap_or_else(|| Zero::zero());
+			.unwrap_or(Zero::zero());
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
