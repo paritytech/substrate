@@ -22,7 +22,7 @@ use crate as pallet_society;
 
 use frame_support::{
 	parameter_types, ord_parameter_types,
-	traits::{OnInitialize, OnFinalize},
+	traits::{GenesisBuild, OnInitialize, OnFinalize},
 };
 use frame_support_test::TestRandomness;
 use sp_core::H256;
