@@ -1487,7 +1487,7 @@ pub mod pallet {
 			<Bonded<T>>::insert(&stash, &controller);
 			<Payee<T>>::insert(&stash, payee);
 
-			let current_era = CurrentEra::<T>::get().unwrap_or(0);
+			let current_era = CurrentEra::<T>::get().unwrap_or_else(|| 0);
 			let history_depth = Self::history_depth();
 			let last_reward_era = current_era.saturating_sub(history_depth);
 
@@ -1596,7 +1596,7 @@ pub mod pallet {
 				ensure!(ledger.active >= min_active_bond, Error::<T>::InsufficientBond);
 
 				// Note: in case there is no current era it is fine to bond one era more.
-				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
+				let era = Self::current_era().unwrap_or_else(|| 0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
@@ -1734,7 +1734,7 @@ pub mod pallet {
 			let nominations = Nominations {
 				targets,
 				// Initial nominations are considered submitted at era 0. See `Nominations` doc
-				submitted_in: Self::current_era().unwrap_or(0),
+				submitted_in: Self::current_era().unwrap_or_else(|| 0),
 				suppressed: false,
 			};
 
@@ -2113,8 +2113,8 @@ pub mod pallet {
 			ensure_root(origin)?;
 			if let Some(current_era) = Self::current_era() {
 				HistoryDepth::<T>::mutate(|history_depth| {
-					let last_kept = current_era.checked_sub(*history_depth).unwrap_or(0);
-					let new_last_kept = current_era.checked_sub(new_history_depth).unwrap_or(0);
+					let last_kept = current_era.checked_sub(*history_depth).unwrap_or_else(|| 0);
+					let new_last_kept = current_era.checked_sub(new_history_depth).unwrap_or_else(|| 0);
 					for era_index in last_kept..new_last_kept {
 						Self::clear_era_information(era_index);
 					}
@@ -2488,7 +2488,7 @@ impl<T: Config> Pallet<T> {
 				});
 
 			let era_length = session_index.checked_sub(current_era_start_session_index)
-				.unwrap_or(0); // Must never happen.
+				.unwrap_or_else(|| 0); // Must never happen.
 
 			match ForceEra::<T>::get() {
 				// Will be set to `NotForcing` again if a new era has been triggered.
@@ -2522,7 +2522,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Start a session potentially starting an era.
 	fn start_session(start_session: SessionIndex) {
-		let next_active_era = Self::active_era().map(|e| e.index + 1).unwrap_or(0);
+		let next_active_era = Self::active_era().map(|e| e.index + 1).unwrap_or_else(|| 0);
 		// This is only `Some` when current era has already progressed to the next era, while the
 		// active era is one behind (i.e. in the *last session of the active era*, or *first session
 		// of the new current era*, depending on how you look at it).
@@ -2558,7 +2558,7 @@ impl<T: Config> Pallet<T> {
 	/// * update `BondedEras` and apply slashes.
 	fn start_era(start_session: SessionIndex) {
 		let active_era = ActiveEra::<T>::mutate(|active_era| {
-			let new_index = active_era.as_ref().map(|info| info.index + 1).unwrap_or(0);
+			let new_index = active_era.as_ref().map(|info| info.index + 1).unwrap_or_else(|| 0);
 			*active_era = Some(ActiveEraInfo {
 				index: new_index,
 				// Set new active era start in next `on_finalize`. To guarantee usage of `Time`
@@ -2627,7 +2627,7 @@ impl<T: Config> Pallet<T> {
 	) -> Vec<T::AccountId> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
-			*s = Some(s.map(|s| s + 1).unwrap_or(0));
+			*s = Some(s.map(|s| s + 1).unwrap_or_else(|| 0));
 			s.unwrap()
 		});
 		ErasStartSessionIndex::<T>::insert(&new_planned_era, &start_session_index);
@@ -2675,7 +2675,7 @@ impl<T: Config> Pallet<T> {
 					warn,
 					"chain does not have enough staking candidates to operate for era {:?} ({} \
 					elected, minimum is {})",
-					CurrentEra::<T>::get().unwrap_or(0),
+					CurrentEra::<T>::get().unwrap_or_else(|| 0),
 					exposures.len(),
 					Self::minimum_validator_count(),
 				),
@@ -3017,10 +3017,10 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
-		let current_era = Self::current_era().unwrap_or(0);
+		let current_era = Self::current_era().unwrap_or_else(|| 0);
 		let current_session = Self::current_planned_session();
 		let current_era_start_session_index =
-			Self::eras_start_session_index(current_era).unwrap_or(0);
+			Self::eras_start_session_index(current_era).unwrap_or_else(|| 0);
 		// Number of session in the current era or the maximum session per era if reached.
 		let era_progress = current_session
 			.saturating_sub(current_era_start_session_index)
@@ -3110,7 +3110,7 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		targets.into_iter().for_each(|v| {
 			let stake: BalanceOf<T> = target_stake
 				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
-				.unwrap_or(MinNominatorBond::<T>::get() * 100u32.into());
+				.unwrap_or_else(|| MinNominatorBond::<T>::get() * 100u32.into());
 			<Bonded<T>>::insert(v.clone(), v.clone());
 			<Ledger<T>>::insert(
 				v.clone(),
@@ -3186,7 +3186,7 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
-				.unwrap_or(0);
+				.unwrap_or_else(|| 0);
 
 			validators.into_iter().map(|v| {
 				let exposure = Self::eras_stakers(current_era, &v);
@@ -3200,7 +3200,7 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
-				.unwrap_or(0);
+				.unwrap_or_else(|| 0);
 
 			validators.into_iter().map(|v| {
 				let exposure = Self::eras_stakers(current_era, &v);
