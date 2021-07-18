@@ -301,6 +301,7 @@ pub mod pallet {
 		/// Indicator for whether an emergency origin is even allowed to happen. Some chains may want
 		/// to set this permanently to `false`, others may want to condition it on things such as
 		/// an upgrade having happened recently.
+		#[pallet::constant]
 		type InstantAllowed: Get<bool>;
 
 		/// Minimum voting period allowed for a fast-track referendum.
@@ -355,6 +356,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The maximum number of public proposals that can exist at any time.
+		#[pallet::constant]
 		type MaxProposals: Get<u32>;
 	}
 

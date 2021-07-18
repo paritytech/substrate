@@ -187,6 +187,7 @@ pub mod pallet {
 		type SpendFunds: SpendFunds<Self, I>;
 
 		/// The maximum number of approvals that can wait in the spending queue.
+		#[pallet::constant]
 		type MaxApprovals: Get<u32>;
 	}
 

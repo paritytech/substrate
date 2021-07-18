@@ -148,6 +148,7 @@ pub mod pallet {
 
 		/// The maximum weight that may be scheduled per block for any dispatchables of less priority
 		/// than `schedule::HARD_DEADLINE`.
+		#[pallet::constant]
 		type MaximumWeight: Get<Weight>;
 
 		/// Required origin to schedule or cancel calls.
@@ -155,6 +156,7 @@ pub mod pallet {
 
 		/// The maximum number of scheduled calls in the queue for a single block.
 		/// Not strictly enforced, but used for weight estimation.
+		#[pallet::constant]
 		type MaxScheduledPerBlock: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
