@@ -275,7 +275,8 @@ pub use types::{Bid, BidKind, Judgement, Payout, StrikeCount, Vote, VouchingStat
 pub use pallet::*;
 
 type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+type NegativeImbalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 // Note that accessing this struct isn't free. It requires a storage read,
 // but that is pretty much unavoidable.
