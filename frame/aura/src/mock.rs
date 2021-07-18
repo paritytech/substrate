@@ -80,8 +80,13 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub const MaxAuthorities: u32 = 10;
+}
+
 impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
+	type MaxAuthorities = MaxAuthorities;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {

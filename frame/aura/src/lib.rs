@@ -37,10 +37,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
-use codec::{Encode, Decode};
+use sp_std::{convert::{TryFrom, TryInto}, prelude::*};
+use codec::{Encode, Decode, MaxEncodedLen};
 use frame_support::{
 	Parameter, traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet}, ConsensusEngineId,
+	BoundedSlice, BoundedVec,
 };
 use sp_runtime::{
 	RuntimeAppPublic,
@@ -63,10 +64,14 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: pallet_timestamp::Config + frame_system::Config {
 		/// The identifier type for an authority.
-		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
+		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default
+			+ MaybeSerializeDeserialize + MaxEncodedLen;
+		/// The maximum number of authorities that the pallet can hold.
+		type MaxAuthorities: Get<u32>;
 	}
 
 	#[pallet::pallet]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
 
 	#[pallet::hooks]
@@ -90,7 +95,8 @@ pub mod pallet {
 	/// The current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+	pub(super) type Authorities<T: Config> =
+		StorageValue<_, BoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The current slot of this block.
 	///
@@ -120,12 +126,12 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn change_authorities(new: Vec<T::AuthorityId>) {
+	fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>) {
 		<Authorities<T>>::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
-			ConsensusLog::AuthoritiesChange(new).encode()
+			ConsensusLog::AuthoritiesChange(new.into_inner()).encode()
 		);
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
@@ -133,7 +139,9 @@ impl<T: Config> Pallet<T> {
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
-			<Authorities<T>>::put(authorities);
+			let bounded = <BoundedSlice<'_, _, T::MaxAuthorities>>::try_from(authorities)
+				.expect("Initial authority set must be less than T::MaxAuthorities");
+			<Authorities<T>>::put(bounded);
 		}
 	}
 
@@ -179,8 +187,12 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		if changed {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 			let last_authorities = Self::authorities();
-			if next_authorities != last_authorities {
-				Self::change_authorities(next_authorities);
+			if last_authorities != next_authorities {
+				let bounded = match next_authorities.try_into() {
+					Ok(v) => v,
+					Err(_) => return,
+				};
+				Self::change_authorities(bounded);
 			}
 		}
 	}
