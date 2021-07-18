@@ -264,10 +264,10 @@ use sp_runtime::{Percent,
 };
 use frame_support::{
 	ensure,
-	dispatch::DispatchResult, PalletId, WeakBoundedVec,
+	dispatch::DispatchResult, PalletId, BoundedVec, WeakBoundedVec,
 };
 use frame_support::traits::{
-	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
+	ConstU32, Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
 	ExistenceRequirement::AllowDeath, EnsureOrigin, OnUnbalanced, Imbalance
 };
 
@@ -286,6 +286,8 @@ impl<T: Config<I>, I: 'static> Get<u32> for MaxMembersGetter<T, I> {
 	}
 }
 
+pub type MaxBidCount = ConstU32<1000>;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
@@ -294,6 +296,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -1150,8 +1153,11 @@ pub mod pallet {
 
 	/// The current bids, stored ordered by the value of the bid.
 	#[pallet::storage]
-	pub(crate) type Bids<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<Bid<T::AccountId, BalanceOf<T, I>>>, ValueQuery>;
+	pub(crate) type Bids<T: Config<I>, I: 'static = ()> = StorageValue<
+		_,
+		BoundedVec<Bid<T::AccountId, BalanceOf<T, I>>, MaxBidCount>,
+		ValueQuery,
+	>;
 
 	/// Members currently vouching or banned from vouching again
 	#[pallet::storage]
@@ -1238,14 +1244,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Puts a bid into storage ordered by smallest to largest value.
 	/// Allows a maximum of 1000 bids in queue, removing largest value people first.
 	fn put_bid(
-		mut bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>,
+		mut bids: BoundedVec<Bid<T::AccountId, BalanceOf<T, I>>, MaxBidCount>,
 		who: &T::AccountId,
 		value: BalanceOf<T, I>,
 		bid_kind: BidKind<T::AccountId, BalanceOf<T, I>>
 	) {
-		const MAX_BID_COUNT: usize = 1000;
-
-		match bids.binary_search_by(|bid| bid.value.cmp(&value)) {
+		let res = match bids.binary_search_by(|bid| bid.value.cmp(&value)) {
 			// Insert new elements after the existing ones. This ensures new bids
 			// with the same bid value are further down the list than existing ones.
 			Ok(pos) => {
@@ -1261,39 +1265,38 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// If the element is not at the end of the list, insert the new element
 				// in the spot.
 				if let Some((p, _)) = different_bid {
-					bids.insert(p, Bid {
+					bids.try_insert(p, Bid {
 						value,
 						who: who.clone(),
-						kind: bid_kind,
-					});
+						kind: bid_kind.clone(),
+					})
 				// If the element is at the end of the list, push the element on the end.
 				} else {
-					bids.push(Bid {
+					bids.try_push(Bid {
 						value,
 						who: who.clone(),
-						kind: bid_kind,
-					});
+						kind: bid_kind.clone(),
+					})
 				}
 			},
-			Err(pos) => bids.insert(pos, Bid {
+			Err(pos) => bids.try_insert(pos, Bid {
 				value,
 				who: who.clone(),
-				kind: bid_kind,
+				kind: bid_kind.clone(),
 			}),
-		}
+		};
 		// Keep it reasonably small.
-		if bids.len() > MAX_BID_COUNT {
-			let Bid { who: popped, kind, .. } = bids.pop().expect("b.len() > 1000; qed");
-			match kind {
+		if res.is_err() {
+			match bid_kind {
 				BidKind::Deposit(deposit) => {
-					let err_amount = T::Currency::unreserve(&popped, deposit);
+					let err_amount = T::Currency::unreserve(who, deposit);
 					debug_assert!(err_amount.is_zero());
 				}
 				BidKind::Vouch(voucher, _) => {
 					<Vouching<T, I>>::remove(&voucher);
 				}
 			}
-			Self::deposit_event(Event::AutoUnbid(popped));
+			Self::deposit_event(Event::AutoUnbid(who.clone()));
 		}
 
 		<Bids<T, I>>::put(bids);
