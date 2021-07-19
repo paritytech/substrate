@@ -20,3 +20,4 @@
 mod pallet_id;
 
 pub use pallet_id::PalletIdCmd;
+

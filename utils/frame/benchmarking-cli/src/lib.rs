@@ -18,9 +18,8 @@
 mod command;
 mod writer;
 
-use std::fmt::Debug;
-
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
+use std::fmt::Debug;
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be used
 // like crate names with `_`

@@ -17,20 +17,22 @@
 
 //! Implementation of the `palletid` subcommand
 
-use std::convert::{TryFrom, TryInto};
-
-use frame_support::PalletId;
 use sc_cli::{
-	utils::print_from_uri, with_crypto_scheme, CryptoSchemeFlag, Error, KeystoreParams,
-	OutputTypeFlag,
+	Error, utils::print_from_uri, CryptoSchemeFlag,
+	OutputTypeFlag, KeystoreParams, with_crypto_scheme,
 };
-use sp_core::crypto::{Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::AccountIdConversion;
+use sp_core::crypto::{Ss58Codec, Ss58AddressFormat};
+use std::convert::{TryInto, TryFrom};
 use structopt::StructOpt;
+use frame_support::PalletId;
 
 /// The `palletid` command
 #[derive(Debug, StructOpt)]
-#[structopt(name = "palletid", about = "Inspect a module ID address")]
+#[structopt(
+	name = "palletid",
+	about = "Inspect a module ID address"
+)]
 pub struct PalletIdCmd {
 	/// The module ID used to derive the account
 	id: String,
@@ -61,18 +63,18 @@ pub struct PalletIdCmd {
 impl PalletIdCmd {
 	/// runs the command
 	pub fn run<R>(&self) -> Result<(), Error>
-	where
-		R: frame_system::Config,
-		R::AccountId: Ss58Codec,
+		where
+			R: frame_system::Config,
+			R::AccountId: Ss58Codec,
 	{
 		if self.id.len() != 8 {
 			Err("a module id must be a string of 8 characters")?
 		}
 		let password = self.keystore_params.read_password()?;
 
-		let id_fixed_array: [u8; 8] = self.id.as_bytes().try_into().map_err(|_| {
-			"Cannot convert argument to palletid: argument should be 8-character string"
-		})?;
+		let id_fixed_array: [u8; 8] = self.id.as_bytes()
+			.try_into()
+			.map_err(|_| "Cannot convert argument to palletid: argument should be 8-character string")?;
 
 		let account_id: R::AccountId = PalletId(id_fixed_array).into_account();
 
@@ -89,3 +91,4 @@ impl PalletIdCmd {
 		Ok(())
 	}
 }
+
