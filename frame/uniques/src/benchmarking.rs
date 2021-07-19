@@ -201,10 +201,10 @@ benchmarks_instance_pallet! {
 		Uniques::<T, I>::force_asset_status(
 			SystemOrigin::Root.into(),
 			class,
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
+			Box::new(caller_lookup.clone()),
+			Box::new(caller_lookup.clone()),
+			Box::new(caller_lookup.clone()),
+			Box::new(caller_lookup.clone()),
 			true,
 			false,
 		)?;
@@ -265,7 +265,13 @@ benchmarks_instance_pallet! {
 		let target0 = T::Lookup::unlookup(account("target", 0, SEED));
 		let target1 = T::Lookup::unlookup(account("target", 1, SEED));
 		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
-	}: _(SystemOrigin::Signed(caller), Default::default(), target0.clone(), target1.clone(), target2.clone())
+	}: _(
+		SystemOrigin::Signed(caller),
+		Default::default(),
+		Box::new(target0.clone()),
+		Box::new(target1.clone()),
+		Box::new(target2.clone())
+	)
 	verify {
 		assert_last_event::<T, I>(Event::TeamChanged(
 			class,
@@ -280,10 +286,10 @@ benchmarks_instance_pallet! {
 		let origin = T::ForceOrigin::successful_origin();
 		let call = Call::<T, I>::force_asset_status(
 			class,
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
+			Box::new(caller_lookup.clone()),
+			Box::new(caller_lookup.clone()),
+			Box::new(caller_lookup.clone()),
+			Box::new(caller_lookup.clone()),
 			true,
 			false,
 		);

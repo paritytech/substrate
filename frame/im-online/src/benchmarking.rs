@@ -68,14 +68,14 @@ benchmarks! {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
-	}: _(RawOrigin::None, input_heartbeat, signature)
+	}: _(RawOrigin::None, Box::new(input_heartbeat), signature)
 
 	#[extra]
 	validate_unsigned {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
-		let call = Call::heartbeat(input_heartbeat, signature);
+		let call = Call::heartbeat(Box::new(input_heartbeat), signature);
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)?;
 	}
@@ -84,7 +84,7 @@ benchmarks! {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
-		let call = Call::heartbeat(input_heartbeat, signature);
+		let call = Call::heartbeat(Box::new(input_heartbeat), signature);
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)?;
 		call.dispatch_bypass_filter(RawOrigin::None.into())?;

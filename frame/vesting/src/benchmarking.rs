@@ -177,7 +177,7 @@ benchmarks! {
 			per_block: 10u32.into(),
 			starting_block: 1u32.into(),
 		};
-	}: _(RawOrigin::Signed(caller), target_lookup, vesting_schedule)
+	}: _(RawOrigin::Signed(caller), Box::new(target_lookup), vesting_schedule)
 	verify {
 		assert_eq!(
 			T::MinVestedTransfer::get(),
@@ -209,7 +209,7 @@ benchmarks! {
 			per_block: 10u32.into(),
 			starting_block: 1u32.into(),
 		};
-	}: _(RawOrigin::Root, source_lookup, target_lookup, vesting_schedule)
+	}: _(RawOrigin::Root, Box::new(source_lookup), Box::new(target_lookup), vesting_schedule)
 	verify {
 		assert_eq!(
 			T::MinVestedTransfer::get(),

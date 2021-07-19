@@ -66,7 +66,7 @@ fn create_sub_accounts<T: Config>(who: &T::AccountId, s: u32) -> Result<Vec<(T::
 	// Set identity so `set_subs` does not fail.
 	let _ = T::Currency::make_free_balance_be(&who, BalanceOf::<T>::max_value());
 	let info = create_identity_info::<T>(1);
-	Identity::<T>::set_identity(who_origin.clone().into(), info)?;
+	Identity::<T>::set_identity(who_origin.clone().into(), Box::new(info))?;
 
 	Ok(subs)
 }
@@ -123,7 +123,7 @@ benchmarks! {
 
 			// Add an initial identity
 			let initial_info = create_identity_info::<T>(1);
-			Identity::<T>::set_identity(caller_origin.clone(), initial_info)?;
+			Identity::<T>::set_identity(caller_origin.clone(), Box::new(initial_info))?;
 
 			// User requests judgement from all the registrars, and they approve
 			for i in 0..r {
@@ -137,7 +137,7 @@ benchmarks! {
 			}
 			caller
 		};
-	}: _(RawOrigin::Signed(caller.clone()), create_identity_info::<T>(x))
+	}: _(RawOrigin::Signed(caller.clone()), Box::new(create_identity_info::<T>(x)))
 	verify {
 		assert_last_event::<T>(Event::<T>::IdentitySet(caller).into());
 	}
@@ -190,7 +190,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
 		// User requests judgement from all the registrars, and they approve
@@ -219,7 +219,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10u32.into())
 	verify {
@@ -237,7 +237,7 @@ benchmarks! {
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
+			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10u32.into())?;
@@ -307,7 +307,7 @@ benchmarks! {
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		let x in 1 .. T::MaxAdditionalFields::get() => {
 			let info = create_identity_info::<T>(x);
-			Identity::<T>::set_identity(user_origin.clone(), info)?;
+			Identity::<T>::set_identity(user_origin.clone(), Box::new(info))?;
 		};
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
@@ -328,7 +328,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
 
 		let info = create_identity_info::<T>(x);
-		Identity::<T>::set_identity(target_origin.clone(), info)?;
+		Identity::<T>::set_identity(target_origin.clone(), Box::new(info))?;
 		let _ = add_sub_accounts::<T>(&target, s)?;
 
 		// User requests judgement from all the registrars, and they approve
@@ -355,7 +355,7 @@ benchmarks! {
 		let sub = account("new_sub", 0, SEED);
 		let data = Data::Raw(vec![0; 32].try_into().unwrap());
 		ensure!(SubsOf::<T>::get(&caller).1.len() as u32 == s, "Subs not set.");
-	}: _(RawOrigin::Signed(caller.clone()), T::Lookup::unlookup(sub), data)
+	}: _(RawOrigin::Signed(caller.clone()), Box::new(T::Lookup::unlookup(sub)), data)
 	verify {
 		ensure!(SubsOf::<T>::get(&caller).1.len() as u32 == s + 1, "Subs not added.");
 	}
@@ -367,7 +367,11 @@ benchmarks! {
 		let (sub, _) = add_sub_accounts::<T>(&caller, s)?.remove(0);
 		let data = Data::Raw(vec![1; 32].try_into().unwrap());
 		ensure!(SuperOf::<T>::get(&sub).unwrap().1 != data, "data already set");
-	}: _(RawOrigin::Signed(caller), T::Lookup::unlookup(sub.clone()), data.clone())
+	}: _(
+		RawOrigin::Signed(caller),
+		Box::new(T::Lookup::unlookup(sub.clone())),
+		data.clone()
+	)
 	verify {
 		ensure!(SuperOf::<T>::get(&sub).unwrap().1 == data, "data not set");
 	}
@@ -390,7 +394,11 @@ benchmarks! {
 		let sup = account("super", 0, SEED);
 		let _ = add_sub_accounts::<T>(&sup, s)?;
 		let sup_origin = RawOrigin::Signed(sup).into();
-		Identity::<T>::add_sub(sup_origin, T::Lookup::unlookup(caller.clone()), Data::Raw(vec![0; 32].try_into().unwrap()))?;
+		Identity::<T>::add_sub(
+			sup_origin,
+			Box::new(T::Lookup::unlookup(caller.clone())),
+			Data::Raw(vec![0; 32].try_into().unwrap())
+		)?;
 		ensure!(SuperOf::<T>::contains_key(&caller), "Sub doesn't exists");
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {

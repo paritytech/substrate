@@ -138,7 +138,7 @@ benchmarks_instance_pallet! {
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
-	}: force_transfer(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount)
+	}: force_transfer(RawOrigin::Root, Box::new(source_lookup), Box::new(recipient_lookup), transfer_amount)
 	verify {
 		assert_eq!(Balances::<T, I>::free_balance(&source), Zero::zero());
 		assert_eq!(Balances::<T, I>::free_balance(&recipient), transfer_amount);

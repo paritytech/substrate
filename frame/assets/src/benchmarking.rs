@@ -202,7 +202,13 @@ benchmarks_instance_pallet! {
 		let (caller, caller_lookup) = create_default_minted_asset::<T, I>(true, amount);
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
-	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, target_lookup, amount)
+	}: _(
+		SystemOrigin::Signed(caller.clone()),
+		Default::default(),
+		Box::new(caller_lookup),
+		Box::new(target_lookup),
+		amount
+	)
 	verify {
 		assert_last_event::<T, I>(
 			Event::Transferred(Default::default(), caller, target, amount).into()
@@ -260,7 +266,13 @@ benchmarks_instance_pallet! {
 		let target0 = T::Lookup::unlookup(account("target", 0, SEED));
 		let target1 = T::Lookup::unlookup(account("target", 1, SEED));
 		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
-	}: _(SystemOrigin::Signed(caller), Default::default(), target0.clone(), target1.clone(), target2.clone())
+	}: _(
+		SystemOrigin::Signed(caller),
+		Default::default(),
+		Box::new(target0.clone()),
+		Box::new(target1.clone()),
+		Box::new(target2.clone())
+	)
 	verify {
 		assert_last_event::<T, I>(Event::TeamChanged(
 			Default::default(),
@@ -341,10 +353,10 @@ benchmarks_instance_pallet! {
 		let origin = T::ForceOrigin::successful_origin();
 		let call = Call::<T, I>::force_asset_status(
 			Default::default(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
+			Box::new(caller_lookup.clone()),
+			Box::new(caller_lookup.clone()),
+			Box::new(caller_lookup.clone()),
+			Box::new(caller_lookup.clone()),
 			100u32.into(),
 			true,
 			false,
@@ -381,7 +393,13 @@ benchmarks_instance_pallet! {
 
 		let dest: T::AccountId = account("dest", 0, SEED);
 		let dest_lookup = T::Lookup::unlookup(dest.clone());
-	}: _(SystemOrigin::Signed(delegate.clone()), id, owner_lookup, dest_lookup, amount)
+	}: _(
+		SystemOrigin::Signed(delegate.clone()),
+		id,
+		Box::new(owner_lookup),
+		Box::new(dest_lookup),
+		amount
+	)
 	verify {
 		assert!(T::Currency::reserved_balance(&owner).is_zero());
 		assert_event::<T, I>(Event::Transferred(id, owner, dest, amount).into());
@@ -412,7 +430,12 @@ benchmarks_instance_pallet! {
 		let amount = 100u32.into();
 		let origin = SystemOrigin::Signed(caller.clone()).into();
 		Assets::<T, I>::approve_transfer(origin, id, delegate_lookup.clone(), amount)?;
-	}: _(SystemOrigin::Signed(caller.clone()), id, caller_lookup, delegate_lookup)
+	}: _(
+		SystemOrigin::Signed(caller.clone()),
+		id,
+		Box::new(caller_lookup),
+		Box::new(delegate_lookup)
+	)
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled(id, caller, delegate).into());
 	}
