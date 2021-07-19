@@ -17,7 +17,7 @@
 
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
+use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkResults, BenchmarkSelector};
 use frame_support::traits::StorageInfo;
 use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
@@ -31,7 +31,43 @@ use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_state_machine::StateMachine;
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
+
+// This takes multiple benchmark batches and combines all the results where the pallet, instance,
+// and benchmark are the same.
+fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
+	if batches.is_empty() {
+		return batches
+	}
+
+	let mut all_benchmarks = HashMap::<_, Vec<BenchmarkResults>>::new();
+
+	batches
+		.into_iter()
+		.for_each(|BenchmarkBatch { pallet, instance, benchmark, results }| {
+			// We use this key to uniquely identify a benchmark among batches.
+			let key = (pallet, instance, benchmark);
+
+			match all_benchmarks.get_mut(&key) {
+				// We already have this benchmark, so we extend the results.
+				Some(x) => x.extend(results),
+				// New benchmark, so we add a new entry with the initial results.
+				None => {
+					all_benchmarks.insert(key, results);
+				},
+			}
+		});
+
+	all_benchmarks
+		.into_iter()
+		.map(|((pallet, instance, benchmark), results)| BenchmarkBatch {
+			pallet,
+			instance,
+			benchmark,
+			results,
+		})
+		.collect::<Vec<_>>()
+}
 
 impl BenchmarkCmd {
 	/// Runs the command and benchmarks the chain.
@@ -74,137 +110,145 @@ impl BenchmarkCmd {
 			2, // The runtime instances cache size.
 		);
 
-		let mut extensions = Extensions::default();
-		extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
-		let (offchain, _) = TestOffchainExt::new();
-		let (pool, _) = TestTransactionPoolExt::new();
-		extensions.register(OffchainWorkerExt::new(offchain.clone()));
-		extensions.register(OffchainDbExt::new(offchain));
-		extensions.register(TransactionPoolExt::new(pool));
+		let mut batches = Vec::new();
+		let mut storage_info = Vec::new();
 
-		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-			&state,
-			None,
-			&mut changes,
-			&executor,
-			"Benchmark_dispatch_benchmark",
-			&(
-				&self.pallet,
-				&self.extrinsic,
-				self.lowest_range_values.clone(),
-				self.highest_range_values.clone(),
-				self.steps.clone(),
-				self.repeat,
-				!self.no_verify,
-				self.extra,
+		for r in 0..self.repeat {
+			let mut extensions = Extensions::default();
+			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
+			let (offchain, _) = TestOffchainExt::new();
+			let (pool, _) = TestTransactionPoolExt::new();
+			extensions.register(OffchainWorkerExt::new(offchain.clone()));
+			extensions.register(OffchainDbExt::new(offchain));
+			extensions.register(TransactionPoolExt::new(pool));
+
+			let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+				&state,
+				None,
+				&mut changes,
+				&executor,
+				"Benchmark_dispatch_benchmark",
+				&(
+					&self.pallet,
+					&self.extrinsic,
+					self.lowest_range_values.clone(),
+					self.highest_range_values.clone(),
+					self.steps.clone(),
+					r,
+					!self.no_verify,
+					self.extra,
+				)
+					.encode(),
+				extensions,
+				&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+				sp_core::testing::TaskExecutor::new(),
 			)
-				.encode(),
-			extensions,
-			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
-			sp_core::testing::TaskExecutor::new(),
-		)
-		.execute(strategy.into())
-		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+			.execute(strategy.into())
+			.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-		let results = <std::result::Result<
+			let (batch, last_storage_info) = <std::result::Result<
 				(Vec<BenchmarkBatch>, Vec<StorageInfo>),
 				String,
 			> as Decode>::decode(&mut &result[..])
-			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
+			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))??;
 
-		match results {
-			Ok((batches, storage_info)) => {
-				if let Some(output_path) = &self.output {
-					crate::writer::write_results(&batches, &storage_info, output_path, self)?;
-				}
+			batches.extend(batch);
+			storage_info = last_storage_info;
+		}
 
-				for batch in batches.into_iter() {
-					// Print benchmark metadata
-					println!(
-						"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
-						String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
-						String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
-						self.lowest_range_values,
-						self.highest_range_values,
-						self.steps,
-						self.repeat,
+		let batches = combine_batches(batches);
+
+		for b in batches.clone() {
+			println!(
+				"{:?}: {:?}",
+				String::from_utf8(b.pallet).unwrap(),
+				String::from_utf8(b.benchmark).unwrap(),
+			);
+		}
+
+		if let Some(output_path) = &self.output {
+			crate::writer::write_results(&batches, &storage_info, output_path, self)?;
+		}
+
+		for batch in batches.into_iter() {
+			// Print benchmark metadata
+			println!(
+				"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
+				String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
+				String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
+				self.lowest_range_values,
+				self.highest_range_values,
+				self.steps,
+				self.repeat,
+			);
+
+			// Skip raw data + analysis if there are no results
+			if batch.results.is_empty() {
+				continue
+			}
+
+			if self.raw_data {
+				// Print the table header
+				batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
+
+				print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes\n");
+				// Print the values
+				batch.results.iter().for_each(|result| {
+					let parameters = &result.components;
+					parameters.iter().for_each(|param| print!("{:?},", param.1));
+					// Print extrinsic time and storage root time
+					print!(
+						"{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
+						result.extrinsic_time,
+						result.storage_root_time,
+						result.reads,
+						result.repeat_reads,
+						result.writes,
+						result.repeat_writes,
+						result.proof_size,
 					);
+				});
 
-					// Skip raw data + analysis if there are no results
-					if batch.results.is_empty() {
-						continue
-					}
+				println!();
+			}
 
-					if self.raw_data {
-						// Print the table header
-						batch.results[0]
-							.components
-							.iter()
-							.for_each(|param| print!("{:?},", param.0));
-
-						print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes\n");
-						// Print the values
-						batch.results.iter().for_each(|result| {
-							let parameters = &result.components;
-							parameters.iter().for_each(|param| print!("{:?},", param.1));
-							// Print extrinsic time and storage root time
-							print!(
-								"{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
-								result.extrinsic_time,
-								result.storage_root_time,
-								result.reads,
-								result.repeat_reads,
-								result.writes,
-								result.repeat_writes,
-								result.proof_size,
-							);
-						});
-
-						println!();
-					}
-
-					// Conduct analysis.
-					if !self.no_median_slopes {
-						println!("Median Slopes Analysis\n========");
-						if let Some(analysis) = Analysis::median_slopes(
-							&batch.results,
-							BenchmarkSelector::ExtrinsicTime,
-						) {
-							println!("-- Extrinsic Time --\n{}", analysis);
-						}
-						if let Some(analysis) =
-							Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads)
-						{
-							println!("Reads = {:?}", analysis);
-						}
-						if let Some(analysis) =
-							Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes)
-						{
-							println!("Writes = {:?}", analysis);
-						}
-					}
-					if !self.no_min_squares {
-						println!("Min Squares Analysis\n========");
-						if let Some(analysis) = Analysis::min_squares_iqr(
-							&batch.results,
-							BenchmarkSelector::ExtrinsicTime,
-						) {
-							println!("-- Extrinsic Time --\n{}", analysis);
-						}
-						if let Some(analysis) =
-							Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads)
-						{
-							println!("Reads = {:?}", analysis);
-						}
-						if let Some(analysis) =
-							Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes)
-						{
-							println!("Writes = {:?}", analysis);
-						}
-					}
+			// Conduct analysis.
+			if !self.no_median_slopes {
+				println!("Median Slopes Analysis\n========");
+				if let Some(analysis) =
+					Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime)
+				{
+					println!("-- Extrinsic Time --\n{}", analysis);
 				}
-			},
-			Err(error) => eprintln!("Error: {}", error),
+				if let Some(analysis) =
+					Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads)
+				{
+					println!("Reads = {:?}", analysis);
+				}
+				if let Some(analysis) =
+					Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes)
+				{
+					println!("Writes = {:?}", analysis);
+				}
+			}
+			if !self.no_min_squares {
+				println!("Min Squares Analysis\n========");
+				if let Some(analysis) =
+					Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime)
+				{
+					println!("-- Extrinsic Time --\n{}", analysis);
+				}
+				if let Some(analysis) =
+					Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads)
+				{
+					println!("Reads = {:?}", analysis);
+				}
+				if let Some(analysis) =
+					Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes)
+				{
+					println!("Writes = {:?}", analysis);
+				}
+			}
 		}
 
 		Ok(())
