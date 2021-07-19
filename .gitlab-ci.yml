@@ -532,6 +532,7 @@ build-rust-doc:
   script:
     - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
+    - rm -f ./crate-docs/.lock
     - mv ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
