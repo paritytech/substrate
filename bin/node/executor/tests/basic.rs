@@ -624,9 +624,9 @@ fn deploying_wasm_contract_should_work() {
 					pallet_contracts::Call::instantiate_with_code::<Runtime>(
 						1000 * DOLLARS + subsistence,
 						500_000_000,
-						transfer_code,
-						Vec::new(),
-						Vec::new(),
+						Box::new(transfer_code),
+						Box::new(Vec::new()),
+						Box::new(Vec::new()),
 					)
 				),
 			},
@@ -634,10 +634,10 @@ fn deploying_wasm_contract_should_work() {
 				signed: Some((charlie(), signed_extra(1, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::call::<Runtime>(
-						sp_runtime::MultiAddress::Id(addr.clone()),
+						Box::new(sp_runtime::MultiAddress::Id(addr.clone())),
 						10,
 						500_000_000,
-						vec![0x00, 0x01, 0x02, 0x03]
+						Box::new(vec![0x00, 0x01, 0x02, 0x03])
 					)
 				),
 			},
