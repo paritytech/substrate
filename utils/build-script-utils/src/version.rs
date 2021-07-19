@@ -27,15 +27,15 @@ pub fn generate_cargo_keys() {
 		Ok(o) if o.status.success() => {
 			let sha = String::from_utf8_lossy(&o.stdout).trim().to_owned();
 			Cow::from(sha)
-		}
+		},
 		Ok(o) => {
 			println!("cargo:warning=Git command failed with status: {}", o.status);
 			Cow::from("unknown")
-		}
+		},
 		Err(err) => {
 			println!("cargo:warning=Failed to execute git command: {}", err);
 			Cow::from("unknown")
-		}
+		},
 	};
 
 	println!("cargo:rustc-env=SUBSTRATE_CLI_IMPL_VERSION={}", get_version(&commit))

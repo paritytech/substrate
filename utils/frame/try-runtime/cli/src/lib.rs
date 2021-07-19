@@ -197,20 +197,18 @@ where
 
 	let ext = {
 		let builder = match command.state {
-			State::Snap { snapshot_path } => {
+			State::Snap { snapshot_path } =>
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
-				}))
-			}
-			State::Live { snapshot_path, modules } => {
+				})),
+			State::Live { snapshot_path, modules } =>
 				Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
 					transport: shared.url.to_owned().into(),
 					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 					modules: modules.to_owned().unwrap_or_default(),
 					at: Some(shared.block_at::<Block>()?),
 					..Default::default()
-				}))
-			}
+				})),
 		};
 
 		let (code_key, code) = extract_code(config.chain_spec)?;
@@ -282,13 +280,13 @@ where
 			};
 
 			Mode::Online(online_config)
-		}
+		},
 		State::Snap { snapshot_path } => {
 			let mode =
 				Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(snapshot_path) });
 
 			mode
-		}
+		},
 	};
 	let builder = Builder::<Block>::new()
 		.mode(mode)
@@ -360,7 +358,7 @@ where
 				Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(snapshot_path) });
 
 			mode
-		}
+		},
 		State::Live { snapshot_path, modules } => {
 			let parent_hash = block.header().parent_hash();
 
@@ -373,7 +371,7 @@ where
 			});
 
 			mode
-		}
+		},
 	};
 
 	let ext = {
@@ -437,17 +435,14 @@ impl TryRuntimeCmd {
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		match &self.command {
-			Command::OnRuntimeUpgrade(ref cmd) => {
+			Command::OnRuntimeUpgrade(ref cmd) =>
 				on_runtime_upgrade::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config)
-					.await
-			}
-			Command::OffchainWorker(cmd) => {
+					.await,
+			Command::OffchainWorker(cmd) =>
 				offchain_worker::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config)
-					.await
-			}
-			Command::ExecuteBlock(cmd) => {
-				execute_block::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
-			}
+					.await,
+			Command::ExecuteBlock(cmd) =>
+				execute_block::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await,
 		}
 	}
 }

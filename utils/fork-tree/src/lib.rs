@@ -212,13 +212,13 @@ where
 	{
 		if let Some(ref best_finalized_number) = self.best_finalized_number {
 			if number <= *best_finalized_number {
-				return Err(Error::Revert);
+				return Err(Error::Revert)
 			}
 		}
 
 		for root in self.roots.iter_mut() {
 			if root.hash == hash {
-				return Err(Error::Duplicate);
+				return Err(Error::Duplicate)
 			}
 
 			match root.import(hash, number, data, is_descendent_of)? {
@@ -226,11 +226,11 @@ where
 					hash = h;
 					number = n;
 					data = d;
-				}
+				},
 				None => {
 					self.rebalance();
-					return Ok(false);
-				}
+					return Ok(false)
+				},
 			}
 		}
 
@@ -279,7 +279,7 @@ where
 
 			// found the node, early exit
 			if let FindOutcome::Found(node) = node {
-				return Ok(Some(node));
+				return Ok(Some(node))
 			}
 		}
 
@@ -315,7 +315,7 @@ where
 
 			// found the node, early exit
 			if let FindOutcome::Found(node) = node {
-				return Ok(Some(node));
+				return Ok(Some(node))
 			}
 		}
 
@@ -342,7 +342,7 @@ where
 			// found the node, early exit
 			if let FindOutcome::Found(mut node) = node {
 				node.push(index);
-				return Ok(Some(node));
+				return Ok(Some(node))
 			}
 		}
 
@@ -364,7 +364,7 @@ where
 		let node = self.roots.swap_remove(position);
 		self.roots = node.children;
 		self.best_finalized_number = Some(node.number);
-		return node.data;
+		return node.data
 	}
 
 	/// Finalize a node in the tree. This method will make sure that the node
@@ -384,19 +384,19 @@ where
 	{
 		if let Some(ref best_finalized_number) = self.best_finalized_number {
 			if number <= *best_finalized_number {
-				return Err(Error::Revert);
+				return Err(Error::Revert)
 			}
 		}
 
 		// check if one of the current roots is being finalized
 		if let Some(root) = self.finalize_root(hash) {
-			return Ok(FinalizationResult::Changed(Some(root)));
+			return Ok(FinalizationResult::Changed(Some(root)))
 		}
 
 		// make sure we're not finalizing a descendent of any root
 		for root in self.roots.iter() {
 			if number > root.number && is_descendent_of(&root.hash, hash)? {
-				return Err(Error::UnfinalizedAncestor);
+				return Err(Error::UnfinalizedAncestor)
 			}
 		}
 
@@ -438,13 +438,13 @@ where
 	{
 		if let Some(ref best_finalized_number) = self.best_finalized_number {
 			if number <= *best_finalized_number {
-				return Err(Error::Revert);
+				return Err(Error::Revert)
 			}
 		}
 
 		// check if one of the current roots is being finalized
 		if let Some(root) = self.finalize_root(hash) {
-			return Ok(FinalizationResult::Changed(Some(root)));
+			return Ok(FinalizationResult::Changed(Some(root)))
 		}
 
 		// we need to:
@@ -467,13 +467,13 @@ where
 
 			// if we have met finalized root - open it and return
 			if is_finalized {
-				return Ok(FinalizationResult::Changed(Some(self.finalize_root_at(idx))));
+				return Ok(FinalizationResult::Changed(Some(self.finalize_root_at(idx))))
 			}
 
 			// if node is descendant of finalized block - just leave it as is
 			if is_descendant {
 				idx += 1;
-				continue;
+				continue
 			}
 
 			// if node is ancestor of finalized block - remove it and continue with children
@@ -481,7 +481,7 @@ where
 				let root = self.roots.swap_remove(idx);
 				self.roots.extend(root.children);
 				changed = true;
-				continue;
+				continue
 			}
 
 			// if node is neither ancestor, nor descendant of the finalized block - remove it
@@ -521,7 +521,7 @@ where
 	{
 		if let Some(ref best_finalized_number) = self.best_finalized_number {
 			if number <= *best_finalized_number {
-				return Err(Error::Revert);
+				return Err(Error::Revert)
 			}
 		}
 
@@ -533,11 +533,11 @@ where
 				if node.hash == *hash || is_descendent_of(&node.hash, hash)? {
 					for node in node.children.iter() {
 						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
-							return Err(Error::UnfinalizedAncestor);
+							return Err(Error::UnfinalizedAncestor)
 						}
 					}
 
-					return Ok(Some(self.roots.iter().any(|root| root.hash == node.hash)));
+					return Ok(Some(self.roots.iter().any(|root| root.hash == node.hash)))
 				}
 			}
 		}
@@ -566,7 +566,7 @@ where
 	{
 		if let Some(ref best_finalized_number) = self.best_finalized_number {
 			if number <= *best_finalized_number {
-				return Err(Error::Revert);
+				return Err(Error::Revert)
 			}
 		}
 
@@ -579,12 +579,12 @@ where
 				if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
 					for node in root.children.iter() {
 						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
-							return Err(Error::UnfinalizedAncestor);
+							return Err(Error::UnfinalizedAncestor)
 						}
 					}
 
 					position = Some(i);
-					break;
+					break
 				}
 			}
 		}
@@ -693,11 +693,11 @@ mod node_implementation {
 			F: Fn(&H, &H) -> Result<bool, E>,
 		{
 			if self.hash == hash {
-				return Err(Error::Duplicate);
+				return Err(Error::Duplicate)
 			};
 
 			if number <= self.number {
-				return Ok(Some((hash, number, data)));
+				return Ok(Some((hash, number, data)))
 			}
 
 			for node in self.children.iter_mut() {
@@ -706,7 +706,7 @@ mod node_implementation {
 						hash = h;
 						number = n;
 						data = d;
-					}
+					},
 					None => return Ok(None),
 				}
 			}
@@ -743,7 +743,7 @@ mod node_implementation {
 		{
 			// stop searching this branch
 			if *number < self.number {
-				return Ok(FindOutcome::Failure(false));
+				return Ok(FindOutcome::Failure(false))
 			}
 
 			let mut known_descendent_of = false;
@@ -755,16 +755,16 @@ mod node_implementation {
 					FindOutcome::Abort => return Ok(FindOutcome::Abort),
 					FindOutcome::Found(mut x) => {
 						x.push(i);
-						return Ok(FindOutcome::Found(x));
-					}
+						return Ok(FindOutcome::Found(x))
+					},
 					FindOutcome::Failure(true) => {
 						// if the block was a descendent of this child,
 						// then it cannot be a descendent of any others,
 						// so we don't search them.
 						known_descendent_of = true;
-						break;
-					}
-					FindOutcome::Failure(false) => {}
+						break
+					},
+					FindOutcome::Failure(false) => {},
 				}
 			}
 
@@ -776,7 +776,7 @@ mod node_implementation {
 			if is_descendent_of {
 				// if the predicate passes we return the node
 				if predicate(&self.data) {
-					return Ok(FindOutcome::Found(Vec::new()));
+					return Ok(FindOutcome::Found(Vec::new()))
 				}
 			}
 
@@ -814,7 +814,7 @@ mod node_implementation {
 						cur = &cur.children[i];
 					}
 					Ok(FindOutcome::Found(cur))
-				}
+				},
 			}
 		}
 
@@ -847,7 +847,7 @@ mod node_implementation {
 						cur = &mut cur.children[i];
 					}
 					Ok(FindOutcome::Found(cur))
-				}
+				},
 			}
 		}
 	}
@@ -938,9 +938,8 @@ mod test {
 				("C", b) => Ok(b == "D" || b == "E"),
 				("D", b) => Ok(b == "E"),
 				("E", _) => Ok(false),
-				("F", b) => {
-					Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "O")
-				}
+				("F", b) =>
+					Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "O"),
 				("G", _) => Ok(false),
 				("H", b) => Ok(b == "I" || b == "L" || b == "M" || b == "O"),
 				("I", _) => Ok(false),

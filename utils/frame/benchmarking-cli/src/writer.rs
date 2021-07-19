@@ -120,7 +120,7 @@ fn map_results(
 ) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
 	if batches.is_empty() {
-		return Err(io_error("empty batches"));
+		return Err(io_error("empty batches"))
 	}
 
 	let mut all_benchmarks = HashMap::new();
@@ -130,7 +130,7 @@ fn map_results(
 	while let Some(batch) = batches_iter.next() {
 		// Skip if there are no results
 		if batch.results.is_empty() {
-			continue;
+			continue
 		}
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
@@ -282,7 +282,7 @@ pub fn write_results(
 		Some(header_file) => {
 			let text = fs::read_to_string(header_file)?;
 			text
-		}
+		},
 		None => String::new(),
 	};
 
@@ -371,13 +371,13 @@ fn add_storage_comments(
 		for (key, reads, writes, whitelisted) in &result.keys {
 			// skip keys which are whitelisted
 			if *whitelisted {
-				continue;
+				continue
 			}
 			let prefix_length = key.len().min(32);
-			let prefix = key[0 .. prefix_length].to_vec();
+			let prefix = key[0..prefix_length].to_vec();
 			if identified.contains(&prefix) {
 				// skip adding comments for keys we already identified
-				continue;
+				continue
 			} else {
 				// track newly identified keys
 				identified.insert(prefix.clone());
@@ -394,7 +394,7 @@ fn add_storage_comments(
 						writes,
 					);
 					comments.push(comment)
-				}
+				},
 				None => {
 					let comment = format!(
 						"Storage: unknown [0x{}] (r:{} w:{})",
@@ -403,7 +403,7 @@ fn add_storage_comments(
 						writes,
 					);
 					comments.push(comment)
-				}
+				},
 			}
 		}
 	}
@@ -500,7 +500,7 @@ mod test {
 		slope: u32,
 	) -> BenchmarkBatch {
 		let mut results = Vec::new();
-		for i in 0 .. 5 {
+		for i in 0..5 {
 			results.push(BenchmarkResults {
 				components: vec![(param, i), (BenchmarkParameter::z, 0)],
 				extrinsic_time: (base + slope * i).into(),
@@ -519,7 +519,7 @@ mod test {
 			instance: b"instance".to_vec(),
 			benchmark: [benchmark.to_vec(), b"_benchmark".to_vec()].concat(),
 			results,
-		};
+		}
 	}
 
 	fn check_data(benchmark: &BenchmarkData, component: &str, base: u128, slope: u128) {

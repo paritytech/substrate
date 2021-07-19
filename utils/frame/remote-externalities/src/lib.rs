@@ -253,7 +253,7 @@ impl<B: BlockT> Builder<B> {
 
 			if page_len < PAGE as usize {
 				debug!(target: LOG_TARGET, "last page received: {}", page_len);
-				break all_keys;
+				break all_keys
 			} else {
 				let new_last_key =
 					all_keys.last().expect("all_keys is populated; has .last(); qed");
@@ -433,7 +433,7 @@ impl<B: BlockT> Builder<B> {
 					self.save_state_snapshot(&kp, &c.path)?;
 				}
 				kp
-			}
+			},
 		};
 
 		info!(

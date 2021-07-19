@@ -125,7 +125,7 @@ where
 		at: Option<<Block as traits::Block>::Hash>,
 	) -> FutureResult<Bytes> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(rpc_future::err(err.into()));
+			return Box::new(rpc_future::err(err.into()))
 		}
 
 		let dry_run = || {

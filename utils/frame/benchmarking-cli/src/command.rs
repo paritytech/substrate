@@ -46,19 +46,19 @@ impl BenchmarkCmd {
 	{
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
-				return Err("Output file or path is invalid!".into());
+				return Err("Output file or path is invalid!".into())
 			}
 		}
 
 		if let Some(header_file) = &self.header {
 			if !header_file.is_file() {
-				return Err("Header file is invalid!".into());
+				return Err("Header file is invalid!".into())
 			};
 		}
 
 		if let Some(handlebars_template_file) = &self.template {
 			if !handlebars_template_file.is_file() {
-				return Err("Handlebars template file is invalid!".into());
+				return Err("Handlebars template file is invalid!".into())
 			};
 		}
 
@@ -134,7 +134,7 @@ impl BenchmarkCmd {
 
 					// Skip raw data + analysis if there are no results
 					if batch.results.is_empty() {
-						continue;
+						continue
 					}
 
 					if self.raw_data {
@@ -205,7 +205,7 @@ impl BenchmarkCmd {
 						}
 					}
 				}
-			}
+			},
 			Err(error) => eprintln!("Error: {}", error),
 		}
 

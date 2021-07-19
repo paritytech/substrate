@@ -83,26 +83,26 @@ impl<T: SourcedType, S: MetricSource> Collector for SourcedMetric<T, S> {
 					let mut c = proto::Counter::default();
 					c.set_value(value.into_f64());
 					m.set_counter(c);
-				}
+				},
 				proto::MetricType::GAUGE => {
 					let mut g = proto::Gauge::default();
 					g.set_value(value.into_f64());
 					m.set_gauge(g);
-				}
+				},
 				t => {
 					log::error!("Unsupported sourced metric type: {:?}", t);
-				}
+				},
 			}
 
 			debug_assert_eq!(self.desc.variable_labels.len(), label_values.len());
 			match self.desc.variable_labels.len().cmp(&label_values.len()) {
 				Ordering::Greater => {
 					log::warn!("Missing label values for sourced metric {}", self.desc.fq_name)
-				}
+				},
 				Ordering::Less => {
 					log::warn!("Too many label values for sourced metric {}", self.desc.fq_name)
-				}
-				Ordering::Equal => {}
+				},
+				Ordering::Equal => {},
 			}
 
 			m.set_label(

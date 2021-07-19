@@ -139,21 +139,21 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 	fn find_impl(mut path: PathBuf) -> Option<PathBuf> {
 		loop {
 			if path.join("Cargo.lock").exists() {
-				return Some(path.join("Cargo.lock"));
+				return Some(path.join("Cargo.lock"))
 			}
 
 			if !path.pop() {
-				return None;
+				return None
 			}
 		}
 	}
 
 	if let Some(path) = find_impl(build_helper::out_dir()) {
-		return Some(path);
+		return Some(path)
 	}
 
 	if let Some(path) = find_impl(cargo_manifest.to_path_buf()) {
-		return Some(path);
+		return Some(path)
 	}
 
 	build_helper::warning!(
@@ -196,11 +196,10 @@ fn get_wasm_workspace_root() -> PathBuf {
 	loop {
 		match out_dir.parent() {
 			Some(parent) if out_dir.ends_with("build") => return parent.to_path_buf(),
-			_ => {
+			_ =>
 				if !out_dir.pop() {
-					break;
-				}
-			}
+					break
+				},
 		}
 	}
 
@@ -450,7 +449,7 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 	println!("{} {}", colorize_info_message("Using rustc version:"), cargo_cmd.rustc_version());
 
 	match build_cmd.status().map(|s| s.success()) {
-		Ok(true) => {}
+		Ok(true) => {},
 		// Use `process.exit(1)` to have a clean error output.
 		_ => process::exit(1),
 	}

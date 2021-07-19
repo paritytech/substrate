@@ -200,7 +200,7 @@ fn get_rustup_nightly(selected: Option<String>) -> Option<CargoCommand> {
 			}
 
 			latest_nightly?.trim_end_matches(&host).into()
-		}
+		},
 	};
 
 	Some(CargoCommand::new_with_args("rustup", &["run", &version, "cargo"]))
