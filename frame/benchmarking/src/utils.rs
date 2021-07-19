@@ -80,8 +80,6 @@ pub struct BenchmarkConfig {
 	pub highest_range_values: Vec<u32>,
 	/// The number of samples to take across the range of values for components.
 	pub steps: Vec<u32>,
-	/// The number of times to repeat a benchmark.
-	pub repeat: u32,
 	/// Enable an extra benchmark iteration which runs the verification logic for a benchmark.
 	pub verify: bool,
 	/// Enable benchmarking of "extra" extrinsics, i.e. those that are not directly used in a pallet.
@@ -193,13 +191,11 @@ pub trait Benchmarking<T> {
 	/// - `steps`: The number of sample points you want to take across the range of parameters.
 	/// - `lowest_range_values`: The lowest number for each range of parameters.
 	/// - `highest_range_values`: The highest number for each range of parameters.
-	/// - `repeat`: The number of times you want to repeat a benchmark.
 	fn run_benchmark(
 		name: &[u8],
 		lowest_range_values: &[u32],
 		highest_range_values: &[u32],
 		steps: &[u32],
-		repeat: u32,
 		whitelist: &[TrackedStorageKey],
 		verify: bool,
 	) -> Result<Vec<T>, &'static str>;

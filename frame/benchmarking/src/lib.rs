@@ -703,7 +703,6 @@ macro_rules! impl_benchmark {
 				lowest_range_values: &[u32],
 				highest_range_values: &[u32],
 				steps: &[u32],
-				repeat: u32,
 				whitelist: &[$crate::TrackedStorageKey],
 				verify: bool,
 			) -> Result<$crate::Vec<$crate::BenchmarkResults>, &'static str> {
@@ -715,9 +714,6 @@ macro_rules! impl_benchmark {
 					_ => return Err("Could not find extrinsic."),
 				};
 				let mut results: $crate::Vec<$crate::BenchmarkResults> = $crate::Vec::new();
-				if repeat == 0 {
-					return Ok(results);
-				}
 
 				// Add whitelist to DB including whitelisted caller
 				let mut whitelist = whitelist.to_vec();
@@ -740,110 +736,104 @@ macro_rules! impl_benchmark {
 				// Default number of steps for a component.
 				let mut prev_steps = 10;
 
-				let mut repeat_benchmark = |
-					repeat: u32,
+				let mut do_benchmark = |
 					c: &[($crate::BenchmarkParameter, u32)],
 					results: &mut $crate::Vec<$crate::BenchmarkResults>,
 					verify: bool,
 					step: u32,
 					num_steps: u32,
 				| -> Result<(), &'static str> {
-					// Run the benchmark `repeat` times.
-					for r in 0..repeat {
-						// Set up the externalities environment for the setup we want to
-						// benchmark.
-						let closure_to_benchmark = <
-							SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
-						>::instance(&selected_benchmark, c, verify)?;
+					// Set up the externalities environment for the setup we want to
+					// benchmark.
+					let closure_to_benchmark = <
+						SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
+					>::instance(&selected_benchmark, c, verify)?;
 
-						// Set the block number to at least 1 so events are deposited.
-						if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
-							frame_system::Pallet::<T>::set_block_number(1u32.into());
-						}
-
-						// Commit the externalities to the database, flushing the DB cache.
-						// This will enable worst case scenario for reading from the database.
-						$crate::benchmarking::commit_db();
-
-						// Reset the read/write counter so we don't count operations in the setup process.
-						$crate::benchmarking::reset_read_write_count();
-
-						if verify {
-							closure_to_benchmark()?;
-						} else {
-							// Time the extrinsic logic.
-							$crate::log::trace!(
-								target: "benchmark",
-								"Start Benchmark: {:?}", c
-							);
-
-							let start_pov = $crate::benchmarking::proof_size();
-							let start_extrinsic = $crate::benchmarking::current_time();
-
-							closure_to_benchmark()?;
-
-							let finish_extrinsic = $crate::benchmarking::current_time();
-							let end_pov = $crate::benchmarking::proof_size();
-
-							// Calculate the diff caused by the benchmark.
-							let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
-							let diff_pov = match (start_pov, end_pov) {
-								(Some(start), Some(end)) => end.saturating_sub(start),
-								_ => Default::default(),
-							};
-
-							// Commit the changes to get proper write count
-							$crate::benchmarking::commit_db();
-							$crate::log::trace!(
-								target: "benchmark",
-								"End Benchmark: {} ns", elapsed_extrinsic
-							);
-							let read_write_count = $crate::benchmarking::read_write_count();
-							$crate::log::trace!(
-								target: "benchmark",
-								"Read/Write Count {:?}", read_write_count
-							);
-
-							let time = $crate::benchmarking::current_time();
-							if time.saturating_sub(progress) > 5000000000 {
-								progress = $crate::benchmarking::current_time();
-								$crate::log::info!(
-									target: "benchmark",
-									"Benchmarking {} {}/{}, run {}/{}",
-									extrinsic,
-									step,
-									num_steps,
-									r,
-									repeat,
-								);
-							}
-
-							// Time the storage root recalculation.
-							let start_storage_root = $crate::benchmarking::current_time();
-							$crate::storage_root();
-							let finish_storage_root = $crate::benchmarking::current_time();
-							let elapsed_storage_root = finish_storage_root - start_storage_root;
-
-							// TODO: Fix memory allocation issue then re-enable
-							// let read_and_written_keys = $crate::benchmarking::get_read_and_written_keys();
-							let read_and_written_keys = Default::default();
-
-							results.push($crate::BenchmarkResults {
-								components: c.to_vec(),
-								extrinsic_time: elapsed_extrinsic,
-								storage_root_time: elapsed_storage_root,
-								reads: read_write_count.0,
-								repeat_reads: read_write_count.1,
-								writes: read_write_count.2,
-								repeat_writes: read_write_count.3,
-								proof_size: diff_pov,
-								keys: read_and_written_keys,
-							});
-						}
-
-						// Wipe the DB back to the genesis state.
-						$crate::benchmarking::wipe_db();
+					// Set the block number to at least 1 so events are deposited.
+					if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+						frame_system::Pallet::<T>::set_block_number(1u32.into());
 					}
+
+					// Commit the externalities to the database, flushing the DB cache.
+					// This will enable worst case scenario for reading from the database.
+					$crate::benchmarking::commit_db();
+
+					// Reset the read/write counter so we don't count operations in the setup process.
+					$crate::benchmarking::reset_read_write_count();
+
+					if verify {
+						closure_to_benchmark()?;
+					} else {
+						// Time the extrinsic logic.
+						$crate::log::trace!(
+							target: "benchmark",
+							"Start Benchmark: {:?}", c
+						);
+
+						let start_pov = $crate::benchmarking::proof_size();
+						let start_extrinsic = $crate::benchmarking::current_time();
+
+						closure_to_benchmark()?;
+
+						let finish_extrinsic = $crate::benchmarking::current_time();
+						let end_pov = $crate::benchmarking::proof_size();
+
+						// Calculate the diff caused by the benchmark.
+						let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
+						let diff_pov = match (start_pov, end_pov) {
+							(Some(start), Some(end)) => end.saturating_sub(start),
+							_ => Default::default(),
+						};
+
+						// Commit the changes to get proper write count
+						$crate::benchmarking::commit_db();
+						$crate::log::trace!(
+							target: "benchmark",
+							"End Benchmark: {} ns", elapsed_extrinsic
+						);
+						let read_write_count = $crate::benchmarking::read_write_count();
+						$crate::log::trace!(
+							target: "benchmark",
+							"Read/Write Count {:?}", read_write_count
+						);
+
+						let time = $crate::benchmarking::current_time();
+						if time.saturating_sub(progress) > 5000000000 {
+							progress = $crate::benchmarking::current_time();
+							$crate::log::info!(
+								target: "benchmark",
+								"Benchmarking {} {}/{}",
+								extrinsic,
+								step,
+								num_steps,
+							);
+						}
+
+						// Time the storage root recalculation.
+						let start_storage_root = $crate::benchmarking::current_time();
+						$crate::storage_root();
+						let finish_storage_root = $crate::benchmarking::current_time();
+						let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+						// TODO: Fix memory allocation issue then re-enable
+						let read_and_written_keys = $crate::benchmarking::get_read_and_written_keys();
+						//let read_and_written_keys = Default::default();
+
+						results.push($crate::BenchmarkResults {
+							components: c.to_vec(),
+							extrinsic_time: elapsed_extrinsic,
+							storage_root_time: elapsed_storage_root,
+							reads: read_write_count.0,
+							repeat_reads: read_write_count.1,
+							writes: read_write_count.2,
+							repeat_writes: read_write_count.3,
+							proof_size: diff_pov,
+							keys: read_and_written_keys,
+						});
+					}
+
+					// Wipe the DB back to the genesis state.
+					$crate::benchmarking::wipe_db();
 
 					Ok(())
 				};
@@ -851,9 +841,9 @@ macro_rules! impl_benchmark {
 				if components.is_empty() {
 					if verify {
 						// If `--verify` is used, run the benchmark once to verify it would complete.
-						repeat_benchmark(1, Default::default(), &mut $crate::Vec::new(), true, 1, 1)?;
+						do_benchmark(Default::default(), &mut $crate::Vec::new(), true, 1, 1)?;
 					}
-					repeat_benchmark(repeat, Default::default(), &mut results, false, 1, 1)?;
+					do_benchmark(Default::default(), &mut results, false, 1, 1)?;
 				} else {
 					// Select the component we will be benchmarking. Each component will be benchmarked.
 					for (idx, (name, low, high)) in components.iter().enumerate() {
@@ -891,9 +881,9 @@ macro_rules! impl_benchmark {
 
 							if verify {
 								// If `--verify` is used, run the benchmark once to verify it would complete.
-								repeat_benchmark(1, &c, &mut $crate::Vec::new(), true, s, num_of_steps)?;
+								do_benchmark(&c, &mut $crate::Vec::new(), true, s, num_of_steps)?;
 							}
-							repeat_benchmark(repeat, &c, &mut results, false, s, num_of_steps)?;
+							do_benchmark(&c, &mut results, false, s, num_of_steps)?;
 						}
 					}
 				}
@@ -1246,7 +1236,6 @@ pub fn show_benchmark_debug_info(
 	lowest_range_values: &sp_std::prelude::Vec<u32>,
 	highest_range_values: &sp_std::prelude::Vec<u32>,
 	steps: &sp_std::prelude::Vec<u32>,
-	repeat: &u32,
 	verify: &bool,
 	error_message: &str,
 ) -> sp_runtime::RuntimeString {
@@ -1256,7 +1245,6 @@ pub fn show_benchmark_debug_info(
 		* Lowest_range_values: {:?}\n\
 		* Highest_range_values: {:?}\n\
 		* Steps: {:?}\n\
-		* Repeat: {:?}\n\
 		* Verify: {:?}\n\
 		* Error message: {}",
 		sp_std::str::from_utf8(instance_string)
@@ -1266,7 +1254,6 @@ pub fn show_benchmark_debug_info(
 		lowest_range_values,
 		highest_range_values,
 		steps,
-		repeat,
 		verify,
 		error_message,
 	)
@@ -1347,7 +1334,6 @@ macro_rules! add_benchmark {
 			lowest_range_values,
 			highest_range_values,
 			steps,
-			repeat,
 			verify,
 			extra,
 		} = config;
@@ -1363,7 +1349,6 @@ macro_rules! add_benchmark {
 							&lowest_range_values[..],
 							&highest_range_values[..],
 							&steps[..],
-							*repeat,
 							whitelist,
 							*verify,
 						).map_err(|e| {
@@ -1373,7 +1358,6 @@ macro_rules! add_benchmark {
 								lowest_range_values,
 								highest_range_values,
 								steps,
-								repeat,
 								verify,
 								e,
 							)
@@ -1390,7 +1374,6 @@ macro_rules! add_benchmark {
 						&lowest_range_values[..],
 						&highest_range_values[..],
 						&steps[..],
-						*repeat,
 						whitelist,
 						*verify,
 					).map_err(|e| {
@@ -1400,7 +1383,6 @@ macro_rules! add_benchmark {
 							lowest_range_values,
 							highest_range_values,
 							steps,
-							repeat,
 							verify,
 							e,
 						)
