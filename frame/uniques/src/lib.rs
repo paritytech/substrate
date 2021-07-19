@@ -79,28 +79,36 @@ pub mod pallet {
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The basic amount of funds that must be reserved for an asset class.
+		#[pallet::constant]
 		type ClassDeposit: Get<DepositBalanceOf<Self, I>>;
 
 		/// The basic amount of funds that must be reserved for an asset instance.
+		#[pallet::constant]
 		type InstanceDeposit: Get<DepositBalanceOf<Self, I>>;
 
 		/// The basic amount of funds that must be reserved when adding metadata to your asset.
+		#[pallet::constant]
 		type MetadataDepositBase: Get<DepositBalanceOf<Self, I>>;
 
 		/// The basic amount of funds that must be reserved when adding an attribute to an asset.
+		#[pallet::constant]
 		type AttributeDepositBase: Get<DepositBalanceOf<Self, I>>;
 
 		/// The additional funds that must be reserved for the number of bytes store in metadata,
 		/// either "normal" metadata or attribute metadata.
+		#[pallet::constant]
 		type DepositPerByte: Get<DepositBalanceOf<Self, I>>;
 
 		/// The maximum length of data stored on-chain.
+		#[pallet::constant]
 		type StringLimit: Get<u32>;
 
 		/// The maximum length of an attribute key.
+		#[pallet::constant]
 		type KeyLimit: Get<u32>;
 
 		/// The maximum length of an attribute value.
+		#[pallet::constant]
 		type ValueLimit: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.

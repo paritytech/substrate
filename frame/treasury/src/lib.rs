@@ -62,7 +62,7 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_std::prelude::*;
@@ -117,7 +117,7 @@ pub type ProposalIndex = u32;
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
 	proposer: AccountId,
@@ -137,6 +137,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -187,6 +188,7 @@ pub mod pallet {
 		type SpendFunds: SpendFunds<Self, I>;
 
 		/// The maximum number of approvals that can wait in the spending queue.
+		#[pallet::constant]
 		type MaxApprovals: Get<u32>;
 	}
 
