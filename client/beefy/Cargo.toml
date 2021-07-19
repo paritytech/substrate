@@ -12,6 +12,7 @@ hex = "0.4"
 log = "0.4"
 parking_lot = "0.11"
 thiserror = "1.0"
+wasm-timer = "0.2.5"
 
 codec = { version = "2.0.0", package = "parity-scale-codec", features = ["derive"] }
 prometheus = { package = "substrate-prometheus-endpoint", git = "https://github.com/paritytech/substrate", branch = "master"}

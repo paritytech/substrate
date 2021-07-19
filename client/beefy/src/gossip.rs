@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 
 use sc_network::PeerId;
 use sc_network_gossip::{MessageIntent, ValidationResult, Validator, ValidatorContext};
@@ -23,7 +23,8 @@ use sp_runtime::traits::{Block, Hash, Header, NumberFor};
 
 use codec::{Decode, Encode};
 use log::{debug, trace};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
+use wasm_timer::Instant;
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
@@ -34,6 +35,9 @@ use crate::keystore::BeefyKeystore;
 
 // Limit BEEFY gossip by keeping only a bound number of voting rounds alive.
 const MAX_LIVE_GOSSIP_ROUNDS: usize = 3;
+
+// Timeout for rebroadcasting messages.
+const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 
 /// Gossip engine messages topic
 pub(crate) fn topic<B: Block>() -> B::Hash
@@ -62,6 +66,7 @@ where
 {
 	topic: B::Hash,
 	known_votes: RwLock<KnownVotes<B>>,
+	next_rebroadcast: Mutex<Instant>,
 }
 
 impl<B> GossipValidator<B>
@@ -72,6 +77,7 @@ where
 		GossipValidator {
 			topic: topic::<B>(),
 			known_votes: RwLock::new(BTreeMap::new()),
+			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
 		}
 	}
 
@@ -188,8 +194,23 @@ where
 
 	#[allow(clippy::type_complexity)]
 	fn message_allowed<'a>(&'a self) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
+		let do_rebroadcast = {
+			let now = Instant::now();
+			let mut next_rebroadcast = self.next_rebroadcast.lock();
+			if now >= *next_rebroadcast {
+				*next_rebroadcast = now + REBROADCAST_AFTER;
+				true
+			} else {
+				false
+			}
+		};
+
 		let known_votes = self.known_votes.read();
-		Box::new(move |_who, _intent, _topic, mut data| {
+		Box::new(move |_who, intent, _topic, mut data| {
+			if let MessageIntent::PeriodicRebroadcast = intent {
+				return do_rebroadcast;
+			}
+
 			let msg = match VoteMessage::<MmrRootHash, NumberFor<B>, Public, Signature>::decode(&mut data) {
 				Ok(vote) => vote,
 				Err(_) => return true,
@@ -198,7 +219,7 @@ where
 			let round = msg.commitment.block_number;
 			let allowed = GossipValidator::<B>::is_live(&known_votes, &round);
 
-			trace!(target: "beefy", "🥩 Message for round #{} allowed: {}", round, allowed);
+			debug!(target: "beefy", "🥩 Message for round #{} allowed: {}", round, allowed);
 
 			allowed
 		})
