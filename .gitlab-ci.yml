@@ -516,10 +516,9 @@ build-rust-doc:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs
-  # FIXME
-  # needs:
-  #   - job:                         test-linux-stable
-  #     artifacts:                   false
+  needs:
+    - job:                         test-linux-stable
+      artifacts:                   false
   variables:
     <<:                            *default-vars
     SKIP_WASM_BUILD:               1
@@ -632,11 +631,9 @@ publish-s3-doc:
   needs:
     - job:                         build-rust-doc
       artifacts:                   true
-    # FIXME
-    # - job:                         build-linux-substrate
-    #   artifacts:                   false
-  # <<:                              *build-refs
-  # <<:                              *test-refs
+    - job:                         build-linux-substrate
+      artifacts:                   false
+  <<:                              *build-refs
   <<:                              *kubernetes-env
   variables:
     GIT_STRATEGY:                  none
@@ -647,11 +644,8 @@ publish-s3-doc:
         echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
         exit 1
       )
-    # FIXME
-    # --only-show-errors
     - ls -lah crate-docs
-    # - rm -f ./crate-docs/.lock
-    - aws s3 sync --delete --size-only
+    - aws s3 sync --delete --size-only --only-show-errors
         ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
