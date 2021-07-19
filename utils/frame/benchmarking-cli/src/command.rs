@@ -134,7 +134,6 @@ impl BenchmarkCmd {
 					self.lowest_range_values.clone(),
 					self.highest_range_values.clone(),
 					self.steps.clone(),
-					r,
 					!self.no_verify,
 					self.extra,
 				)
