@@ -275,7 +275,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(any(test, feature = "make-bags"))]
-mod mock;
+pub mod mock;
 #[cfg(test)]
 mod tests;
 #[cfg(any(feature = "runtime-benchmarks", test))]
