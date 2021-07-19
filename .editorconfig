@@ -9,6 +9,7 @@ trim_trailing_whitespace=true
 max_line_length=100
 insert_final_newline=true
 
+# rust files ignored, instead use `rustfmt.toml` with `cargo +nightly fmt` 
 [*.rs]
 indent_style=unset
 indent_size=unset
