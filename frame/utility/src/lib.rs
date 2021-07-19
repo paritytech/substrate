@@ -109,6 +109,19 @@ pub mod pallet {
 		BatchCompleted,
 	}
 
+	#[pallet::extra_constants]
+	impl<T: Config> Pallet<T> {
+		/// The limit on the number of batched calls.
+		fn batched_calls_limit() -> u32 {
+			let allocator_limit = 33554432;
+			let call_size = core::mem::size_of::<<T as Config>::Call>() as u32;
+			// The margin to take into account vec doubling capacity.
+			let margin_factor = 3;
+
+			allocator_limit / margin_factor / call_size
+		}
+	}
+
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Too many calls batched.
@@ -121,7 +134,8 @@ pub mod pallet {
 		///
 		/// May be called from any origin.
 		///
-		/// - `calls`: The calls to be dispatched from the same origin.
+		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
+		///   exceed the constant: [`Self::batched_calls_limit`] (available in constant metadata).
 		///
 		/// If origin is root then call are dispatch without checking origin filter. (This includes
 		/// bypassing `frame_system::Config::BaseCallFilter`).
@@ -159,7 +173,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
-			ensure!(calls_len <= Self::batched_calls_limit(), Error::<T>::TooManyCalls);
+			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
 			let mut weight: Weight = 0;
@@ -235,7 +249,8 @@ pub mod pallet {
 		///
 		/// May be called from any origin.
 		///
-		/// - `calls`: The calls to be dispatched from the same origin.
+		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
+		///   exceed the constant: [`Self::batched_calls_limit`] (available in constant metadata).
 		///
 		/// If origin is root then call are dispatch without checking origin filter. (This includes
 		/// bypassing `frame_system::Config::BaseCallFilter`).
@@ -268,7 +283,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
-			ensure!(calls_len <= Self::batched_calls_limit(), Error::<T>::TooManyCalls);
+			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 			// Track the actual weight of each of the batch calls.
 			let mut weight: Weight = 0;
 			for (index, call) in calls.into_iter().enumerate() {
@@ -316,15 +331,5 @@ impl<T: Config> Pallet<T> {
 	pub fn derivative_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
-	}
-
-	/// The limit on the number of batched calls.
-	fn batched_calls_limit() -> usize {
-		let allocator_limit = 33554432;
-		let call_size = core::mem::size_of::<<T as Config>::Call>();
-		// The margin to take into account vec doubling capacity.
-		let margin_factor = 3;
-
-		allocator_limit/margin_factor/call_size
 	}
 }
