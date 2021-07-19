@@ -274,7 +274,7 @@
 #![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(test)]
+#[cfg(any(test, feature = "make-bags"))]
 mod mock;
 #[cfg(test)]
 mod tests;
@@ -282,7 +282,6 @@ mod tests;
 pub mod testing_utils;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
-
 
 pub mod inflation;
 pub mod slashing;
