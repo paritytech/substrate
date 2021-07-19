@@ -182,7 +182,10 @@ fn origin_guards_should_work() {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_noop!(Uniques::transfer_ownership(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
-		assert_noop!(Uniques::set_team(Origin::signed(2), 0, 2, 2, 2), Error::<Test>::NoPermission);
+		assert_noop!(
+			Uniques::set_team(Origin::signed(2), 0, Box::new(2), Box::new(2), Box::new(2)),
+			Error::<Test>::NoPermission,
+		);
 		assert_noop!(Uniques::freeze(Origin::signed(2), 0, 42), Error::<Test>::NoPermission);
 		assert_noop!(Uniques::thaw(Origin::signed(2), 0, 42), Error::<Test>::NoPermission);
 		assert_noop!(Uniques::mint(Origin::signed(2), 0, 69, 2), Error::<Test>::NoPermission);
@@ -223,7 +226,7 @@ fn transfer_owner_should_work() {
 fn set_team_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
-		assert_ok!(Uniques::set_team(Origin::signed(1), 0, 2, 3, 4));
+		assert_ok!(Uniques::set_team(Origin::signed(1), 0, Box::new(2), Box::new(3), Box::new(4)));
 
 		assert_ok!(Uniques::mint(Origin::signed(2), 0, 42, 2));
 		assert_ok!(Uniques::freeze(Origin::signed(4), 0, 42));
@@ -419,7 +422,18 @@ fn force_asset_status_should_work(){
 		assert_eq!(Balances::reserved_balance(1), 65);
 
 		//force asset status to be free holding
-		assert_ok!(Uniques::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, true, false));
+		assert_ok!(
+			Uniques::force_asset_status(
+				Origin::root(),
+				0,
+				Box::new(1),
+				Box::new(1),
+				Box::new(1),
+				Box::new(1),
+				true,
+				false,
+			)
+		);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 142, 1));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 169, 2));
 		assert_ok!(Uniques::set_metadata(Origin::signed(1), 0, 142, bvec![0; 20], false));
@@ -445,7 +459,7 @@ fn burn_works() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
-		assert_ok!(Uniques::set_team(Origin::signed(1), 0, 2, 3, 4));
+		assert_ok!(Uniques::set_team(Origin::signed(1), 0, Box::new(2), Box::new(3), Box::new(4)));
 
 		assert_noop!(Uniques::burn(Origin::signed(5), 0, 42, Some(5)), Error::<Test>::Unknown);
 

@@ -64,7 +64,7 @@ benchmarks! {
 		// Whitelist controller account from further DB operations.
 		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
 		frame_benchmarking::benchmarking::add_to_whitelist(v_controller_key.into());
-	}: _(RawOrigin::Signed(v_controller), keys, proof)
+	}: _(RawOrigin::Signed(v_controller), Box::new(keys), proof)
 
 	purge_keys {
 		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
@@ -77,7 +77,11 @@ benchmarks! {
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
-		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
+		Session::<T>::set_keys(
+			RawOrigin::Signed(v_controller.clone()).into(),
+			Box::new(keys),
+			proof,
+		)?;
 		// Whitelist controller account from further DB operations.
 		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
 		frame_benchmarking::benchmarking::add_to_whitelist(v_controller_key.into());
@@ -153,7 +157,11 @@ fn check_membership_proof_setup<T: Config>(
 		let keys: T::Keys = Decode::decode(&mut &keys[..]).unwrap();
 		let proof: Vec<u8> = vec![];
 
-		Session::<T>::set_keys(RawOrigin::Signed(controller).into(), keys, proof).unwrap();
+		Session::<T>::set_keys(
+			RawOrigin::Signed(controller).into(),
+			Box::new(keys),
+			proof,
+		).unwrap();
 	}
 
 	Pallet::<T>::on_initialize(T::BlockNumber::one());

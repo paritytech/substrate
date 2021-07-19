@@ -596,7 +596,7 @@ pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 	let _ = Balances::make_free_balance_be(&ctrl, val);
 	assert_ok!(Staking::bond(
 		Origin::signed(stash),
-		ctrl,
+		Box::new(ctrl),
 		val,
 		RewardDestination::Controller,
 	));
@@ -616,7 +616,7 @@ pub(crate) fn bond_nominator(
 	let _ = Balances::make_free_balance_be(&ctrl, val);
 	assert_ok!(Staking::bond(
 		Origin::signed(stash),
-		ctrl,
+		Box::new(ctrl),
 		val,
 		RewardDestination::Controller,
 	));

@@ -197,7 +197,7 @@ fn vested_transfer_works() {
 				per_block: 64, // Vesting over 20 blocks
 				starting_block: 10,
 			};
-			assert_ok!(Vesting::vested_transfer(Some(3).into(), 4, new_vesting_schedule));
+			assert_ok!(Vesting::vested_transfer(Some(3).into(), Box::new(4), new_vesting_schedule));
 			// Now account 4 should have vesting.
 			assert_eq!(Vesting::vesting(&4), Some(new_vesting_schedule));
 			// Ensure the transfer happened correctly.
@@ -247,7 +247,7 @@ fn vested_transfer_correctly_fails() {
 				starting_block: 10,
 			};
 			assert_noop!(
-				Vesting::vested_transfer(Some(4).into(), 2, new_vesting_schedule),
+				Vesting::vested_transfer(Some(4).into(), Box::new(2), new_vesting_schedule),
 				Error::<Test>::ExistingVestingSchedule,
 			);
 
@@ -258,7 +258,7 @@ fn vested_transfer_correctly_fails() {
 				starting_block: 10,
 			};
 			assert_noop!(
-				Vesting::vested_transfer(Some(3).into(), 4, new_vesting_schedule_too_low),
+				Vesting::vested_transfer(Some(3).into(), Box::new(4), new_vesting_schedule_too_low),
 				Error::<Test>::AmountLow,
 			);
 
@@ -286,8 +286,23 @@ fn force_vested_transfer_works() {
 				per_block: 64, // Vesting over 20 blocks
 				starting_block: 10,
 			};
-			assert_noop!(Vesting::force_vested_transfer(Some(4).into(), 3, 4, new_vesting_schedule), BadOrigin);
-			assert_ok!(Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, new_vesting_schedule));
+			assert_noop!(
+				Vesting::force_vested_transfer(
+					Some(4).into(),
+					Box::new(3),
+					Box::new(4),
+					new_vesting_schedule
+				),
+				BadOrigin,
+			);
+			assert_ok!(
+				Vesting::force_vested_transfer(
+					RawOrigin::Root.into(),
+					Box::new(3),
+					Box::new(4),
+					new_vesting_schedule,
+				),
+			);
 			// Now account 4 should have vesting.
 			assert_eq!(Vesting::vesting(&4), Some(new_vesting_schedule));
 			// Ensure the transfer happened correctly.
@@ -337,7 +352,12 @@ fn force_vested_transfer_correctly_fails() {
 				starting_block: 10,
 			};
 			assert_noop!(
-				Vesting::force_vested_transfer(RawOrigin::Root.into(), 4, 2, new_vesting_schedule),
+				Vesting::force_vested_transfer(
+					RawOrigin::Root.into(),
+					Box::new(4),
+					Box::new(2),
+					new_vesting_schedule,
+				),
 				Error::<Test>::ExistingVestingSchedule,
 			);
 
@@ -348,7 +368,12 @@ fn force_vested_transfer_correctly_fails() {
 				starting_block: 10,
 			};
 			assert_noop!(
-				Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 4, new_vesting_schedule_too_low),
+				Vesting::force_vested_transfer(
+					RawOrigin::Root.into(),
+					Box::new(3),
+					Box::new(4),
+					new_vesting_schedule_too_low,
+				),
 				Error::<Test>::AmountLow,
 			);
 

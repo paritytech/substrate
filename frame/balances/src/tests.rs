@@ -341,10 +341,12 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
 				assert_noop!(
-					Balances::force_transfer(Some(2).into(), 1, 2, 69),
+					Balances::force_transfer(Some(2).into(), Box::new(1), Box::new(2), 69),
 					BadOrigin,
 				);
-				assert_ok!(Balances::force_transfer(RawOrigin::Root.into(), 1, 2, 69));
+				assert_ok!(
+					Balances::force_transfer(RawOrigin::Root.into(), Box::new(1), Box::new(2), 69)
+				);
 				assert_eq!(Balances::total_balance(&1), 42);
 				assert_eq!(Balances::total_balance(&2), 69);
 			});

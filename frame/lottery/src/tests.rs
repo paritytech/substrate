@@ -44,7 +44,7 @@ fn basic_end_to_end_works() {
 		let length = 20;
 		let delay = 5;
 		let calls = vec![
-			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::force_transfer(Box::new(0), Box::new(0), 0)),
 			Call::Balances(BalancesCall::transfer(0, 0)),
 		];
 
@@ -103,7 +103,7 @@ fn set_calls_works() {
 		assert!(!CallIndices::<Test>::exists());
 
 		let calls = vec![
-			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::force_transfer(Box::new(0), Box::new(0), 0)),
 			Call::Balances(BalancesCall::transfer(0, 0)),
 		];
 
@@ -111,7 +111,7 @@ fn set_calls_works() {
 		assert!(CallIndices::<Test>::exists());
 
 		let too_many_calls = vec![
-			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::force_transfer(Box::new(0), Box::new(0), 0)),
 			Call::Balances(BalancesCall::transfer(0, 0)),
 			Call::System(SystemCall::remark(vec![])),
 		];
@@ -165,7 +165,7 @@ fn buy_ticket_works_as_simple_passthrough() {
 
 		// Lottery is set up, but too expensive to enter, so `do_buy_ticket` fails.
 		let calls = vec![
-			Call::Balances(BalancesCall::force_transfer(0, 0, 0)),
+			Call::Balances(BalancesCall::force_transfer(Box::new(0), Box::new(0), 0)),
 			Call::Balances(BalancesCall::transfer(0, 0)),
 		];
 		assert_ok!(Lottery::set_calls(Origin::root(), calls));
@@ -183,7 +183,9 @@ fn buy_ticket_works_as_simple_passthrough() {
 			BalancesError::<Test, _>::InsufficientBalance,
 		);
 
-		let bad_origin_call = Box::new(Call::Balances(BalancesCall::force_transfer(0, 0, 0)));
+		let bad_origin_call = Box::new(Call::Balances(
+			BalancesCall::force_transfer(Box::new(0), Box::new(0), 0)
+		));
 		assert_noop!(
 			Lottery::buy_ticket(Origin::signed(1), bad_origin_call),
 			BadOrigin,

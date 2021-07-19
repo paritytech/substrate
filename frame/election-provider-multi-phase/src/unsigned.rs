@@ -781,7 +781,7 @@ mod tests {
 	fn validate_unsigned_retracts_wrong_phase() {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
+			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
 
 			// initial
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -841,7 +841,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
+			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
 
 			// initial
 			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -878,7 +878,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
+			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
 			assert_eq!(solution.compact.unique_targets().len(), 0);
 
 			// won't work anymore.
@@ -900,7 +900,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
+			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
 
 			assert_eq!(
 				<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -926,7 +926,7 @@ mod tests {
 
 			// This is in itself an invalid BS solution.
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), witness());
+			let call = Call::submit_unsigned(Box::new(solution.clone()), witness());
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -946,7 +946,7 @@ mod tests {
 			let mut correct_witness = witness();
 			correct_witness.voters += 1;
 			correct_witness.targets -= 1;
-			let call = Call::submit_unsigned(solution.clone(), correct_witness);
+			let call = Call::submit_unsigned(Box::new(solution.clone()), correct_witness);
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -967,7 +967,7 @@ mod tests {
 
 			// ensure this solution is valid.
 			assert!(MultiPhase::queued_solution().is_none());
-			assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, witness));
+			assert_ok!(MultiPhase::submit_unsigned(Origin::none(), Box::new(solution), witness));
 			assert!(MultiPhase::queued_solution().is_some());
 		})
 	}
@@ -1046,7 +1046,9 @@ mod tests {
 				};
 				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
-				assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, witness));
+				assert_ok!(
+					MultiPhase::submit_unsigned(Origin::none(), Box::new(solution), witness)
+				);
 				assert_eq!(MultiPhase::queued_solution().unwrap().score[0], 10);
 
 				// trial 1: a solution who's score is only 2, i.e. 20% better in the first element.
@@ -1088,7 +1090,9 @@ mod tests {
 
 				// and it is fine
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
-				assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, witness));
+				assert_ok!(
+					MultiPhase::submit_unsigned(Origin::none(), Box::new(solution), witness)
+				);
 			})
 	}
 

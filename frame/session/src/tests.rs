@@ -100,7 +100,9 @@ fn authorities_should_track_validators() {
 		reset_before_session_end_called();
 
 		set_next_validators(vec![1, 2, 4]);
-		assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4).into(), vec![]));
+		assert_ok!(
+			Session::set_keys(Origin::signed(4), Box::new(UintAuthorityId(4).into()), vec![])
+		);
 		force_new_session();
 		initialize_block(3);
 		assert_eq!(Session::queued_keys(), vec![
@@ -160,7 +162,9 @@ fn session_change_should_work() {
 
 		// Block 3: Set new key for validator 2; no visible change.
 		initialize_block(3);
-		assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5).into(), vec![]));
+		assert_ok!(
+			Session::set_keys(Origin::signed(2), Box::new(UintAuthorityId(5).into()), vec![])
+		);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 		// Block 4: Session rollover; no visible change.
@@ -183,13 +187,17 @@ fn duplicates_are_not_allowed() {
 		System::set_block_number(1);
 		Session::on_initialize(1);
 		assert_noop!(
-			Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]),
+			Session::set_keys(Origin::signed(4), Box::new(UintAuthorityId(1).into()), vec![]),
 			Error::<Test>::DuplicatedKey,
 		);
-		assert_ok!(Session::set_keys(Origin::signed(1), UintAuthorityId(10).into(), vec![]));
+		assert_ok!(
+			Session::set_keys(Origin::signed(1), Box::new(UintAuthorityId(10).into()), vec![])
+		);
 
 		// is fine now that 1 has migrated off.
-		assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]));
+		assert_ok!(
+			Session::set_keys(Origin::signed(4), Box::new(UintAuthorityId(1).into()), vec![])
+		);
 	});
 }
 
@@ -231,7 +239,7 @@ fn session_changed_flag_works() {
 		assert!(before_session_end_called());
 		reset_before_session_end_called();
 
-		assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5).into(), vec![]));
+		assert_ok!(Session::set_keys(Origin::signed(2), Box::new(UintAuthorityId(5).into()), vec![]));
 		force_new_session();
 		initialize_block(6);
 		assert!(!session_changed());
@@ -239,7 +247,7 @@ fn session_changed_flag_works() {
 		reset_before_session_end_called();
 
 		// changing the keys of a validator leads to change.
-		assert_ok!(Session::set_keys(Origin::signed(69), UintAuthorityId(69).into(), vec![]));
+		assert_ok!(Session::set_keys(Origin::signed(69), Box::new(UintAuthorityId(69).into()), vec![]));
 		force_new_session();
 		initialize_block(7);
 		assert!(session_changed());
@@ -334,7 +342,9 @@ fn session_keys_generate_output_works_as_set_keys_input() {
 		assert_ok!(
 			Session::set_keys(
 				Origin::signed(2),
-				<mock::Test as Config>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
+				Box::new(
+					<mock::Test as Config>::Keys::decode(&mut &new_keys[..]).expect("Decode keys")
+				),
 				vec![],
 			)
 		);

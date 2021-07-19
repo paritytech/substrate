@@ -1924,7 +1924,7 @@ mod tests {
 				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
 				assert_ok!(MultiPhase::submit(
 					crate::mock::Origin::signed(99),
-					solution,
+					Box::new(solution),
 					MultiPhase::signed_submissions().len() as u32
 				));
 			}

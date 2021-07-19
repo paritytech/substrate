@@ -452,8 +452,11 @@ fn report_equivocation_current_session_works() {
 		let key_owner_proof = Historical::prove(key).unwrap();
 
 		// report the equivocation
-		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Babe::report_equivocation_unsigned(
+			Origin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof
+		).unwrap();
 
 		// start a new era so that the results of the offence report
 		// are applied at era end
@@ -537,8 +540,11 @@ fn report_equivocation_old_session_works() {
 		);
 
 		// report the equivocation
-		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Babe::report_equivocation_unsigned(
+			Origin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof
+		).unwrap();
 
 		// start a new era so that the results of the offence report
 		// are applied at era end
@@ -597,7 +603,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		assert_err!(
 			Babe::report_equivocation_unsigned(
 				Origin::none(),
-				equivocation_proof.clone(),
+				Box::new(equivocation_proof.clone()),
 				key_owner_proof
 			),
 			Error::<Test>::InvalidKeyOwnershipProof,
@@ -615,7 +621,11 @@ fn report_equivocation_invalid_key_owner_proof() {
 		start_era(2);
 
 		assert_err!(
-			Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof),
+			Babe::report_equivocation_unsigned(
+				Origin::none(),
+				Box::new(equivocation_proof),
+				key_owner_proof,
+			),
 			Error::<Test>::InvalidKeyOwnershipProof,
 		);
 	})
@@ -650,7 +660,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 			assert_err!(
 				Babe::report_equivocation_unsigned(
 					Origin::none(),
-					equivocation_proof,
+					Box::new(equivocation_proof),
 					key_owner_proof.clone(),
 				),
 				Error::<Test>::InvalidEquivocationProof,
@@ -760,7 +770,10 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		let key_owner_proof = Historical::prove(key).unwrap();
 
 		let inner =
-			Call::report_equivocation_unsigned(equivocation_proof.clone(), key_owner_proof.clone());
+			Call::report_equivocation_unsigned(
+				Box::new(equivocation_proof.clone()),
+				key_owner_proof.clone(),
+			);
 
 		// only local/inblock reports are allowed
 		assert_eq!(
@@ -791,8 +804,11 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		assert_ok!(<Babe as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&inner));
 
 		// we submit the report
-		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
-			.unwrap();
+		Babe::report_equivocation_unsigned(
+			Origin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		).unwrap();
 
 		// the report should now be considered stale and the transaction is invalid.
 		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
@@ -856,7 +872,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// check the dispatch info for the call.
 		let info = Call::<Test>::report_equivocation_unsigned(
-			equivocation_proof.clone(),
+			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
 		.get_dispatch_info();
@@ -868,7 +884,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// report the equivocation.
 		let post_info = Babe::report_equivocation_unsigned(
 			Origin::none(),
-			equivocation_proof.clone(),
+			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
 		.unwrap();
@@ -881,7 +897,11 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// report the equivocation again which is invalid now since it is
 		// duplicate.
 		let post_info =
-			Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
+			Babe::report_equivocation_unsigned(
+				Origin::none(),
+				Box::new(equivocation_proof),
+				key_owner_proof
+			)
 				.err()
 				.unwrap()
 				.post_info;

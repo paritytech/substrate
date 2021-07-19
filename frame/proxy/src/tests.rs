@@ -89,10 +89,14 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
+parameter_types! {
+	pub const MaxBatched: u32 = 100_000;
+}
 impl pallet_utility::Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type WeightInfo = ();
+	type MaxBatched = MaxBatched;
 }
 parameter_types! {
 	pub const ProxyDepositBase: u64 = 1;

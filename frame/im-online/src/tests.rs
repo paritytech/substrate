@@ -129,7 +129,7 @@ fn heartbeat(
 	};
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
-	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))
+	ImOnline::pre_dispatch(&crate::Call::heartbeat(Box::new(heartbeat.clone()), signature.clone()))
 		.map_err(|e| match e {
 			TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_VALIDATORS_LEN)) =>
 				"invalid validators len",
@@ -137,7 +137,7 @@ fn heartbeat(
 		})?;
 	ImOnline::heartbeat(
 		Origin::none(),
-		heartbeat,
+		Box::new(heartbeat),
 		signature,
 	)
 }
@@ -236,7 +236,7 @@ fn should_generate_heartbeats() {
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
-		assert_eq!(heartbeat, Heartbeat {
+		assert_eq!(*heartbeat, Heartbeat {
 			block_number: block,
 			network_state: sp_io::offchain::network_state().unwrap(),
 			session_index: 2,
@@ -348,7 +348,7 @@ fn should_not_send_a_report_if_already_online() {
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
-		assert_eq!(heartbeat, Heartbeat {
+		assert_eq!(*heartbeat, Heartbeat {
 			block_number: 4,
 			network_state: sp_io::offchain::network_state().unwrap(),
 			session_index: 2,

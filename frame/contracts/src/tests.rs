@@ -258,10 +258,14 @@ impl pallet_timestamp::Config for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
+parameter_types! {
+	pub const MaxBatched: u32 = 100_000;
+}
 impl pallet_utility::Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type WeightInfo = ();
+	type MaxBatched = MaxBatched;
 }
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;
@@ -391,7 +395,13 @@ fn calling_plain_account_fails() {
 		let base_cost = <<Test as Config>::WeightInfo as WeightInfo>::call();
 
 		assert_eq!(
-			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
+			Contracts::call(
+				Origin::signed(ALICE),
+				Box::new(BOB),
+				0,
+				GAS_LIMIT,
+				Box::new(Vec::new()),
+			),
 			Err(
 				DispatchErrorWithPostInfo {
 					error: Error::<Test>::ContractNotFound.into(),
@@ -498,9 +508,9 @@ fn instantiate_and_call_and_deposit_event() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			);
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
@@ -574,29 +584,29 @@ fn deposit_event_max_value_limit() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 			// Call contract with allowed storage value.
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
-				addr.clone(),
+				Box::new(addr.clone()),
 				0,
 				GAS_LIMIT * 2, // we are copying a huge buffer,
-				<Test as Config>::Schedule::get().limits.payload_len.encode(),
+				Box::new(<Test as Config>::Schedule::get().limits.payload_len.encode()),
 			));
 
 			// Call contract with too large a storage value.
 			assert_err_ignore_postinfo!(
 				Contracts::call(
 					Origin::signed(ALICE),
-					addr,
+					Box::new(addr),
 					0,
 					GAS_LIMIT,
-					(<Test as Config>::Schedule::get().limits.payload_len + 1).encode(),
+					Box::new((<Test as Config>::Schedule::get().limits.payload_len + 1).encode()),
 				),
 				Error::<Test>::ValueTooLarge,
 			);
@@ -618,9 +628,9 @@ fn run_out_of_gas() {
 				Origin::signed(ALICE),
 				100 * subsistence,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
@@ -629,10 +639,10 @@ fn run_out_of_gas() {
 			assert_err_ignore_postinfo!(
 				Contracts::call(
 					Origin::signed(ALICE),
-					addr, // newly created account
+					Box::new(addr), // newly created account
 					0,
 					67_500_000,
-					vec![],
+					Box::new(vec![]),
 				),
 				Error::<Test>::OutOfGas,
 			);
@@ -666,10 +676,10 @@ fn storage_size() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
+				Box::new(wasm),
 				// rent_allowance
-				<Test as pallet_balances::Config>::Balance::from(10_000u32).encode(),
-				vec![],
+				Box::new(<Test as pallet_balances::Config>::Balance::from(10_000u32).encode()),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			let bob_contract = ContractInfoOf::<Test>::get(&addr)
@@ -687,10 +697,10 @@ fn storage_size() {
 
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
-				addr.clone(),
+				Box::new(addr.clone()),
 				0,
 				GAS_LIMIT,
-				call::set_storage_4_byte()
+				Box::new(call::set_storage_4_byte())
 			));
 			let bob_contract = ContractInfoOf::<Test>::get(&addr)
 				.unwrap()
@@ -707,10 +717,10 @@ fn storage_size() {
 
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
-				addr.clone(),
+				Box::new(addr.clone()),
 				0,
 				GAS_LIMIT,
-				call::remove_storage_4_byte()
+				Box::new(call::remove_storage_4_byte())
 			));
 			let bob_contract = ContractInfoOf::<Test>::get(&addr)
 				.unwrap()
@@ -739,9 +749,9 @@ fn empty_kv_pairs() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			let bob_contract = ContractInfoOf::<Test>::get(&addr)
@@ -785,9 +795,9 @@ fn deduct_blocks() {
 				Origin::signed(ALICE),
 				endowment,
 				GAS_LIMIT,
-				wasm,
-				allowance.encode(),
-				vec![],
+				Box::new(wasm),
+				Box::new(allowance.encode()),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			let contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
@@ -814,7 +824,13 @@ fn deduct_blocks() {
 
 			// Trigger rent through call
 			assert_ok!(
-				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null())
+				Contracts::call(
+					Origin::signed(ALICE),
+					Box::new(addr.clone()),
+					0,
+					GAS_LIMIT,
+					Box::new(call::null())
+				)
 			);
 
 			// Check result
@@ -831,7 +847,13 @@ fn deduct_blocks() {
 
 			// Trigger rent through call
 			assert_ok!(
-				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null())
+				Contracts::call(
+					Origin::signed(ALICE),
+					Box::new(addr.clone()),
+					0,
+					GAS_LIMIT,
+					Box::new(call::null())
+				)
 			);
 
 			// Check result
@@ -845,7 +867,13 @@ fn deduct_blocks() {
 
 			// Second call on same block should have no effect on rent
 			assert_ok!(
-				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null())
+				Contracts::call(
+					Origin::signed(ALICE),
+					Box::new(addr.clone()),
+					0,
+					GAS_LIMIT,
+					Box::new(call::null())
+				)
 			);
 			let contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
 			assert_eq!(contract.rent_allowance, allowance - rent0 - rent - rent_2);
@@ -894,9 +922,10 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn(AccountIdOf<Test>) -> bool
 				Origin::signed(ALICE),
 				100_000,
 				GAS_LIMIT,
-				wasm,
-				<Test as pallet_balances::Config>::Balance::from(30_000u32).encode(), // rent allowance
-				vec![],
+				Box::new(wasm),
+				// rent allowance
+				Box::new(<Test as pallet_balances::Config>::Balance::from(30_000u32).encode()),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
@@ -933,9 +962,10 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 				Origin::signed(ALICE),
 				70_000,
 				GAS_LIMIT,
-				wasm.clone(),
-				<Test as pallet_balances::Config>::Balance::from(100_000u32).encode(), // rent allowance
-				vec![],
+				Box::new(wasm.clone()),
+				// rent allowance
+				Box::new(<Test as pallet_balances::Config>::Balance::from(100_000u32).encode()),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			let allowance = ContractInfoOf::<Test>::get(&addr)
@@ -980,9 +1010,10 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 				Origin::signed(ALICE),
 				100_000,
 				GAS_LIMIT,
-				wasm.clone(),
-				<Test as pallet_balances::Config>::Balance::from(70_000u32).encode(), // rent allowance
-				vec![],
+				Box::new(wasm.clone()),
+				// rent allowance
+				Box::new(<Test as pallet_balances::Config>::Balance::from(70_000u32).encode()),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			let allowance = ContractInfoOf::<Test>::get(&addr)
@@ -1037,9 +1068,9 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 				Origin::signed(ALICE),
 				subsistence_threshold * 100,
 				GAS_LIMIT,
-				wasm,
-				(subsistence_threshold * 100).encode(), // rent allowance
-				vec![],
+				Box::new(wasm),
+				Box::new((subsistence_threshold * 100).encode()), // rent allowance
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			let allowance = ContractInfoOf::<Test>::get(&addr)
@@ -1098,16 +1129,22 @@ fn call_removed_contract() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
+				Box::new(wasm),
 				// rent allowance
-				<Test as pallet_balances::Config>::Balance::from(10_000u32).encode(),
-				vec![],
+				Box::new(<Test as pallet_balances::Config>::Balance::from(10_000u32).encode()),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 			// Calling contract should succeed.
 			assert_ok!(
-				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null())
+				Contracts::call(
+					Origin::signed(ALICE),
+					Box::new(addr.clone()),
+					0,
+					GAS_LIMIT,
+					Box::new(call::null())
+				)
 			);
 
 			// Advance blocks
@@ -1115,7 +1152,13 @@ fn call_removed_contract() {
 
 			// Calling contract should deny access because rent cannot be paid.
 			assert_err_ignore_postinfo!(
-				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null()),
+				Contracts::call(
+					Origin::signed(ALICE),
+					Box::new(addr.clone()),
+					0,
+					GAS_LIMIT,
+					Box::new(call::null())
+				),
 				Error::<Test>::RentNotPaid,
 			);
 			// No event is generated because the contract is not actually removed.
@@ -1123,7 +1166,13 @@ fn call_removed_contract() {
 
 			// Subsequent contract calls should also fail.
 			assert_err_ignore_postinfo!(
-				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null()),
+				Contracts::call(
+					Origin::signed(ALICE),
+					Box::new(addr.clone()),
+					0,
+					GAS_LIMIT,
+					Box::new(call::null())
+				),
 				Error::<Test>::RentNotPaid,
 			);
 
@@ -1147,9 +1196,9 @@ fn default_rent_allowance_on_instantiate() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			let contract = ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
@@ -1172,7 +1221,13 @@ fn default_rent_allowance_on_instantiate() {
 
 			// Trigger rent through call
 			assert_ok!(
-				Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, call::null())
+				Contracts::call(
+					Origin::signed(ALICE),
+					Box::new(addr.clone()),
+					0,
+					GAS_LIMIT,
+					Box::new(call::null())
+				)
 			);
 
 			// Check contract is still alive
@@ -1227,9 +1282,9 @@ fn restoration(
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				set_rent_wasm.clone(),
-				allowance.encode(),
-				vec![],
+				Box::new(set_rent_wasm.clone()),
+				Box::new(allowance.encode()),
+				Box::new(vec![]),
 			));
 			let addr_bob = Contracts::contract_address(&ALICE, &set_rent_code_hash, &[]);
 
@@ -1288,9 +1343,9 @@ fn restoration(
 					Origin::signed(ALICE),
 					20_000,
 					GAS_LIMIT,
-					set_rent_wasm,
-					allowance.encode(),
-					vec![1],
+					Box::new(set_rent_wasm),
+					Box::new(allowance.encode()),
+					Box::new(vec![1]),
 				));
 				assert_refcount!(set_rent_code_hash, 2);
 				let addr_dummy = Contracts::contract_address(&ALICE, &set_rent_code_hash, &[1]);
@@ -1334,8 +1389,8 @@ fn restoration(
 			if test_different_storage {
 				assert_ok!(Contracts::call(
 					Origin::signed(ALICE),
-					addr_bob.clone(), 0, GAS_LIMIT,
-					call::set_storage_4_byte())
+					Box::new(addr_bob.clone()), 0, GAS_LIMIT,
+					Box::new(call::set_storage_4_byte()))
 				);
 			}
 
@@ -1347,7 +1402,11 @@ fn restoration(
 			// calls `claim_surcharge`.
 			assert_err_ignore_postinfo!(
 				Contracts::call(
-					Origin::signed(ALICE), addr_bob.clone(), 0, GAS_LIMIT, call::null()
+					Origin::signed(ALICE),
+					Box::new(addr_bob.clone()),
+					0,
+					GAS_LIMIT,
+					Box::new(call::null()),
 				),
 				Error::<Test>::RentNotPaid,
 			);
@@ -1370,9 +1429,9 @@ fn restoration(
 				Origin::signed(CHARLIE),
 				30_000,
 				GAS_LIMIT,
-				restoration_wasm,
-				vec![],
-				vec![],
+				Box::new(restoration_wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr_django = Contracts::contract_address(&CHARLIE, &restoration_code_hash, &[]);
 
@@ -1391,15 +1450,17 @@ fn restoration(
 			let perform_the_restoration = || {
 				Contracts::call(
 					Origin::signed(ALICE),
-					addr_django.clone(),
+					Box::new(addr_django.clone()),
 					0,
 					GAS_LIMIT,
-					set_rent_code_hash
-						.as_ref()
-						.iter()
-						.chain(AsRef::<[u8]>::as_ref(&addr_bob))
-						.cloned()
-						.collect(),
+					Box::new(
+						set_rent_code_hash
+							.as_ref()
+							.iter()
+							.chain(AsRef::<[u8]>::as_ref(&addr_bob))
+							.cloned()
+							.collect()
+					),
 				)
 			};
 
@@ -1553,9 +1614,9 @@ fn storage_max_value_limit() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
@@ -1563,20 +1624,20 @@ fn storage_max_value_limit() {
 			// Call contract with allowed storage value.
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
-				addr.clone(),
+				Box::new(addr.clone()),
 				0,
 				GAS_LIMIT * 2, // we are copying a huge buffer
-				<Test as Config>::Schedule::get().limits.payload_len.encode(),
+				Box::new(<Test as Config>::Schedule::get().limits.payload_len.encode()),
 			));
 
 			// Call contract with too large a storage value.
 			assert_err_ignore_postinfo!(
 				Contracts::call(
 					Origin::signed(ALICE),
-					addr,
+					Box::new(addr),
 					0,
 					GAS_LIMIT,
-					(<Test as Config>::Schedule::get().limits.payload_len + 1).encode(),
+					Box::new((<Test as Config>::Schedule::get().limits.payload_len + 1).encode()),
 				),
 				Error::<Test>::ValueTooLarge,
 			);
@@ -1598,27 +1659,27 @@ fn deploy_and_call_other_contract() {
 				Origin::signed(ALICE),
 				100_000,
 				GAS_LIMIT,
-				caller_wasm,
-				vec![],
-				vec![],
+				Box::new(caller_wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			assert_ok!(Contracts::instantiate_with_code(
 				Origin::signed(ALICE),
 				100_000,
 				GAS_LIMIT,
-				callee_wasm,
-				0u32.to_le_bytes().encode(),
-				vec![42],
+				Box::new(callee_wasm),
+				Box::new(0u32.to_le_bytes().encode()),
+				Box::new(vec![42]),
 			));
 
 			// Call BOB contract, which attempts to instantiate and call the callee contract and
 			// makes various assertions on the results from those calls.
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
-				Contracts::contract_address(&ALICE, &caller_code_hash, &[]),
+				Box::new(Contracts::contract_address(&ALICE, &caller_code_hash, &[])),
 				0,
 				GAS_LIMIT,
-				callee_code_hash.as_ref().to_vec(),
+				Box::new(callee_code_hash.as_ref().to_vec()),
 			));
 		});
 }
@@ -1637,9 +1698,9 @@ fn cannot_self_destruct_through_draning() {
 				Origin::signed(ALICE),
 				100_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
@@ -1654,10 +1715,10 @@ fn cannot_self_destruct_through_draning() {
 			assert_ok!(
 				Contracts::call(
 					Origin::signed(ALICE),
-					addr,
+					Box::new(addr),
 					0,
 					GAS_LIMIT,
-					vec![],
+					Box::new(vec![]),
 				)
 			);
 		});
@@ -1677,9 +1738,9 @@ fn cannot_self_destruct_while_live() {
 				Origin::signed(ALICE),
 				100_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
@@ -1694,10 +1755,10 @@ fn cannot_self_destruct_while_live() {
 			assert_err_ignore_postinfo!(
 				Contracts::call(
 					Origin::signed(ALICE),
-					addr.clone(),
+					Box::new(addr.clone()),
 					0,
 					GAS_LIMIT,
-					vec![0],
+					Box::new(vec![0]),
 				),
 				Error::<Test>::ContractTrapped,
 			);
@@ -1725,9 +1786,9 @@ fn self_destruct_works() {
 				Origin::signed(ALICE),
 				100_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
@@ -1744,10 +1805,10 @@ fn self_destruct_works() {
 			assert_matches!(
 				Contracts::call(
 					Origin::signed(ALICE),
-					addr.clone(),
+					Box::new(addr.clone()),
 					0,
 					GAS_LIMIT,
-					vec![],
+					Box::new(vec![]),
 				),
 				Ok(_)
 			);
@@ -1811,9 +1872,9 @@ fn destroy_contract_and_transfer_funds() {
 				Origin::signed(ALICE),
 				200_000,
 				GAS_LIMIT,
-				callee_wasm,
-				vec![],
-				vec![42]
+				Box::new(callee_wasm),
+				Box::new(vec![]),
+				Box::new(vec![42]),
 			));
 
 			// This deploys the BOB contract, which in turn deploys the CHARLIE contract during
@@ -1822,9 +1883,9 @@ fn destroy_contract_and_transfer_funds() {
 				Origin::signed(ALICE),
 				200_000,
 				GAS_LIMIT,
-				caller_wasm,
-				callee_code_hash.as_ref().to_vec(),
-				vec![],
+				Box::new(caller_wasm),
+				Box::new(callee_code_hash.as_ref().to_vec()),
+				Box::new(vec![]),
 			));
 			let addr_bob = Contracts::contract_address(&ALICE, &caller_code_hash, &[]);
 			let addr_charlie = Contracts::contract_address(
@@ -1840,10 +1901,10 @@ fn destroy_contract_and_transfer_funds() {
 			// Call BOB, which calls CHARLIE, forcing CHARLIE to self-destruct.
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
-				addr_bob,
+				Box::new(addr_bob),
 				0,
 				GAS_LIMIT,
-				addr_charlie.encode(),
+				Box::new(addr_charlie.encode()),
 			));
 
 			// Check that CHARLIE has moved on to the great beyond (ie. died).
@@ -1866,9 +1927,9 @@ fn cannot_self_destruct_in_constructor() {
 					Origin::signed(ALICE),
 					100_000,
 					GAS_LIMIT,
-					wasm,
-					vec![],
-					vec![],
+					Box::new(wasm),
+					Box::new(vec![]),
+					Box::new(vec![]),
 				),
 				Error::<Test>::TerminatedInConstructor,
 			);
@@ -1890,9 +1951,9 @@ fn crypto_hashes() {
 				Origin::signed(ALICE),
 				100_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			// Perform the call.
@@ -1943,9 +2004,9 @@ fn transfer_return_code() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
@@ -1993,9 +2054,9 @@ fn call_return_code() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				caller_code,
-				vec![0],
-				vec![],
+				Box::new(caller_code),
+				Box::new(vec![0]),
+				Box::new(vec![]),
 			),
 		);
 		let addr_bob = Contracts::contract_address(&ALICE, &caller_hash, &[]);
@@ -2017,9 +2078,9 @@ fn call_return_code() {
 				Origin::signed(CHARLIE),
 				subsistence * 100,
 				GAS_LIMIT,
-				callee_code,
-				vec![0],
-				vec![],
+				Box::new(callee_code),
+				Box::new(vec![0]),
+				Box::new(vec![]),
 			),
 		);
 		let addr_django = Contracts::contract_address(&CHARLIE, &callee_hash, &[]);
@@ -2092,9 +2153,9 @@ fn instantiate_return_code() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				callee_code,
-				vec![],
-				vec![],
+				Box::new(callee_code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 
@@ -2103,9 +2164,9 @@ fn instantiate_return_code() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				caller_code,
-				vec![],
-				vec![],
+				Box::new(caller_code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 		let addr = Contracts::contract_address(&ALICE, &caller_hash, &[]);
@@ -2186,9 +2247,9 @@ fn disabled_chain_extension_wont_deploy() {
 				Origin::signed(ALICE),
 				3 * subsistence,
 				GAS_LIMIT,
-				code,
-				vec![],
-				vec![],
+				Box::new(code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 			"module uses chain extensions but chain extensions are disabled",
 		);
@@ -2206,9 +2267,9 @@ fn disabled_chain_extension_errors_on_call() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				code,
-				vec![],
-				vec![],
+				Box::new(code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
@@ -2216,10 +2277,10 @@ fn disabled_chain_extension_errors_on_call() {
 		assert_err_ignore_postinfo!(
 			Contracts::call(
 				Origin::signed(ALICE),
-				addr.clone(),
+				Box::new(addr.clone()),
 				0,
 				GAS_LIMIT,
-				vec![],
+				Box::new(vec![]),
 			),
 			Error::<Test>::NoChainExtension,
 		);
@@ -2237,9 +2298,9 @@ fn chain_extension_works() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				code,
-				vec![],
-				vec![],
+				Box::new(code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
@@ -2311,9 +2372,9 @@ fn lazy_removal_works() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				code,
-				vec![],
-				vec![],
+				Box::new(code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 
@@ -2327,10 +2388,10 @@ fn lazy_removal_works() {
 		// Terminate the contract
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
-			addr.clone(),
+			Box::new(addr.clone()),
 			0,
 			GAS_LIMIT,
-			vec![],
+			Box::new(vec![]),
 		));
 
 		// Contract info should be gone
@@ -2371,9 +2432,9 @@ fn lazy_removal_partial_remove_works() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				code,
-				vec![],
-				vec![],
+				Box::new(code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 
@@ -2394,10 +2455,10 @@ fn lazy_removal_partial_remove_works() {
 		// Terminate the contract
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
-			addr.clone(),
+			Box::new(addr.clone()),
 			0,
 			GAS_LIMIT,
-			vec![],
+			Box::new(vec![]),
 		));
 
 		// Contract info should be gone
@@ -2454,9 +2515,9 @@ fn lazy_removal_does_no_run_on_full_block() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				code,
-				vec![],
-				vec![],
+				Box::new(code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 
@@ -2484,10 +2545,10 @@ fn lazy_removal_does_no_run_on_full_block() {
 		// Terminate the contract
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
-			addr.clone(),
+			Box::new(addr.clone()),
 			0,
 			GAS_LIMIT,
-			vec![],
+			Box::new(vec![]),
 		));
 
 		// Contract info should be gone
@@ -2540,9 +2601,9 @@ fn lazy_removal_does_not_use_all_weight() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				code,
-				vec![],
-				vec![],
+				Box::new(code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 
@@ -2571,10 +2632,10 @@ fn lazy_removal_does_not_use_all_weight() {
 		// Terminate the contract
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
-			addr.clone(),
+			Box::new(addr.clone()),
 			0,
 			GAS_LIMIT,
-			vec![],
+			Box::new(vec![]),
 		));
 
 		// Contract info should be gone
@@ -2612,9 +2673,9 @@ fn deletion_queue_full() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				code,
-				vec![],
-				vec![],
+				Box::new(code),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 
@@ -2627,10 +2688,10 @@ fn deletion_queue_full() {
 		assert_err_ignore_postinfo!(
 			Contracts::call(
 				Origin::signed(ALICE),
-				addr.clone(),
+				Box::new(addr.clone()),
 				0,
 				GAS_LIMIT,
-				vec![],
+				Box::new(vec![]),
 			),
 			Error::<Test>::DeletionQueueFull,
 		);
@@ -2671,10 +2732,12 @@ fn not_deployed_if_endowment_too_low_for_first_rent() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
-				(BalanceOf::<Test>::from(first_rent) - BalanceOf::<Test>::from(1u32))
-					.encode(), // rent allowance
-				vec![],
+				Box::new(wasm),
+				Box::new(
+					// rent allowance
+					(BalanceOf::<Test>::from(first_rent) - BalanceOf::<Test>::from(1u32)).encode()
+				),
+				Box::new(vec![]),
 			),
 			Error::<Test>::NewContractNotFunded,
 		));
@@ -2692,9 +2755,9 @@ fn surcharge_reward_is_capped() {
 			Origin::signed(ALICE),
 			30_000,
 			GAS_LIMIT,
-			wasm,
-			<BalanceOf<Test>>::from(10_000u32).encode(), // rent allowance
-			vec![],
+			Box::new(wasm),
+			Box::new(<BalanceOf<Test>>::from(10_000u32).encode()), // rent allowance
+			Box::new(vec![]),
 		));
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 		let contract = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
@@ -2737,17 +2800,17 @@ fn refcounter() {
 			Origin::signed(ALICE),
 			subsistence * 100,
 			GAS_LIMIT,
-			wasm.clone(),
-			vec![],
-			vec![0],
+			Box::new(wasm.clone()),
+			Box::new(vec![]),
+			Box::new(vec![0]),
 		));
 		assert_ok!(Contracts::instantiate_with_code(
 			Origin::signed(ALICE),
 			subsistence * 100,
 			GAS_LIMIT,
-			wasm.clone(),
-			vec![],
-			vec![1],
+			Box::new(wasm.clone()),
+			Box::new(vec![]),
+			Box::new(vec![1]),
 		));
 		assert_refcount!(code_hash, 2);
 
@@ -2756,9 +2819,9 @@ fn refcounter() {
 			Origin::signed(ALICE),
 			subsistence * 100,
 			GAS_LIMIT,
-			code_hash,
-			vec![],
-			vec![2],
+			Box::new(code_hash),
+			Box::new(vec![]),
+			Box::new(vec![2]),
 		));
 		assert_refcount!(code_hash, 3);
 
@@ -2770,10 +2833,10 @@ fn refcounter() {
 		// Terminating one contract should decrement the refcount
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
-			addr0,
+			Box::new(addr0),
 			0,
 			GAS_LIMIT,
-			vec![],
+			Box::new(vec![]),
 		));
 		assert_refcount!(code_hash, 2);
 
@@ -2810,9 +2873,9 @@ fn reinstrument_does_charge() {
 			Origin::signed(ALICE),
 			subsistence * 100,
 			GAS_LIMIT,
-			wasm,
-			zero.clone(),
-			vec![],
+			Box::new(wasm),
+			Box::new(zero.clone()),
+			Box::new(vec![]),
 		));
 
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
@@ -2878,9 +2941,9 @@ fn debug_message_works() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
@@ -2910,9 +2973,9 @@ fn debug_message_logging_disabled() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
@@ -2929,10 +2992,10 @@ fn debug_message_logging_disabled() {
 		// the dispatchables always run without debugging
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
-			addr,
+			Box::new(addr),
 			0,
 			GAS_LIMIT,
-			vec![],
+			Box::new(vec![]),
 		));
 		assert!(result.debug_message.is_empty());
 	});
@@ -2950,9 +3013,9 @@ fn debug_message_invalid_utf8() {
 				Origin::signed(ALICE),
 				30_000,
 				GAS_LIMIT,
-				wasm,
-				vec![],
-				vec![],
+				Box::new(wasm),
+				Box::new(vec![]),
+				Box::new(vec![]),
 			),
 		);
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
@@ -2982,9 +3045,9 @@ fn gas_estimation_nested_call_fixed_limit() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				caller_code,
-				vec![],
-				vec![0],
+				Box::new(caller_code),
+				Box::new(vec![]),
+				Box::new(vec![0]),
 			),
 		);
 		let addr_caller = Contracts::contract_address(&ALICE, &caller_hash, &[0]);
@@ -2994,9 +3057,9 @@ fn gas_estimation_nested_call_fixed_limit() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				callee_code,
-				vec![],
-				vec![1],
+				Box::new(callee_code),
+				Box::new(vec![]),
+				Box::new(vec![1]),
 			),
 		);
 		let addr_callee = Contracts::contract_address(&ALICE, &callee_hash, &[1]);
@@ -3047,9 +3110,9 @@ fn gas_estimation_call_runtime() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				caller_code,
-				vec![],
-				vec![0],
+				Box::new(caller_code),
+				Box::new(vec![]),
+				Box::new(vec![0]),
 			),
 		);
 		let addr_caller = Contracts::contract_address(&ALICE, &caller_hash, &[0]);
@@ -3059,9 +3122,9 @@ fn gas_estimation_call_runtime() {
 				Origin::signed(ALICE),
 				subsistence * 100,
 				GAS_LIMIT,
-				callee_code,
-				vec![],
-				vec![1],
+				Box::new(callee_code),
+				Box::new(vec![]),
+				Box::new(vec![1]),
 			),
 		);
 		let addr_callee = Contracts::contract_address(&ALICE, &callee_hash, &[1]);

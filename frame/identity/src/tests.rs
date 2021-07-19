@@ -161,26 +161,32 @@ fn editing_subaccounts_should_work() {
 	new_test_ext().execute_with(|| {
 		let data = |x| Data::Raw(vec![x; 1].try_into().unwrap());
 
-		assert_noop!(Identity::add_sub(Origin::signed(10), 20, data(1)), Error::<Test>::NoIdentity);
+		assert_noop!(
+			Identity::add_sub(Origin::signed(10), Box::new(20), data(1)),
+			Error::<Test>::NoIdentity,
+		);
 
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 
 		// first sub account
-		assert_ok!(Identity::add_sub(Origin::signed(10), 1, data(1)));
+		assert_ok!(Identity::add_sub(Origin::signed(10), Box::new(1), data(1)));
 		assert_eq!(SuperOf::<Test>::get(1), Some((10, data(1))));
 		assert_eq!(Balances::free_balance(10), 80);
 
 		// second sub account
-		assert_ok!(Identity::add_sub(Origin::signed(10), 2, data(2)));
+		assert_ok!(Identity::add_sub(Origin::signed(10), Box::new(2), data(2)));
 		assert_eq!(SuperOf::<Test>::get(1), Some((10, data(1))));
 		assert_eq!(SuperOf::<Test>::get(2), Some((10, data(2))));
 		assert_eq!(Balances::free_balance(10), 70);
 
 		// third sub account is too many
-		assert_noop!(Identity::add_sub(Origin::signed(10), 3, data(3)), Error::<Test>::TooManySubAccounts);
+		assert_noop!(
+			Identity::add_sub(Origin::signed(10), Box::new(3), data(3)),
+			Error::<Test>::TooManySubAccounts,
+		);
 
 		// rename first sub account
-		assert_ok!(Identity::rename_sub(Origin::signed(10), 1, data(11)));
+		assert_ok!(Identity::rename_sub(Origin::signed(10), Box::new(1), data(11)));
 		assert_eq!(SuperOf::<Test>::get(1), Some((10, data(11))));
 		assert_eq!(SuperOf::<Test>::get(2), Some((10, data(2))));
 		assert_eq!(Balances::free_balance(10), 70);
@@ -192,7 +198,7 @@ fn editing_subaccounts_should_work() {
 		assert_eq!(Balances::free_balance(10), 80);
 
 		// add third sub account
-		assert_ok!(Identity::add_sub(Origin::signed(10), 3, data(3)));
+		assert_ok!(Identity::add_sub(Origin::signed(10), Box::new(3), data(3)));
 		assert_eq!(SuperOf::<Test>::get(1), None);
 		assert_eq!(SuperOf::<Test>::get(2), Some((10, data(2))));
 		assert_eq!(SuperOf::<Test>::get(3), Some((10, data(3))));
@@ -205,16 +211,19 @@ fn resolving_subaccount_ownership_works() {
 	new_test_ext().execute_with(|| {
 		let data = |x| Data::Raw(vec![x; 1].try_into().unwrap());
 
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-		assert_ok!(Identity::set_identity(Origin::signed(20), twenty()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
+		assert_ok!(Identity::set_identity(Origin::signed(20), Box::new(twenty())));
 
 		// 10 claims 1 as a subaccount
-		assert_ok!(Identity::add_sub(Origin::signed(10), 1, data(1)));
+		assert_ok!(Identity::add_sub(Origin::signed(10), Box::new(1), data(1)));
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(10), 80);
 		assert_eq!(Balances::reserved_balance(10), 20);
 		// 20 cannot claim 1 now
-		assert_noop!(Identity::add_sub(Origin::signed(20), 1, data(1)), Error::<Test>::AlreadyClaimed);
+		assert_noop!(
+			Identity::add_sub(Origin::signed(20), Box::new(1), data(1)),
+			Error::<Test>::AlreadyClaimed,
+		);
 		// 1 wants to be with 20 so it quits from 10
 		assert_ok!(Identity::quit_sub(Origin::signed(1)));
 		// 1 gets the 10 that 10 paid.
@@ -222,7 +231,7 @@ fn resolving_subaccount_ownership_works() {
 		assert_eq!(Balances::free_balance(10), 80);
 		assert_eq!(Balances::reserved_balance(10), 10);
 		// 20 can claim 1 now
-		assert_ok!(Identity::add_sub(Origin::signed(20), 1, data(1)));
+		assert_ok!(Identity::add_sub(Origin::signed(20), Box::new(1), data(1)));
 	});
 }
 
@@ -272,7 +281,7 @@ fn registration_should_work() {
 		three_fields.additional.try_push(Default::default()).unwrap();
 		three_fields.additional.try_push(Default::default()).unwrap();
 		assert_eq!(three_fields.additional.try_push(Default::default()), Err(()));
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_eq!(Identity::identity(10).unwrap().info, ten());
 		assert_eq!(Balances::free_balance(10), 90);
 		assert_ok!(Identity::clear_identity(Origin::signed(10)));
@@ -295,7 +304,7 @@ fn uninvited_judgement_should_work() {
 			Error::<Test>::InvalidTarget
 		);
 
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_noop!(
 			Identity::provide_judgement(Origin::signed(10), 0, 10, Judgement::Reasonable),
 			Error::<Test>::InvalidIndex
@@ -314,7 +323,7 @@ fn uninvited_judgement_should_work() {
 fn clearing_judgement_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
 		assert_ok!(Identity::clear_identity(Origin::signed(10)));
 		assert_eq!(Identity::identity(10), None);
@@ -324,7 +333,7 @@ fn clearing_judgement_should_work() {
 #[test]
 fn killing_slashing_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_noop!(Identity::kill_identity(Origin::signed(1), 10), BadOrigin);
 		assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
 		assert_eq!(Identity::identity(10), None);
@@ -339,7 +348,7 @@ fn setting_subaccounts_should_work() {
 		let mut subs = vec![(20, Data::Raw(vec![40; 1].try_into().unwrap()))];
 		assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), Error::<Test>::NotFound);
 
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 		assert_eq!(Balances::free_balance(10), 80);
 		assert_eq!(Identity::subs_of(10), (10, vec![20].try_into().unwrap()));
@@ -377,7 +386,7 @@ fn setting_subaccounts_should_work() {
 #[test]
 fn clearing_account_should_remove_subaccounts_and_refund() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1].try_into().unwrap()))]));
 		assert_ok!(Identity::clear_identity(Origin::signed(10)));
 		assert_eq!(Balances::free_balance(10), 100);
@@ -388,7 +397,7 @@ fn clearing_account_should_remove_subaccounts_and_refund() {
 #[test]
 fn killing_account_should_remove_subaccounts_and_not_refund() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1].try_into().unwrap()))]));
 		assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
 		assert_eq!(Balances::free_balance(10), 80);
@@ -402,7 +411,7 @@ fn cancelling_requested_judgement_should_work() {
 		assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 		assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 		assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NoIdentity);
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 		assert_ok!(Identity::cancel_request(Origin::signed(10), 0));
 		assert_eq!(Balances::free_balance(10), 90);
@@ -418,7 +427,7 @@ fn requesting_judgement_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 		assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-		assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9), Error::<Test>::FeeChanged);
 		assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 		// 10 for the judgement request, 10 for the identity.
@@ -448,14 +457,14 @@ fn field_deposit_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 		assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-		assert_ok!(Identity::set_identity(Origin::signed(10), IdentityInfo {
+		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(IdentityInfo {
 			additional: vec![
 				(Data::Raw(b"number".to_vec().try_into().unwrap()), Data::Raw(10u32.encode().try_into().unwrap())),
 				(Data::Raw(b"text".to_vec().try_into().unwrap()), Data::Raw(b"10".to_vec().try_into().unwrap())),
 			]
 			.try_into()
 			.unwrap(), .. Default::default()
-		}));
+		})));
 		assert_eq!(Balances::free_balance(10), 70);
 	});
 }
