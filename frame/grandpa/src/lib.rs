@@ -71,7 +71,7 @@ pub use equivocation::{
 pub use pallet::*;
 
 /// The current storage version.
-pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 #[frame_support::pallet]
 pub mod pallet {

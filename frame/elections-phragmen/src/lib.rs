@@ -123,7 +123,7 @@ pub use weights::WeightInfo;
 pub mod migrations;
 
 /// The current storage version.
-pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;

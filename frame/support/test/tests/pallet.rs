@@ -64,7 +64,7 @@ pub mod pallet {
 
 	type BalanceOf<T> = <T as Config>::Balance;
 
-	pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(10);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(10);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config
