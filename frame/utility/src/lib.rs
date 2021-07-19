@@ -135,7 +135,7 @@ pub mod pallet {
 		/// May be called from any origin.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
-		///   exceed the constant: [`Self::batched_calls_limit`] (available in constant metadata).
+		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
 		/// If origin is root then call are dispatch without checking origin filter. (This includes
 		/// bypassing `frame_system::Config::BaseCallFilter`).
@@ -250,7 +250,7 @@ pub mod pallet {
 		/// May be called from any origin.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
-		///   exceed the constant: [`Self::batched_calls_limit`] (available in constant metadata).
+		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
 		/// If origin is root then call are dispatch without checking origin filter. (This includes
 		/// bypassing `frame_system::Config::BaseCallFilter`).
