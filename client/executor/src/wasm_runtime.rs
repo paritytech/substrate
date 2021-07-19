@@ -29,7 +29,10 @@ use sp_core::traits::{Externalities, RuntimeCode, FetchRuntimeCode};
 use sp_version::RuntimeVersion;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
-use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
+use sc_executor_common::{
+	wasm_runtime::{WasmModule, WasmInstance},
+	runtime_blob::RuntimeBlob,
+};
 
 use sp_wasm_interface::Function;
 
@@ -174,7 +177,7 @@ impl RuntimeCache {
 
 	/// Prepares a WASM module instance and executes given function for it.
 	///
-	/// This uses internal cache to find avaiable instance or create a new one.
+	/// This uses internal cache to find available instance or create a new one.
 	/// # Parameters
 	///
 	/// `code` - Provides external code or tells the executor to fetch it from storage.
@@ -193,7 +196,7 @@ impl RuntimeCache {
 	///
 	/// `f` - Function to execute.
 	///
-	/// # Returns result of `f` wrapped in an additonal result.
+	/// # Returns result of `f` wrapped in an additional result.
 	/// In case of failure one of two errors can be returned:
 	///
 	/// `Err::InvalidCode` is returned for runtime code issues.
@@ -235,6 +238,9 @@ impl RuntimeCache {
 			None =>  {
 				let code = runtime_code.fetch_runtime_code().ok_or(WasmError::CodeNotFound)?;
 
+				#[cfg(not(target_os = "unknown"))]
+				let time = std::time::Instant::now();
+
 				let result = create_versioned_wasm_runtime(
 					&code,
 					code_hash.clone(),
@@ -246,9 +252,22 @@ impl RuntimeCache {
 					self.max_runtime_instances,
 					self.cache_path.as_deref(),
 				);
-				if let Err(ref err) = result {
-					log::warn!(target: "wasm-runtime", "Cannot create a runtime: {:?}", err);
+
+				match result {
+					Ok(ref result) => {
+						#[cfg(not(target_os = "unknown"))]
+						log::debug!(
+							target: "wasm-runtime",
+							"Prepared new runtime version {:?} in {} ms.",
+							result.version,
+							time.elapsed().as_millis(),
+						);
+					}
+					Err(ref err) => {
+						log::warn!(target: "wasm-runtime", "Cannot create a runtime: {:?}", err);
+					}
 				}
+
 				Arc::new(result?)
 			}
 		};
@@ -278,16 +297,11 @@ impl RuntimeCache {
 pub fn create_wasm_runtime_with_code(
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
-	code: &[u8],
+	blob: RuntimeBlob,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
 ) -> Result<Arc<dyn WasmModule>, WasmError> {
-	use sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT;
-
-	let code = sp_maybe_compressed_blob::decompress(code, CODE_BLOB_BOMB_LIMIT)
-		.map_err(|e| WasmError::Other(format!("Decompression error: {:?}", e)))?;
-
 	match wasm_method {
 		WasmExecutionMethod::Interpreted => {
 			// Wasmi doesn't have any need in a cache directory.
@@ -297,7 +311,7 @@ pub fn create_wasm_runtime_with_code(
 			drop(cache_path);
 
 			sc_executor_wasmi::create_runtime(
-				&code,
+				blob,
 				heap_pages,
 				host_functions,
 				allow_missing_func_imports,
@@ -306,16 +320,16 @@ pub fn create_wasm_runtime_with_code(
 		}
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled => {
-			let blob = sc_executor_common::runtime_blob::RuntimeBlob::new(&code)?;
 			sc_executor_wasmtime::create_runtime(
-				sc_executor_wasmtime::CodeSupplyMode::Verbatim { blob },
+				blob,
 				sc_executor_wasmtime::Config {
 					heap_pages: heap_pages as u32,
 					allow_missing_func_imports,
 					cache_path: cache_path.map(ToOwned::to_owned),
 					semantics: sc_executor_wasmtime::Semantics {
 						fast_instance_reuse: true,
-						stack_depth_metering: false,
+						deterministic_stack_limit: None,
+						canonicalize_nans: false,
 					},
 				},
 				host_functions,
@@ -324,7 +338,7 @@ pub fn create_wasm_runtime_with_code(
 	}
 }
 
-fn decode_version(version: &[u8]) -> Result<RuntimeVersion, WasmError> {
+fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 	let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut &version[..])
 		.map_err(|_|
 				 WasmError::Instantiation(
@@ -334,12 +348,59 @@ fn decode_version(version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 
 	let core_api_id = sp_core::hashing::blake2_64(b"Core");
 	if v.has_api_with(&core_api_id, |v| v >= 3) {
-		sp_api::RuntimeVersion::decode(&mut &version[..])
+		sp_api::RuntimeVersion::decode(&mut version)
 			.map_err(|_|
 				WasmError::Instantiation("failed to decode \"Core_version\" result".into())
 			)
 	} else {
 		Ok(v)
+	}
+}
+
+fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
+	use std::convert::TryFrom;
+	use sp_api::RUNTIME_API_INFO_SIZE;
+
+	apis.chunks(RUNTIME_API_INFO_SIZE)
+		.map(|chunk| {
+			// `chunk` can be less than `RUNTIME_API_INFO_SIZE` if the total length of `apis` doesn't
+			// completely divide by `RUNTIME_API_INFO_SIZE`.
+			<[u8; RUNTIME_API_INFO_SIZE]>::try_from(chunk)
+				.map(sp_api::deserialize_runtime_api_info)
+				.map_err(|_| {
+					WasmError::Other("a clipped runtime api info declaration".to_owned())
+				})
+		})
+		.collect::<Result<Vec<_>, WasmError>>()
+}
+
+/// Take the runtime blob and scan it for the custom wasm sections containing the version information
+/// and construct the `RuntimeVersion` from them.
+///
+/// If there are no such sections, it returns `None`. If there is an error during decoding those
+/// sections, `Err` will be returned.
+pub fn read_embedded_version(
+	blob: &RuntimeBlob,
+) -> Result<Option<RuntimeVersion>, WasmError> {
+	if let Some(mut version_section) = blob.custom_section_contents("runtime_version") {
+		// We do not use `decode_version` here because the runtime_version section is not supposed
+		// to ever contain a legacy version. Apart from that `decode_version` relies on presence
+		// of a special API in the `apis` field to treat the input as a non-legacy version. However
+		// the structure found in the `runtime_version` always contain an empty `apis` field. Therefore
+		// the version read will be mistakenly treated as an legacy one.
+		let mut decoded_version = sp_api::RuntimeVersion::decode(&mut version_section)
+			.map_err(|_|
+				WasmError::Instantiation("failed to decode version section".into())
+			)?;
+
+		// Don't stop on this and check if there is a special section that encodes all runtime APIs.
+		if let Some(apis_section) = blob.custom_section_contents("runtime_apis") {
+			decoded_version.apis = decode_runtime_apis(apis_section)?.into();
+		}
+
+		Ok(Some(decoded_version))
+	} else {
+		Ok(None)
 	}
 }
 
@@ -354,41 +415,44 @@ fn create_versioned_wasm_runtime(
 	max_instances: usize,
 	cache_path: Option<&Path>,
 ) -> Result<VersionedRuntime, WasmError> {
-	#[cfg(not(target_os = "unknown"))]
-	let time = std::time::Instant::now();
+	// The incoming code may be actually compressed. We decompress it here and then work with
+	// the uncompressed code from now on.
+	let blob = sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(&code)?;
+
+	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary pertaining
+	// to runtime version. We do it before consuming the runtime blob for creating the runtime.
+	let mut version: Option<_> = read_embedded_version(&blob)?;
+
 	let runtime = create_wasm_runtime_with_code(
 		wasm_method,
 		heap_pages,
-		&code,
+		blob,
 		host_functions,
 		allow_missing_func_imports,
 		cache_path,
 	)?;
 
-	// Call to determine runtime version.
-	let version_result = {
-		// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
-		let mut ext = AssertUnwindSafe(ext);
+	// If the runtime blob doesn't embed the runtime version then use the legacy version query
+	// mechanism: call the runtime.
+	if version.is_none() {
+		// Call to determine runtime version.
+		let version_result = {
+			// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
+			let mut ext = AssertUnwindSafe(ext);
 
-		// The following unwind safety assertion is OK because if the method call panics, the
-		// runtime will be dropped.
-		let runtime = AssertUnwindSafe(runtime.as_ref());
-		crate::native_executor::with_externalities_safe(
-			&mut **ext,
-			move || runtime.new_instance()?.call("Core_version".into(), &[])
-		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
-	};
-	let version = match version_result {
-		Ok(version) => Some(decode_version(&version)?),
-		Err(_) => None,
-	};
-	#[cfg(not(target_os = "unknown"))]
-	log::debug!(
-		target: "wasm-runtime",
-		"Prepared new runtime version {:?} in {} ms.",
-		version,
-		time.elapsed().as_millis(),
-	);
+			// The following unwind safety assertion is OK because if the method call panics, the
+			// runtime will be dropped.
+			let runtime = AssertUnwindSafe(runtime.as_ref());
+			crate::native_executor::with_externalities_safe(
+				&mut **ext,
+				move || runtime.new_instance()?.call("Core_version".into(), &[])
+			).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
+		};
+
+		if let Ok(version_buf) = version_result {
+			version = Some(decode_version(&version_buf)?)
+		}
+	}
 
 	let mut instances = Vec::with_capacity(max_instances);
 	instances.resize_with(max_instances, || Mutex::new(None));
@@ -427,7 +491,7 @@ mod tests {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(Core::<Block>::ID, 1)]),
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 1)]),
 		};
 
 		let version = decode_version(&old_runtime_version.encode()).unwrap();
@@ -442,7 +506,7 @@ mod tests {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(Core::<Block>::ID, 3)]),
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
 		};
 
 		decode_version(&old_runtime_version.encode()).unwrap_err();
@@ -456,11 +520,42 @@ mod tests {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(Core::<Block>::ID, 3)]),
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
 			transaction_version: 3,
 		};
 
 		let version = decode_version(&old_runtime_version.encode()).unwrap();
 		assert_eq!(3, version.transaction_version);
+	}
+
+	#[test]
+	fn embed_runtime_version_works() {
+		let wasm = sp_maybe_compressed_blob::decompress(
+			substrate_test_runtime::wasm_binary_unwrap(),
+			sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
+		).expect("Decompressing works");
+
+		let runtime_version = RuntimeVersion {
+			spec_name: "test_replace".into(),
+			impl_name: "test_replace".into(),
+			authoring_version: 100,
+			spec_version: 100,
+			impl_version: 100,
+			apis: sp_api::create_apis_vec!([(<dyn Core::<Block>>::ID, 3)]),
+			transaction_version: 100,
+		};
+
+		let embedded = sp_version::embed::embed_runtime_version(
+			&wasm,
+			runtime_version.clone(),
+		).expect("Embedding works");
+
+		let blob = RuntimeBlob::new(&embedded).expect("Embedded blob is valid");
+		let read_version = read_embedded_version(&blob)
+			.ok()
+			.flatten()
+			.expect("Reading embedded version works");
+
+		assert_eq!(runtime_version, read_version);
 	}
 }

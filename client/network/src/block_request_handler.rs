@@ -46,7 +46,7 @@ mod rep {
 	use super::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
-	pub const SAME_REQUEST: Rep = Rep::new(i32::min_value(), "Same block request multiple times");
+	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
 }
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
@@ -65,11 +65,7 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 // Visibility `pub(crate)` to allow `crate::light_client_requests::sender` to generate block request
 // protocol name and send block requests.
 pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
-	let mut s = String::new();
-	s.push_str("/");
-	s.push_str(protocol_id.as_ref());
-	s.push_str("/sync/2");
-	s
+	format!("/{}/sync/2", protocol_id.as_ref())
 }
 
 /// The key of [`BlockRequestHandler::seen_requests`].
@@ -192,7 +188,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			support_multiple_justifications,
 		};
 
-		let mut reputation_changes = Vec::new();
+		let mut reputation_change = None;
 
 		match self.seen_requests.get_mut(&key) {
 			Some(SeenRequestsValue::First) => {},
@@ -200,7 +196,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				*requests = requests.saturating_add(1);
 
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
-					reputation_changes.push(rep::SAME_REQUEST);
+					reputation_change = Some(rep::SAME_REQUEST);
 				}
 			},
 			None => {
@@ -219,7 +215,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			attributes,
 		);
 
-		let result = if reputation_changes.is_empty() {
+		let result = if reputation_change.is_none() {
 			let block_response = self.get_block_response(
 				attributes,
 				from_block_id,
@@ -228,7 +224,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				support_multiple_justifications,
 			)?;
 
-			// If any of the blocks contains nay data, we can consider it as successful request.
+			// If any of the blocks contains any data, we can consider it as successful request.
 			if block_response
 				.blocks
 				.iter()
@@ -253,7 +249,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 		pending_response.send(OutgoingResponse {
 			result,
-			reputation_changes,
+			reputation_changes: reputation_change.into_iter().collect(),
 			sent_feedback: None,
 		}).map_err(|_| HandleRequestError::SendResponse)
 	}
@@ -268,6 +264,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 	) -> Result<BlockResponse, HandleRequestError> {
 		let get_header = attributes.contains(BlockAttributes::HEADER);
 		let get_body = attributes.contains(BlockAttributes::BODY);
+		let get_indexed_body = attributes.contains(BlockAttributes::INDEXED_BODY);
 		let get_justification = attributes.contains(BlockAttributes::JUSTIFICATION);
 
 		let mut blocks = Vec::new();
@@ -325,6 +322,18 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				Vec::new()
 			};
 
+			let indexed_body =  if get_indexed_body {
+				match self.client.block_indexed_body(&BlockId::Hash(hash))? {
+					Some(transactions) => transactions,
+					None => {
+						log::trace!(target: LOG_TARGET, "Missing indexed block data for block request.");
+						break;
+					}
+				}
+			} else {
+				Vec::new()
+			};
+
 			let block_data = crate::schema::v1::BlockData {
 				hash: hash.encode(),
 				header: if get_header {
@@ -338,6 +347,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				justification,
 				is_empty_justification,
 				justifications,
+				indexed_body,
 			};
 
 			total_size += block_data.body.len();

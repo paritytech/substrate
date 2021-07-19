@@ -53,8 +53,6 @@ impl From<&tracing_core::Level> for WasmLevel {
 	}
 }
 
-
-
 impl core::default::Default for WasmLevel {
 	fn default() -> Self {
 		WasmLevel::TRACE

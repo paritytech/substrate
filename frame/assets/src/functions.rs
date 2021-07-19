@@ -47,7 +47,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 	) -> Result<bool, DispatchError> {
-		let accounts = d.accounts.checked_add(1).ok_or(Error::<T, I>::Overflow)?;
+		let accounts = d.accounts.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 		let is_sufficient = if d.is_sufficient {
 			frame_system::Pallet::<T>::inc_sufficients(who);
 			d.sufficients += 1;
@@ -162,7 +162,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		id: T::AssetId,
 		who: &T::AccountId,
 		keep_alive: bool,
-	) -> Result<T::Balance, Error<T, I>> {
+	) -> Result<T::Balance, DispatchError> {
 		let details = Asset::<T, I>::get(id).ok_or_else(|| Error::<T, I>::Unknown)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 
@@ -173,7 +173,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Frozen balance: account CANNOT be deleted
 			let required = frozen
 				.checked_add(&details.min_balance)
-				.ok_or(Error::<T, I>::Overflow)?;
+				.ok_or(ArithmeticError::Overflow)?;
 			account.balance.saturating_sub(required)
 		} else {
 			let is_provider = false;

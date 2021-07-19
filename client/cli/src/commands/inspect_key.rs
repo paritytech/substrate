@@ -25,7 +25,7 @@ use structopt::StructOpt;
 /// The `inspect` command
 #[derive(Debug, StructOpt)]
 #[structopt(
-	name = "inspect-key",
+	name = "inspect",
 	about = "Gets a public key and a SS58 address from the provided Secret URI"
 )]
 pub struct InspectKeyCmd {

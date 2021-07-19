@@ -21,7 +21,7 @@
 
 use super::{Call, Event, *};
 use crate::mock::*;
-use codec::{Decode, Encode};
+use codec::Encode;
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok, assert_noop,
@@ -125,22 +125,6 @@ fn cannot_schedule_change_when_one_pending() {
 		Grandpa::on_finalize(3);
 		let _header = System::finalize();
 	});
-}
-
-#[test]
-fn new_decodes_from_old() {
-	let old = OldStoredPendingChange {
-		scheduled_at: 5u32,
-		delay: 100u32,
-		next_authorities: to_authorities(vec![(1, 5), (2, 10), (3, 2)]),
-	};
-
-	let encoded = old.encode();
-	let new = StoredPendingChange::<u32>::decode(&mut &encoded[..]).unwrap();
-	assert!(new.forced.is_none());
-	assert_eq!(new.scheduled_at, old.scheduled_at);
-	assert_eq!(new.delay, old.delay);
-	assert_eq!(new.next_authorities, old.next_authorities);
 }
 
 #[test]

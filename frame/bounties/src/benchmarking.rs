@@ -22,12 +22,12 @@
 use super::*;
 
 use sp_runtime::traits::Bounded;
-use frame_system::{EventRecord, RawOrigin};
+use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Bounties;
-use pallet_treasury::Module as Treasury;
+use pallet_treasury::Pallet as Treasury;
 
 const SEED: u32 = 0;
 
@@ -84,11 +84,7 @@ fn setup_pot_account<T: Config>() {
 }
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = frame_system::Pallet::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 const MAX_BYTES: u32 = 16384;

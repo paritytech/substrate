@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use crate::protocol::notifications::{Notifications, NotificationsOut};
+use crate::protocol::notifications::{Notifications, NotificationsOut, ProtocolConfig};
 
 use futures::prelude::*;
 use libp2p::{PeerId, Multiaddr, Transport};
@@ -80,7 +80,12 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: Notifications::new(peerset, iter::once(("/foo".into(), Vec::new(), 1024 * 1024))),
+			inner: Notifications::new(peerset, iter::once(ProtocolConfig {
+				name: "/foo".into(),
+				fallback_names: Vec::new(),
+				handshake: Vec::new(),
+				max_notification_size: 1024 * 1024
+			})),
 			addrs: addrs
 				.iter()
 				.enumerate()

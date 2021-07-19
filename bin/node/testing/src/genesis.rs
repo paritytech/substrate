@@ -22,7 +22,7 @@ use crate::keyring::*;
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use node_runtime::{
 	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
-	GrandpaConfig, IndicesConfig, ContractsConfig, SocietyConfig, wasm_binary_unwrap,
+	GrandpaConfig, IndicesConfig, SocietyConfig, wasm_binary_unwrap,
 	AccountId, StakerStatus, BabeConfig, BABE_GENESIS_EPOCH_CONFIG,
 };
 use node_runtime::constants::currency::*;
@@ -56,20 +56,20 @@ pub fn config_endowed(
 	);
 
 	GenesisConfig {
-		frame_system: SystemConfig {
+		system: SystemConfig {
 			changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 				digest_interval: 2,
 				digest_levels: 2,
 			}) } else { None },
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| wasm_binary_unwrap().to_vec()),
 		},
-		pallet_indices: IndicesConfig {
+		indices: IndicesConfig {
 			indices: vec![],
 		},
-		pallet_balances: BalancesConfig {
+		balances: BalancesConfig {
 			balances: endowed,
 		},
-		pallet_session: SessionConfig {
+		session: SessionConfig {
 			keys: vec![
 				(dave(), alice(), to_session_keys(
 					&Ed25519Keyring::Alice,
@@ -85,7 +85,7 @@ pub fn config_endowed(
 				)),
 			]
 		},
-		pallet_staking: StakingConfig {
+		staking: StakingConfig {
 			stakers: vec![
 				(dave(), alice(), 111 * DOLLARS, StakerStatus::Validator),
 				(eve(), bob(), 100 * DOLLARS, StakerStatus::Validator),
@@ -97,31 +97,29 @@ pub fn config_endowed(
 			invulnerables: vec![alice(), bob(), charlie()],
 			.. Default::default()
 		},
-		pallet_contracts: ContractsConfig {
-			current_schedule: Default::default(),
-		},
-		pallet_babe: BabeConfig {
+		babe: BabeConfig {
 			authorities: vec![],
 			epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG),
 		},
-		pallet_grandpa: GrandpaConfig {
+		grandpa: GrandpaConfig {
 			authorities: vec![],
 		},
-		pallet_im_online: Default::default(),
-		pallet_authority_discovery: Default::default(),
-		pallet_democracy: Default::default(),
-		pallet_collective_Instance1: Default::default(),
-		pallet_collective_Instance2: Default::default(),
-		pallet_membership_Instance1: Default::default(),
-		pallet_elections_phragmen: Default::default(),
-		pallet_sudo: Default::default(),
-		pallet_treasury: Default::default(),
-		pallet_society: SocietyConfig {
+		im_online: Default::default(),
+		authority_discovery: Default::default(),
+		democracy: Default::default(),
+		council: Default::default(),
+		technical_committee: Default::default(),
+		technical_membership: Default::default(),
+		elections: Default::default(),
+		sudo: Default::default(),
+		treasury: Default::default(),
+		society: SocietyConfig {
 			members: vec![alice(), bob()],
 			pot: 0,
 			max_members: 999,
 		},
-		pallet_vesting: Default::default(),
-		pallet_gilt: Default::default(),
+		vesting: Default::default(),
+		gilt: Default::default(),
+		transaction_storage: Default::default(),
 	}
 }

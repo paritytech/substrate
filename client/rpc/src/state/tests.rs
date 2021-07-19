@@ -63,6 +63,7 @@ fn should_return_storage() {
 		Arc::new(client),
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
+		None,
 	);
 	let key = StorageKey(KEY.to_vec());
 
@@ -105,6 +106,7 @@ fn should_return_child_storage() {
 		client,
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
+		None,
 	);
 	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
@@ -144,6 +146,7 @@ fn should_call_contract() {
 		client,
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
+		None,
 	);
 
 	assert_matches!(
@@ -162,6 +165,7 @@ fn should_notify_about_storage_changes() {
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
+			None,
 		);
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
@@ -200,6 +204,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
+			None,
 		);
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
@@ -242,6 +247,7 @@ fn should_query_storage() {
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
+			None,
 		);
 
 		let mut add_block = |nonce| {
@@ -463,11 +469,12 @@ fn should_return_runtime_version() {
 		client.clone(),
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
+		None,
 	);
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
-		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",2],[\"0x40fe3ad401f8959a\",4],\
+		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",5],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
 		\"transactionVersion\":1}";
@@ -490,6 +497,7 @@ fn should_notify_on_runtime_version_initially() {
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
+			None,
 		);
 
 		api.subscribe_runtime_version(Default::default(), subscriber);

@@ -20,7 +20,7 @@
 use sp_std::prelude::*;
 use codec::{Codec, Decode};
 use sp_runtime::traits::{Convert, Zero};
-use sp_runtime::{BoundToRuntimeAppPublic, ConsensusEngineId, Percent, RuntimeAppPublic};
+use sp_runtime::{BoundToRuntimeAppPublic, ConsensusEngineId, Permill, RuntimeAppPublic};
 use sp_staking::SessionIndex;
 use crate::dispatch::Parameter;
 use crate::weights::Weight;
@@ -126,7 +126,7 @@ pub trait EstimateNextSessionRotation<BlockNumber> {
 	/// Return an estimate of the current session progress.
 	///
 	/// None should be returned if the estimation fails to come to an answer.
-	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Percent>, Weight);
+	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Permill>, Weight);
 
 	/// Return the block number at which the next session rotation is estimated to happen.
 	///
@@ -139,7 +139,7 @@ impl<BlockNumber: Zero> EstimateNextSessionRotation<BlockNumber> for () {
 		Zero::zero()
 	}
 
-	fn estimate_current_session_progress(_: BlockNumber) -> (Option<Percent>, Weight) {
+	fn estimate_current_session_progress(_: BlockNumber) -> (Option<Permill>, Weight) {
 		(None, Zero::zero())
 	}
 

@@ -40,7 +40,7 @@ use sc_executor_common::runtime_blob::{RuntimeBlob, DataSegmentsSnapshot};
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
-	heap: sp_allocator::FreeingBumpHeapAllocator,
+	heap: sc_allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	host_functions: &'a [&'static dyn Function],
@@ -59,7 +59,7 @@ impl<'a> FunctionExecutor<'a> {
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: sp_allocator::FreeingBumpHeapAllocator::new(heap_base),
+			heap: sc_allocator::FreeingBumpHeapAllocator::new(heap_base),
 			memory: m,
 			table: t,
 			host_functions,
@@ -185,7 +185,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		&mut self,
 		instance_id: u32,
 		export_name: &str,
-		args: &[u8],
+		mut args: &[u8],
 		return_val: Pointer<u8>,
 		return_val_len: WordSize,
 		state: u32,
@@ -193,7 +193,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &args[..])
+		let args = Vec::<sp_wasm_interface::Value>::decode(&mut args)
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)
@@ -641,18 +641,18 @@ impl WasmModule for WasmiRuntime {
 /// Create a new `WasmiRuntime` given the code. This function loads the module and
 /// stores it in the instance.
 pub fn create_runtime(
-	code: &[u8],
+	blob: RuntimeBlob,
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 ) -> Result<WasmiRuntime, WasmError> {
-	let module = Module::from_buffer(&code).map_err(|_| WasmError::InvalidModule)?;
+	let data_segments_snapshot = DataSegmentsSnapshot::take(&blob)
+		.map_err(|e| WasmError::Other(e.to_string()))?;
 
-	// Extract the data segments from the wasm code.
-	//
-	// A return of this error actually indicates that there is a problem in logic, since
-	// we just loaded and validated the `module` above.
-	let (data_segments_snapshot, global_vals_snapshot) = {
+	let module = Module::from_parity_wasm_module(blob.into_inner())
+		.map_err(|_| WasmError::InvalidModule)?;
+
+	let global_vals_snapshot = {
 		let (instance, _, _) = instantiate_module(
 			heap_pages as usize,
 			&module,
@@ -660,12 +660,7 @@ pub fn create_runtime(
 			allow_missing_func_imports,
 		)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
-
-		let data_segments_snapshot = DataSegmentsSnapshot::take(&RuntimeBlob::new(code)?)
-			.map_err(|e| WasmError::Other(e.to_string()))?;
-		let global_vals_snapshot = GlobalValsSnapshot::take(&instance);
-
-		(data_segments_snapshot, global_vals_snapshot)
+		GlobalValsSnapshot::take(&instance)
 	};
 
 	Ok(WasmiRuntime {

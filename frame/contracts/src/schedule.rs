@@ -23,11 +23,10 @@ use crate::{Config, weights::WeightInfo};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
-use frame_support::weights::Weight;
+use frame_support::{DefaultNoBound, weights::Weight};
 use sp_std::{marker::PhantomData, vec::Vec};
 use codec::{Encode, Decode};
-use parity_wasm::elements;
-use pwasm_utils::rules;
+use pwasm_utils::{parity_wasm::elements, rules};
 use sp_runtime::RuntimeDebug;
 
 /// How many API calls are executed in a single batch. The reason for increasing the amount
@@ -41,44 +40,57 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 
 /// Definition of the cost schedule and other parameterizations for the wasm vm.
 ///
-/// Its fields are private to the crate in order to allow addition of new contract
-/// callable functions without bumping to a new major version. A genesis config should
-/// rely on public functions of this type.
+/// Its [`Default`] implementation is the designated way to initialize this type. It uses
+/// the benchmarked information supplied by [`Config::WeightInfo`]. All of its fields are
+/// public and can therefore be modified. For example in order to change some of the limits
+/// and set a custom instruction weight version the following code could be used:
+/// ```rust
+/// use pallet_contracts::{Schedule, Limits, InstructionWeights, Config};
+///
+/// fn create_schedule<T: Config>() -> Schedule<T> {
+///     Schedule {
+///         limits: Limits {
+///		        globals: 3,
+///		        parameters: 3,
+///		        memory_pages: 16,
+///		        table_size: 3,
+///		        br_table_size: 3,
+///		        .. Default::default()
+///	        },
+///         instruction_weights: InstructionWeights {
+///	            version: 5,
+///             .. Default::default()
+///         },
+///	        .. Default::default()
+///     }
+/// }
+/// ```
+///
+/// # Note
+///
+/// Please make sure to bump the [`InstructionWeights::version`] whenever substantial
+/// changes are made to its values.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, DefaultNoBound)]
 pub struct Schedule<T: Config> {
-	/// Version of the schedule.
-	///
-	/// # Note
-	///
-	/// Must be incremented whenever the [`self.instruction_weights`] are changed. The
-	/// reason is that changes to instruction weights require a re-instrumentation
-	/// of all contracts which are triggered by a version comparison on call.
-	/// Changes to other parts of the schedule should not increment the version in
-	/// order to avoid unnecessary re-instrumentations.
-	pub(crate) version: u32,
-
-	/// Whether the `seal_println` function is allowed to be used contracts.
-	/// MUST only be enabled for `dev` chains, NOT for production chains
-	pub(crate) enable_println: bool,
-
 	/// Describes the upper limits on various metrics.
-	pub(crate) limits: Limits,
+	pub limits: Limits,
 
 	/// The weights for individual wasm instructions.
-	pub(crate) instruction_weights: InstructionWeights<T>,
+	pub instruction_weights: InstructionWeights<T>,
 
 	/// The weights for each imported function a contract is allowed to call.
-	pub(crate) host_fn_weights: HostFnWeights<T>,
+	pub host_fn_weights: HostFnWeights<T>,
 }
 
 /// Describes the upper limits on various metrics.
 ///
 /// # Note
 ///
-/// The values in this struct should only ever be increased for a deployed chain. The reason
-/// is that decreasing those values will break existing contracts which are above the new limits.
+/// The values in this struct should never be decreased. The reason is that decreasing those
+/// values will break existing contracts which are above the new limits when a
+/// re-instrumentation is triggered.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct Limits {
@@ -121,6 +133,17 @@ pub struct Limits {
 
 	/// The maximum length of a subject in bytes used for PRNG generation.
 	pub subject_len: u32,
+
+	/// The maximum nesting level of the call stack.
+	pub call_depth: u32,
+
+	/// The maximum size of a storage value and event payload in bytes.
+	pub payload_len: u32,
+
+	/// The maximum length of a contract code in bytes. This limit applies to the instrumented
+	/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
+	/// a wasm binary below this maximum size.
+	pub code_len: u32,
 }
 
 impl Limits {
@@ -153,6 +176,19 @@ impl Limits {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
 pub struct InstructionWeights<T: Config> {
+	/// Version of the instruction weights.
+	///
+	/// # Note
+	///
+	/// Should be incremented whenever any instruction weight is changed. The
+	/// reason is that changes to instruction weights require a re-instrumentation
+	/// in order to apply the changes to an already deployed code. The re-instrumentation
+	/// is triggered by comparing the version of the current schedule with the version the code was
+	/// instrumented with. Changes usually happen when pallet_contracts is re-benchmarked.
+	///
+	/// Changes to other parts of the schedule should not increment the version in
+	/// order to avoid unnecessary re-instrumentations.
+	pub version: u32,
 	pub i64const: u32,
 	pub i64load: u32,
 	pub i64store: u32,
@@ -264,17 +300,8 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_terminate`.
 	pub terminate: Weight,
 
-	/// Weight per byte of the terminated contract.
-	pub terminate_per_code_byte: Weight,
-
 	/// Weight of calling `seal_restore_to`.
 	pub restore_to: Weight,
-
-	/// Weight per byte of the restoring contract.
-	pub restore_to_per_caller_code_byte: Weight,
-
-	/// Weight per byte of the restored contract.
-	pub restore_to_per_tombstone_code_byte: Weight,
 
 	/// Weight per delta key supplied to `seal_restore_to`.
 	pub restore_to_per_delta: Weight,
@@ -290,6 +317,9 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight per byte of an event deposited through `seal_deposit_event`.
 	pub deposit_event_per_byte: Weight,
+
+	/// Weight of calling `seal_debug_message`.
+	pub debug_message: Weight,
 
 	/// Weight of calling `seal_set_rent_allowance`.
 	pub set_rent_allowance: Weight,
@@ -315,9 +345,6 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_call`.
 	pub call: Weight,
 
-	/// Weight per byte of the called contract.
-	pub call_per_code_byte: Weight,
-
 	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
 	pub call_transfer_surcharge: Weight,
 
@@ -329,9 +356,6 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight of calling `seal_instantiate`.
 	pub instantiate: Weight,
-
-	/// Weight per byte of the instantiated contract.
-	pub instantiate_per_code_byte: Weight,
 
 	/// Weight per input byte supplied to `seal_instantiate`.
 	pub instantiate_per_input_byte: Weight,
@@ -365,9 +389,6 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
-
-	/// Weight of calling `seal_rent_params`.
-	pub rent_params: Weight,
 
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
@@ -451,18 +472,6 @@ macro_rules! cost_byte_batched {
 	}
 }
 
-impl<T: Config> Default for Schedule<T> {
-	fn default() -> Self {
-		Self {
-			version: 0,
-			enable_println: false,
-			limits: Default::default(),
-			instruction_weights: Default::default(),
-			host_fn_weights: Default::default(),
-		}
-	}
-}
-
 impl Default for Limits {
 	fn default() -> Self {
 		Self {
@@ -476,6 +485,9 @@ impl Default for Limits {
 			table_size: 4096,
 			br_table_size: 256,
 			subject_len: 32,
+			call_depth: 32,
+			payload_len: 16 * 1024,
+			code_len: 128 * 1024,
 		}
 	}
 }
@@ -484,6 +496,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
+			version: 2,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
 			i64store: cost_instr!(instr_i64store, 2),
@@ -560,15 +573,13 @@ impl<T: Config> Default for HostFnWeights<T> {
 			r#return: cost!(seal_return),
 			return_per_byte: cost_byte!(seal_return_per_kb),
 			terminate: cost!(seal_terminate),
-			terminate_per_code_byte: cost_byte!(seal_terminate_per_code_kb),
 			restore_to: cost!(seal_restore_to),
-			restore_to_per_caller_code_byte: cost_byte_args!(seal_restore_to_per_code_kb_delta, 1, 0, 0),
-			restore_to_per_tombstone_code_byte: cost_byte_args!(seal_restore_to_per_code_kb_delta, 0, 1, 0),
-			restore_to_per_delta: cost_batched_args!(seal_restore_to_per_code_kb_delta, 0, 0, 1),
+			restore_to_per_delta: cost_batched!(seal_restore_to_per_delta),
 			random: cost_batched!(seal_random),
 			deposit_event: cost_batched!(seal_deposit_event),
 			deposit_event_per_topic: cost_batched_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
 			deposit_event_per_byte: cost_byte_batched_args!(seal_deposit_event_per_topic_and_kb, 0, 1),
+			debug_message: cost_batched!(seal_debug_message),
 			set_rent_allowance: cost_batched!(seal_set_rent_allowance),
 			set_storage: cost_batched!(seal_set_storage),
 			set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
@@ -577,15 +588,13 @@ impl<T: Config> Default for HostFnWeights<T> {
 			get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
 			transfer: cost_batched!(seal_transfer),
 			call: cost_batched!(seal_call),
-			call_per_code_byte: cost_byte_batched_args!(seal_call_per_code_transfer_input_output_kb, 1, 0, 0, 0),
-			call_transfer_surcharge: cost_batched_args!(seal_call_per_code_transfer_input_output_kb, 0, 1, 0, 0),
-			call_per_input_byte: cost_byte_batched_args!(seal_call_per_code_transfer_input_output_kb, 0, 0, 1, 0),
-			call_per_output_byte: cost_byte_batched_args!(seal_call_per_code_transfer_input_output_kb, 0, 0, 0, 1),
+			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_input_output_kb, 1, 0, 0),
+			call_per_input_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 1, 0),
+			call_per_output_byte: cost_byte_batched_args!(seal_call_per_transfer_input_output_kb, 0, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_per_code_byte: cost_byte_batched_args!(seal_instantiate_per_code_input_output_salt_kb, 1, 0, 0, 0),
-			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_code_input_output_salt_kb, 0, 1, 0, 0),
-			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_code_input_output_salt_kb, 0, 0, 1, 0),
-			instantiate_per_salt_byte: cost_byte_batched_args!(seal_instantiate_per_code_input_output_salt_kb, 0, 0, 0, 1),
+			instantiate_per_input_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 1, 0, 0),
+			instantiate_per_output_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 1, 0),
+			instantiate_per_salt_byte: cost_byte_batched_args!(seal_instantiate_per_input_output_salt_kb, 0, 0, 1),
 			hash_sha2_256: cost_batched!(seal_hash_sha2_256),
 			hash_sha2_256_per_byte: cost_byte_batched!(seal_hash_sha2_256_per_kb),
 			hash_keccak_256: cost_batched!(seal_hash_keccak_256),
@@ -594,7 +603,6 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
-			rent_params: cost_batched!(seal_rent_params),
 			_phantom: PhantomData,
 		}
 	}
@@ -606,20 +614,6 @@ struct ScheduleRules<'a, T: Config> {
 }
 
 impl<T: Config> Schedule<T> {
-	/// Allow contracts to call `seal_println` in order to print messages to the console.
-	///
-	/// This should only ever be activated in development chains. The printed messages
-	/// can be observed on the console by setting the environment variable
-	/// `RUST_LOG=runtime=debug` when running the node.
-	///
-	/// # Note
-	///
-	/// Is set to `false` by default.
-	pub fn enable_println(mut self, enable: bool) -> Self {
-		self.enable_println = enable;
-		self
-	}
-
 	pub(crate) fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
 		ScheduleRules {
 			schedule: &self,
@@ -638,7 +632,7 @@ impl<T: Config> Schedule<T> {
 
 impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
 	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32> {
-		use parity_wasm::elements::Instruction::*;
+		use self::elements::Instruction::*;
 		let w = &self.schedule.instruction_weights;
 		let max_params = self.schedule.limits.parameters;
 

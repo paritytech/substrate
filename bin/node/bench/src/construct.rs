@@ -39,7 +39,7 @@ use sp_runtime::{
 	traits::NumberFor,
 	OpaqueExtrinsic,
 };
-use sp_transaction_pool::{
+use sc_transaction_pool_api::{
 	ImportNotificationStream,
 	PoolFuture,
 	PoolStatus,
@@ -49,6 +49,7 @@ use sp_transaction_pool::{
 	TxHash,
 };
 use sp_consensus::{Environment, Proposer};
+use sp_inherents::InherentDataProvider;
 
 use crate::{
 	common::SizeType,
@@ -153,10 +154,7 @@ impl core::Benchmark for ConstructionBenchmark {
 			None,
 			None,
 		);
-		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-		inherent_data_providers
-			.register_provider(sp_timestamp::InherentDataProvider)
-			.expect("Failed to register timestamp data provider");
+		let timestamp_provider = sp_timestamp::InherentDataProvider::from_system_time();
 
 		let start = std::time::Instant::now();
 
@@ -168,7 +166,7 @@ impl core::Benchmark for ConstructionBenchmark {
 
 		let _block = futures::executor::block_on(
 			proposer.propose(
-				inherent_data_providers.create_inherent_data().expect("Create inherent data failed"),
+				timestamp_provider.create_inherent_data().expect("Create inherent data failed"),
 				Default::default(),
 				std::time::Duration::from_secs(20),
 				None,
@@ -200,7 +198,7 @@ impl From<OpaqueExtrinsic> for PoolTransaction {
 	}
 }
 
-impl sp_transaction_pool::InPoolTransaction for PoolTransaction {
+impl sc_transaction_pool_api::InPoolTransaction for PoolTransaction {
 	type Transaction = OpaqueExtrinsic;
 	type Hash = node_primitives::Hash;
 
@@ -226,11 +224,11 @@ impl sp_transaction_pool::InPoolTransaction for PoolTransaction {
 #[derive(Clone, Debug)]
 pub struct Transactions(Vec<Arc<PoolTransaction>>);
 
-impl sp_transaction_pool::TransactionPool for Transactions {
+impl sc_transaction_pool_api::TransactionPool for Transactions {
 	type Block = Block;
 	type Hash = node_primitives::Hash;
 	type InPoolTransaction = PoolTransaction;
-	type Error = sp_transaction_pool::error::Error;
+	type Error = sc_transaction_pool_api::error::Error;
 
 	/// Returns a future that imports a bunch of unverified transactions to the pool.
 	fn submit_at(

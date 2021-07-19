@@ -81,7 +81,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
 		#[pallet::weight(Weight::from(*_foo))]
-		fn foo(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
+		pub fn foo(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
 			let _ = origin;
 			Self::deposit_event(Event::Something(3));
 			Ok(().into())
@@ -90,7 +90,7 @@ pub mod pallet {
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
 		#[frame_support::transactional]
-		fn foo_transactional(
+		pub fn foo_transactional(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32
 		) -> DispatchResultWithPostInfo {
@@ -133,6 +133,21 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type DoubleMap2<T, I = ()> =
 		StorageDoubleMap<_, Twox64Concat, u16, Blake2_128Concat, u32, u64>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn nmap)]
+	pub type NMap<T, I = ()> = StorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn nmap2)]
+	pub type NMap2<T, I = ()> = StorageNMap<
+		_,
+		(
+			storage::Key<Twox64Concat, u16>,
+			storage::Key<Blake2_128Concat, u32>,
+		),
+		u64,
+	>;
 
 	#[pallet::genesis_config]
 	#[derive(Default)]
@@ -181,20 +196,19 @@ pub mod pallet {
 	pub enum InherentError {
 	}
 
-	impl sp_inherents::IsFatalError for InherentError {
+	impl frame_support::inherent::IsFatalError for InherentError {
 		fn is_fatal_error(&self) -> bool {
 			unimplemented!();
 		}
 	}
 
-	pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"testpall";
+	pub const INHERENT_IDENTIFIER: frame_support::inherent::InherentIdentifier = *b"testpall";
 }
 
 // Test that a instantiable pallet with a generic genesis_config is correctly handled
 #[frame_support::pallet]
 pub mod pallet2 {
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
@@ -204,12 +218,6 @@ pub mod pallet2 {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
-
-	#[pallet::call]
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {}
 
 	#[pallet::event]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -242,7 +250,7 @@ frame_support::parameter_types!(
 );
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
@@ -298,8 +306,8 @@ frame_support::construct_runtime!(
 		Instance1Example: pallet::<Instance1>::{
 			Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
 		},
-		Example2: pallet2::{Pallet, Call, Event<T>, Config<T>, Storage},
-		Instance1Example2: pallet2::<Instance1>::{Pallet, Call, Event<T>, Config<T>, Storage},
+		Example2: pallet2::{Pallet, Event<T>, Config<T>, Storage},
+		Instance1Example2: pallet2::<Instance1>::{Pallet, Event<T>, Config<T>, Storage},
 	}
 );
 
@@ -386,7 +394,7 @@ fn pallet_expand_deposit_event() {
 		pallet::Call::<Runtime>::foo(3).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet(pallet::Event::Something(3)),
+			Event::Example(pallet::Event::Something(3)),
 		);
 	});
 
@@ -395,7 +403,7 @@ fn pallet_expand_deposit_event() {
 		pallet::Call::<Runtime, pallet::Instance1>::foo(3).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet_Instance1(pallet::Event::Something(3)),
+			Event::Instance1Example(pallet::Event::Something(3)),
 		);
 	});
 }
@@ -403,7 +411,7 @@ fn pallet_expand_deposit_event() {
 #[test]
 fn storage_expand() {
 	use frame_support::pallet_prelude::*;
-	use frame_support::StoragePrefixedMap;
+	use frame_support::storage::StoragePrefixedMap;
 
 	fn twox_64_concat(d: &[u8]) -> Vec<u8> {
 		let mut v = twox_64(d).to_vec();
@@ -447,6 +455,19 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime>>::final_prefix());
+
+		<pallet::NMap<Runtime>>::insert((&1,), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"NMap")].concat();
+		k.extend(1u8.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
+		assert_eq!(&k[..32], &<pallet::NMap<Runtime>>::final_prefix());
+
+		<pallet::NMap2<Runtime>>::insert((&1, &2), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"NMap2")].concat();
+		k.extend(1u16.using_encoded(twox_64_concat));
+		k.extend(2u32.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
+		assert_eq!(&k[..32], &<pallet::NMap2<Runtime>>::final_prefix());
 	});
 
 	TestExternalities::default().execute_with(|| {
@@ -479,6 +500,19 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime, pallet::Instance1>>::final_prefix());
+
+		<pallet::NMap<Runtime, pallet::Instance1>>::insert((&1,), &3);
+		let mut k = [twox_128(b"Instance1Example"), twox_128(b"NMap")].concat();
+		k.extend(1u8.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
+		assert_eq!(&k[..32], &<pallet::NMap<Runtime, pallet::Instance1>>::final_prefix());
+
+		<pallet::NMap2<Runtime, pallet::Instance1>>::insert((&1, &2), &3);
+		let mut k = [twox_128(b"Instance1Example"), twox_128(b"NMap2")].concat();
+		k.extend(1u16.using_encoded(twox_64_concat));
+		k.extend(2u32.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
+		assert_eq!(&k[..32], &<pallet::NMap2<Runtime, pallet::Instance1>>::final_prefix());
 	});
 }
 
@@ -505,27 +539,27 @@ fn pallet_hooks_expand() {
 		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet_Instance1(pallet::Event::Something(11)),
+			Event::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::pallet(pallet::Event::Something(10)),
+			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::pallet_Instance1(pallet::Event::Something(21)),
+			Event::Instance1Example(pallet::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			Event::pallet(pallet::Event::Something(20)),
+			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::pallet_Instance1(pallet::Event::Something(31)),
+			Event::Instance1Example(pallet::Event::Something(31)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::pallet(pallet::Event::Something(30)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 	})
 }
@@ -617,6 +651,36 @@ fn metadata() {
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("NMap".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec!["u8".to_string()]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Blake2_128Concat,
+						]),
+						value: DecodeDifferent::Decoded("u32".to_string()),
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("NMap2".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec![
+							"u16".to_string(),
+							"u32".to_string(),
+						]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Twox64Concat,
+							StorageHasher::Blake2_128Concat,
+						]),
+						value: DecodeDifferent::Decoded("u64".to_string()),
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
 			]),
 		})),
 		calls: Some(DecodeDifferent::Decoded(vec![
@@ -696,7 +760,7 @@ fn metadata() {
 
 
 	let metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V12(metadata) => metadata,
+		RuntimeMetadata::V13(metadata) => metadata,
 		_ => panic!("metadata has been bump, test needs to be updated"),
 	};
 

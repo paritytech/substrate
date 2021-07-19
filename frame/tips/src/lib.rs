@@ -501,7 +501,7 @@ impl<T: Config> Module<T> {
 		tips.sort_by_key(|i| i.1);
 
 		let treasury = Self::account_id();
-		let max_payout = pallet_treasury::Module::<T>::pot();
+		let max_payout = pallet_treasury::Pallet::<T>::pot();
 
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
 		if !tip.deposit.is_zero() {

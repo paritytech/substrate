@@ -274,11 +274,11 @@ fn periodic_session_works() {
 		if P::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
 			assert_eq!(
 				P::estimate_current_session_progress(i).0.unwrap(),
-				Percent::from_percent(100)
+				Permill::from_percent(100)
 			);
 		} else {
 			assert!(
-				P::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100)
+				P::estimate_current_session_progress(i).0.unwrap() < Permill::from_percent(100)
 			);
 		}
 	}
@@ -290,7 +290,7 @@ fn periodic_session_works() {
 	assert_eq!(P::estimate_next_session_rotation(3u64).0.unwrap(), 3);
 	assert_eq!(
 		P::estimate_current_session_progress(3u64).0.unwrap(),
-		Percent::from_percent(10),
+		Permill::from_percent(10),
 	);
 
 	for i in (1u64..10).map(|i| 3 + i) {
@@ -302,11 +302,11 @@ fn periodic_session_works() {
 		if P::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
 			assert_eq!(
 				P::estimate_current_session_progress(i).0.unwrap(),
-				Percent::from_percent(100)
+				Permill::from_percent(100)
 			);
 		} else {
 			assert!(
-				P::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100)
+				P::estimate_current_session_progress(i).0.unwrap() < Permill::from_percent(100)
 			);
 		}
 	}
@@ -316,14 +316,14 @@ fn periodic_session_works() {
 	assert_eq!(P::estimate_next_session_rotation(13u64).0.unwrap(), 23);
 	assert_eq!(
 		P::estimate_current_session_progress(13u64).0.unwrap(),
-		Percent::from_percent(10)
+		Permill::from_percent(10)
 	);
 
 	assert!(!P::should_end_session(14u64));
 	assert_eq!(P::estimate_next_session_rotation(14u64).0.unwrap(), 23);
 	assert_eq!(
 		P::estimate_current_session_progress(14u64).0.unwrap(),
-		Percent::from_percent(20)
+		Permill::from_percent(20)
 	);
 }
 

@@ -22,14 +22,21 @@ use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{
 	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
-	traits::Get,
+	storage::types::{
+		EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
+		ReversibleKeyGenerator, TupleToEncodedIter,
+	},
 };
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
+pub use types::Key;
 
 pub mod unhashed;
 pub mod hashed;
+pub mod bounded_btree_map;
+pub mod bounded_btree_set;
 pub mod bounded_vec;
+pub mod weak_bounded_vec;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
@@ -307,10 +314,16 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// The type that iterates over all `(key, value)`.
 	type Iterator: Iterator<Item = (K, V)>;
+	/// The type that itereates over all `key`s.
+	type KeyIterator: Iterator<Item = K>;
 
 	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
 	/// this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
+
+	/// Enumerate all keys in the map in no particular order, skipping over the elements. If you
+	/// alter the map while doing this, you'll get undefined results.
+	fn iter_keys() -> Self::KeyIterator;
 
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
@@ -329,8 +342,14 @@ pub trait IterableStorageDoubleMap<
 	K2: FullCodec,
 	V: FullCodec
 >: StorageDoubleMap<K1, K2, V> {
+	/// The type that iterates over all `key2`.
+	type PartialKeyIterator: Iterator<Item = K2>;
+
 	/// The type that iterates over all `(key2, value)`.
 	type PrefixIterator: Iterator<Item = (K2, V)>;
+
+	/// The type that iterates over all `(key1, key2)`.
+	type FullKeyIterator: Iterator<Item = (K1, K2)>;
 
 	/// The type that iterates over all `(key1, key2, value)`.
 	type Iterator: Iterator<Item = (K1, K2, V)>;
@@ -339,6 +358,11 @@ pub trait IterableStorageDoubleMap<
 	/// remove values whose first key is `k1` to the map while doing this, you'll get undefined
 	/// results.
 	fn iter_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
+
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` in no particular
+	/// order. If you add or remove values whose first key is `k1` to the map while doing this,
+	/// you'll get undefined results.
+	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::PartialKeyIterator;
 
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order. If you add elements with first key `k1` to the map while doing this,
@@ -349,6 +373,10 @@ pub trait IterableStorageDoubleMap<
 	/// the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
+	/// Enumerate all keys `k1` and `k2` in the map in no particular order. If you add or remove
+	/// values to the map while doing this, you'll get undefined results.
+	fn iter_keys() -> Self::FullKeyIterator;
+
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
@@ -358,6 +386,52 @@ pub trait IterableStorageDoubleMap<
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(f: F);
+}
+
+/// A strongly-typed map with arbitrary number of keys in storage whose keys and values can be
+/// iterated over.
+pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageNMap<K, V> {
+	/// The type that iterates over all `(key1, key2, key3, ... keyN)` tuples.
+	type KeyIterator: Iterator<Item = K::Key>;
+
+	/// The type that iterates over all `(key1, key2, key3, ... keyN), value)` tuples.
+	type Iterator: Iterator<Item = (K::Key, V)>;
+
+	/// Enumerate all elements in the map with prefix key `kp` in no particular order. If you add or
+	/// remove values whose prefix is `kp` to the map while doing this, you'll get undefined
+	/// results.
+	fn iter_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where K: HasReversibleKeyPrefix<KP>;
+
+	/// Enumerate all suffix keys in the map with prefix key `kp` in no particular order. If you
+	/// add or remove values whose prefix is `kp` to the map while doing this, you'll get undefined
+	/// results.
+	fn iter_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where K: HasReversibleKeyPrefix<KP>;
+
+	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
+	/// particular order. If you add elements with prefix key `kp` to the map while doing this,
+	/// you'll get undefined results.
+	fn drain_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where K: HasReversibleKeyPrefix<KP>;
+
+	/// Enumerate all elements in the map in no particular order. If you add or remove values to
+	/// the map while doing this, you'll get undefined results.
+	fn iter() -> Self::Iterator;
+
+	/// Enumerate all keys in the map in no particular order. If you add or remove values to the
+	/// map while doing this, you'll get undefined results.
+	fn iter_keys() -> Self::KeyIterator;
+
+	/// Remove all elements from the map and iterate through them in no particular order. If you
+	/// add elements to the map while doing this, you'll get undefined results.
+	fn drain() -> Self::Iterator;
+
+	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	///
+	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
+	fn translate<O: Decode, F: FnMut(K::Key, O) -> Option<V>>(f: F);
 }
 
 /// An implementation of a map with a two keys.
@@ -424,7 +498,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg2: EncodeLike<K2>;
 
 	/// Remove all values under the first key.
-	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
+	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+		where KArg1: ?Sized + EncodeLike<K1>;
 
 	/// Iterate over values that share the first key.
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> PrefixIterator<V>
@@ -511,6 +586,122 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	>(key1: KeyArg1, key2: KeyArg2) -> Option<V>;
 }
 
+/// An implementation of a map with an arbitrary number of keys.
+///
+/// Details of implementation can be found at [`generator::StorageNMap`].
+pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
+	/// The type that get/take returns.
+	type Query;
+
+	/// Get the storage key used to fetch a value corresponding to a specific key.
+	fn hashed_key_for<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
+
+	/// Does the value (explicitly) exist in storage?
+	fn contains_key<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> bool;
+
+	/// Load the value associated with the given key from the map.
+	fn get<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query;
+
+	/// Try to get the value for the given key from the map.
+	///
+	/// Returns `Ok` if it exists, `Err` if not.
+	fn try_get<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Result<V, ()>;
+
+	/// Swap the values of two keys.
+	fn swap<KOther, KArg1, KArg2>(key1: KArg1, key2: KArg2)
+	where
+		KOther: KeyGenerator,
+		KArg1: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		KArg2: EncodeLikeTuple<KOther::KArg> + TupleToEncodedIter;
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<KArg, VArg>(key: KArg, val: VArg)
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		VArg: EncodeLike<V>;
+
+	/// Remove the value under a key.
+	fn remove<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg);
+
+	/// Remove all values under the partial prefix key.
+	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
+		where K: HasKeyPrefix<KP>;
+
+	/// Iterate over values that share the partial prefix key.
+	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V> where K: HasKeyPrefix<KP>;
+
+	/// Mutate the value under a key.
+	fn mutate<KArg, R, F>(key: KArg, f: F) -> R
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Self::Query) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned.
+	fn try_mutate<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Self::Query) -> Result<R, E>;
+
+	/// Mutate the value under a key.
+	///
+	/// Deletes the item if mutated to a `None`.
+	fn mutate_exists<KArg, R, F>(key: KArg, f: F) -> R
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Option<V>) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Option<V>) -> Result<R, E>;
+
+	/// Take the value under a key.
+	fn take<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query;
+
+	/// Append the given items to the value in the storage.
+	///
+	/// `V` is required to implement `codec::EncodeAppend`.
+	///
+	/// # Warning
+	///
+	/// If the storage item is not encoded properly, the storage will be overwritten
+	/// and set to `[item]`. Any default value set for the storage item will be ignored
+	/// on overwrite.
+	fn append<Item, EncodeLikeItem, KArg>(key: KArg, item: EncodeLikeItem)
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		V: StorageAppend<Item>;
+
+	/// Read the length of the storage value without decoding the entire value under the
+	/// given `key`.
+	///
+	/// `V` is required to implement [`StorageDecodeLength`].
+	///
+	/// If the value does not exists or it fails to decode the length, `None` is returned.
+	/// Otherwise `Some(len)` is returned.
+	///
+	/// # Warning
+	///
+	/// `None` does not mean that `get()` does not return a value. The default value is completly
+	/// ignored by this function.
+	fn decode_len<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Option<usize>
+	where
+		V: StorageDecodeLength,
+	{
+		V::decode_len(&Self::hashed_key_for(key))
+	}
+
+	/// Migrate an item with the given `key` from defunct `hash_fns` to the current hashers.
+	///
+	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
+	fn migrate_keys<KArg>(key: KArg, hash_fns: K::HArg) -> Option<V>
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter;
+}
+
 /// Iterate over a prefix and decode raw_key and raw_value into `T`.
 ///
 /// If any decoding fails it skips it and continues to the next key.
@@ -572,6 +763,56 @@ impl<T> Iterator for PrefixIterator<T> {
 				}
 				None => None,
 			}
+		}
+	}
+}
+
+/// Iterate over a prefix and decode raw_key into `T`.
+///
+/// If any decoding fails it skips it and continues to the next key.
+pub struct KeyPrefixIterator<T> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	/// If true then value are removed while iterating
+	drain: bool,
+	/// Function that take `raw_key_without_prefix` and decode `T`.
+	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
+	closure: fn(&[u8]) -> Result<T, codec::Error>,
+}
+
+impl<T> KeyPrefixIterator<T> {
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(mut self) -> Self {
+		self.drain = true;
+		self
+	}
+}
+
+impl<T> Iterator for KeyPrefixIterator<T> {
+	type Item = T;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		loop {
+			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+
+			if let Some(next) = maybe_next {
+				self.previous_key = next;
+				if self.drain {
+					unhashed::kill(&self.previous_key);
+				}
+				let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+
+				match (self.closure)(raw_key_without_prefix) {
+					Ok(item) => return Some(item),
+					Err(e) => {
+						log::error!("key failed to decode at {:?}: {:?}", self.previous_key, e);
+						continue;
+					}
+				}
+			}
+
+			return None;
 		}
 	}
 }
@@ -725,8 +966,8 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	}
 
 	/// Remove all value of the storage.
-	fn remove_all() {
-		sp_io::storage::clear_prefix(&Self::final_prefix())
+	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -807,16 +1048,47 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 }
 
 /// Provides `Sealed` trait to prevent implementing trait `StorageAppend` & `StorageDecodeLength`
-/// outside of this crate.
+/// & `EncodeLikeTuple` outside of this crate.
 mod private {
 	use super::*;
-	use bounded_vec::{BoundedVecValue, BoundedVec};
+	use bounded_vec::BoundedVec;
+	use weak_bounded_vec::WeakBoundedVec;
 
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
-	impl<T: BoundedVecValue, S: Get<u32>> Sealed for BoundedVec<T, S> {}
+	impl<T, S> Sealed for BoundedVec<T, S> {}
+	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
+	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
+	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
+
+	macro_rules! impl_sealed_for_tuple {
+		($($elem:ident),+) => {
+			paste::paste! {
+				impl<$($elem: Encode,)+> Sealed for ($($elem,)+) {}
+				impl<$($elem: Encode,)+> Sealed for &($($elem,)+) {}
+			}
+		};
+	}
+
+	impl_sealed_for_tuple!(A);
+	impl_sealed_for_tuple!(A, B);
+	impl_sealed_for_tuple!(A, B, C);
+	impl_sealed_for_tuple!(A, B, C, D);
+	impl_sealed_for_tuple!(A, B, C, D, E);
+	impl_sealed_for_tuple!(A, B, C, D, E, F);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q, R);
 }
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
@@ -827,13 +1099,132 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 /// format ever changes, we need to remove this here.
 impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
 
+/// Marker trait that is implemented for types that support the `storage::append` api with a limit
+/// on the number of element.
+///
+/// This trait is sealed.
+pub trait StorageTryAppend<Item>: StorageDecodeLength + private::Sealed {
+	fn bound() -> usize;
+}
+
+/// Storage value that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
+pub trait TryAppendValue<T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage item.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<LikeI: EncodeLike<I>>(item: LikeI) -> Result<(), ()>;
+}
+
+impl<T, I, StorageValueT> TryAppendValue<T, I> for StorageValueT
+where
+	I: Encode,
+	T: FullCodec + StorageTryAppend<I>,
+	StorageValueT: generator::StorageValue<T>,
+{
+	fn try_append<LikeI: EncodeLike<I>>(item: LikeI) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len().unwrap_or_default();
+		if current < bound {
+			// NOTE: we cannot reuse the implementation for `Vec<T>` here because we never want to
+			// mark `BoundedVec<T, S>` as `StorageAppend`.
+			let key = Self::storage_value_final_key();
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Storage map that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
+pub trait TryAppendMap<K: Encode, T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage map at the given `key`.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<LikeK: EncodeLike<K> + Clone, LikeI: EncodeLike<I>>(
+		key: LikeK,
+		item: LikeI,
+	) -> Result<(), ()>;
+}
+
+impl<K, T, I, StorageMapT> TryAppendMap<K, T, I> for StorageMapT
+where
+	K: FullCodec,
+	T: FullCodec + StorageTryAppend<I>,
+	I: Encode,
+	StorageMapT: generator::StorageMap<K, T>,
+{
+	fn try_append<LikeK: EncodeLike<K> + Clone, LikeI: EncodeLike<I>>(
+		key: LikeK,
+		item: LikeI,
+	) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len(key.clone()).unwrap_or_default();
+		if current < bound {
+			let key = Self::storage_map_final_key(key);
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Storage double map that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
+pub trait TryAppendDoubleMap<K1: Encode, K2: Encode, T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage double map at the given `key`.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<
+		LikeK1: EncodeLike<K1> + Clone,
+		LikeK2: EncodeLike<K2> + Clone,
+		LikeI: EncodeLike<I>,
+	>(
+		key1: LikeK1,
+		key2: LikeK2,
+		item: LikeI,
+	) -> Result<(), ()>;
+}
+
+impl<K1, K2, T, I, StorageDoubleMapT> TryAppendDoubleMap<K1, K2, T, I> for StorageDoubleMapT
+where
+	K1: FullCodec,
+	K2: FullCodec,
+	T: FullCodec + StorageTryAppend<I>,
+	I: Encode,
+	StorageDoubleMapT: generator::StorageDoubleMap<K1, K2, T>,
+{
+	fn try_append<
+		LikeK1: EncodeLike<K1> + Clone,
+		LikeK2: EncodeLike<K2> + Clone,
+		LikeI: EncodeLike<I>,
+	>(
+		key1: LikeK1,
+		key2: LikeK2,
+		item: LikeI,
+	) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len(key1.clone(), key2.clone()).unwrap_or_default();
+		if current < bound {
+			let double_map_key = Self::storage_double_map_final_key(key1, key2);
+			sp_io::storage::append(&double_map_key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
 	use sp_core::hashing::twox_128;
-	use crate::hash::Identity;
+	use crate::{hash::Identity, assert_ok};
 	use sp_io::TestExternalities;
 	use generator::StorageValue as _;
+	use bounded_vec::BoundedVec;
+	use weak_bounded_vec::WeakBoundedVec;
+	use core::convert::{TryFrom, TryInto};
 
 	#[test]
 	fn prefixed_map_works() {
@@ -879,7 +1270,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
 
 			// test removal
-			MyStorage::remove_all();
+			MyStorage::remove_all(None);
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 
 			// test migration
@@ -889,7 +1280,7 @@ mod test {
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 			MyStorage::translate_values(|v: u32| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2]);
-			MyStorage::remove_all();
+			MyStorage::remove_all(None);
 
 			// test migration 2
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u128);
@@ -901,7 +1292,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
 			MyStorage::translate_values(|v: u128| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
-			MyStorage::remove_all();
+			MyStorage::remove_all(None);
 
 			// test that other values are not modified.
 			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));
@@ -966,6 +1357,59 @@ mod test {
 				require_transaction();
 				TransactionOutcome::Rollback(())
 			});
+		});
+	}
+
+	#[test]
+	fn key_prefix_iterator_works() {
+		TestExternalities::default().execute_with(|| {
+			use crate::storage::generator::StorageMap;
+			use crate::hash::Twox64Concat;
+			struct MyStorageMap;
+			impl StorageMap<u64, u64> for MyStorageMap {
+				type Query = u64;
+				type Hasher = Twox64Concat;
+
+				fn module_prefix() -> &'static [u8] {
+					b"MyModule"
+				}
+
+				fn storage_prefix() -> &'static [u8] {
+					b"MyStorageMap"
+				}
+
+				fn from_optional_value_to_query(v: Option<u64>) -> Self::Query {
+					v.unwrap_or_default()
+				}
+
+				fn from_query_to_optional_value(v: Self::Query) -> Option<u64> {
+					Some(v)
+				}
+			}
+
+			let k = [twox_128(b"MyModule"), twox_128(b"MyStorageMap")].concat();
+			assert_eq!(MyStorageMap::prefix_hash().to_vec(), k);
+
+			// empty to start
+			assert!(MyStorageMap::iter_keys().collect::<Vec<_>>().is_empty());
+
+			MyStorageMap::insert(1, 10);
+			MyStorageMap::insert(2, 20);
+			MyStorageMap::insert(3, 30);
+			MyStorageMap::insert(4, 40);
+
+			// just looking
+			let mut keys = MyStorageMap::iter_keys().collect::<Vec<_>>();
+			keys.sort();
+			assert_eq!(keys, vec![1, 2, 3, 4]);
+
+			// draining the keys and values
+			let mut drained_keys = MyStorageMap::iter_keys().drain().collect::<Vec<_>>();
+			drained_keys.sort();
+			assert_eq!(drained_keys, vec![1, 2, 3, 4]);
+
+			// empty again
+			assert!(MyStorageMap::iter_keys().collect::<Vec<_>>().is_empty());
 		});
 	}
 
@@ -1039,6 +1483,82 @@ mod test {
 					(vec![1, 2, 3], 8),
 					(vec![3], 8),
 				],
+			);
+		});
+	}
+
+	crate::parameter_types! {
+		pub const Seven: u32 = 7;
+		pub const Four: u32 = 4;
+	}
+
+	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, Seven>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, Seven>> }
+	crate::generate_storage_alias! {
+		Prefix,
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, Seven>>
+	}
+
+	#[test]
+	fn try_append_works() {
+		TestExternalities::default().execute_with(|| {
+			let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			Foo::put(bounded);
+			assert_ok!(Foo::try_append(4));
+			assert_ok!(Foo::try_append(5));
+			assert_ok!(Foo::try_append(6));
+			assert_ok!(Foo::try_append(7));
+			assert_eq!(Foo::decode_len().unwrap(), 7);
+			assert!(Foo::try_append(8).is_err());
+		});
+
+		TestExternalities::default().execute_with(|| {
+			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			FooMap::insert(1, bounded);
+
+			assert_ok!(FooMap::try_append(1, 4));
+			assert_ok!(FooMap::try_append(1, 5));
+			assert_ok!(FooMap::try_append(1, 6));
+			assert_ok!(FooMap::try_append(1, 7));
+			assert_eq!(FooMap::decode_len(1).unwrap(), 7);
+			assert!(FooMap::try_append(1, 8).is_err());
+
+			// append to a non-existing
+			assert!(FooMap::get(2).is_none());
+			assert_ok!(FooMap::try_append(2, 4));
+			assert_eq!(
+				FooMap::get(2).unwrap(),
+				BoundedVec::<u32, Seven>::try_from(vec![4]).unwrap(),
+			);
+			assert_ok!(FooMap::try_append(2, 5));
+			assert_eq!(
+				FooMap::get(2).unwrap(),
+				BoundedVec::<u32, Seven>::try_from(vec![4, 5]).unwrap(),
+			);
+		});
+
+		TestExternalities::default().execute_with(|| {
+			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			FooDoubleMap::insert(1, 1, bounded);
+
+			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
+			assert_ok!(FooDoubleMap::try_append(1, 1, 5));
+			assert_ok!(FooDoubleMap::try_append(1, 1, 6));
+			assert_ok!(FooDoubleMap::try_append(1, 1, 7));
+			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 7);
+			assert!(FooDoubleMap::try_append(1, 1, 8).is_err());
+
+			// append to a non-existing
+			assert!(FooDoubleMap::get(2, 1).is_none());
+			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
+			assert_eq!(
+				FooDoubleMap::get(2, 1).unwrap(),
+				BoundedVec::<u32, Seven>::try_from(vec![4]).unwrap(),
+			);
+			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
+			assert_eq!(
+				FooDoubleMap::get(2, 1).unwrap(),
+				BoundedVec::<u32, Seven>::try_from(vec![4, 5]).unwrap(),
 			);
 		});
 	}

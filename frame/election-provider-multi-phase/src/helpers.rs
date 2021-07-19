@@ -47,16 +47,28 @@ pub fn generate_voter_cache<T: Config>(
 	cache
 }
 
-/// Create a function the returns the index a voter in the snapshot.
+/// Create a function that returns the index of a voter in the snapshot.
 ///
 /// The returning index type is the same as the one defined in `T::CompactSolution::Voter`.
 ///
 /// ## Warning
 ///
-/// The snapshot must be the same is the one used to create `cache`.
+/// Note that this will represent the snapshot data from which the `cache` is generated.
 pub fn voter_index_fn<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_ {
+	move |who| {
+		cache.get(who).and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
+	}
+}
+
+/// Create a function that returns the index of a voter in the snapshot.
+///
+/// Same as [`voter_index_fn`] but the returned function owns all its necessary data; nothing is
+/// borrowed.
+pub fn voter_index_fn_owned<T: Config>(
+	cache: BTreeMap<T::AccountId, usize>,
+) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> {
 	move |who| {
 		cache.get(who).and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
 	}
@@ -66,7 +78,7 @@ pub fn voter_index_fn<T: Config>(
 ///
 /// ## Warning
 ///
-/// The snapshot must be the same is the one used to create `cache`.
+/// Note that this will represent the snapshot data from which the `cache` is generated.
 pub fn voter_index_fn_usize<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<usize> + '_ {
@@ -91,7 +103,7 @@ pub fn voter_index_fn_linear<T: Config>(
 	}
 }
 
-/// Create a function the returns the index to a target in the snapshot.
+/// Create a function that returns the index of a target in the snapshot.
 ///
 /// The returned index type is the same as the one defined in `T::CompactSolution::Target`.
 ///

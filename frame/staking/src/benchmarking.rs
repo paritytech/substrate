@@ -18,7 +18,7 @@
 //! Staking pallet benchmarking.
 
 use super::*;
-use crate::Module as Staking;
+use crate::Pallet as Staking;
 use testing_utils::*;
 
 use sp_runtime::traits::One;
@@ -30,6 +30,7 @@ pub use frame_benchmarking::{
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
 const MAX_VALIDATORS: u32 = 1000;
+const MAX_NOMINATORS: u32 = 1000;
 const MAX_SLASHES: u32 = 1000;
 
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
@@ -78,9 +79,9 @@ pub fn create_validator_with_nominators<T: Config>(
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0 .. upper_bound {
 		let (n_stash, n_controller) = if !dead {
-			create_stash_controller::<T>(u32::max_value() - i, 100, destination.clone())?
+			create_stash_controller::<T>(u32::MAX - i, 100, destination.clone())?
 		} else {
-			create_stash_and_dead_controller::<T>(u32::max_value() - i, 100, destination.clone())?
+			create_stash_and_dead_controller::<T>(u32::MAX - i, 100, destination.clone())?
 		};
 		if i < n {
 			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
@@ -88,10 +89,10 @@ pub fn create_validator_with_nominators<T: Config>(
 		}
 	}
 
-	ValidatorCount::put(1);
+	ValidatorCount::<T>::put(1);
 
 	// Start a new Era
-	let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
+	let new_validators = Staking::<T>::try_trigger_new_era(SessionIndex::one(), true).unwrap();
 
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
@@ -102,7 +103,7 @@ pub fn create_validator_with_nominators<T: Config>(
 		individual: points_individual.into_iter().collect(),
 	};
 
-	let current_era = CurrentEra::get().unwrap();
+	let current_era = CurrentEra::<T>::get().unwrap();
 	ErasRewardPoints::<T>::insert(current_era, reward);
 
 	// Create reward pool
@@ -164,7 +165,7 @@ benchmarks! {
 		add_slashing_spans::<T>(&stash, s);
 		let amount = T::Currency::minimum_balance() * 5u32.into(); // Half of total
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
-		CurrentEra::put(EraIndex::max_value());
+		CurrentEra::<T>::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
 		whitelist_account!(controller);
@@ -183,7 +184,7 @@ benchmarks! {
 		add_slashing_spans::<T>(&stash, s);
 		let amount = T::Currency::minimum_balance() * 10u32.into();
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
-		CurrentEra::put(EraIndex::max_value());
+		CurrentEra::<T>::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
 		whitelist_account!(controller);
@@ -303,17 +304,17 @@ benchmarks! {
 		let validator_count = MAX_VALIDATORS;
 	}: _(RawOrigin::Root, validator_count)
 	verify {
-		assert_eq!(ValidatorCount::get(), validator_count);
+		assert_eq!(ValidatorCount::<T>::get(), validator_count);
 	}
 
 	force_no_eras {}: _(RawOrigin::Root)
-	verify { assert_eq!(ForceEra::get(), Forcing::ForceNone); }
+	verify { assert_eq!(ForceEra::<T>::get(), Forcing::ForceNone); }
 
 	force_new_era {}: _(RawOrigin::Root)
-	verify { assert_eq!(ForceEra::get(), Forcing::ForceNew); }
+	verify { assert_eq!(ForceEra::<T>::get(), Forcing::ForceNew); }
 
 	force_new_era_always {}: _(RawOrigin::Root)
-	verify { assert_eq!(ForceEra::get(), Forcing::ForceAlways); }
+	verify { assert_eq!(ForceEra::<T>::get(), Forcing::ForceAlways); }
 
 	// Worst case scenario, the list of invulnerables is very long.
 	set_invulnerables {
@@ -361,7 +362,7 @@ benchmarks! {
 			RewardDestination::Controller,
 		)?;
 
-		let current_era = CurrentEra::get().unwrap();
+		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
 		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
 
@@ -394,7 +395,7 @@ benchmarks! {
 			RewardDestination::Staked,
 		)?;
 
-		let current_era = CurrentEra::get().unwrap();
+		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
 		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
 
@@ -444,8 +445,8 @@ benchmarks! {
 
 	set_history_depth {
 		let e in 1 .. 100;
-		HistoryDepth::put(e);
-		CurrentEra::put(e);
+		HistoryDepth::<T>::put(e);
+		CurrentEra::<T>::put(e);
 		for i in 0 .. e {
 			<ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
 			<ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
@@ -453,22 +454,28 @@ benchmarks! {
 			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
 			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
-			ErasStartSessionIndex::insert(i, i);
+			ErasStartSessionIndex::<T>::insert(i, i);
 		}
-	}: _(RawOrigin::Root, EraIndex::zero(), u32::max_value())
+	}: _(RawOrigin::Root, EraIndex::zero(), u32::MAX)
 	verify {
-		assert_eq!(HistoryDepth::get(), 0);
+		assert_eq!(HistoryDepth::<T>::get(), 0);
 	}
 
 	reap_stash {
 		let s in 1 .. MAX_SPANS;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
+		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), ValidatorPrefs::default())?;
 		add_slashing_spans::<T>(&stash, s);
 		T::Currency::make_free_balance_be(&stash, T::Currency::minimum_balance());
 		whitelist_account!(controller);
+
+		assert!(Bonded::<T>::contains_key(&stash));
+		assert!(Validators::<T>::contains_key(&stash));
+
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
+		assert!(!Validators::<T>::contains_key(&stash));
 	}
 
 	new_era {
@@ -484,7 +491,8 @@ benchmarks! {
 		)?;
 		let session_index = SessionIndex::one();
 	}: {
-		let validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
+		let validators = Staking::<T>::try_trigger_new_era(session_index, true)
+			.ok_or("`new_era` failed")?;
 		assert!(validators.len() == v as usize);
 	}
 
@@ -500,10 +508,10 @@ benchmarks! {
 			None,
 		)?;
 		// Start a new Era
-		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
+		let new_validators = Staking::<T>::try_trigger_new_era(SessionIndex::one(), true).unwrap();
 		assert!(new_validators.len() == v as usize);
 
-		let current_era = CurrentEra::get().unwrap();
+		let current_era = CurrentEra::<T>::get().unwrap();
 		let mut points_total = 0;
 		let mut points_individual = Vec::new();
 		let mut payout_calls_arg = Vec::new();
@@ -562,9 +570,9 @@ benchmarks! {
 
 	get_npos_voters {
 		// number of validator intention.
-		let v in 200 .. 400;
+		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
 		// number of nominator intention.
-		let n in 200 .. 400;
+		let n in (MAX_NOMINATORS / 2) .. MAX_NOMINATORS;
 		// total number of slashing spans. Assigned to validators randomly.
 		let s in 1 .. 20;
 
@@ -583,14 +591,48 @@ benchmarks! {
 
 	get_npos_targets {
 		// number of validator intention.
-		let v in 200 .. 400;
+		let v in (MAX_VALIDATORS / 2) .. MAX_VALIDATORS;
 		// number of nominator intention.
-		let n = 500;
+		let n = MAX_NOMINATORS;
 
 		let _ = create_validators_with_nominators_for_era::<T>(v, n, T::MAX_NOMINATIONS as usize, false, None)?;
 	}: {
 		let targets = <Staking<T>>::get_npos_targets();
 		assert_eq!(targets.len() as u32, v);
+	}
+
+	set_staking_limits {
+		// This function always does the same thing... just write to 4 storage items.
+	}: _(
+		RawOrigin::Root,
+		BalanceOf::<T>::max_value(),
+		BalanceOf::<T>::max_value(),
+		Some(u32::MAX),
+		Some(u32::MAX),
+		Some(Percent::max_value())
+	) verify {
+		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
+		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
+		assert_eq!(MaxNominatorsCount::<T>::get(), Some(u32::MAX));
+		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::MAX));
+		assert_eq!(ChillThreshold::<T>::get(), Some(Percent::from_percent(100)));
+	}
+
+	chill_other {
+		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
+		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), ValidatorPrefs::default())?;
+		Staking::<T>::set_staking_limits(
+			RawOrigin::Root.into(),
+			BalanceOf::<T>::max_value(),
+			BalanceOf::<T>::max_value(),
+			Some(0),
+			Some(0),
+			Some(Percent::from_percent(0))
+		)?;
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), controller.clone())
+	verify {
+		assert!(!Validators::<T>::contains_key(controller));
 	}
 }
 
@@ -602,7 +644,7 @@ mod tests {
 
 	#[test]
 	fn create_validators_with_nominators_for_era_works() {
-		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
 			let v = 10;
 			let n = 100;
 
@@ -624,7 +666,7 @@ mod tests {
 
 	#[test]
 	fn create_validator_with_nominators_works() {
-		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
 			let n = 10;
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
@@ -636,7 +678,7 @@ mod tests {
 
 			assert_eq!(nominators.len() as u32, n);
 
-			let current_era = CurrentEra::get().unwrap();
+			let current_era = CurrentEra::<Test>::get().unwrap();
 
 			let original_free_balance = Balances::free_balance(&validator_stash);
 			assert_ok!(Staking::payout_stakers(Origin::signed(1337), validator_stash, current_era));
@@ -648,7 +690,7 @@ mod tests {
 
 	#[test]
 	fn add_slashing_spans_works() {
-		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
 			let n = 10;
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
@@ -679,7 +721,7 @@ mod tests {
 
 	#[test]
 	fn test_payout_all() {
-		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build_and_execute(|| {
 			let v = 10;
 			let n = 100;
 
@@ -699,6 +741,7 @@ mod tests {
 
 impl_benchmark_test_suite!(
 	Staking,
-	crate::mock::ExtBuilder::default().has_stakers(true).build(),
+	crate::mock::ExtBuilder::default().has_stakers(true),
 	crate::mock::Test,
+	exec_name = build_and_execute
 );

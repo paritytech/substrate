@@ -17,6 +17,8 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
+use sp_std::prelude::*;
+
 /// An instance of a pallet in the storage.
 ///
 /// It is required that these instances are unique, to support multiple instances per pallet in the same runtime!
@@ -44,4 +46,43 @@ pub trait StorageInstance {
 
 	/// Prefix given to a storage to isolate from other storages in the pallet.
 	const STORAGE_PREFIX: &'static str;
+}
+
+/// Metadata about storage from the runtime.
+#[derive(codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone)]
+pub struct StorageInfo {
+	/// Encoded string of pallet name.
+	pub pallet_name: Vec<u8>,
+	/// Encoded string of storage name.
+	pub storage_name: Vec<u8>,
+	/// The prefix of the storage. All keys after the prefix are considered part of this storage.
+	pub prefix: Vec<u8>,
+	/// The maximum number of values in the storage, or none if no maximum specified.
+	pub max_values: Option<u32>,
+	/// The maximum size of key/values in the storage, or none if no maximum specified.
+	pub max_size: Option<u32>,
+}
+
+/// A trait to give information about storage.
+///
+/// It can be used to calculate PoV worst case size.
+pub trait StorageInfoTrait {
+	fn storage_info() -> Vec<StorageInfo>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl StorageInfoTrait for Tuple {
+	fn storage_info() -> Vec<StorageInfo> {
+		let mut res = vec![];
+		for_tuples!( #( res.extend_from_slice(&Tuple::storage_info()); )* );
+		res
+	}
+}
+
+/// Similar to [`StorageInfoTrait`], a trait to give partial information about storage.
+///
+/// This is useful when a type can give some partial information with its generic parameter doesn't
+/// implement some bounds.
+pub trait PartialStorageInfoTrait {
+	fn partial_storage_info() -> Vec<StorageInfo>;
 }

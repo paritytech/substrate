@@ -136,4 +136,118 @@ pub trait StateApi<Hash> {
 	fn unsubscribe_storage(
 		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
 	) -> RpcResult<bool>;
+
+	/// The `state_traceBlock` RPC provides a way to trace the re-execution of a single
+	/// block, collecting Spans and Events from both the client and the relevant WASM runtime.
+	/// The Spans and Events are conceptually equivalent to those from the [Tracing][1] crate.
+	///
+	/// The structure of the traces follows that of the block execution pipeline, so meaningful
+	/// interpretation of the traces requires an understanding of the Substrate chain's block
+	/// execution.
+	///
+	/// [Link to conceptual map of trace structure for Polkadot and Kusama block execution.][2]
+	///
+	/// [1]: https://crates.io/crates/tracing
+	/// [2]: https://docs.google.com/drawings/d/1vZoJo9jaXlz0LmrdTOgHck9_1LsfuQPRmTr-5g1tOis/edit?usp=sharing
+	///
+	/// ## Node requirements
+	///
+	/// - Fully synced archive node (i.e. a node that is not actively doing a "major" sync).
+	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime versions
+	/// for which tracing is desired.
+	///
+	/// ## Node recommendations
+	///
+	/// - Use fast SSD disk storage.
+	/// - Run node flags to increase DB read speed (i.e. `--state-cache-size`, `--db-cache`).
+	///
+	/// ## Creating tracing enabled WASM runtimes
+	///
+	/// - Checkout commit of chain version to compile with WASM traces
+	/// - [diener][1] can help to peg commit of substrate to what the chain expects.
+	/// - Navigate to the `runtime` folder/package of the chain
+	/// - Add feature `with-tracing = ["frame-executive/with-tracing", "sp-io/with-tracing"]`
+	/// under `[features]` to the `runtime` packages' `Cargo.toml`.
+	/// - Compile the runtime with `cargo build --release --features with-tracing`
+	/// - Tracing-enabled WASM runtime should be found in `./target/release/wbuild/{{chain}}-runtime`
+	/// and be called something like `{{your_chain}}_runtime.compact.wasm`. This can be
+	/// renamed/modified however you like, as long as it retains the `.wasm` extension.
+	/// - Run the node with the wasm blob overrides by placing them in a folder with all your runtimes,
+	/// and passing the path of this folder to your chain, e.g.:
+	/// 	- `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
+	///
+	/// You can also find some pre-built tracing enabled wasm runtimes in [substrate-archive][2]
+	///
+	/// [Source.][3]
+	///
+	/// [1]: https://crates.io/crates/diener
+	/// [2]: https://github.com/paritytech/substrate-archive/tree/master/wasm-tracing
+	/// [3]: https://github.com/paritytech/substrate-archive/wiki
+	///
+	/// ## RPC Usage
+	///
+	/// The RPC allows for two filtering mechanisms: tracing targets and storage key prefixes.
+	/// The filtering of spans and events takes place after they are all collected; so while filters
+	/// do not reduce time for actual block re-execution, they reduce the response payload size.
+	///
+	/// Note: storage events primarily come from _primitives/state-machine/src/ext.rs_.
+	/// The default filters can be overridden, see the [params section](#params) for details.
+	///
+	/// ### `curl` example
+	///
+	/// ```text
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
+	///		"params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264"]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
+	/// ### Params
+	///
+	/// - `block_hash` (param index 0): Hash of the block to trace.
+	/// - `targets` (param index 1): String of comma separated (no spaces) targets. Specified
+	/// 	targets match with trace targets by prefix (i.e if a target is in the beginning
+	/// 	of a trace target it is considered a match). If an empty string is specified no
+	/// 	targets will be filtered out. The majority of targets correspond to Rust module names,
+	/// 	and the ones that do not are typically "hardcoded" into span or event location
+	/// 	somewhere in the Substrate source code. ("Non-hardcoded" targets typically come from frame
+	/// 	support macros.)
+	/// - `storage_keys` (param index 2): String of comma separated (no spaces) hex encoded
+	/// 	(no `0x` prefix) storage keys. If an empty string is specified no events will
+	/// 	be filtered out. If anything other than an empty string is specified, events
+	/// 	will be filtered by storage key (so non-storage events will **not** show up).
+	/// 	You can specify any length of a storage key prefix (i.e. if a specified storage
+	/// 	key is in the beginning of an events storage key it is considered a match).
+	/// 	Example: for balance tracking on Polkadot & Kusama you would likely want
+	///		to track changes to account balances with the frame_system::Account storage item,
+	///		which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
+	///		the storage prefix for the map:
+	///		`26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
+	/// 	Additionally you would want to track the extrinsic index, which is under the
+	///		`:extrinsic_index` key. The key for this would be the aforementioned string as bytes
+	///		in hex: `3a65787472696e7369635f696e646578`.
+	///		The following are some resources to learn more about storage keys in substrate:
+	///		[substrate storage][1], [transparent keys in substrate][2],
+	///		[querying substrate storage via rpc][3].
+	///
+	///		[1]: https://substrate.dev/docs/en/knowledgebase/advanced/storage#storage-map-key
+	///		[2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
+	///		[3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
+	///
+	/// ### Maximum payload size
+	///
+	/// The maximum payload size allowed is 15mb. Payloads over this size will return a
+	/// object with a simple error message. If you run into issues with payload size you can
+	/// narrow down the traces using a smaller set of targets and/or storage keys.
+	///
+	/// If you are having issues with maximum payload size you can use the flag
+	/// `-lstate_tracing=trace` to get some logging during tracing.
+	#[rpc(name = "state_traceBlock")]
+	fn trace_block(
+		&self,
+		block: Hash,
+		targets: Option<String>,
+		storage_keys: Option<String>,
+	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
 }

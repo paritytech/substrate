@@ -47,11 +47,11 @@ pub trait SystemApi<Hash, Number> {
 
 	/// Get the chain's type.
 	#[rpc(name = "system_chainType")]
-	fn system_type(&self) -> SystemResult<sp_chain_spec::ChainType>;
+	fn system_type(&self) -> SystemResult<sc_chain_spec::ChainType>;
 
 	/// Get a custom set of properties as a JSON object, defined in the chain spec.
 	#[rpc(name = "system_properties")]
-	fn system_properties(&self) -> SystemResult<sp_chain_spec::Properties>;
+	fn system_properties(&self) -> SystemResult<sc_chain_spec::Properties>;
 
 	/// Return health status of the node.
 	///
@@ -101,6 +101,10 @@ pub trait SystemApi<Hash, Number> {
 	#[rpc(name = "system_removeReservedPeer", returns = "()")]
 	fn system_remove_reserved_peer(&self, peer_id: String)
 		-> Compat<BoxFuture<'static, Result<(), jsonrpc_core::Error>>>;
+
+	/// Returns the list of reserved peers
+	#[rpc(name = "system_reservedPeers", returns = "Vec<String>")]
+	fn system_reserved_peers(&self) -> Receiver<Vec<String>>;
 
 	/// Returns the roles the node is running as.
 	#[rpc(name = "system_nodeRoles", returns = "Vec<NodeRole>")]

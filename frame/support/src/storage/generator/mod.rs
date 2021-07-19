@@ -25,10 +25,12 @@
 //! This is internal api and is subject to change.
 
 mod map;
+mod nmap;
 mod double_map;
 mod value;
 
 pub use map::StorageMap;
+pub use nmap::StorageNMap;
 pub use double_map::StorageDoubleMap;
 pub use value::StorageValue;
 

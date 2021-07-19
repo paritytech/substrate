@@ -25,7 +25,7 @@ use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 use core::convert::TryInto;
 
-use crate::Module as Multisig;
+use crate::Pallet as Multisig;
 
 const SEED: u32 = 0;
 

@@ -300,6 +300,11 @@ pub enum StorageEntryType {
 		value: DecodeDifferentStr,
 		key2_hasher: StorageHasher,
 	},
+	NMap {
+		keys: DecodeDifferentArray<&'static str, StringBuf>,
+		hashers: DecodeDifferentArray<StorageHasher>,
+		value: DecodeDifferentStr,
+	},
 }
 
 /// A storage entry modifier.
@@ -364,8 +369,10 @@ pub enum RuntimeMetadata {
 	V10(RuntimeMetadataDeprecated),
 	/// Version 11 for runtime metadata. No longer used.
 	V11(RuntimeMetadataDeprecated),
-	/// Version 12 for runtime metadata.
-	V12(RuntimeMetadataV12),
+	/// Version 12 for runtime metadata. No longer used.
+	V12(RuntimeMetadataDeprecated),
+	/// Version 13 for runtime metadata.
+	V13(RuntimeMetadataV13),
 }
 
 /// Enum that should fail.
@@ -389,7 +396,7 @@ impl Decode for RuntimeMetadataDeprecated {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Decode, Serialize))]
-pub struct RuntimeMetadataV12 {
+pub struct RuntimeMetadataV13 {
 	/// Metadata of all the modules.
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 	/// Metadata of the extrinsic.
@@ -397,7 +404,7 @@ pub struct RuntimeMetadataV12 {
 }
 
 /// The latest version of the metadata.
-pub type RuntimeMetadataLastVersion = RuntimeMetadataV12;
+pub type RuntimeMetadataLastVersion = RuntimeMetadataV13;
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode, RuntimeDebug)]
@@ -425,6 +432,6 @@ impl Into<sp_core::OpaqueMetadata> for RuntimeMetadataPrefixed {
 
 impl Into<RuntimeMetadataPrefixed> for RuntimeMetadataLastVersion {
 	fn into(self) -> RuntimeMetadataPrefixed {
-		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V12(self))
+		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V13(self))
 	}
 }

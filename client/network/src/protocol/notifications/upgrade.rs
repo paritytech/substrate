@@ -19,8 +19,10 @@
 pub use self::collec::UpgradeCollec;
 pub use self::notifications::{
 	NotificationsIn,
+	NotificationsInOpen,
 	NotificationsInSubstream,
 	NotificationsOut,
+	NotificationsOutOpen,
 	NotificationsOutSubstream,
 	NotificationsHandshakeError,
 	NotificationsOutError,

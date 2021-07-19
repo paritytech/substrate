@@ -18,16 +18,16 @@
 //! Storage map type. Implements StorageMap, StorageIterableMap, StoragePrefixedMap traits and their
 //! methods directly.
 
-use codec::{FullCodec, Decode, EncodeLike, Encode};
+use codec::{FullCodec, Decode, EncodeLike, Encode, MaxEncodedLen};
 use crate::{
 	storage::{
-		StorageAppend, StorageDecodeLength,
-		bounded_vec::{BoundedVec, BoundedVecValue},
+		StorageAppend, StorageTryAppend, StorageDecodeLength, StoragePrefixedMap,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
-	traits::{GetDefault, StorageInstance, Get},
+	traits::{GetDefault, StorageInstance, Get, StorageInfo},
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
 /// A type that allow to store value for given key. Allowing to insert/remove/iterate on values.
@@ -43,20 +43,23 @@ use sp_std::prelude::*;
 ///
 /// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 /// `blake2_128_concat` must be used.  Otherwise, other values in storage can be compromised.
-pub struct StorageMap<Prefix, Hasher, Key, Value, QueryKind=OptionQuery, OnEmpty=GetDefault>(
-	core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty)>
+pub struct StorageMap<
+	Prefix, Hasher, Key, Value, QueryKind=OptionQuery, OnEmpty=GetDefault, MaxValues=GetDefault,
+>(
+	core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues)>
 );
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 	crate::storage::generator::StorageMap<Key, Value>
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
 	Key: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	type Query = QueryKind::Query;
 	type Hasher = Hasher;
@@ -74,15 +77,17 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> crate::storage::StoragePrefixedMap<Value> for
-	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	StoragePrefixedMap<Value> for
+	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
 	Key: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	fn module_prefix() -> &'static [u8] {
 		<Self as crate::storage::generator::StorageMap<Key, Value>>::module_prefix()
@@ -92,43 +97,16 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, QueryKind, OnEmpty, VecValue, VecBound>
-	StorageMap<Prefix, Hasher, Key, BoundedVec<VecValue, VecBound>, QueryKind, OnEmpty>
-where
-	Prefix: StorageInstance,
-	Hasher: crate::hash::StorageHasher,
-	Key: FullCodec,
-	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
-	VecValue: BoundedVecValue,
-	VecBound: Get<u32>,
-{
-	/// Try and append the given item to the map in the storage.
-	///
-	/// Is only available if `Value` of the map is [`BoundedVec`].
-	pub fn try_append<EncodeLikeItem, EncodeLikeKey>(
-		key: EncodeLikeKey,
-		item: EncodeLikeItem,
-	) -> Result<(), ()>
-	where
-		EncodeLikeKey: EncodeLike<Key> + Clone,
-		EncodeLikeItem: EncodeLike<VecValue>,
-	{
-		<Self as crate::storage::bounded_vec::TryAppendMap<Key, VecValue, VecBound>>::try_append(
-			key, item,
-		)
-	}
-}
-
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
-	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
 	Key: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Vec<u8> {
@@ -253,8 +231,8 @@ where
 	}
 
 	/// Remove all value of the storage.
-	pub fn remove_all() {
-		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
+	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
 
 	/// Iter over all value of the storage.
@@ -281,23 +259,49 @@ where
 	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(f: F) {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::translate_values(f)
 	}
+
+	/// Try and append the given item to the value in the storage.
+	///
+	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
+	pub fn try_append<KArg, Item, EncodeLikeItem>(
+		key: KArg,
+		item: EncodeLikeItem,
+	) -> Result<(), ()>
+	where
+		KArg: EncodeLike<Key> + Clone,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		Value: StorageTryAppend<Item>,
+	{
+		<
+			Self as crate::storage::TryAppendMap<Key, Value, Item>
+		>::try_append(key, item)
+	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
-	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher + crate::ReversibleStorageHasher,
 	Key: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	/// Enumerate all elements in the map in no particular order.
 	///
 	/// If you alter the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key, Value)> {
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter()
+	}
+
+	/// Enumerate all keys in the map in no particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter_keys()
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
@@ -327,20 +331,76 @@ pub trait StorageMapMetadata {
 	const HASHER: frame_metadata::StorageHasher;
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> StorageMapMetadata
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> where
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageMapMetadata
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
 	Key: FullCodec,
 	Value: FullCodec,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
 	const HASHER: frame_metadata::StorageHasher = Hasher::METADATA;
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
 	const DEFAULT: DefaultByteGetter =
 		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
+}
+
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::StorageInfoTrait for
+	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec + MaxEncodedLen,
+	Value: FullCodec + MaxEncodedLen,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::final_prefix().to_vec(),
+				max_values: MaxValues::get(),
+				max_size: Some(
+					Hasher::max_len::<Key>()
+						.saturating_add(Value::max_encoded_len())
+						.saturated_into(),
+				),
+			}
+		]
+	}
+}
+
+/// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+	crate::traits::PartialStorageInfoTrait for
+	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+where
+	Prefix: StorageInstance,
+	Hasher: crate::hash::StorageHasher,
+	Key: FullCodec,
+	Value: FullCodec,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: Get<QueryKind::Query> + 'static,
+	MaxValues: Get<Option<u32>>,
+{
+	fn partial_storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				pallet_name: Self::module_prefix().to_vec(),
+				storage_name: Self::storage_prefix().to_vec(),
+				prefix: Self::final_prefix().to_vec(),
+				max_values: MaxValues::get(),
+				max_size: None,
+			}
+		]
+	}
 }
 
 #[cfg(test)]
@@ -473,7 +533,7 @@ mod test {
 
 			A::insert(3, 10);
 			A::insert(4, 10);
-			A::remove_all();
+			A::remove_all(None);
 			assert_eq!(A::contains_key(3), false);
 			assert_eq!(A::contains_key(4), false);
 
@@ -508,7 +568,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
-			WithLen::remove_all();
+			WithLen::remove_all(None);
 			assert_eq!(WithLen::decode_len(3), None);
 			WithLen::append(0, 10);
 			assert_eq!(WithLen::decode_len(0), Some(1));

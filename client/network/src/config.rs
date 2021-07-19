@@ -105,7 +105,7 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Request response configuration for the block request protocol.
 	///
-	/// [`RequestResponseConfig`] [`name`] is used to tag outgoing block requests with the correct
+	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
 	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
 	/// requests, if enabled.
 	///
@@ -123,6 +123,15 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// [`crate::light_client_requests::handler::LightClientRequestHandler::new`] allowing
 	/// both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
+
+	/// Request response configuration for the state request protocol.
+	///
+	/// Can be constructed either via
+	/// [`crate::block_request_handler::generate_protocol_config`] allowing outgoing but not
+	/// incoming requests, or constructed via
+	/// [`crate::state_request_handler::StateRequestHandler::new`] allowing
+	/// both outgoing and incoming requests.
+	pub state_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.
@@ -140,6 +149,11 @@ impl Role {
 	/// True for `Role::Authority`
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Role::Authority { .. })
+	}
+
+	/// True for `Role::Light`
+	pub fn is_light(&self) -> bool {
+		matches!(self, Role::Light { .. })
 	}
 }
 
@@ -166,7 +180,7 @@ pub enum TransactionImport {
 	None,
 }
 
-/// Fuure resolving to transaction import result.
+/// Future resolving to transaction import result.
 pub type TransactionImportFuture = Pin<Box<dyn Future<Output=TransactionImport> + Send>>;
 
 /// Transaction pool interface
@@ -368,6 +382,26 @@ impl From<multiaddr::Error> for ParseErr {
 	}
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Sync operation mode.
+pub enum SyncMode {
+	/// Full block download and verification.
+	Full,
+	/// Download blocks and the latest state.
+	Fast {
+		/// Skip state proof download and verification.
+		skip_proofs: bool,
+		/// Download indexed transactions for recent blocks.
+		storage_chain_mode: bool,
+	},
+}
+
+impl Default for SyncMode {
+	fn default() -> Self {
+		SyncMode::Full
+	}
+}
+
 /// Network service configuration.
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
@@ -395,6 +429,8 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Initial syncing mode.
+	pub sync_mode: SyncMode,
 
 	/// True if Kademlia random discovery should be enabled.
 	///
@@ -457,6 +493,7 @@ impl NetworkConfiguration {
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: 5,
+			sync_mode: SyncMode::Full,
 			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
@@ -530,6 +567,9 @@ impl Default for SetConfig {
 }
 
 /// Extension to [`SetConfig`] for sets that aren't the default set.
+///
+/// > **Note**: As new fields might be added in the future, please consider using the `new` method
+/// >			and modifiers instead of creating this struct manually.
 #[derive(Clone, Debug)]
 pub struct NonDefaultSetConfig {
 	/// Name of the notifications protocols of this set. A substream on this set will be
@@ -538,10 +578,46 @@ pub struct NonDefaultSetConfig {
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// >           by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
+	/// If the remote reports that it doesn't support the protocol indicated in the
+	/// `notifications_protocol` field, then each of these fallback names will be tried one by
+	/// one.
+	///
+	/// If a fallback is used, it will be reported in
+	/// [`crate::Event::NotificationStreamOpened::negotiated_fallback`].
+	pub fallback_names: Vec<Cow<'static, str>>,
 	/// Maximum allowed size of single notifications.
 	pub max_notification_size: u64,
 	/// Base configuration.
 	pub set_config: SetConfig,
+}
+
+impl NonDefaultSetConfig {
+	/// Creates a new [`NonDefaultSetConfig`]. Zero slots and accepts only reserved nodes.
+	pub fn new(notifications_protocol: Cow<'static, str>, max_notification_size: u64) -> Self {
+		NonDefaultSetConfig {
+			notifications_protocol,
+			max_notification_size,
+			fallback_names: Vec::new(),
+			set_config: SetConfig {
+				in_peers: 0,
+				out_peers: 0,
+				reserved_nodes: Vec::new(),
+				non_reserved_mode: NonReservedPeerMode::Deny,
+			},
+		}
+	}
+
+	/// Modifies the configuration to allow non-reserved nodes.
+	pub fn allow_non_reserved(&mut self, in_peers: u32, out_peers: u32) {
+		self.set_config.in_peers = in_peers;
+		self.set_config.out_peers = out_peers;
+		self.set_config.non_reserved_mode = NonReservedPeerMode::Accept;
+	}
+
+	/// Add a node to the list of reserved nodes.
+	pub fn add_reserved(&mut self, peer: MultiaddrWithPeerId) {
+		self.set_config.reserved_nodes.push(peer);
+	}
 }
 
 /// Configuration for the transport layer.
@@ -555,8 +631,7 @@ pub enum TransportConfig {
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
-		/// been passed in [`NetworkConfiguration::reserved_nodes`] or
-		/// [`NetworkConfiguration::boot_nodes`].
+		/// been passed in [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
 
 		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we

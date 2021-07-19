@@ -19,9 +19,6 @@
 
 use sp_inherents::{InherentIdentifier, InherentData, Error};
 
-#[cfg(feature = "std")]
-use sp_inherents::{InherentDataProviders, ProvideInherentData};
-
 /// The Aura inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
@@ -31,15 +28,14 @@ pub type InherentType = sp_consensus_slots::Slot;
 /// Auxiliary trait to extract Aura inherent data.
 pub trait AuraInherentData {
 	/// Get aura inherent data.
-	fn aura_inherent_data(&self) ->Result<InherentType, Error>;
+	fn aura_inherent_data(&self) ->Result<Option<InherentType>, Error>;
 	/// Replace aura inherent data.
 	fn aura_replace_inherent_data(&mut self, new: InherentType);
 }
 
 impl AuraInherentData for InherentData {
-	fn aura_inherent_data(&self) ->Result<InherentType, Error> {
+	fn aura_inherent_data(&self) ->Result<Option<InherentType>, Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "Aura inherent data not found".into()))
 	}
 
 	fn aura_replace_inherent_data(&mut self, new: InherentType) {
@@ -51,50 +47,59 @@ impl AuraInherentData for InherentData {
 // TODO: Remove in the future. https://github.com/paritytech/substrate/issues/8029
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
-	slot_duration: std::time::Duration,
+	slot: InherentType,
 }
 
 #[cfg(feature = "std")]
 impl InherentDataProvider {
-	pub fn new(slot_duration: std::time::Duration) -> Self {
+	/// Create a new instance with the given slot.
+	pub fn new(slot: InherentType) -> Self {
 		Self {
-			slot_duration
+			slot,
+		}
+	}
+
+	/// Creates the inherent data provider by calculating the slot from the given
+	/// `timestamp` and `duration`.
+	pub fn from_timestamp_and_duration(
+		timestamp: sp_timestamp::Timestamp,
+		duration: std::time::Duration,
+	) -> Self {
+		let slot = InherentType::from(
+			(timestamp.as_duration().as_millis() / duration.as_millis()) as u64
+		);
+
+		Self {
+			slot,
 		}
 	}
 }
 
 #[cfg(feature = "std")]
-impl ProvideInherentData for InherentDataProvider {
-	fn on_register(
-		&self,
-		providers: &InherentDataProviders,
-	) ->Result<(), Error> {
-		if !providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {
-			// Add the timestamp inherent data provider, as we require it.
-			providers.register_provider(sp_timestamp::InherentDataProvider)
-		} else {
-			Ok(())
-		}
-	}
+impl sp_std::ops::Deref for InherentDataProvider {
+	type Target = InherentType;
 
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
+	fn deref(&self) -> &Self::Target {
+		&self.slot
 	}
+}
 
+#[cfg(feature = "std")]
+#[async_trait::async_trait]
+impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	fn provide_inherent_data(
 		&self,
 		inherent_data: &mut InherentData,
 	) ->Result<(), Error> {
-		use sp_timestamp::TimestampInherentData;
-
-		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot = *timestamp / self.slot_duration.as_millis() as u64;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot)
+		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot)
 	}
 
-	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		use codec::Decode;
-
-		sp_inherents::Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
+	async fn try_handle_error(
+		&self,
+		_: &InherentIdentifier,
+		_: &[u8],
+	) -> Option<Result<(), Error>> {
+		// There is no error anymore
+		None
 	}
 }

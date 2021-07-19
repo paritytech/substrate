@@ -27,7 +27,7 @@ use sp_core::crypto::SecretString;
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
 
 /// Parameters of the keystore
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct KeystoreParams {
 	/// Specify custom URIs to connect to for keystore-services
 	#[structopt(long = "keystore-uri")]

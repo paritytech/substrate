@@ -17,7 +17,7 @@
 
 //! Tests for the module.
 
-use super::*;
+use super::{*, Event};
 use mock::*;
 use sp_runtime::{
 	assert_eq_error_rate,
@@ -25,7 +25,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
-	assert_ok, assert_noop, StorageMap,
+	assert_ok, assert_noop,
 	traits::{Currency, ReservableCurrency, OnInitialize},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
@@ -187,10 +187,10 @@ fn rewards_should_work() {
 		Payee::<Test>::insert(21, RewardDestination::Controller);
 		Payee::<Test>::insert(101, RewardDestination::Controller);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 50)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 50)]);
 		// This is the second validator of the current elected set.
-		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
+		<Pallet<Test>>::reward_by_ids(vec![(21, 50)]);
 
 		// Compute total payout now for whole duration of the session.
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
@@ -227,7 +227,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			RawEvent::EraPayout(0, total_payout_0, maximum_payout - total_payout_0)
+			Event::EraPayout(0, total_payout_0, maximum_payout - total_payout_0)
 		);
 		mock::make_all_reward_payment(0);
 
@@ -253,7 +253,7 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
@@ -265,7 +265,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			RawEvent::EraPayout(1, total_payout_1, maximum_payout - total_payout_1)
+			Event::EraPayout(1, total_payout_1, maximum_payout - total_payout_1)
 		);
 		mock::make_all_reward_payment(1);
 
@@ -297,8 +297,7 @@ fn staking_should_work() {
 	ExtBuilder::default()
 		.nominate(false)
 		.fair(false) // to give 20 more staked value
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// remember + compare this along with the test.
 			assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
@@ -374,8 +373,7 @@ fn blocking_and_kicking_works() {
 		.validator_count(4)
 		.nominate(true)
 		.num_validators(3)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// block validator 10/11
 			assert_ok!(Staking::validate(Origin::signed(10), ValidatorPrefs { blocked: true, .. Default::default() }));
 			// attempt to nominate from 100/101...
@@ -398,8 +396,7 @@ fn less_than_needed_candidates_works() {
 		.validator_count(4)
 		.nominate(false)
 		.num_validators(3)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			assert_eq!(Staking::validator_count(), 4);
 			assert_eq!(Staking::minimum_validator_count(), 1);
 			assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
@@ -426,8 +423,7 @@ fn no_candidate_emergency_condition() {
 		.num_validators(4)
 		.validator_pool(true)
 		.nominate(false)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// initial validators
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
 			let prefs = ValidatorPrefs { commission: Perbill::one(), .. Default::default() };
@@ -440,13 +436,26 @@ fn no_candidate_emergency_condition() {
 			let res = Staking::chill(Origin::signed(10));
 			assert_ok!(res);
 
-			// trigger era
-			mock::start_active_era(1);
+			let current_era = CurrentEra::<Test>::get();
 
-			// Previous ones are elected. chill is invalidates. TODO: #2494
+			// try trigger new era
+			mock::run_to_block(20);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				Event::StakingElectionFailed,
+			);
+			// No new era is created
+			assert_eq!(current_era, CurrentEra::<Test>::get());
+
+			// Go to far further session to see if validator have changed
+			mock::run_to_block(100);
+
+			// Previous ones are elected. chill is not effective in active era (as era hasn't changed)
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			// Though the validator preferences has been removed.
-			assert!(Staking::validators(11) != prefs);
+			// The chill is still pending.
+			assert!(!<Staking as crate::Store>::Validators::contains_key(11));
+			// No new era is created.
+			assert_eq!(current_era, CurrentEra::<Test>::get());
 		});
 }
 
@@ -455,8 +464,7 @@ fn nominating_and_rewards_should_work() {
 	ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// initial validators -- everyone is actually even.
 			assert_eq_uvec!(validator_controllers(), vec![40, 30]);
 
@@ -482,8 +490,8 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 0
 			let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-			<Module<Test>>::reward_by_ids(vec![(41, 1)]);
-			<Module<Test>>::reward_by_ids(vec![(31, 1)]);
+			<Pallet<Test>>::reward_by_ids(vec![(41, 1)]);
+			<Pallet<Test>>::reward_by_ids(vec![(31, 1)]);
 
 			mock::start_active_era(1);
 
@@ -524,8 +532,8 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 1
 			let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-			<Module<Test>>::reward_by_ids(vec![(21, 2)]);
-			<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+			<Pallet<Test>>::reward_by_ids(vec![(21, 2)]);
+			<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 			mock::start_active_era(2);
 
@@ -779,7 +787,7 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 1);
 
 		// no era change.
-		ForceEra::put(Forcing::ForceNone);
+		ForceEra::<Test>::put(Forcing::ForceNone);
 
 		start_session(4);
 		assert_eq!(active_era(), 1);
@@ -795,7 +803,7 @@ fn forcing_new_era_works() {
 
 		// back to normal.
 		// this immediately starts a new session.
-		ForceEra::put(Forcing::NotForcing);
+		ForceEra::<Test>::put(Forcing::NotForcing);
 
 		start_session(8);
 		assert_eq!(active_era(), 1);
@@ -803,7 +811,7 @@ fn forcing_new_era_works() {
 		start_session(9);
 		assert_eq!(active_era(), 2);
 		// forceful change
-		ForceEra::put(Forcing::ForceAlways);
+		ForceEra::<Test>::put(Forcing::ForceAlways);
 
 		start_session(10);
 		assert_eq!(active_era(), 2);
@@ -815,10 +823,10 @@ fn forcing_new_era_works() {
 		assert_eq!(active_era(), 4);
 
 		// just one forceful change
-		ForceEra::put(Forcing::ForceNew);
+		ForceEra::<Test>::put(Forcing::ForceNew);
 		start_session(13);
 		assert_eq!(active_era(), 5);
-		assert_eq!(ForceEra::get(), Forcing::NotForcing);
+		assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 
 		start_session(14);
 		assert_eq!(active_era(), 6);
@@ -917,7 +925,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(1);
 		mock::make_all_reward_payment(0);
@@ -940,7 +948,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
@@ -968,7 +976,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(3);
 		mock::make_all_reward_payment(2);
@@ -1015,7 +1023,7 @@ fn validator_payment_prefs_work() {
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 		let exposure_1 = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
@@ -1241,8 +1249,7 @@ fn rebond_works() {
 	// * it can re-bond a portion of the funds scheduled to unlock.
 	ExtBuilder::default()
 		.nominate(false)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// Set payee to controller. avoids confusion
 			assert_ok!(Staking::set_payee(
 				Origin::signed(10),
@@ -1386,8 +1393,7 @@ fn rebond_is_fifo() {
 	// Rebond should proceed by reversing the most recent bond operations.
 	ExtBuilder::default()
 		.nominate(false)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// Set payee to controller. avoids confusion
 			assert_ok!(Staking::set_payee(
 				Origin::signed(10),
@@ -1508,8 +1514,8 @@ fn reward_to_stake_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
-		<Module<Test>>::reward_by_ids(vec![(21, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(21, 1)]);
 
 		// New era --> rewards are paid --> stakes are changed
 		mock::start_active_era(1);
@@ -1534,109 +1540,117 @@ fn reward_to_stake_works() {
 fn on_free_balance_zero_stash_removes_validator() {
 	// Tests that validator storage items are cleaned up when stash is empty
 	// Tests that storage items are untouched when controller is empty
-	ExtBuilder::default().existential_deposit(10).build_and_execute(|| {
-		// Check the balance of the validator account
-		assert_eq!(Balances::free_balance(10), 256);
-		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(11), 256000);
-		// Check these two accounts are bonded
-		assert_eq!(Staking::bonded(&11), Some(10));
+	ExtBuilder::default()
+		.existential_deposit(10)
+		.min_nominator_bond(10)
+		.min_validator_bond(10)
+		.build_and_execute(|| {
+			// Check the balance of the validator account
+			assert_eq!(Balances::free_balance(10), 256);
+			// Check the balance of the stash account
+			assert_eq!(Balances::free_balance(11), 256000);
+			// Check these two accounts are bonded
+			assert_eq!(Staking::bonded(&11), Some(10));
 
-		// Set some storage items which we expect to be cleaned up
-		// Set payee information
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
+			// Set some storage items which we expect to be cleaned up
+			// Set payee information
+			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
-		// Check storage items that should be cleaned up
-		assert!(<Ledger<Test>>::contains_key(&10));
-		assert!(<Bonded<Test>>::contains_key(&11));
-		assert!(<Validators<Test>>::contains_key(&11));
-		assert!(<Payee<Test>>::contains_key(&11));
+			// Check storage items that should be cleaned up
+			assert!(<Ledger<Test>>::contains_key(&10));
+			assert!(<Bonded<Test>>::contains_key(&11));
+			assert!(<Validators<Test>>::contains_key(&11));
+			assert!(<Payee<Test>>::contains_key(&11));
 
-		// Reduce free_balance of controller to 0
-		let _ = Balances::slash(&10, Balance::max_value());
+			// Reduce free_balance of controller to 0
+			let _ = Balances::slash(&10, Balance::max_value());
 
-		// Check the balance of the stash account has not been touched
-		assert_eq!(Balances::free_balance(11), 256000);
-		// Check these two accounts are still bonded
-		assert_eq!(Staking::bonded(&11), Some(10));
+			// Check the balance of the stash account has not been touched
+			assert_eq!(Balances::free_balance(11), 256000);
+			// Check these two accounts are still bonded
+			assert_eq!(Staking::bonded(&11), Some(10));
 
-		// Check storage items have not changed
-		assert!(<Ledger<Test>>::contains_key(&10));
-		assert!(<Bonded<Test>>::contains_key(&11));
-		assert!(<Validators<Test>>::contains_key(&11));
-		assert!(<Payee<Test>>::contains_key(&11));
+			// Check storage items have not changed
+			assert!(<Ledger<Test>>::contains_key(&10));
+			assert!(<Bonded<Test>>::contains_key(&11));
+			assert!(<Validators<Test>>::contains_key(&11));
+			assert!(<Payee<Test>>::contains_key(&11));
 
-		// Reduce free_balance of stash to 0
-		let _ = Balances::slash(&11, Balance::max_value());
-		// Check total balance of stash
-		assert_eq!(Balances::total_balance(&11), 10);
+			// Reduce free_balance of stash to 0
+			let _ = Balances::slash(&11, Balance::max_value());
+			// Check total balance of stash
+			assert_eq!(Balances::total_balance(&11), 10);
 
-		// Reap the stash
-		assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
+			// Reap the stash
+			assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
 
-		// Check storage items do not exist
-		assert!(!<Ledger<Test>>::contains_key(&10));
-		assert!(!<Bonded<Test>>::contains_key(&11));
-		assert!(!<Validators<Test>>::contains_key(&11));
-		assert!(!<Nominators<Test>>::contains_key(&11));
-		assert!(!<Payee<Test>>::contains_key(&11));
-	});
+			// Check storage items do not exist
+			assert!(!<Ledger<Test>>::contains_key(&10));
+			assert!(!<Bonded<Test>>::contains_key(&11));
+			assert!(!<Validators<Test>>::contains_key(&11));
+			assert!(!<Nominators<Test>>::contains_key(&11));
+			assert!(!<Payee<Test>>::contains_key(&11));
+		});
 }
 
 #[test]
 fn on_free_balance_zero_stash_removes_nominator() {
 	// Tests that nominator storage items are cleaned up when stash is empty
 	// Tests that storage items are untouched when controller is empty
-	ExtBuilder::default().existential_deposit(10).build_and_execute(|| {
-		// Make 10 a nominator
-		assert_ok!(Staking::nominate(Origin::signed(10), vec![20]));
-		// Check that account 10 is a nominator
-		assert!(<Nominators<Test>>::contains_key(11));
-		// Check the balance of the nominator account
-		assert_eq!(Balances::free_balance(10), 256);
-		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(11), 256000);
+	ExtBuilder::default()
+		.existential_deposit(10)
+		.min_nominator_bond(10)
+		.min_validator_bond(10)
+		.build_and_execute(|| {
+			// Make 10 a nominator
+			assert_ok!(Staking::nominate(Origin::signed(10), vec![20]));
+			// Check that account 10 is a nominator
+			assert!(<Nominators<Test>>::contains_key(11));
+			// Check the balance of the nominator account
+			assert_eq!(Balances::free_balance(10), 256);
+			// Check the balance of the stash account
+			assert_eq!(Balances::free_balance(11), 256000);
 
-		// Set payee information
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
+			// Set payee information
+			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
-		// Check storage items that should be cleaned up
-		assert!(<Ledger<Test>>::contains_key(&10));
-		assert!(<Bonded<Test>>::contains_key(&11));
-		assert!(<Nominators<Test>>::contains_key(&11));
-		assert!(<Payee<Test>>::contains_key(&11));
+			// Check storage items that should be cleaned up
+			assert!(<Ledger<Test>>::contains_key(&10));
+			assert!(<Bonded<Test>>::contains_key(&11));
+			assert!(<Nominators<Test>>::contains_key(&11));
+			assert!(<Payee<Test>>::contains_key(&11));
 
-		// Reduce free_balance of controller to 0
-		let _ = Balances::slash(&10, Balance::max_value());
-		// Check total balance of account 10
-		assert_eq!(Balances::total_balance(&10), 0);
+			// Reduce free_balance of controller to 0
+			let _ = Balances::slash(&10, Balance::max_value());
+			// Check total balance of account 10
+			assert_eq!(Balances::total_balance(&10), 0);
 
-		// Check the balance of the stash account has not been touched
-		assert_eq!(Balances::free_balance(11), 256000);
-		// Check these two accounts are still bonded
-		assert_eq!(Staking::bonded(&11), Some(10));
+			// Check the balance of the stash account has not been touched
+			assert_eq!(Balances::free_balance(11), 256000);
+			// Check these two accounts are still bonded
+			assert_eq!(Staking::bonded(&11), Some(10));
 
-		// Check storage items have not changed
-		assert!(<Ledger<Test>>::contains_key(&10));
-		assert!(<Bonded<Test>>::contains_key(&11));
-		assert!(<Nominators<Test>>::contains_key(&11));
-		assert!(<Payee<Test>>::contains_key(&11));
+			// Check storage items have not changed
+			assert!(<Ledger<Test>>::contains_key(&10));
+			assert!(<Bonded<Test>>::contains_key(&11));
+			assert!(<Nominators<Test>>::contains_key(&11));
+			assert!(<Payee<Test>>::contains_key(&11));
 
-		// Reduce free_balance of stash to 0
-		let _ = Balances::slash(&11, Balance::max_value());
-		// Check total balance of stash
-		assert_eq!(Balances::total_balance(&11), 10);
+			// Reduce free_balance of stash to 0
+			let _ = Balances::slash(&11, Balance::max_value());
+			// Check total balance of stash
+			assert_eq!(Balances::total_balance(&11), 10);
 
-		// Reap the stash
-		assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
+			// Reap the stash
+			assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
 
-		// Check storage items do not exist
-		assert!(!<Ledger<Test>>::contains_key(&10));
-		assert!(!<Bonded<Test>>::contains_key(&11));
-		assert!(!<Validators<Test>>::contains_key(&11));
-		assert!(!<Nominators<Test>>::contains_key(&11));
-		assert!(!<Payee<Test>>::contains_key(&11));
-	});
+			// Check storage items do not exist
+			assert!(!<Ledger<Test>>::contains_key(&10));
+			assert!(!<Bonded<Test>>::contains_key(&11));
+			assert!(!<Validators<Test>>::contains_key(&11));
+			assert!(!<Nominators<Test>>::contains_key(&11));
+			assert!(!<Payee<Test>>::contains_key(&11));
+		});
 }
 
 
@@ -1712,14 +1726,15 @@ fn bond_with_no_staked_value() {
 	ExtBuilder::default()
 		.validator_count(3)
 		.existential_deposit(5)
+		.min_nominator_bond(5)
+		.min_validator_bond(5)
 		.nominate(false)
 		.minimum_validator_count(1)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// Can't bond with 1
 			assert_noop!(
 				Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
-				Error::<Test>::InsufficientValue,
+				Error::<Test>::InsufficientBond,
 			);
 			// bonded with absolute minimum value possible.
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Controller));
@@ -1761,8 +1776,7 @@ fn bond_with_little_staked_value_bounded() {
 		.validator_count(3)
 		.nominate(false)
 		.minimum_validator_count(1)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// setup
 			assert_ok!(Staking::chill(Origin::signed(30)));
 			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -1815,8 +1829,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 		.validator_count(2)
 		.nominate(false)
 		.minimum_validator_count(1)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// disable the nominator
 			assert_ok!(Staking::chill(Origin::signed(100)));
 			// make stakes equal.
@@ -1863,8 +1876,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 		.validator_count(2)
 		.nominate(false)
 		.minimum_validator_count(1)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			// disable the nominator
 			assert_ok!(Staking::chill(Origin::signed(100)));
 			// 31/30 will have less stake
@@ -1910,8 +1922,7 @@ fn new_era_elects_correct_number_of_validators() {
 		.validator_pool(true)
 		.fair(true)
 		.validator_count(1)
-		.build()
-		.execute_with(|| {
+		.build_and_execute(|| {
 			assert_eq!(Staking::validator_count(), 1);
 			assert_eq!(validator_controllers().len(), 1);
 
@@ -1949,8 +1960,8 @@ fn phragmen_should_not_overflow() {
 #[test]
 fn reward_validator_slashing_validator_does_not_overflow() {
 	ExtBuilder::default().build_and_execute(|| {
-		let stake = u64::max_value() as Balance * 2;
-		let reward_slash = u64::max_value() as Balance * 2;
+		let stake = u64::MAX as Balance * 2;
+		let reward_slash = u64::MAX as Balance * 2;
 
 		// Assert multiplication overflows in balance arithmetic.
 		assert!(stake.checked_mul(reward_slash).is_none());
@@ -2007,12 +2018,12 @@ fn reward_from_authorship_event_handler_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		use pallet_authorship::EventHandler;
 
-		assert_eq!(<pallet_authorship::Module<Test>>::author(), 11);
+		assert_eq!(<pallet_authorship::Pallet<Test>>::author(), 11);
 
-		<Module<Test>>::note_author(11);
-		<Module<Test>>::note_uncle(21, 1);
+		<Pallet<Test>>::note_author(11);
+		<Pallet<Test>>::note_uncle(21, 1);
 		// Rewarding the same two times works.
-		<Module<Test>>::note_uncle(11, 1);
+		<Pallet<Test>>::note_uncle(11, 1);
 
 		// Not mandatory but must be coherent with rewards
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
@@ -2035,13 +2046,13 @@ fn add_reward_points_fns_works() {
 		// Not mandatory but must be coherent with rewards
 		assert_eq_uvec!(Session::validators(), vec![21, 11]);
 
-		<Module<Test>>::reward_by_ids(vec![
+		<Pallet<Test>>::reward_by_ids(vec![
 			(21, 1),
 			(11, 1),
 			(11, 1),
 		]);
 
-		<Module<Test>>::reward_by_ids(vec![
+		<Pallet<Test>>::reward_by_ids(vec![
 			(21, 1),
 			(11, 1),
 			(11, 1),
@@ -2084,7 +2095,7 @@ fn era_is_always_same_length() {
 		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session_per_era * 2u32);
 
 		let session = Session::current_index();
-		ForceEra::put(Forcing::ForceNew);
+		ForceEra::<Test>::put(Forcing::ForceNew);
 		advance_session();
 		advance_session();
 		assert_eq!(current_era(), 3);
@@ -2453,7 +2464,11 @@ fn only_slash_for_max_in_era() {
 #[test]
 fn garbage_collection_after_slashing() {
 	// ensures that `SlashingSpans` and `SpanSlash` of an account is removed after reaping.
-	ExtBuilder::default().existential_deposit(2).build_and_execute(|| {
+	ExtBuilder::default()
+	.existential_deposit(2)
+	.min_nominator_bond(2)
+	.min_validator_bond(2)
+	.build_and_execute(|| {
 		assert_eq!(Balances::free_balance(11), 256_000);
 
 		on_offence_now(
@@ -2992,13 +3007,13 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		Payee::<Test>::insert(11, RewardDestination::Controller);
 		Payee::<Test>::insert(101, RewardDestination::Controller);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 
 		mock::start_active_era(1);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -3007,7 +3022,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 
 		mock::start_active_era(2);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -3168,7 +3183,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		}
 		mock::start_active_era(1);
 
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 
@@ -3510,7 +3525,7 @@ fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
 		let zero_offence_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1);
-		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), Ok(zero_offence_weight));
+		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), zero_offence_weight);
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
 		let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
@@ -3523,7 +3538,7 @@ fn offences_weight_calculated_correctly() {
 					reporters: vec![],
 				}
 			).collect();
-		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), Ok(n_offence_unapplied_weight));
+		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), n_offence_unapplied_weight);
 
 		// On Offence with one offenders, Applied
 		let one_offender = [
@@ -3544,7 +3559,7 @@ fn offences_weight_calculated_correctly() {
 			// `reward_cost` * reporters (1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
 
-		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), Ok(one_offence_unapplied_weight));
+		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), one_offence_unapplied_weight);
 	});
 }
 
@@ -3710,6 +3725,8 @@ fn session_buffering_no_offset() {
 fn cannot_rebond_to_lower_than_ed() {
 	ExtBuilder::default()
 		.existential_deposit(10)
+		.min_nominator_bond(10)
+		.min_validator_bond(10)
 		.build_and_execute(|| {
 			// stash must have more balance than bonded for this to work.
 			assert_eq!(Balances::free_balance(&21), 512_000);
@@ -3726,7 +3743,8 @@ fn cannot_rebond_to_lower_than_ed() {
 				}
 			);
 
-			// unbond all of it.
+			// unbond all of it. must be chilled first.
+			assert_ok!(Staking::chill(Origin::signed(20)));
 			assert_ok!(Staking::unbond(Origin::signed(20), 1000));
 			assert_eq!(
 				Staking::ledger(&20).unwrap(),
@@ -3742,7 +3760,7 @@ fn cannot_rebond_to_lower_than_ed() {
 			// now bond a wee bit more
 			assert_noop!(
 				Staking::rebond(Origin::signed(20), 5),
-				Error::<Test>::InsufficientValue,
+				Error::<Test>::InsufficientBond,
 			);
 		})
 }
@@ -3751,6 +3769,8 @@ fn cannot_rebond_to_lower_than_ed() {
 fn cannot_bond_extra_to_lower_than_ed() {
 	ExtBuilder::default()
 		.existential_deposit(10)
+		.min_nominator_bond(10)
+		.min_validator_bond(10)
 		.build_and_execute(|| {
 			// stash must have more balance than bonded for this to work.
 			assert_eq!(Balances::free_balance(&21), 512_000);
@@ -3767,7 +3787,8 @@ fn cannot_bond_extra_to_lower_than_ed() {
 				}
 			);
 
-			// unbond all of it.
+			// unbond all of it. must be chilled first.
+			assert_ok!(Staking::chill(Origin::signed(20)));
 			assert_ok!(Staking::unbond(Origin::signed(20), 1000));
 			assert_eq!(
 				Staking::ledger(&20).unwrap(),
@@ -3786,7 +3807,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 			// now bond a wee bit more
 			assert_noop!(
 				Staking::bond_extra(Origin::signed(21), 5),
-				Error::<Test>::InsufficientValue,
+				Error::<Test>::InsufficientBond,
 			);
 		})
 }
@@ -3796,6 +3817,8 @@ fn do_not_die_when_active_is_ed() {
 	let ed = 10;
 	ExtBuilder::default()
 		.existential_deposit(ed)
+		.min_nominator_bond(ed)
+		.min_validator_bond(ed)
 		.build_and_execute(|| {
 			// initial stuff.
 			assert_eq!(
@@ -3832,7 +3855,7 @@ fn do_not_die_when_active_is_ed() {
 fn on_finalize_weight_is_nonzero() {
 	ExtBuilder::default().build_and_execute(|| {
 		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
-		assert!(Staking::on_initialize(1) >= on_finalize_weight);
+		assert!(<Staking as Hooks<u64>>::on_initialize(1) >= on_finalize_weight);
 	})
 }
 
@@ -3875,7 +3898,7 @@ mod election_data_provider {
 
 	#[test]
 	fn voters_include_self_vote() {
-		ExtBuilder::default().nominate(false).build().execute_with(|| {
+		ExtBuilder::default().nominate(false).build_and_execute(|| {
 			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
 				.unwrap()
 				.0
@@ -3887,7 +3910,7 @@ mod election_data_provider {
 
 	#[test]
 	fn voters_exclude_slashed() {
-		ExtBuilder::default().build().execute_with(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
 				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
@@ -3933,7 +3956,7 @@ mod election_data_provider {
 
 	#[test]
 	fn respects_len_limits() {
-		ExtBuilder::default().build().execute_with(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::voters(Some(1)).unwrap_err(), "Voter snapshot too big");
 			assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
 		});
@@ -3941,7 +3964,7 @@ mod election_data_provider {
 
 	#[test]
 	fn estimate_next_election_works() {
-		ExtBuilder::default().session_per_era(5).period(5).build().execute_with(|| {
+		ExtBuilder::default().session_per_era(5).period(5).build_and_execute(|| {
 			// first session is always length 0.
 			for b in 1..20 {
 				run_to_block(b);
@@ -3954,7 +3977,7 @@ mod election_data_provider {
 			assert_eq!(staking_events().len(), 1);
 			assert_eq!(
 				*staking_events().last().unwrap(),
-				RawEvent::StakingElection
+				Event::StakingElection
 			);
 
 			for b in 21..45 {
@@ -3968,8 +3991,240 @@ mod election_data_provider {
 			assert_eq!(staking_events().len(), 3);
 			assert_eq!(
 				*staking_events().last().unwrap(),
-				RawEvent::StakingElection
+				Event::StakingElection
 			);
+
+			Staking::force_no_eras(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
+
+			Staking::force_new_era_always(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+
+			Staking::force_new_era(Origin::root()).unwrap();
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
+
+			// Do a fail election
+			MinimumValidatorCount::<Test>::put(1000);
+			run_to_block(50);
+			// Election: failed, next session is a new election
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 50 + 5);
+			// The new era is still forced until a new era is planned.
+			assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
+
+			MinimumValidatorCount::<Test>::put(2);
+			run_to_block(55);
+			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
+			assert_eq!(staking_events().len(), 6);
+			assert_eq!(
+				*staking_events().last().unwrap(),
+				Event::StakingElection
+			);
+			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
+			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
+		})
+	}
+
+	#[test]
+	#[should_panic]
+	fn count_check_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// We should never insert into the validators or nominators map directly as this will
+			// not keep track of the count. This test should panic as we verify the count is accurate
+			// after every test using the `post_checks` in `mock`.
+			Validators::<Test>::insert(987654321, ValidatorPrefs::default());
+			Nominators::<Test>::insert(987654321, Nominations {
+				targets: vec![],
+				submitted_in: Default::default(),
+				suppressed: false,
+			});
+		})
+	}
+
+	#[test]
+	fn min_bond_checks_work() {
+		ExtBuilder::default()
+			.existential_deposit(100)
+			.min_nominator_bond(1_000)
+			.min_validator_bond(1_500)
+			.build_and_execute(|| {
+				// 500 is not enough for any role
+				assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
+				assert_noop!(Staking::nominate(Origin::signed(4), vec![1]), Error::<Test>::InsufficientBond);
+				assert_noop!(
+					Staking::validate(Origin::signed(4), ValidatorPrefs::default()),
+					Error::<Test>::InsufficientBond,
+				);
+
+				// 1000 is enough for nominator
+				assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
+				assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+				assert_noop!(
+					Staking::validate(Origin::signed(4), ValidatorPrefs::default()),
+					Error::<Test>::InsufficientBond,
+				);
+
+				// 1500 is enough for validator
+				assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
+				assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+				assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
+
+				// Can't unbond anything as validator
+				assert_noop!(Staking::unbond(Origin::signed(4), 500), Error::<Test>::InsufficientBond);
+
+				// Once they are a nominator, they can unbond 500
+				assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+				assert_ok!(Staking::unbond(Origin::signed(4), 500));
+				assert_noop!(Staking::unbond(Origin::signed(4), 500), Error::<Test>::InsufficientBond);
+
+				// Once they are chilled they can unbond everything
+				assert_ok!(Staking::chill(Origin::signed(4)));
+				assert_ok!(Staking::unbond(Origin::signed(4), 1000));
+			})
+	}
+
+	#[test]
+	fn chill_other_works() {
+		ExtBuilder::default()
+			.existential_deposit(100)
+			.min_nominator_bond(1_000)
+			.min_validator_bond(1_500)
+			.build_and_execute(|| {
+				for i in 0 .. 15 {
+					let a = 4 * i;
+					let b = 4 * i + 1;
+					let c = 4 * i + 2;
+					let d = 4 * i + 3;
+					Balances::make_free_balance_be(&a, 100_000);
+					Balances::make_free_balance_be(&b, 100_000);
+					Balances::make_free_balance_be(&c, 100_000);
+					Balances::make_free_balance_be(&d, 100_000);
+
+					// Nominator
+					assert_ok!(Staking::bond(Origin::signed(a), b, 1000, RewardDestination::Controller));
+					assert_ok!(Staking::nominate(Origin::signed(b), vec![1]));
+
+					// Validator
+					assert_ok!(Staking::bond(Origin::signed(c), d, 1500, RewardDestination::Controller));
+					assert_ok!(Staking::validate(Origin::signed(d), ValidatorPrefs::default()));
+				}
+
+				// To chill other users, we need to:
+				// * Set a minimum bond amount
+				// * Set a limit
+				// * Set a threshold
+				//
+				// If any of these are missing, we do not have enough information to allow the
+				// `chill_other` to succeed from one user to another.
+
+				// Can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+
+				// Change the minimum bond... but no limits.
+				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, None, None, None));
+
+				// Still can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+
+				// Add limits, but no threshold
+				assert_ok!(Staking::set_staking_limits(Origin::root(), 1_500, 2_000, Some(10), Some(10), None));
+
+				// Still can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+
+				// Add threshold, but no limits
+				assert_ok!(Staking::set_staking_limits(
+					Origin::root(), 1_500, 2_000, None, None, Some(Percent::from_percent(0))
+				));
+
+				// Still can't chill these users
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+
+				// Add threshold and limits
+				assert_ok!(Staking::set_staking_limits(
+					Origin::root(), 1_500, 2_000, Some(10), Some(10), Some(Percent::from_percent(75))
+				));
+
+				// 16 people total because tests start with 1 active one
+				assert_eq!(CounterForNominators::<Test>::get(), 16);
+				assert_eq!(CounterForValidators::<Test>::get(), 16);
+
+				// Users can now be chilled down to 7 people, so we try to remove 9 of them (starting with 16)
+				for i in 6 .. 15 {
+					let b = 4 * i + 1;
+					let d = 4 * i + 3;
+					assert_ok!(Staking::chill_other(Origin::signed(1337), b));
+					assert_ok!(Staking::chill_other(Origin::signed(1337), d));
+				}
+
+				// Cant go lower.
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 1), Error::<Test>::CannotChillOther);
+				assert_noop!(Staking::chill_other(Origin::signed(1337), 3), Error::<Test>::CannotChillOther);
+			})
+	}
+
+	#[test]
+	fn capped_stakers_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let validator_count = CounterForValidators::<Test>::get();
+			assert_eq!(validator_count, 3);
+			let nominator_count = CounterForNominators::<Test>::get();
+			assert_eq!(nominator_count, 1);
+
+			// Change the maximums
+			let max = 10;
+			assert_ok!(Staking::set_staking_limits(
+				Origin::root(), 10, 10, Some(max), Some(max), Some(Percent::from_percent(0))
+			));
+
+			// can create `max - validator_count` validators
+			let mut some_existing_validator = AccountId::default();
+			for i in 0 .. max - validator_count {
+				let (_, controller) = testing_utils::create_stash_controller::<Test>(
+					i + 10_000_000, 100, RewardDestination::Controller,
+				).unwrap();
+				assert_ok!(Staking::validate(Origin::signed(controller), ValidatorPrefs::default()));
+				some_existing_validator = controller;
+			}
+
+			// but no more
+			let (_, last_validator) = testing_utils::create_stash_controller::<Test>(
+				1337, 100, RewardDestination::Controller,
+			).unwrap();
+
+			assert_noop!(
+				Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()),
+				Error::<Test>::TooManyValidators,
+			);
+
+			// same with nominators
+			let mut some_existing_nominator = AccountId::default();
+			for i in 0 .. max - nominator_count {
+				let (_, controller) = testing_utils::create_stash_controller::<Test>(
+					i + 20_000_000, 100, RewardDestination::Controller,
+				).unwrap();
+				assert_ok!(Staking::nominate(Origin::signed(controller), vec![1]));
+				some_existing_nominator = controller;
+			}
+
+			// one more is too many
+			let (_, last_nominator) = testing_utils::create_stash_controller::<Test>(
+				30_000_000, 100, RewardDestination::Controller,
+			).unwrap();
+			assert_noop!(Staking::nominate(Origin::signed(last_nominator), vec![1]), Error::<Test>::TooManyNominators);
+
+			// Re-nominate works fine
+			assert_ok!(Staking::nominate(Origin::signed(some_existing_nominator), vec![1]));
+			// Re-validate works fine
+			assert_ok!(Staking::validate(Origin::signed(some_existing_validator), ValidatorPrefs::default()));
+
+			// No problem when we set to `None` again
+			assert_ok!(Staking::set_staking_limits(Origin::root(), 10, 10, None, None, None));
+			assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
+			assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
 		})
 	}
 }

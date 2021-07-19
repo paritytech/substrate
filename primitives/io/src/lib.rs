@@ -30,15 +30,12 @@
 use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
-use sp_std::ops::Deref;
-
-#[cfg(feature = "std")]
 use tracing;
 
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{CallInWasmExt, TaskExecutorExt, RuntimeSpawnExt},
+	traits::{TaskExecutorExt, RuntimeSpawnExt},
 	offchain::{OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
 	storage::ChildInfo,
@@ -70,6 +67,8 @@ mod batch_verifier;
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
 
+const LOG_TARGET: &str = "runtime::io";
+
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
 pub enum EcdsaVerifyError {
@@ -84,7 +83,7 @@ pub enum EcdsaVerifyError {
 /// The outcome of calling `storage_kill`. Returned value is the number of storage items
 /// removed from the trie from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
-pub enum KillChildStorageResult {
+pub enum KillStorageResult {
 	/// No key remains in the child trie.
 	AllRemoved(u32),
 	/// At least one key still resides in the child trie due to the supplied limit.
@@ -131,8 +130,43 @@ pub trait Storage {
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		Externalities::clear_prefix(*self, prefix)
+		let _ = Externalities::clear_prefix(*self, prefix, None);
 	}
+
+	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
+	///
+	/// # Limit
+	///
+	/// Deletes all keys from the overlay and up to `limit` keys from the backend if
+	/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
+	///
+	/// The limit can be used to partially delete a prefix storage in case it is too large
+	/// to delete in one go (block).
+	///
+	/// It returns a boolean false iff some keys are remaining in
+	/// the prefix after the functions returns. Also returns a `u32` with
+	/// the number of keys removed from the process.
+	///
+	/// # Note
+	///
+	/// Please note that keys that are residing in the overlay for that prefix when
+	/// issuing this call are all deleted without counting towards the `limit`. Only keys
+	/// written during the current block are part of the overlay. Deleting with a `limit`
+	/// mostly makes sense with an empty overlay for that prefix.
+	///
+	/// Calling this function multiple times per block for the same `prefix` does
+	/// not make much sense because it is not cumulative when called inside the same block.
+	/// Use this function to distribute the deletion of a single child trie across multiple
+	/// blocks.
+	#[version(2)]
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
+		let (all_removed, num_removed) = Externalities::clear_prefix(*self, prefix, limit);
+		match all_removed {
+			true => KillStorageResult::AllRemoved(num_removed),
+			false => KillStorageResult::SomeRemaining(num_removed),
+		}
+	}
+
 
 	/// Append the encoded `value` to the storage item at `key`.
 	///
@@ -294,26 +328,7 @@ pub trait DefaultChildStorage {
 
 	/// Clear a child storage key.
 	///
-	/// Deletes all keys from the overlay and up to `limit` keys from the backend if
-	/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
-	///
-	/// The limit can be used to partially delete a child trie in case it is too large
-	/// to delete in one go (block).
-	///
-	/// It returns a boolean false iff some keys are remaining in
-	/// the child trie after the functions returns.
-	///
-	/// # Note
-	///
-	/// Please note that keys that are residing in the overlay for that child trie when
-	/// issuing this call are all deleted without counting towards the `limit`. Only keys
-	/// written during the current block are part of the overlay. Deleting with a `limit`
-	/// mostly makes sense with an empty overlay for that child trie.
-	///
-	/// Calling this function multiple times per block for the same `storage_key` does
-	/// not make much sense because it is not cumulative when called inside the same block.
-	/// Use this function to distribute the deletion of a single child trie across multiple
-	/// blocks.
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
 	#[version(2)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
 		let child_info = ChildInfo::new_default(storage_key);
@@ -323,34 +338,14 @@ pub trait DefaultChildStorage {
 
 	/// Clear a child storage key.
 	///
-	/// Deletes all keys from the overlay and up to `limit` keys from the backend if
-	/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
-	///
-	/// The limit can be used to partially delete a child trie in case it is too large
-	/// to delete in one go (block).
-	///
-	/// It returns a boolean false iff some keys are remaining in
-	/// the child trie after the functions returns. Also returns a `u32` with
-	/// the number of keys removed from the process.
-	///
-	/// # Note
-	///
-	/// Please note that keys that are residing in the overlay for that child trie when
-	/// issuing this call are all deleted without counting towards the `limit`. Only keys
-	/// written during the current block are part of the overlay. Deleting with a `limit`
-	/// mostly makes sense with an empty overlay for that child trie.
-	///
-	/// Calling this function multiple times per block for the same `storage_key` does
-	/// not make much sense because it is not cumulative when called inside the same block.
-	/// Use this function to distribute the deletion of a single child trie across multiple
-	/// blocks.
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
 	#[version(3)]
-	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillChildStorageResult {
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
 		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
 		match all_removed {
-			true => KillChildStorageResult::AllRemoved(num_removed),
-			false => KillChildStorageResult::SomeRemaining(num_removed),
+			true => KillStorageResult::AllRemoved(num_removed),
+			false => KillStorageResult::SomeRemaining(num_removed),
 		}
 	}
 
@@ -375,7 +370,25 @@ pub trait DefaultChildStorage {
 		prefix: &[u8],
 	) {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.clear_child_prefix(&child_info, prefix);
+		let _ = self.clear_child_prefix(&child_info, prefix, None);
+	}
+
+	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(2)]
+	fn clear_prefix(
+		&mut self,
+		storage_key: &[u8],
+		prefix: &[u8],
+		limit: Option<u32>,
+	) -> KillStorageResult {
+		let child_info = ChildInfo::new_default(storage_key);
+		let (all_removed, num_removed) = self.clear_child_prefix(&child_info, prefix, limit);
+		match all_removed {
+			true => KillStorageResult::AllRemoved(num_removed),
+			false => KillStorageResult::SomeRemaining(num_removed),
+		}
 	}
 
 	/// Default child root calculation.
@@ -427,11 +440,32 @@ pub trait Trie {
 	fn keccak_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
 		Layout::<sp_core::KeccakHasher>::ordered_trie_root(input)
 	}
+
+	/// Verify trie proof
+	fn blake2_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
+		sp_trie::verify_trie_proof::<Layout<sp_core::Blake2Hasher>, _, _, _>(
+			&root,
+			proof,
+			&[(key, Some(value))],
+		).is_ok()
+	}
+
+	/// Verify trie proof
+	fn keccak_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
+		sp_trie::verify_trie_proof::<Layout<sp_core::KeccakHasher>, _, _, _>(
+			&root,
+			proof,
+			&[(key, Some(value))],
+		).is_ok()
+	}
 }
 
 /// Interface that provides miscellaneous functions for communicating between the runtime and the node.
 #[runtime_interface]
 pub trait Misc {
+	// NOTE: We use the target 'runtime' for messages produced by general printing functions, instead
+	// of LOG_TARGET.
+
 	/// Print a number.
 	fn print_num(val: u64) {
 		log::debug!(target: "runtime", "{}", val);
@@ -456,28 +490,34 @@ pub trait Misc {
 	///
 	/// # Performance
 	///
-	/// Calling this function is very expensive and should only be done very occasionally.
-	/// For getting the runtime version, it requires instantiating the wasm blob and calling a
-	/// function in this blob.
+	/// This function may be very expensive to call depending on the wasm binary. It may be
+	/// relatively cheap if the wasm binary contains version information. In that case, uncompression
+	/// of the wasm blob is the dominating factor.
+	///
+	/// If the wasm binary does not have the version information attached, then a legacy mechanism
+	/// may be involved. This means that a runtime call will be performed to query the version.
+	///
+	/// Calling into the runtime may be incredible expensive and should be approached with care.
 	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
-		// Create some dummy externalities, `Core_version` should not write data anyway.
+		use sp_core::traits::ReadRuntimeVersionExt;
+
 		let mut ext = sp_state_machine::BasicExternalities::default();
 
-		self.extension::<CallInWasmExt>()
-			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(
-				wasm,
-				None,
-				"Core_version",
-				&[],
-				&mut ext,
-				// If a runtime upgrade introduces new host functions that are not provided by
-				// the node, we should not fail at instantiation. Otherwise nodes that are
-				// updated could run this successfully and it could lead to a storage root
-				// mismatch when importing this block.
-				sp_core::traits::MissingHostFunctions::Allow,
-			)
-			.ok()
+		match self
+			.extension::<ReadRuntimeVersionExt>()
+			.expect("No `ReadRuntimeVersionExt` associated for the current context!")
+			.read_runtime_version(wasm, &mut ext)
+		{
+			Ok(v) => Some(v),
+			Err(err) => {
+				log::debug!(
+					target: LOG_TARGET,
+					"cannot read version from the given runtime: {}",
+					err,
+				);
+				None
+			}
+		}
 	}
 }
 
@@ -813,6 +853,20 @@ pub trait Hashing {
 	}
 }
 
+/// Interface that provides transaction indexing API.
+#[runtime_interface]
+pub trait TransactionIndex {
+	/// Add transaction index. Returns indexed content hash.
+	fn index(&mut self, extrinsic: u32, size: u32, context_hash: [u8; 32]) {
+		self.storage_index_transaction(extrinsic, &context_hash, size);
+	}
+
+	/// Conduct a 512-bit Keccak hash.
+	fn renew(&mut self, extrinsic: u32, context_hash: [u8; 32]) {
+		self.storage_renew_transaction_index(extrinsic, &context_hash);
+	}
+}
+
 /// Interface that provides functions to access the Offchain DB.
 #[runtime_interface]
 pub trait OffchainIndex {
@@ -933,7 +987,7 @@ pub trait Offchain {
 			.local_storage_compare_and_set(
 				kind,
 				key,
-				old_value.as_ref().map(|v| v.deref()),
+				old_value.as_deref(),
 				new_value,
 			)
 	}
@@ -1051,7 +1105,7 @@ pub trait Offchain {
 
 /// Wasm only interface that provides functions for calling into the allocator.
 #[runtime_interface(wasm_only)]
-trait Allocator {
+pub trait Allocator {
 	/// Malloc the given number of bytes and return the pointer to the allocated memory location.
 	fn malloc(&mut self, size: u32) -> Pointer<u8> {
 		self.allocate_memory(size).expect("Failed to allocate memory")
@@ -1423,6 +1477,7 @@ pub type SubstrateHostFunctions = (
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
 	runtime_tasks::HostFunctions,
+	transaction_index::HostFunctions,
 );
 
 #[cfg(test)]
@@ -1487,7 +1542,7 @@ mod tests {
 		});
 
 		t.execute_with(|| {
-			storage::clear_prefix(b":abc");
+			assert!(matches!(storage::clear_prefix(b":abc", None), KillStorageResult::AllRemoved(2)));
 
 			assert!(storage::get(b":a").is_some());
 			assert!(storage::get(b":abdd").is_some());

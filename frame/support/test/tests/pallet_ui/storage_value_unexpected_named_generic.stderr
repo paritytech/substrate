@@ -1,0 +1,11 @@
+error: Invalid pallet::storage, Unexpected generic `P` for `StorageValue`. `StorageValue` expect generics `Value`, and optional generics `QueryKind`, `OnEmpty`.
+  --> $DIR/storage_value_unexpected_named_generic.rs:19:29
+   |
+19 |     type Foo<T> = StorageValue<P = u32>;
+   |                                ^
+
+error: Invalid pallet::storage, cannot find `Value` generic, required for `StorageValue`.
+  --> $DIR/storage_value_unexpected_named_generic.rs:19:28
+   |
+19 |     type Foo<T> = StorageValue<P = u32>;
+   |                               ^

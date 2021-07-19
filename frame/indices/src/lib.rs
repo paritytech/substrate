@@ -69,9 +69,6 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Assign an previously unassigned index.
@@ -93,7 +90,7 @@ pub mod pallet {
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::claim())]
-		pub(crate) fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
+		pub fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| {
@@ -126,7 +123,7 @@ pub mod pallet {
 		///    - Writes: Indices Accounts, System Account (recipient)
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::transfer())]
-		pub(crate) fn transfer(
+		pub fn transfer(
 			origin: OriginFor<T>,
 			new: T::AccountId,
 			index: T::AccountIndex,
@@ -165,7 +162,7 @@ pub mod pallet {
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::free())]
-		pub(crate) fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
+		pub fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
@@ -201,7 +198,7 @@ pub mod pallet {
 		///    - Writes: Indices Accounts, System Account (original owner)
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::force_transfer())]
-		pub(crate) fn force_transfer(
+		pub fn force_transfer(
 			origin: OriginFor<T>,
 			new: T::AccountId,
 			index: T::AccountIndex,
@@ -237,7 +234,7 @@ pub mod pallet {
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::freeze())]
-		pub(crate) fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
+		pub fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {

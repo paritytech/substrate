@@ -107,11 +107,11 @@ pub fn polish_block(block: &mut Block) {
 	execute_block_with_state_root_handler(block, Mode::Overwrite);
 }
 
-pub fn execute_block(mut block: Block) {
-	execute_block_with_state_root_handler(&mut block, Mode::Verify);
+pub fn execute_block(mut block: Block) -> Header {
+	execute_block_with_state_root_handler(&mut block, Mode::Verify)
 }
 
-fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) {
+fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) -> Header {
 	let header = &mut block.header;
 
 	initialize_block(header);
@@ -142,6 +142,8 @@ fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) {
 			"Transaction trie root must be valid.",
 		);
 	}
+
+	new_header
 }
 
 /// The block executor.
@@ -191,7 +193,8 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
-	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
+	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
+		.unwrap_or_default();
 	let result = execute_transaction_backend(&utx, extrinsic_index);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
@@ -269,6 +272,8 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 			sp_io::offchain_index::clear(&key);
 			Ok(Ok(()))
 		}
+		Extrinsic::Store(data) =>
+			execute_store(data.clone()),
 	}
 }
 
@@ -295,6 +300,13 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
 	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);
 	storage::hashed::put(&blake2_256, &from_balance_key, &(from_balance - tx.amount));
 	storage::hashed::put(&blake2_256, &to_balance_key, &(to_balance + tx.amount));
+	Ok(Ok(()))
+}
+
+fn execute_store(data: Vec<u8>) -> ApplyExtrinsicResult {
+	let content_hash = sp_io::hashing::blake2_256(&data);
+	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
+	sp_io::transaction_index::index(extrinsic_index, data.len() as u32, content_hash);
 	Ok(Ok(()))
 }
 

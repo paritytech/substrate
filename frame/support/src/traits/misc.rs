@@ -53,6 +53,21 @@ impl<T: Default> Get<T> for GetDefault {
 	}
 }
 
+/// Implement `Get<u32>` and `Get<Option<u32>>` using the given const.
+pub struct ConstU32<const T: u32>;
+
+impl<const T: u32> Get<u32> for ConstU32<T> {
+	fn get() -> u32 {
+		T
+	}
+}
+
+impl<const T: u32> Get<Option<u32>> for ConstU32<T> {
+	fn get() -> Option<u32> {
+		Some(T)
+	}
+}
+
 /// A type for which some values make sense to be able to drop without further consideration.
 pub trait TryDrop: Sized {
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".

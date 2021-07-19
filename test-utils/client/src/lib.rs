@@ -80,6 +80,7 @@ pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
+	no_genesis: bool,
 }
 
 impl<Block: BlockT, Executor, G: GenesisInit> Default
@@ -101,6 +102,16 @@ impl<Block: BlockT, Executor, G: GenesisInit> TestClientBuilder<Block, Executor,
 		let backend = Arc::new(Backend::new_test(keep_blocks, 0));
 		Self::with_backend(backend)
 	}
+
+	/// Create new `TestClientBuilder` with default backend and storage chain mode
+	pub fn with_tx_storage(keep_blocks: u32) -> Self {
+		let backend = Arc::new(Backend::new_test_with_tx_storage(
+			keep_blocks,
+			0,
+			sc_client_db::TransactionStorageMode::StorageChain,
+		));
+		Self::with_backend(backend)
+	}
 }
 
 impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, Executor, Backend, G> {
@@ -116,6 +127,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			fork_blocks: None,
 			bad_blocks: None,
 			enable_offchain_indexing_api: false,
+			no_genesis: false,
 		}
 	}
 
@@ -183,6 +195,12 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		self
 	}
 
+	/// Disable writing genesis.
+	pub fn set_no_genesis(mut self) -> Self {
+		self.no_genesis = true;
+		self
+	}
+
 	/// Build the test client with the given native executor.
 	pub fn build_with_executor<RuntimeApi>(
 		self,
@@ -232,6 +250,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			None,
 			ClientConfig {
 				offchain_indexing_api: self.enable_offchain_indexing_api,
+				no_genesis: self.no_genesis,
 				..Default::default()
 			},
 		).expect("Creates new client");
@@ -244,7 +263,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 
 impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	Block,
-	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+	client::LocalCallExecutor<Block, Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
@@ -255,7 +274,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	) -> (
 		client::Client<
 			Backend,
-			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+			client::LocalCallExecutor<Block, Backend, NativeExecutor<E>>,
 			Block,
 			RuntimeApi
 		>,

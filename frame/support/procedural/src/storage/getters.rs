@@ -21,7 +21,8 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use super::{DeclStorageDefExt, StorageLineTypeDef};
 
-pub fn impl_getters(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
+	let scrate = &def.hidden_crate;
 	let mut getters = TokenStream::new();
 
 	for (get_fn, line) in def.storage_lines.iter()
@@ -65,6 +66,21 @@ pub fn impl_getters(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStrea
 					}
 				}
 			},
+			StorageLineTypeDef::NMap(map) => {
+				let keygen = map.to_keygen_struct(&def.hidden_crate);
+				let value = &map.value;
+				quote!{
+					pub fn #get_fn<KArg>(key: KArg) -> #value
+					where
+						KArg: #scrate::storage::types::EncodeLikeTuple<
+							<#keygen as #scrate::storage::types::KeyGenerator>::KArg
+						>
+							+ #scrate::storage::types::TupleToEncodedIter,
+					{
+						<#storage_struct as #scrate::#storage_trait>::get(key)
+					}
+				}
+			}
 		};
 		getters.extend(getter);
 	}

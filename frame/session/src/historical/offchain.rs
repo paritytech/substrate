@@ -25,7 +25,10 @@
 //! This is used in conjunction with [`ProvingTrie`](super::ProvingTrie) and
 //! the off-chain indexing API.
 
-use sp_runtime::{offchain::storage::StorageValueRef, KeyTypeId};
+use sp_runtime::{
+	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+	KeyTypeId
+};
 use sp_session::MembershipProof;
 
 use super::super::{Pallet as SessionModule, SessionIndex};
@@ -49,6 +52,7 @@ impl<T: Config> ValidatorSet<T> {
 		let derived_key = shared::derive_key(shared::PREFIX, session_index);
 		StorageValueRef::persistent(derived_key.as_ref())
 			.get::<Vec<(T::ValidatorId, T::FullIdentification)>>()
+			.ok()
 			.flatten()
 			.map(|validator_set| Self { validator_set })
 	}
@@ -100,19 +104,19 @@ pub fn prove_session_membership<T: Config, D: AsRef<[u8]>>(
 pub fn prune_older_than<T: Config>(first_to_keep: SessionIndex) {
 	let derived_key = shared::LAST_PRUNE.to_vec();
 	let entry = StorageValueRef::persistent(derived_key.as_ref());
-	match entry.mutate(|current: Option<Option<SessionIndex>>| -> Result<_, ()> {
+	match entry.mutate(|current: Result<Option<SessionIndex>, StorageRetrievalError>| -> Result<_, ()> {
 		match current {
-			Some(Some(current)) if current < first_to_keep => Ok(first_to_keep),
+			Ok(Some(current)) if current < first_to_keep => Ok(first_to_keep),
 			// do not move the cursor, if the new one would be behind ours
-			Some(Some(current)) => Ok(current),
-			None => Ok(first_to_keep),
+			Ok(Some(current)) => Ok(current),
+			Ok(None) => Ok(first_to_keep),
 			// if the storage contains undecodable data, overwrite with current anyways
 			// which might leak some entries being never purged, but that is acceptable
 			// in this context
-			Some(None) => Ok(first_to_keep),
+			Err(_) => Ok(first_to_keep),
 		}
 	}) {
-		Ok(Ok(new_value)) => {
+		Ok(new_value) => {
 			// on a re-org this is not necessarily true, with the above they might be equal
 			if new_value < first_to_keep {
 				for session_index in new_value..first_to_keep {
@@ -121,8 +125,8 @@ pub fn prune_older_than<T: Config>(first_to_keep: SessionIndex) {
 				}
 			}
 		}
-		Ok(Err(_)) => {} // failed to store the value calculated with the given closure
-		Err(_) => {}     // failed to calculate the value to store with the given closure
+		Err(MutateStorageError::ConcurrentModification(_)) => {}
+		Err(MutateStorageError::ValueFunctionFailed(_)) => {}
 	}
 }
 

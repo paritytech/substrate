@@ -36,75 +36,71 @@ pub enum EntryPointType {
 	/// Direct call.
 	///
 	/// Call is made by providing only payload reference and length.
-	Direct,
+	Direct {
+		entrypoint: wasmtime::TypedFunc<(u32, u32), u64>,
+	},
 	/// Indirect call.
 	///
 	/// Call is made by providing payload reference and length, and extra argument
-	/// for advanced routing (typically extra WASM function pointer).
-	Wrapped(u32),
+	/// for advanced routing.
+	Wrapped {
+		/// The extra argument passed to the runtime. It is typically a wasm function pointer.
+		func: u32,
+		dispatcher: wasmtime::TypedFunc<(u32, u32, u32), u64>,
+	},
 }
 
 /// Wasm blob entry point.
 pub struct EntryPoint {
 	call_type: EntryPointType,
-	func: wasmtime::Func,
 }
 
 impl EntryPoint {
 	/// Call this entry point.
 	pub fn call(&self, data_ptr: Pointer<u8>, data_len: WordSize) -> Result<u64> {
-		let data_ptr = u32::from(data_ptr) as i32;
-		let data_len = u32::from(data_len) as i32;
+		let data_ptr = u32::from(data_ptr);
+		let data_len = u32::from(data_len);
 
-		(match self.call_type {
-			EntryPointType::Direct => {
-				self.func.call(&[
-					wasmtime::Val::I32(data_ptr),
-					wasmtime::Val::I32(data_len),
-				])
-			},
-			EntryPointType::Wrapped(func) => {
-				self.func.call(&[
-					wasmtime::Val::I32(func as _),
-					wasmtime::Val::I32(data_ptr),
-					wasmtime::Val::I32(data_len),
-				])
-			},
-		})
-			.map(|results|
-				// the signature is checked to have i64 return type
-				results[0].unwrap_i64() as u64
-			)
-			.map_err(|err| Error::from(format!(
-				"Wasm execution trapped: {}",
-				err
-			)))
+		fn handle_trap(err: wasmtime::Trap) -> Error {
+			Error::from(format!("Wasm execution trapped: {}", err))
+		}
+
+		match self.call_type {
+			EntryPointType::Direct { ref entrypoint } => {
+				entrypoint.call((data_ptr, data_len)).map_err(handle_trap)
+			}
+			EntryPointType::Wrapped {
+				func,
+				ref dispatcher,
+			} => {
+				dispatcher
+					.call((func, data_ptr, data_len))
+					.map_err(handle_trap)
+			}
+		}
 	}
 
 	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {
-		use wasmtime::ValType;
-		let entry_point = wasmtime::FuncType::new(
-			[ValType::I32, ValType::I32].iter().cloned(),
-			[ValType::I64].iter().cloned(),
-		);
-		if func.ty() == entry_point {
-			Ok(Self { func, call_type: EntryPointType::Direct })
-		} else {
-			Err("Invalid signature for direct entry point")
-		}
+		let entrypoint = func
+			.typed::<(u32, u32), u64>()
+			.map_err(|_| "Invalid signature for direct entry point")?
+			.clone();
+		Ok(Self {
+			call_type: EntryPointType::Direct { entrypoint },
+		})
 	}
 
-	pub fn wrapped(dispatcher: wasmtime::Func, func: u32) -> std::result::Result<Self, &'static str> {
-		use wasmtime::ValType;
-		let entry_point = wasmtime::FuncType::new(
-			[ValType::I32, ValType::I32, ValType::I32].iter().cloned(),
-			[ValType::I64].iter().cloned(),
-		);
-		if dispatcher.ty() == entry_point {
-			Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
-		} else {
-			Err("Invalid signature for wrapped entry point")
-		}
+	pub fn wrapped(
+		dispatcher: wasmtime::Func,
+		func: u32,
+	) -> std::result::Result<Self, &'static str> {
+		let dispatcher = dispatcher
+			.typed::<(u32, u32, u32), u64>()
+			.map_err(|_| "Invalid signature for wrapped entry point")?
+			.clone();
+		Ok(Self {
+			call_type: EntryPointType::Wrapped { func, dispatcher },
+		})
 	}
 }
 
@@ -315,7 +311,7 @@ fn get_table(instance: &Instance) -> Option<Table> {
 		.cloned()
 }
 
-/// Functions realted to memory.
+/// Functions related to memory.
 impl InstanceWrapper {
 	/// Read data from a slice of memory into a destination buffer.
 	///
@@ -344,7 +340,7 @@ impl InstanceWrapper {
 
 			let range = util::checked_range(address.into(), data.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
-			&mut memory[range].copy_from_slice(data);
+			memory[range].copy_from_slice(data);
 			Ok(())
 		}
 	}
@@ -355,7 +351,7 @@ impl InstanceWrapper {
 	/// to get more details.
 	pub fn allocate(
 		&self,
-		allocator: &mut sp_allocator::FreeingBumpHeapAllocator,
+		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
 		size: WordSize,
 	) -> Result<Pointer<u8>> {
 		unsafe {
@@ -372,7 +368,7 @@ impl InstanceWrapper {
 	/// Returns `Err` in case the given memory region cannot be deallocated.
 	pub fn deallocate(
 		&self,
-		allocator: &mut sp_allocator::FreeingBumpHeapAllocator,
+		allocator: &mut sc_allocator::FreeingBumpHeapAllocator,
 		ptr: Pointer<u8>,
 	) -> Result<()> {
 		unsafe {
@@ -417,6 +413,43 @@ impl InstanceWrapper {
 			&mut []
 		} else {
 			slice::from_raw_parts_mut(ptr, len)
+		}
+	}
+
+	/// Returns the pointer to the first byte of the linear memory for this instance.
+	pub fn base_ptr(&self) -> *const u8 {
+		self.memory.data_ptr()
+	}
+
+	/// Removes physical backing from the allocated linear memory. This leads to returning the memory
+	/// back to the system. While the memory is zeroed this is considered as a side-effect and is not
+	/// relied upon. Thus this function acts as a hint.
+	pub fn decommit(&self) {
+		if self.memory.data_size() == 0 {
+			return;
+		}
+
+		cfg_if::cfg_if! {
+			if #[cfg(target_os = "linux")] {
+				use std::sync::Once;
+
+				unsafe {
+					let ptr = self.memory.data_ptr();
+					let len = self.memory.data_size();
+
+					// Linux handles MADV_DONTNEED reliably. The result is that the given area
+					// is unmapped and will be zeroed on the next pagefault.
+					if libc::madvise(ptr as _, len, libc::MADV_DONTNEED) != 0 {
+						static LOGGED: Once = Once::new();
+						LOGGED.call_once(|| {
+							log::warn!(
+								"madvise(MADV_DONTNEED) failed: {}",
+								std::io::Error::last_os_error(),
+							);
+						});
+					}
+				}
+			}
 		}
 	}
 }

@@ -65,71 +65,74 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
-pub use sp_consensus_babe::{
-	BabeApi, ConsensusLog, BABE_ENGINE_ID, BabeEpochConfiguration, BabeGenesisConfiguration,
-	AuthorityId, AuthorityPair, AuthoritySignature, BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
-	digests::{
-		CompatibleDigestItem, NextEpochDescriptor, NextConfigDescriptor, PreDigest,
-		PrimaryPreDigest, SecondaryPlainPreDigest,
-	},
-};
-pub use sp_consensus::SyncOracle;
-pub use sc_consensus_slots::SlotProportion;
-use std::{
-	collections::HashMap, sync::Arc, u64, pin::Pin, borrow::Cow, convert::TryInto,
-	time::{Duration, Instant},
-};
-use sp_consensus::{ImportResult, CanAuthorWith, import_queue::BoxJustificationImport};
-use sp_core::crypto::Public;
-use sp_application_crypto::AppKey;
-use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId}, Justifications,
-	traits::{Block as BlockT, Header, DigestItemFor, Zero},
-};
-use sp_api::{ProvideRuntimeApi, NumberFor};
-use parking_lot::Mutex;
-use sp_inherents::{InherentDataProviders, InherentData};
-use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
-use sp_consensus::{
-	BlockImport, Environment, Proposer, BlockCheckParams,
-	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	SelectChain, SlotData, import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId},
-};
-use sp_consensus_babe::inherents::BabeInherentData;
-use sp_timestamp::TimestampInherentData;
-use sc_client_api::{
-	backend::AuxStore, BlockchainEvents, ProvideUncles,
-};
-use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use futures::channel::mpsc::{channel, Sender, Receiver};
-use futures::channel::oneshot;
-use retain_mut::RetainMut;
 
+use std::{
+	borrow::Cow, collections::HashMap, convert::TryInto, pin::Pin, sync::Arc, time::Duration, u64,
+};
+
+use codec::{Decode, Encode};
+use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures::channel::oneshot;
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
+use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
-use sc_consensus_slots::{
-	SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
-	BackoffAuthoringBlocksStrategy
-};
-use sc_consensus_epochs::{
-	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
-};
-use sp_blockchain::{
-	Result as ClientResult, Error as ClientError,
-	HeaderBackend, ProvideCache, HeaderMetadata
-};
+use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
-use codec::{Encode, Decode};
+
+use sc_client_api::{backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider};
+use sc_consensus_epochs::{
+	descendent_query, Epoch as EpochT, EpochChangesFor, SharedEpochChanges, ViableEpochDescriptor,
+};
+use sc_consensus_slots::{
+	check_equivocation, BackoffAuthoringBlocksStrategy, CheckedHeader, InherentDataProviderExt,
+	SlotInfo, StorageChanges,
+};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::ApiExt;
+use sp_api::{NumberFor, ProvideRuntimeApi};
+use sp_application_crypto::AppKey;
+use sp_block_builder::BlockBuilder as BlockBuilderApi;
+use sp_blockchain::{
+	Error as ClientError, HeaderBackend, HeaderMetadata, ProvideCache, Result as ClientResult,
+};
+use sp_consensus::{import_queue::BoxJustificationImport, CanAuthorWith, ImportResult};
+use sp_consensus::{
+	import_queue::{BasicQueue, CacheKeyId, DefaultImportQueue, Verifier},
+	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, Environment,
+	Error as ConsensusError, ForkChoiceStrategy, Proposer, SelectChain, SlotData,
+	StateAction,
+};
+use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
+use sp_core::crypto::Public;
+use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_runtime::{
+	generic::{BlockId, OpaqueDigestItemId},
+	traits::{Block as BlockT, DigestItemFor, Header, Zero},
+	Justifications,
+};
 
-mod verification;
+pub use sc_consensus_slots::SlotProportion;
+pub use sp_consensus::SyncOracle;
+pub use sp_consensus_babe::{
+	digests::{
+		CompatibleDigestItem, NextConfigDescriptor, NextEpochDescriptor, PreDigest,
+		PrimaryPreDigest, SecondaryPlainPreDigest,
+	},
+	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight,
+	BabeEpochConfiguration, BabeGenesisConfiguration, ConsensusLog, BABE_ENGINE_ID,
+	VRF_OUTPUT_LENGTH,
+};
+
+pub use aux_schema::load_block_weight as block_weight;
+
 mod migration;
+mod verification;
 
-pub mod aux_schema;
 pub mod authorship;
+pub mod aux_schema;
 #[cfg(test)]
 mod tests;
 
@@ -270,15 +273,19 @@ pub enum Error<B: BlockT> {
 	/// Parent block has no associated weight
 	#[display(fmt = "Parent block of {} has no associated weight", _0)]
 	ParentBlockNoAssociatedWeight(B::Hash),
+	/// Check inherents error
 	#[display(fmt = "Checking inherents failed: {}", _0)]
-	/// Check Inherents error
-	CheckInherents(String),
+	CheckInherents(sp_inherents::Error),
+	/// Unhandled check inherents error
+	#[display(fmt = "Checking inherents unhandled error: {}", "String::from_utf8_lossy(_0)")]
+	CheckInherentsUnhandled(sp_inherents::InherentIdentifier),
+	/// Create inherents error.
+	#[display(fmt = "Creating inherents failed: {}", _0)]
+	CreateInherents(sp_inherents::Error),
 	/// Client error
 	Client(sp_blockchain::Error),
 	/// Runtime Api error.
 	RuntimeApi(sp_api::ApiError),
-	/// Runtime error
-	Runtime(sp_inherents::Error),
 	/// Fork tree error
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
@@ -314,7 +321,7 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B>,
+		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>, C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
@@ -360,7 +367,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
+pub struct BabeParams<B: BlockT, C, SC, E, I, SO, L, CIDP, BS, CAW> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
 
@@ -381,8 +388,11 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// A sync oracle
 	pub sync_oracle: SO,
 
-	/// Providers for inherent data.
-	pub inherent_data_providers: InherentDataProviders,
+	/// Hook into the sync module to control the justification sync process.
+	pub justification_sync_link: L,
+
+	/// Something that can create the inherent data providers.
+	pub create_inherent_data_providers: CIDP,
 
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
@@ -403,43 +413,60 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// because there were no blocks produced for some slots.
 	pub block_proposal_slot_portion: SlotProportion,
 
+	/// The maximum proportion of the slot dedicated to proposing with any lenience factor applied
+	/// due to no blocks being produced.
+	pub max_block_proposal_slot_portion: Option<SlotProportion>,
+
 	/// Handle use to report telemetries.
 	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Start the babe worker.
-pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
-	keystore,
-	client,
-	select_chain,
-	env,
-	block_import,
-	sync_oracle,
-	inherent_data_providers,
-	force_authoring,
-	backoff_authoring_blocks,
-	babe_link,
-	can_author_with,
-	block_proposal_slot_portion,
-	telemetry,
-}: BabeParams<B, C, E, I, SO, SC, CAW, BS>) -> Result<
-	BabeWorker<B>,
-	sp_consensus::Error,
-> where
+pub fn start_babe<B, C, SC, E, I, SO, CIDP, BS, CAW, L, Error>(
+	BabeParams {
+		keystore,
+		client,
+		select_chain,
+		env,
+		block_import,
+		sync_oracle,
+		justification_sync_link,
+		create_inherent_data_providers,
+		force_authoring,
+		backoff_authoring_blocks,
+		babe_link,
+		can_author_with,
+		block_proposal_slot_portion,
+		max_block_proposal_slot_portion,
+		telemetry,
+	}: BabeParams<B, C, SC, E, I, SO, L, CIDP, BS, CAW>,
+) -> Result<BabeWorker<B>, sp_consensus::Error>
+where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
-		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>
-		+ Send + Sync + 'static,
+	C: ProvideRuntimeApi<B>
+		+ ProvideCache<B>
+		+ ProvideUncles<B>
+		+ BlockchainEvents<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = ClientError>
+		+ Send
+		+ Sync
+		+ 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send
-		+ Sync + 'static,
-	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
+	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>>
+		+ Send
+		+ Sync
+		+ 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-	CAW: CanAuthorWith<B> + Send + Sync + 'static,
+	L: sp_consensus::JustificationSyncLink<B> + 'static,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
 
@@ -451,6 +478,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		block_import,
 		env,
 		sync_oracle: sync_oracle.clone(),
+		justification_sync_link,
 		force_authoring,
 		backoff_authoring_blocks,
 		keystore,
@@ -458,15 +486,9 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
 		block_proposal_slot_portion,
+		max_block_proposal_slot_portion,
 		telemetry,
 	};
-
-	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
-	sc_consensus_uncles::register_uncles_inherent_data_provider(
-		client.clone(),
-		select_chain.clone(),
-		&inherent_data_providers,
-	)?;
 
 	info!(target: "babe", "👶 Starting BABE Authorship worker");
 	let inner = sc_consensus_slots::start_slot_worker(
@@ -474,8 +496,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		select_chain,
 		worker,
 		sync_oracle,
-		inherent_data_providers,
-		babe_link.time_source,
+		create_inherent_data_providers,
 		can_author_with,
 	);
 
@@ -603,11 +624,12 @@ type SlotNotificationSinks<B> = Arc<
 	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>
 >;
 
-struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
+struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,
 	sync_oracle: SO,
+	justification_sync_link: L,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
@@ -615,28 +637,31 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
 	block_proposal_slot_portion: SlotProportion,
+	max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
 }
 
-impl<B, C, E, I, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
-	for BabeSlotWorker<B, C, E, I, SO, BS>
+impl<B, C, E, I, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
+	for BabeSlotWorker<B, C, E, I, SO, L, BS>
 where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> +
-		ProvideCache<B> +
-		HeaderBackend<B> +
-		HeaderMetadata<B, Error = ClientError>,
+	C: ProvideRuntimeApi<B>
+		+ ProvideCache<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
+	L: sp_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>>,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 	type Claim = (PreDigest, AuthorityId);
 	type SyncOracle = SO;
+	type JustificationSyncLink = L;
 	type CreateProposer = Pin<Box<
 		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
 	>>;
@@ -766,7 +791,9 @@ where
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(digest_item);
 			import_block.body = Some(body);
-			import_block.storage_changes = Some(storage_changes);
+			import_block.state_action = StateAction::ApplyChanges(
+				sp_consensus::StorageChanges::Changes(storage_changes)
+			);
 			import_block.intermediates.insert(
 				Cow::from(INTERMEDIATE_KEY),
 				Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
@@ -801,6 +828,10 @@ where
 		&mut self.sync_oracle
 	}
 
+	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink {
+		&mut self.justification_sync_link
+	}
+
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
 		Box::pin(self.env.init(block).map_err(|e| {
 			sp_consensus::Error::ClientImport(format!("{:?}", e))
@@ -811,43 +842,17 @@ where
 		self.telemetry.clone()
 	}
 
-	fn proposing_remaining_duration(
-		&self,
-		parent_head: &B::Header,
-		slot_info: &SlotInfo,
-	) -> std::time::Duration {
-		let max_proposing = slot_info.duration.mul_f32(self.block_proposal_slot_portion.get());
+	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> std::time::Duration {
+		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot());
 
-		let slot_remaining = slot_info.ends_at
-			.checked_duration_since(Instant::now())
-			.unwrap_or_default();
-
-		let slot_remaining = std::cmp::min(slot_remaining, max_proposing);
-
-		// If parent is genesis block, we don't require any lenience factor.
-		if parent_head.number().is_zero() {
-			return slot_remaining
-		}
-
-		let parent_slot = match find_pre_digest::<B>(parent_head) {
-			Err(_) => return slot_remaining,
-			Ok(d) => d.slot(),
-		};
-
-		if let Some(slot_lenience) =
-			sc_consensus_slots::slot_lenience_exponential(parent_slot, slot_info)
-		{
-			debug!(
-				target: "babe",
-				"No block for {} slots. Applying exponential lenience of {}s",
-				slot_info.slot.saturating_sub(parent_slot + 1),
-				slot_lenience.as_secs(),
-			);
-
-			slot_remaining + slot_lenience
-		} else {
-			slot_remaining
-		}
+		sc_consensus_slots::proposing_remaining_duration(
+			parent_slot,
+			slot_info,
+			&self.block_proposal_slot_portion,
+			self.max_block_proposal_slot_portion.as_ref(),
+			sc_consensus_slots::SlotLenienceType::Exponential,
+			self.logging_target(),
+		)
 	}
 }
 
@@ -913,27 +918,9 @@ fn find_next_config_digest<B: BlockT>(header: &B::Header)
 	Ok(config_digest)
 }
 
-#[derive(Default, Clone)]
-struct TimeSource(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
-
-impl SlotCompatible for TimeSource {
-	fn extract_timestamp_and_slot(
-		&self,
-		data: &InherentData,
-	) -> Result<(sp_timestamp::Timestamp, Slot, std::time::Duration), sp_consensus::Error> {
-		trace!(target: "babe", "extract timestamp");
-		data.timestamp_inherent_data()
-			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
-			.map_err(Into::into)
-			.map_err(sp_consensus::Error::InherentData)
-			.map(|(x, y)| (x, y, self.0.lock().0.take().unwrap_or_default()))
-	}
-}
-
 /// State that must be shared between the import queue and the authoring logic.
 #[derive(Clone)]
 pub struct BabeLink<Block: BlockT> {
-	time_source: TimeSource,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	config: Config,
 }
@@ -951,30 +938,31 @@ impl<Block: BlockT> BabeLink<Block> {
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
+pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
 	client: Arc<Client>,
 	select_chain: SelectChain,
-	inherent_data_providers: sp_inherents::InherentDataProviders,
+	create_inherent_data_providers: CIDP,
 	config: Config,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
-	time_source: TimeSource,
 	can_author_with: CAW,
 	telemetry: Option<TelemetryHandle>,
 }
 
-impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, CAW>
+impl<Block, Client, SelectChain, CAW, CIDP> BabeVerifier<Block, Client, SelectChain, CAW, CIDP>
 where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block>,
+	CIDP: CreateInherentDataProviders<Block, ()>,
 {
-	fn check_inherents(
+	async fn check_inherents(
 		&self,
 		block: Block,
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
+		create_inherent_data_providers: CIDP::InherentDataProviders,
 	) -> Result<(), Error<Block>> {
 		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
 			debug!(
@@ -993,17 +981,18 @@ where
 		).map_err(Error::RuntimeApi)?;
 
 		if !inherent_res.ok() {
-			inherent_res
-				.into_errors()
-				.try_for_each(|(i, e)| {
-					Err(Error::CheckInherents(self.inherent_data_providers.error_to_string(&i, &e)))
-				})
-		} else {
-			Ok(())
+			for (i, e) in inherent_res.into_errors() {
+				match create_inherent_data_providers.try_handle_error(&i, &e).await {
+					Some(res) => res.map_err(|e| Error::CheckInherents(e))?,
+					None => return Err(Error::CheckInherentsUnhandled(i)),
+				}
+			}
 		}
+
+		Ok(())
 	}
 
-	fn check_and_report_equivocation(
+	async fn check_and_report_equivocation(
 		&self,
 		slot_now: Slot,
 		slot: Slot,
@@ -1038,6 +1027,7 @@ where
 		let best_id = self
 			.select_chain
 			.best_chain()
+			.await
 			.map(|h| BlockId::Hash(h.hash()))
 			.map_err(|e| Error::Client(e.into()))?;
 
@@ -1084,16 +1074,31 @@ where
 	}
 }
 
+type BlockVerificationResult<Block> = Result<
+	(
+		BlockImportParams<Block, ()>,
+		Option<Vec<(CacheKeyId, Vec<u8>)>>,
+	),
+	String,
+>;
+
 #[async_trait::async_trait]
-impl<Block, Client, SelectChain, CAW> Verifier<Block>
-	for BabeVerifier<Block, Client, SelectChain, CAW>
+impl<Block, Client, SelectChain, CAW, CIDP> Verifier<Block>
+	for BabeVerifier<Block, Client, SelectChain, CAW, CIDP>
 where
 	Block: BlockT,
-	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
-		+ Send + Sync + AuxStore + ProvideCache<Block>,
+	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ AuxStore
+		+ ProvideCache<Block>,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block> + Send + Sync,
+	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
 	async fn verify(
 		&mut self,
@@ -1101,7 +1106,7 @@ where
 		header: Block::Header,
 		justifications: Option<Justifications>,
 		mut body: Option<Vec<Block::Extrinsic>>,
-	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> BlockVerificationResult<Block> {
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
@@ -1111,46 +1116,51 @@ where
 			body,
 		);
 
-		debug!(target: "babe", "We have {:?} logs in this header", header.digest().logs().len());
-		let mut inherent_data = self
-			.inherent_data_providers
-			.create_inherent_data()
-			.map_err(Error::<Block>::Runtime)?;
-
-		let (_, slot_now, _) = self.time_source.extract_timestamp_and_slot(&inherent_data)
-			.map_err(Error::<Block>::Extraction)?;
-
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
+
+		debug!(target: "babe", "We have {:?} logs in this header", header.digest().logs().len());
+
+		let create_inherent_data_providers = self
+			.create_inherent_data_providers
+			.create_inherent_data_providers(parent_hash, ())
+			.await
+			.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
+
+		let slot_now = create_inherent_data_providers.slot();
 
 		let parent_header_metadata = self.client.header_metadata(parent_hash)
 			.map_err(Error::<Block>::FetchParentHeader)?;
 
 		let pre_digest = find_pre_digest::<Block>(&header)?;
-		let epoch_changes = self.epoch_changes.shared_data();
-		let epoch_descriptor = epoch_changes.epoch_descriptor_for_child_of(
-			descendent_query(&*self.client),
-			&parent_hash,
-			parent_header_metadata.number,
-			pre_digest.slot(),
-		)
+		let (check_header, epoch_descriptor) = {
+			let epoch_changes = self.epoch_changes.shared_data();
+			let epoch_descriptor = epoch_changes.epoch_descriptor_for_child_of(
+				descendent_query(&*self.client),
+				&parent_hash,
+				parent_header_metadata.number,
+				pre_digest.slot(),
+			)
 			.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
 			.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
-		let viable_epoch = epoch_changes.viable_epoch(
-			&epoch_descriptor,
-			|slot| Epoch::genesis(&self.config, slot)
-		).ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+			let viable_epoch = epoch_changes.viable_epoch(
+				&epoch_descriptor,
+				|slot| Epoch::genesis(&self.config, slot)
+			).ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
 
-		// We add one to the current slot to allow for some small drift.
-		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let v_params = verification::VerificationParams {
-			header: header.clone(),
-			pre_digest: Some(pre_digest),
-			slot_now: slot_now + 1,
-			epoch: viable_epoch.as_ref(),
+			// We add one to the current slot to allow for some small drift.
+			// FIXME #1019 in the future, alter this queue to allow deferring of headers
+			let v_params = verification::VerificationParams {
+				header: header.clone(),
+				pre_digest: Some(pre_digest),
+				slot_now: slot_now + 1,
+				epoch: viable_epoch.as_ref(),
+			};
+
+			(verification::check_header::<Block>(v_params)?, epoch_descriptor)
 		};
 
-		match verification::check_header::<Block>(v_params)? {
+		match check_header {
 			CheckedHeader::Checked(pre_header, verified_info) => {
 				let babe_pre_digest = verified_info.pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
@@ -1165,7 +1175,7 @@ where
 					&header,
 					&verified_info.author,
 					&origin,
-				) {
+				).await {
 					warn!(target: "babe", "Error checking/reporting BABE equivocation: {:?}", err);
 				}
 
@@ -1173,6 +1183,8 @@ where
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
+					let mut inherent_data = create_inherent_data_providers.create_inherent_data()
+						.map_err(Error::<Block>::CreateInherents)?;
 					inherent_data.babe_replace_inherent_data(slot);
 					let block = Block::new(pre_header.clone(), inner_body);
 
@@ -1180,7 +1192,8 @@ where
 						block.clone(),
 						BlockId::Hash(parent_hash),
 						inherent_data,
-					)?;
+						create_inherent_data_providers,
+					).await?;
 
 					let (_, inner_body) = block.deconstruct();
 					body = Some(inner_body);
@@ -1217,22 +1230,6 @@ where
 				Err(Error::<Block>::TooFarInFuture(hash).into())
 			}
 		}
-	}
-}
-
-/// Register the babe inherent data provider, if not registered already.
-pub fn register_babe_inherent_data_provider(
-	inherent_data_providers: &InherentDataProviders,
-	slot_duration: Duration,
-) -> Result<(), sp_consensus::Error> {
-	debug!(target: "babe", "Registering");
-	if !inherent_data_providers.has_provider(&sp_consensus_babe::inherents::INHERENT_IDENTIFIER) {
-		inherent_data_providers
-			.register_provider(sp_consensus_babe::inherents::InherentDataProvider::new(slot_duration))
-			.map_err(Into::into)
-			.map_err(sp_consensus::Error::InherentData)
-	} else {
-		Ok(())
 	}
 }
 
@@ -1301,7 +1298,12 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		// early exit if block already in chain, otherwise the check for
 		// epoch changes will error when trying to re-import an epoch change
 		match self.client.status(BlockId::Hash(hash)) {
-			Ok(sp_blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(sp_blockchain::BlockStatus::InChain) => {
+				// When re-importing existing block strip away intermediates.
+				let _ = block.take_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY)?;
+				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+				return self.inner.import_block(block, new_cache).await.map_err(Into::into)
+			},
 			Ok(sp_blockchain::BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}
@@ -1579,13 +1581,13 @@ pub fn block_import<Client, Block: BlockT, I>(
 	config: Config,
 	wrapped_block_import: I,
 	client: Arc<Client>,
-) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)> where
+) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)>
+where
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client, &config)?;
 	let link = BabeLink {
 		epoch_changes: epoch_changes.clone(),
-		time_source: Default::default(),
 		config: config.clone(),
 	};
 
@@ -1616,13 +1618,13 @@ pub fn block_import<Client, Block: BlockT, I>(
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
+pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW, CIDP>(
 	babe_link: BabeLink<Block>,
 	block_import: Inner,
 	justification_import: Option<BoxJustificationImport<Block>>,
 	client: Arc<Client>,
 	select_chain: SelectChain,
-	inherent_data_providers: InherentDataProviders,
+	create_inherent_data_providers: CIDP,
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
@@ -1636,15 +1638,14 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
+	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
-	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration())?;
-
 	let verifier = BabeVerifier {
 		select_chain,
-		inherent_data_providers,
+		create_inherent_data_providers,
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,
-		time_source: babe_link.time_source,
 		can_author_with,
 		telemetry,
 		client,

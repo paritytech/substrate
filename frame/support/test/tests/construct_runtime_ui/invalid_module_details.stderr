@@ -1,4 +1,4 @@
-error: expected curly braces
+error: expected one of: identifier, curly braces, `<`
  --> $DIR/invalid_module_details.rs:9:19
   |
 9 |         system: System::(),

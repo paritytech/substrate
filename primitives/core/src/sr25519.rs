@@ -42,7 +42,7 @@ use crate::crypto::Ss58Codec;
 
 use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use crate::hash::{H256, H512};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, MaxEncodedLen};
 use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
@@ -60,7 +60,10 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner)]
+#[derive(
+	PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner,
+	MaxEncodedLen,
+)]
 pub struct Public(pub [u8; 32]);
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
@@ -218,8 +221,8 @@ impl<'de> Deserialize<'de> for Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
-		Ok(Signature::try_from(signature_hex.as_ref())
-			.map_err(|e| de::Error::custom(format!("{:?}", e)))?)
+		Signature::try_from(signature_hex.as_ref())
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))
 	}
 }
 
@@ -448,7 +451,7 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> MiniSecretKey {
-	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0
+	secret.hard_derive_mini_secret_key(Some(ChainCode(*cc)), b"").0
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
@@ -762,7 +765,7 @@ mod test {
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::soft(1));
-		let pair_1 = pair.derive(path.clone().into_iter(), None).unwrap().0;
+		let pair_1 = pair.derive(path.into_iter(), None).unwrap().0;
 		let public_1 = pair.public().derive(path.into_iter()).unwrap();
 		assert_eq!(pair_1.public(), public_1);
 	}
@@ -879,7 +882,7 @@ mod test {
 	#[test]
 	fn signature_serialization_doesnt_panic() {
 		fn deserialize_signature(text: &str) -> Result<Signature, serde_json::error::Error> {
-			Ok(serde_json::from_str(text)?)
+			serde_json::from_str(text)
 		}
 		assert!(deserialize_signature("Not valid json.").is_err());
 		assert!(deserialize_signature("\"Not an actual signature.\"").is_err());

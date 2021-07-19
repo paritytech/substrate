@@ -175,7 +175,7 @@ tests:
                       polkadot-abcdef01234-abcdef has been monotonically
                       increasing for more than 10 minutes."
                 - exp_labels:
-                      severity: critical
+                      severity: warning
                       pod: polkadot-abcdef01234-abcdef
                       instance: polkadot-abcdef01234-abcdef
                       job: polkadot
@@ -190,7 +190,7 @@ tests:
             # same. Thus expect an alert.
             exp_alerts:
                 - exp_labels:
-                      severity: critical
+                      severity: warning
                       pod: polkadot-abcdef01234-abcdef
                       instance: polkadot-abcdef01234-abcdef
                       job: polkadot

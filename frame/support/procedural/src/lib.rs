@@ -28,9 +28,30 @@ mod debug_no_bound;
 mod clone_no_bound;
 mod partial_eq_no_bound;
 mod default_no_bound;
+mod key_prefix;
+mod dummy_part_checker;
 
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
+use std::cell::RefCell;
+
+thread_local! {
+	/// A global counter, can be used to generate a relatively unique identifier.
+	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
+}
+
+/// Counter to generate a relatively unique identifier for macros querying for the existence of
+/// pallet parts. This is necessary because declarative macros gets hoisted to the crate root,
+/// which shares the namespace with other pallets containing the very same query macros.
+struct Counter(u64);
+
+impl Counter {
+	fn inc(&mut self) -> u64 {
+		let ret = self.0;
+		self.0 += 1;
+		ret
+	}
+}
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 ///
@@ -155,6 +176,9 @@ use proc_macro::TokenStream;
 /// * \[optional\] `config(#field_name)`: `field_name` is optional if get is set.
 /// Will include the item in `GenesisConfig`.
 /// * \[optional\] `build(#closure)`: Closure called with storage overlays.
+/// * \[optional\] `max_values(#expr)`: `expr` is an expression returning a `u32`. It is used to
+/// implement `StorageInfoTrait`. Note this attribute is not available for storage value as the maximum
+/// number of values is 1.
 /// * `#type`: Storage type.
 /// * \[optional\] `#default`: Value returned when none.
 ///
@@ -233,20 +257,29 @@ use proc_macro::TokenStream;
 /// add_extra_genesis {
 /// 	config(phantom): std::marker::PhantomData<I>,
 /// }
-/// ...
+/// ```
 ///
 /// This adds a field to your `GenesisConfig` with the name `phantom` that you can initialize with
 /// `Default::default()`.
 ///
+/// ## PoV information
+///
+/// To implement the trait `StorageInfoTrait` for storages an additional attribute can be used
+/// `generate_storage_info`:
+/// ```nocompile
+/// decl_storage! { generate_storage_info
+/// 	trait Store for ...
+/// }
+/// ```
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
 }
 
-/// Construct a runtime, with the given name and the given modules.
+/// Construct a runtime, with the given name and the given pallets.
 ///
 /// The parameters here are specific types for `Block`, `NodeBlock`, and `UncheckedExtrinsic`
-/// and the modules that are used by the runtime.
+/// and the pallets that are used by the runtime.
 /// `Block` is the block type that is used in the runtime and `NodeBlock` is the block type
 /// that is used in the node. For instance they can differ in the extrinsics type.
 ///
@@ -263,7 +296,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         Test: test::{Pallet, Call} = 1,
 ///         Test2: test_with_long_module::{Pallet, Event<T>},
 ///
-///         // Module with instances
+///         // Pallets with instances
 ///         Test3_Instance1: test3::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
 ///         Test3_DefaultInstance: test3::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
 ///     }
@@ -271,38 +304,39 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// The identifier `System` is the name of the pallet and the lower case identifier `system` is the
-/// name of the Rust module/crate for this Substrate module. The identifiers between the braces are
-/// the module parts provided by the pallet. It is important to list these parts here to export
+/// name of the Rust module/crate for this Substrate pallet. The identifiers between the braces are
+/// the pallet parts provided by the pallet. It is important to list these parts here to export
 /// them correctly in the metadata or to make the pallet usable in the runtime.
 ///
 /// We provide support for the following module parts in a pallet:
 ///
-/// - `Module`
-/// - `Call`
-/// - `Storage`
-/// - `Event` or `Event<T>` (if the event is generic)
-/// - `Origin` or `Origin<T>` (if the origin is generic)
-/// - `Config` or `Config<T>` (if the config is generic)
-/// - `Inherent` - If the module provides/can check inherents.
-/// - `ValidateUnsigned` - If the module validates unsigned extrinsics.
+/// - `Pallet` - Required for all pallets
+/// - `Call` - If the pallet has callable functions
+/// - `Storage` - If the pallet uses storage
+/// - `Event` or `Event<T>` (if the event is generic) - If the pallet emits events
+/// - `Origin` or `Origin<T>` (if the origin is generic) - If the pallet has instanciable origins
+/// - `Config` or `Config<T>` (if the config is generic) - If the pallet builds the genesis storage
+///   with `GenesisConfig`
+/// - `Inherent` - If the pallet provides/can check inherents.
+/// - `ValidateUnsigned` - If the pallet validates unsigned extrinsics.
 ///
-/// `= $n` is an optional part allowing to define at which index the module variants in
+/// `= $n` is an optional part allowing to define at which index the pallet variants in
 /// `OriginCaller`, `Call` and `Event` are encoded, and to define the ModuleToIndex value.
 ///
 /// if `= $n` is not given, then index is resolved same as fieldless enum in Rust
 /// (i.e. incrementedly from previous index):
 /// ```nocompile
-/// module1 .. = 2,
-/// module2 .., // Here module2 is given index 3
-/// module3 .. = 0,
-/// module4 .., // Here module4 is given index 1
+/// pallet1 .. = 2,
+/// pallet2 .., // Here pallet2 is given index 3
+/// pallet3 .. = 0,
+/// pallet4 .., // Here pallet4 is given index 1
 /// ```
 ///
 /// # Note
 ///
-/// The population of the genesis storage depends on the order of modules. So, if one of your
-/// modules depends on another module, the module that is depended upon needs to come before
-/// the module depending on it.
+/// The population of the genesis storage depends on the order of pallets. So, if one of your
+/// pallets depends on another pallet, the pallet that is depended upon needs to come before
+/// the pallet depending on it.
 ///
 /// # Type definitions
 ///
@@ -350,7 +384,7 @@ pub fn derive_clone_no_bound(input: TokenStream) -> TokenStream {
 	clone_no_bound::derive_clone_no_bound(input)
 }
 
-/// Derive [`Debug`] but do not bound any generics. Docs are at `frame_support::DeriveNoBounds`.
+/// Derive [`Debug`] but do not bound any generics. Docs are at `frame_support::DebugNoBound`.
 #[proc_macro_derive(DebugNoBound)]
 pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
 	debug_no_bound::derive_debug_no_bound(input)
@@ -432,3 +466,16 @@ pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
 /// The number of module instances supported by the runtime, starting at index 1,
 /// and up to `NUMBER_OF_INSTANCE`.
 pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;
+
+/// This macro is meant to be used by frame-support only.
+/// It implements the trait `HasKeyPrefix` and `HasReversibleKeyPrefix` for tuple of `Key`.
+#[proc_macro]
+pub fn impl_key_prefix_for_tuples(input: TokenStream) -> TokenStream {
+	key_prefix::impl_key_prefix_for_tuples(input).unwrap_or_else(syn::Error::into_compile_error).into()
+}
+
+/// Internal macro use by frame_support to generate dummy part checker for old pallet declaration
+#[proc_macro]
+pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
+	dummy_part_checker::generate_dummy_part_checker(input)
+}

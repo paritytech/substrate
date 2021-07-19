@@ -96,14 +96,8 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::{result, cmp};
-use sp_inherents::InherentData;
 use frame_support::traits::{Time, UnixTime, OnTimestampSet};
-use sp_runtime::{
-	RuntimeString,
-	traits::{
-		AtLeast32Bit, Zero, SaturatedConversion, Scale,
-	}
-};
+use sp_runtime::traits::{AtLeast32Bit, Zero, SaturatedConversion, Scale};
 use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,
 };
@@ -122,7 +116,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Type used for expressing timestamp.
 		type Moment: Parameter + Default + AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
+			+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy + MaxEncodedLen;
 
 		/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 		type OnTimestampSet: OnTimestampSet<Self::Moment>;
@@ -140,6 +134,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Current time for the current block.
@@ -189,7 +184,7 @@ pub mod pallet {
 			T::WeightInfo::set(),
 			DispatchClass::Mandatory
 		))]
-		pub(super) fn set(origin: OriginFor<T>, #[pallet::compact] now: T::Moment) -> DispatchResultWithPostInfo {
+		pub fn set(origin: OriginFor<T>, #[pallet::compact] now: T::Moment) -> DispatchResult {
 			ensure_none(origin)?;
 			assert!(!DidUpdate::<T>::exists(), "Timestamp must be updated only once in the block");
 			let prev = Self::now();
@@ -202,7 +197,7 @@ pub mod pallet {
 
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -213,8 +208,9 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-			let inherent_data = extract_inherent_data(data)
-				.expect("Gets and decodes timestamp inherent data");
+			let inherent_data = data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+				.expect("Timestamp inherent data not correctly encoded")
+				.expect("Timestamp inherent data must be provided");
 			let data = (*inherent_data).saturated_into::<T::Moment>();
 
 			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
@@ -230,11 +226,13 @@ pub mod pallet {
 				_ => return Ok(()),
 			};
 
-			let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
+			let data = data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+				.expect("Timestamp inherent data not correctly encoded")
+				.expect("Timestamp inherent data must be provided");
 
 			let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
 			if t > *(data + MAX_TIMESTAMP_DRIFT_MILLIS) {
-				Err(InherentError::Other("Timestamp too far in future to accept".into()))
+				Err(InherentError::TooFarInFuture)
 			} else if t < minimum {
 				Err(InherentError::ValidAtTimestamp(minimum.into()))
 			} else {
@@ -262,12 +260,6 @@ impl<T: Config> Pallet<T> {
 	pub fn set_timestamp(now: T::Moment) {
 		Now::<T>::put(now);
 	}
-}
-
-fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
-	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
-		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
-		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
 }
 
 impl<T: Config> Time for Pallet<T> {
@@ -334,7 +326,7 @@ mod tests {
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
+		type BaseCallFilter = frame_support::traits::AllowAll;
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();

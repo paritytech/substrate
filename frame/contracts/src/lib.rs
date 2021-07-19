@@ -59,9 +59,6 @@
 //!
 //! ### Dispatchable functions
 //!
-//! * [`Pallet::update_schedule`] -
-//! ([Root Origin](https://substrate.dev/docs/en/knowledgebase/runtime/origin) Only) -
-//! Set a new [`Schedule`].
 //! * [`Pallet::instantiate_with_code`] - Deploys a new contract from the supplied wasm binary,
 //! optionally transferring
 //! some balance. This instantiates a new smart contract account with the supplied code and
@@ -79,10 +76,6 @@
 //! * [`ink`](https://github.com/paritytech/ink) is
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
-//!
-//! ## Related Modules
-//!
-//! * [Balances](../pallet_balances/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit="512")]
@@ -103,10 +96,14 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 
-pub use crate::{pallet::*, schedule::Schedule};
+pub use crate::{
+	pallet::*,
+	schedule::{Schedule, Limits, InstructionWeights, HostFnWeights},
+	exec::Frame,
+};
 use crate::{
 	gas::GasMeter,
-	exec::{ExecutionContext, Executable},
+	exec::{Stack as ExecStack, Executable},
 	rent::Rent,
 	storage::{Storage, DeletedContract, ContractInfo, AliveContractInfo, TombstoneContractInfo},
 	weights::WeightInfo,
@@ -121,8 +118,9 @@ use sp_runtime::{
 	Perbill,
 };
 use frame_support::{
-	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
-	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo},
+	traits::{OnUnbalanced, Currency, Get, Time, Randomness, Filter},
+	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo, GetDispatchInfo},
+	dispatch::Dispatchable,
 };
 use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
@@ -157,8 +155,58 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// The overarching call type.
+		type Call:
+			Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> +
+			GetDispatchInfo +
+			codec::Decode +
+			IsType<<Self as frame_system::Config>::Call>;
+
+		/// Filter that is applied to calls dispatched by contracts.
+		///
+		/// Use this filter to control which dispatchables are callable by contracts.
+		/// This is applied in **addition** to [`frame_system::Config::BaseCallFilter`].
+		/// It is recommended to treat this as a whitelist.
+		///
+		/// # Subsistence Threshold
+		///
+		/// The runtime **must** make sure that any allowed dispatchable makes sure that the
+		/// `total_balance` of the contract stays above [`Pallet::subsistence_threshold()`].
+		/// Otherwise contracts can clutter the storage with their tombstones without
+		/// deposting the correct amount of balance.
+		///
+		/// # Stability
+		///
+		/// The runtime **must** make sure that all dispatchables that are callable by
+		/// contracts remain stable. In addition [`Self::Call`] itself must remain stable.
+		/// This means that no existing variants are allowed to switch their positions.
+		///
+		/// # Note
+		///
+		/// Note that dispatchables that are called via contracts do not spawn their
+		/// own wasm instance for each call (as opposed to when called via a transaction).
+		/// Therefore please make sure to be restrictive about which dispatchables are allowed
+		/// in order to not introduce a new DoS vector like memory allocation patterns that can
+		/// be exploited to drive the runtime into a panic.
+		type CallFilter: Filter<<Self as frame_system::Config>::Call>;
+
 		/// Handler for rent payments.
 		type RentPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+		/// Used to answer contracts' queries regarding the current weight price. This is **not**
+		/// used to calculate the actual fee and is only for informational purposes.
+		type WeightPrice: Convert<Weight, BalanceOf<Self>>;
+
+		/// Describes the weights of the dispatchables of this module and is also used to
+		/// construct a default cost schedule.
+		type WeightInfo: WeightInfo;
+
+		/// Type that allows the runtime authors to add new host functions for a contract to call.
+		type ChainExtension: chain_extension::ChainExtension<Self>;
+
+		/// Cost schedule and limits.
+		#[pallet::constant]
+		type Schedule: Get<Schedule<Self>>;
 
 		/// Number of block delay an extrinsic claim surcharge has.
 		///
@@ -210,24 +258,12 @@ pub mod pallet {
 		#[pallet::constant]
 		type SurchargeReward: Get<BalanceOf<Self>>;
 
-		/// The maximum nesting level of a call/instantiate stack.
-		#[pallet::constant]
-		type MaxDepth: Get<u32>;
-
-		/// The maximum size of a storage value and event payload in bytes.
-		#[pallet::constant]
-		type MaxValueSize: Get<u32>;
-
-		/// Used to answer contracts' queries regarding the current weight price. This is **not**
-		/// used to calculate the actual fee and is only for informational purposes.
-		type WeightPrice: Convert<Weight, BalanceOf<Self>>;
-
-		/// Describes the weights of the dispatchables of this module and is also used to
-		/// construct a default cost schedule.
-		type WeightInfo: WeightInfo;
-
-		/// Type that allows the runtime authors to add new host functions for a contract to call.
-		type ChainExtension: chain_extension::ChainExtension<Self>;
+		/// The type of the call stack determines the maximum nesting depth of contract calls.
+		///
+		/// The allowed depth is `CallStack::size() + 1`.
+		/// Therefore a size of `0` means that a contract cannot use call or instantiate.
+		/// In other words only the origin called "root contract" is allowed to execute then.
+		type CallStack: smallvec::Array<Item=Frame<Self>>;
 
 		/// The maximum number of tries that can be queued for deletion.
 		#[pallet::constant]
@@ -236,12 +272,6 @@ pub mod pallet {
 		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
 		#[pallet::constant]
 		type DeletionWeightLimit: Get<Weight>;
-
-		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
-		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
-		/// a wasm binary below this maximum size.
-		#[pallet::constant]
-		type MaxCodeSize: Get<u32>;
 	}
 
 	#[pallet::pallet]
@@ -274,26 +304,6 @@ pub mod pallet {
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
 	{
-		/// Updates the schedule for metering contracts.
-		///
-		/// The schedule's version cannot be less than the version of the stored schedule.
-		/// If a schedule does not change the instruction weights the version does not
-		/// need to be increased. Therefore we allow storing a schedule that has the same
-		/// version as the stored one.
-		#[pallet::weight(T::WeightInfo::update_schedule())]
-		pub fn update_schedule(
-			origin: OriginFor<T>,
-			schedule: Schedule<T>
-		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			if <CurrentSchedule<T>>::get().version > schedule.version {
-				Err(Error::<T>::InvalidScheduleVersion)?
-			}
-			Self::deposit_event(Event::ScheduleUpdated(schedule.version));
-			CurrentSchedule::put(schedule);
-			Ok(().into())
-		}
-
 		/// Makes a call to an account, optionally transferring some balance.
 		///
 		/// * If the account is a smart-contract account, the associated code will be
@@ -301,7 +311,7 @@ pub mod pallet {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[pallet::weight(T::WeightInfo::call(T::MaxCodeSize::get() / 1024).saturating_add(*gas_limit))]
+		#[pallet::weight(T::WeightInfo::call().saturating_add(*gas_limit))]
 		pub fn call(
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -312,13 +322,11 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <CurrentSchedule<T>>::get();
-			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
-			let (result, code_len) = match ctx.call(dest, value, &mut gas_meter, data) {
-				Ok((output, len)) => (Ok(output), len),
-				Err((err, len)) => (Err(err), len),
-			};
-			gas_meter.into_dispatch_result(result, T::WeightInfo::call(code_len / 1024))
+			let schedule = T::Schedule::get();
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
+				origin, dest, &mut gas_meter, &schedule, value, data, None,
+			);
+			gas_meter.into_dispatch_result(result, T::WeightInfo::call())
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -359,15 +367,15 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
-			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
+			ensure!(code_len <= T::Schedule::get().limits.code_len, Error::<T>::CodeTooLarge);
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <CurrentSchedule<T>>::get();
+			let schedule = T::Schedule::get();
 			let executable = PrefabWasmModule::from_code(code, &schedule)?;
 			let code_len = executable.code_len();
-			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
-			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
-			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
-				.map(|(_address, output)| output);
+			ensure!(code_len <= T::Schedule::get().limits.code_len, Error::<T>::CodeTooLarge);
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
+			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
 				T::WeightInfo::instantiate_with_code(code_len / 1024, salt.len() as u32 / 1024)
@@ -380,8 +388,7 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(T::MaxCodeSize::get() / 1024, salt.len() as u32 / 1024)
-				.saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32 / 1024).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -393,15 +400,14 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <CurrentSchedule<T>>::get();
+			let schedule = T::Schedule::get();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
-			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
-			let code_len = executable.code_len();
-			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
-				.map(|(_address, output)| output);
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
+			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
-				T::WeightInfo::instantiate(code_len / 1024, salt.len() as u32 / 1024),
+				T::WeightInfo::instantiate(salt.len() as u32 / 1024),
 			)
 		}
 
@@ -409,12 +415,12 @@ pub mod pallet {
 		/// producer fails to do so, a regular users will be allowed to claim the reward.
 		///
 		/// In case of a successful eviction no fees are charged from the sender. However, the
-		/// reward is capped by the total amount of rent that was payed by the contract while
+		/// reward is capped by the total amount of rent that was paid by the contract while
 		/// it was alive.
 		///
 		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
 		/// is returned and the sender is not eligible for the reward.
-		#[pallet::weight(T::WeightInfo::claim_surcharge(T::MaxCodeSize::get() / 1024))]
+		#[pallet::weight(T::WeightInfo::claim_surcharge(T::Schedule::get().limits.code_len / 1024))]
 		pub fn claim_surcharge(
 			origin: OriginFor<T>,
 			dest: T::AccountId,
@@ -442,10 +448,10 @@ pub mod pallet {
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			match Rent::<T, PrefabWasmModule<T>>::try_eviction(&dest, handicap)? {
-				(Some(rent_payed), code_len) => {
+				(Some(rent_paid), code_len) => {
 					T::Currency::deposit_into_existing(
 						&rewarded,
-						T::SurchargeReward::get().min(rent_payed),
+						T::SurchargeReward::get().min(rent_paid),
 					)
 					.map(|_| PostDispatchInfo {
 						actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),
@@ -556,9 +562,20 @@ pub mod pallet {
 		/// Performing a call was denied because the calling depth reached the limit
 		/// of what is specified in the schedule.
 		MaxCallDepthReached,
-		/// The contract that was called is either no contract at all (a plain account)
-		/// or is a tombstone.
-		NotCallable,
+		/// No contract was found at the specified address.
+		ContractNotFound,
+		/// A tombstone exist at the specified address.
+		///
+		/// Tombstone cannot be called. Anyone can use `seal_restore_to` in order to revive
+		/// the contract, though.
+		ContractIsTombstone,
+		/// The called contract does not have enough balance to pay for its storage.
+		///
+		/// The contract ran out of balance and is therefore eligible for eviction into a
+		/// tombstone. Anyone can evict the contract by submitting a `claim_surcharge`
+		/// extrinsic. Alternatively, a plain balance transfer can be used in order to
+		/// increase the contracts funds so that it can be called again.
+		RentNotPaid,
 		/// The code supplied to `instantiate_with_code` exceeds the limit specified in the
 		/// current schedule.
 		CodeTooLarge,
@@ -572,12 +589,11 @@ pub mod pallet {
 		ContractTrapped,
 		/// The size defined in `T::MaxValueSize` was exceeded.
 		ValueTooLarge,
-		/// The action performed is not allowed while the contract performing it is already
-		/// on the call stack. Those actions are contract self destruction and restoration
-		/// of a tombstone.
-		ReentranceDenied,
-		/// `seal_input` was called twice from the same contract execution context.
-		InputAlreadyRead,
+		/// Termination of a contract is not allowed while the contract is already
+		/// on the call stack. Can be triggered by `seal_terminate` or `seal_restore_to.
+		TerminatedWhileReentrant,
+		/// `seal_call` forwarded this contracts input. It therefore is no longer available.
+		InputForwarded,
 		/// The subject passed to `seal_random` exceeds the limit.
 		RandomSubjectTooLong,
 		/// The amount of topics passed to `seal_deposit_events` exceeds the limit.
@@ -606,11 +622,15 @@ pub mod pallet {
 		StorageExhausted,
 		/// A contract with the same AccountId already exists.
 		DuplicateContract,
+		/// A contract self destructed in its constructor.
+		///
+		/// This can be triggered by a call to `seal_terminate` or `seal_restore_to`.
+		TerminatedInConstructor,
+		/// The debug message specified to `seal_debug_message` does contain invalid UTF-8.
+		DebugMessageInvalidUTF8,
+		/// A call tried to invoke a contract that is flagged as non-reentrant.
+		ReentranceDenied,
 	}
-
-	/// Current cost schedule for contracts.
-	#[pallet::storage]
-	pub(crate) type CurrentSchedule<T: Config> = StorageValue<_, Schedule<T>, ValueQuery>;
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
 	#[pallet::storage]
@@ -636,29 +656,6 @@ pub mod pallet {
 	/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
 	#[pallet::storage]
 	pub(crate) type DeletionQueue<T: Config> = StorageValue<_, Vec<DeletedContract>, ValueQuery>;
-
-
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		#[doc = "Current cost schedule for contracts."]
-		pub current_schedule: Schedule<T>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self {
-				current_schedule: Default::default(),
-			}
-		}
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
-		fn build(&self) {
-			<CurrentSchedule<T>>::put(&self.current_schedule);
-		}
-	}
 }
 
 impl<T: Config> Pallet<T>
@@ -670,6 +667,12 @@ where
 	/// This function is similar to [`Self::call`], but doesn't perform any address lookups
 	/// and better suitable for calling directly from Rust.
 	///
+	/// # Note
+	///
+	/// `debug` should only ever be set to `true` when executing as an RPC because
+	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
+	/// If set to `true` it returns additional human readable debugging information.
+	///
 	/// It returns the execution result and the amount of used weight.
 	pub fn bare_call(
 		origin: T::AccountId,
@@ -677,16 +680,23 @@ where
 		value: BalanceOf<T>,
 		gas_limit: Weight,
 		input_data: Vec<u8>,
+		debug: bool,
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		let schedule = <CurrentSchedule<T>>::get();
-		let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
-		let result = ctx.call(dest, value, &mut gas_meter, input_data);
-		let gas_consumed = gas_meter.gas_spent();
+		let schedule = T::Schedule::get();
+		let mut debug_message = if debug {
+			Some(Vec::new())
+		} else {
+			None
+		};
+		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
+			origin, dest, &mut gas_meter, &schedule, value, input_data, debug_message.as_mut(),
+		);
 		ContractExecResult {
-			result: result.map(|r| r.0).map_err(|r| r.0.error),
-			gas_consumed,
-			debug_message: Bytes(Vec::new()),
+			result: result.map_err(|r| r.error),
+			gas_consumed: gas_meter.gas_consumed(),
+			gas_required: gas_meter.gas_required(),
+			debug_message: debug_message.unwrap_or_default(),
 		}
 	}
 
@@ -700,6 +710,12 @@ where
 	/// If `compute_projection` is set to `true` the result also contains the rent projection.
 	/// This is optional because some non trivial and stateful work is performed to compute
 	/// the projection. See [`Self::rent_projection`].
+	///
+	/// # Note
+	///
+	/// `debug` should only ever be set to `true` when executing as an RPC because
+	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
+	/// If set to `true` it returns additional human readable debugging information.
 	pub fn bare_instantiate(
 		origin: T::AccountId,
 		endowment: BalanceOf<T>,
@@ -708,10 +724,10 @@ where
 		data: Vec<u8>,
 		salt: Vec<u8>,
 		compute_projection: bool,
+		debug: bool,
 	) -> ContractInstantiateResult<T::AccountId, T::BlockNumber> {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		let schedule = <CurrentSchedule<T>>::get();
-		let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
+		let schedule = T::Schedule::get();
 		let executable = match code {
 			Code::Upload(Bytes(binary)) => PrefabWasmModule::from_code(binary, &schedule),
 			Code::Existing(hash) => PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter),
@@ -720,29 +736,38 @@ where
 			Ok(executable) => executable,
 			Err(error) => return ContractInstantiateResult {
 				result: Err(error.into()),
-				gas_consumed: gas_meter.gas_spent(),
-				debug_message: Bytes(Vec::new()),
+				gas_consumed: gas_meter.gas_consumed(),
+				gas_required: gas_meter.gas_required(),
+				debug_message: Vec::new(),
 			}
 		};
-		let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
-			.and_then(|(account_id, result)| {
-				let rent_projection = if compute_projection {
-					Some(Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
-						.map_err(|_| <Error<T>>::NewContractNotFunded)?)
-				} else {
-					None
-				};
+		let mut debug_message = if debug {
+			Some(Vec::new())
+		} else {
+			None
+		};
+		let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+			origin, executable, &mut gas_meter, &schedule,
+			endowment, data, &salt, debug_message.as_mut(),
+		).and_then(|(account_id, result)| {
+			let rent_projection = if compute_projection {
+				Some(Rent::<T, PrefabWasmModule<T>>::compute_projection(&account_id)
+					.map_err(|_| <Error<T>>::NewContractNotFunded)?)
+			} else {
+				None
+			};
 
-				Ok(InstantiateReturnValue {
-					result,
-					account_id,
-					rent_projection,
-				})
+			Ok(InstantiateReturnValue {
+				result,
+				account_id,
+				rent_projection,
+			})
 		});
 		ContractInstantiateResult {
 			result: result.map_err(|e| e.error),
-			gas_consumed: gas_meter.gas_spent(),
-			debug_message: Bytes(Vec::new()),
+			gas_consumed: gas_meter.gas_consumed(),
+			gas_required: gas_meter.gas_required(),
+			debug_message: debug_message.unwrap_or_default(),
 		}
 	}
 
@@ -813,7 +838,7 @@ where
 	/// Store code for benchmarks which does not check nor instrument the code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn store_code_raw(code: Vec<u8>) -> frame_support::dispatch::DispatchResult {
-		let schedule = <CurrentSchedule<T>>::get();
+		let schedule = T::Schedule::get();
 		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
 		Ok(())
 	}

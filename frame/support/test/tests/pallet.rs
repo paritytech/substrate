@@ -47,10 +47,10 @@ impl From<SomeType6> for u64 { fn from(_t: SomeType6) -> Self { 0u64 } }
 pub struct SomeType7;
 impl From<SomeType7> for u64 { fn from(_t: SomeType7) -> Self { 0u64 } }
 
-pub trait SomeAssociation1 { type _1: Parameter; }
+pub trait SomeAssociation1 { type _1: Parameter + codec::MaxEncodedLen; }
 impl SomeAssociation1 for u64 { type _1 = u64; }
 
-pub trait SomeAssociation2 { type _2: Parameter; }
+pub trait SomeAssociation2 { type _2: Parameter + codec::MaxEncodedLen; }
 impl SomeAssociation2 for u64 { type _2 = u64; }
 
 #[frame_support::pallet]
@@ -100,6 +100,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -131,11 +132,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
-	where T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1
+		where T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1
 	{
 		/// Doc comment put in metadata
 		#[pallet::weight(Weight::from(*_foo))]
-		fn foo(
+		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
 			_bar: u32,
@@ -150,7 +151,7 @@ pub mod pallet {
 		/// Doc comment put in metadata
 		#[pallet::weight(1)]
 		#[frame_support::transactional]
-		fn foo_transactional(
+		pub fn foo_transactional(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
@@ -164,7 +165,7 @@ pub mod pallet {
 
 		// Test for DispatchResult return type
 		#[pallet::weight(1)]
-		fn foo_no_post_info(
+		pub fn foo_no_post_info(
 			_origin: OriginFor<T>,
 		) -> DispatchResult {
 			Ok(())
@@ -194,7 +195,11 @@ pub mod pallet {
 		StorageValue<_, <T::AccountId as SomeAssociation2>::_2>;
 
 	#[pallet::storage]
-	pub type Value<T> = StorageValue<_, u32>;
+	pub type Value<T> = StorageValue<Value = u32>;
+
+	#[pallet::storage]
+	#[pallet::storage_prefix = "Value2"]
+	pub type RenamedValue<T> = StorageValue<Value = u64>;
 
 	#[pallet::type_value]
 	pub fn MyDefault<T: Config>() -> u16
@@ -209,13 +214,32 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, u8, u16, ValueQuery, MyDefault<T>>;
 
 	#[pallet::storage]
-	pub type Map2<T> = StorageMap<_, Twox64Concat, u16, u32>;
+	pub type Map2<T> = StorageMap<
+		Hasher = Twox64Concat, Key = u16, Value = u32, MaxValues = ConstU32<3>
+	>;
 
 	#[pallet::storage]
 	pub type DoubleMap<T> = StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
 
 	#[pallet::storage]
-	pub type DoubleMap2<T> = StorageDoubleMap<_, Twox64Concat, u16, Blake2_128Concat, u32, u64>;
+	pub type DoubleMap2<T> = StorageDoubleMap<
+		Hasher1 = Twox64Concat, Key1 = u16,
+		Hasher2 = Blake2_128Concat, Key2 = u32,
+		Value = u64,
+		MaxValues = ConstU32<5>,
+	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn nmap)]
+	pub type NMap<T> = StorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn nmap2)]
+	pub type NMap2<T> = StorageNMap<
+		Key = (NMapKey<Twox64Concat, u16>, NMapKey<Blake2_128Concat, u32>),
+		Value = u64,
+		MaxValues = ConstU32<11>,
+	>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_value)]
@@ -225,7 +249,8 @@ pub mod pallet {
 	#[cfg(feature = "conditional-storage")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_map)]
-	pub type ConditionalMap<T> = StorageMap<_, Twox64Concat, u16, u32>;
+	pub type ConditionalMap<T> =
+		StorageMap<_, Twox64Concat, u16, u32, OptionQuery, GetDefault, ConstU32<12>>;
 
 	#[cfg(feature = "conditional-storage")]
 	#[pallet::storage]
@@ -236,6 +261,18 @@ pub mod pallet {
 		u8,
 		Twox64Concat,
 		u16,
+		u32,
+	>;
+
+	#[cfg(feature = "conditional-storage")]
+	#[pallet::storage]
+	#[pallet::getter(fn conditional_nmap)]
+	pub type ConditionalNMap<T> = StorageNMap<
+		_,
+		(
+			storage::Key<Blake2_128Concat, u8>,
+			storage::Key<Twox64Concat, u16>,
+		),
 		u32,
 	>;
 
@@ -266,10 +303,13 @@ pub mod pallet {
 		type Call = Call<T>;
 		fn validate_unsigned(
 			_source: TransactionSource,
-			_call: &Self::Call
+			call: &Self::Call
 		) -> TransactionValidity {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType5); // Test for where clause
+			if matches!(call, Call::foo_transactional(_)) {
+				return Ok(ValidTransaction::default());
+			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 		}
 	}
@@ -286,26 +326,44 @@ pub mod pallet {
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			T::AccountId::from(SomeType1); // Test for where clause
 			T::AccountId::from(SomeType6); // Test for where clause
-			unimplemented!();
+			Some(Call::foo_no_post_info())
 		}
 
-		fn is_inherent(_call: &Self::Call) -> bool {
-			unimplemented!();
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, Call::foo_no_post_info() | Call::foo(..))
+		}
+
+		fn check_inherent(call: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
+			match call {
+				Call::foo_no_post_info() => Ok(()),
+				Call::foo(0, 0) => Err(InherentError::Fatal),
+				Call::foo(..) => Ok(()),
+				_ => unreachable!("other calls are not inherents"),
+			}
+		}
+
+		fn is_inherent_required(d: &InherentData) -> Result<Option<Self::Error>, Self::Error> {
+			match d.get_data::<bool>(b"required") {
+				Ok(Some(true)) => Ok(Some(InherentError::Fatal)),
+				Ok(Some(false)) | Ok(None) => Ok(None),
+				Err(_) => unreachable!("should not happen in tests"),
+			}
 		}
 	}
 
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
 	#[cfg_attr(feature = "std", derive(codec::Decode))]
 	pub enum InherentError {
+		Fatal,
 	}
 
-	impl sp_inherents::IsFatalError for InherentError {
+	impl frame_support::inherent::IsFatalError for InherentError {
 		fn is_fatal_error(&self) -> bool {
-			unimplemented!();
+			matches!(self, InherentError::Fatal)
 		}
 	}
 
-	pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"testpall";
+	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"testpall";
 }
 
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
@@ -337,6 +395,9 @@ pub mod pallet2 {
 	where T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 	}
+
+	#[pallet::storage]
+	pub type SomeValue<T: Config> = StorageValue<_, Vec<u32>>;
 
 	#[pallet::event]
 	pub enum Event {
@@ -372,20 +433,11 @@ pub mod pallet2 {
 /// Test that the supertrait check works when we pass some parameter to the `frame_system::Config`.
 #[frame_support::pallet]
 pub mod pallet3 {
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
-
 	#[pallet::config]
 	pub trait Config: frame_system::Config<Origin = ()> {}
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
 }
 
 frame_support::parameter_types!(
@@ -396,7 +448,7 @@ frame_support::parameter_types!(
 );
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
@@ -460,7 +512,7 @@ fn transactional_works() {
 		pallet::Call::<Runtime>::foo_transactional(1).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events().iter().map(|e| &e.event).collect::<Vec<_>>(),
-			vec![&Event::pallet(pallet::Event::Something(0))],
+			vec![&Event::Example(pallet::Event::Something(0))],
 		);
 	})
 }
@@ -510,13 +562,171 @@ fn instance_expand() {
 }
 
 #[test]
+fn inherent_expand() {
+	use frame_support::{
+		inherent::{BlockT, InherentData},
+		traits::EnsureInherentsAreFirst,
+	};
+	use sp_core::Hasher;
+	use sp_runtime::{traits::{BlakeTwo256, Header}, Digest};
+
+	let inherents = InherentData::new().create_extrinsics();
+
+	let expected = vec![
+		UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+	];
+	assert_eq!(expected, inherents);
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 0)), signature: None },
+		],
+	);
+
+	assert!(InherentData::new().check_extrinsics(&block).ok());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(0, 0)), signature: None },
+		],
+	);
+
+	assert!(InherentData::new().check_extrinsics(&block).fatal_error());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
+		],
+	);
+
+	let mut inherent = InherentData::new();
+	inherent.put_data(*b"required", &true).unwrap();
+	assert!(inherent.check_extrinsics(&block).fatal_error());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: Some((1, (), ())) },
+		],
+	);
+
+	let mut inherent = InherentData::new();
+	inherent.put_data(*b"required", &true).unwrap();
+	assert!(inherent.check_extrinsics(&block).fatal_error());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
+		],
+	);
+
+	assert!(Runtime::ensure_inherents_are_first(&block).is_ok());
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_transactional(0)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+		],
+	);
+
+	assert_eq!(Runtime::ensure_inherents_are_first(&block).err().unwrap(), 2);
+
+	let block = Block::new(
+		Header::new(
+			1,
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			BlakeTwo256::hash(b"test"),
+			Digest::default(),
+		),
+		vec![
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 1)), signature: None },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo(1, 0)), signature: Some((1, (), ())) },
+			UncheckedExtrinsic { function: Call::Example(pallet::Call::foo_no_post_info()), signature: None },
+		],
+	);
+
+	assert_eq!(Runtime::ensure_inherents_are_first(&block).err().unwrap(), 2);
+}
+
+#[test]
+fn validate_unsigned_expand() {
+	use frame_support::pallet_prelude::{
+		InvalidTransaction, TransactionSource, TransactionValidityError, ValidTransaction, ValidateUnsigned,
+	};
+	let call = pallet::Call::<Runtime>::foo_no_post_info();
+
+	let validity = pallet::Pallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err();
+	assert_eq!(validity, TransactionValidityError::Invalid(InvalidTransaction::Call));
+
+	let call = pallet::Call::<Runtime>::foo_transactional(0);
+
+	let validity = pallet::Pallet::validate_unsigned(TransactionSource::External, &call).unwrap();
+	assert_eq!(validity, ValidTransaction::default());
+}
+
+#[test]
+fn trait_store_expand() {
+	TestExternalities::default().execute_with(|| {
+		<pallet::Pallet<Runtime> as pallet::Store>::Value::get();
+		<pallet::Pallet<Runtime> as pallet::Store>::Map::get(1);
+		<pallet::Pallet<Runtime> as pallet::Store>::DoubleMap::get(1, 2);
+	})
+}
+
+#[test]
 fn pallet_expand_deposit_event() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 		pallet::Call::<Runtime>::foo(3, 0).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet(pallet::Event::Something(3)),
+			Event::Example(pallet::Event::Something(3)),
 		);
 	})
 }
@@ -524,7 +734,7 @@ fn pallet_expand_deposit_event() {
 #[test]
 fn storage_expand() {
 	use frame_support::pallet_prelude::*;
-	use frame_support::StoragePrefixedMap;
+	use frame_support::storage::StoragePrefixedMap;
 
 	fn twox_64_concat(d: &[u8]) -> Vec<u8> {
 		let mut v = twox_64(d).to_vec();
@@ -542,6 +752,10 @@ fn storage_expand() {
 		pallet::Value::<Runtime>::put(1);
 		let k = [twox_128(b"Example"), twox_128(b"Value")].concat();
 		assert_eq!(unhashed::get::<u32>(&k), Some(1u32));
+
+		pallet::RenamedValue::<Runtime>::put(2);
+		let k = [twox_128(b"Example"), twox_128(b"Value2")].concat();
+		assert_eq!(unhashed::get::<u64>(&k), Some(2));
 
 		pallet::Map::<Runtime>::insert(1, 2);
 		let mut k = [twox_128(b"Example"), twox_128(b"Map")].concat();
@@ -569,11 +783,25 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime>>::final_prefix());
 
+		pallet::NMap::<Runtime>::insert((&1,), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"NMap")].concat();
+		k.extend(1u8.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
+		assert_eq!(&k[..32], &<pallet::NMap<Runtime>>::final_prefix());
+
+		pallet::NMap2::<Runtime>::insert((&1, &2), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"NMap2")].concat();
+		k.extend(1u16.using_encoded(twox_64_concat));
+		k.extend(2u32.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
+		assert_eq!(&k[..32], &<pallet::NMap2<Runtime>>::final_prefix());
+
 		#[cfg(feature = "conditional-storage")]
 		{
 			pallet::ConditionalValue::<Runtime>::put(1);
 			pallet::ConditionalMap::<Runtime>::insert(1, 2);
 			pallet::ConditionalDoubleMap::<Runtime>::insert(1, 2, 3);
+			pallet::ConditionalNMap::<Runtime>::insert((1, 2), 3);
 		}
 	})
 }
@@ -595,15 +823,15 @@ fn pallet_hooks_expand() {
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::pallet(pallet::Event::Something(10)),
+			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::pallet(pallet::Event::Something(20)),
+			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::pallet(pallet::Event::Something(30)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 	})
 }
@@ -646,6 +874,13 @@ fn metadata() {
 					name: DecodeDifferent::Decoded("Value".to_string()),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("Value2".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u64".to_string())),
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
@@ -699,6 +934,36 @@ fn metadata() {
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
 				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("NMap".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec!["u8".to_string()]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Blake2_128Concat,
+						]),
+						value: DecodeDifferent::Decoded("u32".to_string()),
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("NMap2".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec![
+							"u16".to_string(),
+							"u32".to_string(),
+						]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Twox64Concat,
+							StorageHasher::Blake2_128Concat,
+						]),
+						value: DecodeDifferent::Decoded("u64".to_string()),
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
 				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
 					name: DecodeDifferent::Decoded("ConditionalValue".to_string()),
 					modifier: StorageEntryModifier::Optional,
@@ -727,6 +992,20 @@ fn metadata() {
 						key2: DecodeDifferent::Decoded("u16".to_string()),
 						hasher: StorageHasher::Blake2_128Concat,
 						key2_hasher: StorageHasher::Twox64Concat,
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("ConditionalNMap".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::NMap {
+						keys: DecodeDifferent::Decoded(vec!["u8".to_string(), "u16".to_string()]),
+						hashers: DecodeDifferent::Decoded(vec![
+							StorageHasher::Blake2_128Concat,
+							StorageHasher::Twox64Concat,
+						]),
+						value: DecodeDifferent::Decoded("u32".to_string()),
 					},
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),
@@ -848,7 +1127,7 @@ fn metadata() {
 	};
 
 	let metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V12(metadata) => metadata,
+		RuntimeMetadata::V13(metadata) => metadata,
 		_ => panic!("metadata has been bump, test needs to be updated"),
 	};
 
@@ -871,4 +1150,142 @@ fn test_pallet_info_access() {
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 2);
+}
+
+#[test]
+fn test_storage_info() {
+	use frame_support::{
+		StorageHasher,
+		traits::{StorageInfoTrait, StorageInfo},
+		pallet_prelude::*,
+	};
+
+	let prefix = |pallet_name, storage_name| {
+		let mut res = [0u8; 32];
+		res[0..16].copy_from_slice(&Twox128::hash(pallet_name));
+		res[16..32].copy_from_slice(&Twox128::hash(storage_name));
+		res
+	};
+
+	assert_eq!(
+		Example::storage_info(),
+		vec![
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"ValueWhereClause".to_vec(),
+				prefix: prefix(b"Example", b"ValueWhereClause").to_vec(),
+				max_values: Some(1),
+				max_size: Some(8),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Value".to_vec(),
+				prefix: prefix(b"Example", b"Value").to_vec(),
+				max_values: Some(1),
+				max_size: Some(4),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Value2".to_vec(),
+				prefix: prefix(b"Example", b"Value2").to_vec(),
+				max_values: Some(1),
+				max_size: Some(8),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Map".to_vec(),
+				prefix: prefix(b"Example", b"Map").to_vec(),
+				max_values: None,
+				max_size: Some(3 + 16),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"Map2".to_vec(),
+				prefix: prefix(b"Example", b"Map2").to_vec(),
+				max_values: Some(3),
+				max_size: Some(6 + 8),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"DoubleMap".to_vec(),
+				prefix: prefix(b"Example", b"DoubleMap").to_vec(),
+				max_values: None,
+				max_size: Some(7 + 16 + 8),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"DoubleMap2".to_vec(),
+				prefix: prefix(b"Example", b"DoubleMap2").to_vec(),
+				max_values: Some(5),
+				max_size: Some(14 + 8 + 16),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"NMap".to_vec(),
+				prefix: prefix(b"Example", b"NMap").to_vec(),
+				max_values: None,
+				max_size: Some(5 + 16),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"NMap2".to_vec(),
+				prefix: prefix(b"Example", b"NMap2").to_vec(),
+				max_values: Some(11),
+				max_size: Some(14 + 8 + 16),
+			},
+			#[cfg(feature = "conditional-storage")]
+			{
+				StorageInfo {
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"ConditionalValue".to_vec(),
+					prefix: prefix(b"Example", b"ConditionalValue").to_vec(),
+					max_values: Some(1),
+					max_size: Some(4),
+				}
+			},
+			#[cfg(feature = "conditional-storage")]
+			{
+				StorageInfo {
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"ConditionalMap".to_vec(),
+					prefix: prefix(b"Example", b"ConditionalMap").to_vec(),
+					max_values: Some(12),
+					max_size: Some(6 + 8),
+				}
+			},
+			#[cfg(feature = "conditional-storage")]
+			{
+				StorageInfo {
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"ConditionalDoubleMap".to_vec(),
+					prefix: prefix(b"Example", b"ConditionalDoubleMap").to_vec(),
+					max_values: None,
+					max_size: Some(7 + 16 + 8),
+				}
+			},
+			#[cfg(feature = "conditional-storage")]
+			{
+				StorageInfo {
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"ConditionalNMap".to_vec(),
+					prefix: prefix(b"Example", b"ConditionalNMap").to_vec(),
+					max_values: None,
+					max_size: Some(7 + 16 + 8),
+				}
+			},
+		],
+	);
+
+	assert_eq!(
+		Example2::storage_info(),
+		vec![
+			StorageInfo {
+				pallet_name: b"Example2".to_vec(),
+				storage_name: b"SomeValue".to_vec(),
+				prefix: prefix(b"Example2", b"SomeValue").to_vec(),
+				max_values: Some(1),
+				max_size: None,
+			},
+		],
+	);
 }
