@@ -37,11 +37,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{convert::{TryFrom, TryInto}, prelude::*};
+use sp_std::{convert::TryFrom, prelude::*};
 use codec::{Encode, Decode, MaxEncodedLen};
 use frame_support::{
 	Parameter, traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet}, ConsensusEngineId,
-	BoundedSlice, BoundedVec,
+	BoundedSlice, WeakBoundedVec,
 };
 use sp_runtime::{
 	RuntimeAppPublic,
@@ -96,7 +96,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> =
-		StorageValue<_, BoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
+		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The current slot of this block.
 	///
@@ -126,7 +126,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>) {
+	fn change_authorities(new: WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>) {
 		<Authorities<T>>::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
@@ -188,10 +188,10 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 			let last_authorities = Self::authorities();
 			if last_authorities != next_authorities {
-				let bounded = match next_authorities.try_into() {
-					Ok(v) => v,
-					Err(_) => return,
-				};
+				let bounded = <WeakBoundedVec<_, T::MaxAuthorities>>::force_from(
+					next_authorities,
+					Some("AuRa new session"),
+				);
 				Self::change_authorities(bounded);
 			}
 		}

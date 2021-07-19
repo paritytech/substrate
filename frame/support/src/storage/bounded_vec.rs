@@ -28,6 +28,7 @@ use core::{
 use crate::{
 	traits::Get,
 	storage::{StorageDecodeLength, StorageTryAppend},
+	WeakBoundedVec,
 };
 
 /// A bounded vector.
@@ -48,6 +49,7 @@ pub struct BoundedSlice<'a, T, S>(&'a [T], PhantomData<S>);
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec` or a `Vec`.
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
+impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<WeakBoundedVec<T, S>> for BoundedSlice<'a, T, S> {}
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, S> {}
 
 impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
