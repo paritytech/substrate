@@ -3907,12 +3907,9 @@ fn test_rebag() {
 		// verify preconditions
 		let weight_of = Staking::weight_of_fn();
 		let node = Node::<Test>::from_id(&stash).unwrap();
-
-		println!("upper node: {:#?}", node);
 		assert_eq!(
 			{
 				let origin_bag = Bag::<Test>::get(node.bag_upper).unwrap();
-				println!("origin bag: {:#?}", origin_bag);
 				origin_bag.iter().count()
 			},
 			1,

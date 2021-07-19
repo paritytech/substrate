@@ -944,6 +944,7 @@ mod tests {
 				Staking::update_ledger(&controller, &ledger);
 				Staking::do_rebag(voter_id);
 
+				// Increase balance to the next threshold.
 				balance += 10;
 			}
 
@@ -1067,7 +1068,8 @@ mod tests {
 
 
 			// TODO bags do not get cleaned up from storages
-			// - is this ok?
+			// - is this ok? I assume its ok if this is not cleaned just because voters are removed
+			//   but it should be cleaned up if we migrate thresholds
 			assert_eq!(<Staking as crate::Store>::VoterBags::iter().collect::<Vec<_>>().len(), 6);
 			// and the voter list has no one in it.
 			assert_eq!(VoterList::<Test>::iter().collect::<Vec<_>>().len(), 0);
