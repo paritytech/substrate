@@ -17,25 +17,25 @@
 
 //! `Structopt`-ready structs for `try-runtime`.
 
-use parity_scale_codec::{Decode, Encode};
 use std::{fmt::Debug, path::PathBuf, str::FromStr, sync::Arc};
-use sc_service::Configuration;
+
+use parity_scale_codec::{Decode, Encode};
+use remote_externalities::{rpc_api, Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig};
+use sc_chain_spec::ChainSpec;
 use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
 use sc_executor::NativeExecutor;
-use sc_service::NativeExecutionDispatch;
-use sc_chain_spec::ChainSpec;
-use sp_state_machine::StateMachine;
-use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
+use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::{
-	offchain::{
-		OffchainWorkerExt, OffchainDbExt, TransactionPoolExt,
-		testing::{TestOffchainExt, TestTransactionPoolExt},
-	},
-	storage::{StorageData, StorageKey, well_known_keys},
 	hashing::twox_128,
+	offchain::{
+		testing::{TestOffchainExt, TestTransactionPoolExt},
+		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
+	},
+	storage::{well_known_keys, StorageData, StorageKey},
 };
-use sp_keystore::{KeystoreExt, testing::KeyStore};
-use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig, rpc_api};
+use sp_keystore::{testing::KeyStore, KeystoreExt};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_state_machine::StateMachine;
 
 mod parse;
 
@@ -170,7 +170,7 @@ pub enum State {
 		/// The modules to scrape. If empty, entire chain state will be scraped.
 		#[structopt(short, long, require_delimiter = true)]
 		modules: Option<Vec<String>>,
-	}
+	},
 }
 
 async fn on_runtime_upgrade<Block, ExecDispatch>(
@@ -192,11 +192,8 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor = NativeExecutor::<ExecDispatch>::new(
-		wasm_method.into(),
-		heap_pages,
-		max_runtime_instances,
-	);
+	let executor =
+		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
 
 	let ext = {
 		let builder = match command.state {
@@ -204,24 +201,24 @@ where
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				}))
-			},
-			State::Live {
-				snapshot_path,
-				modules
-			} => Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
-				transport: shared.url.to_owned().into(),
-				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-				modules: modules.to_owned().unwrap_or_default(),
-				at: Some(shared.block_at::<Block>()?),
-				..Default::default()
-			})),
+			}
+			State::Live { snapshot_path, modules } => {
+				Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
+					transport: shared.url.to_owned().into(),
+					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
+					modules: modules.to_owned().unwrap_or_default(),
+					at: Some(shared.block_at::<Block>()?),
+					..Default::default()
+				}))
+			}
 		};
 
 		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder
 			.inject_key_value(&[(code_key, code)])
 			.inject_hashed_key(&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat())
-			.build().await?
+			.build()
+			.await?
 	};
 
 	let encoded_result = StateMachine::<_, _, NumberFor<Block>, _>::new(
@@ -232,8 +229,7 @@ where
 		"TryRuntime_on_runtime_upgrade",
 		&[],
 		ext.extensions,
-		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
-			.runtime_code()?,
+		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
@@ -271,35 +267,28 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor = NativeExecutor::<ExecDispatch>::new(
-		wasm_method.into(),
-		heap_pages,
-		max_runtime_instances,
-	);
+	let executor =
+		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
 
 	let mode = match command.state {
-			State::Live {
-				snapshot_path,
-				modules
-			} => {
-				let at = shared.block_at::<Block>()?;
-				let online_config = OnlineConfig {
-					transport: shared.url.to_owned().into(),
-					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-					modules: modules.to_owned().unwrap_or_default(),
-					at: Some(at),
-					..Default::default()
-				};
+		State::Live { snapshot_path, modules } => {
+			let at = shared.block_at::<Block>()?;
+			let online_config = OnlineConfig {
+				transport: shared.url.to_owned().into(),
+				state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
+				modules: modules.to_owned().unwrap_or_default(),
+				at: Some(at),
+				..Default::default()
+			};
 
-				Mode::Online(online_config)
-			},
-			State::Snap { snapshot_path } => {
-				let mode = Mode::Offline(OfflineConfig {
-					state_snapshot: SnapshotConfig::new(snapshot_path),
-				});
+			Mode::Online(online_config)
+		}
+		State::Snap { snapshot_path } => {
+			let mode =
+				Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(snapshot_path) });
 
-				mode
-			}
+			mode
+		}
 	};
 	let builder = Builder::<Block>::new()
 		.mode(mode)
@@ -308,10 +297,7 @@ where
 		let (code_key, code) = extract_code(config.chain_spec)?;
 		builder.inject_key_value(&[(code_key, code)]).build().await?
 	} else {
-		builder
-			.inject_hashed_key(well_known_keys::CODE)
-			.build()
-			.await?
+		builder.inject_hashed_key(well_known_keys::CODE).build().await?
 	};
 
 	let (offchain, _offchain_state) = TestOffchainExt::new();
@@ -332,8 +318,7 @@ where
 		"OffchainWorkerApi_offchain_worker",
 		header.encode().as_ref(),
 		ext.extensions,
-		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
-			.runtime_code()?,
+		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
@@ -363,23 +348,19 @@ where
 
 	let mut changes = Default::default();
 	let max_runtime_instances = config.max_runtime_instances;
-	let executor = NativeExecutor::<ExecDispatch>::new(
-		wasm_method.into(),
-		heap_pages,
-		max_runtime_instances,
-	);
+	let executor =
+		NativeExecutor::<ExecDispatch>::new(wasm_method.into(), heap_pages, max_runtime_instances);
 
 	let block_hash = shared.block_at::<Block>()?;
 	let block: Block = rpc_api::get_block::<Block, _>(shared.url.clone(), block_hash).await?;
 
 	let mode = match command.state {
 		State::Snap { snapshot_path } => {
-			let mode = Mode::Offline(OfflineConfig {
-				state_snapshot: SnapshotConfig::new(snapshot_path),
-			});
+			let mode =
+				Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(snapshot_path) });
 
 			mode
-		},
+		}
 		State::Live { snapshot_path, modules } => {
 			let parent_hash = block.header().parent_hash();
 
@@ -403,10 +384,7 @@ where
 			let (code_key, code) = extract_code(config.chain_spec)?;
 			builder.inject_key_value(&[(code_key, code)]).build().await?
 		} else {
-			builder
-				.inject_hashed_key(well_known_keys::CODE)
-				.build()
-				.await?
+			builder.inject_hashed_key(well_known_keys::CODE).build().await?
 		};
 
 		// register externality extensions in order to provide host interface for OCW to the
@@ -460,10 +438,12 @@ impl TryRuntimeCmd {
 	{
 		match &self.command {
 			Command::OnRuntimeUpgrade(ref cmd) => {
-				on_runtime_upgrade::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
+				on_runtime_upgrade::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config)
+					.await
 			}
 			Command::OffchainWorker(cmd) => {
-				offchain_worker::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
+				offchain_worker::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config)
+					.await
 			}
 			Command::ExecuteBlock(cmd) => {
 				execute_block::<Block, ExecDispatch>(self.shared.clone(), cmd.clone(), config).await
