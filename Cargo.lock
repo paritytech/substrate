@@ -5542,7 +5542,6 @@ dependencies = [
  "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
- "sp-state-machine",
  "sp-std",
  "sp-storage",
  "sp-tracing",

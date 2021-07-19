@@ -524,7 +524,7 @@ impl<T: Config> Bag<T> {
 		assert!(self
 			.tail()
 			.and_then(|tail| Some(tail.next().is_none()))
-			// if there is no head, then there must not be a tail
+			// if there is no tail, then there must not be a head
 			.unwrap_or_else(|| self.head.is_none()));
 		// 3) Iterate all voters and ensure that there are no loops.
 		let mut seen_in_bag = BTreeSet::new();

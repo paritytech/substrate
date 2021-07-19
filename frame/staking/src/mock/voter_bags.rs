@@ -32,5 +32,4 @@ pub const CONSTANT_RATIO: f64 = 2.0000000000000000;
 
 /// Upper thresholds delimiting the bag list.
 // pub const THRESHOLDS: [u64; 65] = [5, 15, 25, 50, 100, 1000, 2000, 3000]; // TODO: switch to this
-// @kian I am using the below because it is easier to calculate the next threshold in a loop
 pub const THRESHOLDS: [u64; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
