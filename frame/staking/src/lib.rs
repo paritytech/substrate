@@ -1384,6 +1384,8 @@ pub mod pallet {
 		/// There are too many validators in the system. Governance needs to adjust the staking settings
 		/// to keep things safe for the runtime.
 		TooManyValidators,
+		/// Stash cannot be killed since the validator has unclaimed rewards.
+		UnclaimedRewards,
 	}
 
 	#[pallet::hooks]
@@ -2779,7 +2781,9 @@ impl<T: Config> Pallet<T> {
 			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
 	}
 
-	/// Remove all associated data of a stash account from the staking system.
+	/// Remove all associated data of a stash account from the staking
+	/// system. If the stash is or used to be a validator, any unclaimed
+	/// rewards must be claimed first.
 	///
 	/// Assumes storage is upgraded before calling.
 	///
@@ -2788,6 +2792,26 @@ impl<T: Config> Pallet<T> {
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
 	fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
 		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
+		let ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
+
+		// Determine range of Eras to check.
+		let current_era = CurrentEra::<T>::get().ok_or(
+			Error::<T>::UnclaimedRewards
+		)?;
+		let history_depth = Self::history_depth();
+		let last_reward_era = current_era.saturating_sub(history_depth);
+		let mut to_check: Vec<u32> = (last_reward_era..current_era).collect();
+
+		// Limit the Eras as much as possible.
+		to_check.retain(|e| !ledger.claimed_rewards.contains(e));
+
+		// If the stash is a validator, check whether there's an
+		// unclaimed era. Returns on the fist match.
+		if to_check.iter().any(|era| {
+			<ErasStakersClipped<T>>::contains_key(era, stash)
+		}) {
+			Err(Error::<T>::UnclaimedRewards)?
+		}
 
 		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
 
