@@ -18,6 +18,8 @@
 
 //! Middleware for RPC requests.
 
+use std::collections::HashSet;
+
 use jsonrpc_core::{
 	Middleware as RequestMiddleware, Metadata,
 	FutureResponse, FutureOutput
@@ -25,6 +27,9 @@ use jsonrpc_core::{
 use prometheus_endpoint::{GaugeVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64, register};
 
 use futures::{future::Either, Future};
+use pubsub::PubSubMetadata;
+
+use crate::RpcHandler;
 
 /// Metrics for RPC middleware
 #[derive(Debug, Clone)]
@@ -98,9 +103,21 @@ impl RpcMetrics {
 	}
 }
 
+/// Instantiates a dummy `IoHandler` given a builder function to extract supported method names.
+pub fn method_names<F, M>(gen_handler: F) -> HashSet<String> where
+	F: FnOnce(RpcMiddleware) -> RpcHandler<M>,
+	M: PubSubMetadata,
+{
+	let io = gen_handler(
+		RpcMiddleware::new(None, HashSet::new(), "dummy")
+	);
+	io.iter().map(|x| x.0.clone()).collect()
+}
+
 /// Middleware for RPC calls
 pub struct RpcMiddleware {
 	metrics: Option<RpcMetrics>,
+	known_rpc_method_names: HashSet<String>,
 	transport_label: String,
 }
 
@@ -109,9 +126,14 @@ impl RpcMiddleware {
 	///
 	/// - `metrics`: Will be used to report statistics.
 	/// - `transport_label`: The label that is used when reporting the statistics.
-	pub fn new(metrics: Option<RpcMetrics>, transport_label: &str) -> Self {
+	pub fn new(
+		metrics: Option<RpcMetrics>,
+		known_rpc_method_names: HashSet<String>,
+		transport_label: &str,
+	) -> Self {
 		RpcMiddleware {
 			metrics,
+			known_rpc_method_names,
 			transport_label: String::from(transport_label),
 		}
 	}
@@ -149,7 +171,7 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 	{
 		#[cfg(not(target_os = "unknown"))]
 		let start = std::time::Instant::now();
-		let name = call_name(&call).to_owned();
+		let name = call_name(&call, &self.known_rpc_method_names).to_owned();
 		let metrics = self.metrics.clone();
 		let transport_label = self.transport_label.clone();
 		log::trace!(target: "rpc_metrics", "[{}] {} call: {:?}", transport_label, name, &call);
@@ -182,11 +204,20 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 	}
 }
 
-fn call_name(call: &jsonrpc_core::Call) -> &str {
+fn call_name<'a>(call: &'a jsonrpc_core::Call, known_methods: &HashSet<String>) -> &'a str {
+	// To prevent bloating metric with all invalid method names we filter them out here.
+	let only_known = |method: &'a String| {
+		if known_methods.contains(method) {
+			method.as_str()
+		} else {
+			"invalid method"
+		}
+	};
+
 	match call {
-		jsonrpc_core::Call::Invalid { .. } => "invalid",
-		jsonrpc_core::Call::MethodCall(ref call) => &*call.method,
-		jsonrpc_core::Call::Notification(ref notification) => &*notification.method,
+		jsonrpc_core::Call::Invalid { .. } => "invalid call",
+		jsonrpc_core::Call::MethodCall(ref call) => only_known(&call.method),
+		jsonrpc_core::Call::Notification(ref notification) => only_known(&notification.method),
 	}
 }
 

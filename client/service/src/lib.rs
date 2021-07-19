@@ -371,11 +371,12 @@ fn start_rpc_servers<
 		}
 	}
 
+	let rpc_method_names = sc_rpc_server::method_names(|m| gen_handler(sc_rpc::DenyUnsafe::No, m));
 	Ok(Box::new((
 		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
 			&*path, gen_handler(
 				sc_rpc::DenyUnsafe::No,
-				sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc")
+				sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), rpc_method_names.clone(), "ipc")
 			),
 			server_metrics.clone(),
 		)),
@@ -387,7 +388,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), rpc_method_names.clone(), "http")
 				),
 				config.rpc_max_payload
 			),
@@ -400,7 +401,7 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), rpc_method_names.clone(), "ws")
 				),
 				config.rpc_max_payload,
 				server_metrics.clone(),
