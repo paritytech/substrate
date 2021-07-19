@@ -29,9 +29,9 @@ use sp_runtime::traits::Member;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
-use sp_transaction_pool::error;
+use sc_transaction_pool_api::error;
 
-use crate::{
+use super::{
 	base_pool::Transaction,
 	future::WaitingTransaction,
 	tracked_map::{self, ReadOnlyTrackedMap, TrackedMap},
@@ -108,11 +108,13 @@ Hence every hash retrieved from `provided_tags` is always present in `ready`;
 qed
 "#;
 
+/// Validated transactions that are block ready with all their dependencies met.
 #[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
-	/// Insertion id
+	/// Next free insertion id (used to indicate when a transaction was inserted into the pool).
 	insertion_id: u64,
 	/// tags that are provided by Ready transactions
+	/// (only a single transaction can provide a specific tag)
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
 	ready: TrackedMap<Hash, ReadyTx<Hash, Ex>>,
@@ -147,7 +149,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	///
 	/// Transactions are returned in order:
 	/// 1. First by the dependencies:
-	///	- never return transaction that requires a tag, which was not provided by one of the previously returned transactions
+	///	- never return transaction that requires a tag, which was not provided by one of the previously
+	/// returned transactions
 	/// 2. Then by priority:
 	/// - If there are two transactions with all requirements satisfied the one with higher priority goes first.
 	/// 3. Then by the ttl that's left
@@ -235,7 +238,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 			.fold(None, f)
 	}
 
-	/// Returns true if given hash is part of the queue.
+	/// Returns true if given transaction is part of the queue.
 	pub fn contains(&self, hash: &Hash) -> bool {
 		self.ready.read().contains_key(hash)
 	}

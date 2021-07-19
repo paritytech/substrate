@@ -27,7 +27,7 @@ use sc_client_api::{BlockchainEvents, UsageProvider};
 use sc_network::NetworkService;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
-use sp_transaction_pool::TransactionPool;
+use sc_transaction_pool_api::TransactionPool;
 use std::{fmt::Display, sync::Arc, time::Duration, collections::VecDeque};
 
 mod display;

@@ -16,6 +16,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+/// Use this to override host functions.
+/// eg
+/// ```rust
+/// use test_runner::override_host_functions;
+/// pub struct SignatureVerificationOverride;
+///
+/// impl sp_wasm_interface::HostFunctions for SignatureVerificationOverride {
+///     fn host_functions() -> Vec<&'static dyn sp_wasm_interface::Function> {
+///         override_host_functions!(
+///             "ext_crypto_ecdsa_verify_version_1", EcdsaVerify,
+///         )
+///     }
+/// }
+/// ```
 #[macro_export]
 macro_rules! override_host_functions {
     ($($fn_name:expr, $name:ident,)*) => {{

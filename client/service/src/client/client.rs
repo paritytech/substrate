@@ -355,6 +355,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				genesis_block.deconstruct().0,
 				Some(vec![]),
 				None,
+				None,
 				block_state,
 			)?;
 			backend.commit_operation(op)?;
@@ -657,6 +658,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			justifications,
 			post_digests,
 			body,
+			indexed_body,
 			finalized,
 			auxiliary,
 			fork_choice,
@@ -695,6 +697,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_headers,
 			justifications,
 			body,
+			indexed_body,
 			storage_changes,
 			new_cache,
 			finalized,
@@ -734,6 +737,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: PrePostHeader<Block::Header>,
 		justifications: Option<Justifications>,
 		body: Option<Vec<Block::Extrinsic>>,
+		indexed_body: Option<Vec<Vec<u8>>>,
 		storage_changes: Option<sp_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		finalized: bool,
@@ -871,6 +875,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		operation.op.set_block_data(
 			import_headers.post().clone(),
 			body,
+			indexed_body,
 			justifications,
 			leaf_state,
 		)?;
@@ -1481,7 +1486,6 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 		Ok(keys)
 	}
 
-
 	fn storage_keys_iter<'a>(
 		&self,
 		id: &BlockId<Block>,
@@ -1496,6 +1500,20 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 		Ok(KeyIterator::new(state, prefix, start_key))
 	}
 
+	fn child_storage_keys_iter<'a>(
+		&self,
+		id: &BlockId<Block>,
+		child_info: ChildInfo,
+		prefix: Option<&'a StorageKey>,
+		start_key: Option<&StorageKey>
+	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
+		let state = self.state_at(id)?;
+		let start_key = start_key
+			.or(prefix)
+			.map(|key| key.0.clone())
+			.unwrap_or_else(Vec::new);
+		Ok(KeyIterator::new_child(state, child_info, prefix, start_key))
+	}
 
 	fn storage(
 		&self,

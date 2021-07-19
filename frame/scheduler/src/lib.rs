@@ -148,6 +148,7 @@ pub mod pallet {
 
 		/// The maximum weight that may be scheduled per block for any dispatchables of less priority
 		/// than `schedule::HARD_DEADLINE`.
+		#[pallet::constant]
 		type MaximumWeight: Get<Weight>;
 
 		/// Required origin to schedule or cancel calls.
@@ -155,6 +156,7 @@ pub mod pallet {
 
 		/// The maximum number of scheduled calls in the queue for a single block.
 		/// Not strictly enforced, but used for weight estimation.
+		#[pallet::constant]
 		type MaxScheduledPerBlock: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
@@ -461,7 +463,7 @@ pub mod pallet {
 		/// Schedule a named task after a delay.
 		///
 		/// # <weight>
-		/// Same as [`schedule_named`].
+		/// Same as [`schedule_named`](Self::schedule_named).
 		/// # </weight>
 		#[pallet::weight(<T as Config>::WeightInfo::schedule_named(T::MaxScheduledPerBlock::get()))]
 		pub fn schedule_named_after(

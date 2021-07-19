@@ -50,25 +50,28 @@ pub use log;
 pub use frame_metadata as metadata;
 
 #[macro_use]
-mod origin;
-#[macro_use]
 pub mod dispatch;
 pub mod storage;
 mod hash;
 #[macro_use]
 pub mod event;
-#[macro_use]
-pub mod genesis_config;
-#[macro_use]
 pub mod inherent;
-#[macro_use]
-pub mod unsigned;
 #[macro_use]
 pub mod error;
 pub mod traits;
 pub mod weights;
 pub mod instances;
 pub mod migrations;
+
+#[doc(hidden)]
+pub mod unsigned {
+	#[doc(hidden)]
+	pub use crate::sp_runtime::traits::ValidateUnsigned;
+	#[doc(hidden)]
+	pub use crate::sp_runtime::transaction_validity::{
+		TransactionValidity, UnknownTransaction, TransactionValidityError, TransactionSource,
+	};
+}
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
@@ -113,11 +116,12 @@ impl TypeId for PalletId {
 /// // generate a storage value with type u32.
 /// generate_storage_alias!(Prefix, StorageName => Value<u32>);
 ///
-/// // generate a double map from `(u32, u32)` (with hasher `Twox64Concat`) to `Vec<u8>`
+/// // generate a double map from `(u32, u32)` (with hashers `Twox64Concat` for each key) 
+/// // to `Vec<u8>`
 /// generate_storage_alias!(
 /// 	OtherPrefix, OtherStorageName => DoubleMap<
-/// 		(u32, u32),
-/// 		(u32, u32),
+/// 		(u32, Twox64Concat),
+/// 		(u32, Twox64Concat),
 /// 		Vec<u8>
 /// 	>
 /// );
@@ -125,7 +129,7 @@ impl TypeId for PalletId {
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// generate_storage_alias!(
-/// 	Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
+/// 	Prefix, GenericStorage<T: Config> => Map<(T::AccountId, Twox64Concat), Vec<u8>>
 /// );
 /// # fn main() {}
 /// ```
@@ -1382,7 +1386,7 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
-/// and value types must bound [`traits::MaxEncodedLen`].
+/// and value types must bound [`pallet_prelude::MaxEncodedLen`].
 ///
 /// As the macro implements [`traits::GetStorageVersion`], the current storage version needs to be
 /// communicated to the macro. This can be done by using the `storage_version` attribute:
