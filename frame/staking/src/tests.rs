@@ -77,7 +77,7 @@ fn kill_stash_works() {
 }
 
 #[test]
-fn kill_stash_spots_unclaimed_payouts() {
+fn kill_stash_detects_unclaimed_payouts() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
 		// Create a validator:
