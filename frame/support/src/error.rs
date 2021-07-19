@@ -91,6 +91,7 @@ macro_rules! decl_error {
 		$( where $( $where_ty: $where_bound ),* )?
 		{
 			#[doc(hidden)]
+			#[codec(skip)]
 			__Ignore(
 				$crate::sp_std::marker::PhantomData<($generic, $( $inst_generic)?)>,
 				$crate::Never,

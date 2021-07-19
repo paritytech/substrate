@@ -35,6 +35,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let phantom_variant: syn::Variant = syn::parse_quote!(
 		#[doc(hidden)]
+		#[codec(skip)]
 		__Ignore(
 			#frame_support::sp_std::marker::PhantomData<(#type_use_gen)>,
 			#frame_support::Never,
