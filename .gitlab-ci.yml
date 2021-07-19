@@ -652,7 +652,7 @@ publish-s3-doc:
     - ls -lah crate-docs
     # - rm -f ./crate-docs/.lock
     - aws s3 sync --delete --size-only
-        ./crate-docs/* s3://${BUCKET}/${PREFIX}/
+        ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
