@@ -258,14 +258,10 @@ impl pallet_timestamp::Config for Test {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
-parameter_types! {
-	pub const MaxBatched: u32 = 100_000;
-}
 impl pallet_utility::Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type WeightInfo = ();
-	type MaxBatched = MaxBatched;
 }
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;

@@ -97,10 +97,6 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
-
-		/// Maximum number of call that can be batched in `batch` and `batch_all` calls.
-		#[pallet::constant]
-		type MaxBatched: Get<u32>;
 	}
 
 	#[pallet::event]
@@ -117,29 +113,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Too many calls batched.
 		TooManyCalls
-	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn integrity_test() {
-			let max_batched = T::MaxBatched::get() as u64;
-			let call_size = core::mem::size_of::<<T as Config>::Call>() as u64;
-			let max_alloc_with_margin = 33554432/2;
-			if max_batched * call_size > max_alloc_with_margin {
-				panic!(
-					"Invalid configuration for pallet-utility: maximum number of batched calls \
-					({max_batched}) and call size ({call_size}) are too big.
-					They must ensure the property: \
-					`max_batched_calls * call_size < max_allocation_with_margin` to ensure \
-					`Vec<Call>` can allocate the maximum without reaching the allocator \
-					limit of 32MiB.
-					max_allocation_with_margin is `32MiB/2` ({max_alloc_with_margin})",
-					max_batched = max_batched,
-					call_size = call_size,
-					max_alloc_with_margin = max_alloc_with_margin,
-				);
-			}
-		}
 	}
 
 	#[pallet::call]
@@ -186,7 +159,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
-			ensure!(calls_len <= T::MaxBatched::get() as usize, Error::<T>::TooManyCalls);
+			ensure!(calls_len <= Self::batched_calls_limit(), Error::<T>::TooManyCalls);
+
 			// Track the actual weight of each of the batch calls.
 			let mut weight: Weight = 0;
 			for (index, call) in calls.into_iter().enumerate() {
@@ -294,7 +268,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
-			ensure!(calls_len <= T::MaxBatched::get() as usize, Error::<T>::TooManyCalls);
+			ensure!(calls_len <= Self::batched_calls_limit(), Error::<T>::TooManyCalls);
 			// Track the actual weight of each of the batch calls.
 			let mut weight: Weight = 0;
 			for (index, call) in calls.into_iter().enumerate() {
@@ -342,5 +316,15 @@ impl<T: Config> Pallet<T> {
 	pub fn derivative_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+	}
+
+	/// The limit on the number of batched calls.
+	fn batched_calls_limit() -> usize {
+		let allocator_limit = 33554432;
+		let call_size = core::mem::size_of::<<T as Config>::Call>();
+		// The margin to take into account vec doubling capacity.
+		let margin_factor = 3;
+
+		allocator_limit/margin_factor/call_size
 	}
 }

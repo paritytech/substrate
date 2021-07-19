@@ -151,14 +151,10 @@ impl Filter<Call> for TestBaseCallFilter {
 	}
 }
 
-parameter_types! {
-	pub const MaxBatched: u32 = 100_000;
-}
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type WeightInfo = ();
-	type MaxBatched = MaxBatched;
 }
 
 type ExampleCall = example::Call<Test>;
