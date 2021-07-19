@@ -77,6 +77,26 @@ fn kill_stash_works() {
 }
 
 #[test]
+fn kill_stash_spots_unclaimed_payouts() {
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		let balance = 1000;
+		// Create a validator:
+		bond_validator(11, 10, balance); // Default(64)
+
+		mock::start_active_era(1);
+		Staking::reward_by_ids(vec![(11, 1)]);
+
+		// compute and ensure the reward amount is greater than zero.
+		let _ = current_total_payout_for_duration(reward_time_per_era());
+
+		mock::start_active_era(2);
+
+		assert_noop!(Staking::kill_stash(&11, 0), Error::<Test>::UnclaimedRewards);
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+	});
+}
+
+#[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().build_and_execute(|| {
