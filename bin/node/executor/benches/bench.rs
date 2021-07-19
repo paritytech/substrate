@@ -16,22 +16,21 @@
 // limitations under the License.
 
 use codec::{Decode, Encode};
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use frame_support::Hashable;
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use node_executor::Executor;
 use node_primitives::{BlockNumber, Hash};
 use node_runtime::{
-	constants::currency::*, Block, BuildStorage, Call, CheckedExtrinsic, GenesisConfig, Header,
-	UncheckedExtrinsic,
+	Block, BuildStorage, Call, CheckedExtrinsic, GenesisConfig, Header, UncheckedExtrinsic,
 };
+use node_runtime::constants::currency::*;
 use node_testing::keyring::*;
-use sp_core::{
-	storage::well_known_keys,
-	traits::{CodeExecutor, RuntimeCode},
-	NativeOrEncoded, NeverNativeValue,
-};
-use sp_runtime::traits::BlakeTwo256;
+use sp_core::{NativeOrEncoded, NeverNativeValue};
+use sp_core::storage::well_known_keys;
+use sp_core::traits::{CodeExecutor, RuntimeCode};
+use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
+use sc_executor::{NativeExecutor, RuntimeInfo, WasmExecutionMethod, Externalities};
+use sp_runtime::traits::BlakeTwo256;
 
 criterion_group!(benches, bench_execute_block);
 criterion_main!(benches);

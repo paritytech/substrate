@@ -55,11 +55,7 @@ pallet-staking-reward-curve = { version = "3.0.0", path = "../staking/reward-cur
 substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
 frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
 frame-election-provider-support = { version = "3.0.0", features = ["runtime-benchmarks"], path = "../election-provider-support" }
-remote-externalities = { version = "0.9", path = "../../utils/frame/remote-externalities" }
-sc-executor = { version = "0.9.0", path = "../../client/executor" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 
-tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
 rand = "0.8.4"
 rand_chacha = { version = "0.2" }
 parking_lot = "0.11.1"
@@ -99,4 +95,3 @@ make-bags = [
 	"sp-tracing",
 	"std",
 ]
-remote-ext = []

@@ -315,6 +315,12 @@ impl<B: BlockT> Builder<B> {
 				key_values.push((key.clone(), value));
 				if key_values.len() % (10 * BATCH_SIZE) == 0 {
 					let ratio: f64 = key_values.len() as f64 / keys_count as f64;
+					println!( // TODO: figure out how to get logs from remote in test cases
+						"progress = {:.2} [{} / {}]",
+						ratio,
+						key_values.len(),
+						keys_count,
+					);
 					debug!(
 						target: LOG_TARGET,
 						"progress = {:.2} [{} / {}]",
@@ -361,6 +367,12 @@ impl<B: BlockT> Builder<B> {
 			for f in config.modules.iter() {
 				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
 				let module_kv = self.rpc_get_pairs_paged(hashed_prefix.clone(), at).await?;
+				println!(
+					"downloaded data for module {} (count: {} / prefix: {:?}).",
+					f,
+					module_kv.len(),
+					HexDisplay::from(&hashed_prefix)
+				);
 				info!(
 					target: LOG_TARGET,
 					"downloaded data for module {} (count: {} / prefix: {:?}).",
