@@ -99,7 +99,7 @@ impl BenchmarkCmd {
 		let mut batches = Vec::new();
 		let mut storage_info = Vec::new();
 
-		for r in 0 .. self.repeat {
+		for _r in 0 .. self.repeat {
 			let mut extensions = Extensions::default();
 			extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 			let (offchain, _) = TestOffchainExt::new();
