@@ -220,10 +220,15 @@ impl frame_system::Config for Runtime {
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
 
+parameter_types! {
+	pub const MaxBatched: u32 = 100_000;
+}
+
 impl pallet_utility::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
+	type MaxBatched = MaxBatched;
 }
 
 parameter_types! {
@@ -1618,5 +1623,10 @@ mod tests {
 		{}
 
 		is_submit_signed_transaction::<Runtime>();
+	}
+
+	#[test]
+	fn call_size() {
+		assert!(core::mem::size_of::<Call>() <= 90);
 	}
 }

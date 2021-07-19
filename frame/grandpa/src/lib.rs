@@ -192,14 +192,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			equivocation_proof: Box<EquivocationProof<T::Hash, T::BlockNumber>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
 			Self::do_report_equivocation(
 				Some(reporter),
-				equivocation_proof,
+				*equivocation_proof,
 				key_owner_proof,
 			)
 		}
@@ -216,14 +216,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			equivocation_proof: Box<EquivocationProof<T::Hash, T::BlockNumber>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			Self::do_report_equivocation(
 				T::HandleEquivocation::block_author(),
-				equivocation_proof,
+				*equivocation_proof,
 				key_owner_proof,
 			)
 		}

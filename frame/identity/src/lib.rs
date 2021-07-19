@@ -331,7 +331,10 @@ pub mod pallet {
 			T::MaxRegistrars::get().into(), // R
 			T::MaxAdditionalFields::get().into(), // X
 		))]
-		pub fn set_identity(origin: OriginFor<T>, info: IdentityInfo<T::MaxAdditionalFields>) -> DispatchResultWithPostInfo {
+		pub fn set_identity(
+			origin: OriginFor<T>,
+			info: Box<IdentityInfo<T::MaxAdditionalFields>>,
+		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
 			ensure!(extra_fields <= T::MaxAdditionalFields::get(), Error::<T>::TooManyFields);
@@ -341,10 +344,14 @@ pub mod pallet {
 				Some(mut id) => {
 					// Only keep non-positive judgements.
 					id.judgements.retain(|j| j.1.is_sticky());
-					id.info = info;
+					id.info = *info;
 					id
 				}
-				None => Registration { info, judgements: BoundedVec::default(), deposit: Zero::zero() },
+				None => Registration {
+					info: *info,
+					judgements: BoundedVec::default(),
+					deposit: Zero::zero(),
+				},
 			};
 
 			let old_deposit = id.deposit;
@@ -808,9 +815,13 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
 		#[pallet::weight(T::WeightInfo::add_sub(T::MaxSubAccounts::get()))]
-		pub fn add_sub(origin: OriginFor<T>, sub: <T::Lookup as StaticLookup>::Source, data: Data) -> DispatchResult {
+		pub fn add_sub(
+			origin: OriginFor<T>,
+			sub: Box<<T::Lookup as StaticLookup>::Source>,
+			data: Data,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let sub = T::Lookup::lookup(sub)?;
+			let sub = T::Lookup::lookup(*sub)?;
 			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
 
 			// Check if it's already claimed as sub-identity.
@@ -837,10 +848,12 @@ pub mod pallet {
 		/// sub identity of `sub`.
 		#[pallet::weight(T::WeightInfo::rename_sub(T::MaxSubAccounts::get()))]
 		pub fn rename_sub(
-			origin: OriginFor<T>, sub: <T::Lookup as StaticLookup>::Source, data: Data
+			origin: OriginFor<T>,
+			sub: Box<<T::Lookup as StaticLookup>::Source>,
+			data: Data,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let sub = T::Lookup::lookup(sub)?;
+			let sub = T::Lookup::lookup(*sub)?;
 			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
 			ensure!(SuperOf::<T>::get(&sub).map_or(false, |x| x.0 == sender), Error::<T>::NotOwned);
 			SuperOf::<T>::insert(&sub, (sender, data));

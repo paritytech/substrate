@@ -762,14 +762,14 @@ pub mod pallet {
 		pub fn set_team(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			issuer: Box<<T::Lookup as StaticLookup>::Source>,
+			admin: Box<<T::Lookup as StaticLookup>::Source>,
+			freezer: Box<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let issuer = T::Lookup::lookup(issuer)?;
-			let admin = T::Lookup::lookup(admin)?;
-			let freezer = T::Lookup::lookup(freezer)?;
+			let issuer = T::Lookup::lookup(*issuer)?;
+			let admin = T::Lookup::lookup(*admin)?;
+			let freezer = T::Lookup::lookup(*freezer)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -893,10 +893,10 @@ pub mod pallet {
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
 			#[pallet::compact] class: T::ClassId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			owner: Box<<T::Lookup as StaticLookup>::Source>,
+			issuer: Box<<T::Lookup as StaticLookup>::Source>,
+			admin: Box<<T::Lookup as StaticLookup>::Source>,
+			freezer: Box<<T::Lookup as StaticLookup>::Source>,
 			free_holding: bool,
 			is_frozen: bool,
 		) -> DispatchResult {
@@ -904,10 +904,10 @@ pub mod pallet {
 
 			Class::<T, I>::try_mutate(class, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
-				asset.owner = T::Lookup::lookup(owner)?;
-				asset.issuer = T::Lookup::lookup(issuer)?;
-				asset.admin = T::Lookup::lookup(admin)?;
-				asset.freezer = T::Lookup::lookup(freezer)?;
+				asset.owner = T::Lookup::lookup(*owner)?;
+				asset.issuer = T::Lookup::lookup(*issuer)?;
+				asset.admin = T::Lookup::lookup(*admin)?;
+				asset.freezer = T::Lookup::lookup(*freezer)?;
 				asset.free_holding = free_holding;
 				asset.is_frozen = is_frozen;
 				*maybe_asset = Some(asset);

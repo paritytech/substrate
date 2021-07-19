@@ -394,7 +394,7 @@ pub mod pallet {
 		))]
 		pub fn heartbeat(
 			origin: OriginFor<T>,
-			heartbeat: Heartbeat<T::BlockNumber>,
+			heartbeat: Box<Heartbeat<T::BlockNumber>>,
 			// since signature verification is done in `validate_unsigned`
 			// we can skip doing it here again.
 			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature,
@@ -652,7 +652,7 @@ impl<T: Config> Pallet<T> {
 
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
 
-			Ok(Call::heartbeat(heartbeat_data, signature))
+			Ok(Call::heartbeat(Box::new(heartbeat_data), signature))
 		};
 
 		if Self::is_online(authority_index) {

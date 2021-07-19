@@ -35,7 +35,7 @@ use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
 	traits::TrailingZeroInput,
 };
-use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec};
+use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec, boxed::Box};
 
 /// Storage key used to store the last block number at which offchain worker ran.
 pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -209,7 +209,7 @@ impl<T: Config> Pallet<T> {
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
 
 		let score = raw_solution.score.clone();
-		let call: Call<T> = Call::submit_unsigned(raw_solution, witness).into();
+		let call: Call<T> = Call::submit_unsigned(Box::new(raw_solution), witness).into();
 
 		log!(
 			debug,

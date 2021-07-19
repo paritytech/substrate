@@ -314,17 +314,17 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::call().saturating_add(*gas_limit))]
 		pub fn call(
 			origin: OriginFor<T>,
-			dest: <T::Lookup as StaticLookup>::Source,
+			dest: Box<<T::Lookup as StaticLookup>::Source>,
 			#[pallet::compact] value: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
-			data: Vec<u8>
+			data: Box<Vec<u8>>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
+			let dest = T::Lookup::lookup(*dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = T::Schedule::get();
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-				origin, dest, &mut gas_meter, &schedule, value, data, None,
+				origin, dest, &mut gas_meter, &schedule, value, *data, None,
 			);
 			gas_meter.into_dispatch_result(result, T::WeightInfo::call())
 		}
@@ -361,20 +361,20 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] endowment: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
-			code: Vec<u8>,
-			data: Vec<u8>,
-			salt: Vec<u8>,
+			code: Box<Vec<u8>>,
+			data: Box<Vec<u8>>,
+			salt: Box<Vec<u8>>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 			ensure!(code_len <= T::Schedule::get().limits.code_len, Error::<T>::CodeTooLarge);
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = T::Schedule::get();
-			let executable = PrefabWasmModule::from_code(code, &schedule)?;
+			let executable = PrefabWasmModule::from_code(*code, &schedule)?;
 			let code_len = executable.code_len();
 			ensure!(code_len <= T::Schedule::get().limits.code_len, Error::<T>::CodeTooLarge);
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
+				origin, executable, &mut gas_meter, &schedule, endowment, *data, &salt, None,
 			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
@@ -394,16 +394,16 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] endowment: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
-			code_hash: CodeHash<T>,
-			data: Vec<u8>,
-			salt: Vec<u8>,
+			code_hash: Box<CodeHash<T>>,
+			data: Box<Vec<u8>>,
+			salt: Box<Vec<u8>>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = T::Schedule::get();
-			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
+			let executable = PrefabWasmModule::from_storage(*code_hash, &schedule, &mut gas_meter)?;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin, executable, &mut gas_meter, &schedule, endowment, data, &salt, None,
+				origin, executable, &mut gas_meter, &schedule, endowment, *data, &salt, None,
 			).map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
@@ -424,7 +424,7 @@ pub mod pallet {
 		pub fn claim_surcharge(
 			origin: OriginFor<T>,
 			dest: T::AccountId,
-			aux_sender: Option<T::AccountId>
+			aux_sender: Option<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {

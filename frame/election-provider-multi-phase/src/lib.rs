@@ -853,7 +853,7 @@ pub mod pallet {
 		))]
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
-			solution: RawSolution<CompactOf<T>>,
+			solution: Box<RawSolution<CompactOf<T>>>,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -873,7 +873,7 @@ pub mod pallet {
 			assert!(targets as u32 == witness.targets, "{}", error_message);
 
 			let ready =
-				Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(error_message);
+				Self::feasibility_check(*solution, ElectionCompute::Unsigned).expect(error_message);
 
 			// Store the newly received solution.
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
@@ -947,7 +947,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
 		pub fn submit(
 			origin: OriginFor<T>,
-			solution: RawSolution<CompactOf<T>>,
+			solution: Box<RawSolution<CompactOf<T>>>,
 			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -975,7 +975,7 @@ pub mod pallet {
 
 			// create the submission
 			let deposit = Self::deposit_for(&solution, size);
-			let submission = SignedSubmission { who: who.clone(), deposit, solution };
+			let submission = SignedSubmission { who: who.clone(), deposit, solution: *solution };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full

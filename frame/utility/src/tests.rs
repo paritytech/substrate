@@ -150,10 +150,15 @@ impl Filter<Call> for TestBaseCallFilter {
 		}
 	}
 }
+
+parameter_types! {
+	pub const MaxBatched: u32 = 100_000;
+}
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type WeightInfo = ();
+	type MaxBatched = MaxBatched;
 }
 
 type ExampleCall = example::Call<Test>;
@@ -273,8 +278,8 @@ fn batch_with_root_works() {
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
 		assert_ok!(Utility::batch(Origin::root(), vec![
-			Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
-			Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
+			Call::Balances(BalancesCall::force_transfer(Box::new(1), Box::new(2), 5)),
+			Call::Balances(BalancesCall::force_transfer(Box::new(1), Box::new(2), 5)),
 			call, // Check filters are correctly bypassed
 		]));
 		assert_eq!(Balances::free_balance(1), 0);

@@ -278,13 +278,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get()))]
 		pub fn vested_transfer(
 			origin: OriginFor<T>,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: Box<<T::Lookup as StaticLookup>::Source>,
 			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
 			ensure!(schedule.locked >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 
-			let who = T::Lookup::lookup(target)?;
+			let who = T::Lookup::lookup(*target)?;
 			ensure!(!Vesting::<T>::contains_key(&who), Error::<T>::ExistingVestingSchedule);
 
 			T::Currency::transfer(&transactor, &who, schedule.locked, ExistenceRequirement::AllowDeath)?;
@@ -315,15 +315,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get()))]
 		pub fn force_vested_transfer(
 			origin: OriginFor<T>,
-			source: <T::Lookup as StaticLookup>::Source,
-			target: <T::Lookup as StaticLookup>::Source,
+			source: Box<<T::Lookup as StaticLookup>::Source>,
+			target: Box<<T::Lookup as StaticLookup>::Source>,
 			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			ensure!(schedule.locked >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 
-			let target = T::Lookup::lookup(target)?;
-			let source = T::Lookup::lookup(source)?;
+			let target = T::Lookup::lookup(*target)?;
+			let source = T::Lookup::lookup(*source)?;
 			ensure!(!Vesting::<T>::contains_key(&target), Error::<T>::ExistingVestingSchedule);
 
 			T::Currency::transfer(&source, &target, schedule.locked, ExistenceRequirement::AllowDeath)?;

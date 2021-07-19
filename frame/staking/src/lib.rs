@@ -1275,7 +1275,7 @@ pub mod pallet {
 				);
 				let _ = <Pallet<T>>::bond(
 					T::Origin::from(Some(stash.clone()).into()),
-					T::Lookup::unlookup(controller.clone()),
+					Box::new(T::Lookup::unlookup(controller.clone())),
 					balance,
 					RewardDestination::Staked,
 				);
@@ -1459,7 +1459,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::bond())]
 		pub fn bond(
 			origin: OriginFor<T>,
-			controller: <T::Lookup as StaticLookup>::Source,
+			controller: Box<<T::Lookup as StaticLookup>::Source>,
 			#[pallet::compact] value: BalanceOf<T>,
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
@@ -1469,7 +1469,7 @@ pub mod pallet {
 				Err(Error::<T>::AlreadyBonded)?
 			}
 
-			let controller = T::Lookup::lookup(controller)?;
+			let controller = T::Lookup::lookup(*controller)?;
 
 			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?

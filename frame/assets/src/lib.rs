@@ -681,13 +681,13 @@ pub mod pallet {
 		pub fn force_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			source: <T::Lookup as StaticLookup>::Source,
-			dest: <T::Lookup as StaticLookup>::Source,
+			source: Box<<T::Lookup as StaticLookup>::Source>,
+			dest: Box<<T::Lookup as StaticLookup>::Source>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let source = T::Lookup::lookup(source)?;
-			let dest = T::Lookup::lookup(dest)?;
+			let source = T::Lookup::lookup(*source)?;
+			let dest = T::Lookup::lookup(*dest)?;
 
 			let f = TransferFlags {
 				keep_alive: false,
@@ -871,14 +871,14 @@ pub mod pallet {
 		pub fn set_team(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			issuer: Box<<T::Lookup as StaticLookup>::Source>,
+			admin: Box<<T::Lookup as StaticLookup>::Source>,
+			freezer: Box<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			let issuer = T::Lookup::lookup(issuer)?;
-			let admin = T::Lookup::lookup(admin)?;
-			let freezer = T::Lookup::lookup(freezer)?;
+			let issuer = T::Lookup::lookup(*issuer)?;
+			let admin = T::Lookup::lookup(*admin)?;
+			let freezer = T::Lookup::lookup(*freezer)?;
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -1094,10 +1094,10 @@ pub mod pallet {
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			owner: Box<<T::Lookup as StaticLookup>::Source>,
+			issuer: Box<<T::Lookup as StaticLookup>::Source>,
+			admin: Box<<T::Lookup as StaticLookup>::Source>,
+			freezer: Box<<T::Lookup as StaticLookup>::Source>,
 			#[pallet::compact] min_balance: T::Balance,
 			is_sufficient: bool,
 			is_frozen: bool,
@@ -1106,10 +1106,10 @@ pub mod pallet {
 
 			Asset::<T, I>::try_mutate(id, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
-				asset.owner = T::Lookup::lookup(owner)?;
-				asset.issuer = T::Lookup::lookup(issuer)?;
-				asset.admin = T::Lookup::lookup(admin)?;
-				asset.freezer = T::Lookup::lookup(freezer)?;
+				asset.owner = T::Lookup::lookup(*owner)?;
+				asset.issuer = T::Lookup::lookup(*issuer)?;
+				asset.admin = T::Lookup::lookup(*admin)?;
+				asset.freezer = T::Lookup::lookup(*freezer)?;
 				asset.min_balance = min_balance;
 				asset.is_sufficient = is_sufficient;
 				asset.is_frozen = is_frozen;
@@ -1226,8 +1226,8 @@ pub mod pallet {
 		pub fn force_cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			owner: Box<<T::Lookup as StaticLookup>::Source>,
+			delegate: Box<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			T::ForceOrigin::try_origin(origin)
@@ -1238,8 +1238,8 @@ pub mod pallet {
 					Ok(())
 				})?;
 
-			let owner = T::Lookup::lookup(owner)?;
-			let delegate = T::Lookup::lookup(delegate)?;
+			let owner = T::Lookup::lookup(*owner)?;
+			let delegate = T::Lookup::lookup(*delegate)?;
 
 			let approval = Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
@@ -1272,13 +1272,13 @@ pub mod pallet {
 		pub fn transfer_approved(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			destination: <T::Lookup as StaticLookup>::Source,
+			owner: Box<<T::Lookup as StaticLookup>::Source>,
+			destination: Box<<T::Lookup as StaticLookup>::Source>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let delegate = ensure_signed(origin)?;
-			let owner = T::Lookup::lookup(owner)?;
-			let destination = T::Lookup::lookup(destination)?;
+			let owner = T::Lookup::lookup(*owner)?;
+			let destination = T::Lookup::lookup(*destination)?;
 
 			Approvals::<T, I>::try_mutate_exists((id, &owner, delegate), |maybe_approved| -> DispatchResult {
 				let mut approved = maybe_approved.take().ok_or(Error::<T, I>::Unapproved)?;

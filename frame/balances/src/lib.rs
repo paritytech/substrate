@@ -338,13 +338,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
-			source: <T::Lookup as StaticLookup>::Source,
-			dest: <T::Lookup as StaticLookup>::Source,
+			source: Box<<T::Lookup as StaticLookup>::Source>,
+			dest: Box<<T::Lookup as StaticLookup>::Source>,
 			#[pallet::compact] value: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let source = T::Lookup::lookup(source)?;
-			let dest = T::Lookup::lookup(dest)?;
+			let source = T::Lookup::lookup(*source)?;
+			let dest = T::Lookup::lookup(*dest)?;
 			<Self as Currency<_>>::transfer(&source, &dest, value, ExistenceRequirement::AllowDeath)?;
 			Ok(().into())
 		}

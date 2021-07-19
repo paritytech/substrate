@@ -354,14 +354,14 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Header>,
+			equivocation_proof: Box<EquivocationProof<T::Header>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
 
 			Self::do_report_equivocation(
 				Some(reporter),
-				equivocation_proof,
+				*equivocation_proof,
 				key_owner_proof,
 			)
 		}
@@ -379,14 +379,14 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: EquivocationProof<T::Header>,
+			equivocation_proof: Box<EquivocationProof<T::Header>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
 			Self::do_report_equivocation(
 				T::HandleEquivocation::block_author(),
-				equivocation_proof,
+				*equivocation_proof,
 				key_owner_proof,
 			)
 		}

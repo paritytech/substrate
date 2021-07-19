@@ -531,12 +531,12 @@ decl_module! {
 		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
 		#[weight = T::WeightInfo::set_keys()]
-		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
+		pub fn set_keys(origin, keys: Box<T::Keys>, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(keys.ownership_proof_is_valid(&proof), Error::<T>::InvalidProof);
 
-			Self::do_set_keys(&who, keys)?;
+			Self::do_set_keys(&who, *keys)?;
 
 			Ok(())
 		}
