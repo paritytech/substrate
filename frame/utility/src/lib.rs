@@ -98,7 +98,7 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
-		/// Maximum number of call that can be batched in `batch` or `batch_all` calls.
+		/// Maximum number of call that can be batched in `batch` and `batch_all` calls.
 		#[pallet::constant]
 		type MaxBatched: Get<u32>;
 	}
