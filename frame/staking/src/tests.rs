@@ -83,16 +83,29 @@ fn kill_stash_spots_unclaimed_payouts() {
 		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
 
+		// Reward in Era 1
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
-
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 
+		// Reward in Era 2
 		mock::start_active_era(2);
+		Staking::reward_by_ids(vec![(11, 1)]);
+		let _ = current_total_payout_for_duration(reward_time_per_era());
 
+		mock::start_active_era(3);
+
+		// Era 1 & 2 are unclaimed, prevents killing.
 		assert_noop!(Staking::kill_stash(&11, 0), Error::<Test>::UnclaimedRewards);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+
+		// Era 2 is unclaimed, prevents killing.
+		assert_noop!(Staking::kill_stash(&11, 0), Error::<Test>::UnclaimedRewards);
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 2));
+
+		// All Eras have been claimed, killing is possible.
+		assert_ok!(Staking::kill_stash(&11, 0));
 	});
 }
 
