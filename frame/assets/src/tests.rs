@@ -21,7 +21,7 @@ use super::*;
 use crate::{mock::*, Error};
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 use pallet_balances::Error as BalancesError;
-use sp_runtime::TokenError;
+use sp_runtime::{traits::ConvertInto, TokenError};
 
 #[test]
 fn basic_minting_should_work() {
@@ -753,5 +753,34 @@ fn force_asset_status_should_work() {
 		assert_eq!(Assets::balance(0, 1), 200);
 		assert_eq!(Assets::balance(0, 2), 0);
 		assert_eq!(Assets::total_supply(0), 200);
+	});
+}
+
+#[test]
+fn balance_conversion_should_work() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::tokens::BalanceConversion;
+
+		let id = 42;
+		assert_ok!(Assets::force_create(Origin::root(), id, 1, true, 10));
+		let not_sufficient = 23;
+		assert_ok!(Assets::force_create(Origin::root(), not_sufficient, 1, false, 10));
+
+		assert_eq!(
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, 1234),
+			Err(ConversionError::AssetMissing)
+		);
+		assert_eq!(
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(
+				100,
+				not_sufficient
+			),
+			Err(ConversionError::AssetNotSufficient)
+		);
+		// 10 / 1 == 10 -> the conversion should 10x the value
+		assert_eq!(
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, id),
+			Ok(100 * 10)
+		);
 	});
 }
