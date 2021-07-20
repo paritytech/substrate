@@ -85,11 +85,9 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	// Ideally all tests should use a value <= `MinVestedTransfer` when configuring the
-	// existential deposit. In production this is ensured the by the runtime integrity test.
 	pub const MinVestedTransfer: u64 = 256 * 2;
 	pub static ExistentialDeposit: u64 = 0;
-	pub const MaxVestingSchedules: u32 = 3;
+	pub static MaxVestingSchedules: u32 = 3;
 }
 impl Config for Test {
 	type BlockNumberToBalance = Identity;
@@ -103,11 +101,12 @@ impl Config for Test {
 pub struct ExtBuilder {
 	existential_deposit: u64,
 	vesting_genesis_config: Option<Vec<(u64, u64, u64, u64)>>,
+	max_vesting_schedules: Option<u32>,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { existential_deposit: 1, vesting_genesis_config: None }
+		Self { existential_deposit: 1, vesting_genesis_config: None, max_vesting_schedules: None }
 	}
 }
 
@@ -122,8 +121,16 @@ impl ExtBuilder {
 		self
 	}
 
+	pub fn max_vesting_schedules(mut self, max_vesting_schedules: u32) -> Self {
+		self.max_vesting_schedules = Some(max_vesting_schedules);
+		self
+	}
+
 	pub fn build(self) -> sp_io::TestExternalities {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
+		if let Some(max_vesting_schedules) = self.max_vesting_schedules {
+			MAX_VESTING_SCHEDULES.with(|v| *v.borrow_mut() = max_vesting_schedules);
+		}
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
