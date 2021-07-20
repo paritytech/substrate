@@ -133,6 +133,17 @@ impl VestingAction {
 	}
 }
 
+/// MaxVestingSchedules getter. Guarantees a value of at least 1.
+pub struct MaxVestingSchedulesGetter<T>(PhantomData<T>);
+
+impl<T: Config> Get<u32> for MaxVestingSchedulesGetter<T> {
+	/// MaxVestingSchedules getter. Guarantees a value of at least 1.
+	fn get() -> u32 {
+		T::MaxVestingSchedules::get().max(One::one())
+	}
+}
+
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -182,7 +193,7 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			assert!(T::MaxVestingSchedules::get() > 0, "`MaxVestingSchedules` must ge greater than 0");
+			// assert!(T::MaxVestingSchedules::get() > 0, "`MaxVestingSchedules` must ge greater than 0");
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
 					// `Currency::minimum_balance()` needs `TestExternalities`.
@@ -202,7 +213,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>,
+		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, MaxVestingSchedulesGetter::<T>>,
 	>;
 
 	/// Storage version of the pallet.
@@ -306,8 +317,8 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::vest_locked(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
-			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get()))
+		#[pallet::weight(T::WeightInfo::vest_locked(MaxLocksOf::<T>::get(), MaxVestingSchedulesGetter::<T>::get())
+			.max(T::WeightInfo::vest_unlocked(MaxLocksOf::<T>::get(), MaxVestingSchedulesGetter::<T>::get()))
 		)]
 		pub fn vest(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -329,8 +340,8 @@ pub mod pallet {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
-			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get()))
+		#[pallet::weight(T::WeightInfo::vest_other_locked(MaxLocksOf::<T>::get(), MaxVestingSchedulesGetter::<T>::get())
+			.max(T::WeightInfo::vest_other_unlocked(MaxLocksOf::<T>::get(), MaxVestingSchedulesGetter::<T>::get()))
 		)]
 		pub fn vest_other(
 			origin: OriginFor<T>,
@@ -359,7 +370,7 @@ pub mod pallet {
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		/// # </weight>
 		#[pallet::weight(
-			T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
+			T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get(), MaxVestingSchedulesGetter::<T>::get())
 		)]
 		pub fn vested_transfer(
 			origin: OriginFor<T>,
@@ -390,7 +401,7 @@ pub mod pallet {
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
 		/// # </weight>
 		#[pallet::weight(
-			T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
+			T::WeightInfo::force_vested_transfer(MaxLocksOf::<T>::get(), MaxVestingSchedulesGetter::<T>::get())
 		)]
 		pub fn force_vested_transfer(
 			origin: OriginFor<T>,
@@ -422,8 +433,8 @@ pub mod pallet {
 		/// - `schedule1_index`: index of the first schedule to merge.
 		/// - `schedule2_index`: index of the second schedule to merge.
 		#[pallet::weight(
-			T::WeightInfo::not_unlocking_merge_schedules(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get())
-			.max(T::WeightInfo::unlocking_merge_schedules(MaxLocksOf::<T>::get(), T::MaxVestingSchedules::get()))
+			T::WeightInfo::not_unlocking_merge_schedules(MaxLocksOf::<T>::get(), MaxVestingSchedulesGetter::<T>::get())
+			.max(T::WeightInfo::unlocking_merge_schedules(MaxLocksOf::<T>::get(), MaxVestingSchedulesGetter::<T>::get()))
 		)]
 		pub fn merge_schedules(
 			origin: OriginFor<T>,
@@ -589,7 +600,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), DispatchError> {
 		let schedules: BoundedVec<
 			VestingInfo<BalanceOf<T>, T::BlockNumber>,
-			T::MaxVestingSchedules,
+			MaxVestingSchedulesGetter::<T>,
 		> = schedules.try_into().map_err(|_| Error::<T>::AtMaxVestingSchedules)?;
 
 		if schedules.len() == 0 {
@@ -734,8 +745,8 @@ where
 		}
 
 		ensure!(
-			Vesting::<T>::decode_len(who).unwrap_or_default() <
-				T::MaxVestingSchedules::get() as usize,
+			(Vesting::<T>::decode_len(who).unwrap_or_default() as u32) <
+				MaxVestingSchedulesGetter::<T>::get(),
 			Error::<T>::AtMaxVestingSchedules
 		);
 

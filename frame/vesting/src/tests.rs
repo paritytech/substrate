@@ -1154,3 +1154,8 @@ fn per_block_works() {
 	assert_eq!(per_block_1.per_block(), 1u32);
 	assert_eq!(per_block_1.raw_per_block(), 1u32);
 }
+
+#[test]
+fn min_vested_transfer_getter_works() {
+	// TODO
+}
