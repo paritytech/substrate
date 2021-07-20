@@ -276,8 +276,8 @@ impl InstanceFilter<Call> for ProxyType {
 				Call::Balances(..) |
 				Call::Assets(..) |
 				Call::Uniques(..) |
-				Call::Vesting(pallet_vesting::Call::vested_transfer(..)) |
-				Call::Indices(pallet_indices::Call::transfer(..))
+				Call::Vesting(pallet_vesting::Call::vested_transfer { .. }) |
+				Call::Indices(pallet_indices::Call::transfer { .. })
 			),
 			ProxyType::Governance => matches!(
 				c,

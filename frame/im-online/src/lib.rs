@@ -460,7 +460,7 @@ pub mod pallet {
 		type Call = Call<T>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::heartbeat(heartbeat, signature) = call {
+			if let Call::heartbeat { heartbeat, _signature: signature } = call {
 				if <Pallet<T>>::is_online(heartbeat.authority_index) {
 					// we already received a heartbeat for this authority
 					return InvalidTransaction::Stale.into();
@@ -642,7 +642,7 @@ impl<T: Config> Pallet<T> {
 		let prepare_heartbeat = || -> OffchainResult<T, Call<T>> {
 			let network_state = sp_io::offchain::network_state()
 				.map_err(|_| OffchainErr::NetworkState)?;
-			let heartbeat_data = Heartbeat {
+			let heartbeat = Heartbeat {
 				block_number,
 				network_state,
 				session_index,
@@ -650,9 +650,9 @@ impl<T: Config> Pallet<T> {
 				validators_len,
 			};
 
-			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
+			let signature = key.sign(&heartbeat.encode()).ok_or(OffchainErr::FailedSigning)?;
 
-			Ok(Call::heartbeat(heartbeat_data, signature))
+			Ok(Call::heartbeat { heartbeat, _signature: signature })
 		};
 
 		if Self::is_online(authority_index) {

@@ -410,7 +410,7 @@ pub mod pallet {
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 			let proof = data.get_data::<TransactionStorageProof>(&Self::INHERENT_IDENTIFIER).unwrap_or(None);
-			proof.map(Call::check_proof)
+			proof.map(|proof| Call::check_proof { proof })
 		}
 
 		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
@@ -418,7 +418,7 @@ pub mod pallet {
 		}
 
 		fn is_inherent(call: &Self::Call) -> bool {
-			matches!(call, Call::check_proof(_))
+			matches!(call, Call::check_proof { .. })
 		}
 	}
 

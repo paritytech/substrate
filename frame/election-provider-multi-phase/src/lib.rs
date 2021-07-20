@@ -1064,7 +1064,7 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_unsigned(solution, _) = call {
+			if let Call::submit_unsigned { solution, .. } = call {
 				// Discard solution not coming from the local OCW.
 				match source {
 					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
@@ -1101,7 +1101,7 @@ pub mod pallet {
 		}
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::submit_unsigned(solution, _) = call {
+			if let Call::submit_unsigned { solution, .. } = call {
 				Self::unsigned_pre_dispatch_checks(solution)
 					.map_err(dispatch_error_to_invalid)
 					.map_err(Into::into)

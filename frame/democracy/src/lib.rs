@@ -1690,7 +1690,7 @@ impl<T: Config> Pallet<T> {
 					None,
 					63,
 					frame_system::RawOrigin::Root.into(),
-					Call::enact_proposal(status.proposal_hash, index).into(),
+					Call::enact_proposal { proposal_hash: status.proposal_hash, index }.into(),
 				).is_err() {
 					frame_support::print("LOGIC ERROR: bake_referendum/schedule_named failed");
 				}

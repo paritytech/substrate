@@ -128,7 +128,12 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				#frame_support::sp_std::marker::PhantomData<(#type_use_gen,)>,
 				#frame_support::Never,
 			),
-			#( #( #[doc = #fn_doc] )* #fn_name( #( #args_compact_attr #args_type ),* ), )*
+			#(
+				#( #[doc = #fn_doc] )*
+				#fn_name {
+					#( #args_compact_attr #args_name: #args_type ),*
+				},
+			)*
 		}
 
 		impl<#type_impl_gen> #frame_support::dispatch::GetDispatchInfo
@@ -138,7 +143,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			fn get_dispatch_info(&self) -> #frame_support::dispatch::DispatchInfo {
 				match *self {
 					#(
-						Self::#fn_name ( #( ref #args_name, )* ) => {
+						Self::#fn_name { #( ref #args_name, )* } => {
 							let __pallet_base_weight = #fn_weight;
 
 							let __pallet_weight = <
@@ -172,7 +177,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		{
 			fn get_call_name(&self) -> &'static str {
 				match *self {
-					#( Self::#fn_name(..) => stringify!(#fn_name), )*
+					#( Self::#fn_name { .. } => stringify!(#fn_name), )*
 					Self::__Ignore(_, _) => unreachable!("__PhantomItem cannot be used."),
 				}
 			}
@@ -193,7 +198,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
-						Self::#fn_name( #( #args_name, )* ) => {
+						Self::#fn_name { #( #args_name, )* } => {
 							#frame_support::sp_tracing::enter_span!(
 								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
 							);
