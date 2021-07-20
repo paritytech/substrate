@@ -35,19 +35,18 @@
 // --output=./frame/lottery/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
+#![rustfmt(skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_lottery.
 pub trait WeightInfo {
 	fn buy_ticket() -> Weight;
-	fn set_calls(n: u32) -> Weight;
+	fn set_calls(n: u32, ) -> Weight;
 	fn start_lottery() -> Weight;
 	fn stop_repeat() -> Weight;
 	fn on_initialize_end() -> Weight;
@@ -62,7 +61,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
-	fn set_calls(n: u32) -> Weight {
+	fn set_calls(n: u32, ) -> Weight {
 		(15_015_000 as Weight)
 			// Standard Error: 5_000
 			.saturating_add((301_000 as Weight).saturating_mul(n as Weight))
@@ -97,7 +96,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
-	fn set_calls(n: u32) -> Weight {
+	fn set_calls(n: u32, ) -> Weight {
 		(15_015_000 as Weight)
 			// Standard Error: 5_000
 			.saturating_add((301_000 as Weight).saturating_mul(n as Weight))

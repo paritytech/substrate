@@ -35,58 +35,58 @@
 // --output=./frame/system/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
+#![rustfmt(skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for frame_system.
 pub trait WeightInfo {
-	fn remark(b: u32) -> Weight;
-	fn remark_with_event(b: u32) -> Weight;
+	fn remark(b: u32, ) -> Weight;
+	fn remark_with_event(b: u32, ) -> Weight;
 	fn set_heap_pages() -> Weight;
 	fn set_changes_trie_config() -> Weight;
-	fn set_storage(i: u32) -> Weight;
-	fn kill_storage(i: u32) -> Weight;
-	fn kill_prefix(p: u32) -> Weight;
+	fn set_storage(i: u32, ) -> Weight;
+	fn kill_storage(i: u32, ) -> Weight;
+	fn kill_prefix(p: u32, ) -> Weight;
 }
 
 /// Weights for frame_system using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
-	fn remark(_b: u32) -> Weight {
+	fn remark(_b: u32, ) -> Weight {
 		(1_038_000 as Weight)
 	}
-	fn remark_with_event(b: u32) -> Weight {
+	fn remark_with_event(b: u32, ) -> Weight {
 		(5_246_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(b as Weight))
 	}
 	fn set_heap_pages() -> Weight {
-		(1_586_000 as Weight).saturating_add(T::DbWeight::get().writes(1 as Weight))
+		(1_586_000 as Weight)
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn set_changes_trie_config() -> Weight {
 		(7_181_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn set_storage(i: u32) -> Weight {
+	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
 			.saturating_add((568_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
-	fn kill_storage(i: u32) -> Weight {
+	fn kill_storage(i: u32, ) -> Weight {
 		(2_278_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((423_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
-	fn kill_prefix(p: u32) -> Weight {
+	fn kill_prefix(p: u32, ) -> Weight {
 		(8_243_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((795_000 as Weight).saturating_mul(p as Weight))
@@ -96,35 +96,36 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn remark(_b: u32) -> Weight {
+	fn remark(_b: u32, ) -> Weight {
 		(1_038_000 as Weight)
 	}
-	fn remark_with_event(b: u32) -> Weight {
+	fn remark_with_event(b: u32, ) -> Weight {
 		(5_246_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(b as Weight))
 	}
 	fn set_heap_pages() -> Weight {
-		(1_586_000 as Weight).saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		(1_586_000 as Weight)
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn set_changes_trie_config() -> Weight {
 		(7_181_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn set_storage(i: u32) -> Weight {
+	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
 			.saturating_add((568_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
-	fn kill_storage(i: u32) -> Weight {
+	fn kill_storage(i: u32, ) -> Weight {
 		(2_278_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((423_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
-	fn kill_prefix(p: u32) -> Weight {
+	fn kill_prefix(p: u32, ) -> Weight {
 		(8_243_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((795_000 as Weight).saturating_mul(p as Weight))

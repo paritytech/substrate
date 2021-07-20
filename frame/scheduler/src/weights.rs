@@ -35,48 +35,47 @@
 // --output=./frame/scheduler/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
+#![rustfmt(skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_scheduler.
 pub trait WeightInfo {
-	fn schedule(s: u32) -> Weight;
-	fn cancel(s: u32) -> Weight;
-	fn schedule_named(s: u32) -> Weight;
-	fn cancel_named(s: u32) -> Weight;
+	fn schedule(s: u32, ) -> Weight;
+	fn cancel(s: u32, ) -> Weight;
+	fn schedule_named(s: u32, ) -> Weight;
+	fn cancel_named(s: u32, ) -> Weight;
 }
 
 /// Weights for pallet_scheduler using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn schedule(s: u32) -> Weight {
+	fn schedule(s: u32, ) -> Weight {
 		(24_811_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((116_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn cancel(s: u32) -> Weight {
+	fn cancel(s: u32, ) -> Weight {
 		(23_851_000 as Weight)
 			// Standard Error: 3_000
 			.saturating_add((1_439_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn schedule_named(s: u32) -> Weight {
+	fn schedule_named(s: u32, ) -> Weight {
 		(31_096_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((141_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	fn cancel_named(s: u32) -> Weight {
+	fn cancel_named(s: u32, ) -> Weight {
 		(26_715_000 as Weight)
 			// Standard Error: 4_000
 			.saturating_add((1_455_000 as Weight).saturating_mul(s as Weight))
@@ -87,28 +86,28 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn schedule(s: u32) -> Weight {
+	fn schedule(s: u32, ) -> Weight {
 		(24_811_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((116_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn cancel(s: u32) -> Weight {
+	fn cancel(s: u32, ) -> Weight {
 		(23_851_000 as Weight)
 			// Standard Error: 3_000
 			.saturating_add((1_439_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn schedule_named(s: u32) -> Weight {
+	fn schedule_named(s: u32, ) -> Weight {
 		(31_096_000 as Weight)
 			// Standard Error: 1_000
 			.saturating_add((141_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	fn cancel_named(s: u32) -> Weight {
+	fn cancel_named(s: u32, ) -> Weight {
 		(26_715_000 as Weight)
 			// Standard Error: 4_000
 			.saturating_add((1_455_000 as Weight).saturating_mul(s as Weight))

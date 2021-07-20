@@ -35,18 +35,17 @@
 // --output=./frame/transaction-storage/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
+
+#![rustfmt(skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{
-	traits::Get,
-	weights::{constants::RocksDbWeight, Weight},
-};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_transaction_storage.
 pub trait WeightInfo {
-	fn store(l: u32) -> Weight;
+	fn store(l: u32, ) -> Weight;
 	fn renew() -> Weight;
 	fn check_proof_max() -> Weight;
 }
@@ -54,7 +53,7 @@ pub trait WeightInfo {
 /// Weights for pallet_transaction_storage using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn store(l: u32) -> Weight {
+	fn store(l: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
 			.saturating_add((8_000 as Weight).saturating_mul(l as Weight))
@@ -75,7 +74,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn store(l: u32) -> Weight {
+	fn store(l: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
 			.saturating_add((8_000 as Weight).saturating_mul(l as Weight))
