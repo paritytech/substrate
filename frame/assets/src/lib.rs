@@ -141,10 +141,7 @@ pub use types::*;
 use sp_std::{prelude::*, borrow::Borrow, convert::TryInto};
 use sp_runtime::{
 	TokenError, ArithmeticError,
-	traits::{
-		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded,
-		StoredMapError,
-	}
+	traits::{AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded}
 };
 use codec::HasCompact;
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
