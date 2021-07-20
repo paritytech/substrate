@@ -48,7 +48,7 @@
 //!
 //! ### Signed Phase
 //!
-//!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
+//! 	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
 //! on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
 //! maximum of `pallet::Config::MaxSignedSubmissions` solutions are stored. The queue is always
@@ -558,14 +558,20 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use frame_support::traits::EstimateCallFee;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event> + TryInto<Event<Self>>;
+		type Event: From<Event<Self>>
+			+ IsType<<Self as frame_system::Config>::Event>
+			+ TryInto<Event<Self>>;
 
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
+
+		/// Something that can predict the fee of a call.
+		type EstimateCallFee: frame_support::traits::EstimateCallFee<Call<Self>, BalanceOf<Self>>;
 
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
@@ -975,7 +981,14 @@ pub mod pallet {
 
 			// create the submission
 			let deposit = Self::deposit_for(&solution, size);
-			let submission = SignedSubmission { who: who.clone(), deposit, solution };
+			let reward = {
+				use sp_runtime::traits::Saturating;
+				let call = Call::submit(solution.clone(), num_signed_submissions);
+				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
+				T::SignedRewardBase::get().saturating_add(call_fee)
+			};
+
+			let submission = SignedSubmission { who: who.clone(), deposit, solution, reward };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full

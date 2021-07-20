@@ -50,13 +50,13 @@ pub use filter::{
 
 mod misc;
 pub use misc::{
-	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
-	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing, ExtrinsicCall,
-	EnsureInherentsAreFirst, ConstU32,
+	Backing, ConstU32, EnsureInherentsAreFirst, EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get,
+	GetBacking, GetDefault, HandleLifetime, IsSubType, IsType, Len, OffchainWorker,
+	OnKilledAccount, OnNewAccount, SameOrOther, Time, TryDrop, UnixTime,
 };
 
 mod stored_map;
-pub use stored_map::{StoredMap, StorageMapShim};
+pub use stored_map::{StorageMapShim, StoredMap};
 mod randomness;
 pub use randomness::Randomness;
 

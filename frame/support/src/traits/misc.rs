@@ -328,11 +328,30 @@ impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra> whe
 }
 
 impl<Address, Call, Signature, Extra> ExtrinsicCall
-for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
+	for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Extra: sp_runtime::traits::SignedExtension,
 {
 	fn call(&self) -> &Self::Call {
 		&self.function
+	}
+}
+
+use sp_runtime::traits::Zero;
+/// Something that can estimate the fee of a call.
+///
+/// Typically, the same pallet that will charge transaction fees will implement this.
+pub trait EstimateCallFee<Call, Balance> {
+	/// Estimate the fee of this call.
+	///
+	/// The dispatch info and the length is deduced from the call. The post info can optionally be
+	/// provided.
+	fn estimate_call_fee(call: &Call, post_info: crate::weights::PostDispatchInfo) -> Balance;
+}
+
+#[cfg(feature = "std")]
+impl<Call, Balance: Zero> EstimateCallFee<Call, Balance> for () {
+	fn estimate_call_fee(_: &Call, _: crate::weights::PostDispatchInfo) -> Balance {
+		Zero::zero()
 	}
 }

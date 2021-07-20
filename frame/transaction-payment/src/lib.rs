@@ -580,7 +580,8 @@ impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 	}
 }
 
-impl<T: Config> SignedExtension for ChargeTransactionPayment<T> where
+impl<T: Config> SignedExtension for ChargeTransactionPayment<T>
+where
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
 	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
@@ -639,6 +640,21 @@ impl<T: Config> SignedExtension for ChargeTransactionPayment<T> where
 		);
 		T::OnChargeTransaction::correct_and_deposit_fee(&who, info, post_info, actual_fee, tip, imbalance)?;
 		Ok(())
+	}
+}
+
+use frame_support::traits::EstimateCallFee;
+use sp_runtime::traits::Zero;
+impl<T: Config, AnyCall: GetDispatchInfo + Encode> EstimateCallFee<AnyCall, BalanceOf<T>>
+	for Pallet<T>
+where
+	BalanceOf<T>: FixedPointOperand,
+	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+{
+	fn estimate_call_fee(call: &AnyCall, post_info: PostDispatchInfo) -> BalanceOf<T> {
+		let len = call.encoded_size() as u32;
+		let info = call.get_dispatch_info();
+		Self::compute_actual_fee(len, &info, &post_info, Zero::zero())
 	}
 }
 
