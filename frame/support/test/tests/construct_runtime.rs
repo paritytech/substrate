@@ -468,17 +468,17 @@ fn event_codec() {
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(Call::System(system::Call::noop()).encode()[0], 30);
-	assert_eq!(Call::Module1_1(module1::Call::fail()).encode()[0], 31);
-	assert_eq!(Call::Module2(module2::Call::fail()).encode()[0], 32);
-	assert_eq!(Call::Module1_2(module1::Call::fail()).encode()[0], 33);
-	assert_eq!(Call::NestedModule3(nested::module3::Call::fail()).encode()[0], 34);
-	assert_eq!(Call::Module3(module3::Call::fail()).encode()[0], 35);
-	assert_eq!(Call::Module1_4(module1::Call::fail()).encode()[0], 3);
-	assert_eq!(Call::Module1_6(module1::Call::fail()).encode()[0], 1);
-	assert_eq!(Call::Module1_7(module1::Call::fail()).encode()[0], 2);
-	assert_eq!(Call::Module1_8(module1::Call::fail()).encode()[0], 12);
-	assert_eq!(Call::Module1_9(module1::Call::fail()).encode()[0], 13);
+	assert_eq!(Call::System(Box::new(system::Call::noop())).encode()[0], 30);
+	assert_eq!(Call::Module1_1(Box::new(module1::Call::fail())).encode()[0], 31);
+	assert_eq!(Call::Module2(Box::new(module2::Call::fail())).encode()[0], 32);
+	assert_eq!(Call::Module1_2(Box::new(module1::Call::fail())).encode()[0], 33);
+	assert_eq!(Call::NestedModule3(Box::new(nested::module3::Call::fail())).encode()[0], 34);
+	assert_eq!(Call::Module3(Box::new(module3::Call::fail())).encode()[0], 35);
+	assert_eq!(Call::Module1_4(Box::new(module1::Call::fail())).encode()[0], 3);
+	assert_eq!(Call::Module1_6(Box::new(module1::Call::fail())).encode()[0], 1);
+	assert_eq!(Call::Module1_7(Box::new(module1::Call::fail())).encode()[0], 2);
+	assert_eq!(Call::Module1_8(Box::new(module1::Call::fail())).encode()[0], 12);
+	assert_eq!(Call::Module1_9(Box::new(module1::Call::fail())).encode()[0], 13);
 }
 
 #[test]
@@ -539,7 +539,7 @@ fn call_name() {
 #[test]
 fn call_metadata() {
 	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
-	let call = Call::Module3(module3::Call::<Runtime>::aux_4());
+	let call = Call::Module3(Box::new(module3::Call::<Runtime>::aux_4()));
 	let metadata = call.get_call_metadata();
 	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
 	assert_eq!(metadata, expected);
@@ -565,7 +565,7 @@ fn get_module_names() {
 #[test]
 fn call_subtype_conversion() {
 	use frame_support::{dispatch::CallableCallFor, traits::IsSubType};
-	let call = Call::Module3(module3::Call::<Runtime>::fail());
+	let call = Call::Module3(Box::new(module3::Call::<Runtime>::fail()));
 	let subcall: Option<&CallableCallFor<Module3, Runtime>> = call.is_sub_type();
 	let subcall_none: Option<&CallableCallFor<Module2, Runtime>> = call.is_sub_type();
 	assert_eq!(Some(&module3::Call::<Runtime>::fail()), subcall);

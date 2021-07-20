@@ -39,7 +39,12 @@ pub fn expand_outer_dispatch(
 		let path = &pallet_declaration.path;
 		let index = pallet_declaration.index;
 
-		variant_defs.extend(quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),));
+		variant_defs.extend(quote!(
+			#[codec(index = #index)]
+			#name(#scrate::sp_std::boxed::Box<
+				#scrate::dispatch::CallableCallFor<#name, #runtime>
+			>),
+		));
 		variant_patterns.push(quote!(Call::#name(call)));
 		pallet_names.push(name);
 		query_call_part_macros.push(quote! {
@@ -117,7 +122,10 @@ pub fn expand_outer_dispatch(
 				match self {
 					#(
 						#variant_patterns =>
-							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin),
+							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(
+								*call,
+								origin,
+							),
 					)*
 				}
 			}
@@ -128,7 +136,7 @@ pub fn expand_outer_dispatch(
 				#[allow(unreachable_patterns)]
 				fn is_sub_type(&self) -> Option<&#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> {
 					match self {
-						#variant_patterns => Some(call),
+						#variant_patterns => Some(&*call),
 						// May be unreachable
 						_ => None,
 					}
@@ -137,6 +145,7 @@ pub fn expand_outer_dispatch(
 
 			impl From<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for Call {
 				fn from(call: #scrate::dispatch::CallableCallFor<#pallet_names, #runtime>) -> Self {
+					let call = #scrate::sp_std::boxed::Box::new(call);
 					#variant_patterns
 				}
 			}
