@@ -191,19 +191,6 @@ pub mod pallet {
 		fn post_upgrade() -> Result<(), &'static str> {
 			migrations::v1::post_migrate::<T>()
 		}
-
-		fn integrity_test() {
-			// assert!(T::MaxVestingSchedules::get() > 0, "`MaxVestingSchedules` must ge greater than 0");
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(||
-					// `Currency::minimum_balance()` needs `TestExternalities`.
-					assert!(
-						T::MinVestedTransfer::get() >= <T as Config>::Currency::minimum_balance(),
-						"`MinVestedTransfer` must greater than or equal to minimum balance for Currency."
-					)
-				);
-			}
-		}
 	}
 
 	/// Information regarding the vesting of a given account.
@@ -516,7 +503,7 @@ impl<T: Config> Pallet<T> {
 		schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
 	) -> DispatchResult {
 		// Validate user inputs.
-		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
+		ensure!(schedule.locked() >= Self::min_vested_transfer(), Error::<T>::AmountLow);
 		if !schedule.is_valid() { return Err(Error::<T>::InvalidScheduleParams.into()); };
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
@@ -667,6 +654,10 @@ impl<T: Config> Pallet<T> {
 		);
 
 		Ok((schedules, locked_now))
+	}
+
+	fn min_vested_transfer() -> BalanceOf<T> {
+		T::MinVestedTransfer::get().max(T::Currency::minimum_balance())
 	}
 }
 

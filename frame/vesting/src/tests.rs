@@ -1156,6 +1156,11 @@ fn per_block_works() {
 }
 
 #[test]
+fn max_vesting_schedules_getter_works() {
+	// TODO
+}
+
+#[test]
 fn min_vested_transfer_getter_works() {
 	// TODO
 }
