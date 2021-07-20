@@ -718,7 +718,23 @@ pub trait Crypto {
 	/// Verify `ecdsa` signature.
 	///
 	/// Returns `true` when the verification was successful.
-	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
+	fn ecdsa_verify(
+		sig: &ecdsa::Signature,
+		msg: &[u8],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		ecdsa::Pair::verify_deprecated(sig, msg, pub_key)
+	}
+
+	/// Verify `ecdsa` signature.
+	///
+	/// Returns `true` when the verification was successful.
+	#[version(2)]
+	fn ecdsa_verify(
+		sig: &ecdsa::Signature,
+		msg: &[u8],
+		pub_key: &ecdsa::Public,
+	) -> bool {
 		ecdsa::Pair::verify(sig, msg, pub_key)
 	}
 

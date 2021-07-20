@@ -393,10 +393,7 @@ impl From<(libsecp256k1::Signature, libsecp256k1::RecoveryId)> for Signature {
 impl<'a> TryFrom<&'a Signature> for (libsecp256k1::Signature, libsecp256k1::RecoveryId) {
 	type Error = ();
 	fn try_from(x: &'a Signature) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), Self::Error> {
-		Ok((
-			libsecp256k1::Signature::parse_overflowing_slice(&x.0[0..64]).expect("hardcoded to 64 bytes; qed"),
-			libsecp256k1::RecoveryId::parse(x.0[64]).map_err(|_| ())?,
-		))
+		parse_signature(&x.0).map_err(|_| ())
 	}
 }
 
@@ -524,8 +521,10 @@ impl TraitPair for Pair {
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
 		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
 		if sig.len() != 65 { return false }
-		let ri = match libsecp256k1::RecoveryId::parse(sig[64]) { Ok(x) => x, _ => return false };
-		let sig = match libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64]) { Ok(x) => x, _ => return false };
+		let (sig, ri) = match parse_signature(&sig) {
+			Ok(sigri) => sigri,
+			_ => return false,
+		};
 		match libsecp256k1::recover(&message, &sig, &ri) {
 			Ok(actual) => pubkey.as_ref() == &actual.serialize()[1..],
 			_ => false,
@@ -578,6 +577,36 @@ impl Pair {
 			_ => false,
 		}
 	}
+
+	/// Verify a signature on a message. Returns true if the signature is good.
+	/// Parses Signature using parse_overflowing_slice
+	pub fn verify_deprecated<M: AsRef<[u8]>>(sig: &Signature, message: M, pubkey: &Public) -> bool {
+		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
+		let (sig, ri) = match parse_signature_deprecated(&sig.0) {
+			Ok(sigri) => sigri,
+			_ => return false
+		};
+		match libsecp256k1::recover(&message, &sig, &ri) {
+			Ok(actual) => pubkey.0[..] == actual.serialize_compressed()[..],
+			_ => false,
+		}
+	}
+}
+
+fn parse_signature(
+    x: &[u8],
+) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), libsecp256k1::Error> {
+    let sig = libsecp256k1::Signature::parse_standard_slice(&x[0..64])?;
+    let ri = libsecp256k1::RecoveryId::parse(x[64])?;
+    Ok((sig, ri))
+}
+
+fn parse_signature_deprecated(
+    x: &[u8],
+) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), libsecp256k1::Error> {
+    let sig = libsecp256k1::Signature::parse_overflowing_slice(&x[0..64])?;
+    let ri = libsecp256k1::RecoveryId::parse(x[64])?;
+    Ok((sig, ri))
 }
 
 impl CryptoType for Public {
