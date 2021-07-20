@@ -126,27 +126,24 @@ fn resolve_func_import(
 
 	let func_ty = match import_ty.ty() {
 		ExternType::Func(func_ty) => func_ty,
-		_ => {
+		_ =>
 			return Err(WasmError::Other(format!(
 				"host doesn't provide any non function imports besides 'memory': {}:{}",
 				import_ty.module(),
 				name,
-			)))
-		},
+			))),
 	};
 
 	let host_func = match host_functions.iter().find(|host_func| host_func.name() == name) {
 		Some(host_func) => host_func,
-		None if allow_missing_func_imports => {
-			return Ok(MissingHostFuncHandler::new(import_ty)?.into_extern(store, &func_ty))
-		},
-		None => {
+		None if allow_missing_func_imports =>
+			return Ok(MissingHostFuncHandler::new(import_ty)?.into_extern(store, &func_ty)),
+		None =>
 			return Err(WasmError::Other(format!(
 				"host doesn't provide such function: {}:{}",
 				import_ty.module(),
 				name,
-			)))
-		},
+			))),
 	};
 	if &func_ty != &wasmtime_func_sig(*host_func) {
 		return Err(WasmError::Other(format!(

@@ -143,9 +143,8 @@ impl<B: Block> LightClientRequestHandler<B> {
 				self.on_remote_read_child_request(&peer, r)?,
 			Some(schema::v1::light::request::Request::RemoteChangesRequest(r)) =>
 				self.on_remote_changes_request(&peer, r)?,
-			None => {
-				return Err(HandleRequestError::BadRequest("Remote request without request data."))
-			},
+			None =>
+				return Err(HandleRequestError::BadRequest("Remote request without request data.")),
 		};
 
 		let mut data = Vec::new();

@@ -126,9 +126,7 @@ where
 
 			check_secondary_vrf_header::<B>(pre_hash, secondary, sig, &epoch)?;
 		}
-		_ => {
-			return Err(babe_err(Error::SecondarySlotAssignmentsDisabled))
-		},
+		_ => return Err(babe_err(Error::SecondarySlotAssignmentsDisabled)),
 	}
 
 	let info = VerifiedHeaderInfo {

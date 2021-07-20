@@ -177,11 +177,10 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 						visited_hashes.insert(hash);
 					}
 				},
-				_ => {
+				_ =>
 					return Err(ClientError::BadJustification(
 						"invalid precommit ancestry proof in grandpa justification".to_string(),
-					))
-				},
+					)),
 			}
 		}
 

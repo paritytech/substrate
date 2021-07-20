@@ -843,9 +843,7 @@ impl RequestResponseCodec for GenericCodec {
 			Ok(l) => l,
 			Err(unsigned_varint::io::ReadError::Io(err))
 				if matches!(err.kind(), io::ErrorKind::UnexpectedEof) =>
-			{
-				return Ok(Err(()))
-			}
+				return Ok(Err(())),
 			Err(err) => return Err(io::Error::new(io::ErrorKind::InvalidInput, err)),
 		};
 

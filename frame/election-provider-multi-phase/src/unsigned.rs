@@ -547,9 +547,7 @@ impl<T: Config> Pallet<T> {
 					voters = next;
 				},
 				// we are out of bounds, break out of the loop.
-				Err(()) => {
-					break
-				},
+				Err(()) => break,
 				// we found the right value - early exit the function.
 				Ok(next) => return next,
 			}

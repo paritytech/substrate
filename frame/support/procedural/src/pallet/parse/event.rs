@@ -141,9 +141,7 @@ impl PalletEventAttrInfo {
 				PalletEventAttr::DepositEvent { fn_vis, fn_span, .. }
 					if deposit_event.is_none() =>
 					deposit_event = Some((fn_vis, fn_span)),
-				attr => {
-					return Err(syn::Error::new(attr.span(), "Duplicate attribute"))
-				},
+				attr => return Err(syn::Error::new(attr.span(), "Duplicate attribute")),
 			}
 		}
 

@@ -459,9 +459,7 @@ impl BenchDb {
 			match block.push(opaque) {
 				Err(sp_blockchain::Error::ApplyExtrinsicFailed(
 					sp_blockchain::ApplyExtrinsicFailed::Validity(e),
-				)) if e.exhausted_resources() => {
-					break
-				},
+				)) if e.exhausted_resources() => break,
 				Err(err) => panic!("Error pushing transaction: {:?}", err),
 				Ok(_) => {},
 			}

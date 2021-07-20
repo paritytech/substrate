@@ -229,9 +229,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 
 					let sinks = match this.message_sinks.get_mut(&topic) {
 						Some(sinks) => sinks,
-						None => {
-							continue
-						},
+						None => continue,
 					};
 
 					// Make sure all sinks for the given topic are ready.

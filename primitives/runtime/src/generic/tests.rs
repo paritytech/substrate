@@ -47,7 +47,7 @@ fn non_system_digest_item_encoding() {
 		encoded,
 		vec![
 			// type = DigestItemType::Other
-			0, // length of other data
+			0,  // length of other data
 			12, // authorities
 			10, 20, 30,
 		]

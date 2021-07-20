@@ -272,9 +272,7 @@ pub fn open_database<Block: BlockT>(
 			sp_database::as_database(db)
 		},
 		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
-		DatabaseSettingsSrc::RocksDb { .. } => {
-			return Err(db_open_error("with-kvdb-rocksdb"))
-		},
+		DatabaseSettingsSrc::RocksDb { .. } => return Err(db_open_error("with-kvdb-rocksdb")),
 		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => crate::parity_db::open(&path, db_type)
 			.map_err(|e| sp_blockchain::Error::Backend(format!("{}", e)))?,

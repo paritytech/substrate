@@ -855,9 +855,7 @@ where
 
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State> {
 		match block {
-			BlockId::Hash(h) if h == Default::default() => {
-				return Ok(Self::State::default())
-			},
+			BlockId::Hash(h) if h == Default::default() => return Ok(Self::State::default()),
 			_ => {},
 		}
 

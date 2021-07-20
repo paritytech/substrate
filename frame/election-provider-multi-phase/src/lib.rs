@@ -1066,9 +1066,7 @@ pub mod pallet {
 				// Discard solution not coming from the local OCW.
 				match source {
 					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
-					_ => {
-						return InvalidTransaction::Call.into()
-					},
+					_ => return InvalidTransaction::Call.into(),
 				}
 
 				let _ = Self::unsigned_pre_dispatch_checks(solution)

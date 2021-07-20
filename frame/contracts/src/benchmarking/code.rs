@@ -361,11 +361,7 @@ where
 	/// and adds it to `env`. A reference to that memory is returned so that it can be used to
 	/// access the memory contents from the supervisor.
 	pub fn add_memory<S>(&self, env: &mut EnvironmentDefinitionBuilder<S>) -> Option<Memory> {
-		let memory = if let Some(memory) = &self.memory {
-			memory
-		} else {
-			return None
-		};
+		let memory = if let Some(memory) = &self.memory { memory } else { return None };
 		let memory = Memory::new(memory.min_pages, Some(memory.max_pages)).unwrap();
 		env.add_memory("env", "memory", memory.clone());
 		Some(memory)

@@ -690,7 +690,7 @@ where
 				// send the command to the voter
 				let _ = self.send_voter_commands.unbounded_send(command);
 			},
-			Err(CommandOrError::Error(e)) => {
+			Err(CommandOrError::Error(e)) =>
 				return Err(match e {
 					Error::Grandpa(error) => ConsensusError::ClientImport(error.to_string()),
 					Error::Network(error) => ConsensusError::ClientImport(error),
@@ -700,8 +700,7 @@ where
 					Error::Signing(error) => ConsensusError::ClientImport(error),
 					Error::Timer(error) => ConsensusError::ClientImport(error.to_string()),
 					Error::RuntimeApi(error) => ConsensusError::ClientImport(error.to_string()),
-				})
-			},
+				}),
 			Ok(_) => {
 				assert!(
 					!enacts_change,

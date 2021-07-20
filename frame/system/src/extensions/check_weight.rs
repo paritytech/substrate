@@ -157,9 +157,7 @@ where
 
 	// Check if we don't exceed per-class allowance
 	match limit_per_class.max_total {
-		Some(max) if per_class > max => {
-			return Err(InvalidTransaction::ExhaustsResources.into())
-		},
+		Some(max) if per_class > max => return Err(InvalidTransaction::ExhaustsResources.into()),
 		// There is no `max_total` limit (`None`),
 		// or we are below the limit.
 		_ => {},
@@ -170,9 +168,8 @@ where
 	if all_weight.total() > maximum_weight.max_block {
 		match limit_per_class.reserved {
 			// We are over the limit in reserved pool.
-			Some(reserved) if per_class > reserved => {
-				return Err(InvalidTransaction::ExhaustsResources.into())
-			},
+			Some(reserved) if per_class > reserved =>
+				return Err(InvalidTransaction::ExhaustsResources.into()),
 			// There is either no limit in reserved pool (`None`),
 			// or we are below the limit.
 			_ => {},

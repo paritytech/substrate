@@ -414,9 +414,7 @@ impl Iterator for ResponseBody {
 					self.error = Some(e);
 					return None
 				},
-				Ok(0) => {
-					return None
-				},
+				Ok(0) => return None,
 				Ok(size) => {
 					self.position = 0;
 					self.filled_up_to = Some(size as usize);

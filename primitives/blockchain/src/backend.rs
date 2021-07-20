@@ -126,9 +126,7 @@ pub trait Backend<Block: BlockT>:
 			match self.header(BlockId::Hash(target_hash))? {
 				Some(x) => x,
 				// target not in blockchain
-				None => {
-					return Ok(None)
-				},
+				None => return Ok(None),
 			}
 		};
 
