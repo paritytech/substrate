@@ -27,7 +27,7 @@ use frame_support::{
 	},
 };
 use frame_system::{Pallet as System, RawOrigin};
-use sp_runtime::traits::{Bounded, One};
+use sp_runtime::traits::{BadOrigin, Bounded, One};
 
 use crate::Pallet as Democracy;
 
