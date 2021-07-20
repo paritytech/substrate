@@ -126,7 +126,7 @@
 //!
 //! A call to `T::ElectionProvider::elect` is made, and `Ok(_)` cannot be returned, then the pallet
 //! proceeds to the [`Phase::Emergency`]. During this phase, any solution can be submitted from
-//! [`T::ForceOrigin`], without any checking. Once submitted, the forced solution is kept in
+//! [`Config::ForceOrigin`], without any checking. Once submitted, the forced solution is kept in
 //! [`QueuedSolution`] until the next call to `T::ElectionProvider::elect`, where it is returned and
 //! [`Phase`] goes back to `Off`.
 //!
@@ -587,15 +587,18 @@ pub mod pallet {
 		type OffchainRepeat: Get<Self::BlockNumber>;
 
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
+		#[pallet::constant]
 		type MinerTxPriority: Get<TransactionPriority>;
 		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
 		/// the pallet.
+		#[pallet::constant]
 		type MinerMaxIterations: Get<u32>;
 
 		/// Maximum weight that the miner should consume.
 		///
 		/// The miner will ensure that the total weight of the unsigned solution will not exceed
 		/// this value, based on [`WeightInfo::submit_unsigned`].
+		#[pallet::constant]
 		type MinerMaxWeight: Get<Weight>;
 
 		/// Maximum number of signed submissions that can be queued.
@@ -640,6 +643,7 @@ pub mod pallet {
 		///
 		/// The miner will ensure that the total length of the unsigned solution will not exceed
 		/// this value.
+		#[pallet::constant]
 		type MinerMaxLength: Get<u32>;
 
 		/// Something that will provide the election data.

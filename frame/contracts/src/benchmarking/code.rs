@@ -508,7 +508,7 @@ pub mod body {
 	/// Replace the locals of the supplied `body` with `num` i64 locals.
 	pub fn inject_locals(body: &mut FuncBody, num: u32) {
 		use self::elements::Local;
-		*body.locals_mut() = (0..num).map(|i| Local::new(i, ValueType::I64)).collect()
+		*body.locals_mut() = vec![Local::new(num, ValueType::I64)];
 	}
 }
 

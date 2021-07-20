@@ -13,15 +13,18 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.3.1" }
-pallet-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "./primitives" }
+
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+
+pallet-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "./primitives" }
 
 [dev-dependencies]
 env_logger = "0.8"
@@ -31,15 +34,15 @@ hex-literal = "0.3"
 default = ["std"]
 std = [
 	"codec/std",
-	"frame-benchmarking/std",
-	"frame-support/std",
-	"frame-system/std",
 	"mmr-lib/std",
-	"pallet-mmr-primitives/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-mmr-primitives/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]
