@@ -593,6 +593,7 @@ impl Pair {
 	}
 }
 
+#[cfg(feature = "full_crypto")]
 fn parse_signature(
     x: &[u8],
 ) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), libsecp256k1::Error> {
@@ -601,6 +602,7 @@ fn parse_signature(
     Ok((sig, ri))
 }
 
+#[cfg(feature = "full_crypto")]
 fn parse_signature_deprecated(
     x: &[u8],
 ) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), libsecp256k1::Error> {
