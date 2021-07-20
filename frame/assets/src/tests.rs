@@ -703,6 +703,8 @@ fn force_asset_status_should_work(){
 #[test]
 fn balance_conversion_should_work() {
 	new_test_ext().execute_with(|| {
+		use frame_support::traits::tokens::BalanceConversion;
+
 		let id = 42;
 		assert_ok!(Assets::force_create(Origin::root(), id, 1, true, 10));
 		let not_sufficient = 23;
