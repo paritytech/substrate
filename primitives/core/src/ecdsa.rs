@@ -394,7 +394,7 @@ impl<'a> TryFrom<&'a Signature> for (libsecp256k1::Signature, libsecp256k1::Reco
 	type Error = ();
 	fn try_from(x: &'a Signature) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), Self::Error> {
 		Ok((
-			libsecp256k1::Signature::parse_standard_slice(&x.0[0..64]).expect("hardcoded to 64 bytes; qed"),
+			libsecp256k1::Signature::parse_overflowing_slice(&x.0[0..64]).expect("hardcoded to 64 bytes; qed"),
 			libsecp256k1::RecoveryId::parse(x.0[64]).map_err(|_| ())?,
 		))
 	}
@@ -525,7 +525,7 @@ impl TraitPair for Pair {
 		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
 		if sig.len() != 65 { return false }
 		let ri = match libsecp256k1::RecoveryId::parse(sig[64]) { Ok(x) => x, _ => return false };
-		let sig = match libsecp256k1::Signature::parse_standard_slice(&sig[0..64]) { Ok(x) => x, _ => return false };
+		let sig = match libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64]) { Ok(x) => x, _ => return false };
 		match libsecp256k1::recover(&message, &sig, &ri) {
 			Ok(actual) => pubkey.as_ref() == &actual.serialize()[1..],
 			_ => false,
