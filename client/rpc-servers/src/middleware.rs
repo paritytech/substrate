@@ -24,7 +24,7 @@ use jsonrpc_core::{
 	Middleware as RequestMiddleware, Metadata,
 	FutureResponse, FutureOutput
 };
-use prometheus_endpoint::{GaugeVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64, register};
+use prometheus_endpoint::{CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64, register};
 
 use futures::{future::Either, Future};
 use pubsub::PubSubMetadata;
@@ -34,11 +34,11 @@ use crate::RpcHandler;
 /// Metrics for RPC middleware
 #[derive(Debug, Clone)]
 pub struct RpcMetrics {
-	requests_started: GaugeVec<U64>,
-	requests_finished: GaugeVec<U64>,
+	requests_started: CounterVec<U64>,
+	requests_finished: CounterVec<U64>,
 	calls_time: HistogramVec,
-	calls_started: GaugeVec<U64>,
-	calls_finished: GaugeVec<U64>
+	calls_started: CounterVec<U64>,
+	calls_finished: CounterVec<U64>
 }
 
 impl RpcMetrics {
@@ -47,7 +47,7 @@ impl RpcMetrics {
 		if let Some(r) = metrics_registry {
 			Ok(Some(Self {
 				requests_started: register(
-					GaugeVec::new(
+					CounterVec::new(
 						Opts::new(
 							"rpc_requests_started",
 							"Number of RPC requests (not calls) received by the server."
@@ -57,7 +57,7 @@ impl RpcMetrics {
 					r,
 				)?,
 				requests_finished: register(
-					GaugeVec::new(
+					CounterVec::new(
 						Opts::new(
 							"rpc_requests_finished",
 							"Number of RPC requests (not calls) processed by the server."
@@ -77,7 +77,7 @@ impl RpcMetrics {
 					r,
 				)?,
 				calls_started: register(
-					GaugeVec::new(
+					CounterVec::new(
 						Opts::new(
 							"rpc_calls_started",
 							"Number of received RPC calls (unique un-batched requests)"
@@ -87,7 +87,7 @@ impl RpcMetrics {
 					r
 				)?,
 				calls_finished: register(
-					GaugeVec::new(
+					CounterVec::new(
 						Opts::new(
 							"rpc_calls_finished",
 							"Number of processed RPC calls (unique un-batched requests)"

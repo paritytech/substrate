@@ -25,7 +25,7 @@ mod middleware;
 use std::io;
 use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
 use log::error;
-use prometheus_endpoint::{Gauge, PrometheusError, Registry, U64, register};
+use prometheus_endpoint::{Counter, PrometheusError, Registry, U64, register};
 use pubsub::PubSubMetadata;
 
 const MEGABYTE: usize = 1024 * 1024;
@@ -73,9 +73,9 @@ pub fn rpc_handler<M: PubSubMetadata>(
 #[derive(Debug, Clone)]
 pub struct ServerMetrics {
 	/// Number of sessions opened.
-	session_opened: Option<Gauge<U64>>,
+	session_opened: Option<Counter<U64>>,
 	/// Number of sessions closed.
-	session_closed: Option<Gauge<U64>>,
+	session_closed: Option<Counter<U64>>,
 }
 
 impl ServerMetrics {
@@ -83,14 +83,14 @@ impl ServerMetrics {
 	pub fn new(registry: Option<&Registry>) -> Result<Self, PrometheusError> {
 		registry.map(|r| Ok(Self {
 			session_opened: register(
-				Gauge::new(
+				Counter::new(
 					"rpc_sessions_opened",
 					"Number of persistent RPC sessions opened",
 				)?,
 				r,
 			)?.into(),
 			session_closed: register(
-				Gauge::new(
+				Counter::new(
 					"rpc_sessions_closed",
 					"Number of persistent RPC sessions closed",
 				)?,
