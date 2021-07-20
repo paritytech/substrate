@@ -376,9 +376,9 @@ where
 /// The point of this trait is to be able to easily convert between `RuntimeAppPublic`, the wrapped
 /// (generic = non application-specific) crypto types and the `Public` type required by the runtime.
 ///
-/// 	Example (pseudo-)implementation:
+/// Example (pseudo-)implementation:
 /// ```ignore
-/// 	// im-online specific crypto
+/// // im-online specific crypto
 /// type RuntimeAppPublic = ImOnline(sr25519::Public);
 ///
 /// // wrapped "raw" crypto
