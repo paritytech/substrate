@@ -27,8 +27,11 @@ use sc_telemetry::TelemetryHandle;
 use sp_api::TransactionFor;
 use sp_blockchain::{well_known_cache_keys, BlockStatus};
 use sp_consensus::{
-	BlockCheckParams, BlockImport, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	ImportResult, JustificationImport, SelectChain,
+	BlockOrigin, Error as ConsensusError, SelectChain,
+};
+use sc_consensus::{
+	BlockCheckParams, BlockImport, BlockImportParams,
+	ImportResult, JustificationImport
 };
 use sp_finality_grandpa::{ConsensusLog, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};

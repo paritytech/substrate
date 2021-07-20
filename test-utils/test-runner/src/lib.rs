@@ -230,7 +230,8 @@
 use sc_executor::NativeExecutionDispatch;
 use sc_service::TFullClient;
 use sp_api::{ConstructRuntimeApi, TransactionFor};
-use sp_consensus::{BlockImport, SelectChain};
+use sp_consensus::SelectChain;
+use sc_consensus::BlockImport;
 use sp_inherents::InherentDataProvider;
 use sp_runtime::traits::{Block as BlockT, SignedExtension};
 

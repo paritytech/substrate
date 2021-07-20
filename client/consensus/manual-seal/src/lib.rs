@@ -21,9 +21,12 @@
 
 use futures::prelude::*;
 use sp_consensus::{
-	Environment, Proposer, SelectChain, BlockImport,
-	ForkChoiceStrategy, BlockImportParams, BlockOrigin,
-	import_queue::{Verifier, BasicQueue, CacheKeyId, BoxBlockImport},
+	BlockOrigin, Environment, Proposer, SelectChain,
+	import_queue::CacheKeyId,
+};
+use sc_consensus::{
+	block_import::{BlockImport, ForkChoiceStrategy, BlockImportParams},
+	import_queue::{Verifier, BasicQueue, BoxBlockImport},
 };
 use sp_blockchain::HeaderBackend;
 use sp_inherents::CreateInherentDataProviders;
@@ -278,7 +281,7 @@ mod tests {
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use sc_transaction_pool_api::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;
-	use sp_consensus::ImportedAux;
+	use sc_consensus::ImportedAux;
 	use sc_basic_authorship::ProposerFactory;
 	use sc_client_api::BlockBackend;
 

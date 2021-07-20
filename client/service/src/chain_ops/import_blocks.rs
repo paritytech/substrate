@@ -26,11 +26,10 @@ use sp_runtime::traits::{
 };
 use sp_runtime::generic::SignedBlock;
 use codec::{Decode, IoReader as CodecIoReader};
-use sp_consensus::{
-	BlockOrigin,
-	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
+use sp_consensus::BlockOrigin;
+use sc_consensus::import_queue::{
+	IncomingBlock, Link, BlockImportError, BlockImportStatus, ImportQueue
 };
-
 use std::{io::{Read, Seek}, pin::Pin};
 use std::time::{Duration, Instant};
 use futures_timer::Delay;
@@ -318,7 +317,7 @@ where
 			&mut self,
 			imported: usize,
 			_num_expected_blocks: usize,
-			results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+			results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>
 		) {
 			self.imported_blocks += imported as u64;
 

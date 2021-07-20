@@ -20,10 +20,8 @@
 use sc_service::client::Client;
 use sc_client_api::backend::Finalizer;
 use sc_client_api::client::BlockBackend;
-use sp_consensus::{
-	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
-	ForkChoiceStrategy,
-};
+use sc_consensus::{BlockImportParams, BlockImport, ForkChoiceStrategy};
+use sp_consensus::{BlockOrigin, Error as ConsensusError};
 use sp_runtime::{Justification, Justifications};
 use sp_runtime::traits::{Block as BlockT};
 use sp_runtime::generic::BlockId;

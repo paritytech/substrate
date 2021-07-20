@@ -35,8 +35,8 @@ use state::StateSync;
 use sp_blockchain::{Error as ClientError, HeaderMetadata};
 use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
-	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
 };
+use sc_consensus::{IncomingBlock, BlockImportStatus, BlockImportError};
 use crate::protocol::message::{
 	self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
 };
@@ -1218,7 +1218,7 @@ impl<B: BlockT> ChainSync<B> {
 		&'a mut self,
 		imported: usize,
 		count: usize,
-		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>,
+		results: Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
 		trace!(target: "sync", "Imported {} of {}", imported, count);
 
@@ -1238,12 +1238,12 @@ impl<B: BlockT> ChainSync<B> {
 			}
 
 			match result {
-				Ok(BlockImportResult::ImportedKnown(number, who)) => {
+				Ok(BlockImportStatus::ImportedKnown(number, who)) => {
 					if let Some(peer) = who.and_then(|p| self.peers.get_mut(&p)) {
 						peer.update_common_number(number);
 					}
 				}
-				Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
+				Ok(BlockImportStatus::ImportedUnknown(number, aux, who)) => {
 					if aux.clear_justification_requests {
 						trace!(
 							target: "sync",
@@ -2756,7 +2756,7 @@ mod test {
 					.map(|b|
 						(
 							Ok(
-								BlockImportResult::ImportedUnknown(
+								BlockImportStatus::ImportedUnknown(
 									b.header().number().clone(),
 									Default::default(),
 									Some(peer_id1.clone()),

@@ -1260,11 +1260,11 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 #[cfg(test)]
 mod tests {
 	use substrate_test_runtime_client::{
-		prelude::*,
-		sp_consensus::BlockOrigin,
+		prelude::*,		
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
+	use sp_consensus::BlockOrigin;
 	use sp_api::ProvideRuntimeApi;
 	use sp_runtime::generic::BlockId;
 	use sp_core::storage::well_known_keys::HEAP_PAGES;

@@ -29,10 +29,11 @@ use crate::client::{Client, Backend};
 use crate::keyring::*;
 use sc_client_db::PruningMode;
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
-use sp_consensus::{
-	BlockOrigin, BlockImport, BlockImportParams,
+use sc_consensus::{
+	BlockImport, BlockImportParams,
 	ForkChoiceStrategy, ImportResult, ImportedAux
 };
+use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::BlockId,
 	OpaqueExtrinsic,

@@ -1162,4 +1162,3 @@ fn syncs_indexed_blocks() {
 	net.block_until_sync();
 	assert!(net.peer(1).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_some());
 }
-
