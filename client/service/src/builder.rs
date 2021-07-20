@@ -21,7 +21,7 @@ use crate::{
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	metrics::MetricsService,
 	client::{light, Client, ClientConfig},
-	config::{Configuration, KeystoreConfig, PrometheusConfig},
+	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 };
 use sc_client_api::{
 	light::RemoteBlockchain, ForkBlocks, BadBlocks, UsageProvider, ExecutorProvider,
@@ -40,9 +40,10 @@ use futures::{
 };
 use sc_keystore::LocalKeystore;
 use log::info;
-use sc_network::config::{Role, OnDemand};
+use sc_network::config::{Role, OnDemand, SyncMode};
 use sc_network::NetworkService;
 use sc_network::block_request_handler::{self, BlockRequestHandler};
+use sc_network::state_request_handler::{self, StateRequestHandler};
 use sc_network::light_client_requests::{self, handler::LightClientRequestHandler};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -59,7 +60,7 @@ use sc_telemetry::{
 	TelemetryHandle,
 	SUBSTRATE_INFO,
 };
-use sp_transaction_pool::MaintainedTransactionPool;
+use sc_transaction_pool_api::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::{
@@ -70,7 +71,7 @@ use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
-	backend::StorageProvider,
+	StorageProvider,
 	proof_provider::ProofProvider,
 	execution_extensions::ExecutionExtensions
 };
@@ -377,6 +378,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 				offchain_worker_enabled : config.offchain_worker.enabled,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
+				no_genesis: matches!(config.network.sync_mode, sc_network::config::SyncMode::Fast {..}),
 				wasm_runtime_substitutes,
 			},
 		)?;
@@ -804,6 +806,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 			client.clone(),
 			subscriptions.clone(),
 			deny_unsafe,
+			config.rpc_max_payload,
 		);
 		(chain, state, child_state)
 	};
@@ -911,6 +914,23 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		}
 	};
 
+	let state_request_protocol_config = {
+		if matches!(config.role, Role::Light) {
+			// Allow outgoing requests but deny incoming requests.
+			state_request_handler::generate_protocol_config(&protocol_id)
+		} else {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) = StateRequestHandler::new(
+				&protocol_id,
+				client.clone(),
+				config.network.default_peers_set.in_peers as usize
+				+ config.network.default_peers_set.out_peers as usize,
+			);
+			spawn_handle.spawn("state_request_handler", handler.run());
+			protocol_config
+		}
+	};
+
 	let light_client_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
@@ -926,7 +946,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		}
 	};
 
-	let network_params = sc_network::config::Params {
+	let mut network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
@@ -949,8 +969,18 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		block_announce_validator,
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
+		state_request_protocol_config,
 		light_client_request_protocol_config,
 	};
+
+	// Storage chains don't keep full block history and can't be synced in full mode.
+	// Force fast sync when storage chain mode is enabled.
+	if matches!(config.transaction_storage, TransactionStorageMode::StorageChain) {
+		network_params.network_config.sync_mode = SyncMode::Fast {
+			storage_chain_mode: true,
+			skip_proofs: false,
+		};
+	}
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;

@@ -49,6 +49,7 @@ members = [
 	"client/network/test",
 	"client/offchain",
 	"client/peerset",
+	"client/allocator",
 	"client/proposer-metrics",
 	"client/rpc",
 	"client/rpc-api",
@@ -61,7 +62,7 @@ members = [
 	"client/tracing",
 	"client/tracing/proc-macro",
 	"client/transaction-pool",
-	"client/transaction-pool/graph",
+	"client/transaction-pool/api",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",
@@ -129,7 +130,6 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
-	"primitives/allocator",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -141,7 +141,6 @@ members = [
 	"primitives/authorship",
 	"primitives/block-builder",
 	"primitives/blockchain",
-	"primitives/chain-spec",
 	"primitives/consensus/aura",
 	"primitives/consensus/babe",
 	"primitives/consensus/common",
@@ -205,9 +204,6 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/prometheus",
 	"utils/wasm-builder",
-	# temp deps
-	"max-encoded-len",
-	"max-encoded-len/derive",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates

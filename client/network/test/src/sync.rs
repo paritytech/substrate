@@ -1087,3 +1087,79 @@ fn syncs_after_missing_announcement() {
 	net.block_until_sync();
 	assert!(net.peer(1).client().header(&BlockId::Hash(final_block)).unwrap().is_some());
 }
+
+#[test]
+fn syncs_state() {
+	sp_tracing::try_init_simple();
+	for skip_proofs in &[ false, true ] {
+		let mut net = TestNet::new(0);
+		net.add_full_peer_with_config(Default::default());
+		net.add_full_peer_with_config(FullPeerConfig {
+			sync_mode: SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false },
+			..Default::default()
+		});
+		net.peer(0).push_blocks(64, false);
+		// Wait for peer 1 to sync header chain.
+		net.block_until_sync();
+		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
+
+		let just = (*b"FRNK", Vec::new());
+		net.peer(1).client().finalize_block(BlockId::Number(60), Some(just), true).unwrap();
+		// Wait for state sync.
+		block_on(futures::future::poll_fn::<(), _>(|cx| {
+			net.poll(cx);
+			if net.peer(1).client.info().finalized_state.is_some() {
+				Poll::Ready(())
+			} else {
+				Poll::Pending
+			}
+		}));
+		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
+		// Wait for the rest of the states to be imported.
+		block_on(futures::future::poll_fn::<(), _>(|cx| {
+			net.poll(cx);
+			if net.peer(1).client().has_state_at(&BlockId::Number(64)) {
+				Poll::Ready(())
+			} else {
+				Poll::Pending
+			}
+		}));
+	}
+}
+
+#[test]
+fn syncs_indexed_blocks() {
+	use sp_runtime::traits::Hash;
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(0);
+	let mut n: u64 = 0;
+	net.add_full_peer_with_config(FullPeerConfig {
+		storage_chain: true,
+		..Default::default()
+	});
+	net.add_full_peer_with_config(FullPeerConfig {
+		storage_chain: true,
+		sync_mode: SyncMode::Fast { skip_proofs: false, storage_chain_mode: true },
+		..Default::default()
+	});
+	net.peer(0).generate_blocks_at(
+		BlockId::number(0),
+		64,
+		BlockOrigin::Own, |mut builder| {
+			let ex = Extrinsic::Store(n.to_le_bytes().to_vec());
+			n += 1;
+			builder.push(ex).unwrap();
+			builder.build().unwrap().block
+		},
+		false,
+		true,
+		true,
+	);
+	let indexed_key = sp_runtime::traits::BlakeTwo256::hash(&42u64.to_le_bytes());
+	assert!(net.peer(0).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_some());
+	assert!(net.peer(1).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_none());
+
+	net.block_until_sync();
+	assert!(net.peer(1).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_some());
+}
+

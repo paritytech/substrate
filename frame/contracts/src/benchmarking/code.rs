@@ -258,9 +258,14 @@ where
 
 	/// Same as `dummy` but with maximum sized linear memory and a dummy section of specified size.
 	pub fn dummy_with_bytes(dummy_bytes: u32) -> Self {
+		// We want the module to have the size `dummy_bytes`.
+		// This is not completely correct as the overhead grows when the contract grows
+		// because of variable length integer encoding. However, it is good enough to be that
+		// close for benchmarking purposes.
+		let module_overhead = 65;
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
-			dummy_section: dummy_bytes,
+			dummy_section: dummy_bytes.saturating_sub(module_overhead),
 			.. Default::default()
 		}
 		.into()
@@ -503,7 +508,7 @@ pub mod body {
 	/// Replace the locals of the supplied `body` with `num` i64 locals.
 	pub fn inject_locals(body: &mut FuncBody, num: u32) {
 		use self::elements::Local;
-		*body.locals_mut() = (0..num).map(|i| Local::new(i, ValueType::I64)).collect()
+		*body.locals_mut() = vec![Local::new(num, ValueType::I64)];
 	}
 }
 

@@ -151,9 +151,14 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		BlockchainInfo {
 			best_hash: meta.best_hash,
 			best_number: meta.best_number,
-			genesis_hash: meta.genesis_hash,
+			genesis_hash: meta.genesis_hash.clone(),
 			finalized_hash: meta.finalized_hash,
 			finalized_number: meta.finalized_number,
+			finalized_state: if meta.finalized_hash != Default::default() {
+				Some((meta.genesis_hash, Zero::zero()))
+			} else {
+				None
+			},
 			number_leaves: 1,
 		}
 	}

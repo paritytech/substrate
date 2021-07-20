@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use frame_support::{
-	StorageValue, StorageMap, parameter_types, assert_ok,
+	parameter_types, assert_ok,
 	traits::{ChangeMembers, Currency, LockIdentifier},
 };
 use sp_core::H256;
@@ -36,7 +36,7 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -266,7 +266,7 @@ pub(crate) fn new_test_ext_with_candidate_holes() -> sp_io::TestExternalities {
 	let mut t = ExtBuilder::default().build();
 	t.execute_with(|| {
 		<elections::Candidates<Test>>::put(vec![0, 0, 1]);
-		elections::CandidateCount::put(1);
+		elections::CandidateCount::<Test>::put(1);
 		<elections::RegisterInfoOf<Test>>::insert(1, (0, 2));
 	});
 	t

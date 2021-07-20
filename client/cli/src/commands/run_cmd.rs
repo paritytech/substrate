@@ -42,12 +42,11 @@ pub struct RunCmd {
 	/// The node will be started with the authority role and actively
 	/// participate in any consensus task that it can (e.g. depending on
 	/// availability of local keys).
-	#[structopt(
-		long = "validator"
-	)]
+	#[structopt(long)]
 	pub validator: bool,
 
-	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
+	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA
+	/// observer.
 	#[structopt(long)]
 	pub no_grandpa: bool,
 
@@ -57,8 +56,8 @@ pub struct RunCmd {
 
 	/// Listen to all RPC interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
-	/// server to filter out dangerous methods. More details:
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
+	/// proxy server to filter out dangerous methods. More details:
 	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
@@ -74,8 +73,8 @@ pub struct RunCmd {
 	///
 	/// - `Unsafe`: Exposes every RPC method.
 	/// - `Safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
-	/// - `Auto`: Acts as `Safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is passed,
-	///   otherwise acts as `Unsafe`.
+	/// - `Auto`: Acts as `Safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is
+	///   passed, otherwise acts as `Unsafe`.
 	#[structopt(
 		long,
 		value_name = "METHOD SET",
@@ -88,8 +87,9 @@ pub struct RunCmd {
 
 	/// Listen to all Websocket interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
-	/// server to filter out dangerous methods. More details: <https://github.com/paritytech/substrate/wiki/Public-RPC>.
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
+	/// proxy server to filter out dangerous methods. More details:
+	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
@@ -99,6 +99,11 @@ pub struct RunCmd {
 	/// Same as `--ws-external` but doesn't warn you about it.
 	#[structopt(long = "unsafe-ws-external")]
 	pub unsafe_ws_external: bool,
+
+	/// Set the the maximum RPC payload size for both requests and responses (both http and ws), in
+	/// megabytes. Default is 15MiB.
+	#[structopt(long = "rpc-max-payload")]
+	pub rpc_max_payload: Option<usize>,
 
 	/// Listen to all Prometheus data source interfaces.
 	///
@@ -194,7 +199,8 @@ pub struct RunCmd {
 	#[structopt(long, conflicts_with_all = &["alice", "charlie", "dave", "eve", "ferdie", "one", "two"])]
 	pub bob: bool,
 
-	/// Shortcut for `--name Charlie --validator` with session keys for `Charlie` added to keystore.
+	/// Shortcut for `--name Charlie --validator` with session keys for `Charlie` added to
+	/// keystore.
 	#[structopt(long, conflicts_with_all = &["alice", "bob", "dave", "eve", "ferdie", "one", "two"])]
 	pub charlie: bool,
 
@@ -433,6 +439,10 @@ impl CliConfiguration for RunCmd {
 
 	fn rpc_methods(&self) -> Result<sc_service::config::RpcMethods> {
 		Ok(self.rpc_methods.into())
+	}
+
+	fn rpc_max_payload(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_payload)
 	}
 
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {

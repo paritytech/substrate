@@ -20,6 +20,9 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Added
 
+- Allow contracts to dispatch calls into the runtime (**unstable**)
+[#9276](https://github.com/paritytech/substrate/pull/9276)
+
 - New **unstable** version of `seal_call` that offers more features.
 [#8909](https://github.com/paritytech/substrate/pull/8909)
 
@@ -41,6 +44,11 @@ output to an RPC client.
 
 - Make storage and fields of `Schedule` private to the crate.
 [#8359](https://github.com/paritytech/substrate/pull/8359)
+
+### Fixed
+
+- Remove pre-charging which caused wrongly estimated weights
+[#8976](https://github.com/paritytech/substrate/pull/8976)
 
 ## [v3.0.0] 2021-02-25
 

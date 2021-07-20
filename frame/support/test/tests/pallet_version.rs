@@ -144,7 +144,7 @@ frame_support::parameter_types!(
 );
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;

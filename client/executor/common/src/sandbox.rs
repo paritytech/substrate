@@ -187,10 +187,10 @@ fn trap(msg: &'static str) -> Trap {
 	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
 }
 
-fn deserialize_result(serialized_result: &[u8]) -> std::result::Result<Option<RuntimeValue>, Trap> {
+fn deserialize_result(mut serialized_result: &[u8]) -> std::result::Result<Option<RuntimeValue>, Trap> {
 	use self::sandbox_primitives::HostError;
 	use sp_wasm_interface::ReturnValue;
-	let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut &serialized_result[..])
+	let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut serialized_result)
 		.map_err(|_| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
 
 	match result_val {
@@ -379,10 +379,10 @@ pub enum InstantiationError {
 }
 
 fn decode_environment_definition(
-	raw_env_def: &[u8],
+	mut raw_env_def: &[u8],
 	memories: &[Option<MemoryRef>],
 ) -> std::result::Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
-	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..])
+	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut raw_env_def)
 		.map_err(|_| InstantiationError::EnvironmentDefinitionCorrupted)?;
 
 	let mut func_map = HashMap::new();

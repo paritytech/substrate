@@ -333,6 +333,7 @@ pub fn new_full_base(
 			babe_link,
 			can_author_with,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
+			max_block_proposal_slot_portion: None,
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
 		};
 
@@ -627,7 +628,7 @@ mod tests {
 	use sc_service_test::TestNetNode;
 	use crate::service::{new_full_base, new_light_base, NewFullBase};
 	use sp_runtime::{key_types::BABE, traits::IdentifyAccount, RuntimeAppPublic};
-	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
+	use sc_transaction_pool_api::{MaintainedTransactionPool, ChainEvent};
 	use sc_client_api::BlockBackend;
 	use sc_keystore::LocalKeystore;
 	use sp_inherents::InherentDataProvider;

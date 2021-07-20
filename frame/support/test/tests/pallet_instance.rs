@@ -250,7 +250,7 @@ frame_support::parameter_types!(
 );
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
@@ -306,8 +306,8 @@ frame_support::construct_runtime!(
 		Instance1Example: pallet::<Instance1>::{
 			Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
 		},
-		Example2: pallet2::{Pallet, Call, Event<T>, Config<T>, Storage},
-		Instance1Example2: pallet2::<Instance1>::{Pallet, Call, Event<T>, Config<T>, Storage},
+		Example2: pallet2::{Pallet, Event<T>, Config<T>, Storage},
+		Instance1Example2: pallet2::<Instance1>::{Pallet, Event<T>, Config<T>, Storage},
 	}
 );
 

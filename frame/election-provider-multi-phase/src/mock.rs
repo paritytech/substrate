@@ -199,7 +199,7 @@ pub fn witness() -> SolutionOrSnapshotSize {
 
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -260,8 +260,13 @@ parameter_types! {
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: u64 = 10;
 	pub static UnsignedPhase: u64 = 5;
-	pub static MaxSignedSubmissions: u32 = 5;
-
+	pub static SignedMaxSubmissions: u32 = 5;
+	pub static SignedDepositBase: Balance = 5;
+	pub static SignedDepositByte: Balance = 0;
+	pub static SignedDepositWeight: Balance = 0;
+	pub static SignedRewardBase: Balance = 7;
+	pub static SignedRewardMax: Balance = 10;
+	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxIterations: u32 = 5;
 	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
@@ -304,11 +309,32 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
 		}
 	}
-	fn elect_queued() -> Weight {
+	fn finalize_signed_phase_accept_solution() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::elect_queued()
+			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_accept_solution()
+		}
+	}
+	fn finalize_signed_phase_reject_solution() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
+		}
+	}
+	fn submit(c: u32) -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::submit(c)
+		}
+	}
+	fn elect_queued(v: u32, t: u32, a: u32, d: u32) -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::elect_queued(v, t, a, d)
 		}
 	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -342,6 +368,14 @@ impl crate::Config for Runtime {
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
+	type SignedRewardBase = SignedRewardBase;
+	type SignedDepositBase = SignedDepositBase;
+	type SignedDepositByte = ();
+	type SignedDepositWeight = ();
+	type SignedMaxWeight = SignedMaxWeight;
+	type SignedMaxSubmissions = SignedMaxSubmissions;
+	type SlashHandler = ();
+	type RewardHandler = ();
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = ();
@@ -404,6 +438,32 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 		Targets::set(targets);
 		Voters::set(voters);
 	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn clear() {
+		Targets::set(vec![]);
+		Voters::set(vec![]);
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn add_voter(voter: AccountId, weight: VoteWeight, targets: Vec<AccountId>) {
+		let mut current = Voters::get();
+		current.push((voter, weight, targets));
+		Voters::set(current);
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn add_target(target: AccountId) {
+		let mut current = Targets::get();
+		current.push(target);
+		Targets::set(current);
+
+		// to be on-par with staking, we add a self vote as well. the stake is really not that
+		// important.
+		let mut current = Voters::get();
+		current.push((target, ExistentialDeposit::get() as u64, vec![target]));
+		Voters::set(current);
+	}
 }
 
 impl ExtBuilder {
@@ -438,6 +498,20 @@ impl ExtBuilder {
 	}
 	pub fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
 		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets)));
+		self
+	}
+	pub fn signed_max_submission(self, count: u32) -> Self {
+		<SignedMaxSubmissions>::set(count);
+		self
+	}
+	pub fn signed_deposit(self, base: u64, byte: u64, weight: u64) -> Self {
+		<SignedDepositBase>::set(base);
+		<SignedDepositByte>::set(byte);
+		<SignedDepositWeight>::set(weight);
+		self
+	}
+	pub fn signed_weight(self, weight: Weight) -> Self {
+		<SignedMaxWeight>::set(weight);
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
@@ -480,4 +554,8 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(test)
 	}
+}
+
+pub(crate) fn balances(who: &u64) -> (u64, u64) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
 }

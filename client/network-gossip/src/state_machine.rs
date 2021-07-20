@@ -41,7 +41,7 @@ use wasm_timer::Instant;
 // this cache should take about 256 KB of memory.
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 8192;
 
-const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_secs(30);
+const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_millis(750);
 
 pub(crate) const PERIODIC_MAINTENANCE_INTERVAL: time::Duration = time::Duration::from_millis(1100);
 

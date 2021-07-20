@@ -78,9 +78,8 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError,
+		Dispatchable, AtLeast32BitUnsigned, Saturating, BlockNumberProvider,
 	},
-	offchain::storage_lock::BlockNumberProvider,
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
@@ -88,7 +87,7 @@ use frame_support::{
 	Parameter, storage,
 	traits::{
 		SortedMembers, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
-		StoredMap, EnsureOrigin, OriginTrait, Filter, MaxEncodedLen,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
@@ -96,7 +95,7 @@ use frame_support::{
 	},
 	dispatch::{DispatchResultWithPostInfo, DispatchResult},
 };
-use codec::{Encode, Decode, FullCodec, EncodeLike};
+use codec::{Encode, Decode, FullCodec, EncodeLike, MaxEncodedLen};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -463,7 +462,7 @@ pub mod pallet {
 			_subkeys: u32,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			storage::unhashed::kill_prefix(&prefix);
+			storage::unhashed::kill_prefix(&prefix, None);
 			Ok(().into())
 		}
 
@@ -581,7 +580,7 @@ pub mod pallet {
 	/// Events deposited for the current block.
 	#[pallet::storage]
 	#[pallet::getter(fn events)]
-	pub(super) type Events<T: Config> =
+	pub type Events<T: Config> =
 		StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
@@ -778,7 +777,7 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 /// This type alias represents an index of an event.
 ///
 /// We use `u32` here because this index is used as index for `Events<T>`
-/// which can't contain more than `u32::max_value()` items.
+/// which can't contain more than `u32::MAX` items.
 type EventIndex = u32;
 
 /// Type used to encode the number of references an account has.
@@ -1026,20 +1025,6 @@ pub enum DecRefStatus {
 	Exists,
 }
 
-/// Some resultant status relevant to decrementing a provider reference.
-#[derive(Eq, PartialEq, RuntimeDebug)]
-pub enum DecRefError {
-	/// Account cannot have the last provider reference removed while there is a consumer.
-	ConsumerRemaining,
-}
-
-/// Some resultant status relevant to incrementing a consumer reference.
-#[derive(Eq, PartialEq, RuntimeDebug)]
-pub enum IncRefError {
-	/// Account cannot introduce a consumer while there are no providers.
-	NoProviders,
-}
-
 impl<T: Config> Pallet<T> {
 	pub fn account_exists(who: &T::AccountId) -> bool {
 		Account::<T>::contains_key(who)
@@ -1086,7 +1071,7 @@ impl<T: Config> Pallet<T> {
 	/// Decrement the provider reference counter on an account.
 	///
 	/// This *MUST* only be done once for every time you called `inc_providers` on `who`.
-	pub fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
+	pub fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DispatchError> {
 		Account::<T>::try_mutate_exists(who, |maybe_account| {
 			if let Some(mut account) = maybe_account.take() {
 				if account.providers == 0 {
@@ -1106,7 +1091,7 @@ impl<T: Config> Pallet<T> {
 					}
 					(1, c, _) if c > 0 => {
 						// Cannot remove last provider if there are consumers.
-						Err(DecRefError::ConsumerRemaining)
+						Err(DispatchError::ConsumerRemaining)
 					}
 					(x, _, _) => {
 						// Account will continue to exist as there is either > 1 provider or
@@ -1192,12 +1177,12 @@ impl<T: Config> Pallet<T> {
 	/// Increment the reference counter on an account.
 	///
 	/// The account `who`'s `providers` must be non-zero or this will return an error.
-	pub fn inc_consumers(who: &T::AccountId) -> Result<(), IncRefError> {
+	pub fn inc_consumers(who: &T::AccountId) -> Result<(), DispatchError> {
 		Account::<T>::try_mutate(who, |a| if a.providers > 0 {
 			a.consumers = a.consumers.saturating_add(1);
 			Ok(())
 		} else {
-			Err(IncRefError::NoProviders)
+			Err(DispatchError::NoProviders)
 		})
 	}
 
@@ -1334,7 +1319,7 @@ impl<T: Config> Pallet<T> {
 		if let InitKind::Full = kind {
 			<Events<T>>::kill();
 			EventCount::<T>::kill();
-			<EventTopics<T>>::remove_all();
+			<EventTopics<T>>::remove_all(None);
 		}
 	}
 
@@ -1447,7 +1432,7 @@ impl<T: Config> Pallet<T> {
 	pub fn reset_events() {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();
-		<EventTopics<T>>::remove_all();
+		<EventTopics<T>>::remove_all(None);
 	}
 
 	/// Assert the given `event` exists.
@@ -1560,27 +1545,23 @@ impl<T: Config> Pallet<T> {
 /// Event handler which registers a provider when created.
 pub struct Provider<T>(PhantomData<T>);
 impl<T: Config> HandleLifetime<T::AccountId> for Provider<T> {
-	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
+	fn created(t: &T::AccountId) -> Result<(), DispatchError> {
 		Pallet::<T>::inc_providers(t);
 		Ok(())
 	}
-	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
-		Pallet::<T>::dec_providers(t)
-			.map(|_| ())
-			.or_else(|e| match e {
-				DecRefError::ConsumerRemaining => Err(StoredMapError::ConsumerRemaining),
-			})
+	fn killed(t: &T::AccountId) -> Result<(), DispatchError> {
+		Pallet::<T>::dec_providers(t).map(|_| ())
 	}
 }
 
 /// Event handler which registers a self-sufficient when created.
 pub struct SelfSufficient<T>(PhantomData<T>);
 impl<T: Config> HandleLifetime<T::AccountId> for SelfSufficient<T> {
-	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
+	fn created(t: &T::AccountId) -> Result<(), DispatchError> {
 		Pallet::<T>::inc_sufficients(t);
 		Ok(())
 	}
-	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
+	fn killed(t: &T::AccountId) -> Result<(), DispatchError> {
 		Pallet::<T>::dec_sufficients(t);
 		Ok(())
 	}
@@ -1589,13 +1570,10 @@ impl<T: Config> HandleLifetime<T::AccountId> for SelfSufficient<T> {
 /// Event handler which registers a consumer when created.
 pub struct Consumer<T>(PhantomData<T>);
 impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
-	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
+	fn created(t: &T::AccountId) -> Result<(), DispatchError> {
 		Pallet::<T>::inc_consumers(t)
-			.map_err(|e| match e {
-				IncRefError::NoProviders => StoredMapError::NoProviders
-			})
 	}
-	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
+	fn killed(t: &T::AccountId) -> Result<(), DispatchError> {
 		Pallet::<T>::dec_consumers(t);
 		Ok(())
 	}
@@ -1624,7 +1602,7 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		Account::<T>::get(k).data
 	}
 
-	fn try_mutate_exists<R, E: From<StoredMapError>>(
+	fn try_mutate_exists<R, E: From<DispatchError>>(
 		k: &T::AccountId,
 		f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>,
 	) -> Result<R, E> {
@@ -1636,10 +1614,9 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		if !was_providing && is_providing {
 			Self::inc_providers(k);
 		} else if was_providing && !is_providing {
-			match Self::dec_providers(k) {
-				Err(DecRefError::ConsumerRemaining) => Err(StoredMapError::ConsumerRemaining)?,
-				Ok(DecRefStatus::Reaped) => return Ok(result),
-				Ok(DecRefStatus::Exists) => {
+			match Self::dec_providers(k)? {
+				DecRefStatus::Reaped => return Ok(result),
+				DecRefStatus::Exists => {
 					// Update value as normal...
 				}
 			}

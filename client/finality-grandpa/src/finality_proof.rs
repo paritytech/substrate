@@ -62,9 +62,10 @@ pub struct FinalityProofProvider<BE, Block: BlockT> {
 	shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
 }
 
-impl<B, Block: BlockT> FinalityProofProvider<B, Block>
+impl<B, Block> FinalityProofProvider<B, Block>
 where
-	B: Backend<Block> + Send + Sync + 'static,
+	Block: BlockT,
+	B: Backend<Block>,
 {
 	/// Create new finality proof provider using:
 	///
@@ -97,7 +98,7 @@ where
 impl<B, Block> FinalityProofProvider<B, Block>
 where
 	Block: BlockT,
-	B: Backend<Block> + Send + Sync + 'static,
+	B: Backend<Block>,
 {
 	/// Prove finality for the given block number by returning a Justification for the last block of
 	/// the authority set.

@@ -24,7 +24,6 @@
 use sp_std::{result, prelude::*, collections::btree_set::BTreeSet};
 use frame_support::{
 	dispatch, traits::{FindAuthor, VerifySeal, Get},
-	inherent::{InherentData, ProvideInherent, InherentIdentifier},
 };
 use codec::{Encode, Decode};
 use sp_runtime::traits::{Header as HeaderT, One, Saturating};
@@ -138,6 +137,7 @@ pub mod pallet {
 		/// The number of blocks back we should accept uncles.
 		/// This means that we will deal with uncle-parents that are
 		/// `UncleGenerations + 1` before `now`.
+		#[pallet::constant]
 		type UncleGenerations: Get<Self::BlockNumber>;
 		/// A filter for uncles within a block. This is for implementing
 		/// further constraints on what uncles can be included, other than their ancestry.
@@ -236,6 +236,68 @@ pub mod pallet {
 			<DidSetUncles<T>>::put(true);
 
 			Self::verify_and_import_uncles(new_uncles)
+		}
+	}
+
+	#[pallet::inherent]
+	impl<T: Config> ProvideInherent for Pallet<T> {
+		type Call = Call<T>;
+		type Error = InherentError;
+		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+			let uncles = data.uncles().unwrap_or_default();
+			let mut set_uncles = Vec::new();
+
+			if !uncles.is_empty() {
+				let prev_uncles = <Uncles<T>>::get();
+				let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
+					match entry {
+						UncleEntryItem::InclusionHeight(_) => None,
+						UncleEntryItem::Uncle(h, _) => Some(h),
+					}
+				).collect();
+
+				let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
+
+				for uncle in uncles {
+					match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
+						Ok(_) => {
+							let hash = uncle.hash();
+							set_uncles.push(uncle);
+							existing_hashes.push(hash);
+
+							if set_uncles.len() == MAX_UNCLES {
+								break
+							}
+						}
+						Err(_) => {
+							// skip this uncle
+						}
+					}
+				}
+			}
+
+			if set_uncles.is_empty() {
+				None
+			} else {
+				Some(Call::set_uncles(set_uncles))
+			}
+		}
+
+		fn check_inherent(call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
+			match call {
+				Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
+					Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into()))
+				},
+				_ => {
+					Ok(())
+				},
+			}
+		}
+
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, Call::set_uncles(_))
 		}
 	}
 }
@@ -348,67 +410,6 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ProvideInherent for Pallet<T> {
-	type Call = Call<T>;
-	type Error = InherentError;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let uncles = data.uncles().unwrap_or_default();
-		let mut set_uncles = Vec::new();
-
-		if !uncles.is_empty() {
-			let prev_uncles = <Uncles<T>>::get();
-			let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
-				match entry {
-					UncleEntryItem::InclusionHeight(_) => None,
-					UncleEntryItem::Uncle(h, _) => Some(h),
-				}
-			).collect();
-
-			let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
-
-			for uncle in uncles {
-				match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
-					Ok(_) => {
-						let hash = uncle.hash();
-						set_uncles.push(uncle);
-						existing_hashes.push(hash);
-
-						if set_uncles.len() == MAX_UNCLES {
-							break
-						}
-					}
-					Err(_) => {
-						// skip this uncle
-					}
-				}
-			}
-		}
-
-		if set_uncles.is_empty() {
-			None
-		} else {
-			Some(Call::set_uncles(set_uncles))
-		}
-	}
-
-	fn check_inherent(call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
-		match call {
-			Call::set_uncles(ref uncles) if uncles.len() > MAX_UNCLES => {
-				Err(InherentError::Uncles(Error::<T>::TooManyUncles.as_str().into()))
-			},
-			_ => {
-				Ok(())
-			},
-		}
-	}
-
-	fn is_inherent(call: &Self::Call) -> bool {
-		matches!(call, Call::set_uncles(_))
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use crate as pallet_authorship;
@@ -440,7 +441,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
+		type BaseCallFilter = frame_support::traits::AllowAll;
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
