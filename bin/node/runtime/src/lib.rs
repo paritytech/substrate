@@ -1622,6 +1622,10 @@ mod tests {
 
 	#[test]
 	fn call_size() {
-		assert!(core::mem::size_of::<Call>() <= 90);
+		assert!(
+			core::mem::size_of::<Call>() <= 90,
+			"size of Call is more than 90: some calls have too big arguments, use Box to reduce the
+			size of Call",
+		);
 	}
 }
