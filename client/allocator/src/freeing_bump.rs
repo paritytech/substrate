@@ -917,7 +917,8 @@ mod tests {
 	}
 
 	#[test]
-	fn test_orders() {
+	fn test_n_orders() {
+		// Test that N_ORDERS is consistent with min and max possible allocation.
 		assert_eq!(
 			MIN_POSSIBLE_ALLOCATION * 2u32.pow(N_ORDERS as u32 - 1),
 			MAX_POSSIBLE_ALLOCATION
