@@ -20,17 +20,23 @@
 
 use std::sync::Arc;
 
-use sp_blockchain::{Error as ClientError, Result as ClientResult};
-use codec::{Encode, Decode};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_database::{Database, Transaction};
 use crate::utils::{self, meta_keys};
+use codec::{Decode, Encode};
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
+use sp_database::{Database, Transaction};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+};
 
-use crate::cache::{CacheItemT, ComplexBlockId};
-use crate::cache::list_cache::{CommitOperation, Fork};
-use crate::cache::list_entry::{Entry, StorageEntry};
-use crate::DbHash;
+use crate::{
+	cache::{
+		list_cache::{CommitOperation, Fork},
+		list_entry::{Entry, StorageEntry},
+		CacheItemT, ComplexBlockId,
+	},
+	DbHash,
+};
 
 /// Single list-cache metadata.
 #[derive(Debug)]
@@ -54,14 +60,21 @@ pub trait Storage<Block: BlockT, T: CacheItemT> {
 	fn read_meta(&self) -> ClientResult<Metadata<Block>>;
 
 	/// Reads cache entry from the storage.
-	fn read_entry(&self, at: &ComplexBlockId<Block>) -> ClientResult<Option<StorageEntry<Block, T>>>;
+	fn read_entry(
+		&self,
+		at: &ComplexBlockId<Block>,
+	) -> ClientResult<Option<StorageEntry<Block, T>>>;
 
 	/// Reads referenced (and thus existing) cache entry from the storage.
 	fn require_entry(&self, at: &ComplexBlockId<Block>) -> ClientResult<StorageEntry<Block, T>> {
-		self.read_entry(at)
-			.and_then(|entry| entry
-				.ok_or_else(|| ClientError::from(
-					ClientError::Backend(format!("Referenced cache entry at {:?} is not found", at)))))
+		self.read_entry(at).and_then(|entry| {
+			entry.ok_or_else(|| {
+				ClientError::from(ClientError::Backend(format!(
+					"Referenced cache entry at {:?} is not found",
+					at
+				)))
+			})
+		})
 	}
 }
 
@@ -111,10 +124,14 @@ impl DbStorage {
 	}
 
 	/// Get reference to the database.
-	pub fn db(&self) -> &Arc<dyn Database<DbHash>> { &self.db }
+	pub fn db(&self) -> &Arc<dyn Database<DbHash>> {
+		&self.db
+	}
 
 	/// Get reference to the database columns.
-	pub fn columns(&self) -> &DbColumns { &self.columns }
+	pub fn columns(&self) -> &DbColumns {
+		&self.columns
+	}
 
 	/// Encode block id for storing as a key in cache column.
 	/// We append prefix to the actual encoding to allow several caches
@@ -128,25 +145,35 @@ impl DbStorage {
 
 impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for DbStorage {
 	fn read_id(&self, at: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
-		utils::read_header::<Block>(&*self.db, self.columns.key_lookup, self.columns.header, BlockId::Number(at))
-			.map(|maybe_header| maybe_header.map(|header| header.hash()))
+		utils::read_header::<Block>(
+			&*self.db,
+			self.columns.key_lookup,
+			self.columns.header,
+			BlockId::Number(at),
+		)
+		.map(|maybe_header| maybe_header.map(|header| header.hash()))
 	}
 
 	fn read_header(&self, at: &Block::Hash) -> ClientResult<Option<Block::Header>> {
-		utils::read_header::<Block>(&*self.db, self.columns.key_lookup, self.columns.header, BlockId::Hash(*at))
+		utils::read_header::<Block>(
+			&*self.db,
+			self.columns.key_lookup,
+			self.columns.header,
+			BlockId::Hash(*at),
+		)
 	}
 
 	fn read_meta(&self) -> ClientResult<Metadata<Block>> {
 		match self.db.get(self.columns.meta, &self.meta_key) {
 			Some(meta) => meta::decode(&*meta),
-			None => Ok(Metadata {
-				finalized: None,
-				unfinalized: Vec::new(),
-			})
+			None => Ok(Metadata { finalized: None, unfinalized: Vec::new() }),
 		}
 	}
 
-	fn read_entry(&self, at: &ComplexBlockId<Block>) -> ClientResult<Option<StorageEntry<Block, T>>> {
+	fn read_entry(
+		&self,
+		at: &ComplexBlockId<Block>,
+	) -> ClientResult<Option<StorageEntry<Block, T>>> {
 		match self.db.get(self.columns.cache, &self.encode_block_id(at)) {
 			Some(entry) => StorageEntry::<Block, T>::decode(&mut &entry[..])
 				.map_err(|_| ClientError::Backend("Failed to decode cache entry".into()))
@@ -171,7 +198,11 @@ impl<'a> DbStorageTransaction<'a> {
 
 impl<'a, Block: BlockT, T: CacheItemT> StorageTransaction<Block, T> for DbStorageTransaction<'a> {
 	fn insert_storage_entry(&mut self, at: &ComplexBlockId<Block>, entry: &StorageEntry<Block, T>) {
-		self.tx.set_from_vec(self.storage.columns.cache, &self.storage.encode_block_id(at), entry.encode());
+		self.tx.set_from_vec(
+			self.storage.columns.cache,
+			&self.storage.encode_block_id(at),
+			entry.encode(),
+		);
 	}
 
 	fn remove_storage_entry(&mut self, at: &ComplexBlockId<Block>) {
@@ -187,7 +218,8 @@ impl<'a, Block: BlockT, T: CacheItemT> StorageTransaction<Block, T> for DbStorag
 		self.tx.set_from_vec(
 			self.storage.columns.meta,
 			&self.storage.meta_key,
-			meta::encode(best_finalized_entry, unfinalized, operation));
+			meta::encode(best_finalized_entry, unfinalized, operation),
+		);
 	}
 }
 
@@ -206,10 +238,11 @@ mod meta {
 	pub fn encode<Block: BlockT, T: CacheItemT>(
 		best_finalized_entry: Option<&Entry<Block, T>>,
 		unfinalized: &[Fork<Block, T>],
-		op: &CommitOperation<Block, T>
+		op: &CommitOperation<Block, T>,
 	) -> Vec<u8> {
 		let mut finalized = best_finalized_entry.as_ref().map(|entry| &entry.valid_from);
-		let mut unfinalized = unfinalized.iter().map(|fork| &fork.head().valid_from).collect::<Vec<_>>();
+		let mut unfinalized =
+			unfinalized.iter().map(|fork| &fork.head().valid_from).collect::<Vec<_>>();
 
 		match op {
 			CommitOperation::AppendNewBlock(_, _) => (),
@@ -230,8 +263,11 @@ mod meta {
 			CommitOperation::BlockReverted(ref forks) => {
 				for (fork_index, updated_fork) in forks.iter().rev() {
 					match updated_fork {
-						Some(updated_fork) => unfinalized[*fork_index] = &updated_fork.head().valid_from,
-						None => { unfinalized.remove(*fork_index); },
+						Some(updated_fork) =>
+							unfinalized[*fork_index] = &updated_fork.head().valid_from,
+						None => {
+							unfinalized.remove(*fork_index);
+						},
 					}
 				}
 			},
@@ -243,10 +279,12 @@ mod meta {
 	/// Decode meta information.
 	pub fn decode<Block: BlockT>(encoded: &[u8]) -> ClientResult<Metadata<Block>> {
 		let input = &mut &*encoded;
-		let finalized: Option<ComplexBlockId<Block>> = Decode::decode(input)
-			.map_err(|_| ClientError::from(ClientError::Backend("Error decoding cache meta".into())))?;
-		let unfinalized: Vec<ComplexBlockId<Block>> = Decode::decode(input)
-			.map_err(|_| ClientError::from(ClientError::Backend("Error decoding cache meta".into())))?;
+		let finalized: Option<ComplexBlockId<Block>> = Decode::decode(input).map_err(|_| {
+			ClientError::from(ClientError::Backend("Error decoding cache meta".into()))
+		})?;
+		let unfinalized: Vec<ComplexBlockId<Block>> = Decode::decode(input).map_err(|_| {
+			ClientError::from(ClientError::Backend("Error decoding cache meta".into()))
+		})?;
 
 		Ok(Metadata { finalized, unfinalized })
 	}
@@ -254,8 +292,8 @@ mod meta {
 
 #[cfg(test)]
 pub mod tests {
-	use std::collections::{HashMap, HashSet};
 	use super::*;
+	use std::collections::{HashMap, HashSet};
 
 	pub struct FaultyStorage;
 
@@ -272,7 +310,10 @@ pub mod tests {
 			Err(ClientError::Backend("TestError".into()))
 		}
 
-		fn read_entry(&self, _at: &ComplexBlockId<Block>) -> ClientResult<Option<StorageEntry<Block, T>>> {
+		fn read_entry(
+			&self,
+			_at: &ComplexBlockId<Block>,
+		) -> ClientResult<Option<StorageEntry<Block, T>>> {
 			Err(ClientError::Backend("TestError".into()))
 		}
 	}
@@ -287,17 +328,18 @@ pub mod tests {
 	impl<Block: BlockT, T: CacheItemT> DummyStorage<Block, T> {
 		pub fn new() -> Self {
 			DummyStorage {
-				meta: Metadata {
-					finalized: None,
-					unfinalized: Vec::new(),
-				},
+				meta: Metadata { finalized: None, unfinalized: Vec::new() },
 				ids: HashMap::new(),
 				headers: HashMap::new(),
 				entries: HashMap::new(),
 			}
 		}
 
-		pub fn with_meta(mut self, finalized: Option<ComplexBlockId<Block>>, unfinalized: Vec<ComplexBlockId<Block>>) -> Self {
+		pub fn with_meta(
+			mut self,
+			finalized: Option<ComplexBlockId<Block>>,
+			unfinalized: Vec<ComplexBlockId<Block>>,
+		) -> Self {
 			self.meta.finalized = finalized;
 			self.meta.unfinalized = unfinalized;
 			self
@@ -313,7 +355,11 @@ pub mod tests {
 			self
 		}
 
-		pub fn with_entry(mut self, at: ComplexBlockId<Block>, entry: StorageEntry<Block, T>) -> Self {
+		pub fn with_entry(
+			mut self,
+			at: ComplexBlockId<Block>,
+			entry: StorageEntry<Block, T>,
+		) -> Self {
 			self.entries.insert(at.hash, entry);
 			self
 		}
@@ -332,7 +378,10 @@ pub mod tests {
 			Ok(self.meta.clone())
 		}
 
-		fn read_entry(&self, at: &ComplexBlockId<Block>) -> ClientResult<Option<StorageEntry<Block, T>>> {
+		fn read_entry(
+			&self,
+			at: &ComplexBlockId<Block>,
+		) -> ClientResult<Option<StorageEntry<Block, T>>> {
 			Ok(self.entries.get(&at.hash).cloned())
 		}
 	}
@@ -366,7 +415,11 @@ pub mod tests {
 	}
 
 	impl<Block: BlockT, T: CacheItemT> StorageTransaction<Block, T> for DummyTransaction<Block> {
-		fn insert_storage_entry(&mut self, at: &ComplexBlockId<Block>, _entry: &StorageEntry<Block, T>) {
+		fn insert_storage_entry(
+			&mut self,
+			at: &ComplexBlockId<Block>,
+			_entry: &StorageEntry<Block, T>,
+		) {
 			self.inserted_entries.insert(at.hash);
 		}
 
@@ -380,7 +433,9 @@ pub mod tests {
 			unfinalized: &[Fork<Block, T>],
 			operation: &CommitOperation<Block, T>,
 		) {
-			self.updated_meta = Some(meta::decode(&meta::encode(best_finalized_entry, unfinalized, operation)).unwrap());
+			self.updated_meta = Some(
+				meta::decode(&meta::encode(best_finalized_entry, unfinalized, operation)).unwrap(),
+			);
 		}
 	}
 }

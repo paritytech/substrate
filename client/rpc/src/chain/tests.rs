@@ -17,16 +17,19 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
+use crate::testing::TaskExecutor;
 use assert_matches::assert_matches;
+use futures::{
+	compat::{Future01CompatExt, Stream01CompatExt},
+	executor,
+};
+use sc_block_builder::BlockBuilderProvider;
+use sp_rpc::list::ListOrValue;
 use substrate_test_runtime_client::{
 	prelude::*,
+	runtime::{Block, Header, H256},
 	sp_consensus::BlockOrigin,
-	runtime::{H256, Block, Header},
 };
-use sp_rpc::list::ListOrValue;
-use sc_block_builder::BlockBuilderProvider;
-use futures::{executor, compat::{Future01CompatExt, Stream01CompatExt}};
-use crate::testing::TaskExecutor;
 
 #[test]
 fn should_return_header() {
@@ -105,10 +108,7 @@ fn should_return_a_block() {
 		}
 	);
 
-	assert_matches!(
-		api.block(Some(H256::from_low_u64_be(5)).into()).wait(),
-		Ok(None)
-	);
+	assert_matches!(api.block(Some(H256::from_low_u64_be(5)).into()).wait(), Ok(None));
 }
 
 #[test]
@@ -120,7 +120,6 @@ fn should_return_block_hash() {
 		api.block_hash(None.into()),
 		Ok(ListOrValue::Value(Some(ref x))) if x == &client.genesis_hash()
 	);
-
 
 	assert_matches!(
 		api.block_hash(Some(ListOrValue::Value(0u64.into())).into()),
@@ -153,7 +152,6 @@ fn should_return_block_hash() {
 		Ok(ListOrValue::List(list)) if list == &[client.genesis_hash().into(), block.hash().into(), None]
 	);
 }
-
 
 #[test]
 fn should_return_finalized_hash() {
@@ -193,10 +191,7 @@ fn should_notify_about_latest_block() {
 		api.subscribe_all_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -223,10 +218,7 @@ fn should_notify_about_best_block() {
 		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -253,10 +245,7 @@ fn should_notify_about_finalized_block() {
 		api.subscribe_finalized_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert!(matches!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::String(_)))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();

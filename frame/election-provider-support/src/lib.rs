@@ -164,13 +164,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use sp_std::{prelude::*, fmt::Debug};
 use frame_support::weights::Weight;
+use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ExtendedBalance, PerThing128, Supports, Support, VoteWeight
+	Assignment, ExtendedBalance, PerThing128, Support, Supports, VoteWeight,
 };
 
 /// Types that are used by the data provider trait.
@@ -224,7 +224,8 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 		_targets: Vec<AccountId>,
 		_target_stake: Option<VoteWeight>,
-	) {}
+	) {
+	}
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.

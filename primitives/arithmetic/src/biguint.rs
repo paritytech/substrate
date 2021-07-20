@@ -7,7 +7,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+// 	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,9 +17,9 @@
 
 //! Infinite precision unsigned integer for substrate runtime.
 
-use num_traits::{Zero, One};
-use sp_std::{cmp::Ordering, ops, prelude::*, vec, cell::RefCell, convert::TryFrom};
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use num_traits::{One, Zero};
+use sp_std::{cell::RefCell, cmp::Ordering, convert::TryFrom, ops, prelude::*, vec};
 
 // A sensible value for this would be half of the dword size of the host machine. Since the
 // runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
@@ -105,7 +105,9 @@ impl BigUint {
 	}
 
 	/// Number of limbs.
-	pub fn len(&self) -> usize { self.digits.len() }
+	pub fn len(&self) -> usize {
+		self.digits.len()
+	}
 
 	/// A naive getter for limb at `index`. Note that the order is lsb -> msb.
 	///
@@ -156,7 +158,9 @@ impl BigUint {
 		// by definition, a big-int number should never have leading zero limbs. This function
 		// has the ability to cause this. There is nothing to do if the number already has 1
 		// limb only. call it a day and return.
-		if self.len().is_zero() { return; }
+		if self.len().is_zero() {
+			return
+		}
 		let index = self.digits.iter().position(|&elem| elem != 0).unwrap_or(self.len() - 1);
 
 		if index > 0 {
@@ -168,7 +172,9 @@ impl BigUint {
 	/// is already bigger than `size` limbs.
 	pub fn lpad(&mut self, size: usize) {
 		let n = self.len();
-		if n >= size { return; }
+		if n >= size {
+			return
+		}
 		let pad = size - n;
 		let mut new_digits = (0..pad).map(|_| 0).collect::<Vec<Single>>();
 		new_digits.extend(self.digits.iter());
@@ -260,15 +266,15 @@ impl BigUint {
 			if self.get(j) == 0 {
 				// Note: `with_capacity` allocates with 0. Explicitly set j + m to zero if
 				// otherwise.
-				continue;
+				continue
 			}
 
 			let mut k = 0;
 			for i in 0..m {
 				// PROOF: (B−1) × (B−1) + (B−1) + (B−1) = B^2 −1 < B^2. addition is safe.
-				let t = mul_single(self.get(j), other.get(i))
-					+ Double::from(w.get(i + j))
-					+ Double::from(k);
+				let t = mul_single(self.get(j), other.get(i)) +
+					Double::from(w.get(i + j)) +
+					Double::from(k);
 				w.set(i + j, (t % B) as Single);
 				// PROOF: (B^2 - 1) / B < B. conversion is safe.
 				k = (t / B) as Single;
@@ -288,9 +294,9 @@ impl BigUint {
 		let mut out = Self::with_capacity(n);
 		let mut r: Single = 0;
 		// PROOF: (B-1) * B + (B-1) still fits in double
-		let with_r = |x: Single, r: Single| { Double::from(r) * B + Double::from(x) };
+		let with_r = |x: Single, r: Single| Double::from(r) * B + Double::from(x);
 		for d in (0..n).rev() {
-			let (q, rr) = div_single(with_r(self.get(d), r), other) ;
+			let (q, rr) = div_single(with_r(self.get(d), r), other);
 			out.set(d, q as Single);
 			r = rr;
 		}
@@ -311,11 +317,7 @@ impl BigUint {
 	///
 	/// Taken from "The Art of Computer Programming" by D.E. Knuth, vol 2, chapter 4.
 	pub fn div(self, other: &Self, rem: bool) -> Option<(Self, Self)> {
-		if other.len() <= 1
-			|| other.msb() == 0
-			|| self.msb() == 0
-			|| self.len() <= other.len()
-		{
+		if other.len() <= 1 || other.msb() == 0 || self.msb() == 0 || self.len() <= other.len() {
 			return None
 		}
 		let n = other.len();
@@ -344,9 +346,7 @@ impl BigUint {
 				// PROOF: this always fits into `Double`. In the context of Single = u8, and
 				// Double = u16, think of 255 * 256 + 255 which is just u16::MAX.
 				let dividend =
-					Double::from(self_norm.get(j + n))
-						* B
-						+ Double::from(self_norm.get(j + n - 1));
+					Double::from(self_norm.get(j + n)) * B + Double::from(self_norm.get(j + n - 1));
 				let divisor = other_norm.get(n - 1);
 				div_single(dividend, divisor)
 			};
@@ -377,23 +377,30 @@ impl BigUint {
 
 			test();
 			while (*rhat.borrow() as Double) < B {
-				if !test() { break; }
+				if !test() {
+					break
+				}
 			}
 
 			let qhat = qhat.into_inner();
 			// we don't need rhat anymore. just let it go out of scope when it does.
 
 			// step D4
-			let lhs = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
+			let lhs = Self { digits: (j..=j + n).rev().map(|d| self_norm.get(d)).collect() };
 			let rhs = other_norm.clone().mul(&Self::from(qhat));
 
 			let maybe_sub = lhs.sub(&rhs);
 			let mut negative = false;
 			let sub = match maybe_sub {
 				Ok(t) => t,
-				Err(t) => { negative = true; t }
+				Err(t) => {
+					negative = true;
+					t
+				},
 			};
-			(j..=j+n).for_each(|d| { self_norm.set(d, sub.get(d - j)); });
+			(j..=j + n).for_each(|d| {
+				self_norm.set(d, sub.get(d - j));
+			});
 
 			// step D5
 			// PROOF: the `test()` specifically decreases qhat until it is below `B`. conversion
@@ -403,9 +410,11 @@ impl BigUint {
 			// step D6: add back if negative happened.
 			if negative {
 				q.set(j, q.get(j) - 1);
-				let u = Self { digits: (j..=j+n).rev().map(|d| self_norm.get(d)).collect() };
+				let u = Self { digits: (j..=j + n).rev().map(|d| self_norm.get(d)).collect() };
 				let r = other_norm.clone().add(&u);
-				(j..=j+n).rev().for_each(|d| { self_norm.set(d, r.get(d - j)); })
+				(j..=j + n).rev().for_each(|d| {
+					self_norm.set(d, r.get(d - j));
+				})
 			}
 		}
 
@@ -415,9 +424,8 @@ impl BigUint {
 			if normalizer_bits > 0 {
 				let s = SHIFT as u32;
 				let nb = normalizer_bits;
-				for d in 0..n-1 {
-					let v = self_norm.get(d) >> nb
-						| self_norm.get(d + 1).overflowing_shl(s - nb).0;
+				for d in 0..n - 1 {
+					let v = self_norm.get(d) >> nb | self_norm.get(d + 1).overflowing_shl(s - nb).0;
 					r.set(d, v);
 				}
 				r.set(n - 1, self_norm.get(n - 1) >> normalizer_bits);
@@ -445,7 +453,6 @@ impl sp_std::fmt::Debug for BigUint {
 	fn fmt(&self, _: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		Ok(())
 	}
-
 }
 
 impl PartialEq for BigUint {
@@ -475,7 +482,7 @@ impl Ord for BigUint {
 					Ordering::Equal => lhs.cmp(rhs),
 					_ => len_cmp,
 				}
-			}
+			},
 		}
 	}
 }
@@ -632,18 +639,9 @@ pub mod tests {
 
 	#[test]
 	fn equality_works() {
-		assert_eq!(
-			BigUint { digits: vec![1, 2, 3] } == BigUint { digits: vec![1, 2, 3] },
-			true,
-		);
-		assert_eq!(
-			BigUint { digits: vec![3, 2, 3] } == BigUint { digits: vec![1, 2, 3] },
-			false,
-		);
-		assert_eq!(
-			BigUint { digits: vec![0, 1, 2, 3] } == BigUint { digits: vec![1, 2, 3] },
-			true,
-		);
+		assert_eq!(BigUint { digits: vec![1, 2, 3] } == BigUint { digits: vec![1, 2, 3] }, true,);
+		assert_eq!(BigUint { digits: vec![3, 2, 3] } == BigUint { digits: vec![1, 2, 3] }, false,);
+		assert_eq!(BigUint { digits: vec![0, 1, 2, 3] } == BigUint { digits: vec![1, 2, 3] }, true,);
 	}
 
 	#[test]
@@ -669,14 +667,8 @@ pub mod tests {
 		use sp_std::convert::TryFrom;
 		assert_eq!(u64::try_from(with_limbs(1)).unwrap(), 1);
 		assert_eq!(u64::try_from(with_limbs(2)).unwrap(), u32::MAX as u64 + 2);
-		assert_eq!(
-			u64::try_from(with_limbs(3)).unwrap_err(),
-			"cannot fit a number into u64",
-		);
-		assert_eq!(
-			u128::try_from(with_limbs(3)).unwrap(),
-			u32::MAX as u128 + u64::MAX as u128 + 3
-		);
+		assert_eq!(u64::try_from(with_limbs(3)).unwrap_err(), "cannot fit a number into u64",);
+		assert_eq!(u128::try_from(with_limbs(3)).unwrap(), u32::MAX as u128 + u64::MAX as u128 + 3);
 	}
 
 	#[test]

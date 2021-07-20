@@ -20,15 +20,13 @@ use std::{borrow::Cow, process::Command};
 
 /// Generate the `cargo:` key output
 pub fn generate_cargo_keys() {
-	let output = Command::new("git")
-		.args(&["rev-parse", "--short", "HEAD"])
-		.output();
+	let output = Command::new("git").args(&["rev-parse", "--short", "HEAD"]).output();
 
 	let commit = match output {
 		Ok(o) if o.status.success() => {
 			let sha = String::from_utf8_lossy(&o.stdout).trim().to_owned();
 			Cow::from(sha)
-		}
+		},
 		Ok(o) => {
 			println!("cargo:warning=Git command failed with status: {}", o.status);
 			Cow::from("unknown")

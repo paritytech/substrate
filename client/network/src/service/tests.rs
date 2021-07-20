@@ -16,13 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, Event, NetworkService, NetworkWorker};
-use crate::block_request_handler::BlockRequestHandler;
-use crate::state_request_handler::StateRequestHandler;
-use crate::light_client_requests::handler::LightClientRequestHandler;
+use crate::{
+	block_request_handler::BlockRequestHandler, config,
+	light_client_requests::handler::LightClientRequestHandler,
+	state_request_handler::StateRequestHandler, Event, NetworkService, NetworkWorker,
+};
 
-use libp2p::PeerId;
 use futures::prelude::*;
+use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
@@ -37,14 +38,10 @@ type TestNetworkService = NetworkService<
 ///
 /// > **Note**: We return the events stream in order to not possibly lose events between the
 /// >			construction of the service and the moment the events stream is grabbed.
-fn build_test_full_node(config: config::NetworkConfiguration)
-	-> (Arc<TestNetworkService>, impl Stream<Item = Event>)
-{
-	let client = Arc::new(
-		TestClientBuilder::with_default_backend()
-			.build_with_longest_chain()
-			.0,
-	);
+fn build_test_full_node(
+	config: config::NetworkConfiguration,
+) -> (Arc<TestNetworkService>, impl Stream<Item = Event>) {
+	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 
 	#[derive(Clone)]
 	struct PassThroughVerifier(bool);
@@ -69,14 +66,13 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 				.log(|l| {
 					l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"aura"))
 						.or_else(|| {
-							l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"babe"))
+							l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(
+								b"babe",
+							))
 						})
 				})
 				.map(|blob| {
-					vec![(
-						sp_blockchain::well_known_cache_keys::AUTHORITIES,
-						blob.to_vec(),
-					)]
+					vec![(sp_blockchain::well_known_cache_keys::AUTHORITIES, blob.to_vec())]
 				});
 
 			let mut import = sp_consensus::BlockImportParams::new(origin, header);
@@ -99,30 +95,20 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 	let protocol_id = config::ProtocolId::from("/test-protocol-name");
 
 	let block_request_protocol_config = {
-		let (handler, protocol_config) = BlockRequestHandler::new(
-			&protocol_id,
-			client.clone(),
-			50,
-		);
+		let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone(), 50);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
 
 	let state_request_protocol_config = {
-		let (handler, protocol_config) = StateRequestHandler::new(
-			&protocol_id,
-			client.clone(),
-			50,
-		);
+		let (handler, protocol_config) = StateRequestHandler::new(&protocol_id, client.clone(), 50);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
 
 	let light_client_request_protocol_config = {
-		let (handler, protocol_config) = LightClientRequestHandler::new(
-			&protocol_id,
-			client.clone(),
-		);
+		let (handler, protocol_config) =
+			LightClientRequestHandler::new(&protocol_id, client.clone());
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
@@ -130,7 +116,9 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
-		transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
+		transactions_handler_executor: Box::new(|task| {
+			async_std::task::spawn(task);
+		}),
 		network_config: config,
 		chain: client.clone(),
 		on_demand: None,
@@ -162,43 +150,42 @@ const PROTOCOL_NAME: Cow<'static, str> = Cow::Borrowed("/foo");
 
 /// Builds two nodes and their associated events stream.
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
-fn build_nodes_one_proto()
-	-> (Arc<TestNetworkService>, impl Stream<Item = Event>, Arc<TestNetworkService>, impl Stream<Item = Event>)
-{
+fn build_nodes_one_proto() -> (
+	Arc<TestNetworkService>,
+	impl Stream<Item = Event>,
+	Arc<TestNetworkService>,
+	impl Stream<Item = Event>,
+) {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![
-			config::NonDefaultSetConfig {
-				notifications_protocol: PROTOCOL_NAME,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				set_config: Default::default()
-			}
-		],
+		extra_sets: vec![config::NonDefaultSetConfig {
+			notifications_protocol: PROTOCOL_NAME,
+			fallback_names: Vec::new(),
+			max_notification_size: 1024 * 1024,
+			set_config: Default::default(),
+		}],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new_local()
+		..config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![
-			config::NonDefaultSetConfig {
-				notifications_protocol: PROTOCOL_NAME,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				set_config: config::SetConfig {
-					reserved_nodes: vec![config::MultiaddrWithPeerId {
-						multiaddr: listen_addr,
-						peer_id: node1.local_peer_id().clone(),
-					}],
-					.. Default::default()
-				}
-			}
-		],
+		extra_sets: vec![config::NonDefaultSetConfig {
+			notifications_protocol: PROTOCOL_NAME,
+			fallback_names: Vec::new(),
+			max_notification_size: 1024 * 1024,
+			set_config: config::SetConfig {
+				reserved_nodes: vec![config::MultiaddrWithPeerId {
+					multiaddr: listen_addr,
+					peer_id: node1.local_peer_id().clone(),
+				}],
+				..Default::default()
+			},
+		}],
 		listen_addresses: vec![],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new_local()
+		..config::NetworkConfiguration::new_local()
 	});
 
 	(node1, events_stream1, node2, events_stream2)
@@ -214,10 +201,18 @@ fn notifications_state_consistent() {
 
 	// Write some initial notifications that shouldn't get through.
 	for _ in 0..(rand::random::<u8>() % 5) {
-		node1.write_notification(node2.local_peer_id().clone(), PROTOCOL_NAME, b"hello world".to_vec());
+		node1.write_notification(
+			node2.local_peer_id().clone(),
+			PROTOCOL_NAME,
+			b"hello world".to_vec(),
+		);
 	}
 	for _ in 0..(rand::random::<u8>() % 5) {
-		node2.write_notification(node1.local_peer_id().clone(), PROTOCOL_NAME, b"hello world".to_vec());
+		node2.write_notification(
+			node1.local_peer_id().clone(),
+			PROTOCOL_NAME,
+			b"hello world".to_vec(),
+		);
 	}
 
 	async_std::task::block_on(async move {
@@ -234,16 +229,24 @@ fn notifications_state_consistent() {
 			iterations += 1;
 			if iterations >= 1_000 {
 				assert!(something_happened);
-				break;
+				break
 			}
 
 			// Start by sending a notification from node1 to node2 and vice-versa. Part of the
 			// test consists in ensuring that notifications get ignored if the stream isn't open.
 			if rand::random::<u8>() % 5 >= 3 {
-				node1.write_notification(node2.local_peer_id().clone(), PROTOCOL_NAME, b"hello world".to_vec());
+				node1.write_notification(
+					node2.local_peer_id().clone(),
+					PROTOCOL_NAME,
+					b"hello world".to_vec(),
+				);
 			}
 			if rand::random::<u8>() % 5 >= 3 {
-				node2.write_notification(node1.local_peer_id().clone(), PROTOCOL_NAME, b"hello world".to_vec());
+				node2.write_notification(
+					node1.local_peer_id().clone(),
+					PROTOCOL_NAME,
+					b"hello world".to_vec(),
+				);
 			}
 
 			// Also randomly disconnect the two nodes from time to time.
@@ -272,32 +275,40 @@ fn notifications_state_consistent() {
 			};
 
 			match next_event {
-				future::Either::Left(Event::NotificationStreamOpened { remote, protocol, .. }) => {
+				future::Either::Left(Event::NotificationStreamOpened {
+					remote, protocol, ..
+				}) => {
 					something_happened = true;
 					assert!(!node1_to_node2_open);
 					node1_to_node2_open = true;
 					assert_eq!(remote, *node2.local_peer_id());
 					assert_eq!(protocol, PROTOCOL_NAME);
-				}
-				future::Either::Right(Event::NotificationStreamOpened { remote, protocol, .. }) => {
+				},
+				future::Either::Right(Event::NotificationStreamOpened {
+					remote, protocol, ..
+				}) => {
 					something_happened = true;
 					assert!(!node2_to_node1_open);
 					node2_to_node1_open = true;
 					assert_eq!(remote, *node1.local_peer_id());
 					assert_eq!(protocol, PROTOCOL_NAME);
-				}
-				future::Either::Left(Event::NotificationStreamClosed { remote, protocol, .. }) => {
+				},
+				future::Either::Left(Event::NotificationStreamClosed {
+					remote, protocol, ..
+				}) => {
 					assert!(node1_to_node2_open);
 					node1_to_node2_open = false;
 					assert_eq!(remote, *node2.local_peer_id());
 					assert_eq!(protocol, PROTOCOL_NAME);
-				}
-				future::Either::Right(Event::NotificationStreamClosed { remote, protocol, .. }) => {
+				},
+				future::Either::Right(Event::NotificationStreamClosed {
+					remote, protocol, ..
+				}) => {
 					assert!(node2_to_node1_open);
 					node2_to_node1_open = false;
 					assert_eq!(remote, *node1.local_peer_id());
 					assert_eq!(protocol, PROTOCOL_NAME);
-				}
+				},
 				future::Either::Left(Event::NotificationsReceived { remote, .. }) => {
 					assert!(node1_to_node2_open);
 					assert_eq!(remote, *node2.local_peer_id());
@@ -305,10 +316,10 @@ fn notifications_state_consistent() {
 						node1.write_notification(
 							node2.local_peer_id().clone(),
 							PROTOCOL_NAME,
-							b"hello world".to_vec()
+							b"hello world".to_vec(),
 						);
 					}
-				}
+				},
 				future::Either::Right(Event::NotificationsReceived { remote, .. }) => {
 					assert!(node2_to_node1_open);
 					assert_eq!(remote, *node1.local_peer_id());
@@ -316,18 +327,18 @@ fn notifications_state_consistent() {
 						node2.write_notification(
 							node1.local_peer_id().clone(),
 							PROTOCOL_NAME,
-							b"hello world".to_vec()
+							b"hello world".to_vec(),
 						);
 					}
-				}
+				},
 
 				// Add new events here.
-				future::Either::Left(Event::SyncConnected { .. }) => {}
-				future::Either::Right(Event::SyncConnected { .. }) => {}
-				future::Either::Left(Event::SyncDisconnected { .. }) => {}
-				future::Either::Right(Event::SyncDisconnected { .. }) => {}
-				future::Either::Left(Event::Dht(_)) => {}
-				future::Either::Right(Event::Dht(_)) => {}
+				future::Either::Left(Event::SyncConnected { .. }) => {},
+				future::Either::Right(Event::SyncConnected { .. }) => {},
+				future::Either::Left(Event::SyncDisconnected { .. }) => {},
+				future::Either::Right(Event::SyncDisconnected { .. }) => {},
+				future::Either::Left(Event::Dht(_)) => {},
+				future::Either::Right(Event::Dht(_)) => {},
 			};
 		}
 	});
@@ -339,19 +350,14 @@ fn lots_of_incoming_peers_works() {
 
 	let (main_node, _) = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![listen_addr.clone()],
-		extra_sets: vec![
-			config::NonDefaultSetConfig {
-				notifications_protocol: PROTOCOL_NAME,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				set_config: config::SetConfig {
-					in_peers: u32::MAX,
-					.. Default::default()
-				},
-			}
-		],
+		extra_sets: vec![config::NonDefaultSetConfig {
+			notifications_protocol: PROTOCOL_NAME,
+			fallback_names: Vec::new(),
+			max_notification_size: 1024 * 1024,
+			set_config: config::SetConfig { in_peers: u32::MAX, ..Default::default() },
+		}],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new_local()
+		..config::NetworkConfiguration::new_local()
 	});
 
 	let main_node_peer_id = main_node.local_peer_id().clone();
@@ -365,22 +371,20 @@ fn lots_of_incoming_peers_works() {
 
 		let (_dialing_node, event_stream) = build_test_full_node(config::NetworkConfiguration {
 			listen_addresses: vec![],
-			extra_sets: vec![
-				config::NonDefaultSetConfig {
-					notifications_protocol: PROTOCOL_NAME,
-					fallback_names: Vec::new(),
-					max_notification_size: 1024 * 1024,
-					set_config: config::SetConfig {
-						reserved_nodes: vec![config::MultiaddrWithPeerId {
-							multiaddr: listen_addr.clone(),
-							peer_id: main_node_peer_id.clone(),
-						}],
-						.. Default::default()
-					},
-				}
-			],
+			extra_sets: vec![config::NonDefaultSetConfig {
+				notifications_protocol: PROTOCOL_NAME,
+				fallback_names: Vec::new(),
+				max_notification_size: 1024 * 1024,
+				set_config: config::SetConfig {
+					reserved_nodes: vec![config::MultiaddrWithPeerId {
+						multiaddr: listen_addr.clone(),
+						peer_id: main_node_peer_id.clone(),
+					}],
+					..Default::default()
+				},
+			}],
 			transport: config::TransportConfig::MemoryOnly,
-			.. config::NetworkConfiguration::new_local()
+			..config::NetworkConfiguration::new_local()
 		});
 
 		background_tasks_to_wait.push(async_std::task::spawn(async move {
@@ -416,9 +420,7 @@ fn lots_of_incoming_peers_works() {
 		}));
 	}
 
-	futures::executor::block_on(async move {
-		future::join_all(background_tasks_to_wait).await
-	});
+	futures::executor::block_on(async move { future::join_all(background_tasks_to_wait).await });
 }
 
 #[test]
@@ -437,14 +439,13 @@ fn notifications_back_pressure() {
 		while received_notifications < TOTAL_NOTIFS {
 			match events_stream2.next().await.unwrap() {
 				Event::NotificationStreamClosed { .. } => panic!(),
-				Event::NotificationsReceived { messages, .. } => {
+				Event::NotificationsReceived { messages, .. } =>
 					for message in messages {
 						assert_eq!(message.0, PROTOCOL_NAME);
 						assert_eq!(message.1, format!("hello #{}", received_notifications));
 						received_notifications += 1;
-					}
-				}
-				_ => {}
+					},
+				_ => {},
 			};
 
 			if rand::random::<u8>() < 2 {
@@ -458,7 +459,7 @@ fn notifications_back_pressure() {
 		loop {
 			match events_stream1.next().await.unwrap() {
 				Event::NotificationStreamOpened { .. } => break,
-				_ => {}
+				_ => {},
 			};
 		}
 
@@ -483,37 +484,33 @@ fn fallback_name_working() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, mut events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![
-			config::NonDefaultSetConfig {
-				notifications_protocol: NEW_PROTOCOL_NAME.clone(),
-				fallback_names: vec![PROTOCOL_NAME],
-				max_notification_size: 1024 * 1024,
-				set_config: Default::default()
-			}
-		],
+		extra_sets: vec![config::NonDefaultSetConfig {
+			notifications_protocol: NEW_PROTOCOL_NAME.clone(),
+			fallback_names: vec![PROTOCOL_NAME],
+			max_notification_size: 1024 * 1024,
+			set_config: Default::default(),
+		}],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new_local()
+		..config::NetworkConfiguration::new_local()
 	});
 
 	let (_, mut events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![
-			config::NonDefaultSetConfig {
-				notifications_protocol: PROTOCOL_NAME,
-				fallback_names: Vec::new(),
-				max_notification_size: 1024 * 1024,
-				set_config: config::SetConfig {
-					reserved_nodes: vec![config::MultiaddrWithPeerId {
-						multiaddr: listen_addr,
-						peer_id: node1.local_peer_id().clone(),
-					}],
-					.. Default::default()
-				}
-			}
-		],
+		extra_sets: vec![config::NonDefaultSetConfig {
+			notifications_protocol: PROTOCOL_NAME,
+			fallback_names: Vec::new(),
+			max_notification_size: 1024 * 1024,
+			set_config: config::SetConfig {
+				reserved_nodes: vec![config::MultiaddrWithPeerId {
+					multiaddr: listen_addr,
+					peer_id: node1.local_peer_id().clone(),
+				}],
+				..Default::default()
+			},
+		}],
 		listen_addresses: vec![],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new_local()
+		..config::NetworkConfiguration::new_local()
 	});
 
 	let receiver = async_std::task::spawn(async move {
@@ -525,7 +522,7 @@ fn fallback_name_working() {
 					assert_eq!(negotiated_fallback, None);
 					break
 				},
-				_ => {}
+				_ => {},
 			};
 		}
 	});
@@ -539,7 +536,7 @@ fn fallback_name_working() {
 					assert_eq!(negotiated_fallback, Some(PROTOCOL_NAME));
 					break
 				},
-				_ => {}
+				_ => {},
 			};
 		}
 
@@ -555,7 +552,7 @@ fn ensure_listen_addresses_consistent_with_transport_memory() {
 	let _ = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
 
@@ -566,7 +563,7 @@ fn ensure_listen_addresses_consistent_with_transport_not_memory() {
 
 	let _ = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![listen_addr.clone()],
-		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
 
@@ -583,7 +580,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		boot_nodes: vec![boot_node],
-		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
 
@@ -599,7 +596,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 	let _ = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![listen_addr.clone()],
 		boot_nodes: vec![boot_node],
-		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
 
@@ -617,9 +614,9 @@ fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 		transport: config::TransportConfig::MemoryOnly,
 		default_peers_set: config::SetConfig {
 			reserved_nodes: vec![reserved_node],
-			.. Default::default()
+			..Default::default()
 		},
-		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
 
@@ -636,9 +633,9 @@ fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 		listen_addresses: vec![listen_addr.clone()],
 		default_peers_set: config::SetConfig {
 			reserved_nodes: vec![reserved_node],
-			.. Default::default()
+			..Default::default()
 		},
-		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
 
@@ -652,7 +649,7 @@ fn ensure_public_addresses_consistent_with_transport_memory() {
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		public_addresses: vec![public_address],
-		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
 
@@ -665,6 +662,6 @@ fn ensure_public_addresses_consistent_with_transport_not_memory() {
 	let _ = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![listen_addr.clone()],
 		public_addresses: vec![public_address],
-		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }

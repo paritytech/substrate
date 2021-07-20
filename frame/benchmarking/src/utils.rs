@@ -17,18 +17,43 @@
 
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
 
-use codec::{Encode, Decode};
-use sp_std::{vec::Vec, prelude::Box};
-use sp_io::hashing::blake2_256;
-use sp_storage::TrackedStorageKey;
+use codec::{Decode, Encode};
 use frame_support::traits::StorageInfo;
+use sp_io::hashing::blake2_256;
+use sp_std::{prelude::Box, vec::Vec};
+use sp_storage::TrackedStorageKey;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
 #[allow(missing_docs)]
 #[allow(non_camel_case_types)]
 pub enum BenchmarkParameter {
-	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,
+	a,
+	b,
+	c,
+	d,
+	e,
+	f,
+	g,
+	h,
+	i,
+	j,
+	k,
+	l,
+	m,
+	n,
+	o,
+	p,
+	q,
+	r,
+	s,
+	t,
+	u,
+	v,
+	w,
+	x,
+	y,
+	z,
 }
 
 #[cfg(feature = "std")]
@@ -105,7 +130,8 @@ pub trait Benchmarking {
 	/// WARNING! This is a non-deterministic call. Do not use this within
 	/// consensus critical logic.
 	fn current_time() -> u128 {
-		std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
+		std::time::SystemTime::now()
+			.duration_since(std::time::SystemTime::UNIX_EPOCH)
 			.expect("Unix time doesn't go backwards; qed")
 			.as_nanos()
 	}
@@ -153,7 +179,7 @@ pub trait Benchmarking {
 			// If the key does not exist, add it.
 			None => {
 				whitelist.push(add);
-			}
+			},
 		}
 		self.set_whitelist(whitelist);
 	}
@@ -217,12 +243,16 @@ pub trait BenchmarkingSetup<T, I = ()> {
 	fn instance(
 		&self,
 		components: &[(BenchmarkParameter, u32)],
-		verify: bool
+		verify: bool,
 	) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.
-pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
+pub fn account<AccountId: Decode + Default>(
+	name: &'static str,
+	index: u32,
+	seed: u32,
+) -> AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);
 	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
@@ -236,7 +266,7 @@ pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
 macro_rules! whitelist_account {
 	($acc:ident) => {
 		frame_benchmarking::benchmarking::add_to_whitelist(
-			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+			frame_system::Account::<T>::hashed_key_for(&$acc).into(),
 		);
-	}
+	};
 }
