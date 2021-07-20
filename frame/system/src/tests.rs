@@ -121,18 +121,18 @@ fn sufficient_cannot_support_consumer() {
 		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Created);
 		System::inc_account_nonce(&0);
 		assert_eq!(System::account_nonce(&0), 1);
-		assert_noop!(System::inc_consumers(&0), IncRefError::NoProviders);
+		assert_noop!(System::inc_consumers(&0), DispatchError::NoProviders);
 
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
 		assert_ok!(System::inc_consumers(&0));
-		assert_noop!(System::dec_providers(&0), DecRefError::ConsumerRemaining);
+		assert_noop!(System::dec_providers(&0), DispatchError::ConsumerRemaining);
 	});
 }
 
 #[test]
 fn provider_required_to_support_consumer() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(System::inc_consumers(&0), IncRefError::NoProviders);
+		assert_noop!(System::inc_consumers(&0), DispatchError::NoProviders);
 
 		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
 		System::inc_account_nonce(&0);
@@ -143,7 +143,7 @@ fn provider_required_to_support_consumer() {
 		assert_eq!(System::account_nonce(&0), 1);
 
 		assert_ok!(System::inc_consumers(&0));
-		assert_noop!(System::dec_providers(&0), DecRefError::ConsumerRemaining);
+		assert_noop!(System::dec_providers(&0), DispatchError::ConsumerRemaining);
 
 		System::dec_consumers(&0);
 		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Reaped);

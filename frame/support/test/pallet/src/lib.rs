@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,18 +14,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+pub use pallet::*;
 
-//! Traits for working with tokens and their associated datastructures.
+#[frame_support::pallet]
+pub mod pallet {
+	#[allow(unused_imports)]
+	use frame_support::pallet_prelude::*;
+	#[allow(unused_imports)]
+	use frame_system::pallet_prelude::*;
 
-pub mod fungible;
-pub mod fungibles;
-pub mod currency;
-pub mod imbalance;
-pub mod nonfungible;
-pub mod nonfungibles;
-mod misc;
-pub use misc::{
-	BalanceConversion, BalanceStatus,  DepositConsequence,
-	ExistenceRequirement, WithdrawConsequence, WithdrawReasons,
-};
-pub use imbalance::Imbalance;
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {}
+
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self {}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {}
+	}
+}

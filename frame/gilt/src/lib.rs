@@ -117,6 +117,7 @@ pub mod pallet {
 
 		/// The issuance to ignore. This is subtracted from the `Currency`'s `total_issuance` to get
 		/// the issuance by which we inflate or deflate the gilt.
+		#[pallet::constant]
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
 		/// Number of duration queues in total. This sets the maximum duration supported, which is
