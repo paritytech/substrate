@@ -1250,6 +1250,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		value: BalanceOf<T, I>,
 		bid_kind: BidKind<T::AccountId, BalanceOf<T, I>>
 	) {
+		let mut insert_pos = None;
+		let bid_to_insert = Bid {
+			value,
+			who: who.clone(),
+			kind: bid_kind.clone(),
+		};
 		let res = match bids.binary_search_by(|bid| bid.value.cmp(&value)) {
 			// Insert new elements after the existing ones. This ensures new bids
 			// with the same bid value are further down the list than existing ones.
@@ -1266,38 +1272,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// If the element is not at the end of the list, insert the new element
 				// in the spot.
 				if let Some((p, _)) = different_bid {
-					bids.try_insert(p, Bid {
-						value,
-						who: who.clone(),
-						kind: bid_kind.clone(),
-					})
+					insert_pos = Some(p);
+					bids.try_insert(p, bid_to_insert.clone())
 				// If the element is at the end of the list, push the element on the end.
 				} else {
-					bids.try_push(Bid {
-						value,
-						who: who.clone(),
-						kind: bid_kind.clone(),
-					})
+					bids.try_push(bid_to_insert.clone())
 				}
 			},
-			Err(pos) => bids.try_insert(pos, Bid {
-				value,
-				who: who.clone(),
-				kind: bid_kind.clone(),
-			}),
+			Err(pos) => {
+				insert_pos = Some(pos);
+				bids.try_insert(pos, bid_to_insert.clone())
+			}
 		};
 		// Keep it reasonably small.
 		if res.is_err() {
-			match bid_kind {
+			let Bid { who: popped, kind, .. } = bids.pop().expect("b.len() >= 1000; qed");
+			match kind {
 				BidKind::Deposit(deposit) => {
-					let err_amount = T::Currency::unreserve(who, deposit);
+					let err_amount = T::Currency::unreserve(&popped, deposit);
 					debug_assert!(err_amount.is_zero());
 				}
 				BidKind::Vouch(voucher, _) => {
 					<Vouching<T, I>>::remove(&voucher);
 				}
 			}
-			Self::deposit_event(Event::AutoUnbid(who.clone()));
+			Self::deposit_event(Event::AutoUnbid(popped));
+
+			match insert_pos {
+				Some(p) => bids.try_insert(p, bid_to_insert),
+				None => bids.try_push(bid_to_insert),
+			}
+			.expect("b.len() < 1000; qed");
 		}
 
 		<Bids<T, I>>::put(bids);

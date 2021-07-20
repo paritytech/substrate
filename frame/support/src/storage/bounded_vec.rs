@@ -100,6 +100,11 @@ impl<T, S> BoundedVec<T, S> {
 		self.0
 	}
 
+	/// Exactly the same semantics as [`Vec::pop`].
+	pub fn pop(&mut self) -> Option<T> {
+		self.0.pop()
+	}
+
 	/// Exactly the same semantics as [`Vec::remove`].
 	///
 	/// # Panics
