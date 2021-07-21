@@ -134,12 +134,12 @@ benchmarks! {
 	bond_extra {
 		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
 		let max_additional = T::Currency::minimum_balance() * 10u32.into();
-		let ledger = Ledger::<T>::get(&controller).ok_or_else(|| "ledger not created before")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 		whitelist_account!(stash);
 	}: _(RawOrigin::Signed(stash), max_additional)
 	verify {
-		let ledger = Ledger::<T>::get(&controller).ok_or_else(|| "ledger not created after")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded < new_bonded);
 	}
@@ -147,12 +147,12 @@ benchmarks! {
 	unbond {
 		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
 		let amount = T::Currency::minimum_balance() * 10u32.into();
-		let ledger = Ledger::<T>::get(&controller).ok_or_else(|| "ledger not created before")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), amount)
 	verify {
-		let ledger = Ledger::<T>::get(&controller).ok_or_else(|| "ledger not created after")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded > new_bonded);
 	}
@@ -166,12 +166,12 @@ benchmarks! {
 		let amount = T::Currency::minimum_balance() * 5u32.into(); // Half of total
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
 		CurrentEra::<T>::put(EraIndex::max_value());
-		let ledger = Ledger::<T>::get(&controller).ok_or_else(|| "ledger not created before")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
 		whitelist_account!(controller);
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
-		let ledger = Ledger::<T>::get(&controller).ok_or_else(|| "ledger not created after")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_total: BalanceOf<T> = ledger.total;
 		assert!(original_total > new_total);
 	}
@@ -185,7 +185,7 @@ benchmarks! {
 		let amount = T::Currency::minimum_balance() * 10u32.into();
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
 		CurrentEra::<T>::put(EraIndex::max_value());
-		let ledger = Ledger::<T>::get(&controller).ok_or_else(|| "ledger not created before")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
 		whitelist_account!(controller);
 	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
@@ -438,7 +438,7 @@ benchmarks! {
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller.clone()), (l + 100).into())
 	verify {
-		let ledger = Ledger::<T>::get(&controller).ok_or_else(|| "ledger not created after")?;
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_bonded: BalanceOf<T> = ledger.active;
 		assert!(original_bonded < new_bonded);
 	}
@@ -492,7 +492,7 @@ benchmarks! {
 		let session_index = SessionIndex::one();
 	}: {
 		let validators = Staking::<T>::try_trigger_new_era(session_index, true)
-			.ok_or_else(|| "`new_era` failed")?;
+			.ok_or("`new_era` failed")?;
 		assert!(validators.len() == v as usize);
 	}
 

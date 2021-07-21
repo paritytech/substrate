@@ -1487,7 +1487,7 @@ pub mod pallet {
 			<Bonded<T>>::insert(&stash, &controller);
 			<Payee<T>>::insert(&stash, payee);
 
-			let current_era = CurrentEra::<T>::get().unwrap_or_else(|| 0);
+			let current_era = CurrentEra::<T>::get().unwrap_or(0);
 			let history_depth = Self::history_depth();
 			let last_reward_era = current_era.saturating_sub(history_depth);
 
@@ -1527,8 +1527,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			let controller = Self::bonded(&stash).ok_or_else(|| Error::<T>::NotStash)?;
-			let mut ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
@@ -1566,7 +1566,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::unbond())]
 		pub fn unbond(origin: OriginFor<T>, #[pallet::compact] value: BalanceOf<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let mut ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(
 				ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS,
 				Error::<T>::NoMoreChunks,
@@ -1596,7 +1596,7 @@ pub mod pallet {
 				ensure!(ledger.active >= min_active_bond, Error::<T>::InsufficientBond);
 
 				// Note: in case there is no current era it is fine to bond one era more.
-				let era = Self::current_era().unwrap_or_else(|| 0) + T::BondingDuration::get();
+				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
@@ -1625,7 +1625,7 @@ pub mod pallet {
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let mut ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let (stash, old_total) = (ledger.stash.clone(), ledger.total);
 			if let Some(current_era) = Self::current_era() {
 				ledger = ledger.consolidate_unlocked(current_era)
@@ -1668,7 +1668,7 @@ pub mod pallet {
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
 
@@ -1704,7 +1704,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
 
@@ -1734,7 +1734,7 @@ pub mod pallet {
 			let nominations = Nominations {
 				targets,
 				// Initial nominations are considered submitted at era 0. See `Nominations` doc
-				submitted_in: Self::current_era().unwrap_or_else(|| 0),
+				submitted_in: Self::current_era().unwrap_or(0),
 				suppressed: false,
 			};
 
@@ -1757,7 +1757,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
 			Ok(())
 		}
@@ -1784,7 +1784,7 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			<Payee<T>>::insert(stash, payee);
 			Ok(())
@@ -1812,7 +1812,7 @@ pub mod pallet {
 			controller: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-			let old_controller = Self::bonded(&stash).ok_or_else(|| Error::<T>::NotStash)?;
+			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let controller = T::Lookup::lookup(controller)?;
 			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?
@@ -2068,7 +2068,7 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let ledger = ledger.rebond(value);
@@ -2113,8 +2113,8 @@ pub mod pallet {
 			ensure_root(origin)?;
 			if let Some(current_era) = Self::current_era() {
 				HistoryDepth::<T>::mutate(|history_depth| {
-					let last_kept = current_era.checked_sub(*history_depth).unwrap_or_else(|| 0);
-					let new_last_kept = current_era.checked_sub(new_history_depth).unwrap_or_else(|| 0);
+					let last_kept = current_era.checked_sub(*history_depth).unwrap_or(0);
+					let new_last_kept = current_era.checked_sub(new_history_depth).unwrap_or(0);
 					for era_index in last_kept..new_last_kept {
 						Self::clear_era_information(era_index);
 					}
@@ -2166,7 +2166,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::kick(who.len() as u32))]
 		pub fn kick(origin: OriginFor<T>, who: Vec<<T::Lookup as StaticLookup>::Source>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 
 			for nom_stash in who.into_iter()
@@ -2247,7 +2247,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			// Anyone can call this function.
 			let caller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or_else(|| Error::<T>::NotController)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = ledger.stash;
 
 			// In order for one user to chill another user, the following conditions must be met:
@@ -2261,14 +2261,14 @@ pub mod pallet {
 			//
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
 			if caller != controller {
-				let threshold = ChillThreshold::<T>::get().ok_or_else(|| Error::<T>::CannotChillOther)?;
+				let threshold = ChillThreshold::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
 				let min_active_bond = if Nominators::<T>::contains_key(&stash) {
-					let max_nominator_count = MaxNominatorsCount::<T>::get().ok_or_else(|| Error::<T>::CannotChillOther)?;
+					let max_nominator_count = MaxNominatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
 					let current_nominator_count = CounterForNominators::<T>::get();
 					ensure!(threshold * max_nominator_count < current_nominator_count, Error::<T>::CannotChillOther);
 					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&stash) {
-					let max_validator_count = MaxValidatorsCount::<T>::get().ok_or_else(|| Error::<T>::CannotChillOther)?;
+					let max_validator_count = MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
 					let current_validator_count = CounterForValidators::<T>::get();
 					ensure!(threshold * max_validator_count < current_validator_count, Error::<T>::CannotChillOther);
 					MinValidatorBond::<T>::get()
@@ -2335,7 +2335,7 @@ impl<T: Config> Pallet<T> {
 		let controller = Self::bonded(&validator_stash).ok_or_else(
 			|| Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		)?;
-		let mut ledger = <Ledger<T>>::get(&controller).ok_or_else(|| Error::<T>::NotController)?;
+		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
 
 		ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
@@ -2488,7 +2488,7 @@ impl<T: Config> Pallet<T> {
 				});
 
 			let era_length = session_index.checked_sub(current_era_start_session_index)
-				.unwrap_or_else(|| 0); // Must never happen.
+				.unwrap_or(0); // Must never happen.
 
 			match ForceEra::<T>::get() {
 				// Will be set to `NotForcing` again if a new era has been triggered.
@@ -2522,7 +2522,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Start a session potentially starting an era.
 	fn start_session(start_session: SessionIndex) {
-		let next_active_era = Self::active_era().map(|e| e.index + 1).unwrap_or_else(|| 0);
+		let next_active_era = Self::active_era().map(|e| e.index + 1).unwrap_or(0);
 		// This is only `Some` when current era has already progressed to the next era, while the
 		// active era is one behind (i.e. in the *last session of the active era*, or *first session
 		// of the new current era*, depending on how you look at it).
@@ -2558,7 +2558,7 @@ impl<T: Config> Pallet<T> {
 	/// * update `BondedEras` and apply slashes.
 	fn start_era(start_session: SessionIndex) {
 		let active_era = ActiveEra::<T>::mutate(|active_era| {
-			let new_index = active_era.as_ref().map(|info| info.index + 1).unwrap_or_else(|| 0);
+			let new_index = active_era.as_ref().map(|info| info.index + 1).unwrap_or(0);
 			*active_era = Some(ActiveEraInfo {
 				index: new_index,
 				// Set new active era start in next `on_finalize`. To guarantee usage of `Time`
@@ -2627,7 +2627,7 @@ impl<T: Config> Pallet<T> {
 	) -> Vec<T::AccountId> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
-			*s = Some(s.map(|s| s + 1).unwrap_or_else(|| 0));
+			*s = Some(s.map(|s| s + 1).unwrap_or(0));
 			s.unwrap()
 		});
 		ErasStartSessionIndex::<T>::insert(&new_planned_era, &start_session_index);
@@ -2675,7 +2675,7 @@ impl<T: Config> Pallet<T> {
 					warn,
 					"chain does not have enough staking candidates to operate for era {:?} ({} \
 					elected, minimum is {})",
-					CurrentEra::<T>::get().unwrap_or_else(|| 0),
+					CurrentEra::<T>::get().unwrap_or(0),
 					exposures.len(),
 					Self::minimum_validator_count(),
 				),
@@ -2787,7 +2787,7 @@ impl<T: Config> Pallet<T> {
 	/// - after a `withdraw_unbonded()` call that frees all of a stash's bonded balance.
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
 	fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
-		let controller = <Bonded<T>>::get(stash).ok_or_else(|| Error::<T>::NotStash)?;
+		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
 
 		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
 
@@ -3017,10 +3017,10 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
-		let current_era = Self::current_era().unwrap_or_else(|| 0);
+		let current_era = Self::current_era().unwrap_or(0);
 		let current_session = Self::current_planned_session();
 		let current_era_start_session_index =
-			Self::eras_start_session_index(current_era).unwrap_or_else(|| 0);
+			Self::eras_start_session_index(current_era).unwrap_or(0);
 		// Number of session in the current era or the maximum session per era if reached.
 		let era_progress = current_session
 			.saturating_sub(current_era_start_session_index)
@@ -3186,7 +3186,7 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 		<Self as pallet_session::SessionManager<_>>::new_session(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
-				.unwrap_or_else(|| 0);
+				.unwrap_or(0);
 
 			validators.into_iter().map(|v| {
 				let exposure = Self::eras_stakers(current_era, &v);
@@ -3200,7 +3200,7 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 		<Self as pallet_session::SessionManager<_>>::new_session_genesis(new_index).map(|validators| {
 			let current_era = Self::current_era()
 				// Must be some as a new era has been created.
-				.unwrap_or_else(|| 0);
+				.unwrap_or(0);
 
 			validators.into_iter().map(|v| {
 				let exposure = Self::eras_stakers(current_era, &v);
