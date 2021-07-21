@@ -179,7 +179,14 @@ where
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) {
-		Executive::<System, Block, Context, UnsignedValidator, AllPallets>::execute_block(block);
+		Executive::<
+			System,
+			Block,
+			Context,
+			UnsignedValidator,
+			AllPallets,
+			COnRuntimeUpgrade,
+		>::execute_block(block);
 	}
 }
 
@@ -1187,6 +1194,53 @@ mod tests {
 				[69u8; 32].into(),
 				Digest::default(),
 			));
+
+			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
+			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
+		});
+	}
+
+	/// Regression test that ensures that the custom on runtime upgrade is called when executive is
+	/// used through the `ExecuteBlock` trait.
+	#[test]
+	fn custom_runtime_upgrade_is_called_when_using_execute_block_trait() {
+		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
+
+		let header = new_test_ext(1).execute_with(|| {
+			// Make sure `on_runtime_upgrade` is called.
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				..Default::default()
+			});
+
+			// Let's build some fake block.
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			Executive::apply_extrinsic(xt.clone()).unwrap().unwrap();
+
+			Executive::finalize_block()
+		});
+
+		// Reset to get the correct new genesis below.
+		RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+			spec_version: 0,
+			..Default::default()
+		});
+
+		new_test_ext(1).execute_with(|| {
+			// Make sure `on_runtime_upgrade` is called.
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				..Default::default()
+			});
+
+			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]));
 
 			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
 			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
