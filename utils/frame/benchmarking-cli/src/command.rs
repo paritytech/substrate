@@ -31,14 +31,15 @@ use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_state_machine::StateMachine;
-use std::{fmt::Debug, sync::Arc, collections::HashMap};
+use std::{fmt::Debug, sync::Arc};
+use linked_hash_map::LinkedHashMap;
 
 // This takes multiple benchmark batches and combines all the results where the pallet, instance,
 // and benchmark are the same.
 fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
 	if batches.is_empty() { return batches }
 
-	let mut all_benchmarks = HashMap::<_, Vec<BenchmarkResults>>::new();
+	let mut all_benchmarks = LinkedHashMap::<_, Vec<BenchmarkResults>>::new();
 
 	batches.into_iter().for_each(|BenchmarkBatch { pallet, instance, benchmark, results }| {
 		// We use this key to uniquely identify a benchmark among batches.
