@@ -405,7 +405,7 @@ fn start_rpc_servers<
 				),
 				config.rpc_max_payload,
 			)
-		})?
+		)?
 		.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(config.rpc_ws, |address| {
 			sc_rpc_server::start_ws(
@@ -418,8 +418,8 @@ fn start_rpc_servers<
 				),
 				config.rpc_max_payload,
 				server_metrics.clone(),
-			),
-		)?.map(|s| waiting::WsServer(Some(s))),
+			)
+		})?.map(|s| waiting::WsServer(Some(s))),
 	)))
 }
 

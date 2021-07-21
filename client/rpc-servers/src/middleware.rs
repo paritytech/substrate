@@ -69,7 +69,7 @@ impl RpcMetrics {
 					HistogramVec::new(
 						HistogramOpts::new(
 							"rpc_calls_time",
-							"Total time [ms] of processed RPC calls",
+							"Total time [μs] of processed RPC calls",
 						),
 						&["protocol", "method"],
 					)?,
@@ -188,15 +188,15 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 		}
 		Either::A(Box::new(next(call, meta).then(move |r| {
 			#[cfg(not(target_os = "unknown"))]
-			let millis = start.elapsed().as_millis();
+			let micros = start.elapsed().as_micros();
 			// seems that std::time is not implemented for browser target
 			#[cfg(target_os = "unknown")]
-			let millis = 0;
+			let micros = 1;
 			if let Some(ref metrics) = metrics {
 				metrics
 					.calls_time
 					.with_label_values(&[transport_label.as_str(), name.as_str()])
-					.observe(millis as _);
+					.observe(micros as _);
 				metrics
 					.calls_finished
 					.with_label_values(&[
@@ -206,7 +206,8 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 					])
 					.inc();
 			}
-			log::debug!(target: "rpc_metrics", "[{}] {} call took {} ms", transport_label, name, millis);
+			log::debug!(target: "rpc_metrics", "[{}] {} call took {} μs", transport_label, name,
+				micros);
 			r
 		})))
 	}
