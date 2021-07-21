@@ -17,18 +17,14 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::chain_spec::ChainSpec;
+use browser_utils::{browser_configuration, init_logging, set_console_error_panic_hook, Client};
 use log::info;
 use wasm_bindgen::prelude::*;
-use browser_utils::{
-	Client,
-	browser_configuration, init_logging, set_console_error_panic_hook,
-};
 
 /// Starts the client.
 #[wasm_bindgen]
 pub fn start_client(chain_spec: Option<String>, log_level: String) -> Result<Client, JsValue> {
-	start_inner(chain_spec, log_level)
-		.map_err(|err| JsValue::from_str(&err.to_string()))
+	start_inner(chain_spec, log_level).map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
 fn start_inner(
@@ -53,10 +49,9 @@ fn start_inner(
 	info!("👤 Role: {:?}", config.role);
 
 	// Create the service. This is the most heavy initialization step.
-	let (task_manager, rpc_handlers) =
-		crate::service::new_light_base(config)
-			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
-			.map_err(|e| format!("{:?}", e))?;
+	let (task_manager, rpc_handlers) = crate::service::new_light_base(config)
+		.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
+		.map_err(|e| format!("{:?}", e))?;
 
 	Ok(browser_utils::start_client(task_manager, rpc_handlers))
 }

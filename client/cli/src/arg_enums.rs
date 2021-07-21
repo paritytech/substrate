@@ -74,9 +74,8 @@ impl WasmExecutionMethod {
 impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	fn into(self) -> sc_service::config::WasmExecutionMethod {
 		match self {
-			WasmExecutionMethod::Interpreted => {
-				sc_service::config::WasmExecutionMethod::Interpreted
-			}
+			WasmExecutionMethod::Interpreted =>
+				sc_service::config::WasmExecutionMethod::Interpreted,
 			#[cfg(feature = "wasmtime")]
 			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
 			#[cfg(not(feature = "wasmtime"))]
@@ -250,14 +249,10 @@ impl Into<sc_network::config::SyncMode> for SyncMode {
 	fn into(self) -> sc_network::config::SyncMode {
 		match self {
 			SyncMode::Full => sc_network::config::SyncMode::Full,
-			SyncMode::Fast => sc_network::config::SyncMode::Fast {
-				skip_proofs: false,
-				storage_chain_mode: false,
-			},
-			SyncMode::FastUnsafe => sc_network::config::SyncMode::Fast {
-				skip_proofs: true,
-				storage_chain_mode: false,
-			},
+			SyncMode::Fast =>
+				sc_network::config::SyncMode::Fast { skip_proofs: false, storage_chain_mode: false },
+			SyncMode::FastUnsafe =>
+				sc_network::config::SyncMode::Fast { skip_proofs: true, storage_chain_mode: false },
 		}
 	}
 }

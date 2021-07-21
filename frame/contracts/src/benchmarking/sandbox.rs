@@ -15,14 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-///! For instruction benchmarking we do no instantiate a full contract but merely the
-///! sandbox to execute the wasm code. This is because we do not need the full
-///! environment that provides the seal interface as imported functions.
-
-use super::{
-	Config,
-	code::WasmModule,
-};
+/// ! For instruction benchmarking we do no instantiate a full contract but merely the
+/// ! sandbox to execute the wasm code. This is because we do not need the full
+/// ! environment that provides the seal interface as imported functions.
+use super::{code::WasmModule, Config};
 use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Instance, Memory};
 
@@ -51,9 +47,6 @@ where
 		let memory = module.add_memory(&mut env_builder);
 		let instance = Instance::new(&module.code, &env_builder, &mut ())
 			.expect("Failed to create benchmarking Sandbox instance");
-		Self {
-			instance,
-			_memory: memory,
-		}
+		Self { instance, _memory: memory }
 	}
 }

@@ -20,8 +20,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use crate::*;
-use frame_support::traits::OnInitialize;
 use frame_benchmarking::{benchmarks_instance_pallet, impl_benchmark_test_suite};
+use frame_support::traits::OnInitialize;
 
 benchmarks_instance_pallet! {
 	on_initialize {
@@ -37,8 +37,4 @@ benchmarks_instance_pallet! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Pallet,
-	crate::tests::new_test_ext(),
-	crate::mock::Test,
-);
+impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::mock::Test,);

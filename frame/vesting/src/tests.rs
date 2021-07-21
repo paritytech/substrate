@@ -178,34 +178,28 @@ fn check_vesting_status_for_multi_schedule_account() {
 
 #[test]
 fn unvested_balance_should_not_transfer() {
-	ExtBuilder::default()
-		.existential_deposit(10)
-		.build()
-		.execute_with(|| {
-			let user1_free_balance = Balances::free_balance(&1);
-			assert_eq!(user1_free_balance, 100); // Account 1 has free balance
-			// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
-			assert_eq!(Vesting::vesting_balance(&1), Some(45));
-			assert_noop!(
-				Balances::transfer(Some(1).into(), 2, 56),
-				pallet_balances::Error::<Test, _>::LiquidityRestrictions,
-			); // Account 1 cannot send more than vested amount
-		});
+	ExtBuilder::default().existential_deposit(10).build().execute_with(|| {
+		let user1_free_balance = Balances::free_balance(&1);
+		assert_eq!(user1_free_balance, 100); // Account 1 has free balance
+									 // Account 1 has only 5 units vested at block 1 (plus 50 unvested)
+		assert_eq!(Vesting::vesting_balance(&1), Some(45));
+		assert_noop!(
+			Balances::transfer(Some(1).into(), 2, 56),
+			pallet_balances::Error::<Test, _>::LiquidityRestrictions,
+		); // Account 1 cannot send more than vested amount
+	});
 }
 
 #[test]
 fn vested_balance_should_transfer() {
-	ExtBuilder::default()
-		.existential_deposit(10)
-		.build()
-		.execute_with(|| {
-			let user1_free_balance = Balances::free_balance(&1);
-			assert_eq!(user1_free_balance, 100); // Account 1 has free balance
-			// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
-			assert_eq!(Vesting::vesting_balance(&1), Some(45));
-			assert_ok!(Vesting::vest(Some(1).into()));
-			assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
-		});
+	ExtBuilder::default().existential_deposit(10).build().execute_with(|| {
+		let user1_free_balance = Balances::free_balance(&1);
+		assert_eq!(user1_free_balance, 100); // Account 1 has free balance
+									 // Account 1 has only 5 units vested at block 1 (plus 50 unvested)
+		assert_eq!(Vesting::vesting_balance(&1), Some(45));
+		assert_ok!(Vesting::vest(Some(1).into()));
+		assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
+	});
 }
 
 #[test]
@@ -236,17 +230,14 @@ fn non_vested_cannot_vest() {
 
 #[test]
 fn vested_balance_should_transfer_using_vest_other() {
-	ExtBuilder::default()
-		.existential_deposit(10)
-		.build()
-		.execute_with(|| {
-			let user1_free_balance = Balances::free_balance(&1);
-			assert_eq!(user1_free_balance, 100); // Account 1 has free balance
-			// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
-			assert_eq!(Vesting::vesting_balance(&1), Some(45));
-			assert_ok!(Vesting::vest_other(Some(2).into(), 1));
-			assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
-		});
+	ExtBuilder::default().existential_deposit(10).build().execute_with(|| {
+		let user1_free_balance = Balances::free_balance(&1);
+		assert_eq!(user1_free_balance, 100); // Account 1 has free balance
+									 // Account 1 has only 5 units vested at block 1 (plus 50 unvested)
+		assert_eq!(Vesting::vesting_balance(&1), Some(45));
+		assert_ok!(Vesting::vest_other(Some(2).into(), 1));
+		assert_ok!(Balances::transfer(Some(1).into(), 2, 55));
+	});
 }
 
 #[test]
@@ -280,29 +271,26 @@ fn non_vested_cannot_vest_other() {
 
 #[test]
 fn extra_balance_should_transfer() {
-	ExtBuilder::default()
-		.existential_deposit(10)
-		.build()
-		.execute_with(|| {
-			assert_ok!(Balances::transfer(Some(3).into(), 1, 100));
-			assert_ok!(Balances::transfer(Some(3).into(), 2, 100));
+	ExtBuilder::default().existential_deposit(10).build().execute_with(|| {
+		assert_ok!(Balances::transfer(Some(3).into(), 1, 100));
+		assert_ok!(Balances::transfer(Some(3).into(), 2, 100));
 
-			let user1_free_balance = Balances::free_balance(&1);
-			assert_eq!(user1_free_balance, 200); // Account 1 has 100 more free balance than normal
+		let user1_free_balance = Balances::free_balance(&1);
+		assert_eq!(user1_free_balance, 200); // Account 1 has 100 more free balance than normal
 
-			let user2_free_balance = Balances::free_balance(&2);
-			assert_eq!(user2_free_balance, 300); // Account 2 has 100 more free balance than normal
+		let user2_free_balance = Balances::free_balance(&2);
+		assert_eq!(user2_free_balance, 300); // Account 2 has 100 more free balance than normal
 
-			// Account 1 has only 5 units vested at block 1 (plus 150 unvested)
-			assert_eq!(Vesting::vesting_balance(&1), Some(45));
-			assert_ok!(Vesting::vest(Some(1).into()));
-			assert_ok!(Balances::transfer(Some(1).into(), 3, 155)); // Account 1 can send extra units gained
+		// Account 1 has only 5 units vested at block 1 (plus 150 unvested)
+		assert_eq!(Vesting::vesting_balance(&1), Some(45));
+		assert_ok!(Vesting::vest(Some(1).into()));
+		assert_ok!(Balances::transfer(Some(1).into(), 3, 155)); // Account 1 can send extra units gained
 
-			// Account 2 has no units vested at block 1, but gained 100
-			assert_eq!(Vesting::vesting_balance(&2), Some(200));
-			assert_ok!(Vesting::vest(Some(2).into()));
-			assert_ok!(Balances::transfer(Some(2).into(), 3, 100)); // Account 2 can send extra units gained
-		});
+		// Account 2 has no units vested at block 1, but gained 100
+		assert_eq!(Vesting::vesting_balance(&2), Some(200));
+		assert_ok!(Vesting::vest(Some(2).into()));
+		assert_ok!(Balances::transfer(Some(2).into(), 3, 100)); // Account 2 can send extra units gained
+	});
 }
 
 #[test]

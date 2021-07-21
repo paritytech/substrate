@@ -20,8 +20,8 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 
 const SEED: u32 = 0;
 
@@ -65,8 +65,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Pallet,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test,);

@@ -18,8 +18,11 @@
 //! Structs and helpers for distributing a voter's stake among various winners.
 
 use crate::{Error, ExtendedBalance, IdentifierT, PerThing128, __OrInvalidIndex};
-use codec::{Encode, Decode};
-use sp_arithmetic::{traits::{Bounded, Zero}, Normalizable, PerThing};
+use codec::{Decode, Encode};
+use sp_arithmetic::{
+	traits::{Bounded, Zero},
+	Normalizable, PerThing,
+};
 use sp_core::RuntimeDebug;
 use sp_std::vec::Vec;
 
@@ -61,10 +64,7 @@ impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 			})
 			.collect::<Vec<(AccountId, ExtendedBalance)>>();
 
-		StakedAssignment {
-			who: self.who,
-			distribution,
-		}
+		StakedAssignment { who: self.who, distribution }
 	}
 
 	/// Try and normalize this assignment.
@@ -83,12 +83,13 @@ impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 			.map(|(_, p)| *p)
 			.collect::<Vec<_>>()
 			.normalize(P::one())
-			.map(|normalized_ratios|
-				self.distribution
-					.iter_mut()
-					.zip(normalized_ratios)
-					.for_each(|((_, old), corrected)| { *old = corrected; })
-			)
+			.map(|normalized_ratios| {
+				self.distribution.iter_mut().zip(normalized_ratios).for_each(
+					|((_, old), corrected)| {
+						*old = corrected;
+					},
+				)
+			})
 	}
 }
 
@@ -118,7 +119,8 @@ impl<AccountId> StakedAssignment<AccountId> {
 		AccountId: IdentifierT,
 	{
 		let stake = self.total();
-		let distribution = self.distribution
+		let distribution = self
+			.distribution
 			.into_iter()
 			.filter_map(|(target, w)| {
 				let per_thing = P::from_rational(w, stake);
@@ -130,10 +132,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 			})
 			.collect::<Vec<(AccountId, P)>>();
 
-		Assignment {
-			who: self.who,
-			distribution,
-		}
+		Assignment { who: self.who, distribution }
 	}
 
 	/// Try and normalize this assignment.
@@ -152,12 +151,13 @@ impl<AccountId> StakedAssignment<AccountId> {
 			.map(|(_, ref weight)| *weight)
 			.collect::<Vec<_>>()
 			.normalize(stake)
-			.map(|normalized_weights|
-				self.distribution
-					.iter_mut()
-					.zip(normalized_weights.into_iter())
-					.for_each(|((_, weight), corrected)| { *weight = corrected; })
-			)
+			.map(|normalized_weights| {
+				self.distribution.iter_mut().zip(normalized_weights.into_iter()).for_each(
+					|((_, weight), corrected)| {
+						*weight = corrected;
+					},
+				)
+			})
 	}
 
 	/// Get the total stake of this assignment (aka voter budget).
