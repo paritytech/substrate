@@ -1952,6 +1952,23 @@ macro_rules! decl_module {
 			)*
 		}
 
+		$crate::paste::paste! {
+			impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
+				$call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+			{
+				$(
+					#[doc = "Create a call with the variant `" $fn_name "`."]
+					pub fn [< new_call_variant_ $fn_name >](
+						$( $param_name: $param ),*
+					) -> Self {
+						Self::$fn_name {
+							$( $param_name ),*
+						}
+					}
+				)*
+			}
+		}
+
 		// Implement weight calculation function for Call
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::GetDispatchInfo
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
@@ -2718,5 +2735,10 @@ mod tests {
 	#[should_panic(expected = "integrity_test")]
 	fn integrity_test_should_work() {
 		<Module<TraitImpl> as IntegrityTest>::integrity_test();
+	}
+
+	#[test]
+	fn test_new_call_variant() {
+		Call::<TraitImpl>::new_call_variant_aux_0();
 	}
 }

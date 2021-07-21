@@ -42,6 +42,13 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
+	let new_call_variant_fn_name = fn_name.iter()
+		.map(|fn_name| quote::format_ident!("new_call_variant_{}", fn_name))
+		.collect::<Vec<_>>();
+
+	let new_call_variant_doc = fn_name.iter()
+		.map(|fn_name| format!("Create a call with the variant `{}`.", fn_name))
+		.collect::<Vec<_>>();
 
 	let fn_weight = methods.iter().map(|method| &method.weight);
 
@@ -133,6 +140,19 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				#fn_name {
 					#( #args_compact_attr #args_name: #args_type ),*
 				},
+			)*
+		}
+
+		impl<#type_impl_gen> #call_ident<#type_use_gen> #where_clause {
+			#(
+				#[doc = #new_call_variant_doc]
+				pub fn #new_call_variant_fn_name(
+					#( #args_name: #args_type ),*
+				) -> Self {
+					Self::#fn_name {
+						#( #args_name ),*
+					}
+				}
 			)*
 		}
 

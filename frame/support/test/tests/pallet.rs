@@ -733,6 +733,11 @@ fn pallet_expand_deposit_event() {
 }
 
 #[test]
+fn pallet_new_call_variant() {
+	Call::Example(Example::Call::new_call_variant_foo(3, 4));
+}
+
+#[test]
 fn storage_expand() {
 	use frame_support::pallet_prelude::*;
 	use frame_support::storage::StoragePrefixedMap;

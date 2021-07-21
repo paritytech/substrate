@@ -297,20 +297,27 @@ macro_rules! benchmarks_iter {
 		verify $postcode:block
 		$( $rest:tt )*
 	) => {
-		$crate::benchmarks_iter! {
-			{ $( $instance: $instance_bound )? }
-			{ $( $where_clause )* }
-			( $( $names )* )
-			( $( $names_extra )* )
-			$name { $( $code )* }: {
-				<
-					Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
-				>::dispatch_bypass_filter(
-					Call::<T $(, $instance)? >::$dispatch { $($arg),* }, $origin.into()
-				)?;
+		$crate::paste::paste! {
+			$crate::benchmarks_iter! {
+				{ $( $instance: $instance_bound )? }
+				{ $( $where_clause )* }
+				( $( $names )* )
+				( $( $names_extra )* )
+				$name { $( $code )* }: {
+					let call = Call::<
+						T
+						$( , $instance )?
+					>:: [< new_call_variant_ $dispatch >] (
+						$($arg),*
+					);
+
+					<
+						Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
+					>::dispatch_bypass_filter(call, $origin.into())?;
+				}
+				verify $postcode
+				$( $rest )*
 			}
-			verify $postcode
-			$( $rest )*
 		}
 	};
 	// iteration arm:
