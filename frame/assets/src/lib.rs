@@ -141,13 +141,10 @@ pub use types::*;
 use sp_std::{prelude::*, borrow::Borrow, convert::TryInto};
 use sp_runtime::{
 	TokenError, ArithmeticError,
-	traits::{
-		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded,
-		StoredMapError,
-	}
+	traits::{AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded}
 };
 use codec::HasCompact;
-use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
+use frame_support::pallet_prelude::*;
 use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
 use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
 use frame_system::Config as SystemConfig;
@@ -157,10 +154,6 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{
-		dispatch::DispatchResult,
-		pallet_prelude::*,
-	};
 	use frame_system::pallet_prelude::*;
 	use super::*;
 
@@ -189,19 +182,24 @@ pub mod pallet {
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The basic amount of funds that must be reserved for an asset.
+		#[pallet::constant]
 		type AssetDeposit: Get<DepositBalanceOf<Self, I>>;
 
 		/// The basic amount of funds that must be reserved when adding metadata to your asset.
+		#[pallet::constant]
 		type MetadataDepositBase: Get<DepositBalanceOf<Self, I>>;
 
 		/// The additional funds that must be reserved for the number of bytes you store in your
 		/// metadata.
+		#[pallet::constant]
 		type MetadataDepositPerByte: Get<DepositBalanceOf<Self, I>>;
 
 		/// The amount of funds that must be reserved when creating a new approval.
+		#[pallet::constant]
 		type ApprovalDeposit: Get<DepositBalanceOf<Self, I>>;
 
 		/// The maximum length of a name or symbol stored on-chain.
+		#[pallet::constant]
 		type StringLimit: Get<u32>;
 
 		/// A hook to allow a per-asset, per-account minimum balance to be enforced. This must be

@@ -156,6 +156,7 @@ pub mod pallet {
 		/// Number of time we should try to generate a random number that has no modulo bias.
 		/// The larger this number, the more potential computation is used for picking the winner,
 		/// but also the more likely that the chosen winner is done fairly.
+		#[pallet::constant]
 		type MaxGenerateRandom: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.

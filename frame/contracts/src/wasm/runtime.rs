@@ -76,6 +76,9 @@ pub enum ReturnCode {
 	/// recording was disabled.
 	#[cfg(feature = "unstable-interface")]
 	LoggingDisabled = 9,
+	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
+	#[cfg(feature = "unstable-interface")]
+	CallRuntimeReturnedError = 10,
 }
 
 impl ConvertibleToWasm for ReturnCode {
@@ -213,6 +216,12 @@ pub enum RuntimeCosts {
 	HashBlake128(u32),
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(u64),
+	/// Weight charged for copying data from the sandbox.
+	#[cfg(feature = "unstable-interface")]
+	CopyIn(u32),
+	/// Weight charged for calling into the runtime.
+	#[cfg(feature = "unstable-interface")]
+	CallRuntime(Weight),
 }
 
 impl RuntimeCosts {
@@ -273,6 +282,10 @@ impl RuntimeCosts {
 			HashBlake128(len) => s.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			ChainExtension(amount) => amount,
+			#[cfg(feature = "unstable-interface")]
+			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
+			#[cfg(feature = "unstable-interface")]
+			CallRuntime(weight) => weight,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -455,6 +468,15 @@ where
 	pub fn charge_gas(&mut self, costs: RuntimeCosts) -> Result<ChargedAmount, DispatchError> {
 		let token = costs.token(&self.ext.schedule().host_fn_weights);
 		self.ext.gas_meter().charge(token)
+	}
+
+	/// Adjust a previously charged amount down to its actual amount.
+	///
+	/// This is when a maximum a priori amount was charged and then should be partially
+	/// refunded to match the actual amount.
+	pub fn adjust_gas(&mut self, charged: ChargedAmount, actual_costs: RuntimeCosts) {
+		let token = actual_costs.token(&self.ext.schedule().host_fn_weights);
+		self.ext.gas_meter().adjust_gas(charged, token);
 	}
 
 	/// Read designated chunk from the sandbox memory.
@@ -797,7 +819,6 @@ where
 // data passed to the supervisor will lead to a trap. This is not documented explicitly
 // for every function.
 define_env!(Env, <E: Ext>,
-
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
 	// NOTE: This is a implementation defined call and is NOT a part of the public API.
@@ -1807,5 +1828,59 @@ define_env!(Env, <E: Ext>,
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &rent_status, false, already_charged
 		)?)
+	},
+
+	// Call some dispatchable of the runtime.
+	//
+	// This function decodes the passed in data as the overarching `Call` type of the
+	// runtime and dispatches it. The weight as specified in the runtime is charged
+	// from the gas meter. Any weight refunds made by the dispatchable are considered.
+	//
+	// The filter specified by `Config::CallFilter` is attached to the origin of
+	// the dispatched call.
+	//
+	// # Parameters
+	//
+	// - `input_ptr`: the pointer into the linear memory where the input data is placed.
+	// - `input_len`: the length of the input data in bytes.
+	//
+	// # Return Value
+	//
+	// Returns `ReturnCode::Success` when the dispatchable was succesfully executed and
+	// returned `Ok`. When the dispatchable was exeuted but returned an error
+	// `ReturnCode::CallRuntimeReturnedError` is returned. The full error is not
+	// provided because it is not guaranteed to be stable.
+	//
+	// # Comparison with `ChainExtension`
+	//
+	// Just as a chain extension this API allows the runtime to extend the functionality
+	// of contracts. While making use of this function is generelly easier it cannot be
+	// used in call cases. Consider writing a chain extension if you need to do perform
+	// one of the following tasks:
+	//
+	// - Return data.
+	// - Provide functionality **exclusively** to contracts.
+	// - Provide custom weights.
+	// - Avoid the need to keep the `Call` data structure stable.
+	//
+	// # Unstable
+	//
+	// This function is unstable and subject to change (or removal) in the future. Do not
+	// deploy a contract using it to a production chain.
+	[__unstable__] seal_call_runtime(ctx, call_ptr: u32, call_len: u32) -> ReturnCode => {
+		use frame_support::{dispatch::GetDispatchInfo, weights::extract_actual_weight};
+		ctx.charge_gas(RuntimeCosts::CopyIn(call_len))?;
+		let call: <E::T as Config>::Call = ctx.read_sandbox_memory_as_unbounded(
+			call_ptr, call_len
+		)?;
+		let dispatch_info = call.get_dispatch_info();
+		let charged = ctx.charge_gas(RuntimeCosts::CallRuntime(dispatch_info.weight))?;
+		let result = ctx.ext.call_runtime(call);
+		let actual_weight = extract_actual_weight(&result, &dispatch_info);
+		ctx.adjust_gas(charged, RuntimeCosts::CallRuntime(actual_weight));
+		match result {
+			Ok(_) => Ok(ReturnCode::Success),
+			Err(_) => Ok(ReturnCode::CallRuntimeReturnedError),
+		}
 	},
 );

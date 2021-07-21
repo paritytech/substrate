@@ -36,6 +36,7 @@ use sp_runtime::{
 use sp_state_machine::{ExecutionManager, ExecutionStrategy, ExecutionConfig, DefaultHandler};
 use sp_externalities::Extensions;
 use parking_lot::RwLock;
+use sc_transaction_pool_api::OffchainSubmitTransaction;
 
 /// Execution configurations, per operation type.
 #[derive(Debug, Clone)]
@@ -103,8 +104,7 @@ pub struct ExecutionExtensions<Block: traits::Block> {
 	// extension to be a `Weak` reference.
 	// That's also the reason why it's being registered lazily instead of
 	// during initialization.
-	transaction_pool:
-		RwLock<Option<Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>>>,
+	transaction_pool: RwLock<Option<Weak<dyn OffchainSubmitTransaction<Block>>>>,
 	extensions_factory: RwLock<Box<dyn ExtensionsFactory>>,
 }
 
@@ -150,7 +150,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 
 	/// Register transaction pool extension.
 	pub fn register_transaction_pool<T>(&self, pool: &Arc<T>)
-		where T: sp_transaction_pool::OffchainSubmitTransaction<Block> + 'static
+		where T: OffchainSubmitTransaction<Block> + 'static
 	{
 		*self.transaction_pool.write() = Some(Arc::downgrade(&pool) as _);
 	}
@@ -229,7 +229,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 /// A wrapper type to pass `BlockId` to the actual transaction pool.
 struct TransactionPoolAdapter<Block: traits::Block> {
 	at: BlockId<Block>,
-	pool: Arc<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>,
+	pool: Arc<dyn OffchainSubmitTransaction<Block>>,
 }
 
 impl<Block: traits::Block> offchain::TransactionPool for TransactionPoolAdapter<Block> {

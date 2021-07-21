@@ -224,8 +224,25 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 		_targets: Vec<AccountId>,
 		_target_stake: Option<VoteWeight>,
-	) {
-	}
+	) {}
+
+	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
+	/// else a noop.
+	///
+	/// Same as `put_snapshot`, but can add a single voter one by one.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn add_voter(_voter: AccountId, _weight: VoteWeight, _targets: Vec<AccountId>) {}
+
+	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
+	/// else a noop.
+	///
+	/// Same as `put_snapshot`, but can add a single voter one by one.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn add_target(_target: AccountId) {}
+
+	/// Clear all voters and targets.
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn clear() {}
 }
 
 #[cfg(feature = "std")]

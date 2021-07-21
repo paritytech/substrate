@@ -18,11 +18,11 @@
 //! A MMR storage implementations.
 
 use codec::Encode;
-use crate::mmr::{NodeOf, Node};
-use crate::{NumberOfLeaves, Nodes, Module, Config, Instance, primitives};
-use frame_support::{StorageMap, StorageValue};
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
+
+use crate::mmr::{NodeOf, Node};
+use crate::{NumberOfLeaves, Nodes, Pallet, Config, primitives};
 
 /// A marker type for runtime-specific storage implementation.
 ///
@@ -56,11 +56,11 @@ impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
 
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L> where
 	T: Config<I>,
-	I: Instance,
+	I: 'static,
 	L: primitives::FullLeaf + codec::Decode,
 {
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
-		let key = Module::<T, I>::offchain_key(pos);
+		let key = Pallet::<T, I>::offchain_key(pos);
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain
 			::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
@@ -74,7 +74,7 @@ impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T,
 
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage, T, I, L> where
 	T: Config<I>,
-	I: Instance,
+	I: 'static,
 	L: primitives::FullLeaf,
 {
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
@@ -84,7 +84,7 @@ impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage, T, 
 	}
 
 	fn append(&mut self, pos: u64, elems: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
-		let mut leaves = crate::NumberOfLeaves::<I>::get();
+		let mut leaves = crate::NumberOfLeaves::<T, I>::get();
 		let mut size = crate::mmr::utils::NodesUtils::new(leaves).size();
 		if pos != size {
 			return Err(mmr_lib::Error::InconsistentStore);
@@ -94,7 +94,7 @@ impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage, T, 
 			// on-chain we only store the hash (even if it's a leaf)
 			<Nodes<T, I>>::insert(size, elem.hash());
 			// Indexing API is used to store the full leaf content.
-			let key = Module::<T, I>::offchain_key(size);
+			let key = Pallet::<T, I>::offchain_key(size);
 			elem.using_encoded(|elem| sp_io::offchain_index::set(&key, elem));
 			size += 1;
 
@@ -103,7 +103,7 @@ impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage, T, 
 			}
 		}
 
-		NumberOfLeaves::<I>::put(leaves);
+		NumberOfLeaves::<T, I>::put(leaves);
 
 		Ok(())
 	}

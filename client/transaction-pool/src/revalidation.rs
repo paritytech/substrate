@@ -20,7 +20,7 @@
 
 use std::{sync::Arc, pin::Pin, collections::{HashMap, HashSet, BTreeMap}};
 
-use sc_transaction_graph::{ChainApi, Pool, ExtrinsicHash, NumberFor, ValidatedTransaction};
+use crate::graph::{ChainApi, Pool, ExtrinsicHash, NumberFor, ValidatedTransaction};
 use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
@@ -29,9 +29,9 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnbounded
 use futures::prelude::*;
 use std::time::Duration;
 
-#[cfg(not(test))]
+#[cfg(not(feature = "test-helpers"))]
 const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(200);
-#[cfg(test)]
+#[cfg(feature = "test-helpers")]
 pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(1);
 
 const MIN_BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
@@ -225,7 +225,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 					batch_revalidate(this.pool.clone(), this.api.clone(), this.best_block, next_batch).await;
 
-					#[cfg(test)]
+					#[cfg(feature = "test-helpers")]
 					{
 						use intervalier::Guard;
 						// only trigger test events if something was processed
@@ -293,6 +293,7 @@ where
 		}
 	}
 
+	/// New revalidation queue with background worker.
 	pub fn new_with_interval<R: intervalier::IntoStream>(
 		api: Arc<Api>,
 		pool: Arc<Pool<Api>>,
@@ -320,7 +321,7 @@ where
 	}
 
 	/// New revalidation queue with background worker and test signal.
-	#[cfg(test)]
+	#[cfg(feature = "test-helpers")]
 	pub fn new_test(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
 		(Self, Pin<Box<dyn Future<Output=()> + Send>>, intervalier::BackSignalControl)
 	{
@@ -361,35 +362,5 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use sc_transaction_graph::Pool;
-	use sp_transaction_pool::TransactionSource;
-	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
-	use futures::executor::block_on;
-	use substrate_test_runtime_client::AccountKeyring::*;
 
-	fn setup() -> (Arc<TestApi>, Pool<TestApi>) {
-		let test_api = Arc::new(TestApi::empty());
-		let pool = Pool::new(Default::default(), true.into(), test_api.clone());
-		(test_api, pool)
-	}
-
-	#[test]
-	fn smoky() {
-		let (api, pool) = setup();
-		let pool = Arc::new(pool);
-		let queue = Arc::new(RevalidationQueue::new(api.clone(), pool.clone()));
-
-		let uxt = uxt(Alice, 0);
-		let uxt_hash = block_on(
-			pool.submit_one(&BlockId::number(0), TransactionSource::External, uxt.clone())
-		).expect("Should be valid");
-
-		block_on(queue.revalidate_later(0, vec![uxt_hash]));
-
-		// revalidated in sync offload 2nd time
-		assert_eq!(api.validation_requests().len(), 2);
-		// number of ready
-		assert_eq!(pool.validated_pool().status().ready, 1);
-	}
 }
