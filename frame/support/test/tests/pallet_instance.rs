@@ -317,7 +317,7 @@ frame_support::construct_runtime!(
 
 #[test]
 fn call_expand() {
-	let call_foo = pallet::Call::<Runtime>::foo(3);
+	let call_foo = pallet::Call::<Runtime>::foo { _foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
@@ -332,7 +332,7 @@ fn call_expand() {
 		&["foo", "foo_transactional"],
 	);
 
-	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo(3);
+	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo { _foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
@@ -395,7 +395,7 @@ fn instance_expand() {
 fn pallet_expand_deposit_event() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
-		pallet::Call::<Runtime>::foo(3).dispatch_bypass_filter(None.into()).unwrap();
+		pallet::Call::<Runtime>::foo { _foo: 3 }.dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::Example(pallet::Event::Something(3)),
@@ -404,7 +404,8 @@ fn pallet_expand_deposit_event() {
 
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
-		pallet::Call::<Runtime, pallet::Instance1>::foo(3).dispatch_bypass_filter(None.into()).unwrap();
+		pallet::Call::<Runtime, pallet::Instance1>::foo { _foo: 3 }
+			.dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::Instance1Example(pallet::Event::Something(3)),
