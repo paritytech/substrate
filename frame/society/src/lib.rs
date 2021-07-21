@@ -1059,7 +1059,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
-		#[doc = "Amount of our account balance that is specifically for the next round's bid(s)"]
+		/// Amount of our account balance that is specifically for the next round's bid(s)
 		pub pot: BalanceOf<T, I>,
 		pub members: Vec<T::AccountId>,
 		pub max_members: u32,

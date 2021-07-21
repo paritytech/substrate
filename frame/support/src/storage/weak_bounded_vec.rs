@@ -102,6 +102,11 @@ impl<T, S> WeakBoundedVec<T, S> {
 	pub fn iter_mut(&mut self) -> IterMut<'_, T> {
 		self.0.iter_mut()
 	}
+
+	/// Exactly the same semantics as [`Vec::pop`].
+	pub fn pop(&mut self) -> Option<T> {
+		self.0.pop()
+	}
 }
 
 impl<T, S: Get<u32>> WeakBoundedVec<T, S> {
