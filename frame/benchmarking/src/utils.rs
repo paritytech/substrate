@@ -17,9 +17,10 @@
 
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
 
-use codec::{Encode, Decode};
-use sp_std::{vec::Vec, prelude::Box};
+use codec::{Decode, Encode};
+use frame_support::traits::StorageInfo;
 use sp_io::hashing::blake2_256;
+use sp_std::{prelude::Box, vec::Vec};
 use sp_storage::TrackedStorageKey;
 
 /// An alphabet of possible parameters to use for benchmarking.
@@ -27,7 +28,32 @@ use sp_storage::TrackedStorageKey;
 #[allow(missing_docs)]
 #[allow(non_camel_case_types)]
 pub enum BenchmarkParameter {
-	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,
+	a,
+	b,
+	c,
+	d,
+	e,
+	f,
+	g,
+	h,
+	i,
+	j,
+	k,
+	l,
+	m,
+	n,
+	o,
+	p,
+	q,
+	r,
+	s,
+	t,
+	u,
+	v,
+	w,
+	x,
+	y,
+	z,
 }
 
 #[cfg(feature = "std")]
@@ -63,6 +89,7 @@ pub struct BenchmarkResults {
 	pub writes: u32,
 	pub repeat_writes: u32,
 	pub proof_size: u32,
+	pub keys: Vec<(Vec<u8>, u32, u32, bool)>,
 }
 
 /// Configuration used to setup and run runtime benchmarks.
@@ -90,7 +117,8 @@ sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
 		/// Dispatch the given benchmark.
-		fn dispatch_benchmark(config: BenchmarkConfig) -> Result<Vec<BenchmarkBatch>, sp_runtime::RuntimeString>;
+		fn dispatch_benchmark(config: BenchmarkConfig)
+			-> Result<(Vec<BenchmarkBatch>, Vec<StorageInfo>), sp_runtime::RuntimeString>;
 	}
 }
 
@@ -102,7 +130,8 @@ pub trait Benchmarking {
 	/// WARNING! This is a non-deterministic call. Do not use this within
 	/// consensus critical logic.
 	fn current_time() -> u128 {
-		std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
+		std::time::SystemTime::now()
+			.duration_since(std::time::SystemTime::UNIX_EPOCH)
 			.expect("Unix time doesn't go backwards; qed")
 			.as_nanos()
 	}
@@ -143,16 +172,14 @@ pub trait Benchmarking {
 		match whitelist.iter_mut().find(|x| x.key == add.key) {
 			// If we already have this key in the whitelist, update to be the most constrained value.
 			Some(item) => {
-				*item = TrackedStorageKey {
-					key: add.key,
-					has_been_read: item.has_been_read || add.has_been_read,
-					has_been_written: item.has_been_written || add.has_been_written,
-				}
+				item.reads += add.reads;
+				item.writes += add.writes;
+				item.whitelisted = item.whitelisted || add.whitelisted;
 			},
 			// If the key does not exist, add it.
 			None => {
 				whitelist.push(add);
-			}
+			},
 		}
 		self.set_whitelist(whitelist);
 	}
@@ -162,6 +189,10 @@ pub trait Benchmarking {
 		let mut whitelist = self.get_whitelist();
 		whitelist.retain(|x| x.key != remove);
 		self.set_whitelist(whitelist);
+	}
+
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
+		self.get_read_and_written_keys()
 	}
 
 	/// Get current estimated proof size.
@@ -212,12 +243,16 @@ pub trait BenchmarkingSetup<T, I = ()> {
 	fn instance(
 		&self,
 		components: &[(BenchmarkParameter, u32)],
-		verify: bool
+		verify: bool,
 	) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.
-pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
+pub fn account<AccountId: Decode + Default>(
+	name: &'static str,
+	index: u32,
+	seed: u32,
+) -> AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);
 	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
@@ -231,7 +266,7 @@ pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
 macro_rules! whitelist_account {
 	($acc:ident) => {
 		frame_benchmarking::benchmarking::add_to_whitelist(
-			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+			frame_system::Account::<T>::hashed_key_for(&$acc).into(),
 		);
-	}
+	};
 }

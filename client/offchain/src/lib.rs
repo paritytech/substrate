@@ -153,10 +153,7 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 	}
 }
 
-impl<Client, Block: traits::Block> fmt::Debug for OffchainWorkers<
-	Client,
-	Block,
-> {
+impl<Client, Block: traits::Block> fmt::Debug for OffchainWorkers<Client, Block> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_tuple("OffchainWorkers").finish()
 	}
@@ -186,10 +183,8 @@ fn ocw_api_version<A, Block>(at: &BlockId<Block>, runtime: ApiRef<A>) -> u32 whe
 	}
 }
 
-impl<Client, Block> OffchainWorkers<
-	Client,
-	Block,
-> where
+impl<Client, Block> OffchainWorkers<Client, Block>
+where
 	Block: traits::Block,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
@@ -298,7 +293,9 @@ impl<Client, Block> OffchainWorkers<
 				_ => {
 					#[allow(deprecated)]
 					runtime.offchain_worker_before_version_2_with_context(
-						&at, context, *header.number()
+						&at,
+						context,
+						*header.number(),
 					)
 				}
 			};
@@ -391,18 +388,18 @@ pub async fn notification_future<Client, Block, Spawner>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::sync::Arc;
-	use sc_network::{Multiaddr, PeerId};
-	use substrate_test_runtime_client::{
-		TestClient, runtime::Block, TestClientBuilderExt,
-		DefaultTestClientBuilderExt, ClientBlockImportExt,
-	};
-	use sc_transaction_pool::{BasicPool, FullChainApi};
-	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-	use sp_consensus::BlockOrigin;
-	use sc_client_api::Backend as _;
-	use sc_block_builder::BlockBuilderProvider as _;
 	use futures::executor::block_on;
+	use sc_block_builder::BlockBuilderProvider as _;
+	use sc_client_api::Backend as _;
+	use sc_network::{Multiaddr, PeerId};
+	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
+	use sp_consensus::BlockOrigin;
+	use std::sync::Arc;
+	use substrate_test_runtime_client::{
+		runtime::Block, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient,
+		TestClientBuilderExt,
+	};
 
 	struct TestNetwork();
 
@@ -426,17 +423,15 @@ mod tests {
 		}
 	}
 
-	struct TestPool(
-		Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>
-	);
+	struct TestPool(Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>);
 
-	impl sp_transaction_pool::OffchainSubmitTransaction<Block> for TestPool {
+	impl sc_transaction_pool_api::OffchainSubmitTransaction<Block> for TestPool {
 		fn submit_at(
 			&self,
 			at: &BlockId<Block>,
 			extrinsic: <Block as traits::Block>::Extrinsic,
 		) -> Result<(), ()> {
-			let source = sp_transaction_pool::TransactionSource::Local;
+			let source = sc_transaction_pool_api::TransactionSource::Local;
 			futures::executor::block_on(self.0.submit_one(&at, source, extrinsic))
 				.map(|_| ())
 				.map_err(|_| ())
@@ -461,9 +456,7 @@ mod tests {
 
 		// when
 		let offchain = OffchainWorkers::new(client);
-		futures::executor::block_on(
-			offchain.on_block_imported(&header, network, false)
-		);
+		futures::executor::block_on(offchain.on_block_imported(&header, network, false));
 
 		// then
 		assert_eq!(pool.0.status().ready, 1);
@@ -476,22 +469,21 @@ mod tests {
 
 		sp_tracing::try_init_simple();
 
-		let (client, backend) =
-			substrate_test_runtime_client::TestClientBuilder::new()
-				.enable_offchain_indexing_api()
-				.build_with_backend();
+		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
+			.enable_offchain_indexing_api()
+			.build_with_backend();
 		let mut client = Arc::new(client);
 		let offchain_db = backend.offchain_storage().unwrap();
 
 		let key = &b"hello"[..];
 		let value = &b"world"[..];
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder.push(
-			substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexSet(
+		block_builder
+			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexSet(
 				key.to_vec(),
 				value.to_vec(),
-			),
-		).unwrap();
+			))
+			.unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -499,9 +491,11 @@ mod tests {
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
 
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder.push(
-			substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexClear(key.to_vec()),
-		).unwrap();
+		block_builder
+			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexClear(
+				key.to_vec(),
+			))
+			.unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();

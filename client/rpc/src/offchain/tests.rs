@@ -18,7 +18,7 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use sp_core::{Bytes, offchain::storage::InMemOffchainStorage};
+use sp_core::{offchain::storage::InMemOffchainStorage, Bytes};
 
 #[test]
 fn local_storage_should_work() {

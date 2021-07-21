@@ -23,35 +23,33 @@
 #![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
-use sp_core::crypto::Pair;
-use sp_keystore::{
-	SyncCryptoStore,
-	vrf::make_transcript as transcript_from_data,
+use futures::executor::block_on;
+use log::debug;
+use rand::RngCore;
+use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
+use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
+use sc_client_api::{backend::TransactionFor, BlockchainEvents};
+use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
+use sc_keystore::LocalKeystore;
+use sc_network::config::ProtocolConfig;
+use sc_network_test::{Block as TestBlock, *};
+use sp_application_crypto::key_types::BABE;
+use sp_consensus::{
+	import_queue::{BoxBlockImport, BoxJustificationImport},
+	AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal,
 };
 use sp_consensus_babe::{
-	AuthorityPair, Slot, AllowedSlots, make_transcript, make_transcript_data,
-	inherents::InherentDataProvider,
+	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
+	AuthorityPair, Slot,
 };
-use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
-use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
-use sp_consensus::{
-	NoNetwork as DummyOracle, Proposal, DisableProofRecording, AlwaysCanAuthor,
-	import_queue::{BoxBlockImport, BoxJustificationImport},
+use sp_core::crypto::Pair;
+use sp_keystore::{vrf::make_transcript as transcript_from_data, SyncCryptoStore};
+use sp_runtime::{
+	generic::DigestItem,
+	traits::{Block as BlockT, DigestFor},
 };
-use sc_network_test::{Block as TestBlock, *};
-use sc_network::config::ProtocolConfig;
-use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
-use sc_client_api::{BlockchainEvents, backend::TransactionFor};
-use log::debug;
-use std::{time::Duration, cell::RefCell, task::Poll};
-use rand::RngCore;
-use rand_chacha::{
-	rand_core::SeedableRng, ChaChaRng,
-};
-use sc_keystore::LocalKeystore;
-use sp_application_crypto::key_types::BABE;
-use futures::executor::block_on;
 use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
+use std::{cell::RefCell, task::Poll, time::Duration};
 
 type Item = DigestItem<Hash>;
 
@@ -95,10 +93,7 @@ impl Environment<TestBlock> for DummyFactory {
 	type Proposer = DummyProposer;
 	type Error = Error;
 
-	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
-		-> Self::CreateProposer
-	{
-
+	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header) -> Self::CreateProposer {
 		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
 			.expect("parent header has a pre-digest")
 			.slot();
@@ -113,23 +108,24 @@ impl Environment<TestBlock> for DummyFactory {
 }
 
 impl DummyProposer {
-	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
-		-> future::Ready<
-			Result<
-				Proposal<
-					TestBlock,
-					sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>,
-					()
-				>,
-				Error
-			>
-		>
-	{
-		let block_builder = self.factory.client.new_block_at(
-			&BlockId::Hash(self.parent_hash),
-			pre_digests,
-			false,
-		).unwrap();
+	fn propose_with(
+		&mut self,
+		pre_digests: DigestFor<TestBlock>,
+	) -> future::Ready<
+		Result<
+			Proposal<
+				TestBlock,
+				sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>,
+				(),
+			>,
+			Error,
+		>,
+	> {
+		let block_builder = self
+			.factory
+			.client
+			.new_block_at(&BlockId::Hash(self.parent_hash), pre_digests, false)
+			.unwrap();
 
 		let mut block = match block_builder.build().map_err(|e| e.into()) {
 			Ok(b) => b.block,
@@ -143,13 +139,14 @@ impl DummyProposer {
 		// figure out if we should add a consensus digest, since the test runtime
 		// doesn't.
 		let epoch_changes = self.factory.epoch_changes.shared_data();
-		let epoch = epoch_changes.epoch_data_for_child_of(
-			descendent_query(&*self.factory.client),
-			&self.parent_hash,
-			self.parent_number,
-			this_slot,
-			|slot| Epoch::genesis(&self.factory.config, slot),
-		)
+		let epoch = epoch_changes
+			.epoch_data_for_child_of(
+				descendent_query(&*self.factory.client),
+				&self.parent_hash,
+				self.parent_number,
+				this_slot,
+				|slot| Epoch::genesis(&self.factory.config, slot),
+			)
 			.expect("client has data to find epoch")
 			.expect("can compute epoch for baked block");
 
@@ -162,7 +159,8 @@ impl DummyProposer {
 			let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
 				authorities: epoch.authorities.clone(),
 				randomness: epoch.randomness.clone(),
-			}).encode();
+			})
+			.encode();
 			let digest = DigestItem::Consensus(BABE_ENGINE_ID, digest_data);
 			block.header.digest_mut().push(digest)
 		}
@@ -176,7 +174,8 @@ impl DummyProposer {
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
-	type Transaction = sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>;
+	type Transaction =
+		sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>;
 	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Error>>;
 	type ProofRecording = DisableProofRecording;
 	type Proof = ();
@@ -201,9 +200,9 @@ pub struct PanickingBlockImport<B>(B);
 
 #[async_trait::async_trait]
 impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<B>
-	where
-		B::Transaction: Send,
-		B: Send,
+where
+	B::Transaction: Send,
+	B: Send,
 {
 	type Error = B::Error;
 	type Transaction = B::Transaction;
@@ -233,10 +232,8 @@ pub struct BabeTestNet {
 type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
-type TestSelectChain = substrate_test_runtime_client::LongestChain<
-	substrate_test_runtime_client::Backend,
-	TestBlock,
->;
+type TestSelectChain =
+	substrate_test_runtime_client::LongestChain<substrate_test_runtime_client::Backend, TestBlock>;
 
 pub struct TestVerifier {
 	inner: BabeVerifier<
@@ -244,11 +241,13 @@ pub struct TestVerifier {
 		PeersFullClient,
 		TestSelectChain,
 		AlwaysCanAuthor,
-		Box<dyn CreateInherentDataProviders<
-			TestBlock,
-			(),
-			InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider)
-		>>
+		Box<
+			dyn CreateInherentDataProviders<
+				TestBlock,
+				(),
+				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+			>,
+		>,
 	>,
 	mutator: Mutator,
 }
@@ -274,7 +273,12 @@ impl Verifier<TestBlock> for TestVerifier {
 pub struct PeerData {
 	link: BabeLink<TestBlock>,
 	block_import: Mutex<
-		Option<BoxBlockImport<TestBlock, TransactionFor<substrate_test_runtime_client::Backend, TestBlock>>>
+		Option<
+			BoxBlockImport<
+				TestBlock,
+				TransactionFor<substrate_test_runtime_client::Backend, TestBlock>,
+			>,
+		>,
 	>,
 }
 
@@ -286,32 +290,27 @@ impl TestNetFactory for BabeTestNet {
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
 		debug!(target: "babe", "Creating test network from config");
-		BabeTestNet {
-			peers: Vec::new(),
-		}
+		BabeTestNet { peers: Vec::new() }
 	}
 
-	fn make_block_import(&self, client: PeersClient)
-		-> (
-			BlockImportAdapter<Self::BlockImport>,
-			Option<BoxJustificationImport<Block>>,
-			Option<PeerData>,
-		)
-	{
+	fn make_block_import(
+		&self,
+		client: PeersClient,
+	) -> (
+		BlockImportAdapter<Self::BlockImport>,
+		Option<BoxJustificationImport<Block>>,
+		Option<PeerData>,
+	) {
 		let client = client.as_full().expect("only full clients are tested");
 
 		let config = Config::get_or_compute(&*client).expect("config available");
-		let (block_import, link) = crate::block_import(
-			config,
-			client.clone(),
-			client.clone(),
-		).expect("can initialize block-import");
+		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
+			.expect("can initialize block-import");
 
 		let block_import = PanickingBlockImport(block_import);
 
-		let data_block_import = Mutex::new(
-			Some(Box::new(block_import.clone()) as BoxBlockImport<_, _>)
-		);
+		let data_block_import =
+			Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_, _>));
 		(
 			BlockImportAdapter::new(block_import),
 			None,
@@ -324,16 +323,16 @@ impl TestNetFactory for BabeTestNet {
 		client: PeersClient,
 		_cfg: &ProtocolConfig,
 		maybe_link: &Option<PeerData>,
-	)
-		-> Self::Verifier
-	{
+	) -> Self::Verifier {
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 
 		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
 
 		// ensure block import and verifier are linked correctly.
-		let data = maybe_link.as_ref().expect("babe link always provided to verifier instantiation");
+		let data = maybe_link
+			.as_ref()
+			.expect("babe link always provided to verifier instantiation");
 
 		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 
@@ -369,10 +368,7 @@ impl TestNetFactory for BabeTestNet {
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<BabePeer>)>(
-		&mut self,
-		closure: F,
-	) {
+	fn mut_peers<F: FnOnce(&mut Vec<BabePeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 }
@@ -382,9 +378,7 @@ impl TestNetFactory for BabeTestNet {
 fn rejects_empty_block() {
 	sp_tracing::try_init_simple();
 	let mut net = BabeTestNet::new(3);
-	let block_builder = |builder: BlockBuilder<_, _, _>| {
-		builder.build().unwrap().block
-	};
+	let block_builder = |builder: BlockBuilder<_, _, _>| builder.build().unwrap().block;
 	net.mut_peers(|peer| {
 		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);
 	})
@@ -397,11 +391,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
 	let net = BabeTestNet::new(3);
 
-	let peers = &[
-		(0, "//Alice"),
-		(1, "//Bob"),
-		(2, "//Charlie"),
-	];
+	let peers = &[(0, "//Alice"), (1, "//Bob"), (2, "//Charlie")];
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
@@ -415,9 +405,10 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
-			.expect("Creates keystore"));
-		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(seed)).expect("Generates authority key");
+		let keystore: SyncCryptoStorePtr =
+			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
+		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(seed))
+			.expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
 		let mut got_own = false;
@@ -435,47 +426,54 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 		import_notifications.push(
 			// run each future until we get one of our own blocks with number higher than 5
 			// that was produced locally.
-			client.import_notification_stream()
-				.take_while(move |n| future::ready(n.header.number() < &5 || {
-					if n.origin == BlockOrigin::Own {
-						got_own = true;
-					} else {
-						got_other = true;
-					}
+			client
+				.import_notification_stream()
+				.take_while(move |n| {
+					future::ready(
+						n.header.number() < &5 || {
+							if n.origin == BlockOrigin::Own {
+								got_own = true;
+							} else {
+								got_other = true;
+							}
 
-					// continue until we have at least one block of our own
-					// and one of another peer.
-					!(got_own && got_other)
-				}))
-				.for_each(|_| future::ready(()) )
+							// continue until we have at least one block of our own
+							// and one of another peer.
+							!(got_own && got_other)
+						},
+					)
+				})
+				.for_each(|_| future::ready(())),
 		);
 
+		babe_futures.push(
+			start_babe(BabeParams {
+				block_import: data.block_import.lock().take().expect("import set up during init"),
+				select_chain,
+				client,
+				env: environ,
+				sync_oracle: DummyOracle,
+				create_inherent_data_providers: Box::new(|_, _| async {
+					let timestamp = TimestampInherentDataProvider::from_system_time();
+					let slot = InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						Duration::from_secs(6),
+					);
 
-		babe_futures.push(start_babe(BabeParams {
-			block_import: data.block_import.lock().take().expect("import set up during init"),
-			select_chain,
-			client,
-			env: environ,
-			sync_oracle: DummyOracle,
-			create_inherent_data_providers: Box::new(|_, _| async {
-				let timestamp = TimestampInherentDataProvider::from_system_time();
-				let slot = InherentDataProvider::from_timestamp_and_duration(
-					*timestamp,
-					Duration::from_secs(6),
-				);
-
-				Ok((timestamp, slot))
-			}),
-			force_authoring: false,
-			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
-			babe_link: data.link.clone(),
-			keystore,
-			can_author_with: sp_consensus::AlwaysCanAuthor,
-			justification_sync_link: (),
-			block_proposal_slot_portion: SlotProportion::new(0.5),
-			max_block_proposal_slot_portion: None,
-			telemetry: None,
-		}).expect("Starts babe"));
+					Ok((timestamp, slot))
+				}),
+				force_authoring: false,
+				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
+				babe_link: data.link.clone(),
+				keystore,
+				can_author_with: sp_consensus::AlwaysCanAuthor,
+				justification_sync_link: (),
+				block_proposal_slot_portion: SlotProportion::new(0.5),
+				max_block_proposal_slot_portion: None,
+				telemetry: None,
+			})
+			.expect("Starts babe"),
+		);
 	}
 	block_on(future::select(
 		futures::future::poll_fn(move |cx| {
@@ -489,7 +487,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 
 			Poll::<()>::Pending
 		}),
-		future::select(future::join_all(import_notifications), future::join_all(babe_futures))
+		future::select(future::join_all(import_notifications), future::join_all(babe_futures)),
 	));
 }
 
@@ -503,7 +501,8 @@ fn authoring_blocks() {
 fn rejects_missing_inherent_digest() {
 	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::take(&mut header.digest_mut().logs);
-		header.digest_mut().logs = v.into_iter()
+		header.digest_mut().logs = v
+			.into_iter()
 			.filter(|v| stage == Stage::PostSeal || v.as_babe_pre_digest().is_none())
 			.collect()
 	})
@@ -514,7 +513,8 @@ fn rejects_missing_inherent_digest() {
 fn rejects_missing_seals() {
 	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::take(&mut header.digest_mut().logs);
-		header.digest_mut().logs = v.into_iter()
+		header.digest_mut().logs = v
+			.into_iter()
 			.filter(|v| stage == Stage::PreSeal || v.as_babe_seal().is_none())
 			.collect()
 	})
@@ -525,7 +525,8 @@ fn rejects_missing_seals() {
 fn rejects_missing_consensus_digests() {
 	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::take(&mut header.digest_mut().logs);
-		header.digest_mut().logs = v.into_iter()
+		header.digest_mut().logs = v
+			.into_iter()
 			.filter(|v| stage == Stage::PostSeal || v.as_next_epoch_descriptor().is_none())
 			.collect()
 	});
@@ -560,8 +561,8 @@ fn sig_is_not_pre_digest() {
 fn can_author_block() {
 	sp_tracing::try_init_simple();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
-		.expect("Creates keystore"));
+	let keystore: SyncCryptoStorePtr =
+		Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
 	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
@@ -601,8 +602,8 @@ fn can_author_block() {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
-				break;
-			}
+				break
+			},
 		}
 	}
 }
@@ -622,26 +623,27 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	});
 
 	let pre_digest = sp_runtime::generic::Digest {
-		logs: vec![
-			Item::babe_pre_digest(
-				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-					authority_index: 0,
-					slot,
-				}),
-			),
-		],
+		logs: vec![Item::babe_pre_digest(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
+			authority_index: 0,
+			slot,
+		}))],
 	};
 
 	let parent_hash = parent.hash();
 
 	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().block;
 
-	let epoch_descriptor = proposer_factory.epoch_changes.shared_data().epoch_descriptor_for_child_of(
-		descendent_query(&*proposer_factory.client),
-		&parent_hash,
-		*parent.number(),
-		slot,
-	).unwrap().unwrap();
+	let epoch_descriptor = proposer_factory
+		.epoch_changes
+		.shared_data()
+		.epoch_descriptor_for_child_of(
+			descendent_query(&*proposer_factory.client),
+			&parent_hash,
+			*parent.number(),
+			slot,
+		)
+		.unwrap()
+		.unwrap();
 
 	let seal = {
 		// sign the pre-sealed hash of the block and then
@@ -706,13 +708,12 @@ fn importing_block_one_sets_genesis_epoch() {
 	let genesis_epoch = Epoch::genesis(&data.link.config, 999.into());
 
 	let epoch_changes = data.link.epoch_changes.shared_data();
-	let epoch_for_second_block = epoch_changes.epoch_data_for_child_of(
-		descendent_query(&*client),
-		&block_hash,
-		1,
-		1000.into(),
-		|slot| Epoch::genesis(&data.link.config, slot),
-	).unwrap().unwrap();
+	let epoch_for_second_block = epoch_changes
+		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
+			Epoch::genesis(&data.link.config, slot)
+		})
+		.unwrap()
+		.unwrap();
 
 	assert_eq!(epoch_for_second_block, genesis_epoch);
 }
@@ -779,16 +780,10 @@ fn importing_epoch_change_block_prunes_tree() {
 	let fork_3 = propose_and_import_blocks(BlockId::Hash(canon_hashes[18]), 10);
 
 	// We should be tracking a total of 9 epochs in the fork tree
-	assert_eq!(
-		epoch_changes.shared_data().tree().iter().count(),
-		9,
-	);
+	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9,);
 
 	// And only one root
-	assert_eq!(
-		epoch_changes.shared_data().tree().roots().count(),
-		1,
-	);
+	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1,);
 
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).
@@ -796,32 +791,47 @@ fn importing_epoch_change_block_prunes_tree() {
 	propose_and_import_blocks(BlockId::Hash(client.chain_info().best_hash), 7);
 
 	// at this point no hashes from the first fork must exist on the tree
-	assert!(
-		!epoch_changes.shared_data().tree().iter().map(|(h, _, _)| h).any(|h| fork_1.contains(h)),
-	);
+	assert!(!epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_1.contains(h)),);
 
 	// but the epoch changes from the other forks must still exist
-	assert!(
-		epoch_changes.shared_data().tree().iter().map(|(h, _, _)| h).any(|h| fork_2.contains(h))
-	);
+	assert!(epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_2.contains(h)));
 
-	assert!(
-		epoch_changes.shared_data().tree().iter().map(|(h, _, _)| h).any(|h| fork_3.contains(h)),
-	);
+	assert!(epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_3.contains(h)),);
 
 	// finalizing block #25 from the canon chain should prune out the second fork
 	client.finalize_block(BlockId::Hash(canon_hashes[24]), None, false).unwrap();
 	propose_and_import_blocks(BlockId::Hash(client.chain_info().best_hash), 8);
 
 	// at this point no hashes from the second fork must exist on the tree
-	assert!(
-		!epoch_changes.shared_data().tree().iter().map(|(h, _, _)| h).any(|h| fork_2.contains(h)),
-	);
+	assert!(!epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_2.contains(h)),);
 
 	// while epoch changes from the last fork should still exist
-	assert!(
-		epoch_changes.shared_data().tree().iter().map(|(h, _, _)| h).any(|h| fork_3.contains(h)),
-	);
+	assert!(epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_3.contains(h)),);
 }
 
 #[test]
@@ -856,20 +866,15 @@ fn verify_slots_are_strictly_increasing() {
 
 	// we should fail to import this block since the slot number didn't increase.
 	// we will panic due to the `PanickingBlockImport` defined above.
-	propose_and_import_block(
-		&b1,
-		Some(999.into()),
-		&mut proposer_factory,
-		&mut block_import,
-	);
+	propose_and_import_block(&b1, Some(999.into()), &mut proposer_factory, &mut block_import);
 }
 
 #[test]
 fn babe_transcript_generation_match() {
 	sp_tracing::try_init_simple();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
-		.expect("Creates keystore"));
+	let keystore: SyncCryptoStorePtr =
+		Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
 	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
 		.expect("Generates authority pair");
 
@@ -890,9 +895,7 @@ fn babe_transcript_generation_match() {
 
 	let test = |t: merlin::Transcript| -> [u8; 16] {
 		let mut b = [0u8; 16];
-		t.build_rng()
-			.finalize(&mut ChaChaRng::from_seed([0u8;32]))
-			.fill_bytes(&mut b);
+		t.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32])).fill_bytes(&mut b);
 		b
 	};
 	debug_assert!(test(orig_transcript) == test(transcript_from_data(new_transcript)));

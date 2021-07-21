@@ -21,9 +21,9 @@
 
 use proc_macro::TokenStream;
 
+mod decl_runtime_apis;
 mod impl_runtime_apis;
 mod mock_impl_runtime_apis;
-mod decl_runtime_apis;
 mod utils;
 
 #[proc_macro]

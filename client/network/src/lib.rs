@@ -243,13 +243,12 @@
 //! - Calling `trigger_repropagate` when a transaction is added to the pool.
 //!
 //! More precise usage details are still being worked on and will likely change in the future.
-//!
 
 mod behaviour;
 mod chain;
-mod peer_info;
 mod discovery;
 mod on_demand_layer;
+mod peer_info;
 mod protocol;
 mod request_responses;
 mod schema;
@@ -257,21 +256,25 @@ mod service;
 mod transport;
 mod utils;
 
-pub mod block_request_handler;
 pub mod bitswap;
-pub mod light_client_requests;
+pub mod block_request_handler;
 pub mod config;
 pub mod error;
-pub mod gossip;
+pub mod light_client_requests;
 pub mod network_state;
+pub mod state_request_handler;
 pub mod transactions;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
+pub use protocol::{
+	event::{DhtEvent, Event, ObservedRole},
+	sync::{StateDownloadProgress, SyncState},
+	PeerInfo,
+};
 pub use service::{
-	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
-	NotificationSenderReady, IfDisconnected,
+	IfDisconnected, NetworkService, NetworkWorker, NotificationSender, NotificationSenderReady,
+	OutboundFailure, RequestFailure,
 };
 
 pub use sc_peerset::ReputationChange;
@@ -321,4 +324,6 @@ pub struct NetworkStatus<B: BlockT> {
 	pub total_bytes_inbound: u64,
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
+	/// State sync in progress.
+	pub state_sync: Option<protocol::sync::StateDownloadProgress>,
 }

@@ -113,7 +113,7 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 			"missing argument: name of the node. Example: sc_cli::prefix_logs_with(<expr>)",
 		)
 		.to_compile_error()
-		.into();
+		.into()
 	}
 
 	let name = syn::parse_macro_input!(arg as Expr);
@@ -124,12 +124,7 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 		Err(e) => return Error::new(Span::call_site(), e).to_compile_error().into(),
 	};
 
-	let ItemFn {
-		attrs,
-		vis,
-		sig,
-		block,
-	} = item_fn;
+	let ItemFn { attrs, vis, sig, block } = item_fn;
 
 	(quote! {
 		#(#attrs)*

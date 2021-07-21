@@ -59,7 +59,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let hooks_impl = if def.hooks.is_none() {
 		let frame_system = &def.frame_system;
-		quote::quote!{
+		quote::quote! {
 			impl<#type_impl_gen>
 				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
 				for Pallet<#type_use_gen> {}

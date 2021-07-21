@@ -19,13 +19,15 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, account, whitelist_account, impl_benchmark_test_suite};
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelist_account};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable, schedule::DispatchTime},
+	traits::{
+		schedule::DispatchTime, Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable,
+	},
 };
-use frame_system::{RawOrigin, Pallet as System, self};
-use sp_runtime::traits::{Bounded, One};
+use frame_system::{Pallet as System, RawOrigin};
+use sp_runtime::traits::{BadOrigin, Bounded, One};
 
 use crate::Pallet as Democracy;
 
@@ -49,11 +51,7 @@ fn add_proposal<T: Config>(n: u32) -> Result<T::Hash, &'static str> {
 	let value = T::MinimumDeposit::get();
 	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
 
-	Democracy::<T>::propose(
-		RawOrigin::Signed(other).into(),
-		proposal_hash,
-		value.into(),
-	)?;
+	Democracy::<T>::propose(RawOrigin::Signed(other).into(), proposal_hash, value.into())?;
 
 	Ok(proposal_hash)
 }
@@ -76,20 +74,15 @@ fn add_referendum<T: Config>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		63,
 		frame_system::RawOrigin::Root.into(),
 		Call::enact_proposal(proposal_hash, referendum_index).into(),
-	).map_err(|_| "failed to schedule named")?;
+	)
+	.map_err(|_| "failed to schedule named")?;
 	Ok(referendum_index)
 }
 
 fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
-	let v = Vote {
-		aye: true,
-		conviction: Conviction::Locked1x,
-	};
+	let v = Vote { aye: true, conviction: Conviction::Locked1x };
 
-	AccountVote::Standard {
-		vote: v,
-		balance: b,
-	}
+	AccountVote::Standard { vote: v, balance: b }
 }
 
 benchmarks! {
@@ -118,13 +111,13 @@ benchmarks! {
 		// Create s existing "seconds"
 		for i in 0 .. s {
 			let seconder = funded_account::<T>("seconder", i);
-			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0, u32::max_value())?;
+			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0, u32::MAX)?;
 		}
 
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
 		assert_eq!(deposits.0.len(), (s + 1) as usize, "Seconds not recorded");
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), 0, u32::max_value())
+	}: _(RawOrigin::Signed(caller), 0, u32::MAX)
 	verify {
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
 		assert_eq!(deposits.0.len(), (s + 2) as usize, "`second` benchmark did not work");
@@ -224,8 +217,8 @@ benchmarks! {
 		// Place our proposal in the external queue, too.
 		let hash = T::Hashing::hash_of(&0);
 		assert_ok!(
-            Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash.clone())
-        );
+			Democracy::<T>::external_propose(T::ExternalOrigin::successful_origin(), hash.clone())
+		);
 
 		// Add a referendum of our proposal.
 		let referendum_index = add_referendum::<T>(0)?;
@@ -237,9 +230,9 @@ benchmarks! {
 	verify {
 		// Referendum has been canceled
 		assert_noop!(
-            Democracy::<T>::referendum_status(referendum_index),
-            Error::<T>::ReferendumInvalid
-        );
+			Democracy::<T>::referendum_status(referendum_index),
+			Error::<T>::ReferendumInvalid
+		);
 	}
 
 	// Worst case scenario, we external propose a previously blacklisted proposal
@@ -609,7 +602,7 @@ benchmarks! {
 
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), proposal_hash.clone(), u32::max_value())
+	}: _(RawOrigin::Signed(caller), proposal_hash.clone(), u32::MAX)
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		assert!(!Preimages::<T>::contains_key(proposal_hash));
@@ -759,7 +752,7 @@ benchmarks! {
 	}: enact_proposal(RawOrigin::Root, proposal_hash, 0)
 	verify {
 		// Fails due to mismatched origin
-		assert_last_event::<T>(Event::<T>::Executed(0, false).into());
+		assert_last_event::<T>(Event::<T>::Executed(0, Err(BadOrigin.into())).into());
 	}
 
 	#[extra]
@@ -785,9 +778,4 @@ benchmarks! {
 	}
 }
 
-
-impl_benchmark_test_suite!(
-	Democracy,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Democracy, crate::tests::new_test_ext(), crate::tests::Test,);

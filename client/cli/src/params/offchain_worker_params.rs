@@ -27,8 +27,7 @@ use sc_network::config::Role;
 use sc_service::config::OffchainWorkerConfig;
 use structopt::StructOpt;
 
-use crate::error;
-use crate::OffchainWorkerEnabled;
+use crate::{error, OffchainWorkerEnabled};
 
 /// Offchain worker related parameters.
 #[derive(Debug, StructOpt, Clone)]
@@ -87,10 +86,6 @@ impl OffchainWorkerParams {
 		let finality_ocw_enabled = is_enabled(self.finality_ocw_enabled);
 		let indexing_enabled = self.indexing_enabled;
 
-		Ok(OffchainWorkerConfig {
-			ocw_enabled,
-			finality_ocw_enabled,
-			indexing_enabled,
-		})
+		Ok(OffchainWorkerConfig { ocw_enabled, finality_ocw_enabled, indexing_enabled })
 	}
 }

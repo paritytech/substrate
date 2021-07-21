@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use frame_support::{
+	traits::{Get, GetPalletVersion, PalletVersion},
 	weights::Weight,
-	traits::{GetPalletVersion, PalletVersion, Get},
 };
 use sp_io::hashing::twox_128;
 
@@ -31,18 +31,15 @@ pub const OLD_PREFIX: &[u8] = b"GrandpaFinality";
 /// `<Runtime as frame_system::Config>::PalletInfo::name::<GrandpaPallet>`.
 ///
 /// The old storage prefix, `GrandpaFinality` is hardcoded in the migration code.
-pub fn migrate<
-	T: frame_system::Config,
-	P: GetPalletVersion,
-	N: AsRef<str>,
->(new_pallet_name: N) -> Weight {
-
+pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
+	new_pallet_name: N,
+) -> Weight {
 	if new_pallet_name.as_ref().as_bytes() == OLD_PREFIX {
 		log::info!(
 			target: "runtime::afg",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
-		return 0;
+		return 0
 	}
 	let maybe_storage_version = <P as GetPalletVersion>::storage_version();
 	log::info!(
@@ -59,7 +56,7 @@ pub fn migrate<
 				new_pallet_name.as_ref().as_bytes(),
 			);
 			<T as frame_system::Config>::BlockWeights::get().max_block
-		}
+		},
 		_ => {
 			log::warn!(
 				target: "runtime::afg",
@@ -75,11 +72,9 @@ pub fn migrate<
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migration<
-	T: frame_system::Config,
-	P: GetPalletVersion + 'static,
-	N: AsRef<str>,
->(new: N) {
+pub fn pre_migration<T: frame_system::Config, P: GetPalletVersion + 'static, N: AsRef<str>>(
+	new: N,
+) {
 	let new = new.as_ref();
 	log::info!("pre-migration grandpa test with new = {}", new);
 
@@ -119,10 +114,6 @@ pub fn post_migration<P: GetPalletVersion>() {
 	log::info!("post-migration grandpa");
 
 	// Assert that nothing remains at the old prefix
-	assert!(
-		sp_io::storage::next_key(&twox_128(OLD_PREFIX)).map_or(
-			true,
-			|next_key| !next_key.starts_with(&twox_128(OLD_PREFIX))
-		)
-	);
+	assert!(sp_io::storage::next_key(&twox_128(OLD_PREFIX))
+		.map_or(true, |next_key| !next_key.starts_with(&twox_128(OLD_PREFIX))));
 }
