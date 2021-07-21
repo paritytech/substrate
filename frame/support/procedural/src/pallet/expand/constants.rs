@@ -69,41 +69,38 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	});
 
-	let consts = config_consts.chain(extra_consts)
-		.map(|const_| {
-			let const_type = &const_.type_;
-			let ident = &const_.ident;
-			let ident_str = format!("{}", ident);
-			let doc = const_.doc.clone().into_iter();
-			let default_byte_impl = &const_.default_byte_impl;
-			let default_byte_getter = syn::Ident::new(
-				&format!("{}DefaultByteGetter", ident),
-				ident.span()
+	let consts = config_consts.chain(extra_consts).map(|const_| {
+		let const_type = &const_.type_;
+		let ident = &const_.ident;
+		let ident_str = format!("{}", ident);
+		let doc = const_.doc.clone().into_iter();
+		let default_byte_impl = &const_.default_byte_impl;
+		let default_byte_getter =
+			syn::Ident::new(&format!("{}DefaultByteGetter", ident), ident.span());
+
+		quote::quote!({
+			#[allow(non_upper_case_types)]
+			#[allow(non_camel_case_types)]
+			struct #default_byte_getter<#type_decl_gen>(
+				#frame_support::sp_std::marker::PhantomData<(#type_use_gen)>
 			);
 
-			quote::quote!({
-				#[allow(non_upper_case_types)]
-				#[allow(non_camel_case_types)]
-				struct #default_byte_getter<#type_decl_gen>(
-					#frame_support::sp_std::marker::PhantomData<(#type_use_gen)>
-				);
-
-				impl<#type_impl_gen> #default_byte_getter<#type_use_gen>
-					#completed_where_clause
-				{
-					fn default_byte(&self) -> #frame_support::sp_std::vec::Vec<u8> {
-						#default_byte_impl
-					}
+			impl<#type_impl_gen> #default_byte_getter<#type_use_gen>
+				#completed_where_clause
+			{
+				fn default_byte(&self) -> #frame_support::sp_std::vec::Vec<u8> {
+					#default_byte_impl
 				}
+			}
 
-				#frame_support::metadata::PalletConstantMetadata {
-					name: #ident_str,
-					ty: #frame_support::scale_info::meta_type::<#const_type>(),
-					value: #default_byte_getter::<#type_use_gen>(Default::default()).default_byte(),
-					docs: #frame_support::sp_std::vec![ #( #doc ),* ],
-				}
-			})
-		});
+			#frame_support::metadata::PalletConstantMetadata {
+				name: #ident_str,
+				ty: #frame_support::scale_info::meta_type::<#const_type>(),
+				value: #default_byte_getter::<#type_use_gen>(Default::default()).default_byte(),
+				docs: #frame_support::sp_std::vec![ #( #doc ),* ],
+			}
+		})
+	});
 
 	quote::quote!(
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause{

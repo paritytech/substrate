@@ -26,14 +26,11 @@ use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use serde::{Deserialize, Serialize};
 
+use pallet_mmr_primitives::{Error as MmrError, Proof};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT},
-};
-use pallet_mmr_primitives::{Error as MmrError, Proof};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 pub use pallet_mmr_primitives::MmrApi as MmrRuntimeApi;
 
@@ -51,19 +48,12 @@ pub struct LeafProof<BlockHash> {
 
 impl<BlockHash> LeafProof<BlockHash> {
 	/// Create new `LeafProof` from given concrete `leaf` and `proof`.
-	pub fn new<Leaf, MmrHash>(
-		block_hash: BlockHash,
-		leaf: Leaf,
-		proof: Proof<MmrHash>,
-	) -> Self where
+	pub fn new<Leaf, MmrHash>(block_hash: BlockHash, leaf: Leaf, proof: Proof<MmrHash>) -> Self
+	where
 		Leaf: Encode,
 		MmrHash: Encode,
 	{
-		Self {
-			block_hash,
-			leaf: Bytes(leaf.encode()),
-			proof: Bytes(proof.encode()),
-		}
+		Self { block_hash, leaf: Bytes(leaf.encode()), proof: Bytes(proof.encode()) }
 	}
 }
 
@@ -95,21 +85,15 @@ pub struct Mmr<C, B> {
 impl<C, B> Mmr<C, B> {
 	/// Create new `Mmr` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
-		Self {
-			client,
-			_marker: Default::default(),
-		}
+		Self { client, _marker: Default::default() }
 	}
 }
 
-impl<C, Block, MmrHash> MmrApi<<Block as BlockT>::Hash,> for Mmr<C, (Block, MmrHash)>
+impl<C, Block, MmrHash> MmrApi<<Block as BlockT>::Hash> for Mmr<C, (Block, MmrHash)>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: MmrRuntimeApi<
-		Block,
-		MmrHash,
-	>,
+	C::Api: MmrRuntimeApi<Block, MmrHash>,
 	MmrHash: Codec + Send + Sync + 'static,
 {
 	fn generate_proof(
@@ -120,8 +104,7 @@ where
 		let api = self.client.runtime_api();
 		let block_hash = at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash
-		);
+			self.client.info().best_hash);
 
 		let (leaf, proof) = api
 			.generate_proof_with_context(
@@ -202,11 +185,14 @@ mod tests {
 		let expected = LeafProof {
 			block_hash: H256::repeat_byte(0),
 			leaf: Bytes(vec![1_u8, 2, 3, 4].encode()),
-			proof: Bytes(Proof {
-				leaf_index: 1,
-				leaf_count: 9,
-				items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
-			}.encode()),
+			proof: Bytes(
+				Proof {
+					leaf_index: 1,
+					leaf_count: 9,
+					items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
+				}
+				.encode(),
+			),
 		};
 
 		// when
@@ -218,6 +204,5 @@ mod tests {
 
 		// then
 		assert_eq!(actual, expected);
-
 	}
 }

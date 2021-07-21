@@ -76,29 +76,22 @@ impl<H: StorageHasher, K: FullCodec + StaticTypeInfo> KeyGenerator for Key<H, K>
 	const HASHER_METADATA: &'static [crate::metadata::StorageHasher] = &[H::METADATA];
 
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
-		H::hash(
-			&key.to_encoded_iter()
-				.next()
-				.expect("should have at least one element!"),
-		)
-		.as_ref()
-		.to_vec()
+		H::hash(&key.to_encoded_iter().next().expect("should have at least one element!"))
+			.as_ref()
+			.to_vec()
 	}
 
 	fn migrate_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(
 		key: &KArg,
 		hash_fns: Self::HArg,
 	) -> Vec<u8> {
-		(hash_fns.0)(
-			&key.to_encoded_iter()
-				.next()
-				.expect("should have at least one element!"),
-		)
+		(hash_fns.0)(&key.to_encoded_iter().next().expect("should have at least one element!"))
 	}
 }
 
 impl<H: StorageHasher, K: FullCodec + MaxEncodedLen + StaticTypeInfo> KeyGeneratorMaxEncodedLen
-for Key<H, K> {
+	for Key<H, K>
+{
 	fn key_max_encoded_len() -> usize {
 		H::max_len::<K>()
 	}
@@ -120,9 +113,8 @@ impl KeyGenerator for Tuple {
 	for_tuples!( type HArg = ( #(Tuple::HashFn),* ); );
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 
-	const HASHER_METADATA: &'static [crate::metadata::StorageHasher] = &[
-		for_tuples!( #(Tuple::Hasher::METADATA),* )
-	];
+	const HASHER_METADATA: &'static [crate::metadata::StorageHasher] =
+		&[for_tuples!( #(Tuple::Hasher::METADATA),* )];
 
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		let mut final_key = Vec::new();
@@ -212,9 +204,7 @@ pub trait TupleToEncodedIter {
 #[tuple_types_custom_trait_bound(Encode)]
 impl TupleToEncodedIter for Tuple {
 	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
-		[for_tuples!( #(self.Tuple.encode()),* )]
-			.to_vec()
-			.into_iter()
+		[for_tuples!( #(self.Tuple.encode()),* )].to_vec().into_iter()
 	}
 }
 
@@ -230,7 +220,9 @@ pub trait ReversibleKeyGenerator: KeyGenerator {
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error>;
 }
 
-impl<H: ReversibleStorageHasher, K: FullCodec + StaticTypeInfo> ReversibleKeyGenerator for Key<H, K> {
+impl<H: ReversibleStorageHasher, K: FullCodec + StaticTypeInfo> ReversibleKeyGenerator
+	for Key<H, K>
+{
 	type ReversibleHasher = H;
 
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error> {
@@ -248,7 +240,7 @@ impl ReversibleKeyGenerator for Tuple {
 	fn decode_final_key(key_material: &[u8]) -> Result<(Self::Key, &[u8]), codec::Error> {
 		let mut current_key_material = key_material;
 		Ok((
-			(for_tuples!{
+			(for_tuples! {
 				#({
 					let (key, material) = Tuple::decode_final_key(current_key_material)?;
 					current_key_material = material;

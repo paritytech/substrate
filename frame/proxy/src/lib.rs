@@ -29,42 +29,49 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
 mod benchmarking;
+mod tests;
 pub mod weights;
 
-use sp_std::{prelude::*, convert::TryInto};
-use codec::{Encode, Decode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{
+	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
+	ensure,
+	traits::{Currency, Get, InstanceFilter, IsSubType, IsType, OriginTrait, ReservableCurrency},
+	weights::GetDispatchInfo,
+	RuntimeDebug,
+};
+use frame_system::{self as system};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
+	traits::{Dispatchable, Hash, Saturating, Zero},
 	DispatchResult,
-	traits::{Dispatchable, Zero, Hash, Saturating}
 };
-use frame_support::{
-		RuntimeDebug, ensure,
-		dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
-		traits::{
-			Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait,
-			IsType, IsSubType,
-		},
-		weights::GetDispatchInfo,
-};
-use frame_system::{self as system};
-use frame_support::dispatch::DispatchError;
+use sp_std::{convert::TryInto, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
 
 type CallHashOf<T> = <<T as Config>::CallHasher as Hash>::Output;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The parameters under which a particular account has a proxy relationship with some other
 /// account.
 #[derive(
-	Encode, Decode, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, MaxEncodedLen,
-	TypeInfo
+	Encode,
+	Decode,
+	Clone,
+	Copy,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	RuntimeDebug,
+	MaxEncodedLen,
+	TypeInfo,
 )]
 pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 	/// The account which may act on behalf of another.
@@ -89,9 +96,9 @@ pub struct Announcement<AccountId, Hash, BlockNumber> {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::{DispatchResult, *};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::{*, DispatchResult};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -105,8 +112,11 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The overarching call type.
-		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-			+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Call<Self>>
+		type Call: Parameter
+			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>
+			+ IsSubType<Call<Self>>
 			+ IsType<<Self as frame_system::Config>::Call>;
 
 		/// The currency mechanism.
@@ -116,8 +126,13 @@ pub mod pallet {
 		/// The instance filter determines whether a given call may be proxied under this type.
 		///
 		/// IMPORTANT: `Default` must be provided and MUST BE the the *most permissive* value.
-		type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Config>::Call>
-			+ Default + MaxEncodedLen;
+		type ProxyType: Parameter
+			+ Member
+			+ Ord
+			+ PartialOrd
+			+ InstanceFilter<<Self as Config>::Call>
+			+ Default
+			+ MaxEncodedLen;
 
 		/// The base amount of currency needed to reserve for creating a proxy.
 		///
@@ -295,21 +310,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
-			index: u16
+			index: u16,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			let anonymous = Self::anonymous_account(&who, &proxy_type, index, None);
 			ensure!(!Proxies::<T>::contains_key(&anonymous), Error::<T>::Duplicate);
 
-			let proxy_def = ProxyDefinition {
-				delegate: who.clone(),
-				proxy_type: proxy_type.clone(),
-				delay,
-			};
-			let bounded_proxies: BoundedVec<_, T::MaxProxies> = vec![proxy_def]
-				.try_into()
-				.map_err(|_| Error::<T>::TooMany)?;
+			let proxy_def =
+				ProxyDefinition { delegate: who.clone(), proxy_type: proxy_type.clone(), delay };
+			let bounded_proxies: BoundedVec<_, T::MaxProxies> =
+				vec![proxy_def].try_into().map_err(|_| Error::<T>::TooMany)?;
 
 			let deposit = T::ProxyDepositBase::get() + T::ProxyDepositFactor::get();
 			T::Currency::reserve(&who, deposit)?;
@@ -386,10 +397,12 @@ pub mod pallet {
 		pub fn announce(
 			origin: OriginFor<T>,
 			real: T::AccountId,
-			call_hash: CallHashOf<T>
-		) -> DispatchResultWithPostInfo{
+			call_hash: CallHashOf<T>,
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Proxies::<T>::get(&real).0.into_iter()
+			Proxies::<T>::get(&real)
+				.0
+				.into_iter()
 				.find(|x| &x.delegate == &who)
 				.ok_or(Error::<T>::NotProxy)?;
 
@@ -407,7 +420,10 @@ pub mod pallet {
 					T::AnnouncementDepositBase::get(),
 					T::AnnouncementDepositFactor::get(),
 					pending.len(),
-				).map(|d| d.expect("Just pushed; pending.len() > 0; rejig_deposit returns Some; qed"))
+				)
+				.map(|d| {
+					d.expect("Just pushed; pending.len() > 0; rejig_deposit returns Some; qed")
+				})
 				.map(|d| *deposit = d)
 			})?;
 			Self::deposit_event(Event::Announced(real, who, call_hash));
@@ -437,7 +453,7 @@ pub mod pallet {
 		pub fn remove_announcement(
 			origin: OriginFor<T>,
 			real: T::AccountId,
-			call_hash: CallHashOf<T>
+			call_hash: CallHashOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
@@ -467,10 +483,12 @@ pub mod pallet {
 		pub fn reject_announcement(
 			origin: OriginFor<T>,
 			delegate: T::AccountId,
-			call_hash: CallHashOf<T>
+			call_hash: CallHashOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::edit_announcements(&delegate, |ann| ann.real != who || ann.call_hash != call_hash)?;
+			Self::edit_announcements(&delegate, |ann| {
+				ann.real != who || ann.call_hash != call_hash
+			})?;
 
 			Ok(().into())
 		}
@@ -512,9 +530,12 @@ pub mod pallet {
 
 			let call_hash = T::CallHasher::hash_of(&call);
 			let now = system::Pallet::<T>::block_number();
-			Self::edit_announcements(&delegate, |ann|
-				ann.real != real || ann.call_hash != call_hash || now.saturating_sub(ann.height) < def.delay
-			).map_err(|_| Error::<T>::Unannounced)?;
+			Self::edit_announcements(&delegate, |ann| {
+				ann.real != real ||
+					ann.call_hash != call_hash ||
+					now.saturating_sub(ann.height) < def.delay
+			})
+			.map_err(|_| Error::<T>::Unannounced)?;
 
 			Self::do_proxy(def, real, *call);
 
@@ -524,8 +545,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config>
-	{
+	pub enum Event<T: Config> {
 		/// A proxy was executed correctly, with the given \[result\].
 		ProxyExecuted(DispatchResult),
 		/// Anonymous account has been created by new proxy with given
@@ -536,10 +556,10 @@ pub mod pallet {
 	}
 
 	/// Old name generated by `decl_event`.
-	#[deprecated(note="use `Event` instead")]
+	#[deprecated(note = "use `Event` instead")]
 	pub type RawEvent<T> = Event<T>;
 
-	 #[pallet::error]
+	#[pallet::error]
 	pub enum Error<T> {
 		/// There are too many proxies registered or too many announcements pending.
 		TooMany,
@@ -568,13 +588,10 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		(
-			BoundedVec<
-				ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>,
-				T::MaxProxies,
-			>,
-			BalanceOf<T>
+			BoundedVec<ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>, T::MaxProxies>,
+			BalanceOf<T>,
 		),
-		ValueQuery
+		ValueQuery,
 	>;
 
 	/// The announcements made by the proxy (key).
@@ -585,19 +602,14 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		(
-			BoundedVec<
-				Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>,
-				T::MaxPending,
-			>,
+			BoundedVec<Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>, T::MaxPending>,
 			BalanceOf<T>,
 		),
-		ValueQuery
+		ValueQuery,
 	>;
-
 }
 
 impl<T: Config> Pallet<T> {
-
 	/// Calculate the address of an anonymous account.
 	///
 	/// - `who`: The spawner account.
@@ -615,10 +627,12 @@ impl<T: Config> Pallet<T> {
 		index: u16,
 		maybe_when: Option<(T::BlockNumber, u32)>,
 	) -> T::AccountId {
-		let (height, ext_index) = maybe_when.unwrap_or_else(|| (
-			system::Pallet::<T>::block_number(),
-			system::Pallet::<T>::extrinsic_index().unwrap_or_default()
-		));
+		let (height, ext_index) = maybe_when.unwrap_or_else(|| {
+			(
+				system::Pallet::<T>::block_number(),
+				system::Pallet::<T>::extrinsic_index().unwrap_or_default(),
+			)
+		});
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
 			.using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
@@ -701,26 +715,22 @@ impl<T: Config> Pallet<T> {
 		factor: BalanceOf<T>,
 		len: usize,
 	) -> Result<Option<BalanceOf<T>>, DispatchError> {
-		let new_deposit = if len == 0 {
-			BalanceOf::<T>::zero()
-		} else {
-			base + factor * (len as u32).into()
-		};
+		let new_deposit =
+			if len == 0 { BalanceOf::<T>::zero() } else { base + factor * (len as u32).into() };
 		if new_deposit > old_deposit {
 			T::Currency::reserve(&who, new_deposit - old_deposit)?;
 		} else if new_deposit < old_deposit {
 			T::Currency::unreserve(&who, old_deposit - new_deposit);
 		}
-		Ok(if len == 0 {
-			None
-		} else {
-			Some(new_deposit)
-		})
+		Ok(if len == 0 { None } else { Some(new_deposit) })
 	}
 
 	fn edit_announcements<
-		F: FnMut(&Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>) -> bool
-	>(delegate: &T::AccountId, f: F) -> DispatchResult {
+		F: FnMut(&Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>) -> bool,
+	>(
+		delegate: &T::AccountId,
+		f: F,
+	) -> DispatchResult {
 		Announcements::<T>::try_mutate_exists(delegate, |x| {
 			let (mut pending, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
 			let orig_pending_len = pending.len();
@@ -732,7 +742,8 @@ impl<T: Config> Pallet<T> {
 				T::AnnouncementDepositBase::get(),
 				T::AnnouncementDepositFactor::get(),
 				pending.len(),
-			)?.map(|deposit| (pending, deposit));
+			)?
+			.map(|deposit| (pending, deposit));
 			Ok(())
 		})
 	}
@@ -743,7 +754,8 @@ impl<T: Config> Pallet<T> {
 		force_proxy_type: Option<T::ProxyType>,
 	) -> Result<ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>, DispatchError> {
 		let f = |x: &ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>| -> bool {
-			&x.delegate == delegate && force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
+			&x.delegate == delegate &&
+				force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
 		};
 		Ok(Proxies::<T>::get(real).0.into_iter().find(f).ok_or(Error::<T>::NotProxy)?)
 	}
@@ -760,12 +772,15 @@ impl<T: Config> Pallet<T> {
 			// We make sure the proxy call does access this pallet to change modify proxies.
 			match c.is_sub_type() {
 				// Proxy call cannot add or remove a proxy with more permissions than it already has.
-				Some(Call::add_proxy { ref proxy_type, .. } | Call::remove_proxy { ref proxy_type, .. })
-					if !def.proxy_type.is_superset(&proxy_type) => false,
+				Some(
+					Call::add_proxy { ref proxy_type, .. } |
+					Call::remove_proxy { ref proxy_type, .. },
+				) if !def.proxy_type.is_superset(&proxy_type) => false,
 				// Proxy call cannot remove all proxies or kill anonymous proxies unless it has full permissions.
 				Some(Call::remove_proxies { .. } | Call::kill_anonymous { .. })
-					if def.proxy_type != T::ProxyType::default() => false,
-				_ => def.proxy_type.filter(c)
+					if def.proxy_type != T::ProxyType::default() =>
+					false,
+				_ => def.proxy_type.filter(c),
 			}
 		});
 		let e = call.dispatch(origin);

@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use super::helper;
-use syn::spanned::Spanned;
 use quote::ToTokens;
+use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -87,7 +87,7 @@ impl PalletEventAttrInfo {
 			if deposit_event.is_none() {
 				deposit_event = Some(attr)
 			} else {
-				return Err(syn::Error::new(attr.span, "Duplicate attribute"));
+				return Err(syn::Error::new(attr.span, "Duplicate attribute"))
 			}
 		}
 
@@ -107,13 +107,14 @@ impl EventDef {
 			return Err(syn::Error::new(item.span(), "Invalid pallet::event, expected item enum"))
 		};
 
-		let event_attrs: Vec<PalletEventDepositAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
+		let event_attrs: Vec<PalletEventDepositAttr> =
+			helper::take_item_pallet_attrs(&mut item.attrs)?;
 		let attr_info = PalletEventAttrInfo::from_attrs(event_attrs)?;
 		let deposit_event = attr_info.deposit_event;
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::event, `Error` must be public";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		}
 
 		let where_clause = item.generics.where_clause.clone();
@@ -125,10 +126,7 @@ impl EventDef {
 			instances.push(u);
 		} else {
 			// construct_runtime only allow non generic event for non instantiable pallet.
-			instances.push(helper::InstanceUsage {
-				has_instance: false,
-				span: item.ident.span(),
-			})
+			instances.push(helper::InstanceUsage { has_instance: false, span: item.ident.span() })
 		}
 
 		let has_instance = item.generics.type_params().any(|t| t.ident == "I");
@@ -138,14 +136,6 @@ impl EventDef {
 
 		let event = syn::parse2::<keyword::Event>(item.ident.to_token_stream())?;
 
-		Ok(EventDef {
-			attr_span,
-			index,
-			instances,
-			deposit_event,
-			event,
-			gen_kind,
-			where_clause,
-		})
+		Ok(EventDef { attr_span, index, instances, deposit_event, event, gen_kind, where_clause })
 	}
 }

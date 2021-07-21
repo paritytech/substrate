@@ -20,7 +20,7 @@
 
 use sp_std::vec::Vec;
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_runtime::Perbill;
 
 use crate::SessionIndex;
@@ -84,10 +84,7 @@ pub trait Offence<Offender> {
 	///
 	/// `offenders_count` - the count of unique offending authorities. It is >0.
 	/// `validator_set_count` - the cardinality of the validator set at the time of offence.
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill;
+	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill;
 }
 
 /// Errors that may happen on offence reports.
@@ -108,7 +105,7 @@ impl sp_runtime::traits::Printable for OffenceError {
 			Self::Other(e) => {
 				"Other".print();
 				e.print();
-			}
+			},
 		}
 	}
 }

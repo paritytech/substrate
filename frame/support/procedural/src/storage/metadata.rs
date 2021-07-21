@@ -17,16 +17,16 @@
 
 //! Implementation of `storage_metadata` on module structure, used by construct_runtime.
 
+use super::{DeclStorageDefExt, StorageLineDefExt, StorageLineTypeDef};
 use frame_support_procedural_tools::get_doc_literals;
 use proc_macro2::TokenStream;
 use quote::quote;
-use super::{DeclStorageDefExt, StorageLineDefExt, StorageLineTypeDef};
 
 fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) -> TokenStream {
 	let value_type = &line.value_type;
 	match &line.storage_type {
 		StorageLineTypeDef::Simple(_) => {
-			quote!{
+			quote! {
 				#scrate::metadata::StorageEntryType::Plain(
 					#scrate::scale_info::meta_type::<#value_type>()
 				)
@@ -35,7 +35,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 		StorageLineTypeDef::Map(map) => {
 			let hasher = map.hasher.into_metadata();
 			let key = &map.key;
-			quote!{
+			quote! {
 				#scrate::metadata::StorageEntryType::Map {
 					hasher: #scrate::metadata::#hasher,
 					key: #scrate::scale_info::meta_type::<#key>(),
@@ -48,7 +48,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			let hasher2 = map.hasher2.into_metadata();
 			let key1 = &map.key1;
 			let key2 = &map.key2;
-			quote!{
+			quote! {
 				#scrate::metadata::StorageEntryType::DoubleMap {
 					hasher: #scrate::metadata::#hasher1,
 					key1: #scrate::scale_info::meta_type::<#key1>(),
@@ -60,11 +60,12 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 		},
 		StorageLineTypeDef::NMap(map) => {
 			let key_tuple = &map.to_key_tuple();
-			let hashers = map.hashers
+			let hashers = map
+				.hashers
 				.iter()
 				.map(|hasher| hasher.to_storage_hasher_struct())
 				.collect::<Vec<_>>();
-			quote!{
+			quote! {
 				#scrate::metadata::StorageEntryType::NMap {
 					keys: #scrate::scale_info::meta_type::<#key_tuple>(),
 					hashers: #scrate::sp_std::vec! [
@@ -73,7 +74,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 					value: #scrate::scale_info::meta_type::<#value_type>(),
 				}
 			}
-		}
+		},
 	}
 }
 
@@ -82,12 +83,17 @@ fn default_byte_getter(
 	line: &StorageLineDefExt,
 	def: &DeclStorageDefExt,
 ) -> (TokenStream, TokenStream) {
-	let default = line.default_value.as_ref().map(|d| quote!( #d ))
-		.unwrap_or_else(|| quote!( Default::default() ));
+	let default = line
+		.default_value
+		.as_ref()
+		.map(|d| quote!( #d ))
+		.unwrap_or_else(|| quote!(Default::default()));
 
 	let str_name = line.name.to_string();
-	let struct_name = syn::Ident::new(&("__GetByteStruct".to_string() + &str_name), line.name.span());
-	let cache_name = syn::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), line.name.span());
+	let struct_name =
+		syn::Ident::new(&("__GetByteStruct".to_string() + &str_name), line.name.span());
+	let cache_name =
+		syn::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), line.name.span());
 
 	let runtime_generic = &def.module_runtime_generic;
 	let runtime_trait = &def.module_runtime_trait;
@@ -159,10 +165,8 @@ pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
 
 		let ty = storage_line_metadata_type(scrate, line);
 
-		let (
-			default_byte_getter_struct_def,
-			default_byte_getter_struct_instance,
-		) = default_byte_getter(scrate, line, def);
+		let (default_byte_getter_struct_def, default_byte_getter_struct_instance) =
+			default_byte_getter(scrate, line, def);
 
 		let docs = get_doc_literals(&line.attrs);
 

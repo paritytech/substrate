@@ -18,7 +18,8 @@
 #[cfg(feature = "metadata-docs")]
 /// Return all doc attributes literals found.
 pub fn get_doc_literals(attrs: &Vec<syn::Attribute>) -> Vec<syn::Lit> {
-	attrs.iter()
+	attrs
+		.iter()
 		.filter_map(|attr| {
 			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
 				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {

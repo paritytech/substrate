@@ -22,9 +22,14 @@ use serde::{Deserialize, Serialize};
 
 use sp_std::prelude::*;
 
-use crate::ConsensusEngineId;
-use crate::codec::{Decode, Encode, Input, Error};
-use crate::scale_info::{Path, TypeInfo, Type, TypeParameter, build::{Fields, Variants}, meta_type};
+use crate::{
+	codec::{Decode, Encode, Error, Input},
+	scale_info::{
+		build::{Fields, Variants},
+		meta_type, Path, Type, TypeInfo, TypeParameter,
+	},
+	ConsensusEngineId,
+};
 use sp_core::{ChangesTrieConfiguration, RuntimeDebug};
 
 /// Generic header digest.
@@ -41,7 +46,7 @@ pub struct Digest<Hash> {
 
 impl<Item> Default for Digest<Item> {
 	fn default() -> Self {
-		Self { logs: Vec::new(), }
+		Self { logs: Vec::new() }
 	}
 }
 
@@ -62,12 +67,18 @@ impl<Hash> Digest<Hash> {
 	}
 
 	/// Get reference to the first digest item that matches the passed predicate.
-	pub fn log<T: ?Sized, F: Fn(&DigestItem<Hash>) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
+	pub fn log<T: ?Sized, F: Fn(&DigestItem<Hash>) -> Option<&T>>(
+		&self,
+		predicate: F,
+	) -> Option<&T> {
 		self.logs().iter().find_map(predicate)
 	}
 
 	/// Get a conversion of the first digest item that successfully converts using the function.
-	pub fn convert_first<T, F: Fn(&DigestItem<Hash>) -> Option<T>>(&self, predicate: F) -> Option<T> {
+	pub fn convert_first<T, F: Fn(&DigestItem<Hash>) -> Option<T>>(
+		&self,
+		predicate: F,
+	) -> Option<T> {
 		self.logs().iter().find_map(predicate)
 	}
 }
@@ -133,16 +144,18 @@ pub enum ChangesTrieSignal {
 
 #[cfg(feature = "std")]
 impl<Hash: Encode> serde::Serialize for DigestItem<Hash> {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
-		self.using_encoded(|bytes| {
-			sp_core::bytes::serialize(bytes, seq)
-		})
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		self.using_encoded(|bytes| sp_core::bytes::serialize(bytes, seq))
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
-	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
 		D: serde::Deserializer<'a>,
 	{
 		let r = sp_core::bytes::deserialize(de)?;
@@ -153,7 +166,7 @@ impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
 
 impl<Hash> TypeInfo for DigestItem<Hash>
 where
-	Hash: TypeInfo + 'static
+	Hash: TypeInfo + 'static,
 {
 	type Identity = Self;
 
@@ -164,17 +177,14 @@ where
 			.variant(
 				Variants::new()
 					.variant("ChangesTrieRoot", |v| {
-						v.index(DigestItemType::ChangesTrieRoot as u8).fields(
-							Fields::unnamed()
-								.field(|f| f.ty::<Hash>().type_name("Hash")),
-						)
+						v.index(DigestItemType::ChangesTrieRoot as u8)
+							.fields(Fields::unnamed().field(|f| f.ty::<Hash>().type_name("Hash")))
 					})
 					.variant("PreRuntime", |v| {
 						v.index(DigestItemType::PreRuntime as u8).fields(
 							Fields::unnamed()
 								.field(|f| {
-									f.ty::<ConsensusEngineId>()
-										.type_name("ConsensusEngineId")
+									f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId")
 								})
 								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
 						)
@@ -183,8 +193,7 @@ where
 						v.index(DigestItemType::Consensus as u8).fields(
 							Fields::unnamed()
 								.field(|f| {
-									f.ty::<ConsensusEngineId>()
-										.type_name("ConsensusEngineId")
+									f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId")
 								})
 								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
 						)
@@ -193,8 +202,7 @@ where
 						v.index(DigestItemType::Seal as u8).fields(
 							Fields::unnamed()
 								.field(|f| {
-									f.ty::<ConsensusEngineId>()
-										.type_name("ConsensusEngineId")
+									f.ty::<ConsensusEngineId>().type_name("ConsensusEngineId")
 								})
 								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
 						)
@@ -208,8 +216,7 @@ where
 					})
 					.variant("Other", |v| {
 						v.index(DigestItemType::Other as u8).fields(
-							Fields::unnamed()
-								.field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
+							Fields::unnamed().field(|f| f.ty::<Vec<u8>>().type_name("Vec<u8>")),
 						)
 					}),
 			)
@@ -363,9 +370,7 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let item_type: DigestItemType = Decode::decode(input)?;
 		match item_type {
-			DigestItemType::ChangesTrieRoot => Ok(Self::ChangesTrieRoot(
-				Decode::decode(input)?,
-			)),
+			DigestItemType::ChangesTrieRoot => Ok(Self::ChangesTrieRoot(Decode::decode(input)?)),
 			DigestItemType::PreRuntime => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(Self::PreRuntime(vals.0, vals.1))
@@ -373,17 +378,14 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 			DigestItemType::Consensus => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(Self::Consensus(vals.0, vals.1))
-			}
+			},
 			DigestItemType::Seal => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
 				Ok(Self::Seal(vals.0, vals.1))
 			},
-			DigestItemType::ChangesTrieSignal => Ok(Self::ChangesTrieSignal(
-				Decode::decode(input)?,
-			)),
-			DigestItemType::Other => Ok(Self::Other(
-				Decode::decode(input)?,
-			)),
+			DigestItemType::ChangesTrieSignal =>
+				Ok(Self::ChangesTrieSignal(Decode::decode(input)?)),
+			DigestItemType::Other => Ok(Self::Other(Decode::decode(input)?)),
 		}
 	}
 }
@@ -442,9 +444,10 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	pub fn try_as_raw(&self, id: OpaqueDigestItemId) -> Option<&'a [u8]> {
 		match (id, self) {
 			(OpaqueDigestItemId::Consensus(w), &Self::Consensus(v, s)) |
-				(OpaqueDigestItemId::Seal(w), &Self::Seal(v, s)) |
-				(OpaqueDigestItemId::PreRuntime(w), &Self::PreRuntime(v, s))
-				if v == w => Some(&s[..]),
+			(OpaqueDigestItemId::Seal(w), &Self::Seal(v, s)) |
+			(OpaqueDigestItemId::PreRuntime(w), &Self::PreRuntime(v, s))
+				if v == w =>
+				Some(&s[..]),
 			(OpaqueDigestItemId::Other, &Self::Other(s)) => Some(&s[..]),
 			_ => None,
 		}
@@ -461,8 +464,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// Returns `None` if this isn't a seal item, the `id` doesn't match or when the decoding fails.
 	pub fn seal_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
 		match self {
-			Self::Seal(v, s) if *v == id =>
-				Decode::decode(&mut &s[..]).ok(),
+			Self::Seal(v, s) if *v == id => Decode::decode(&mut &s[..]).ok(),
 			_ => None,
 		}
 	}
@@ -473,8 +475,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// when the decoding fails.
 	pub fn consensus_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
 		match self {
-			Self::Consensus(v, s) if *v == id =>
-				Decode::decode(&mut &s[..]).ok(),
+			Self::Consensus(v, s) if *v == id => Decode::decode(&mut &s[..]).ok(),
 			_ => None,
 		}
 	}
@@ -485,8 +486,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// when the decoding fails.
 	pub fn pre_runtime_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
 		match self {
-			Self::PreRuntime(v, s) if *v == id =>
-				Decode::decode(&mut &s[..]).ok(),
+			Self::PreRuntime(v, s) if *v == id => Decode::decode(&mut &s[..]).ok(),
 			_ => None,
 		}
 	}
@@ -548,7 +548,7 @@ mod tests {
 			logs: vec![
 				DigestItem::ChangesTrieRoot(4),
 				DigestItem::Other(vec![1, 2, 3]),
-				DigestItem::Seal(*b"test", vec![1, 2, 3])
+				DigestItem::Seal(*b"test", vec![1, 2, 3]),
 			],
 		};
 
@@ -561,34 +561,35 @@ mod tests {
 	#[test]
 	fn digest_item_type_info() {
 		let type_info = DigestItem::<u32>::type_info();
-		let variants =
-			if let scale_info::TypeDef::Variant(variant) = type_info.type_def() {
-				variant.variants()
-			} else {
-				panic!("Should be a TypeDef::TypeDefVariant")
-			};
+		let variants = if let scale_info::TypeDef::Variant(variant) = type_info.type_def() {
+			variant.variants()
+		} else {
+			panic!("Should be a TypeDef::TypeDefVariant")
+		};
 
 		// ensure that all variants are covered by manual TypeInfo impl
 		let check = |digest_item_type: DigestItemType| {
-			let (variant_name, digest_item) =
-				match digest_item_type {
-					DigestItemType::Other =>
-						("Other", DigestItem::<u32>::Other(Default::default())),
-					DigestItemType::ChangesTrieRoot =>
-						("ChangesTrieRoot", DigestItem::ChangesTrieRoot(Default::default())),
-					DigestItemType::Consensus =>
-						("Consensus", DigestItem::Consensus(Default::default(), Default::default())),
-					DigestItemType::Seal =>
-						("Seal", DigestItem::Seal(Default::default(), Default::default())),
-					DigestItemType::PreRuntime =>
-						("PreRuntime", DigestItem::PreRuntime(Default::default(), Default::default())),
-					DigestItemType::ChangesTrieSignal =>
-						("ChangesTrieSignal", DigestItem::ChangesTrieSignal(
-							ChangesTrieSignal::NewConfiguration(Default::default())
-						)),
-				};
+			let (variant_name, digest_item) = match digest_item_type {
+				DigestItemType::Other => ("Other", DigestItem::<u32>::Other(Default::default())),
+				DigestItemType::ChangesTrieRoot =>
+					("ChangesTrieRoot", DigestItem::ChangesTrieRoot(Default::default())),
+				DigestItemType::Consensus =>
+					("Consensus", DigestItem::Consensus(Default::default(), Default::default())),
+				DigestItemType::Seal =>
+					("Seal", DigestItem::Seal(Default::default(), Default::default())),
+				DigestItemType::PreRuntime =>
+					("PreRuntime", DigestItem::PreRuntime(Default::default(), Default::default())),
+				DigestItemType::ChangesTrieSignal => (
+					"ChangesTrieSignal",
+					DigestItem::ChangesTrieSignal(ChangesTrieSignal::NewConfiguration(
+						Default::default(),
+					)),
+				),
+			};
 			let encoded = digest_item.encode();
-			let variant = variants.iter().find(|v| v.name() == &variant_name)
+			let variant = variants
+				.iter()
+				.find(|v| v.name() == &variant_name)
 				.expect(&format!("Variant {} not found", variant_name));
 
 			assert_eq!(encoded[0], variant.index())

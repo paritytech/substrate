@@ -27,8 +27,11 @@ mod tests {
 	}
 
 	pub trait Config: frame_support_test::Config {
-		type Origin2: codec::Codec + codec::EncodeLike + Default
-			+ codec::MaxEncodedLen + scale_info::TypeInfo;
+		type Origin2: codec::Codec
+			+ codec::EncodeLike
+			+ Default
+			+ codec::MaxEncodedLen
+			+ scale_info::TypeInfo;
 	}
 
 	frame_support::decl_storage! {
@@ -187,35 +190,35 @@ mod tests {
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 					default: vec![1, 0, 0, 0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "PUBGETU32WITHCONFIGMYDEFOPT",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "GetU32WithBuilder",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "GetOptU32WithBuilderSome",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "GetOptU32WithBuilderNone",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "MAPU32",
@@ -226,7 +229,7 @@ mod tests {
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "PUBMAPU32",
@@ -237,7 +240,7 @@ mod tests {
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 				// StorageEntryMetadata {
 				// 	name: "MAPU32MYDEF",
@@ -270,7 +273,7 @@ mod tests {
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![0, 0, 0, 0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "PUBGETMAPU32",
@@ -281,7 +284,7 @@ mod tests {
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![0, 0, 0, 0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "GETMAPU32MYDEF",
@@ -292,7 +295,7 @@ mod tests {
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![109, 97, 112, 100], // "map"
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "PUBGETMAPU32MYDEF",
@@ -303,7 +306,7 @@ mod tests {
 						value: scale_info::meta_type::<[u8; 4]>(),
 					},
 					default: vec![112, 117, 98, 109], // "pubmap"
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "DOUBLEMAP",
@@ -316,7 +319,7 @@ mod tests {
 						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "DOUBLEMAP2",
@@ -329,28 +332,31 @@ mod tests {
 						key2_hasher: StorageHasher::Blake2_128Concat,
 					},
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "COMPLEXTYPE1",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<(Option<u32>,)>()),
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "COMPLEXTYPE2",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<([[(u16, Option<()>); 32]; 12], u32)>()),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<(
+						[[(u16, Option<()>); 32]; 12],
+						u32,
+					)>()),
 					default: [0u8; 1156].to_vec(),
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "COMPLEXTYPE3",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<[u32; 25]>()),
 					default: [0u8; 100].to_vec(),
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "NMAP",
@@ -361,7 +367,7 @@ mod tests {
 						value: scale_info::meta_type::<u8>(),
 					},
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 				StorageEntryMetadata {
 					name: "NMAP2",
@@ -372,7 +378,7 @@ mod tests {
 						value: scale_info::meta_type::<u8>(),
 					},
 					default: vec![0],
-					docs:vec![],
+					docs: vec![],
 				},
 			],
 		}
@@ -381,9 +387,9 @@ mod tests {
 	#[test]
 	fn storage_info() {
 		use frame_support::{
-			StorageHasher,
-			traits::{StorageInfoTrait, StorageInfo},
 			pallet_prelude::*,
+			traits::{StorageInfo, StorageInfoTrait},
+			StorageHasher,
 		};
 		let prefix = |pallet_name, storage_name| {
 			let mut res = [0u8; 32];
@@ -670,9 +676,9 @@ mod test2 {
 	#[test]
 	fn storage_info() {
 		use frame_support::{
-			StorageHasher,
-			traits::{StorageInfoTrait, StorageInfo},
 			pallet_prelude::*,
+			traits::{StorageInfo, StorageInfoTrait},
+			StorageHasher,
 		};
 		let prefix = |pallet_name, storage_name| {
 			let mut res = [0u8; 32];
@@ -714,7 +720,6 @@ mod test2 {
 			],
 		);
 	}
-
 }
 
 #[cfg(test)]
@@ -748,8 +753,8 @@ mod test3 {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test_append_and_len {
+	use codec::{Decode, Encode};
 	use sp_io::TestExternalities;
-	use codec::{Encode, Decode};
 
 	pub trait Config: frame_support_test::Config {}
 

@@ -18,7 +18,7 @@
 //! Macro for declaring a module error.
 
 #[doc(hidden)]
-pub use sp_runtime::traits::{LookupError, BadOrigin};
+pub use sp_runtime::traits::{BadOrigin, LookupError};
 
 /// Declare an error type for a runtime module.
 ///

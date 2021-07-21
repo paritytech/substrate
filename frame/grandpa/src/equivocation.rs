@@ -54,7 +54,7 @@ use sp_staking::{
 	SessionIndex,
 };
 
-use super::{Call, Pallet, Config};
+use super::{Call, Config, Pallet};
 
 /// A trait with utility methods for handling equivocation reports in GRANDPA.
 /// The offence type is generic, and the trait provides , reporting an offence
@@ -130,9 +130,7 @@ pub struct EquivocationHandler<I, R, L, O = GrandpaEquivocationOffence<I>> {
 
 impl<I, R, L, O> Default for EquivocationHandler<I, R, L, O> {
 	fn default() -> Self {
-		Self {
-			_phantom: Default::default(),
-		}
+		Self { _phantom: Default::default() }
 	}
 }
 
@@ -209,21 +207,22 @@ impl<T: Config> Pallet<T> {
 		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
 			// discard equivocation report not coming from the local node
 			match source {
-				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
+				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
 				_ => {
 					log::warn!(
 						target: "runtime::afg",
 						"rejecting unsigned report equivocation transaction because it is not local/in-block."
 					);
 
-					return InvalidTransaction::Call.into();
-				}
+					return InvalidTransaction::Call.into()
+				},
 			}
 
 			// check report staleness
 			is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
 
-			let longevity = <T::HandleEquivocation as HandleEquivocation<T>>::ReportLongevity::get();
+			let longevity =
+				<T::HandleEquivocation as HandleEquivocation<T>>::ReportLongevity::get();
 
 			ValidTransaction::with_tag_prefix("GrandpaEquivocation")
 				// We assign the maximum priority for any equivocation report.
@@ -257,10 +256,7 @@ fn is_known_offence<T: Config>(
 	key_owner_proof: &T::KeyOwnerProof,
 ) -> Result<(), TransactionValidityError> {
 	// check the membership proof to extract the offender's id
-	let key = (
-		sp_finality_grandpa::KEY_TYPE,
-		equivocation_proof.offender().clone(),
-	);
+	let key = (sp_finality_grandpa::KEY_TYPE, equivocation_proof.offender().clone());
 
 	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
 		.ok_or(InvalidTransaction::BadProof)?;

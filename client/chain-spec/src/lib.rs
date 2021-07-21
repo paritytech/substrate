@@ -111,16 +111,16 @@ mod chain_spec;
 mod extension;
 
 pub use chain_spec::{
-	ChainSpec as GenericChainSpec, NoExtension, LightSyncState, SerializableLightSyncState,
+	ChainSpec as GenericChainSpec, LightSyncState, NoExtension, SerializableLightSyncState,
 };
-pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
+pub use extension::{get_extension, Extension, Fork, Forks, GetExtension, Group};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
-use serde::{Serialize, de::DeserializeOwned};
-use sp_runtime::BuildStorage;
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
+use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::Storage;
+use sp_runtime::BuildStorage;
 
 /// The type of a chain.
 ///

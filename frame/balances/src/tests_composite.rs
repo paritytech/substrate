@@ -19,19 +19,15 @@
 
 #![cfg(test)]
 
-use sp_runtime::{
-	traits::IdentityLookup,
-	testing::Header,
+use crate::{self as pallet_balances, decl_tests, Config, Pallet};
+use frame_support::{
+	parameter_types,
+	weights::{DispatchInfo, IdentityFee, Weight},
 };
+use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_io;
-use frame_support::parameter_types;
-use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
-use pallet_transaction_payment::CurrencyAdapter;
-use crate::{
-	self as pallet_balances,
-	Pallet, Config, decl_tests,
-};
+use sp_runtime::{testing::Header, traits::IdentityLookup};
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -110,10 +106,7 @@ pub struct ExtBuilder {
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self {
-			existential_deposit: 1,
-			monied: false,
-		}
+		Self { existential_deposit: 1, monied: false }
 	}
 }
 impl ExtBuilder {
@@ -138,12 +131,14 @@ impl ExtBuilder {
 					(2, 20 * self.existential_deposit),
 					(3, 30 * self.existential_deposit),
 					(4, 40 * self.existential_deposit),
-					(12, 10 * self.existential_deposit)
+					(12, 10 * self.existential_deposit),
 				]
 			} else {
 				vec![]
 			},
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.execute_with(|| System::set_block_number(1));
@@ -151,4 +146,4 @@ impl ExtBuilder {
 	}
 }
 
-decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
+decl_tests! { Test, ExtBuilder, EXISTENTIAL_DEPOSIT }

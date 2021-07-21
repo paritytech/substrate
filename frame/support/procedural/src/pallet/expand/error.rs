@@ -20,11 +20,7 @@ use frame_support_procedural_tools::get_doc_literals;
 
 /// * impl various trait on Error
 pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
-	let error = if let Some(error) = &def.error {
-		error
-	} else {
-		return Default::default()
-	};
+	let error = if let Some(error) = &def.error { error } else { return Default::default() };
 
 	let error_ident = &error.error;
 	let frame_support = &def.frame_support;
@@ -42,16 +38,14 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	);
 
-	let as_u8_matches = error.variants.iter().enumerate()
-		.map(|(i, (variant, _))| {
-			quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,)
-		});
+	let as_u8_matches = error.variants.iter().enumerate().map(
+		|(i, (variant, _))| quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,),
+	);
 
-	let as_str_matches = error.variants.iter()
-		.map(|(variant, _)| {
-			let variant_str = format!("{}", variant);
-			quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
-		});
+	let as_str_matches = error.variants.iter().map(|(variant, _)| {
+		let variant_str = format!("{}", variant);
+		quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
+	});
 
 	let error_item = {
 		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[error.index];
@@ -64,12 +58,12 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 	error_item.variants.insert(0, phantom_variant);
 	// derive TypeInfo for error metadata
-	error_item.attrs.push(
-		syn::parse_quote!( #[derive(#frame_support::scale_info::TypeInfo)] )
-	);
-	error_item.attrs.push(
-		syn::parse_quote!( #[scale_info(skip_type_params(#type_use_gen))] )
-	);
+	error_item
+		.attrs
+		.push(syn::parse_quote!( #[derive(#frame_support::scale_info::TypeInfo)] ));
+	error_item
+		.attrs
+		.push(syn::parse_quote!( #[scale_info(skip_type_params(#type_use_gen))] ));
 
 	if get_doc_literals(&error_item.attrs).is_empty() {
 		error_item.attrs.push(syn::parse_quote!(

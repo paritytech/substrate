@@ -129,15 +129,10 @@ impl WsServer {
 			};
 
 			match server
-				.send_response(&{
-					Response::Accept {
-						key: &websocket_key,
-						protocol: None,
-					}
-				})
+				.send_response(&{ Response::Accept { key: &websocket_key, protocol: None } })
 				.await
 			{
-				Ok(()) => {}
+				Ok(()) => {},
 				Err(err) => return Err(Box::new(err) as Box<_>),
 			};
 

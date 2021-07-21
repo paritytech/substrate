@@ -16,12 +16,9 @@
 // limitations under the License.
 
 use crate::{Config, Pallet};
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::SignedExtension,
-	transaction_validity::TransactionValidityError,
-};
+use sp_runtime::{traits::SignedExtension, transaction_validity::TransactionValidityError};
 
 /// Ensure the transaction version registered in the transaction is the same as at present.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]

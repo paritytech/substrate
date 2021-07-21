@@ -22,12 +22,12 @@ use crate::{
 	metadata::{StorageEntryModifier, StorageEntryType},
 	storage::{
 		types::{
-			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix,
-			OptionQuery, QueryKindTrait, StorageEntryMetadata, TupleToEncodedIter,
+			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OptionQuery, QueryKindTrait,
+			StorageEntryMetadata, TupleToEncodedIter,
 		},
 		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength, StoragePrefixedMap,
 	},
-	traits::{Get, GetDefault, StorageInstance, StorageInfo},
+	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_runtime::SaturatedConversion;
@@ -52,10 +52,13 @@ use sp_std::prelude::*;
 /// such as `blake2_128_concat` must be used for the key hashers. Otherwise, other values
 /// in storage can be compromised.
 pub struct StorageNMap<
-	Prefix, Key, Value, QueryKind = OptionQuery, OnEmpty = GetDefault, MaxValues=GetDefault,
->(
-	core::marker::PhantomData<(Prefix, Key, Value, QueryKind, OnEmpty, MaxValues)>,
-);
+	Prefix,
+	Key,
+	Value,
+	QueryKind = OptionQuery,
+	OnEmpty = GetDefault,
+	MaxValues = GetDefault,
+>(core::marker::PhantomData<(Prefix, Key, Value, QueryKind, OnEmpty, MaxValues)>);
 
 impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 	crate::storage::generator::StorageNMap<Key, Value>
@@ -83,8 +86,7 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::storage::StoragePrefixedMap<Value>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::storage::StoragePrefixedMap<Value>
 	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
@@ -113,7 +115,9 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	pub fn hashed_key_for<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
+	pub fn hashed_key_for<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) -> Vec<u8> {
 		<Self as crate::storage::StorageNMap<Key, Value>>::hashed_key_for(key)
 	}
 
@@ -123,7 +127,9 @@ where
 	}
 
 	/// Load the value associated with the given key from the map.
-	pub fn get<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> QueryKind::Query {
+	pub fn get<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) -> QueryKind::Query {
 		<Self as crate::storage::StorageNMap<Key, Value>>::get(key)
 	}
 
@@ -137,7 +143,9 @@ where
 	}
 
 	/// Take a value from storage, removing it afterwards.
-	pub fn take<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> QueryKind::Query {
+	pub fn take<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) -> QueryKind::Query {
 		<Self as crate::storage::StorageNMap<Key, Value>>::take(key)
 	}
 
@@ -248,7 +256,9 @@ where
 	///
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
-	pub fn decode_len<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(key: KArg) -> Option<usize>
+	pub fn decode_len<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) -> Option<usize>
 	where
 		Value: StorageDecodeLength,
 	{
@@ -260,7 +270,7 @@ where
 	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
 	pub fn migrate_keys<KArg>(key: KArg, hash_fns: Key::HArg) -> Option<Value>
 	where
-		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter
+		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 	{
 		<Self as crate::storage::StorageNMap<Key, Value>>::migrate_keys::<_>(key, hash_fns)
 	}
@@ -402,9 +412,8 @@ where
 	}
 }
 
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::traits::StorageInfoTrait for
-	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator + super::key::KeyGeneratorMaxEncodedLen,
@@ -414,26 +423,23 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn storage_info() -> Vec<StorageInfo> {
-		vec![
-			StorageInfo {
-				pallet_name: Self::module_prefix().to_vec(),
-				storage_name: Self::storage_prefix().to_vec(),
-				prefix: Self::final_prefix().to_vec(),
-				max_values: MaxValues::get(),
-				max_size: Some(
-					Key::key_max_encoded_len()
-						.saturating_add(Value::max_encoded_len())
-						.saturated_into(),
-				),
-			}
-		]
+		vec![StorageInfo {
+			pallet_name: Self::module_prefix().to_vec(),
+			storage_name: Self::storage_prefix().to_vec(),
+			prefix: Self::final_prefix().to_vec(),
+			max_values: MaxValues::get(),
+			max_size: Some(
+				Key::key_max_encoded_len()
+					.saturating_add(Value::max_encoded_len())
+					.saturated_into(),
+			),
+		}]
 	}
 }
 
 /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::traits::PartialStorageInfoTrait for
-	StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
+impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::PartialStorageInfoTrait
+	for StorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
 where
 	Prefix: StorageInstance,
 	Key: super::key::KeyGenerator,
@@ -443,23 +449,23 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn partial_storage_info() -> Vec<StorageInfo> {
-		vec![
-			StorageInfo {
-				pallet_name: Self::module_prefix().to_vec(),
-				storage_name: Self::storage_prefix().to_vec(),
-				prefix: Self::final_prefix().to_vec(),
-				max_values: MaxValues::get(),
-				max_size: None,
-			}
-		]
+		vec![StorageInfo {
+			pallet_name: Self::module_prefix().to_vec(),
+			storage_name: Self::storage_prefix().to_vec(),
+			prefix: Self::final_prefix().to_vec(),
+			max_values: MaxValues::get(),
+			max_size: None,
+		}]
 	}
 }
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::hash::*;
-	use crate::storage::types::{Key, ValueQuery};
-	use crate::metadata::StorageEntryModifier;
+	use crate::{
+		hash::*,
+		metadata::StorageEntryModifier,
+		storage::types::{Key, ValueQuery},
+	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -625,15 +631,9 @@ mod test {
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40), (3, 30)]);
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::MODIFIER,
-				StorageEntryModifier::Default
-			);
+			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
 			assert_eq!(A::NAME, "Foo");
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::default(),
-				98u32.encode()
-			);
+			assert_eq!(AValueQueryWithAnOnEmpty::default(), 98u32.encode());
 			assert_eq!(A::default(), Option::<u32>::None.encode());
 
 			WithLen::remove_all(None);
@@ -785,41 +785,23 @@ mod test {
 			C::insert((3, 30), 10);
 			C::insert((4, 40), 10);
 			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40), 20), ((3, 30), 20)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 20), ((3, 30), 20)]);
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40), 10), ((3, 30), 10)]
-			);
-			assert_eq!(
-				A::drain().collect::<Vec<_>>(),
-				vec![((4, 40), 10), ((3, 30), 10)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 10), ((3, 30), 10)]);
+			assert_eq!(A::drain().collect::<Vec<_>>(), vec![((4, 40), 10), ((3, 30), 10)]);
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![]);
 
 			C::insert((3, 30), 10);
 			C::insert((4, 40), 10);
 			A::translate::<u8, _>(|(k1, k2), v| Some((k1 * k2 as u16 * v as u16).into()));
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40), 1600), ((3, 30), 900)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 1600), ((3, 30), 900)]);
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::MODIFIER,
-				StorageEntryModifier::Default
-			);
+			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
 			assert_eq!(A::NAME, "Foo");
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::default(),
-				98u32.encode()
-			);
+			assert_eq!(AValueQueryWithAnOnEmpty::default(), 98u32.encode());
 			assert_eq!(A::default(), Option::<u32>::None.encode());
 
 			WithLen::remove_all(None);
@@ -831,14 +813,8 @@ mod test {
 			A::insert((3, 31), 12);
 			A::insert((4, 40), 13);
 			A::insert((4, 41), 14);
-			assert_eq!(
-				A::iter_prefix_values((3,)).collect::<Vec<_>>(),
-				vec![12, 11]
-			);
-			assert_eq!(
-				A::iter_prefix_values((4,)).collect::<Vec<_>>(),
-				vec![13, 14]
-			);
+			assert_eq!(A::iter_prefix_values((3,)).collect::<Vec<_>>(), vec![12, 11]);
+			assert_eq!(A::iter_prefix_values((4,)).collect::<Vec<_>>(), vec![13, 14]);
 		});
 	}
 
@@ -846,52 +822,32 @@ mod test {
 	fn test_3_keys() {
 		type A = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_128Concat, u16>,
-				Key<Blake2_128Concat, u16>,
-				Key<Twox64Concat, u16>,
-			),
+			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 			u32,
 			OptionQuery,
 		>;
 		type AValueQueryWithAnOnEmpty = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_128Concat, u16>,
-				Key<Blake2_128Concat, u16>,
-				Key<Twox64Concat, u16>,
-			),
+			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 			u32,
 			ValueQuery,
 			ADefault,
 		>;
 		type B = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_256, u16>,
-				Key<Blake2_256, u16>,
-				Key<Twox128, u16>,
-			),
+			(Key<Blake2_256, u16>, Key<Blake2_256, u16>, Key<Twox128, u16>),
 			u32,
 			ValueQuery,
 		>;
 		type C = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_128Concat, u16>,
-				Key<Blake2_128Concat, u16>,
-				Key<Twox64Concat, u16>,
-			),
+			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 			u8,
 			ValueQuery,
 		>;
 		type WithLen = StorageNMap<
 			Prefix,
-			(
-				Key<Blake2_128Concat, u16>,
-				Key<Blake2_128Concat, u16>,
-				Key<Twox64Concat, u16>,
-			),
+			(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 			Vec<u32>,
 		>;
 
@@ -914,11 +870,7 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 30);
 
 			A::swap::<
-				(
-					Key<Blake2_128Concat, u16>,
-					Key<Blake2_128Concat, u16>,
-					Key<Twox64Concat, u16>,
-				),
+				(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>),
 				_,
 				_,
 			>((1, 10, 100), (2, 20, 200));
@@ -1018,17 +970,11 @@ mod test {
 			C::insert((3, 30, 300), 10);
 			C::insert((4, 40, 400), 10);
 			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40, 400), 20), ((3, 30, 300), 20)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 20), ((3, 30, 300), 20)]);
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40, 400), 10), ((3, 30, 300), 10)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 10), ((3, 30, 300), 10)]);
 			assert_eq!(
 				A::drain().collect::<Vec<_>>(),
 				vec![((4, 40, 400), 10), ((3, 30, 300), 10)]
@@ -1040,21 +986,12 @@ mod test {
 			A::translate::<u8, _>(|(k1, k2, k3), v| {
 				Some((k1 * k2 as u16 * v as u16 / k3 as u16).into())
 			});
-			assert_eq!(
-				A::iter().collect::<Vec<_>>(),
-				vec![((4, 40, 400), 4), ((3, 30, 300), 3)]
-			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 4), ((3, 30, 300), 3)]);
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::MODIFIER,
-				StorageEntryModifier::Default
-			);
+			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
 			assert_eq!(A::NAME, "Foo");
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::default(),
-				98u32.encode()
-			);
+			assert_eq!(AValueQueryWithAnOnEmpty::default(), 98u32.encode());
 			assert_eq!(A::default(), Option::<u32>::None.encode());
 
 			WithLen::remove_all(None);
@@ -1066,22 +1003,10 @@ mod test {
 			A::insert((3, 30, 301), 12);
 			A::insert((4, 40, 400), 13);
 			A::insert((4, 40, 401), 14);
-			assert_eq!(
-				A::iter_prefix_values((3,)).collect::<Vec<_>>(),
-				vec![11, 12]
-			);
-			assert_eq!(
-				A::iter_prefix_values((4,)).collect::<Vec<_>>(),
-				vec![14, 13]
-			);
-			assert_eq!(
-				A::iter_prefix_values((3, 30)).collect::<Vec<_>>(),
-				vec![11, 12]
-			);
-			assert_eq!(
-				A::iter_prefix_values((4, 40)).collect::<Vec<_>>(),
-				vec![14, 13]
-			);
+			assert_eq!(A::iter_prefix_values((3,)).collect::<Vec<_>>(), vec![11, 12]);
+			assert_eq!(A::iter_prefix_values((4,)).collect::<Vec<_>>(), vec![14, 13]);
+			assert_eq!(A::iter_prefix_values((3, 30)).collect::<Vec<_>>(), vec![11, 12]);
+			assert_eq!(A::iter_prefix_values((4, 40)).collect::<Vec<_>>(), vec![14, 13]);
 		});
 	}
 }

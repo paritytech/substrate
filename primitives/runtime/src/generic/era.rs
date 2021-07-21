@@ -18,9 +18,9 @@
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::codec::{Decode, Encode, Input, Output, Error};
+use crate::codec::{Decode, Encode, Error, Input, Output};
 
 /// Era period
 pub type Period = u64;
@@ -64,10 +64,7 @@ impl Era {
 	/// does not exceed `BlockHashCount` parameter passed to `system` module, since that
 	/// prunes old blocks and renders transactions immediately invalid.
 	pub fn mortal(period: u64, current: u64) -> Self {
-		let period = period.checked_next_power_of_two()
-			.unwrap_or(1 << 16)
-			.max(4)
-			.min(1 << 16);
+		let period = period.checked_next_power_of_two().unwrap_or(1 << 16).max(4).min(1 << 16);
 		let phase = current % period;
 		let quantize_factor = (period >> 12).max(1);
 		let quantized_phase = phase / quantize_factor * quantize_factor;
@@ -109,9 +106,10 @@ impl Encode for Era {
 			Self::Immortal => output.push_byte(0),
 			Self::Mortal(period, phase) => {
 				let quantize_factor = (*period as u64 >> 12).max(1);
-				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 | ((phase / quantize_factor) << 4) as u16;
+				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 |
+					((phase / quantize_factor) << 4) as u16;
 				encoded.encode_to(output);
-			}
+			},
 		}
 	}
 }
@@ -154,28 +152,25 @@ impl scale_info::TypeInfo for Era {
 	type Identity = Self;
 
 	fn type_info() -> scale_info::Type {
-		let variants = scale_info::build::Variants::new()
-			.variant("Immortal", |v| v.index(0));
+		let variants = scale_info::build::Variants::new().variant("Immortal", |v| v.index(0));
 
 		// this is necessary since the size of the encoded Mortal variant is `u16`, conditional on
 		// the value of the first byte being > 0.
-		let variants = mortal_variants!(variants,
-			1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-			17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
-			33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-			49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
-			65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
-			81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
-			97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
-			113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128,
-			129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144,
-			145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160,
-			161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176,
-			177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192,
-			193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208,
-			209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224,
-			225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240,
-			241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255
+		let variants = mortal_variants!(
+			variants, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+			22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
+			44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65,
+			66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87,
+			88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107,
+			108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124,
+			125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141,
+			142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158,
+			159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+			176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192,
+			193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209,
+			210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226,
+			227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243,
+			244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255
 		);
 
 		scale_info::Type::builder()
@@ -200,7 +195,7 @@ mod tests {
 		assert!(e.is_immortal());
 
 		assert_eq!(e.encode(), vec![0u8]);
-		assert_eq!(e, Era::decode(&mut&[0u8][..]).unwrap());
+		assert_eq!(e, Era::decode(&mut &[0u8][..]).unwrap());
 	}
 
 	#[test]
@@ -210,7 +205,7 @@ mod tests {
 
 		let expected = vec![5 + 42 % 16 * 16, 42 / 16];
 		assert_eq!(e.encode(), expected);
-		assert_eq!(e, Era::decode(&mut&expected[..]).unwrap());
+		assert_eq!(e, Era::decode(&mut &expected[..]).unwrap());
 	}
 
 	#[test]
@@ -219,7 +214,7 @@ mod tests {
 
 		let expected = vec![(14 + 2500 % 16 * 16) as u8, (2500 / 16) as u8];
 		assert_eq!(e.encode(), expected);
-		assert_eq!(e, Era::decode(&mut&expected[..]).unwrap());
+		assert_eq!(e, Era::decode(&mut &expected[..]).unwrap());
 	}
 
 	#[test]

@@ -16,22 +16,24 @@
 // limitations under the License.
 
 use frame_support::{
-	weights::{DispatchInfo, DispatchClass, Pays, GetDispatchInfo},
-	traits::{
-		GetCallName, GetPalletVersion, OnInitialize, OnFinalize, OnRuntimeUpgrade, OnGenesis,
-	},
 	dispatch::UnfilteredDispatchable,
 	storage::unhashed,
+	traits::{
+		GetCallName, GetPalletVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
+	},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
+};
+use sp_io::{
+	hashing::{blake2_128, twox_128, twox_64},
+	TestExternalities,
 };
 use sp_runtime::DispatchError;
-use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
 #[frame_support::pallet]
 pub mod pallet {
-	use sp_std::any::TypeId;
-	use frame_support::scale_info;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, scale_info};
 	use frame_system::pallet_prelude::*;
+	use sp_std::any::TypeId;
 
 	type BalanceOf<T, I> = <T as Config<I>>::Balance;
 
@@ -74,15 +76,17 @@ pub mod pallet {
 				31
 			}
 		}
-		fn integrity_test() {
-		}
+		fn integrity_test() {}
 	}
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
 		#[pallet::weight(Weight::from(*_foo))]
-		pub fn foo(origin: OriginFor<T>, #[pallet::compact] _foo: u32) -> DispatchResultWithPostInfo {
+		pub fn foo(
+			origin: OriginFor<T>,
+			#[pallet::compact] _foo: u32,
+		) -> DispatchResultWithPostInfo {
 			let _ = origin;
 			Self::deposit_event(Event::Something(3));
 			Ok(().into())
@@ -93,13 +97,12 @@ pub mod pallet {
 		#[frame_support::transactional]
 		pub fn foo_transactional(
 			origin: OriginFor<T>,
-			#[pallet::compact] _foo: u32
+			#[pallet::compact] _foo: u32,
 		) -> DispatchResultWithPostInfo {
 			let _ = origin;
 			Ok(().into())
 		}
 	}
-
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
@@ -140,14 +143,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn nmap2)]
-	pub type NMap2<T, I = ()> = StorageNMap<
-		_,
-		(
-			storage::Key<Twox64Concat, u16>,
-			storage::Key<Blake2_128Concat, u32>,
-		),
-		u64,
-	>;
+	pub type NMap2<T, I = ()> =
+		StorageNMap<_, (storage::Key<Twox64Concat, u16>, storage::Key<Blake2_128Concat, u32>), u64>;
 
 	#[pallet::genesis_config]
 	#[derive(Default)]
@@ -156,14 +153,19 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I:'static> GenesisBuild<T, I> for GenesisConfig {
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
 		fn build(&self) {}
 	}
 
 	#[pallet::origin]
 	#[derive(
-		EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode,
-		scale_info::TypeInfo
+		EqNoBound,
+		RuntimeDebugNoBound,
+		CloneNoBound,
+		PartialEqNoBound,
+		Encode,
+		Decode,
+		scale_info::TypeInfo,
 	)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T, I = ()>(PhantomData<(T, I)>);
@@ -173,7 +175,7 @@ pub mod pallet {
 		type Call = Call<T, I>;
 		fn validate_unsigned(
 			_source: TransactionSource,
-			_call: &Self::Call
+			_call: &Self::Call,
 		) -> TransactionValidity {
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 		}
@@ -197,8 +199,7 @@ pub mod pallet {
 
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
 	#[cfg_attr(feature = "std", derive(codec::Decode))]
-	pub enum InherentError {
-	}
+	pub enum InherentError {}
 
 	impl frame_support::inherent::IsFatalError for InherentError {
 		fn is_fatal_error(&self) -> bool {
@@ -236,9 +237,7 @@ pub mod pallet2 {
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			GenesisConfig {
-				phantom: Default::default(),
-			}
+			GenesisConfig { phantom: Default::default() }
 		}
 	}
 
@@ -249,7 +248,7 @@ pub mod pallet2 {
 }
 
 frame_support::parameter_types!(
-	pub const MyGetParam: u32= 10;
+	pub const MyGetParam: u32 = 10;
 	pub const BlockHashCount: u32 = 250;
 );
 
@@ -280,12 +279,12 @@ impl frame_system::Config for Runtime {
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type MyGetParam= MyGetParam;
+	type MyGetParam = MyGetParam;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance1> for Runtime {
 	type Event = Event;
-	type MyGetParam= MyGetParam;
+	type MyGetParam = MyGetParam;
 	type Balance = u64;
 }
 impl pallet2::Config for Runtime {
@@ -320,26 +319,15 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { _foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo {
-			weight: 3,
-			class: DispatchClass::Normal,
-			pays_fee: Pays::Yes,
-		}
+		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
-	assert_eq!(
-		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_transactional"],
-	);
+	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_transactional"],);
 
 	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo { _foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo {
-			weight: 3,
-			class: DispatchClass::Normal,
-			pays_fee: Pays::Yes,
-		}
+		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
@@ -360,11 +348,7 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module {
-			index: 1,
-			error: 0,
-			message: Some("InsufficientProposersBalance"),
-		},
+		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
 	);
 
 	assert_eq!(
@@ -372,16 +356,16 @@ fn error_expand() {
 		String::from("InsufficientProposersBalance"),
 	);
 	assert_eq!(
-		<&'static str>::from(pallet::Error::<Runtime, pallet::Instance1>::InsufficientProposersBalance),
+		<&'static str>::from(
+			pallet::Error::<Runtime, pallet::Instance1>::InsufficientProposersBalance
+		),
 		"InsufficientProposersBalance",
 	);
 	assert_eq!(
-		DispatchError::from(pallet::Error::<Runtime, pallet::Instance1>::InsufficientProposersBalance),
-		DispatchError::Module {
-			index: 2,
-			error: 0,
-			message: Some("InsufficientProposersBalance"),
-		},
+		DispatchError::from(
+			pallet::Error::<Runtime, pallet::Instance1>::InsufficientProposersBalance
+		),
+		DispatchError::Module { index: 2, error: 0, message: Some("InsufficientProposersBalance") },
 	);
 }
 
@@ -395,7 +379,9 @@ fn instance_expand() {
 fn pallet_expand_deposit_event() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
-		pallet::Call::<Runtime>::foo { _foo: 3 }.dispatch_bypass_filter(None.into()).unwrap();
+		pallet::Call::<Runtime>::foo { _foo: 3 }
+			.dispatch_bypass_filter(None.into())
+			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::Example(pallet::Event::Something(3)),
@@ -405,7 +391,8 @@ fn pallet_expand_deposit_event() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 		pallet::Call::<Runtime, pallet::Instance1>::foo { _foo: 3 }
-			.dispatch_bypass_filter(None.into()).unwrap();
+			.dispatch_bypass_filter(None.into())
+			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::Instance1Example(pallet::Event::Something(3)),
@@ -415,8 +402,7 @@ fn pallet_expand_deposit_event() {
 
 #[test]
 fn storage_expand() {
-	use frame_support::pallet_prelude::*;
-	use frame_support::storage::StoragePrefixedMap;
+	use frame_support::{pallet_prelude::*, storage::StoragePrefixedMap};
 
 	fn twox_64_concat(d: &[u8]) -> Vec<u8> {
 		let mut v = twox_64(d).to_vec();
@@ -597,13 +583,15 @@ fn metadata() {
 		name: "System",
 		storage: None,
 		calls: Some(scale_info::meta_type::<frame_system::Call<Runtime>>().into()),
-		event: Some(PalletEventMetadata { ty: scale_info::meta_type::<frame_system::Event<Runtime>>() }),
+		event: Some(PalletEventMetadata {
+			ty: scale_info::meta_type::<frame_system::Event<Runtime>>(),
+		}),
 		constants: vec![
 			PalletConstantMetadata {
 				name: "BlockWeights",
 				ty: scale_info::meta_type::<frame_system::limits::BlockWeights>(),
 				value: vec![],
-				docs: vec![]
+				docs: vec![],
 			},
 			PalletConstantMetadata {
 				name: "BlockLength",
@@ -633,10 +621,12 @@ fn metadata() {
 				name: "SS58Prefix",
 				ty: scale_info::meta_type::<u8>(),
 				value: vec![],
-				docs: vec![]
-			}
+				docs: vec![],
+			},
 		],
-		error: Some(PalletErrorMetadata { ty: scale_info::meta_type::<frame_system::Error<Runtime>>() }),
+		error: Some(PalletErrorMetadata {
+			ty: scale_info::meta_type::<frame_system::Error<Runtime>>(),
+		}),
 	};
 
 	let example_pallet_metadata = PalletMetadata {
@@ -726,14 +716,12 @@ fn metadata() {
 		}),
 		calls: Some(scale_info::meta_type::<pallet::Call<Runtime>>().into()),
 		event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet::Event<Runtime>>() }),
-		constants: vec![
-			PalletConstantMetadata {
-				name: "MyGetParam",
-				ty: scale_info::meta_type::<u32>(),
-				value: vec![10, 0, 0, 0],
-				docs: vec![],
-			},
-		],
+		constants: vec![PalletConstantMetadata {
+			name: "MyGetParam",
+			ty: scale_info::meta_type::<u32>(),
+			value: vec![10, 0, 0, 0],
+			docs: vec![],
+		}],
 		error: Some(PalletErrorMetadata { ty: scale_info::meta_type::<pallet::Error<Runtime>>() }),
 	};
 
@@ -765,37 +753,28 @@ fn metadata() {
 		_ => unreachable!(),
 	}
 
-	let pallets = vec![
-		system_pallet_metadata,
-		example_pallet_metadata,
-		example_pallet_instance1_metadata,
-	];
+	let pallets =
+		vec![system_pallet_metadata, example_pallet_metadata, example_pallet_instance1_metadata];
 
 	let extrinsic = ExtrinsicMetadata {
 		ty: scale_info::meta_type::<UncheckedExtrinsic>(),
 		version: 4,
-		signed_extensions: vec![
-			SignedExtensionMetadata {
-				identifier: "UnitSignedExtension",
-				ty: scale_info::meta_type::<()>(),
-				additional_signed: scale_info::meta_type::<()>(),
-			}
-		]
+		signed_extensions: vec![SignedExtensionMetadata {
+			identifier: "UnitSignedExtension",
+			ty: scale_info::meta_type::<()>(),
+			additional_signed: scale_info::meta_type::<()>(),
+		}],
 	};
 
 	let expected_metadata: RuntimeMetadataPrefixed =
 		RuntimeMetadataLastVersion::new(pallets, extrinsic).into();
 	let expected_metadata = match expected_metadata.1 {
-		RuntimeMetadata::V14(metadata) => {
-			metadata
-		},
+		RuntimeMetadata::V14(metadata) => metadata,
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
 	let actual_metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V14(metadata) => {
-			metadata
-		},
+		RuntimeMetadata::V14(metadata) => metadata,
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
@@ -807,9 +786,15 @@ fn metadata() {
 fn test_pallet_info_access() {
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::name(), "System");
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::name(), "Example");
-	assert_eq!(<Instance1Example as frame_support::traits::PalletInfoAccess>::name(), "Instance1Example");
+	assert_eq!(
+		<Instance1Example as frame_support::traits::PalletInfoAccess>::name(),
+		"Instance1Example"
+	);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::name(), "Example2");
-	assert_eq!(<Instance1Example2 as frame_support::traits::PalletInfoAccess>::name(), "Instance1Example2");
+	assert_eq!(
+		<Instance1Example2 as frame_support::traits::PalletInfoAccess>::name(),
+		"Instance1Example2"
+	);
 
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);

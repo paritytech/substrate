@@ -15,8 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{Def, parse::storage::StorageDef};
-use crate::pallet::parse::storage::{Metadata, QueryKind, StorageGenerics};
+use crate::pallet::{
+	parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
+	Def,
+};
 use std::collections::HashSet;
 
 /// Generate the prefix_ident related the the storage.
@@ -29,10 +31,7 @@ fn prefix_ident(storage: &StorageDef) -> syn::Ident {
 /// Check for duplicated storage prefixes. This step is necessary since users can specify an
 /// alternative storage prefix using the #[pallet::storage_prefix] syntax, and we need to ensure
 /// that the prefix specified by the user is not a duplicate of an existing one.
-fn check_prefix_duplicates(
-	storage_def: &StorageDef,
-	set: &mut HashSet<String>,
-) -> syn::Result<()> {
+fn check_prefix_duplicates(storage_def: &StorageDef, set: &mut HashSet<String>) -> syn::Result<()> {
 	let prefix = storage_def.prefix();
 
 	if !set.insert(prefix.clone()) {
@@ -40,7 +39,7 @@ fn check_prefix_duplicates(
 			storage_def.prefix_span(),
 			format!("Duplicate storage prefixes found for `{}`", prefix),
 		);
-		return Err(err);
+		return Err(err)
 	}
 
 	Ok(())
@@ -84,10 +83,8 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 
 		let default_query_kind: syn::Type =
 			syn::parse_quote!(#frame_support::storage::types::OptionQuery);
-		let default_on_empty: syn::Type =
-			syn::parse_quote!(#frame_support::traits::GetDefault);
-		let default_max_values: syn::Type =
-			syn::parse_quote!(#frame_support::traits::GetDefault);
+		let default_on_empty: syn::Type = syn::parse_quote!(#frame_support::traits::GetDefault);
+		let default_max_values: syn::Type = syn::parse_quote!(#frame_support::traits::GetDefault);
 
 		if let Some(named_generics) = storage_def.named_generics.clone() {
 			args.args.clear();
@@ -99,7 +96,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(query_kind));
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty.clone());
 					args.args.push(syn::GenericArgument::Type(on_empty));
-				}
+				},
 				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values } => {
 					args.args.push(syn::GenericArgument::Type(hasher));
 					args.args.push(syn::GenericArgument::Type(key));
@@ -110,9 +107,16 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(on_empty));
 					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
-				}
+				},
 				StorageGenerics::DoubleMap {
-					hasher1, key1, hasher2, key2, value, query_kind, on_empty, max_values,
+					hasher1,
+					key1,
+					hasher2,
+					key2,
+					value,
+					query_kind,
+					on_empty,
+					max_values,
 				} => {
 					args.args.push(syn::GenericArgument::Type(hasher1));
 					args.args.push(syn::GenericArgument::Type(key1));
@@ -125,8 +129,8 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(on_empty));
 					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
-				}
-				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values, } => {
+				},
+				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values } => {
 					args.args.push(syn::GenericArgument::Type(keygen));
 					args.args.push(syn::GenericArgument::Type(value));
 					let query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
@@ -135,7 +139,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 					args.args.push(syn::GenericArgument::Type(on_empty));
 					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
-				}
+				},
 			}
 		} else {
 			args.args[0] = syn::parse_quote!( #prefix_ident<#type_use_gen> );
@@ -153,44 +157,42 @@ pub fn process_generics(def: &mut Def) -> syn::Result<()> {
 /// * generate metadatas
 pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	if let Err(e) = process_generics(def) {
-		return e.into_compile_error().into();
+		return e.into_compile_error().into()
 	}
 
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
 	let pallet_ident = &def.pallet_struct.pallet;
 
+	let entries = def.storages.iter().map(|storage| {
+		let docs = &storage.docs;
 
-	let entries = def.storages.iter()
-		.map(|storage| {
-			let docs = &storage.docs;
+		let ident = &storage.ident;
+		let gen = &def.type_use_generics(storage.attr_span);
+		let full_ident = quote::quote_spanned!(storage.attr_span => #ident<#gen> );
 
-			let ident = &storage.ident;
-			let gen = &def.type_use_generics(storage.attr_span);
-			let full_ident = quote::quote_spanned!(storage.attr_span => #ident<#gen> );
+		let cfg_attrs = &storage.cfg_attrs;
 
-			let cfg_attrs = &storage.cfg_attrs;
+		quote::quote_spanned!(storage.attr_span =>
+			#(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
+				name: <#full_ident as #frame_support::storage::StorageEntryMetadata>::NAME,
+				modifier: <#full_ident as #frame_support::storage::StorageEntryMetadata>::MODIFIER,
+				ty: <#full_ident as #frame_support::storage::StorageEntryMetadata>::ty(),
+				default: <#full_ident as #frame_support::storage::StorageEntryMetadata>::default(),
+				docs: #frame_support::sp_std::vec![
+					#( #docs, )*
+				],
+			}
+		)
+	});
 
-			quote::quote_spanned!(storage.attr_span =>
-				#(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
-					name: <#full_ident as #frame_support::storage::StorageEntryMetadata>::NAME,
-					modifier: <#full_ident as #frame_support::storage::StorageEntryMetadata>::MODIFIER,
-					ty: <#full_ident as #frame_support::storage::StorageEntryMetadata>::ty(),
-					default: <#full_ident as #frame_support::storage::StorageEntryMetadata>::default(),
-					docs: #frame_support::sp_std::vec![
-						#( #docs, )*
-					],
-				}
-			)
-		});
-
-	let getters = def.storages.iter()
-		.map(|storage| if let Some(getter) = &storage.getter {
-			let completed_where_clause = super::merge_where_clauses(&[
-				&storage.where_clause,
-				&def.config.where_clause,
-			]);
-			let docs = storage.docs.iter()
+	let getters = def.storages.iter().map(|storage| {
+		if let Some(getter) = &storage.getter {
+			let completed_where_clause =
+				super::merge_where_clauses(&[&storage.where_clause, &def.config.where_clause]);
+			let docs = storage
+				.docs
+				.iter()
 				.map(|d| quote::quote_spanned!(storage.attr_span => #[doc = #d]));
 
 			let ident = &storage.ident;
@@ -290,11 +292,12 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							}
 						}
 					)
-				}
+				},
 			}
 		} else {
 			Default::default()
-		});
+		}
+	});
 
 	let prefix_structs = def.storages.iter().map(|storage_def| {
 		let type_impl_gen = &def.type_impl_generics(storage_def.attr_span);

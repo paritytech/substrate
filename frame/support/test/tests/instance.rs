@@ -15,21 +15,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-use codec::{Codec, EncodeLike, Encode, Decode};
-use scale_info::TypeInfo;
-use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Verify}};
+use codec::{Codec, Decode, Encode, EncodeLike};
 use frame_support::{
-	Parameter, traits::Get, parameter_types,
+	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
 	metadata::{
-		PalletStorageMetadata, StorageEntryModifier, StorageEntryType,
-		StorageEntryMetadata, StorageHasher,
+		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
+		StorageHasher,
 	},
-	StorageValue, StorageMap, StorageDoubleMap,
-	inherent::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError},
+	parameter_types,
+	traits::Get,
+	Parameter, StorageDoubleMap, StorageMap, StorageValue,
 };
-use sp_core::{H256, sr25519};
+use scale_info::TypeInfo;
+use sp_core::{sr25519, H256};
+use sp_runtime::{
+	generic,
+	traits::{BlakeTwo256, Verify},
+	BuildStorage,
+};
 
 mod system;
 
@@ -42,7 +47,10 @@ mod module1 {
 	use super::*;
 	use sp_std::ops::Add;
 
-	pub trait Config<I>: system::Config where <Self as system::Config>::BlockNumber: From<u32> {
+	pub trait Config<I>: system::Config
+	where
+		<Self as system::Config>::BlockNumber: From<u32>,
+	{
 		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
@@ -102,15 +110,19 @@ mod module1 {
 	}
 
 	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo)]
-	pub enum Origin<T: Config<I>, I> where T::BlockNumber: From<u32> {
+	pub enum Origin<T: Config<I>, I>
+	where
+		T::BlockNumber: From<u32>,
+	{
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Config<I>, I: Instance> ProvideInherent for Module<T, I> where
-		T::BlockNumber: From<u32>
+	impl<T: Config<I>, I: Instance> ProvideInherent for Module<T, I>
+	where
+		T::BlockNumber: From<u32>,
 	{
 		type Call = Call<T, I>;
 		type Error = MakeFatalError<()>;
@@ -120,7 +132,10 @@ mod module1 {
 			unimplemented!();
 		}
 
-		fn check_inherent(_: &Self::Call, _: &InherentData) -> std::result::Result<(), Self::Error> {
+		fn check_inherent(
+			_: &Self::Call,
+			_: &InherentData,
+		) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 
@@ -136,7 +151,7 @@ mod module1 {
 mod module2 {
 	use super::*;
 
-	pub trait Config<I=DefaultInstance>: system::Config {
+	pub trait Config<I = DefaultInstance>: system::Config {
 		type Amount: Parameter + Default;
 		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 		type Origin: From<Origin<Self, I>>;
@@ -168,7 +183,7 @@ mod module2 {
 	}
 
 	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo)]
-	pub enum Origin<T: Config<I>, I=DefaultInstance> {
+	pub enum Origin<T: Config<I>, I = DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
@@ -184,7 +199,10 @@ mod module2 {
 			unimplemented!();
 		}
 
-		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
+		fn check_inherent(
+			_call: &Self::Call,
+			_data: &InherentData,
+		) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 
@@ -199,7 +217,9 @@ mod module2 {
 mod module3 {
 	use super::*;
 
-	pub trait Config: module2::Config + module2::Config<module2::Instance1> + system::Config {
+	pub trait Config:
+		module2::Config + module2::Config<module2::Instance1> + system::Config
+	{
 		type Currency: Currency;
 		type Currency2: Currency;
 	}
@@ -256,7 +276,7 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 
 impl system::Config for Runtime {
-	type BaseCallFilter= frame_support::traits::AllowAll;
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
@@ -299,15 +319,9 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig{
-		module_1_1: module1::GenesisConfig {
-			value: 3,
-			test: 2,
-		},
-		module_1_2: module1::GenesisConfig {
-			value: 4,
-			test: 5,
-		},
+	GenesisConfig {
+		module_1_1: module1::GenesisConfig { value: 3, test: 2 },
+		module_1_2: module1::GenesisConfig { value: 4, test: 5 },
 		module_2: module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
@@ -320,14 +334,17 @@ fn new_test_ext() -> sp_io::TestExternalities {
 		},
 		module_2_2: Default::default(),
 		module_2_3: Default::default(),
-	}.build_storage().unwrap().into()
+	}
+	.build_storage()
+	.unwrap()
+	.into()
 }
 
 #[test]
 fn storage_instance_independence() {
 	let mut storage = sp_core::storage::Storage {
 		top: std::collections::BTreeMap::new(),
-		children_default: std::collections::HashMap::new()
+		children_default: std::collections::HashMap::new(),
 	};
 	sp_state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);
@@ -360,7 +377,7 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(Value::get(), 1);
 		assert_eq!(Value::take(), 1);
 		assert_eq!(Value::get(), 0);
-		Value::mutate(|a| *a=2);
+		Value::mutate(|a| *a = 2);
 		assert_eq!(Value::get(), 2);
 		Value::kill();
 		assert_eq!(Value::exists(), false);
@@ -373,7 +390,7 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(Map::get(key), 1);
 		assert_eq!(Map::take(key), 1);
 		assert_eq!(Map::get(key), 0);
-		Map::mutate(key, |a| *a=2);
+		Map::mutate(key, |a| *a = 2);
 		assert_eq!(Map::get(key), 2);
 		Map::remove(key);
 		assert_eq!(Map::contains_key(key), false);
@@ -387,7 +404,7 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(DoubleMap::get(&key1, &key2), 1);
 		assert_eq!(DoubleMap::take(&key1, &key2), 1);
 		assert_eq!(DoubleMap::get(&key1, &key2), 0);
-		DoubleMap::mutate(&key1, &key2, |a| *a=2);
+		DoubleMap::mutate(&key1, &key2, |a| *a = 2);
 		assert_eq!(DoubleMap::get(&key1, &key2), 2);
 		DoubleMap::remove(&key1, &key2);
 		assert_eq!(DoubleMap::get(&key1, &key2), 0);
@@ -398,8 +415,7 @@ fn expected_metadata() -> PalletStorageMetadata {
 	PalletStorageMetadata {
 		prefix: "Instance2Module2",
 		entries: vec![
-			StorageEntryMetadata
-			{
+			StorageEntryMetadata {
 				name: "Value",
 				modifier: StorageEntryModifier::Default,
 				ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
@@ -430,10 +446,9 @@ fn expected_metadata() -> PalletStorageMetadata {
 				default: [0u8; 8].to_vec(),
 				docs: vec![],
 			},
-		]
+		],
 	}
 }
-
 
 #[test]
 fn test_instance_storage_metadata() {

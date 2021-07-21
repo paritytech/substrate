@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
-use proc_macro2::TokenStream;
 use crate::construct_runtime::Pallet;
-use syn::{Ident, TypePath};
+use proc_macro2::TokenStream;
 use quote::quote;
+use syn::{Ident, TypePath};
 
 pub fn expand_runtime_metadata(
 	runtime: &Ident,
@@ -48,7 +48,7 @@ pub fn expand_runtime_metadata(
 			let constants = expand_pallet_metadata_constants(runtime, decl);
 			let errors = expand_pallet_metadata_errors(runtime, decl);
 
-			quote!{
+			quote! {
 				#scrate::metadata::PalletMetadata {
 					name: stringify!(#name),
 					index: #index,
@@ -62,7 +62,7 @@ pub fn expand_runtime_metadata(
 		})
 		.collect::<Vec<_>>();
 
-	quote!{
+	quote! {
 		impl #runtime {
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
 				#scrate::metadata::RuntimeMetadataLastVersion::new(
@@ -98,7 +98,7 @@ fn expand_pallet_metadata_storage(
 		let instance = decl.instance.as_ref().into_iter();
 		let path = &decl.path;
 
-		quote!{
+		quote! {
 			Some(#path::Pallet::<#runtime #(, #path::#instance)*>::storage_metadata())
 		}
 	} else {
@@ -115,7 +115,7 @@ fn expand_pallet_metadata_calls(
 		let instance = decl.instance.as_ref().into_iter();
 		let path = &decl.path;
 
-		quote!{
+		quote! {
 			Some(#path::Pallet::<#runtime #(, #path::#instance)*>::call_functions())
 		}
 	} else {
@@ -131,8 +131,12 @@ fn expand_pallet_metadata_events(
 ) -> TokenStream {
 	if filtered_names.contains(&"Event") {
 		let path = &decl.path;
-		let part_is_generic =
-			!decl.find_part("Event").expect("Event part exists; qed").generics.params.is_empty();
+		let part_is_generic = !decl
+			.find_part("Event")
+			.expect("Event part exists; qed")
+			.generics
+			.params
+			.is_empty();
 		let pallet_event = match (decl.instance.as_ref(), part_is_generic) {
 			(Some(inst), true) => quote!(#path::Event::<#runtime, #path::#inst>),
 			(Some(inst), false) => quote!(#path::Event::<#path::#inst>),
@@ -140,7 +144,7 @@ fn expand_pallet_metadata_events(
 			(None, false) => quote!(#path::Event),
 		};
 
-		quote!{
+		quote! {
 			Some(
 				#scrate::metadata::PalletEventMetadata {
 					ty: #scrate::scale_info::meta_type::<#pallet_event>()
@@ -152,26 +156,20 @@ fn expand_pallet_metadata_events(
 	}
 }
 
-fn expand_pallet_metadata_constants(
-	runtime: &Ident,
-	decl: &Pallet,
-) -> TokenStream {
+fn expand_pallet_metadata_constants(runtime: &Ident, decl: &Pallet) -> TokenStream {
 	let path = &decl.path;
 	let instance = decl.instance.as_ref().into_iter();
 
-	quote!{
+	quote! {
 		#path::Pallet::<#runtime #(, #path::#instance)*>::pallet_constants_metadata()
 	}
 }
 
-fn expand_pallet_metadata_errors(
-	runtime: &Ident,
-	decl: &Pallet,
-) -> TokenStream {
+fn expand_pallet_metadata_errors(runtime: &Ident, decl: &Pallet) -> TokenStream {
 	let path = &decl.path;
 	let instance = decl.instance.as_ref().into_iter();
 
-	quote!{
+	quote! {
 		#path::Pallet::<#runtime #(, #path::#instance)*>::error_metadata()
 	}
 }

@@ -28,6 +28,6 @@ mod util;
 mod tests;
 
 pub use runtime::{
-	create_runtime, create_runtime_from_artifact, prepare_runtime_artifact, Config, Semantics,
-	DeterministicStackLimit,
+	create_runtime, create_runtime_from_artifact, prepare_runtime_artifact, Config,
+	DeterministicStackLimit, Semantics,
 };

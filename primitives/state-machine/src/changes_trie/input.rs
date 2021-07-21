@@ -17,11 +17,8 @@
 
 //! Different types of changes trie input pairs.
 
-use codec::{Decode, Encode, Input, Output, Error};
-use crate::{
-	StorageKey, StorageValue,
-	changes_trie::BlockNumber
-};
+use crate::{changes_trie::BlockNumber, StorageKey, StorageValue};
+use codec::{Decode, Encode, Error, Input, Output};
 use sp_core::storage::PrefixedStorageKey;
 
 /// Key of { changed key => set of extrinsic indices } mapping.
@@ -139,7 +136,6 @@ impl<Number: BlockNumber> DigestIndex<Number> {
 		prefix
 	}
 }
-
 
 impl<Number: BlockNumber> Encode for DigestIndex<Number> {
 	fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {

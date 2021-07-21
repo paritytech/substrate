@@ -19,10 +19,10 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-
 // to allow benchmarking
 #![cfg_attr(feature = "bench", feature(test))]
-#[cfg(feature = "bench")] extern crate test;
+#[cfg(feature = "bench")]
+extern crate test;
 
 #[doc(hidden)]
 pub use codec;
@@ -43,23 +43,27 @@ pub use sp_application_crypto as app_crypto;
 #[cfg(feature = "std")]
 pub use sp_core::storage::{Storage, StorageChild};
 
-use sp_std::prelude::*;
-use sp_std::convert::TryFrom;
-use sp_core::{crypto::{self, Public}, ed25519, sr25519, ecdsa, hash::{H256, H512}};
+use sp_core::{
+	crypto::{self, Public},
+	ecdsa, ed25519,
+	hash::{H256, H512},
+	sr25519,
+};
+use sp_std::{convert::TryFrom, prelude::*};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 
 pub mod curve;
 pub mod generic;
+mod multiaddress;
 pub mod offchain;
+pub mod runtime_logger;
+mod runtime_string;
 #[cfg(feature = "std")]
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
-mod runtime_string;
-mod multiaddress;
-pub mod runtime_logger;
 
 pub use crate::runtime_string::*;
 
@@ -67,25 +71,28 @@ pub use crate::runtime_string::*;
 pub use multiaddress::MultiAddress;
 
 /// Re-export these since they're only "kind of" generic.
-pub use generic::{DigestItem, Digest};
+pub use generic::{Digest, DigestItem};
 
+pub use sp_application_crypto::{BoundToRuntimeAppPublic, RuntimeAppPublic};
 /// Re-export this since it's part of the API of this crate.
-pub use sp_core::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, CryptoTypeId, AccountId32}};
-pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
+pub use sp_core::{
+	crypto::{key_types, AccountId32, CryptoType, CryptoTypeId, KeyTypeId},
+	TypeId,
+};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
 
-/// Re-export top-level arithmetic stuff.
-pub use sp_arithmetic::{
-	PerThing, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf, UpperOf,
-	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
-	traits::SaturatedConversion,
-};
-/// Re-export 128 bit helpers.
-pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use sp_arithmetic::biguint;
+/// Re-export 128 bit helpers.
+pub use sp_arithmetic::helpers_128bit;
+/// Re-export top-level arithmetic stuff.
+pub use sp_arithmetic::{
+	traits::SaturatedConversion, FixedI128, FixedI64, FixedPointNumber, FixedPointOperand,
+	FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
+	UpperOf,
+};
 
 pub use either::Either;
 
@@ -122,7 +129,7 @@ impl Justifications {
 	/// not inserted.
 	pub fn append(&mut self, justification: Justification) -> bool {
 		if self.get(justification.0).is_some() {
-			return false;
+			return false
 		}
 		self.0.push(justification);
 		true
@@ -156,11 +163,11 @@ impl From<Justification> for Justifications {
 	}
 }
 
-use traits::{Verify, Lazy};
+use traits::{Lazy, Verify};
 
-#[cfg(feature = "std")]
-pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::traits::IdentifyAccount;
+#[cfg(feature = "std")]
+pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -172,10 +179,7 @@ pub trait BuildStorage {
 		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(
-		&self,
-		storage: &mut sp_core::storage::Storage,
-	) -> Result<(), String>;
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String>;
 }
 
 /// Something that can build the genesis storage of a module.
@@ -190,17 +194,14 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 
 #[cfg(feature = "std")]
 impl BuildStorage for sp_core::storage::Storage {
-	fn assimilate_storage(
-		&self,
-		storage: &mut sp_core::storage::Storage,
-	)-> Result<(), String> {
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
 		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
 		for (k, other_map) in self.children_default.iter() {
 			let k = k.clone();
 			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
 				if !map.child_info.try_update(&other_map.child_info) {
-					return Err("Incompatible child info update".to_string());
+					return Err("Incompatible child info update".to_string())
 				}
 			} else {
 				storage.children_default.insert(k, other_map.clone());
@@ -212,10 +213,7 @@ impl BuildStorage for sp_core::storage::Storage {
 
 #[cfg(feature = "std")]
 impl BuildStorage for () {
-	fn assimilate_storage(
-		&self,
-		_: &mut sp_core::storage::Storage,
-	) -> Result<(), String> {
+	fn assimilate_storage(&self, _: &mut sp_core::storage::Storage) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }
@@ -244,7 +242,11 @@ impl From<ed25519::Signature> for MultiSignature {
 impl TryFrom<MultiSignature> for ed25519::Signature {
 	type Error = ();
 	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
-		if let MultiSignature::Ed25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSignature::Ed25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -257,7 +259,11 @@ impl From<sr25519::Signature> for MultiSignature {
 impl TryFrom<MultiSignature> for sr25519::Signature {
 	type Error = ();
 	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
-		if let MultiSignature::Sr25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSignature::Sr25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -270,7 +276,11 @@ impl From<ecdsa::Signature> for MultiSignature {
 impl TryFrom<MultiSignature> for ecdsa::Signature {
 	type Error = ();
 	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
-		if let MultiSignature::Ecdsa(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSignature::Ecdsa(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -336,7 +346,11 @@ impl From<ed25519::Public> for MultiSigner {
 impl TryFrom<MultiSigner> for ed25519::Public {
 	type Error = ();
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Ed25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Ed25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -349,7 +363,11 @@ impl From<sr25519::Public> for MultiSigner {
 impl TryFrom<MultiSigner> for sr25519::Public {
 	type Error = ();
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Sr25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Sr25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -362,7 +380,11 @@ impl From<ecdsa::Public> for MultiSigner {
 impl TryFrom<MultiSigner> for ecdsa::Public {
 	type Error = ();
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Ecdsa(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Ecdsa(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -381,17 +403,19 @@ impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
 		match (self, signer) {
-			(Self::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
-			(Self::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(Self::Ed25519(ref sig), who) =>
+				sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
+			(Self::Sr25519(ref sig), who) =>
+				sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
 			(Self::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
 				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
 					Ok(pubkey) =>
-						&sp_io::hashing::blake2_256(pubkey.as_ref())
-							== <dyn AsRef<[u8; 32]>>::as_ref(who),
+						&sp_io::hashing::blake2_256(pubkey.as_ref()) ==
+							<dyn AsRef<[u8; 32]>>::as_ref(who),
 					_ => false,
 				}
-			}
+			},
 		}
 	}
 }
@@ -407,10 +431,10 @@ impl Verify for AnySignature {
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
-			.unwrap_or(false)
-		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
-			.unwrap_or(false)
+			.unwrap_or(false) ||
+			ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+				.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
+				.unwrap_or(false)
 	}
 }
 
@@ -446,7 +470,11 @@ pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWith
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
-	Other(#[codec(skip)] #[cfg_attr(feature = "std", serde(skip_deserializing))] &'static str),
+	Other(
+		#[codec(skip)]
+		#[cfg_attr(feature = "std", serde(skip_deserializing))]
+		&'static str,
+	),
 	/// Failed to lookup some data.
 	CannotLookup,
 	/// A bad origin.
@@ -475,8 +503,9 @@ pub enum DispatchError {
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
 /// the `Dispatchable` that is only known post dispatch.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub struct DispatchErrorWithPostInfo<Info> where
-	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+pub struct DispatchErrorWithPostInfo<Info>
+where
+	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	/// Additional information about the `Dispatchable` which is only known post dispatch.
 	pub post_info: Info,
@@ -488,22 +517,20 @@ impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
 		match self {
-			DispatchError::Module { index, error, message: Some(_) }
-				=> DispatchError::Module { index, error, message: None },
+			DispatchError::Module { index, error, message: Some(_) } =>
+				DispatchError::Module { index, error, message: None },
 			m => m,
 		}
 	}
 }
 
-impl<T, E> From<E> for DispatchErrorWithPostInfo<T> where
+impl<T, E> From<E> for DispatchErrorWithPostInfo<T>
+where
 	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable + Default,
-	E: Into<DispatchError>
+	E: Into<DispatchError>,
 {
 	fn from(error: E) -> Self {
-		Self {
-			post_info: Default::default(),
-			error: error.into(),
-		}
+		Self { post_info: Default::default(), error: error.into() }
 	}
 }
 
@@ -608,8 +635,9 @@ impl From<DispatchError> for &'static str {
 	}
 }
 
-impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str where
-	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str
+where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	fn from(err: DispatchErrorWithPostInfo<T>) -> &'static str {
 		err.error.into()
@@ -629,7 +657,7 @@ impl traits::Printable for DispatchError {
 				if let Some(msg) = message {
 					msg.print();
 				}
-			}
+			},
 			Self::ConsumerRemaining => "Consumer remaining".print(),
 			Self::NoProviders => "No providers".print(),
 			Self::Token(e) => {
@@ -639,13 +667,14 @@ impl traits::Printable for DispatchError {
 			Self::Arithmetic(e) => {
 				"Arithmetic error: ".print();
 				<&'static str>::from(*e).print();
-			}
+			},
 		}
 	}
 }
 
-impl<T> traits::Printable for DispatchErrorWithPostInfo<T> where
-	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+impl<T> traits::Printable for DispatchErrorWithPostInfo<T>
+where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	fn print(&self) {
 		self.error.print();
@@ -707,7 +736,8 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 /// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
 ///   a transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
-pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
+pub type ApplyExtrinsicResult =
+	Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
 
 /// Same as `ApplyExtrinsicResult` but augmented with `PostDispatchInfo` on success.
 pub type ApplyExtrinsicResultWithInfo<T> =
@@ -718,7 +748,7 @@ pub type ApplyExtrinsicResultWithInfo<T> =
 pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 	sig: &V,
 	item: &T,
-	signer: &<V::Signer as IdentifyAccount>::AccountId
+	signer: &<V::Signer as IdentifyAccount>::AccountId,
 ) -> bool {
 	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
 	// unfortunately this is a lifetime relationship that can't
@@ -735,10 +765,7 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 		}
 	}
 
-	sig.verify(
-		LazyEncode { inner: || item.encode(), encoded: None },
-		signer,
-	)
+	sig.verify(LazyEncode { inner: || item.encode(), encoded: None }, signer)
 }
 
 /// Checks that `$x` is equal to `$y` with an error rate of `$error`.
@@ -805,14 +832,20 @@ impl sp_std::fmt::Debug for OpaqueExtrinsic {
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: ::serde::Serializer,
+	{
 		codec::Encode::using_encoded(&self.0, |bytes| ::sp_core::bytes::serialize(bytes, seq))
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
-	fn deserialize<D>(de: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
+		D: ::serde::Deserializer<'a>,
+	{
 		let r = ::sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
@@ -884,7 +917,7 @@ impl<R> TransactionOutcome<R> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Encode, Decode};
+	use codec::{Decode, Encode};
 	use sp_core::crypto::Pair;
 
 	#[test]
@@ -895,22 +928,11 @@ mod tests {
 
 	#[test]
 	fn dispatch_error_encoding() {
-		let error = DispatchError::Module {
-			index: 1,
-			error: 2,
-			message: Some("error message"),
-		};
+		let error = DispatchError::Module { index: 1, error: 2, message: Some("error message") };
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(encoded, vec![3, 1, 2]);
-		assert_eq!(
-			decoded,
-			DispatchError::Module {
-				index: 1,
-				error: 2,
-				message: None,
-			},
-		);
+		assert_eq!(decoded, DispatchError::Module { index: 1, error: 2, message: None },);
 	}
 
 	#[test]
@@ -950,7 +972,7 @@ mod tests {
 		// Ignores `message` field in `Module` variant.
 		assert_eq!(
 			Module { index: 1, error: 1, message: Some("foo") },
-			Module { index: 1, error: 1, message: None},
+			Module { index: 1, error: 1, message: None },
 		);
 	}
 
@@ -974,17 +996,13 @@ mod tests {
 	#[should_panic(expected = "Signature verification has not been called")]
 	fn batching_still_finishes_when_not_called_directly() {
 		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(
-			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
-		);
+		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
+			sp_core::testing::TaskExecutor::new(),
+		));
 
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
-			sp_io::crypto::sr25519_verify(
-				&Default::default(),
-				&Vec::new(),
-				&Default::default(),
-			);
+			sp_io::crypto::sr25519_verify(&Default::default(), &Vec::new(), &Default::default());
 		});
 	}
 
@@ -992,9 +1010,9 @@ mod tests {
 	#[should_panic(expected = "Hey, I'm an error")]
 	fn batching_does_not_panic_while_thread_is_already_panicking() {
 		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(
-			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
-		);
+		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
+			sp_core::testing::TaskExecutor::new(),
+		));
 
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();

@@ -61,17 +61,17 @@ use codec::Encode;
 use frame_support::weights::Weight;
 use sp_runtime::traits;
 
-mod default_weights;
-mod mmr;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
+mod default_weights;
+mod mmr;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
-pub use pallet_mmr_primitives as primitives;
 pub use pallet::*;
+pub use pallet_mmr_primitives as primitives;
 
 pub trait WeightInfo {
 	fn on_initialize(peaks: u64) -> Weight;
@@ -79,9 +79,9 @@ pub trait WeightInfo {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -116,9 +116,17 @@ pub mod pallet {
 		///
 		/// This type is actually going to be stored in the MMR.
 		/// Required to be provided again, to satisfy trait bounds for storage items.
-		type Hash: traits::Member + traits::MaybeSerializeDeserialize + sp_std::fmt::Debug
-			+ sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default + codec::Codec
-			+ codec::EncodeLike + scale_info::TypeInfo;
+		type Hash: traits::Member
+			+ traits::MaybeSerializeDeserialize
+			+ sp_std::fmt::Debug
+			+ sp_std::hash::Hash
+			+ AsRef<[u8]>
+			+ AsMut<[u8]>
+			+ Copy
+			+ Default
+			+ codec::Codec
+			+ codec::EncodeLike
+			+ scale_info::TypeInfo;
 
 		/// Data stored in the leaf nodes.
 		///
@@ -147,7 +155,8 @@ pub mod pallet {
 	/// Latest MMR Root hash.
 	#[pallet::storage]
 	#[pallet::getter(fn mmr_root_hash)]
-	pub type RootHash<T: Config<I>, I: 'static = ()> = StorageValue<_, <T as Config<I>>::Hash, ValueQuery>;
+	pub type RootHash<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, <T as Config<I>>::Hash, ValueQuery>;
 
 	/// Current size of the MMR (number of leaves).
 	#[pallet::storage]
@@ -160,13 +169,8 @@ pub mod pallet {
 	/// are pruned and only stored in the Offchain DB.
 	#[pallet::storage]
 	#[pallet::getter(fn mmr_peak)]
-	pub type Nodes<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Identity,
-		u64,
-		<T as Config<I>>::Hash,
-		OptionQuery
-	>;
+	pub type Nodes<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, u64, <T as Config<I>>::Hash, OptionQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
@@ -211,7 +215,8 @@ pub fn verify_leaf_proof<H, L>(
 	root: H::Output,
 	leaf: mmr::Node<H, L>,
 	proof: primitives::Proof<H::Output>,
-) -> Result<(), primitives::Error> where
+) -> Result<(), primitives::Error>
+where
 	H: traits::Hash,
 	L: primitives::FullLeaf,
 {
@@ -234,10 +239,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// (Offchain Worker or Runtime API call), since it requires
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
-	pub fn generate_proof(leaf_index: u64) -> Result<
-		(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>),
-		primitives::Error,
-	> {
+	pub fn generate_proof(
+		leaf_index: u64,
+	) -> Result<(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
 		mmr.generate_proof(leaf_index)
 	}
@@ -252,13 +256,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		leaf: LeafOf<T, I>,
 		proof: primitives::Proof<<T as Config<I>>::Hash>,
 	) -> Result<(), primitives::Error> {
-		if proof.leaf_count > Self::mmr_leaves()
-			|| proof.leaf_count == 0
-			|| proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
+		if proof.leaf_count > Self::mmr_leaves() ||
+			proof.leaf_count == 0 ||
+			proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
 		{
-			return Err(primitives::Error::Verify.log_debug(
-				"The proof has incorrect number of leaves or proof items."
-			));
+			return Err(primitives::Error::Verify
+				.log_debug("The proof has incorrect number of leaves or proof items."))
 		}
 
 		let mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(proof.leaf_count);

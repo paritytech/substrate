@@ -15,20 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode, MaxEncodedLen};
-use scale_info::{build::{Fields, Variants}, Path, Type, TypeInfo};
+use super::*;
+use codec::{Decode, Encode, MaxEncodedLen};
 use enumflags2::BitFlags;
 use frame_support::{
-    traits::{ConstU32, Get},
-    BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	traits::{ConstU32, Get},
+	BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use sp_std::prelude::*;
-use sp_std::{fmt::Debug, iter::once, ops::Add};
-use sp_runtime::{
-    traits::Zero,
-    RuntimeDebug,
+use scale_info::{
+	build::{Fields, Variants},
+	Path, Type, TypeInfo,
 };
-use super::*;
+use sp_runtime::{traits::Zero, RuntimeDebug};
+use sp_std::{fmt::Debug, iter::once, ops::Add, prelude::*};
 
 /// Either underlying data blob if it is at most 32 bytes, or a hash of it. If the data is greater
 /// than 32-bytes then it will be truncated when encoding.
@@ -59,13 +58,13 @@ impl Decode for Data {
 		let b = input.read_byte()?;
 		Ok(match b {
 			0 => Data::None,
-			n @ 1 ..= 33 => {
+			n @ 1..=33 => {
 				let mut r: BoundedVec<_, _> = vec![0u8; n as usize - 1]
 					.try_into()
 					.expect("bound checked in match arm condition; qed");
 				input.read(&mut r[..])?;
 				Data::Raw(r)
-			}
+			},
 			34 => Data::BlakeTwo256(<[u8; 32]>::decode(input)?),
 			35 => Data::Sha256(<[u8; 32]>::decode(input)?),
 			36 => Data::Keccak256(<[u8; 32]>::decode(input)?),
@@ -84,7 +83,7 @@ impl Encode for Data {
 				let mut r = vec![l as u8 + 1; l + 1];
 				r[1..].copy_from_slice(&x[..l as usize]);
 				r
-			}
+			},
 			Data::BlakeTwo256(ref h) => once(34u8).chain(h.iter().cloned()).collect(),
 			Data::Sha256(ref h) => once(35u8).chain(h.iter().cloned()).collect(),
 			Data::Keccak256(ref h) => once(36u8).chain(h.iter().cloned()).collect(),
@@ -111,36 +110,61 @@ impl TypeInfo for Data {
 	type Identity = Self;
 
 	fn type_info() -> Type {
-		let variants = Variants::new()
-			.variant("None", |v| v.index(0));
+		let variants = Variants::new().variant("None", |v| v.index(0));
 
 		// create a variant for all sizes of Raw data from 0-32
-		let variants = data_raw_variants!(variants,
-			(1, 0),   (2, 1),   (3, 2),   (4, 3),   (5, 4),   (6, 5),   (7, 6),   (8, 7),
-			(9, 8),   (10, 9),  (11, 10), (12, 11), (13, 12), (14, 13), (15, 14), (16, 15),
-			(17, 16), (18, 17), (19, 18), (20, 19), (21, 20), (22, 21), (23, 22), (24, 23),
-			(25, 24), (26, 25), (27, 26), (28, 27), (29, 28), (30, 29), (31, 30), (32, 31),
+		let variants = data_raw_variants!(
+			variants,
+			(1, 0),
+			(2, 1),
+			(3, 2),
+			(4, 3),
+			(5, 4),
+			(6, 5),
+			(7, 6),
+			(8, 7),
+			(9, 8),
+			(10, 9),
+			(11, 10),
+			(12, 11),
+			(13, 12),
+			(14, 13),
+			(15, 14),
+			(16, 15),
+			(17, 16),
+			(18, 17),
+			(19, 18),
+			(20, 19),
+			(21, 20),
+			(22, 21),
+			(23, 22),
+			(24, 23),
+			(25, 24),
+			(26, 25),
+			(27, 26),
+			(28, 27),
+			(29, 28),
+			(30, 29),
+			(31, 30),
+			(32, 31),
 			(33, 32)
 		);
 
-		let variants =
-			variants
-				.variant("BlakeTwo256", |v| v
-					.index(34)
-					.fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>())))
-				.variant("Sha256", |v| v
-					.index(35)
-					.fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>())))
-				.variant("Keccak256", |v| v
-					.index(36)
-					.fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>())))
-				.variant("ShaThree256", |v| v
-					.index(37)
-					.fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>())));
+		let variants = variants
+			.variant("BlakeTwo256", |v| {
+				v.index(34).fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>()))
+			})
+			.variant("Sha256", |v| {
+				v.index(35).fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>()))
+			})
+			.variant("Keccak256", |v| {
+				v.index(36).fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>()))
+			})
+			.variant("ShaThree256", |v| {
+				v.index(37).fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>()))
+			});
 
-		Type::builder()
-			.path(Path::new("Data", module_path!()))
-			.variant(variants)
+		Type::builder().path(Path::new("Data", module_path!())).variant(variants)
 	}
 }
 
@@ -158,9 +182,8 @@ pub type RegistrarIndex = u32;
 /// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
 /// which fields their attestation is relevant for by off-chain means.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-pub enum Judgement<
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq
-> {
+pub enum Judgement<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq>
+{
 	/// The default value; no opinion is held.
 	Unknown,
 	/// No judgement is yet in place, but a deposit is reserved as payment for providing one.
@@ -182,9 +205,9 @@ pub enum Judgement<
 	Erroneous,
 }
 
-impl<
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq
-> Judgement<Balance> {
+impl<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq>
+	Judgement<Balance>
+{
 	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
 	/// it should not be cleared or replaced except by an operation which utilizes the deposit.
 	pub(crate) fn has_deposit(&self) -> bool {
@@ -210,14 +233,14 @@ impl<
 #[repr(u64)]
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug, TypeInfo)]
 pub enum IdentityField {
-	Display        = 0b0000000000000000000000000000000000000000000000000000000000000001,
-	Legal          = 0b0000000000000000000000000000000000000000000000000000000000000010,
-	Web            = 0b0000000000000000000000000000000000000000000000000000000000000100,
-	Riot           = 0b0000000000000000000000000000000000000000000000000000000000001000,
-	Email          = 0b0000000000000000000000000000000000000000000000000000000000010000,
+	Display = 0b0000000000000000000000000000000000000000000000000000000000000001,
+	Legal = 0b0000000000000000000000000000000000000000000000000000000000000010,
+	Web = 0b0000000000000000000000000000000000000000000000000000000000000100,
+	Riot = 0b0000000000000000000000000000000000000000000000000000000000001000,
+	Email = 0b0000000000000000000000000000000000000000000000000000000000010000,
 	PgpFingerprint = 0b0000000000000000000000000000000000000000000000000000000000100000,
-	Image          = 0b0000000000000000000000000000000000000000000000000000000001000000,
-	Twitter        = 0b0000000000000000000000000000000000000000000000000000000010000000,
+	Image = 0b0000000000000000000000000000000000000000000000000000000001000000,
+	Twitter = 0b0000000000000000000000000000000000000000000000000000000010000000,
 }
 
 impl MaxEncodedLen for IdentityField {
@@ -252,14 +275,10 @@ impl TypeInfo for IdentityFields {
 	type Identity = Self;
 
 	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new("IdentityFields", module_path!()))
-			.composite(
-				Fields::unnamed()
-					.field(|f| f.ty::<IdentityField>()
-						.type_name("BitFlags<IdentityField>")
-					)
-			)
+		Type::builder().path(Path::new("IdentityFields", module_path!())).composite(
+			Fields::unnamed()
+				.field(|f| f.ty::<IdentityField>().type_name("BitFlags<IdentityField>")),
+		)
 	}
 }
 
@@ -268,8 +287,7 @@ impl TypeInfo for IdentityFields {
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
 #[derive(
-	CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound,
-	TypeInfo,
+	CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound, TypeInfo,
 )]
 #[codec(mel_bound(FieldLimit: Get<u32>))]
 #[cfg_attr(test, derive(frame_support::DefaultNoBound))]
@@ -324,7 +342,9 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(CloneNoBound, Encode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound, TypeInfo)]
+#[derive(
+	CloneNoBound, Encode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound, TypeInfo,
+)]
 #[codec(mel_bound(
 	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
 	MaxJudgements: Get<u32>,
@@ -347,23 +367,27 @@ pub struct Registration<
 	pub info: IdentityInfo<MaxAdditionalFields>,
 }
 
-impl <
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
-	MaxJudgements: Get<u32>,
-	MaxAdditionalFields: Get<u32>,
-> Registration<Balance, MaxJudgements, MaxAdditionalFields> {
+impl<
+		Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
+		MaxJudgements: Get<u32>,
+		MaxAdditionalFields: Get<u32>,
+	> Registration<Balance, MaxJudgements, MaxAdditionalFields>
+{
 	pub(crate) fn total_deposit(&self) -> Balance {
-		self.deposit + self.judgements.iter()
-			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
-			.fold(Zero::zero(), |a, i| a + i)
+		self.deposit +
+			self.judgements
+				.iter()
+				.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
+				.fold(Zero::zero(), |a, i| a + i)
 	}
 }
 
 impl<
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,
-	MaxJudgements: Get<u32>,
-	MaxAdditionalFields: Get<u32>,
-> Decode for Registration<Balance, MaxJudgements, MaxAdditionalFields> {
+		Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,
+		MaxJudgements: Get<u32>,
+		MaxAdditionalFields: Get<u32>,
+	> Decode for Registration<Balance, MaxJudgements, MaxAdditionalFields>
+{
 	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let (judgements, deposit, info) = Decode::decode(&mut AppendZerosInput::new(input))?;
 		Ok(Self { judgements, deposit, info })
@@ -374,7 +398,7 @@ impl<
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
-	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
+	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq,
 > {
 	/// The account of the registrar.
 	pub account: AccountId,
@@ -399,15 +423,14 @@ mod tests {
 		let type_info = registry.resolve(type_id.id()).unwrap();
 
 		let check_type_info = |data: &Data| {
-			let variant_name =
-				match data {
-					Data::None => "None".to_string(),
-					Data::BlakeTwo256(_) => "BlakeTwo256".to_string(),
-					Data::Sha256(_) => "Sha256".to_string(),
-					Data::Keccak256(_) => "Keccak256".to_string(),
-					Data::ShaThree256(_) => "ShaThree256".to_string(),
-					Data::Raw(bytes) => format!("Raw{}", bytes.len()),
-				};
+			let variant_name = match data {
+				Data::None => "None".to_string(),
+				Data::BlakeTwo256(_) => "BlakeTwo256".to_string(),
+				Data::Sha256(_) => "Sha256".to_string(),
+				Data::Keccak256(_) => "Keccak256".to_string(),
+				Data::ShaThree256(_) => "ShaThree256".to_string(),
+				Data::Raw(bytes) => format!("Raw{}", bytes.len()),
+			};
 			if let scale_info::TypeDef::Variant(variant) = type_info.type_def() {
 				let variant = variant
 					.variants()
@@ -421,12 +444,13 @@ mod tests {
 					.fields()
 					.first()
 					.and_then(|f| registry.resolve(f.ty().id()))
-					.map(|ty|
+					.map(|ty| {
 						if let scale_info::TypeDef::Array(arr) = ty.type_def() {
 							arr.len()
 						} else {
 							panic!("Should be an array type")
-						})
+						}
+					})
 					.unwrap_or(0);
 
 				let encoded = data.encode();
@@ -437,7 +461,7 @@ mod tests {
 			};
 		};
 
-		let mut data = vec! [
+		let mut data = vec![
 			Data::None,
 			Data::BlakeTwo256(Default::default()),
 			Data::Sha256(Default::default()),
@@ -455,4 +479,3 @@ mod tests {
 		}
 	}
 }
-

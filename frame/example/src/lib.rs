@@ -255,26 +255,22 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{
-	prelude::*,
-	marker::PhantomData
-};
+use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResult, traits::IsSubType,
-	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
+	dispatch::DispatchResult,
+	traits::IsSubType,
+	weights::{ClassifyDispatch, DispatchClass, Pays, PaysFee, WeighData, Weight},
 };
-use frame_system::{ensure_signed};
-use codec::{Encode, Decode};
+use frame_system::ensure_signed;
+use log::info;
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{
-		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf, Saturating
-	},
+	traits::{Bounded, DispatchInfoOf, SaturatedConversion, Saturating, SignedExtension},
 	transaction_validity::{
-		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
+		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 };
-use log::info;
+use sp_std::{marker::PhantomData, prelude::*};
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
@@ -313,8 +309,7 @@ const MILLICENTS: u32 = 1_000_000_000;
 //   fulfilled by running the benchmarking toolchain. Refer to `benchmarking.rs` file.
 struct WeightForSetDummy<T: pallet_balances::Config>(BalanceOf<T>);
 
-impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
-{
+impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
 		// *target.0 is the amount passed into the extrinsic
@@ -344,9 +339,9 @@ impl<T: pallet_balances::Config> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy
 #[frame_support::pallet]
 pub mod pallet {
 	// Import various types used to declare pallet in scope.
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	/// Our pallet's configuration trait. All our types and constants go in here. If the
 	/// pallet is dependent on specific other pallets, then their configuration traits
@@ -398,7 +393,7 @@ pub mod pallet {
 			// but we could dispatch extrinsic (transaction/unsigned/inherent) using
 			// sp_io::submit_extrinsic.
 			// To see example on offchain worker, please refer to example-offchain-worker pallet
-		 	// accompanied in this repository.
+			// accompanied in this repository.
 		}
 	}
 
@@ -489,10 +484,7 @@ pub mod pallet {
 		#[pallet::weight(
 			<T as pallet::Config>::WeightInfo::accumulate_dummy((*increase_by).saturated_into())
 		)]
-		pub fn accumulate_dummy(
-			origin: OriginFor<T>,
-			increase_by: T::Balance
-		) -> DispatchResult {
+		pub fn accumulate_dummy(origin: OriginFor<T>, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 
@@ -611,11 +603,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				dummy: Default::default(),
-				bar: Default::default(),
-				foo: Default::default(),
-			}
+			Self { dummy: Default::default(), bar: Default::default(), foo: Default::default() }
 		}
 	}
 
@@ -711,7 +699,9 @@ where
 	type AdditionalSigned = ();
 	type Pre = ();
 
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
+		Ok(())
+	}
 
 	fn validate(
 		&self,
@@ -733,7 +723,7 @@ where
 				let mut valid_tx = ValidTransaction::default();
 				valid_tx.priority = Bounded::max_value();
 				Ok(valid_tx)
-			}
+			},
 			_ => Ok(Default::default()),
 		}
 	}

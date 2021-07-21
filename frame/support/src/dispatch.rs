@@ -18,16 +18,22 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
-pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use crate::weights::{
-	GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch, TransactionPriority, Weight,
-	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
+pub use crate::{
+	codec::{Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, Output},
+	sp_std::{
+		fmt, marker,
+		prelude::{Clone, Eq, PartialEq, Vec},
+		result,
+	},
+	traits::{
+		CallMetadata, GetCallMetadata, GetCallName, GetPalletVersion, UnfilteredDispatchable,
+	},
+	weights::{
+		ClassifyDispatch, DispatchInfo, GetDispatchInfo, PaysFee, PostDispatchInfo,
+		TransactionPriority, WeighData, Weight, WithPostDispatchInfo,
+	},
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
-pub use crate::traits::{
-	CallMetadata, GetCallMetadata, GetCallName, UnfilteredDispatchable, GetPalletVersion,
-};
 
 /// The return typ of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
@@ -2397,14 +2403,20 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
-	use crate::traits::{
-		GetCallName, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade,
-		IntegrityTest, Get, PalletInfo,
+	use crate::{
+		metadata::*,
+		traits::{
+			Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize, OnRuntimeUpgrade,
+			PalletInfo,
+		},
+		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight},
 	};
-	use crate::metadata::*;
 
-	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
+	pub trait Config: system::Config + Sized
+	where
+		Self::AccountId: From<u32>,
+	{
+	}
 
 	pub mod system {
 		use super::*;
@@ -2477,77 +2489,53 @@ mod tests {
 
 	fn expected_calls() -> Vec<FunctionMetadata> {
 		vec![
-			FunctionMetadata {
-				name: "aux_0",
-				args: vec![],
-				docs: vec![
-					" Hi, this is a comment."
-				]
-			},
+			FunctionMetadata { name: "aux_0", args: vec![], docs: vec![" Hi, this is a comment."] },
 			FunctionMetadata {
 				name: "aux_1",
-				args: vec![
-					FunctionArgumentMetadata {
-						name: "_data",
-						ty: scale_info::meta_type::<codec::Compact<u32>>(),
-					}
-				],
+				args: vec![FunctionArgumentMetadata {
+					name: "_data",
+					ty: scale_info::meta_type::<codec::Compact<u32>>(),
+				}],
 				docs: vec![],
 			},
 			FunctionMetadata {
 				name: "aux_2",
 				args: vec![
-					FunctionArgumentMetadata {
-						name: "_data",
-						ty: scale_info::meta_type::<i32>(),
-					},
+					FunctionArgumentMetadata { name: "_data", ty: scale_info::meta_type::<i32>() },
 					FunctionArgumentMetadata {
 						name: "_data2",
 						ty: scale_info::meta_type::<String>(),
-					}
+					},
 				],
 				docs: vec![],
 			},
-			FunctionMetadata {
-				name: "aux_3",
-				args: vec![],
-				docs: vec![],
-			},
+			FunctionMetadata { name: "aux_3", args: vec![], docs: vec![] },
 			FunctionMetadata {
 				name: "aux_4",
-				args: vec![
-					FunctionArgumentMetadata {
-						name: "_data",
-						ty: scale_info::meta_type::<i32>(),
-					}
-				],
+				args: vec![FunctionArgumentMetadata {
+					name: "_data",
+					ty: scale_info::meta_type::<i32>(),
+				}],
 				docs: vec![],
 			},
 			FunctionMetadata {
 				name: "aux_5",
 				args: vec![
-					FunctionArgumentMetadata {
-						name: "_data",
-						ty: scale_info::meta_type::<i32>(),
-					},
+					FunctionArgumentMetadata { name: "_data", ty: scale_info::meta_type::<i32>() },
 					FunctionArgumentMetadata {
 						name: "_data2",
-						ty: scale_info::meta_type::<codec::Compact<u32>>()
-					}
+						ty: scale_info::meta_type::<codec::Compact<u32>>(),
+					},
 				],
 				docs: vec![],
 			},
-			FunctionMetadata {
-				name: "operational",
-				args: vec![],
-				docs: vec![],
-			},
+			FunctionMetadata { name: "operational", args: vec![], docs: vec![] },
 		]
 	}
 
 	#[derive(scale_info::TypeInfo)]
 	pub struct TraitImpl {}
-	impl Config for TraitImpl { }
+	impl Config for TraitImpl {}
 
 	type Test = Module<TraitImpl>;
 
@@ -2614,7 +2602,6 @@ mod tests {
 			unimplemented!("Not required in tests!")
 		}
 	}
-
 
 	impl system::Config for TraitImpl {
 		type Origin = OuterOrigin;
@@ -2700,9 +2687,9 @@ mod tests {
 
 	#[test]
 	fn on_runtime_upgrade_should_work() {
-		sp_io::TestExternalities::default().execute_with(||
+		sp_io::TestExternalities::default().execute_with(|| {
 			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
-		);
+		});
 	}
 
 	#[test]
@@ -2728,7 +2715,10 @@ mod tests {
 	#[test]
 	fn get_call_names() {
 		let call_names = Call::<TraitImpl>::get_call_names();
-		assert_eq!(["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"], call_names);
+		assert_eq!(
+			["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"],
+			call_names
+		);
 	}
 
 	#[test]

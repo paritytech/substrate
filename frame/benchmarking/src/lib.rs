@@ -19,35 +19,35 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
-mod utils;
 #[cfg(feature = "std")]
 mod analysis;
+mod tests;
+mod utils;
 
-pub use utils::*;
 #[cfg(feature = "std")]
-pub use analysis::{Analysis, BenchmarkSelector, RegressionModel, AnalysisChoice};
+pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector, RegressionModel};
+#[doc(hidden)]
+pub use frame_support;
+#[doc(hidden)]
+pub use log;
+#[doc(hidden)]
+pub use paste;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sp_runtime::traits::Zero;
 #[doc(hidden)]
-pub use frame_support;
-#[doc(hidden)]
-pub use sp_std::{self, vec, prelude::Vec, boxed::Box};
-#[doc(hidden)]
-pub use paste;
+pub use sp_std::{self, boxed::Box, prelude::Vec, vec};
 #[doc(hidden)]
 pub use sp_storage::TrackedStorageKey;
-#[doc(hidden)]
-pub use log;
+pub use utils::*;
 
 /// Whitelist the given account.
 #[macro_export]
 macro_rules! whitelist {
 	($acc:ident) => {
 		frame_benchmarking::benchmarking::add_to_whitelist(
-			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+			frame_system::Account::<T>::hashed_key_for(&$acc).into(),
 		);
 	};
 }
@@ -1267,9 +1267,9 @@ pub fn show_benchmark_debug_info(
 		* Verify: {:?}\n\
 		* Error message: {}",
 		sp_std::str::from_utf8(instance_string)
-		.expect("it's all just strings ran through the wasm interface. qed"),
+			.expect("it's all just strings ran through the wasm interface. qed"),
 		sp_std::str::from_utf8(benchmark)
-		.expect("it's all just strings ran through the wasm interface. qed"),
+			.expect("it's all just strings ran through the wasm interface. qed"),
 		lowest_range_values,
 		highest_range_values,
 		steps,

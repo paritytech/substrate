@@ -15,10 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::{pallet::Def, COUNTER};
 use frame_support_procedural_tools::get_doc_literals;
-use crate::COUNTER;
-use syn::{Ident, spanned::Spanned};
+use syn::{spanned::Spanned, Ident};
 
 /// * add various derive trait on GenesisConfig struct.
 pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
@@ -38,15 +37,11 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 
 			(genesis_config, def_macro_ident, std_macro_ident)
 		} else {
-			let def_macro_ident = Ident::new(
-				&format!("__is_genesis_config_defined_{}", count),
-				def.item.span(),
-			);
+			let def_macro_ident =
+				Ident::new(&format!("__is_genesis_config_defined_{}", count), def.item.span());
 
-			let std_macro_ident = Ident::new(
-				&format!("__is_std_enabled_for_genesis_{}", count),
-				def.item.span(),
-			);
+			let std_macro_ident =
+				Ident::new(&format!("__is_std_enabled_for_genesis_{}", count), def.item.span());
 
 			return quote::quote! {
 				#[doc(hidden)]
@@ -75,18 +70,18 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 					#[doc(hidden)]
 					pub use #std_macro_ident as is_std_enabled_for_genesis;
 				}
-			};
+			}
 		};
 
 	let frame_support = &def.frame_support;
 
-	let genesis_config_item = &mut def.item.content.as_mut()
-		.expect("Checked by def parser").1[genesis_config.index];
+	let genesis_config_item =
+		&mut def.item.content.as_mut().expect("Checked by def parser").1[genesis_config.index];
 
 	let serde_crate = format!("{}::serde", frame_support);
 
 	match genesis_config_item {
-		syn::Item::Enum(syn::ItemEnum { attrs, ..}) |
+		syn::Item::Enum(syn::ItemEnum { attrs, .. }) |
 		syn::Item::Struct(syn::ItemStruct { attrs, .. }) |
 		syn::Item::Type(syn::ItemType { attrs, .. }) => {
 			if get_doc_literals(&attrs).is_empty() {

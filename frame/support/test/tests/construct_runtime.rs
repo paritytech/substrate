@@ -19,13 +19,17 @@
 //! * error declareed with decl_error works
 //! * integrity test is generated
 
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-use scale_info::TypeInfo;
-use sp_runtime::{generic, traits::{BlakeTwo256, Verify}, DispatchError};
-use sp_core::{H256, sr25519};
-use sp_std::cell::RefCell;
 use frame_support::traits::PalletInfo as _;
+use scale_info::TypeInfo;
+use sp_core::{sr25519, H256};
+use sp_runtime::{
+	generic,
+	traits::{BlakeTwo256, Verify},
+	DispatchError,
+};
+use sp_std::cell::RefCell;
 
 mod system;
 
@@ -52,7 +56,7 @@ mod module1 {
 	}
 
 	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, TypeInfo)]
-	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData::<(T, I)>);
+	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData<(T, I)>);
 
 	frame_support::decl_event! {
 		pub enum Event<T, I: Instance = DefaultInstance> where
@@ -264,8 +268,8 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 mod origin_test {
-	use frame_support::traits::{Filter, OriginTrait};
 	use super::{module3, nested, system, Block, UncheckedExtrinsic};
+	use frame_support::traits::{Filter, OriginTrait};
 
 	impl nested::module3::Config for RuntimeOriginTest {}
 	impl module3::Config for RuntimeOriginTest {}
@@ -557,10 +561,22 @@ fn get_call_names() {
 fn get_module_names() {
 	use frame_support::dispatch::GetCallMetadata;
 	let module_names = Call::get_module_names();
-	assert_eq!([
-		"System", "Module1_1", "Module2", "Module1_2", "NestedModule3", "Module3",
-		"Module1_4", "Module1_6", "Module1_7", "Module1_8", "Module1_9",
-	], module_names);
+	assert_eq!(
+		[
+			"System",
+			"Module1_1",
+			"Module2",
+			"Module1_2",
+			"NestedModule3",
+			"Module3",
+			"Module1_4",
+			"Module1_6",
+			"Module1_7",
+			"Module1_8",
+			"Module1_9",
+		],
+		module_names
+	);
 }
 
 #[test]
@@ -578,8 +594,8 @@ fn call_subtype_conversion() {
 
 #[test]
 fn test_metadata() {
-	use scale_info::meta_type;
 	use frame_support::metadata::*;
+	use scale_info::meta_type;
 
 	let pallets = vec![
 		PalletMetadata {
@@ -593,10 +609,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_1",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Instance1Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Instance1Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance1>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance1>>().into()),
 			constants: vec![],
@@ -605,10 +618,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module2",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
 			calls: Some(meta_type::<module2::Call<Runtime>>().into()),
 			event: Some(meta_type::<module2::Event>().into()),
 			constants: vec![],
@@ -617,10 +627,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_2",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Instance2Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Instance2Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance2>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance2>>().into()),
 			constants: vec![],
@@ -629,10 +636,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "NestedModule3",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
 			calls: Some(meta_type::<nested::module3::Call<Runtime>>().into()),
 			event: Some(meta_type::<nested::module3::Event>().into()),
 			constants: vec![],
@@ -641,10 +645,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module3",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
 			calls: Some(meta_type::<module3::Call<Runtime>>().into()),
 			event: Some(meta_type::<module3::Event>().into()),
 			constants: vec![],
@@ -653,10 +654,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_3",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Instance3Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Instance3Module", entries: vec![] }),
 			calls: None,
 			event: None,
 			constants: vec![],
@@ -683,10 +681,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_6",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Instance6Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Instance6Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance6>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance6>>().into()),
 			constants: vec![],
@@ -695,10 +690,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_7",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Instance7Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Instance7Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance7>>().into()),
 			event: Some(PalletEventMetadata {
 				ty: meta_type::<module1::Event<Runtime, module1::Instance7>>(),
@@ -709,10 +701,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_8",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Instance8Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Instance8Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance8>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance8>>().into()),
 			constants: vec![],
@@ -721,10 +710,7 @@ fn test_metadata() {
 		},
 		PalletMetadata {
 			name: "Module1_9",
-			storage: Some(PalletStorageMetadata {
-				prefix: "Instance9Module",
-				entries: vec![],
-			}),
+			storage: Some(PalletStorageMetadata { prefix: "Instance9Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance9>>().into()),
 			event: Some(meta_type::<module1::Event<Runtime, module1::Instance9>>().into()),
 			constants: vec![],
@@ -736,13 +722,11 @@ fn test_metadata() {
 	let extrinsic = ExtrinsicMetadata {
 		ty: meta_type::<UncheckedExtrinsic>(),
 		version: 4,
-		signed_extensions: vec![
-			SignedExtensionMetadata {
-				identifier: "UnitSignedExtension",
-				ty: meta_type::<()>(),
-				additional_signed: meta_type::<()>(),
-			}
-		]
+		signed_extensions: vec![SignedExtensionMetadata {
+			identifier: "UnitSignedExtension",
+			ty: meta_type::<()>(),
+			additional_signed: meta_type::<()>(),
+		}],
 	};
 
 	let expected_metadata: RuntimeMetadataPrefixed =

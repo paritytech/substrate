@@ -18,8 +18,8 @@
 //! Various basic types for use in the assets pallet.
 
 use super::*;
-use scale_info::TypeInfo;
 use frame_support::{traits::Get, BoundedVec};
+use scale_info::TypeInfo;
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
@@ -28,12 +28,8 @@ pub(super) type ClassDetailsFor<T, I> =
 pub(super) type InstanceDetailsFor<T, I> =
 	InstanceDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 
-
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct ClassDetails<
-	AccountId,
-	DepositBalance,
-> {
+pub struct ClassDetails<AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	pub(super) owner: AccountId,
 	/// Can mint tokens.
