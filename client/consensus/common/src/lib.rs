@@ -35,6 +35,7 @@ pub use block_import::{
 };
 
 mod longest_chain;
+
 pub mod shared_data;
 
 pub use longest_chain::LongestChain;
