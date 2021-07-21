@@ -17,25 +17,32 @@
 //! Helper for handling (i.e. answering) block requests from a remote peer via the
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
-use codec::{Encode, Decode};
-use crate::chain::Client;
-use crate::config::ProtocolId;
-use crate::protocol::{message::BlockAttributes};
-use crate::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
-use crate::schema::v1::block_request::FromBlock;
-use crate::schema::v1::{BlockResponse, Direction};
-use crate::{PeerId, ReputationChange};
-use futures::channel::{mpsc, oneshot};
-use futures::stream::StreamExt;
+use crate::{
+	chain::Client,
+	config::ProtocolId,
+	protocol::message::BlockAttributes,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
+	PeerId, ReputationChange,
+};
+use codec::{Decode, Encode};
+use futures::{
+	channel::{mpsc, oneshot},
+	stream::StreamExt,
+};
 use log::debug;
 use lru::LruCache;
 use prost::Message;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header, One, Zero};
-use std::cmp::min;
-use std::sync::Arc;
-use std::time::Duration;
-use std::hash::{Hasher, Hash};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header, One, Zero},
+};
+use std::{
+	cmp::min,
+	hash::{Hash, Hasher},
+	sync::Arc,
+	time::Duration,
+};
 
 const LOG_TARGET: &str = "sync";
 const MAX_BLOCKS_IN_RESPONSE: usize = 128;
@@ -61,7 +68,6 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 }
 
 /// Generate the block protocol name from chain specific protocol identifier.
-//
 // Visibility `pub(crate)` to allow `crate::light_client_requests::sender` to generate block request
 // protocol name and send block requests.
 pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
@@ -139,9 +145,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
 				Err(e) => debug!(
 					target: LOG_TARGET,
-					"Failed to handle block request from {}: {}",
-					peer,
-					e,
+					"Failed to handle block request from {}: {}", peer, e,
 				),
 			}
 		}
@@ -159,11 +163,11 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			FromBlock::Hash(ref h) => {
 				let h = Decode::decode(&mut h.as_ref())?;
 				BlockId::<B>::Hash(h)
-			}
+			},
 			FromBlock::Number(ref n) => {
 				let n = Decode::decode(&mut n.as_ref())?;
 				BlockId::<B>::Number(n)
-			}
+			},
 		};
 
 		let max_blocks = if request.max_blocks == 0 {
@@ -172,8 +176,8 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			min(request.max_blocks as usize, MAX_BLOCKS_IN_RESPONSE)
 		};
 
-		let direction = Direction::from_i32(request.direction)
-			.ok_or(HandleRequestError::ParseDirection)?;
+		let direction =
+			Direction::from_i32(request.direction).ok_or(HandleRequestError::ParseDirection)?;
 
 		let attributes = BlockAttributes::from_be_u32(request.fields)?;
 
@@ -201,7 +205,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			},
 			None => {
 				self.seen_requests.put(key.clone(), SeenRequestsValue::First);
-			}
+			},
 		}
 
 		debug!(
@@ -247,11 +251,13 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			Err(())
 		};
 
-		pending_response.send(OutgoingResponse {
-			result,
-			reputation_changes: reputation_change.into_iter().collect(),
-			sent_feedback: None,
-		}).map_err(|_| HandleRequestError::SendResponse)
+		pending_response
+			.send(OutgoingResponse {
+				result,
+				reputation_changes: reputation_change.into_iter().collect(),
+				sent_feedback: None,
+			})
+			.map_err(|_| HandleRequestError::SendResponse)
 	}
 
 	fn get_block_response(
@@ -298,10 +304,8 @@ impl<B: BlockT> BlockRequestHandler<B> {
 					let justification =
 						justifications.and_then(|just| just.into_justification(*b"FRNK"));
 
-					let is_empty_justification = justification
-						.as_ref()
-						.map(|j| j.is_empty())
-						.unwrap_or(false);
+					let is_empty_justification =
+						justification.as_ref().map(|j| j.is_empty()).unwrap_or(false);
 
 					let justification = justification.unwrap_or_default();
 
@@ -310,25 +314,27 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 			let body = if get_body {
 				match self.client.block_body(&BlockId::Hash(hash))? {
-					Some(mut extrinsics) => extrinsics.iter_mut()
-						.map(|extrinsic| extrinsic.encode())
-						.collect(),
+					Some(mut extrinsics) =>
+						extrinsics.iter_mut().map(|extrinsic| extrinsic.encode()).collect(),
 					None => {
 						log::trace!(target: LOG_TARGET, "Missing data for block request.");
-						break;
-					}
+						break
+					},
 				}
 			} else {
 				Vec::new()
 			};
 
-			let indexed_body =  if get_indexed_body {
+			let indexed_body = if get_indexed_body {
 				match self.client.block_indexed_body(&BlockId::Hash(hash))? {
 					Some(transactions) => transactions,
 					None => {
-						log::trace!(target: LOG_TARGET, "Missing indexed block data for block request.");
-						break;
-					}
+						log::trace!(
+							target: LOG_TARGET,
+							"Missing indexed block data for block request."
+						);
+						break
+					},
 				}
 			} else {
 				Vec::new()
@@ -336,11 +342,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 			let block_data = crate::schema::v1::BlockData {
 				hash: hash.encode(),
-				header: if get_header {
-					header.encode()
-				} else {
-					Vec::new()
-				},
+				header: if get_header { header.encode() } else { Vec::new() },
 				body,
 				receipt: Vec::new(),
 				message_queue: Vec::new(),
@@ -358,15 +360,13 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			}
 
 			match direction {
-				Direction::Ascending => {
-					block_id = BlockId::Number(number + One::one())
-				}
+				Direction::Ascending => block_id = BlockId::Number(number + One::one()),
 				Direction::Descending => {
 					if number.is_zero() {
 						break
 					}
 					block_id = BlockId::Hash(parent_hash)
-				}
+				},
 			}
 		}
 

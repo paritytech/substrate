@@ -18,17 +18,16 @@
 // Tests for the Session Pallet
 
 use super::*;
-use mock::Test;
 use codec::Decode;
-use frame_support::{traits::OnInitialize, assert_ok, assert_noop};
+use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+use mock::{
+	authorities, before_session_end_called, force_new_session, new_test_ext,
+	reset_before_session_end_called, session_changed, set_next_validators, set_session_length,
+	Origin, PreUpgradeMockSessionKeys, Session, System, Test, SESSION_CHANGED,
+	TEST_SESSION_CHANGED,
+};
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;
-use mock::{
-	SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
-	set_next_validators, set_session_length, session_changed, Origin, System, Session,
-	reset_before_session_end_called, before_session_end_called, new_test_ext,
-	PreUpgradeMockSessionKeys,
-};
 
 fn initialize_block(block: u64) {
 	SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
@@ -79,10 +78,10 @@ fn authorities_should_track_validators() {
 		set_next_validators(vec![1, 2]);
 		force_new_session();
 		initialize_block(1);
-		assert_eq!(Session::queued_keys(), vec![
-			(1, UintAuthorityId(1).into()),
-			(2, UintAuthorityId(2).into()),
-		]);
+		assert_eq!(
+			Session::queued_keys(),
+			vec![(1, UintAuthorityId(1).into()), (2, UintAuthorityId(2).into()),]
+		);
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 		assert!(before_session_end_called());
@@ -90,10 +89,10 @@ fn authorities_should_track_validators() {
 
 		force_new_session();
 		initialize_block(2);
-		assert_eq!(Session::queued_keys(), vec![
-			(1, UintAuthorityId(1).into()),
-			(2, UintAuthorityId(2).into()),
-		]);
+		assert_eq!(
+			Session::queued_keys(),
+			vec![(1, UintAuthorityId(1).into()), (2, UintAuthorityId(2).into()),]
+		);
 		assert_eq!(Session::validators(), vec![1, 2]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 		assert!(before_session_end_called());
@@ -103,22 +102,28 @@ fn authorities_should_track_validators() {
 		assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4).into(), vec![]));
 		force_new_session();
 		initialize_block(3);
-		assert_eq!(Session::queued_keys(), vec![
-			(1, UintAuthorityId(1).into()),
-			(2, UintAuthorityId(2).into()),
-			(4, UintAuthorityId(4).into()),
-		]);
+		assert_eq!(
+			Session::queued_keys(),
+			vec![
+				(1, UintAuthorityId(1).into()),
+				(2, UintAuthorityId(2).into()),
+				(4, UintAuthorityId(4).into()),
+			]
+		);
 		assert_eq!(Session::validators(), vec![1, 2]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 		assert!(before_session_end_called());
 
 		force_new_session();
 		initialize_block(4);
-		assert_eq!(Session::queued_keys(), vec![
-			(1, UintAuthorityId(1).into()),
-			(2, UintAuthorityId(2).into()),
-			(4, UintAuthorityId(4).into()),
-		]);
+		assert_eq!(
+			Session::queued_keys(),
+			vec![
+				(1, UintAuthorityId(1).into()),
+				(2, UintAuthorityId(2).into()),
+				(4, UintAuthorityId(4).into()),
+			]
+		);
 		assert_eq!(Session::validators(), vec![1, 2, 4]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(4)]);
 	});
@@ -288,10 +293,7 @@ fn periodic_session_works() {
 	// 1/10 of progress.
 	assert!(P::should_end_session(3u64));
 	assert_eq!(P::estimate_next_session_rotation(3u64).0.unwrap(), 3);
-	assert_eq!(
-		P::estimate_current_session_progress(3u64).0.unwrap(),
-		Permill::from_percent(10),
-	);
+	assert_eq!(P::estimate_current_session_progress(3u64).0.unwrap(), Permill::from_percent(10),);
 
 	for i in (1u64..10).map(|i| 3 + i) {
 		assert!(!P::should_end_session(i));
@@ -314,30 +316,22 @@ fn periodic_session_works() {
 	// the new session starts and we proceed in 1/10 increments.
 	assert!(P::should_end_session(13u64));
 	assert_eq!(P::estimate_next_session_rotation(13u64).0.unwrap(), 23);
-	assert_eq!(
-		P::estimate_current_session_progress(13u64).0.unwrap(),
-		Permill::from_percent(10)
-	);
+	assert_eq!(P::estimate_current_session_progress(13u64).0.unwrap(), Permill::from_percent(10));
 
 	assert!(!P::should_end_session(14u64));
 	assert_eq!(P::estimate_next_session_rotation(14u64).0.unwrap(), 23);
-	assert_eq!(
-		P::estimate_current_session_progress(14u64).0.unwrap(),
-		Permill::from_percent(20)
-	);
+	assert_eq!(P::estimate_current_session_progress(14u64).0.unwrap(), Permill::from_percent(20));
 }
 
 #[test]
 fn session_keys_generate_output_works_as_set_keys_input() {
 	new_test_ext().execute_with(|| {
 		let new_keys = mock::MockSessionKeys::generate(None);
-		assert_ok!(
-			Session::set_keys(
-				Origin::signed(2),
-				<mock::Test as Config>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
-				vec![],
-			)
-		);
+		assert_ok!(Session::set_keys(
+			Origin::signed(2),
+			<mock::Test as Config>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
+			vec![],
+		));
 	});
 }
 
@@ -368,26 +362,13 @@ fn upgrade_keys() {
 	assert_eq!(mock::VALIDATORS.with(|l| l.borrow().clone()), vec![1, 2, 3]);
 
 	new_test_ext().execute_with(|| {
-		let pre_one = PreUpgradeMockSessionKeys {
-			a: [1u8; 32],
-			b: [1u8; 64],
-		};
+		let pre_one = PreUpgradeMockSessionKeys { a: [1u8; 32], b: [1u8; 64] };
 
-		let pre_two = PreUpgradeMockSessionKeys {
-			a: [2u8; 32],
-			b: [2u8; 64],
-		};
+		let pre_two = PreUpgradeMockSessionKeys { a: [2u8; 32], b: [2u8; 64] };
 
-		let pre_three = PreUpgradeMockSessionKeys {
-			a: [3u8; 32],
-			b: [3u8; 64],
-		};
+		let pre_three = PreUpgradeMockSessionKeys { a: [3u8; 32], b: [3u8; 64] };
 
-		let val_keys = vec![
-			(1u64, pre_one),
-			(2u64, pre_two),
-			(3u64, pre_three),
-		];
+		let val_keys = vec![(1u64, pre_one), (2u64, pre_two), (3u64, pre_three)];
 
 		// Set `QueuedKeys`.
 		{
@@ -422,9 +403,7 @@ fn upgrade_keys() {
 
 		// Do the upgrade and check sanity.
 		let mock_keys_for = |val| mock::MockSessionKeys { dummy: UintAuthorityId(val) };
-		Session::upgrade_keys::<PreUpgradeMockSessionKeys, _>(
-			|val, _old_keys| mock_keys_for(val),
-		);
+		Session::upgrade_keys::<PreUpgradeMockSessionKeys, _>(|val, _old_keys| mock_keys_for(val));
 
 		// Check key ownership.
 		for (i, ref keys) in val_keys.iter() {
@@ -438,11 +417,7 @@ fn upgrade_keys() {
 		// Check queued keys.
 		assert_eq!(
 			Session::queued_keys(),
-			vec![
-				(1, mock_keys_for(1)),
-				(2, mock_keys_for(2)),
-				(3, mock_keys_for(3)),
-			],
+			vec![(1, mock_keys_for(1)), (2, mock_keys_for(2)), (3, mock_keys_for(3)),],
 		);
 
 		for i in 1u64..4 {

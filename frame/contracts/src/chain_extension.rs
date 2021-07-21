@@ -55,22 +55,19 @@
 //! on how to use a chain extension in order to provide new features to ink! contracts.
 
 use crate::{
-	Error,
-	wasm::{Runtime, RuntimeCosts},
 	gas::ChargedAmount,
+	wasm::{Runtime, RuntimeCosts},
+	Error,
 };
 use codec::{Decode, MaxEncodedLen};
 use frame_support::weights::Weight;
 use sp_runtime::DispatchError;
-use sp_std::{
-	marker::PhantomData,
-	vec::Vec,
-};
+use sp_std::{marker::PhantomData, vec::Vec};
 
+pub use crate::{exec::Ext, Config};
 pub use frame_system::Config as SysConfig;
 pub use pallet_contracts_primitives::ReturnFlags;
 pub use sp_core::crypto::UncheckedFrom;
-pub use crate::{Config, exec::Ext};
 pub use state::Init as InitState;
 
 /// Result that returns a [`DispatchError`] on error.
@@ -90,7 +87,7 @@ pub trait ChainExtension<C: Config> {
 	///
 	/// # Parameters
 	/// - `func_id`: The first argument to `seal_call_chain_extension`. Usually used to
-	///		determine which function to realize.
+	/// 		determine which function to realize.
 	/// - `env`: Access to the remaining arguments and the execution environment.
 	///
 	/// # Return
@@ -143,7 +140,7 @@ pub enum RetVal {
 	/// The semantic is the same as for calling `seal_return`: The control returns to
 	/// the caller of the currently executing contract yielding the supplied buffer and
 	/// flags.
-	Diverging{flags: ReturnFlags, data: Vec<u8>},
+	Diverging { flags: ReturnFlags, data: Vec<u8> },
 }
 
 /// Grants the chain extension access to its parameters and execution environment.
@@ -183,7 +180,9 @@ where
 	/// This is when a maximum a priori amount was charged and then should be partially
 	/// refunded to match the actual amount.
 	pub fn adjust_weight(&mut self, charged: ChargedAmount, actual_weight: Weight) {
-		self.inner.runtime.adjust_gas(charged, RuntimeCosts::ChainExtension(actual_weight))
+		self.inner
+			.runtime
+			.adjust_gas(charged, RuntimeCosts::ChainExtension(actual_weight))
 	}
 
 	/// Grants access to the execution environment of the current contract call.
@@ -204,46 +203,31 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, state::Init> {
 	/// It is only available to this crate because only the wasm runtime module needs to
 	/// ever create this type. Chain extensions merely consume it.
 	pub(crate) fn new(
-		runtime: &'a mut Runtime::<'b, E>,
+		runtime: &'a mut Runtime<'b, E>,
 		input_ptr: u32,
 		input_len: u32,
 		output_ptr: u32,
 		output_len_ptr: u32,
 	) -> Self {
 		Environment {
-			inner: Inner {
-				runtime,
-				input_ptr,
-				input_len,
-				output_ptr,
-				output_len_ptr,
-			},
+			inner: Inner { runtime, input_ptr, input_len, output_ptr, output_len_ptr },
 			phantom: PhantomData,
 		}
 	}
 
 	/// Use all arguments as integer values.
 	pub fn only_in(self) -> Environment<'a, 'b, E, state::OnlyIn> {
-		Environment {
-			inner: self.inner,
-			phantom: PhantomData,
-		}
+		Environment { inner: self.inner, phantom: PhantomData }
 	}
 
 	/// Use input arguments as integer and output arguments as pointer to a buffer.
 	pub fn prim_in_buf_out(self) -> Environment<'a, 'b, E, state::PrimInBufOut> {
-		Environment {
-			inner: self.inner,
-			phantom: PhantomData,
-		}
+		Environment { inner: self.inner, phantom: PhantomData }
 	}
 
 	/// Use input and output arguments as pointers to a buffer.
 	pub fn buf_in_buf_out(self) -> Environment<'a, 'b, E, state::BufInBufOut> {
-		Environment {
-			inner: self.inner,
-			phantom: PhantomData,
-		}
+		Environment { inner: self.inner, phantom: PhantomData }
 	}
 }
 
@@ -287,10 +271,9 @@ where
 	/// charge the overall costs either using `max_len` (worst case approximation) or using
 	/// [`in_len()`](Self::in_len).
 	pub fn read(&self, max_len: u32) -> Result<Vec<u8>> {
-		self.inner.runtime.read_sandbox_memory(
-			self.inner.input_ptr,
-			self.inner.input_len.min(max_len),
-		)
+		self.inner
+			.runtime
+			.read_sandbox_memory(self.inner.input_ptr, self.inner.input_len.min(max_len))
 	}
 
 	/// Reads `min(buffer.len(), in_len) from contract memory.
@@ -304,10 +287,7 @@ where
 			let buffer = core::mem::take(buffer);
 			&mut buffer[..len.min(self.inner.input_len as usize)]
 		};
-		self.inner.runtime.read_sandbox_memory_into_buf(
-			self.inner.input_ptr,
-			sliced,
-		)?;
+		self.inner.runtime.read_sandbox_memory_into_buf(self.inner.input_ptr, sliced)?;
 		*buffer = sliced;
 		Ok(())
 	}
@@ -377,7 +357,7 @@ where
 /// gets too large.
 struct Inner<'a, 'b, E: Ext> {
 	/// The runtime contains all necessary functions to interact with the running contract.
-	runtime: &'a mut Runtime::<'b, E>,
+	runtime: &'a mut Runtime<'b, E>,
 	/// Verbatim argument passed to `seal_call_chain_extension`.
 	input_ptr: u32,
 	/// Verbatim argument passed to `seal_call_chain_extension`.

@@ -29,8 +29,10 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 /// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
-	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
-						supported with the flag disabled.")
+	WASM_BINARY.expect(
+		"Development wasm binary is not available. Testing is only \
+						supported with the flag disabled.",
+	)
 }
 
 /// This function is not used, but we require it for the compiler to include `sp-io`.

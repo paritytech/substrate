@@ -20,62 +20,67 @@
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 pub mod tokens;
-pub use tokens::fungible;
-pub use tokens::fungibles;
-pub use tokens::currency::{
-	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, NamedReservableCurrency,
-	VestingSchedule,
+pub use tokens::{
+	currency::{
+		Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency,
+		VestingSchedule,
+	},
+	fungible, fungibles,
+	imbalance::{Imbalance, OnUnbalanced, SignedImbalance},
+	BalanceStatus, ExistenceRequirement, WithdrawReasons,
 };
-pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
-pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};
 
 mod members;
 pub use members::{
-	Contains, ContainsLengthBound, SortedMembers, InitializeMembers, ChangeMembers, All, IsInVec,
-	AsContains,
+	All, AsContains, ChangeMembers, Contains, ContainsLengthBound, InitializeMembers, IsInVec,
+	SortedMembers,
 };
 
 mod validation;
 pub use validation::{
-	ValidatorSet, ValidatorSetWithIdentification, OneSessionHandler, FindAuthor, VerifySeal,
-	EstimateNextNewSession, EstimateNextSessionRotation, KeyOwnerProofSystem, ValidatorRegistration,
-	Lateness,
+	EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor, KeyOwnerProofSystem, Lateness,
+	OneSessionHandler, ValidatorRegistration, ValidatorSet, ValidatorSetWithIdentification,
+	VerifySeal,
 };
 
 mod filter;
 pub use filter::{
-	Filter, FilterStack, FilterStackGuard, ClearFilterGuard, InstanceFilter, IntegrityTest,
-	AllowAll, DenyAll,
+	AllowAll, ClearFilterGuard, DenyAll, Filter, FilterStack, FilterStackGuard, InstanceFilter,
+	IntegrityTest,
 };
 
 mod misc;
 pub use misc::{
-	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
-	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing, ExtrinsicCall,
-	EnsureInherentsAreFirst, ConstU32,
+	Backing, ConstU32, EnsureInherentsAreFirst, ExecuteBlock, ExtrinsicCall, Get, GetBacking,
+	GetDefault, HandleLifetime, IsSubType, IsType, Len, OffchainWorker, OnKilledAccount,
+	OnNewAccount, SameOrOther, Time, TryDrop, UnixTime,
 };
 
 mod stored_map;
-pub use stored_map::{StoredMap, StorageMapShim};
+pub use stored_map::{StorageMapShim, StoredMap};
 mod randomness;
 pub use randomness::Randomness;
 
 mod metadata;
 pub use metadata::{
-	CallMetadata, GetCallMetadata, GetCallName, PalletInfo, PalletVersion, GetPalletVersion,
-	PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletInfoAccess,
+	CallMetadata, GetCallMetadata, GetCallName, GetPalletVersion, PalletInfo, PalletInfoAccess,
+	PalletVersion, PALLET_VERSION_STORAGE_KEY_POSTFIX,
 };
 
 mod hooks;
-pub use hooks::{Hooks, OnGenesis, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade, OnTimestampSet};
-#[cfg(feature = "try-runtime")]
-pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX};
 #[cfg(feature = "std")]
 pub use hooks::GenesisBuild;
+pub use hooks::{
+	Hooks, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade, OnTimestampSet,
+};
+#[cfg(feature = "try-runtime")]
+pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX};
 
 pub mod schedule;
 mod storage;
-pub use storage::{Instance, PartialStorageInfoTrait, StorageInstance, StorageInfo, StorageInfoTrait};
+pub use storage::{
+	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
+};
 
 mod dispatch;
 pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};

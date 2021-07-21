@@ -21,10 +21,10 @@
 
 use super::*;
 
-use sp_runtime::traits::Bounded;
-use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::traits::OnInitialize;
+use frame_system::RawOrigin;
+use sp_runtime::traits::Bounded;
 
 use crate::Module as Bounties;
 use pallet_treasury::Pallet as Treasury;
@@ -33,7 +33,7 @@ const SEED: u32 = 0;
 
 // Create bounties that are approved for use in `on_initialize`.
 fn create_approved_bounties<T: Config>(n: u32) -> Result<(), &'static str> {
-	for i in 0 .. n {
+	for i in 0..n {
 		let (caller, _curator, _fee, value, reason) = setup_bounty::<T>(i, MAX_BYTES);
 		Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
@@ -44,13 +44,10 @@ fn create_approved_bounties<T: Config>(n: u32) -> Result<(), &'static str> {
 }
 
 // Create the pre-requisite information needed to create a treasury `propose_bounty`.
-fn setup_bounty<T: Config>(u: u32, d: u32) -> (
-	T::AccountId,
-	T::AccountId,
-	BalanceOf<T>,
-	BalanceOf<T>,
-	Vec<u8>,
-) {
+fn setup_bounty<T: Config>(
+	u: u32,
+	d: u32,
+) -> (T::AccountId, T::AccountId, BalanceOf<T>, BalanceOf<T>, Vec<u8>) {
 	let caller = account("caller", u, SEED);
 	let value: BalanceOf<T> = T::BountyValueMinimum::get().saturating_mul(100u32.into());
 	let fee = value / 2u32.into();
@@ -62,10 +59,8 @@ fn setup_bounty<T: Config>(u: u32, d: u32) -> (
 	(caller, curator, fee, value, reason)
 }
 
-fn create_bounty<T: Config>() -> Result<(
-	<T::Lookup as StaticLookup>::Source,
-	BountyIndex,
-), &'static str> {
+fn create_bounty<T: Config>(
+) -> Result<(<T::Lookup as StaticLookup>::Source, BountyIndex), &'static str> {
 	let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, MAX_BYTES);
 	let curator_lookup = T::Lookup::unlookup(curator.clone());
 	Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
@@ -216,8 +211,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Bounties,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Bounties, crate::tests::new_test_ext(), crate::tests::Test,);

@@ -16,13 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use pwasm_utils::{
-	parity_wasm::elements::{
-		DataSegment, Module, deserialize_buffer, serialize, Internal,
-	},
-	export_mutable_globals,
-};
 use crate::error::WasmError;
+use pwasm_utils::{
+	export_mutable_globals,
+	parity_wasm::elements::{deserialize_buffer, serialize, DataSegment, Internal, Module},
+};
 
 /// A bunch of information collected from a WebAssembly module.
 #[derive(Clone)]
@@ -53,11 +51,7 @@ impl RuntimeBlob {
 
 	/// Extract the data segments from the given wasm code.
 	pub(super) fn data_segments(&self) -> Vec<DataSegment> {
-		self.raw_module
-			.data_section()
-			.map(|ds| ds.entries())
-			.unwrap_or(&[])
-			.to_vec()
+		self.raw_module.data_section().map(|ds| ds.entries()).unwrap_or(&[]).to_vec()
 	}
 
 	/// The number of globals defined in locally in this module.
@@ -70,10 +64,7 @@ impl RuntimeBlob {
 
 	/// The number of imports of globals.
 	pub fn imported_globals_count(&self) -> u32 {
-		self.raw_module
-			.import_section()
-			.map(|is| is.globals() as u32)
-			.unwrap_or(0)
+		self.raw_module.import_section().map(|is| is.globals() as u32).unwrap_or(0)
 	}
 
 	/// Perform an instrumentation that makes sure that the mutable globals are exported.
@@ -95,35 +86,29 @@ impl RuntimeBlob {
 				|e| WasmError::Other(format!("cannot inject the stack limiter: {:?}", e)),
 			)?;
 
-		Ok(Self {
-			raw_module: injected_module,
-		})
+		Ok(Self { raw_module: injected_module })
 	}
 
 	/// Perform an instrumentation that makes sure that a specific function `entry_point` is exported
 	pub fn entry_point_exists(&self, entry_point: &str) -> bool {
-		self.raw_module.export_section().map(|e| {
-			e.entries()
-			.iter()
-			.any(|e| matches!(e.internal(), Internal::Function(_)) && e.field() == entry_point)
-		}).unwrap_or_default()
+		self.raw_module
+			.export_section()
+			.map(|e| {
+				e.entries().iter().any(|e| {
+					matches!(e.internal(), Internal::Function(_)) && e.field() == entry_point
+				})
+			})
+			.unwrap_or_default()
 	}
 
 	/// Returns an iterator of all globals which were exported by [`expose_mutable_globals`].
 	pub(super) fn exported_internal_global_names<'module>(
 		&'module self,
 	) -> impl Iterator<Item = &'module str> {
-		let exports = self
-			.raw_module
-			.export_section()
-			.map(|es| es.entries())
-			.unwrap_or(&[]);
+		let exports = self.raw_module.export_section().map(|es| es.entries()).unwrap_or(&[]);
 		exports.iter().filter_map(|export| match export.internal() {
-			Internal::Global(_)
-				if export.field().starts_with("exported_internal_global") =>
-			{
-				Some(export.field())
-			}
+			Internal::Global(_) if export.field().starts_with("exported_internal_global") =>
+				Some(export.field()),
 			_ => None,
 		})
 	}
@@ -135,12 +120,11 @@ impl RuntimeBlob {
 			.custom_sections()
 			.find(|cs| cs.name() == section_name)
 			.map(|cs| cs.payload())
-		}
+	}
 
 	/// Consumes this runtime blob and serializes it.
 	pub fn serialize(self) -> Vec<u8> {
-		serialize(self.raw_module)
-			.expect("serializing into a vec should succeed; qed")
+		serialize(self.raw_module).expect("serializing into a vec should succeed; qed")
 	}
 
 	/// Destructure this structure into the underlying parity-wasm Module.

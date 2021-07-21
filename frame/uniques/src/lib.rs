@@ -27,33 +27,36 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod weights;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
 mod tests;
+pub mod weights;
 
-mod types;
 mod functions;
 mod impl_nonfungibles;
+mod types;
 pub use types::*;
 
-use sp_std::prelude::*;
-use sp_runtime::{RuntimeDebug, ArithmeticError, traits::{Zero, StaticLookup, Saturating}};
-use codec::{Encode, Decode, HasCompact};
-use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved};
+use codec::{Decode, Encode, HasCompact};
+use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
 use frame_system::Config as SystemConfig;
+use sp_runtime::{
+	traits::{Saturating, StaticLookup, Zero},
+	ArithmeticError, RuntimeDebug,
+};
+use sp_std::prelude::*;
 
-pub use weights::WeightInfo;
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -182,7 +185,7 @@ pub mod pallet {
 			NMapKey<Blake2_128Concat, BoundedVec<u8, T::KeyLimit>>,
 		),
 		(BoundedVec<u8, T::ValueLimit>, DepositBalanceOf<T, I>),
-		OptionQuery
+		OptionQuery,
 	>;
 
 	#[pallet::event]
@@ -190,7 +193,7 @@ pub mod pallet {
 	#[pallet::metadata(
 		T::AccountId = "AccountId",
 		T::ClassId = "ClassId",
-		T::InstanceId = "InstanceId",
+		T::InstanceId = "InstanceId"
 	)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An asset class was created. \[ class, creator, owner \]
@@ -419,7 +422,10 @@ pub mod pallet {
 					ensure!(class_details.owner == check_owner, Error::<T, I>::NoPermission);
 				}
 				ensure!(class_details.instances == witness.instances, Error::<T, I>::BadWitness);
-				ensure!(class_details.instance_metadatas == witness.instance_metadatas, Error::<T, I>::BadWitness);
+				ensure!(
+					class_details.instance_metadatas == witness.instance_metadatas,
+					Error::<T, I>::BadWitness
+				);
 				ensure!(class_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
 
 				for (instance, details) in Asset::<T, I>::drain_prefix(&class) {
@@ -490,7 +496,10 @@ pub mod pallet {
 			Self::do_burn(class, instance, |class_details, details| {
 				let is_permitted = class_details.admin == origin || details.owner == origin;
 				ensure!(is_permitted, Error::<T, I>::NoPermission);
-				ensure!(check_owner.map_or(true, |o| o == details.owner), Error::<T, I>::WrongOwner);
+				ensure!(
+					check_owner.map_or(true, |o| o == details.owner),
+					Error::<T, I>::WrongOwner
+				);
 				Ok(())
 			})
 		}
@@ -610,8 +619,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut details = Asset::<T, I>::get(&class, &instance)
-				.ok_or(Error::<T, I>::Unknown)?;
+			let mut details =
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
 			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(class_details.freezer == origin, Error::<T, I>::NoPermission);
 
@@ -640,8 +649,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut details = Asset::<T, I>::get(&class, &instance)
-				.ok_or(Error::<T, I>::Unknown)?;
+			let mut details =
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
 			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(class_details.admin == origin, Error::<T, I>::NoPermission);
 
@@ -664,7 +673,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::freeze_class())]
 		pub fn freeze_class(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId
+			#[pallet::compact] class: T::ClassId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -691,7 +700,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::thaw_class())]
 		pub fn thaw_class(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId
+			#[pallet::compact] class: T::ClassId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -729,7 +738,7 @@ pub mod pallet {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
-					return Ok(());
+					return Ok(())
 				}
 
 				// Move the deposit to the new owner.
@@ -809,8 +818,8 @@ pub mod pallet {
 			let delegate = T::Lookup::lookup(delegate)?;
 
 			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
-			let mut details = Asset::<T, I>::get(&class, &instance)
-				.ok_or(Error::<T, I>::Unknown)?;
+			let mut details =
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
 
 			if let Some(check) = maybe_check {
 				let permitted = &check == &class_details.admin || &check == &details.owner;
@@ -854,8 +863,8 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
 			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
-			let mut details = Asset::<T, I>::get(&class, &instance)
-				.ok_or(Error::<T, I>::Unknown)?;
+			let mut details =
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check) = maybe_check {
 				let permitted = &check == &class_details.admin || &check == &details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
@@ -1060,8 +1069,7 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class)
-				.ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
@@ -1089,11 +1097,7 @@ pub mod pallet {
 				}
 				class_details.total_deposit.saturating_accrue(deposit);
 
-				*metadata = Some(InstanceMetadata {
-					deposit,
-					data: data.clone(),
-					is_frozen,
-				});
+				*metadata = Some(InstanceMetadata { deposit, data: data.clone(), is_frozen });
 
 				Class::<T, I>::insert(&class, &class_details);
 				Self::deposit_event(Event::MetadataSet(class, instance, data, is_frozen));
@@ -1124,8 +1128,7 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class)
-				.ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1200,11 +1203,7 @@ pub mod pallet {
 
 				Class::<T, I>::insert(&class, details);
 
-				*metadata = Some(ClassMetadata {
-					deposit,
-					data: data.clone(),
-					is_frozen,
-				});
+				*metadata = Some(ClassMetadata { deposit, data: data.clone(), is_frozen });
 
 				Self::deposit_event(Event::ClassMetadataSet(class, data, is_frozen));
 				Ok(())

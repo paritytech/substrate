@@ -19,24 +19,24 @@
 //!
 //! Parse the module into `Def` struct through `Def::try_from` function.
 
-pub mod config;
-pub mod pallet_struct;
-pub mod hooks;
 pub mod call;
+pub mod config;
 pub mod error;
-pub mod origin;
-pub mod inherent;
-pub mod storage;
 pub mod event;
-pub mod helper;
-pub mod genesis_config;
-pub mod genesis_build;
-pub mod validate_unsigned;
-pub mod type_value;
 pub mod extra_constants;
+pub mod genesis_build;
+pub mod genesis_config;
+pub mod helper;
+pub mod hooks;
+pub mod inherent;
+pub mod origin;
+pub mod pallet_struct;
+pub mod storage;
+pub mod type_value;
+pub mod validate_unsigned;
 
-use syn::spanned::Spanned;
 use frame_support_procedural_tools::generate_crate_access_2018;
+use syn::spanned::Spanned;
 
 /// Parsed definition of a pallet.
 pub struct Def {
@@ -67,11 +67,14 @@ impl Def {
 		let frame_support = generate_crate_access_2018("frame-support")?;
 
 		let item_span = item.span();
-		let items = &mut item.content.as_mut()
+		let items = &mut item
+			.content
+			.as_mut()
 			.ok_or_else(|| {
 				let msg = "Invalid pallet definition, expected mod to be inlined.";
 				syn::Error::new(item_span, msg)
-			})?.1;
+			})?
+			.1;
 
 		let mut config = None;
 		let mut pallet_struct = None;
@@ -128,13 +131,12 @@ impl Def {
 				},
 				Some(PalletAttr::TypeValue(span)) =>
 					type_values.push(type_value::TypeValueDef::try_from(span, index, item)?),
-				Some(PalletAttr::ExtraConstants(_)) => {
+				Some(PalletAttr::ExtraConstants(_)) =>
 					extra_constants =
-						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?)
-				},
+						Some(extra_constants::ExtraConstantsDef::try_from(index, item)?),
 				Some(attr) => {
 					let msg = "Invalid duplicated attribute";
-					return Err(syn::Error::new(attr.span(), msg));
+					return Err(syn::Error::new(attr.span(), msg))
 				},
 				None => (),
 			}
@@ -148,12 +150,13 @@ impl Def {
 				genesis_config.as_ref().map_or("unused", |_| "used"),
 				genesis_build.as_ref().map_or("unused", |_| "used"),
 			);
-			return Err(syn::Error::new(item_span, msg));
+			return Err(syn::Error::new(item_span, msg))
 		}
 
 		let def = Def {
 			item,
-			config: config.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::config]`"))?,
+			config: config
+				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::config]`"))?,
 			pallet_struct: pallet_struct
 				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[pallet::pallet]`"))?,
 			hooks,
@@ -181,10 +184,7 @@ impl Def {
 	/// Check that usage of trait `Event` is consistent with the definition, i.e. it is declared
 	/// and trait defines type Event, or not declared and no trait associated type.
 	fn check_event_usage(&self) -> syn::Result<()> {
-		match (
-			self.config.has_event_type,
-			self.event.is_some(),
-		) {
+		match (self.config.has_event_type, self.event.is_some()) {
 			(true, false) => {
 				let msg = "Invalid usage of Event, `Config` contains associated type `Event`, \
 					but enum `Event` is not declared (i.e. no use of `#[pallet::event]`). \
@@ -197,7 +197,7 @@ impl Def {
 					An Event associated type must be declare on trait `Config`.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
 			},
-			_ => Ok(())
+			_ => Ok(()),
 		}
 	}
 
@@ -235,19 +235,18 @@ impl Def {
 			instances.extend_from_slice(&extra_constants.instances[..]);
 		}
 
-		let mut errors = instances.into_iter()
-			.filter_map(|instances| {
-				if instances.has_instance == self.config.has_instance {
-					return None
-				}
-				let msg = if self.config.has_instance {
-					"Invalid generic declaration, trait is defined with instance but generic use none"
-				} else {
-					"Invalid generic declaration, trait is defined without instance but generic use \
+		let mut errors = instances.into_iter().filter_map(|instances| {
+			if instances.has_instance == self.config.has_instance {
+				return None
+			}
+			let msg = if self.config.has_instance {
+				"Invalid generic declaration, trait is defined with instance but generic use none"
+			} else {
+				"Invalid generic declaration, trait is defined without instance but generic use \
 						some"
-				};
-				Some(syn::Error::new(instances.span, msg))
-			});
+			};
+			Some(syn::Error::new(instances.span, msg))
+		});
 
 		if let Some(mut first_error) = errors.next() {
 			for error in errors {
@@ -351,7 +350,8 @@ impl GenericKind {
 		match self {
 			GenericKind::None => quote::quote!(),
 			GenericKind::Config => quote::quote_spanned!(span => T: Config),
-			GenericKind::ConfigAndInstance => quote::quote_spanned!(span => T: Config<I>, I: 'static),
+			GenericKind::ConfigAndInstance =>
+				quote::quote_spanned!(span => T: Config<I>, I: 'static),
 		}
 	}
 

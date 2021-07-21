@@ -18,12 +18,12 @@
 
 //! Async externalities.
 
-use std::any::{TypeId, Any};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
-	traits::{Externalities, SpawnNamed, TaskExecutorExt, RuntimeSpawnExt, RuntimeSpawn},
+	traits::{Externalities, RuntimeSpawn, RuntimeSpawnExt, SpawnNamed, TaskExecutorExt},
 };
 use sp_externalities::{Extensions, ExternalitiesExt as _};
+use std::any::{Any, TypeId};
 
 /// Simple state-less externalities for use in async context.
 ///
@@ -34,7 +34,9 @@ pub struct AsyncExternalities {
 }
 
 /// New Async externalities.
-pub fn new_async_externalities(scheduler: Box<dyn SpawnNamed>) -> Result<AsyncExternalities, &'static str> {
+pub fn new_async_externalities(
+	scheduler: Box<dyn SpawnNamed>,
+) -> Result<AsyncExternalities, &'static str> {
 	let mut res = AsyncExternalities { extensions: Default::default() };
 	let mut ext = &mut res as &mut dyn Externalities;
 	ext.register_extension::<TaskExecutorExt>(TaskExecutorExt(scheduler.clone()))
@@ -74,19 +76,11 @@ impl Externalities for AsyncExternalities {
 		panic!("`storage_hash`: should not be used in async externalities!")
 	}
 
-	fn child_storage(
-		&self,
-		_child_info: &ChildInfo,
-		_key: &[u8],
-	) -> Option<StorageValue> {
+	fn child_storage(&self, _child_info: &ChildInfo, _key: &[u8]) -> Option<StorageValue> {
 		panic!("`child_storage`: should not be used in async externalities!")
 	}
 
-	fn child_storage_hash(
-		&self,
-		_child_info: &ChildInfo,
-		_key: &[u8],
-	) -> Option<Vec<u8>> {
+	fn child_storage_hash(&self, _child_info: &ChildInfo, _key: &[u8]) -> Option<Vec<u8>> {
 		panic!("`child_storage_hash`: should not be used in async externalities!")
 	}
 
@@ -94,11 +88,7 @@ impl Externalities for AsyncExternalities {
 		panic!("`next_storage_key`: should not be used in async externalities!")
 	}
 
-	fn next_child_storage_key(
-		&self,
-		_child_info: &ChildInfo,
-		_key: &[u8],
-	) -> Option<StorageKey> {
+	fn next_child_storage_key(&self, _child_info: &ChildInfo, _key: &[u8]) -> Option<StorageKey> {
 		panic!("`next_child_storage_key`: should not be used in async externalities!")
 	}
 
@@ -115,11 +105,7 @@ impl Externalities for AsyncExternalities {
 		panic!("`place_child_storage`: should not be used in async externalities!")
 	}
 
-	fn kill_child_storage(
-		&mut self,
-		_child_info: &ChildInfo,
-		_limit: Option<u32>,
-	) -> (bool, u32) {
+	fn kill_child_storage(&mut self, _child_info: &ChildInfo, _limit: Option<u32>) -> (bool, u32) {
 		panic!("`kill_child_storage`: should not be used in async externalities!")
 	}
 
@@ -136,11 +122,7 @@ impl Externalities for AsyncExternalities {
 		panic!("`clear_child_prefix`: should not be used in async externalities!")
 	}
 
-	fn storage_append(
-		&mut self,
-		_key: Vec<u8>,
-		_value: Vec<u8>,
-	) {
+	fn storage_append(&mut self, _key: Vec<u8>, _value: Vec<u8>) {
 		panic!("`storage_append`: should not be used in async externalities!")
 	}
 
@@ -148,10 +130,7 @@ impl Externalities for AsyncExternalities {
 		panic!("`storage_root`: should not be used in async externalities!")
 	}
 
-	fn child_storage_root(
-		&mut self,
-		_child_info: &ChildInfo,
-	) -> Vec<u8> {
+	fn child_storage_root(&mut self, _child_info: &ChildInfo) -> Vec<u8> {
 		panic!("`child_storage_root`: should not be used in async externalities!")
 	}
 
@@ -209,7 +188,10 @@ impl sp_externalities::ExtensionStore for AsyncExternalities {
 		self.extensions.register_with_type_id(type_id, extension)
 	}
 
-	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
+	fn deregister_extension_by_type_id(
+		&mut self,
+		type_id: TypeId,
+	) -> Result<(), sp_externalities::Error> {
 		if self.extensions.deregister(type_id) {
 			Ok(())
 		} else {
