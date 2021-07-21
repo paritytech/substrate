@@ -531,6 +531,7 @@ build-rust-doc:
   script:
     - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --no-deps --workspace --all-features --verbose
+    - rm -f ./target/doc/.lock
     - mv ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
@@ -643,6 +644,7 @@ publish-s3-doc:
         echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
         exit 1
       )
+    - ls -lah crate-docs
     - aws s3 sync --delete --size-only --only-show-errors
         ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
@@ -708,8 +710,8 @@ trigger-simnet:
   variables:
     TRGR_PROJECT:                  ${CI_PROJECT_NAME}
     TRGR_REF:                      ${CI_COMMIT_REF_NAME}
-    # simnet project ID
+    # Simnet project ID
     DWNSTRM_ID:                    332
   script:
-    # API trigger for a simnet job
+    # API trigger for a Simnet job
     - .maintain/gitlab/trigger_pipeline.sh --simnet-version=${SIMNET_REF}
