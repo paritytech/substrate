@@ -1233,9 +1233,9 @@ mod tests {
 
 		let header = new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
-			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
-				spec_version: 1,
-				..Default::default()
+			RUNTIME_VERSION.with(|v| {
+				*v.borrow_mut() =
+					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			// Let's build some fake block.
@@ -1253,16 +1253,15 @@ mod tests {
 		});
 
 		// Reset to get the correct new genesis below.
-		RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
-			spec_version: 0,
-			..Default::default()
+		RUNTIME_VERSION.with(|v| {
+			*v.borrow_mut() = sp_version::RuntimeVersion { spec_version: 0, ..Default::default() }
 		});
 
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
-			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
-				spec_version: 1,
-				..Default::default()
+			RUNTIME_VERSION.with(|v| {
+				*v.borrow_mut() =
+					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]));
@@ -1340,13 +1339,8 @@ mod tests {
 			let mut digest = Digest::default();
 			digest.push(DigestItem::Seal([1, 2, 3, 4], vec![5, 6, 7, 8]));
 
-			let header = Header::new(
-				1,
-				H256::default(),
-				H256::default(),
-				parent_hash,
-				digest.clone(),
-			);
+			let header =
+				Header::new(1, H256::default(), H256::default(), parent_hash, digest.clone());
 
 			Executive::offchain_worker(&header, true);
 

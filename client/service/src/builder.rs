@@ -20,7 +20,8 @@ use crate::{
 	build_network_future,
 	client::{light, Client, ClientConfig},
 	config::{
-		Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode, OffchainWorkerConfig
+		Configuration, KeystoreConfig, OffchainWorkerConfig, PrometheusConfig,
+		TransactionStorageMode,
 	},
 	error::Error,
 	metrics::MetricsService,
@@ -518,7 +519,7 @@ where
 {
 	let OffchainWorkerConfig { ocw_enabled, finality_ocw_enabled, .. } = config.offchain_worker;
 	if !ocw_enabled && !finality_ocw_enabled {
-		return None;
+		return None
 	}
 
 	let offchain_workers = Arc::new(sc_offchain::OffchainWorkers::new(client.clone()));
@@ -534,7 +535,7 @@ where
 			offchain_workers.clone(),
 			Clone::clone(&spawn_handle),
 			network.clone(),
-		)
+		),
 	);
 
 	Some(offchain_workers)

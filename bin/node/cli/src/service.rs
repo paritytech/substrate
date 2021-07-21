@@ -251,7 +251,10 @@ pub fn new_full_base(
 		})?;
 
 	sc_service::build_offchain_workers(
-		&config, task_manager.spawn_handle(), client.clone(), network.clone(),
+		&config,
+		task_manager.spawn_handle(),
+		client.clone(),
+		network.clone(),
 	);
 
 	let role = config.role.clone();
@@ -539,7 +542,10 @@ pub fn new_light_base(
 	}
 
 	sc_service::build_offchain_workers(
-		&config, task_manager.spawn_handle(), client.clone(), network.clone(),
+		&config,
+		task_manager.spawn_handle(),
+		client.clone(),
+		network.clone(),
 	);
 
 	let light_deps = node_rpc::LightDeps {
