@@ -910,8 +910,9 @@ pub mod pallet {
 						// Reduce next pot by payout
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
-						let maturity = <frame_system::Pallet<T>>::block_number()
-							+ Self::lock_duration(Self::members().len() as u32);
+						let maturity = <frame_system::Pallet<T>>::block_number().saturating_add(
+							Self::lock_duration(Self::members().len() as u32)
+						);
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
 					}
 					Judgement::Reject => {
