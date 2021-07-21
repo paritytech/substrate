@@ -122,7 +122,7 @@ impl VestingAction {
 	fn pick_schedules<'a, T: Config>(
 		&'a self,
 		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
-	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>> + 'a  {
+	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>> + 'a {
 		schedules.into_iter().enumerate().filter_map(move |(index, schedule)| {
 			if self.should_remove(index) {
 				None
@@ -142,7 +142,6 @@ impl<T: Config> Get<u32> for MaxVestingSchedulesGetter<T> {
 		T::MaxVestingSchedules::get().max(One::one())
 	}
 }
-
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -200,7 +199,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, MaxVestingSchedulesGetter::<T>>,
+		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, MaxVestingSchedulesGetter<T>>,
 	>;
 
 	/// Storage version of the pallet.
@@ -247,7 +246,9 @@ pub mod pallet {
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
-				if !vesting_info.is_valid() { panic!("Invalid VestingInfo params at genesis") };
+				if !vesting_info.is_valid() {
+					panic!("Invalid VestingInfo params at genesis")
+				};
 
 				Vesting::<T>::try_append(who, vesting_info)
 					.expect("Too many vesting schedules at genesis.");
@@ -429,7 +430,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			if schedule1_index == schedule2_index {
-				return Ok(());
+				return Ok(())
 			};
 			let schedule1_index = schedule1_index as usize;
 			let schedule2_index = schedule2_index as usize;
@@ -437,8 +438,7 @@ pub mod pallet {
 			let schedules = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
 			let merge_action = VestingAction::Merge(schedule1_index, schedule2_index);
 
-			let (schedules, locked_now) =
-				Self::exec_action(schedules.to_vec(), merge_action)?;
+			let (schedules, locked_now) = Self::exec_action(schedules.to_vec(), merge_action)?;
 
 			Self::write_vesting(&who, schedules)?;
 			Self::write_lock(&who, locked_now);
@@ -469,7 +469,7 @@ impl<T: Config> Pallet<T> {
 			(true, false) => return Some(schedule2),
 			(false, true) => return Some(schedule1),
 			// If neither schedule has ended don't exit early.
-			_ => {}
+			_ => {},
 		}
 
 		let locked = schedule1
@@ -477,7 +477,10 @@ impl<T: Config> Pallet<T> {
 			.saturating_add(schedule2.locked_at::<T::BlockNumberToBalance>(now));
 		// This shouldn't happen because we know at least one ending block is greater than now,
 		// thus at least a schedule a some locked balance.
-		debug_assert!(!locked.is_zero(), "merge_vesting_info validation checks failed to catch a locked of 0");
+		debug_assert!(
+			!locked.is_zero(),
+			"merge_vesting_info validation checks failed to catch a locked of 0"
+		);
 
 		let ending_block = schedule1_ending_block.max(schedule2_ending_block);
 		let starting_block = now.max(schedule1.starting_block()).max(schedule2.starting_block());
@@ -503,7 +506,9 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= Self::min_vested_transfer(), Error::<T>::AmountLow);
-		if !schedule.is_valid() { return Err(Error::<T>::InvalidScheduleParams.into()); };
+		if !schedule.is_valid() {
+			return Err(Error::<T>::InvalidScheduleParams.into())
+		};
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
 
@@ -586,7 +591,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), DispatchError> {
 		let schedules: BoundedVec<
 			VestingInfo<BalanceOf<T>, T::BlockNumber>,
-			MaxVestingSchedulesGetter::<T>,
+			MaxVestingSchedulesGetter<T>,
 		> = schedules.try_into().map_err(|_| Error::<T>::AtMaxVestingSchedules)?;
 
 		if schedules.len() == 0 {
@@ -643,7 +648,7 @@ impl<T: Config> Pallet<T> {
 				} // In the None case there was no new schedule to account for.
 
 				(schedules, locked_now)
-			}
+			},
 			_ => Self::report_schedule_updates(schedules.to_vec(), action),
 		};
 
@@ -699,12 +704,14 @@ where
 		starting_block: T::BlockNumber,
 	) -> DispatchResult {
 		if locked.is_zero() {
-			return Ok(());
+			return Ok(())
 		}
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0.
-		if !vesting_schedule.is_valid() { return Err(Error::<T>::InvalidScheduleParams.into()); };
+		if !vesting_schedule.is_valid() {
+			return Err(Error::<T>::InvalidScheduleParams.into())
+		};
 
 		let mut schedules = Self::vesting(who).unwrap_or_default();
 
@@ -748,8 +755,7 @@ where
 		let schedules = Self::vesting(who).ok_or(Error::<T>::NotVesting)?;
 		let remove_action = VestingAction::Remove(schedule_index as usize);
 
-		let (schedules, locked_now) =
-			Self::exec_action(schedules.to_vec(), remove_action)?;
+		let (schedules, locked_now) = Self::exec_action(schedules.to_vec(), remove_action)?;
 
 		Self::write_vesting(&who, schedules)?;
 		Self::write_lock(who, locked_now);

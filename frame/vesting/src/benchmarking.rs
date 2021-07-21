@@ -33,7 +33,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
-	for id in 0 .. n {
+	for id in 0..n {
 		let lock_id = [id; 8];
 		let locked = 256u32;
 		let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
@@ -58,7 +58,7 @@ fn add_vesting_schedules<T: Config>(
 	System::<T>::set_block_number(T::BlockNumber::zero());
 
 	let mut total_locked: BalanceOf<T> = Zero::zero();
-	for _ in 0 .. n {
+	for _ in 0..n {
 		total_locked += locked;
 
 		let schedule = VestingInfo::new(locked, per_block, starting_block.into());

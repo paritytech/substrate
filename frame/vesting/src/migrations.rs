@@ -44,7 +44,10 @@ pub(crate) mod v1 {
 			|_key, vesting_info| {
 				reads_writes += 1;
 				let v: Option<
-					BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, MaxVestingSchedulesGetter<T>>,
+					BoundedVec<
+						VestingInfo<BalanceOf<T>, T::BlockNumber>,
+						MaxVestingSchedulesGetter<T>,
+					>,
 				> = vec![vesting_info].try_into().ok();
 
 				if v.is_none() {
@@ -67,7 +70,10 @@ pub(crate) mod v1 {
 
 		for (_key, schedules) in Vesting::<T>::iter() {
 			// Assert the new bound vec respects size.
-			assert!(schedules.len() == 1, "A bounded vec with incorrect count of items was created.");
+			assert!(
+				schedules.len() == 1,
+				"A bounded vec with incorrect count of items was created."
+			);
 
 			for s in schedules {
 				// It is ok if this does not pass, but ideally pre-existing schedules would pass
