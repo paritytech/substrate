@@ -17,14 +17,9 @@
 
 //! Test utilities
 
-// This module needs to exist when the `make-bags` feature is enabled so that we can generate the
-// appropriate thresholds, but we don't care if it's mostly unused in that case.
-#![cfg_attr(feature = "make-bags", allow(unused))]
-
-mod voter_bags;
-
-use crate::*;
 use crate as staking;
+use crate::*;
+use frame_election_provider_support::onchain;
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{Currency, FindAuthor, Get, OnInitialize, OneSessionHandler},
@@ -39,7 +34,6 @@ use sp_runtime::{
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
-use frame_election_provider_support::onchain;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -249,8 +243,11 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 }
 
+/// Thresholds used for bags.
+const THRESHOLDS: [VoteWeight; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+
 parameter_types! {
-	pub const VoterBagThresholds: &'static [VoteWeight] = &voter_bags::THRESHOLDS;
+	pub const VoterBagThresholds: &'static [VoteWeight] = &THRESHOLDS;
 }
 
 impl Config for Test {
@@ -387,14 +384,9 @@ impl ExtBuilder {
 	}
 	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		let mut storage = frame_system::GenesisConfig::default()
-			.build_storage::<Test>()
-			.unwrap();
-		let balance_factor = if ExistentialDeposit::get() > 1 {
-			256
-		} else {
-			1
-		};
+
+		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let balance_factor = if ExistentialDeposit::get() > 1 { 256 } else { 1 };
 
 		let num_validators = self.num_validators.unwrap_or(self.validator_count);
 		// Check that the number of validators is sensible.
@@ -511,6 +503,9 @@ fn check_count() {
 	let validator_count = Validators::<Test>::iter().count() as u32;
 	assert_eq!(nominator_count, CounterForNominators::<Test>::get());
 	assert_eq!(validator_count, CounterForValidators::<Test>::get());
+
+	let voters_count = CounterForVoters::<Test>::get();
+	assert_eq!(voters_count, nominator_count + validator_count);
 }
 
 fn check_ledgers() {
@@ -838,4 +833,15 @@ pub(crate) fn staking_events() -> Vec<staking::Event<Test>> {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+use crate::voter_bags::Bag;
+/// Returns the nodes of all non-empty bags.
+pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
+	VoterBagThresholds::get().into_iter().filter_map(|t| {
+		Bag::<Test>::get(*t).map(|bag| (
+			*t,
+			bag.iter().map(|n| n.voter().id).collect::<Vec<_>>()
+		))
+	}).collect::<Vec<_>>()
 }
