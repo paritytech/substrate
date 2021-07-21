@@ -18,6 +18,7 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+log = { version = "0.4.14", default-features = false }
 rand_chacha = { version = "0.2", default-features = false }
 
 [dev-dependencies]
@@ -35,6 +36,7 @@ std = [
 	"sp-std/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 ]
 runtime-benchmarks = [
 	"sp-runtime/runtime-benchmarks",

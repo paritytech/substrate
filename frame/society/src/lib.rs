@@ -1018,7 +1018,6 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
-		/// Errors for this module.
 	pub enum Error<T, I = ()> {
 		/// An incorrect position was provided.
 		BadPosition,
@@ -1286,23 +1285,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 		// Keep it reasonably small.
 		if res.is_err() {
-			let Bid { who: popped, kind, .. } = bids.pop().expect("b.len() >= 1000; qed");
-			match kind {
-				BidKind::Deposit(deposit) => {
-					let err_amount = T::Currency::unreserve(&popped, deposit);
-					debug_assert!(err_amount.is_zero());
+			// Only pop when the inserted bid is not the largest
+			if let Some(p) = insert_pos {
+				let Bid { who: popped, kind, .. } = bids.pop().expect("b.len() >= 1000; qed");
+				match kind {
+					BidKind::Deposit(deposit) => {
+						let err_amount = T::Currency::unreserve(&popped, deposit);
+						debug_assert!(err_amount.is_zero());
+					}
+					BidKind::Vouch(voucher, _) => {
+						<Vouching<T, I>>::remove(&voucher);
+					}
 				}
-				BidKind::Vouch(voucher, _) => {
-					<Vouching<T, I>>::remove(&voucher);
+				Self::deposit_event(Event::AutoUnbid(popped));
+				if bids.try_insert(p, bid_to_insert).is_err() {
+					log::warn!("Number of bids is still larger than MaxBidCount after removing \
+						largest bid!");
 				}
 			}
-			Self::deposit_event(Event::AutoUnbid(popped));
-
-			match insert_pos {
-				Some(p) => bids.try_insert(p, bid_to_insert),
-				None => bids.try_push(bid_to_insert),
-			}
-			.expect("b.len() < 1000; qed");
 		}
 
 		<Bids<T, I>>::put(bids);
