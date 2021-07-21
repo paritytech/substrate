@@ -1329,11 +1329,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Can fail when `MaxMember` limit is reached, but has no side-effects.
 	fn add_member(who: &T::AccountId) -> DispatchResult {
 		let mut members = <Members<T, I>>::get();
-		ensure!(members.len() < <MaxMembers<T, I>>::get() as usize, Error::<T, I>::MaxMembers);
 		match members.binary_search(who) {
 			// Add the new member
 			Err(i) => {
-				members.try_insert(i, who.clone()).expect("members is less than MaxMembers; qed");
+				members.try_insert(i, who.clone())?;
 				T::MembershipChanged::change_members_sorted(&[who.clone()], &[], &members);
 				<Members<T, I>>::put(members);
 				Ok(())
