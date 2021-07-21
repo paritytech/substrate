@@ -2468,7 +2468,7 @@ mod tests {
 			let forbidden_call = Call::Balances(BalanceCall::transfer(CHARLIE, 22));
 
 			// simple cases: direct call
-			assert_err!(ctx.ext.call_runtime(forbidden_call.clone()), BadOrigin,);
+			assert_err!(ctx.ext.call_runtime(forbidden_call.clone()), BadOrigin);
 
 			// as part of a patch: return is OK (but it interrupted the batch)
 			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch(vec![

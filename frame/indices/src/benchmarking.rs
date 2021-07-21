@@ -93,4 +93,4 @@ benchmarks! {
 	// TODO in another PR: lookup and unlookup trait weights (not critical)
 }
 
-impl_benchmark_test_suite!(Indices, crate::mock::new_test_ext(), crate::mock::Test,);
+impl_benchmark_test_suite!(Indices, crate::mock::new_test_ext(), crate::mock::Test);

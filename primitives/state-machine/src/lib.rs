@@ -1062,7 +1062,7 @@ mod tests {
 			TaskExecutor::new(),
 		);
 
-		assert_eq!(state_machine.execute(ExecutionStrategy::NativeWhenPossible).unwrap(), vec![66],);
+		assert_eq!(state_machine.execute(ExecutionStrategy::NativeWhenPossible).unwrap(), vec![66]);
 	}
 
 	#[test]
@@ -1365,7 +1365,7 @@ mod tests {
 			);
 
 			ext.storage_append(key.clone(), reference_data[0].encode());
-			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()),);
+			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()));
 		}
 		overlay.start_transaction();
 		{
@@ -1380,7 +1380,7 @@ mod tests {
 			for i in reference_data.iter().skip(1) {
 				ext.storage_append(key.clone(), i.encode());
 			}
-			assert_eq!(ext.storage(key.as_slice()), Some(reference_data.encode()),);
+			assert_eq!(ext.storage(key.as_slice()), Some(reference_data.encode()));
 		}
 		overlay.rollback_transaction().unwrap();
 		{
@@ -1391,7 +1391,7 @@ mod tests {
 				changes_trie::disabled_state::<_, u64>(),
 				None,
 			);
-			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()),);
+			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()));
 		}
 	}
 
@@ -1434,7 +1434,7 @@ mod tests {
 				None,
 			);
 
-			assert_eq!(ext.storage(key.as_slice()), Some(vec![Item::InitializationItem].encode()),);
+			assert_eq!(ext.storage(key.as_slice()), Some(vec![Item::InitializationItem].encode()));
 
 			ext.storage_append(key.clone(), Item::DiscardedItem.encode());
 
@@ -1455,7 +1455,7 @@ mod tests {
 				None,
 			);
 
-			assert_eq!(ext.storage(key.as_slice()), Some(vec![Item::InitializationItem].encode()),);
+			assert_eq!(ext.storage(key.as_slice()), Some(vec![Item::InitializationItem].encode()));
 
 			ext.storage_append(key.clone(), Item::CommitedItem.encode());
 
@@ -1536,7 +1536,7 @@ mod tests {
 			local_result1.into_iter().collect::<Vec<_>>(),
 			vec![(b"value3".to_vec(), Some(vec![142]))],
 		);
-		assert_eq!(local_result2.into_iter().collect::<Vec<_>>(), vec![(b"value2".to_vec(), None)],);
+		assert_eq!(local_result2.into_iter().collect::<Vec<_>>(), vec![(b"value2".to_vec(), None)]);
 	}
 
 	#[test]

@@ -495,9 +495,9 @@ mod test_iterators {
 				vec![((3, 3), 3), ((0, 0), 0), ((2, 2), 2), ((1, 1), 1)],
 			);
 
-			assert_eq!(NMap::iter_keys().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)],);
+			assert_eq!(NMap::iter_keys().collect::<Vec<_>>(), vec![(3, 3), (0, 0), (2, 2), (1, 1)]);
 
-			assert_eq!(NMap::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1],);
+			assert_eq!(NMap::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1]);
 
 			assert_eq!(
 				NMap::drain().collect::<Vec<_>>(),
@@ -524,9 +524,9 @@ mod test_iterators {
 				vec![(1, 1), (2, 2), (0, 0), (3, 3)],
 			);
 
-			assert_eq!(NMap::iter_key_prefix((k1,)).collect::<Vec<_>>(), vec![1, 2, 0, 3],);
+			assert_eq!(NMap::iter_key_prefix((k1,)).collect::<Vec<_>>(), vec![1, 2, 0, 3]);
 
-			assert_eq!(NMap::iter_prefix_values((k1,)).collect::<Vec<_>>(), vec![1, 2, 0, 3],);
+			assert_eq!(NMap::iter_prefix_values((k1,)).collect::<Vec<_>>(), vec![1, 2, 0, 3]);
 
 			assert_eq!(
 				NMap::drain_prefix((k1,)).collect::<Vec<_>>(),

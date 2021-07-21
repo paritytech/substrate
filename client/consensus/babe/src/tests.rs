@@ -780,10 +780,10 @@ fn importing_epoch_change_block_prunes_tree() {
 	let fork_3 = propose_and_import_blocks(BlockId::Hash(canon_hashes[18]), 10);
 
 	// We should be tracking a total of 9 epochs in the fork tree
-	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9,);
+	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
 
 	// And only one root
-	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1,);
+	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
 
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).
