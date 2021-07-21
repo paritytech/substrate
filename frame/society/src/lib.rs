@@ -1332,7 +1332,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		match members.binary_search(who) {
 			// Add the new member
 			Err(i) => {
-				members.try_insert(i, who.clone())?;
+				members.try_insert(i, who.clone()).map_err(|_| <Error<T, I>>::MaxMembers)?;
 				T::MembershipChanged::change_members_sorted(&[who.clone()], &[], &members);
 				<Members<T, I>>::put(members);
 				Ok(())
