@@ -1800,6 +1800,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "handlebars",
+ "linked-hash-map",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-db",

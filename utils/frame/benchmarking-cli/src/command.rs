@@ -19,6 +19,7 @@ use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkResults, BenchmarkSelector};
 use frame_support::traits::StorageInfo;
+use linked_hash_map::LinkedHashMap;
 use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
@@ -40,7 +41,7 @@ fn combine_batches(batches: Vec<BenchmarkBatch>) -> Vec<BenchmarkBatch> {
 		return batches
 	}
 
-	let mut all_benchmarks = HashMap::<_, Vec<BenchmarkResults>>::new();
+	let mut all_benchmarks = LinkedHashMap::<_, Vec<BenchmarkResults>>::new();
 
 	batches
 		.into_iter()
