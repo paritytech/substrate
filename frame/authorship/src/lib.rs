@@ -137,6 +137,7 @@ pub mod pallet {
 		/// The number of blocks back we should accept uncles.
 		/// This means that we will deal with uncle-parents that are
 		/// `UncleGenerations + 1` before `now`.
+		#[pallet::constant]
 		type UncleGenerations: Get<Self::BlockNumber>;
 		/// A filter for uncles within a block. This is for implementing
 		/// further constraints on what uncles can be included, other than their ancestry.
@@ -440,7 +441,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
+		type BaseCallFilter = frame_support::traits::AllowAll;
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();

@@ -301,6 +301,7 @@ pub mod pallet {
 		/// Indicator for whether an emergency origin is even allowed to happen. Some chains may want
 		/// to set this permanently to `false`, others may want to condition it on things such as
 		/// an upgrade having happened recently.
+		#[pallet::constant]
 		type InstantAllowed: Get<bool>;
 
 		/// Minimum voting period allowed for a fast-track referendum.
@@ -355,6 +356,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The maximum number of public proposals that can exist at any time.
+		#[pallet::constant]
 		type MaxProposals: Get<u32>;
 	}
 
@@ -510,8 +512,8 @@ pub mod pallet {
 		NotPassed(ReferendumIndex),
 		/// A referendum has been cancelled. \[ref_index\]
 		Cancelled(ReferendumIndex),
-		/// A proposal has been enacted. \[ref_index, is_ok\]
-		Executed(ReferendumIndex, bool),
+		/// A proposal has been enacted. \[ref_index, result\]
+		Executed(ReferendumIndex, DispatchResult),
 		/// An account has delegated their vote to another account. \[who, target\]
 		Delegated(T::AccountId, T::AccountId),
 		/// An \[account\] has cancelled a previous delegation operation.
@@ -1652,8 +1654,9 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(err_amount.is_zero());
 				Self::deposit_event(Event::<T>::PreimageUsed(proposal_hash, provider, deposit));
 
-				let ok = proposal.dispatch(frame_system::RawOrigin::Root.into()).is_ok();
-				Self::deposit_event(Event::<T>::Executed(index, ok));
+				let res = proposal.dispatch(frame_system::RawOrigin::Root.into())
+					.map(|_| ()).map_err(|e| e.error);
+				Self::deposit_event(Event::<T>::Executed(index, res));
 
 				Ok(())
 			} else {

@@ -25,7 +25,7 @@ use frame_support::{
 	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable, schedule::DispatchTime},
 };
 use frame_system::{RawOrigin, Pallet as System, self};
-use sp_runtime::traits::{Bounded, One};
+use sp_runtime::traits::{Bounded, One, BadOrigin};
 
 use crate::Pallet as Democracy;
 
@@ -118,13 +118,13 @@ benchmarks! {
 		// Create s existing "seconds"
 		for i in 0 .. s {
 			let seconder = funded_account::<T>("seconder", i);
-			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0, u32::max_value())?;
+			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0, u32::MAX)?;
 		}
 
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
 		assert_eq!(deposits.0.len(), (s + 1) as usize, "Seconds not recorded");
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), 0, u32::max_value())
+	}: _(RawOrigin::Signed(caller), 0, u32::MAX)
 	verify {
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
 		assert_eq!(deposits.0.len(), (s + 2) as usize, "`second` benchmark did not work");
@@ -609,7 +609,7 @@ benchmarks! {
 
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
-	}: _(RawOrigin::Signed(caller), proposal_hash.clone(), u32::max_value())
+	}: _(RawOrigin::Signed(caller), proposal_hash.clone(), u32::MAX)
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		assert!(!Preimages::<T>::contains_key(proposal_hash));
@@ -759,7 +759,7 @@ benchmarks! {
 	}: enact_proposal(RawOrigin::Root, proposal_hash, 0)
 	verify {
 		// Fails due to mismatched origin
-		assert_last_event::<T>(Event::<T>::Executed(0, false).into());
+		assert_last_event::<T>(Event::<T>::Executed(0, Err(BadOrigin.into())).into());
 	}
 
 	#[extra]

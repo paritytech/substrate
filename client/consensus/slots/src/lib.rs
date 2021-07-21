@@ -454,47 +454,36 @@ pub trait InherentDataProviderExt {
 	fn slot(&self) -> Slot;
 }
 
-impl<T, S, P> InherentDataProviderExt for (T, S, P)
-where
-	T: Deref<Target = Timestamp>,
-	S: Deref<Target = Slot>,
-{
-	fn timestamp(&self) -> Timestamp {
-		*self.0.deref()
-	}
+/// Small macro for implementing `InherentDataProviderExt` for inherent data provider tuple.
+macro_rules! impl_inherent_data_provider_ext_tuple {
+	( T, S $(, $TN:ident)* $( , )?) => {
+		impl<T, S, $( $TN ),*>  InherentDataProviderExt for (T, S, $($TN),*)
+		where
+			T: Deref<Target = Timestamp>,
+			S: Deref<Target = Slot>,
+		{
+			fn timestamp(&self) -> Timestamp {
+				*self.0.deref()
+			}
 
-	fn slot(&self) -> Slot {
-		*self.1.deref()
+			fn slot(&self) -> Slot {
+				*self.1.deref()
+			}
+		}
 	}
 }
 
-impl<T, S, P, R> InherentDataProviderExt for (T, S, P, R)
-where
-	T: Deref<Target = Timestamp>,
-	S: Deref<Target = Slot>,
-{
-	fn timestamp(&self) -> Timestamp {
-		*self.0.deref()
-	}
-
-	fn slot(&self) -> Slot {
-		*self.1.deref()
-	}
-}
-
-impl<T, S> InherentDataProviderExt for (T, S)
-where
-	T: Deref<Target = Timestamp>,
-	S: Deref<Target = Slot>,
-{
-	fn timestamp(&self) -> Timestamp {
-		*self.0.deref()
-	}
-
-	fn slot(&self) -> Slot {
-		*self.1.deref()
-	}
-}
+impl_inherent_data_provider_ext_tuple!(T, S);
+impl_inherent_data_provider_ext_tuple!(T, S, A);
+impl_inherent_data_provider_ext_tuple!(T, S, A, B);
+impl_inherent_data_provider_ext_tuple!(T, S, A, B, C);
+impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D);
+impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E);
+impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F);
+impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G);
+impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H);
+impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I);
+impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I, J);
 
 /// Start a new slot worker.
 ///

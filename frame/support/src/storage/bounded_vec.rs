@@ -20,13 +20,13 @@
 
 use sp_std::prelude::*;
 use sp_std::{convert::TryFrom, fmt, marker::PhantomData};
-use codec::{Encode, Decode, EncodeLike};
+use codec::{Encode, Decode, EncodeLike, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
 use crate::{
-	traits::{Get, MaxEncodedLen},
+	traits::Get,
 	storage::{StorageDecodeLength, StorageTryAppend},
 };
 
@@ -121,6 +121,14 @@ impl<T, S> BoundedVec<T, S> {
 	/// Exactly the same semantics as [`Vec::retain`].
 	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
 		self.0.retain(f)
+	}
+
+	/// Exactly the same semantics as [`Vec::get_mut`].
+	pub fn get_mut<I: SliceIndex<[T]>>(
+		&mut self,
+		index: I,
+	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
+		self.0.get_mut(index)
 	}
 }
 

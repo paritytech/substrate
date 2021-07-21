@@ -70,7 +70,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -184,7 +184,7 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const ElectionLookahead: u64 = 0;
-	pub const StakingUnsignedPriority: u64 = u64::max_value() / 2;
+	pub const StakingUnsignedPriority: u64 = u64::MAX / 2;
 }
 
 impl onchain::Config for Test {

@@ -17,7 +17,7 @@
 
 //! Smaller traits used in FRAME which don't need their own file.
 
-use sp_runtime::traits::{StoredMapError, Block as BlockT};
+use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_arithmetic::traits::AtLeast32Bit;
 use crate::dispatch::Parameter;
 
@@ -157,10 +157,10 @@ pub trait OnKilledAccount<AccountId> {
 /// A simple, generic one-parameter event notifier/handler.
 pub trait HandleLifetime<T> {
 	/// An account was created.
-	fn created(_t: &T) -> Result<(), StoredMapError> { Ok(()) }
+	fn created(_t: &T) -> Result<(), DispatchError> { Ok(()) }
 
 	/// An account was killed.
-	fn killed(_t: &T) -> Result<(), StoredMapError> { Ok(()) }
+	fn killed(_t: &T) -> Result<(), DispatchError> { Ok(()) }
 }
 
 impl<T> HandleLifetime<T> for () {}

@@ -355,6 +355,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				genesis_block.deconstruct().0,
 				Some(vec![]),
 				None,
+				None,
 				block_state,
 			)?;
 			backend.commit_operation(op)?;
@@ -657,6 +658,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			justifications,
 			post_digests,
 			body,
+			indexed_body,
 			finalized,
 			auxiliary,
 			fork_choice,
@@ -695,6 +697,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_headers,
 			justifications,
 			body,
+			indexed_body,
 			storage_changes,
 			new_cache,
 			finalized,
@@ -734,6 +737,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: PrePostHeader<Block::Header>,
 		justifications: Option<Justifications>,
 		body: Option<Vec<Block::Extrinsic>>,
+		indexed_body: Option<Vec<Vec<u8>>>,
 		storage_changes: Option<sp_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		finalized: bool,
@@ -871,6 +875,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		operation.op.set_block_data(
 			import_headers.post().clone(),
 			body,
+			indexed_body,
 			justifications,
 			leaf_state,
 		)?;
@@ -1243,18 +1248,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
 	}
-
-	/// Prepare in-memory header that is used in execution environment.
-	fn prepare_environment_block(&self, parent: &BlockId<Block>) -> sp_blockchain::Result<Block::Header> {
-		let parent_hash = self.backend.blockchain().expect_block_hash_from_id(parent)?;
-		Ok(<<Block as BlockT>::Header as HeaderT>::new(
-			self.backend.blockchain().expect_block_number_from_id(parent)? + One::one(),
-			Default::default(),
-			Default::default(),
-			parent_hash,
-			Default::default(),
-		))
-	}
 }
 
 impl<B, E, Block, RA> UsageProvider<Block> for Client<B, E, Block, RA> where
@@ -1313,10 +1306,8 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		)?;
 
 		let state = self.state_at(id)?;
-		let header = self.prepare_environment_block(id)?;
 		prove_execution(
 			state,
-			header,
 			&self.executor,
 			method,
 			call_data,
@@ -1495,7 +1486,6 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 		Ok(keys)
 	}
 
-
 	fn storage_keys_iter<'a>(
 		&self,
 		id: &BlockId<Block>,
@@ -1510,6 +1500,20 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 		Ok(KeyIterator::new(state, prefix, start_key))
 	}
 
+	fn child_storage_keys_iter<'a>(
+		&self,
+		id: &BlockId<Block>,
+		child_info: ChildInfo,
+		prefix: Option<&'a StorageKey>,
+		start_key: Option<&StorageKey>
+	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
+		let state = self.state_at(id)?;
+		let start_key = start_key
+			.or(prefix)
+			.map(|key| key.0.clone())
+			.unwrap_or_else(Vec::new);
+		Ok(KeyIterator::new_child(state, child_info, prefix, start_key))
+	}
 
 	fn storage(
 		&self,
@@ -1782,12 +1786,10 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
-		C: CoreApi<Block>,
 	>(
 		&self,
-		params: CallApiAtParams<'a, Block, C, NC, B::State>,
+		params: CallApiAtParams<'a, Block, NC, B::State>,
 	) -> Result<NativeOrEncoded<R>, sp_api::ApiError> {
-		let core_api = params.core_api;
 		let at = params.at;
 
 		let (manager, extensions) = self.execution_extensions.manager_and_extensions(
@@ -1795,16 +1797,12 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 			params.context,
 		);
 
-		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
-			|| core_api
-				.initialize_block(at, &self.prepare_environment_block(at)?)
-				.map_err(Error::RuntimeApiError),
+		self.executor.contextual_call::<fn(_,_) -> _, _, _>(
 			at,
 			params.function,
 			&params.arguments,
 			params.overlayed_changes,
 			Some(params.storage_transaction_cache),
-			params.initialize_block,
 			manager,
 			params.native_call,
 			params.recorder,

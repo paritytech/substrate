@@ -24,7 +24,7 @@ pub mod hash;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use sp_core::Bytes;
-use sp_transaction_pool::TransactionStatus;
+use sc_transaction_pool_api::TransactionStatus;
 use self::error::{FutureResult, Result};
 
 pub use self::gen_client::Client as AuthorClient;
@@ -78,7 +78,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Submit an extrinsic to watch.
 	///
-	/// See [`TransactionStatus`](sp_transaction_pool::TransactionStatus) for details on transaction
+	/// See [`TransactionStatus`](sc_transaction_pool_api::TransactionStatus) for details on transaction
 	/// life cycle.
 	#[pubsub(
 		subscription = "author_extrinsicUpdate",

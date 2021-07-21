@@ -12,16 +12,16 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-api = { version = "3.0.0", path = "../" }
+sp-api = { version = "4.0.0-dev", path = "../" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sp-version = { version = "3.0.0", path = "../../version" }
-sp-tracing = { version = "3.0.0", path = "../../tracing" }
-sp-runtime = { version = "3.0.0", path = "../../runtime" }
-sp-blockchain = { version = "3.0.0", path = "../../blockchain" }
-sp-consensus = { version = "0.9.0", path = "../../consensus/common" }
-sc-block-builder = { version = "0.9.0", path = "../../../client/block-builder" }
+sp-version = { version = "4.0.0-dev", path = "../../version" }
+sp-tracing = { version = "4.0.0-dev", path = "../../tracing" }
+sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
+sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sp-state-machine = { version = "0.9.0", path = "../../state-machine" }
+sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
 trybuild = "1.0.42"
 rustversion = "1.0.0"
 
@@ -29,7 +29,7 @@ rustversion = "1.0.0"
 criterion = "0.3.0"
 futures = "0.3.9"
 log = "0.4.14"
-sp-core = { version = "3.0.0", path = "../../core" }
+sp-core = { version = "4.0.0-dev", path = "../../core" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 
 [[bench]]

@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::{Error, mock::*};
-use sp_runtime::TokenError;
+use sp_runtime::{TokenError, traits::ConvertInto};
 use frame_support::{assert_ok, assert_noop, traits::Currency};
 use pallet_balances::Error as BalancesError;
 
@@ -310,7 +310,7 @@ fn querying_total_supply_should_work() {
 		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 2), 19);
 		assert_eq!(Assets::balance(0, 3), 31);
-		assert_ok!(Assets::burn(Origin::signed(1), 0, 3, u64::max_value()));
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 3, u64::MAX));
 		assert_eq!(Assets::total_supply(0), 69);
 	});
 }
@@ -457,7 +457,7 @@ fn transferring_amount_more_than_available_balance_should_not_work() {
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 		assert_eq!(Assets::balance(0, 1), 50);
 		assert_eq!(Assets::balance(0, 2), 50);
-		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::MAX));
 		assert_eq!(Assets::balance(0, 1), 0);
 		assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), Error::<Test>::BalanceLow);
 		assert_noop!(Assets::transfer(Origin::signed(2), 0, 1, 51), Error::<Test>::BalanceLow);
@@ -491,7 +491,7 @@ fn burning_asset_balance_with_positive_balance_should_work() {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
-		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::MAX));
 		assert_eq!(Assets::balance(0, 1), 0);
 	});
 }
@@ -502,7 +502,7 @@ fn burning_asset_balance_with_zero_balance_does_nothing() {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 2), 0);
-		assert_ok!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()));
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 2, u64::MAX));
 		assert_eq!(Assets::balance(0, 2), 0);
 		assert_eq!(Assets::total_supply(0), 100);
 	});
@@ -697,5 +697,31 @@ fn force_asset_status_should_work(){
 		assert_eq!(Assets::balance(0, 1), 200);
 		assert_eq!(Assets::balance(0, 2), 0);
 		assert_eq!(Assets::total_supply(0), 200);
+	});
+}
+
+#[test]
+fn balance_conversion_should_work() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::tokens::BalanceConversion;
+
+		let id = 42;
+		assert_ok!(Assets::force_create(Origin::root(), id, 1, true, 10));
+		let not_sufficient = 23;
+		assert_ok!(Assets::force_create(Origin::root(), not_sufficient, 1, false, 10));
+
+		assert_eq!(
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, 1234),
+			Err(ConversionError::AssetMissing)
+		);
+		assert_eq!(
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, not_sufficient),
+			Err(ConversionError::AssetNotSufficient)
+		);
+		// 10 / 1 == 10 -> the conversion should 10x the value
+		assert_eq!(
+			BalanceToAssetBalance::<Balances, Test, ConvertInto>::to_asset_balance(100, id),
+			Ok(100 * 10)
+		);
 	});
 }

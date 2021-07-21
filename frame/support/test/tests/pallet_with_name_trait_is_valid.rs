@@ -43,7 +43,7 @@ frame_support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 		type Error = Error<T>;
-		const Foo: u32 = u32::max_value();
+		const Foo: u32 = u32::MAX;
 
 		#[weight = 0]
 		fn accumulate_dummy(_origin, _increase_by: T::Balance) {
@@ -126,7 +126,7 @@ mod tests {
 	}
 
 	impl frame_system::Config for Runtime {
-		type BaseCallFilter = ();
+		type BaseCallFilter = frame_support::traits::AllowAll;
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;

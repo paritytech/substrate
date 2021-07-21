@@ -207,7 +207,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			}
 		}
 		let (root, parent_txs) = self.storage_root(delta
-			.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			.map(|(k, v)| (k, v.as_ref().map(|v| &v[..])))
 			.chain(
 				child_roots
 					.iter()
@@ -265,6 +265,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Estimate proof size
 	fn proof_size(&self) -> Option<u32> {
+		unimplemented!()
+	}
+
+	/// Extend storage info for benchmarking db
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
 		unimplemented!()
 	}
 }

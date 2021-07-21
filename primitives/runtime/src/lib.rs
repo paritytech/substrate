@@ -54,7 +54,6 @@ pub mod offchain;
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
-pub mod random_number_generator;
 mod runtime_string;
 mod multiaddress;
 pub mod runtime_logger;
@@ -84,8 +83,6 @@ pub use sp_arithmetic::{
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use sp_arithmetic::biguint;
-
-pub use random_number_generator::RandomNumberGenerator;
 
 pub use either::Either;
 
@@ -516,15 +513,6 @@ impl From<crate::traits::LookupError> for DispatchError {
 impl From<crate::traits::BadOrigin> for DispatchError {
 	fn from(_: crate::traits::BadOrigin) -> Self {
 		Self::BadOrigin
-	}
-}
-
-impl From<crate::traits::StoredMapError> for DispatchError {
-	fn from(e: crate::traits::StoredMapError) -> Self {
-		match e {
-			crate::traits::StoredMapError::ConsumerRemaining => Self::ConsumerRemaining,
-			crate::traits::StoredMapError::NoProviders => Self::NoProviders,
-		}
 	}
 }
 
