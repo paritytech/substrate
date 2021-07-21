@@ -171,19 +171,11 @@ where
 	Block: traits::Block,
 	A: ApiExt<Block>,
 {
-	let has_api =
-		|version| runtime.has_api_with::<dyn OffchainWorkerApi<Block>, _>(at, |v| v == version);
 
-	if let Ok(true) = has_api(3) {
-		return 3
-	}
+	let version = runtime.api_version::<dyn OffchainWorkerApi<Block>>(at);
 
-	if let Ok(true) = has_api(2) {
-		return 2
-	}
-
-	match has_api(1) {
-		Ok(true) => 1,
+	match version {
+		Ok(Some(v)) => v,
 		err => {
 			let help =
 				"Consider turning off offchain workers if they are not part of your runtime.";
@@ -286,18 +278,19 @@ where
 			log::debug!("Running offchain workers at {:?}", at);
 			let context =
 				ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all())));
-			let run = match version {
-				3 => runtime.offchain_worker_with_context(&at, context, &header, false),
-				2 =>
-					#[allow(deprecated)]
-					runtime.offchain_worker_before_version_3_with_context(&at, context, &header),
-				_ =>
-					#[allow(deprecated)]
-					runtime.offchain_worker_before_version_2_with_context(
-						&at,
-						context,
-						*header.number(),
-					),
+			let run = {
+				#[allow(deprecated)]
+				match version {
+					1 =>
+						runtime.offchain_worker_before_version_2_with_context(
+							&at,
+							context,
+							*header.number(),
+						),
+					2 =>
+						runtime.offchain_worker_before_version_3_with_context(&at, context, &header),
+					_ => runtime.offchain_worker_with_context(&at, context, &header, false),
+				}
 			};
 			if let Err(e) = run {
 				log::error!("Error running offchain workers at {:?}: {:?}", at, e);
