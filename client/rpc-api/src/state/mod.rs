@@ -197,7 +197,7 @@ pub trait StateApi<Hash> {
 	/// renamed/modified however you like, as long as it retains the `.wasm` extension.
 	/// - Run the node with the wasm blob overrides by placing them in a folder with all your runtimes,
 	/// and passing the path of this folder to your chain, e.g.:
-	/// 	- `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
+	/// - `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
 	///
 	/// You can also find some pre-built tracing enabled wasm runtimes in [substrate-archive][2]
 	///
@@ -230,33 +230,34 @@ pub trait StateApi<Hash> {
 	///
 	/// - `block_hash` (param index 0): Hash of the block to trace.
 	/// - `targets` (param index 1): String of comma separated (no spaces) targets. Specified
-	/// 	targets match with trace targets by prefix (i.e if a target is in the beginning
-	/// 	of a trace target it is considered a match). If an empty string is specified no
-	/// 	targets will be filtered out. The majority of targets correspond to Rust module names,
-	/// 	and the ones that do not are typically "hardcoded" into span or event location
-	/// 	somewhere in the Substrate source code. ("Non-hardcoded" targets typically come from frame
-	/// 	support macros.)
+	/// targets match with trace targets by prefix (i.e if a target is in the beginning
+	/// of a trace target it is considered a match). If an empty string is specified no
+	/// targets will be filtered out. The majority of targets correspond to Rust module names,
+	/// and the ones that do not are typically "hardcoded" into span or event location
+	/// somewhere in the Substrate source code. ("Non-hardcoded" targets typically come from frame
+	/// support macros.)
 	/// - `storage_keys` (param index 2): String of comma separated (no spaces) hex encoded
-	/// 	(no `0x` prefix) storage keys. If an empty string is specified no events will
-	/// 	be filtered out. If anything other than an empty string is specified, events
-	/// 	will be filtered by storage key (so non-storage events will **not** show up).
-	/// 	You can specify any length of a storage key prefix (i.e. if a specified storage
-	/// 	key is in the beginning of an events storage key it is considered a match).
-	/// 	Example: for balance tracking on Polkadot & Kusama you would likely want
-	/// 		to track changes to account balances with the frame_system::Account storage item,
-	/// 		which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
-	/// 		the storage prefix for the map:
-	/// 		`26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
-	/// 	Additionally you would want to track the extrinsic index, which is under the
-	/// 		`:extrinsic_index` key. The key for this would be the aforementioned string as bytes
-	/// 		in hex: `3a65787472696e7369635f696e646578`.
-	/// 		The following are some resources to learn more about storage keys in substrate:
-	/// 		[substrate storage][1], [transparent keys in substrate][2],
-	/// 		[querying substrate storage via rpc][3].
+	/// (no `0x` prefix) storage keys. If an empty string is specified no events will
+	/// be filtered out. If anything other than an empty string is specified, events
+	/// will be filtered by storage key (so non-storage events will **not** show up).
+	/// You can specify any length of a storage key prefix (i.e. if a specified storage
+	/// key is in the beginning of an events storage key it is considered a match).
+	/// Example: for balance tracking on Polkadot & Kusama you would likely want
+	/// to track changes to account balances with the frame_system::Account storage item,
+	/// which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
+	/// the storage prefix for the map:
+	/// `26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
 	///
-	/// 		[1]: https://substrate.dev/docs/en/knowledgebase/advanced/storage#storage-map-key
-	/// 		[2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
-	/// 		[3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
+	/// Additionally you would want to track the extrinsic index, which is under the
+	/// `:extrinsic_index` key. The key for this would be the aforementioned string as bytes
+	/// in hex: `3a65787472696e7369635f696e646578`.
+	/// The following are some resources to learn more about storage keys in substrate:
+	/// [substrate storage][1], [transparent keys in substrate][2],
+	/// [querying substrate storage via rpc][3].
+	///
+	/// [1]: https://substrate.dev/docs/en/knowledgebase/advanced/storage#storage-map-key
+	/// [2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
+	/// [3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
 	///
 	/// ### Maximum payload size
 	///
