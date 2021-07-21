@@ -63,7 +63,7 @@ pub struct OffchainWorkerParams {
 	/// If this setting is enabled it is recommended to run without pruning enabled (archive node).
 	/// By default it's only enabled for nodes that are authoring new blocks.
 	#[structopt(
-		long = "finality-offchain-worker",
+		long = "offchain-worker-on-finality",
 		value_name = "ENABLED",
 		possible_values = &OffchainWorkerEnabled::variants(),
 		case_insensitive = true,
