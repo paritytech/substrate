@@ -1708,7 +1708,7 @@ macro_rules! decl_module {
 		variant $fn_name:ident;
 		$( #[doc = $doc_attr:tt] )*
 		#[compact]
-		$type:ty;
+		$name:ident : $type:ty;
 		$( $rest:tt )*
 	) => {
 		$crate::decl_module! {
@@ -1720,7 +1720,7 @@ macro_rules! decl_module {
 			{
 				$( $current_params )*
 				#[codec(compact)]
-				$type,
+				$name: $type,
 			}
 			variant $fn_name;
 			$( #[doc = $doc_attr] )*
@@ -1737,7 +1737,7 @@ macro_rules! decl_module {
 		{ $( $current_params:tt )* }
 		variant $fn_name:ident;
 		$(#[doc = $doc_attr:tt])*
-		$type:ty;
+		$name:ident : $type:ty;
 		$( $rest:tt )*
 	) => {
 		$crate::decl_module! {
@@ -1748,7 +1748,7 @@ macro_rules! decl_module {
 			{ $( $generated_variants )* }
 			{
 				$( $current_params )*
-				$type,
+				$name: $type,
 			}
 			variant $fn_name;
 			$( #[doc = $doc_attr] )*
@@ -1778,9 +1778,9 @@ macro_rules! decl_module {
 				$( $generated_variants )*
 				#[allow(non_camel_case_types)]
 				$(#[doc = $doc_attr])*
-				$fn_name (
+				$fn_name {
 					$( $current_params )*
-				),
+				},
 			}
 			{}
 			$(
@@ -1947,7 +1947,7 @@ macro_rules! decl_module {
 				$(#[doc = $doc_attr])*
 				$(
 					$(#[$codec_attr])*
-					$param;
+					$param_name : $param;
 				)*
 			)*
 		}
@@ -1959,7 +1959,7 @@ macro_rules! decl_module {
 			fn get_dispatch_info(&self) -> $crate::dispatch::DispatchInfo {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) => {
+						$call_type::$fn_name { $( ref $param_name ),* } => {
 							let __pallet_base_weight = $weight;
 							let __pallet_weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
 								&__pallet_base_weight,
@@ -1992,7 +1992,7 @@ macro_rules! decl_module {
 			fn get_call_name(&self) -> &'static str {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) => {
+						$call_type::$fn_name { $( ref $param_name ),* } => {
 							// Don't generate any warnings for unused variables
 							let _ = ( $( $param_name ),* );
 							stringify!($fn_name)
@@ -2048,8 +2048,8 @@ macro_rules! decl_module {
 			fn clone(&self) -> Self {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) =>
-							$call_type::$fn_name( $( (*$param_name).clone() ),* )
+						$call_type::$fn_name { $( ref $param_name ),* } =>
+							$call_type::$fn_name { $( $param_name: (*$param_name).clone() ),* }
 					,)*
 					_ => unreachable!(),
 				}
@@ -2062,9 +2062,9 @@ macro_rules! decl_module {
 			fn eq(&self, _other: &Self) -> bool {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) => {
+						$call_type::$fn_name { $( ref $param_name ),* } => {
 							let self_params = ( $( $param_name, )* );
-							if let $call_type::$fn_name( $( ref $param_name ),* ) = *_other {
+							if let $call_type::$fn_name { $( ref $param_name ),* } = *_other {
 								self_params == ( $( $param_name, )* )
 							} else {
 								match *_other {
@@ -2092,7 +2092,7 @@ macro_rules! decl_module {
 			) -> $crate::dispatch::result::Result<(), $crate::dispatch::fmt::Error> {
 				match *self {
 					$(
-						$call_type::$fn_name( $( ref $param_name ),* ) =>
+						$call_type::$fn_name { $( ref $param_name ),* } =>
 							write!(_f, "{}{:?}",
 								stringify!($fn_name),
 								( $( $param_name.clone(), )* )
@@ -2110,7 +2110,7 @@ macro_rules! decl_module {
 			fn dispatch_bypass_filter(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					$(
-						$call_type::$fn_name( $( $param_name ),* ) => {
+						$call_type::$fn_name { $( $param_name ),* } => {
 							$crate::decl_module!(
 								@call
 								$from
