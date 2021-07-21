@@ -19,10 +19,8 @@
 //! Simple ECDSA API.
 // end::description[]
 
-#[cfg(feature = "full_crypto")]
-use sp_std::vec::Vec;
-
 use codec::{Decode, Encode, MaxEncodedLen};
+use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::cmp::Ordering;
 
 #[cfg(feature = "std")]
@@ -41,6 +39,10 @@ use bip39::{Language, Mnemonic, MnemonicType};
 use core::convert::{TryFrom, TryInto};
 #[cfg(feature = "full_crypto")]
 use libsecp256k1::{PublicKey, SecretKey};
+#[cfg(feature = "std")]
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+#[cfg(feature = "full_crypto")]
+use sp_std::vec::Vec;
 
 /// An identifier used to match public keys against ecdsa keys
 pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
@@ -449,7 +451,7 @@ impl TraitPair for Pair {
 		phrase: &str,
 		password: Option<&str>,
 	) -> Result<(Pair, Seed), SecretStringError> {
-		let big_seed = seed_from_entropy(
+		let big_seed = substrate_bip39::seed_from_entropy(
 			Mnemonic::from_phrase(phrase, Language::English)
 				.map_err(|_| SecretStringError::InvalidPhrase)?
 				.entropy(),
