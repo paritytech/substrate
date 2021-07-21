@@ -15,19 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode, MaxEncodedLen};
+use super::*;
+use codec::{Decode, Encode, MaxEncodedLen};
 use enumflags2::BitFlags;
 use frame_support::{
-    traits::{ConstU32, Get},
-    BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	traits::{ConstU32, Get},
+	BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use sp_std::prelude::*;
-use sp_std::{fmt::Debug, iter::once, ops::Add};
-use sp_runtime::{
-    traits::Zero,
-    RuntimeDebug,
-};
-use super::*;
+use sp_runtime::{traits::Zero, RuntimeDebug};
+use sp_std::{fmt::Debug, iter::once, ops::Add, prelude::*};
 
 /// Either underlying data blob if it is at most 32 bytes, or a hash of it. If the data is greater
 /// than 32-bytes then it will be truncated when encoding.
@@ -58,13 +54,13 @@ impl Decode for Data {
 		let b = input.read_byte()?;
 		Ok(match b {
 			0 => Data::None,
-			n @ 1 ..= 33 => {
+			n @ 1..=33 => {
 				let mut r: BoundedVec<_, _> = vec![0u8; n as usize - 1]
 					.try_into()
 					.expect("bound checked in match arm condition; qed");
 				input.read(&mut r[..])?;
 				Data::Raw(r)
-			}
+			},
 			34 => Data::BlakeTwo256(<[u8; 32]>::decode(input)?),
 			35 => Data::Sha256(<[u8; 32]>::decode(input)?),
 			36 => Data::Keccak256(<[u8; 32]>::decode(input)?),
@@ -83,7 +79,7 @@ impl Encode for Data {
 				let mut r = vec![l as u8 + 1; l + 1];
 				r[1..].copy_from_slice(&x[..l as usize]);
 				r
-			}
+			},
 			Data::BlakeTwo256(ref h) => once(34u8).chain(h.iter().cloned()).collect(),
 			Data::Sha256(ref h) => once(35u8).chain(h.iter().cloned()).collect(),
 			Data::Keccak256(ref h) => once(36u8).chain(h.iter().cloned()).collect(),
@@ -107,9 +103,8 @@ pub type RegistrarIndex = u32;
 /// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
 /// which fields their attestation is relevant for by off-chain means.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
-pub enum Judgement<
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq
-> {
+pub enum Judgement<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq>
+{
 	/// The default value; no opinion is held.
 	Unknown,
 	/// No judgement is yet in place, but a deposit is reserved as payment for providing one.
@@ -131,9 +126,9 @@ pub enum Judgement<
 	Erroneous,
 }
 
-impl<
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq
-> Judgement<Balance> {
+impl<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq>
+	Judgement<Balance>
+{
 	/// Returns `true` if this judgement is indicative of a deposit being currently held. This means
 	/// it should not be cleared or replaced except by an operation which utilizes the deposit.
 	pub(crate) fn has_deposit(&self) -> bool {
@@ -159,14 +154,14 @@ impl<
 #[repr(u64)]
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug)]
 pub enum IdentityField {
-	Display        = 0b0000000000000000000000000000000000000000000000000000000000000001,
-	Legal          = 0b0000000000000000000000000000000000000000000000000000000000000010,
-	Web            = 0b0000000000000000000000000000000000000000000000000000000000000100,
-	Riot           = 0b0000000000000000000000000000000000000000000000000000000000001000,
-	Email          = 0b0000000000000000000000000000000000000000000000000000000000010000,
+	Display = 0b0000000000000000000000000000000000000000000000000000000000000001,
+	Legal = 0b0000000000000000000000000000000000000000000000000000000000000010,
+	Web = 0b0000000000000000000000000000000000000000000000000000000000000100,
+	Riot = 0b0000000000000000000000000000000000000000000000000000000000001000,
+	Email = 0b0000000000000000000000000000000000000000000000000000000000010000,
 	PgpFingerprint = 0b0000000000000000000000000000000000000000000000000000000000100000,
-	Image          = 0b0000000000000000000000000000000000000000000000000000000001000000,
-	Twitter        = 0b0000000000000000000000000000000000000000000000000000000010000000,
+	Image = 0b0000000000000000000000000000000000000000000000000000000001000000,
+	Twitter = 0b0000000000000000000000000000000000000000000000000000000010000000,
 }
 
 impl MaxEncodedLen for IdentityField {
@@ -202,7 +197,9 @@ impl Decode for IdentityFields {
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
-#[derive(CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound)]
+#[derive(
+	CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound,
+)]
 #[codec(mel_bound(FieldLimit: Get<u32>))]
 #[cfg_attr(test, derive(frame_support::DefaultNoBound))]
 pub struct IdentityInfo<FieldLimit: Get<u32>> {
@@ -277,23 +274,27 @@ pub struct Registration<
 	pub info: IdentityInfo<MaxAdditionalFields>,
 }
 
-impl <
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
-	MaxJudgements: Get<u32>,
-	MaxAdditionalFields: Get<u32>,
-> Registration<Balance, MaxJudgements, MaxAdditionalFields> {
+impl<
+		Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
+		MaxJudgements: Get<u32>,
+		MaxAdditionalFields: Get<u32>,
+	> Registration<Balance, MaxJudgements, MaxAdditionalFields>
+{
 	pub(crate) fn total_deposit(&self) -> Balance {
-		self.deposit + self.judgements.iter()
-			.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
-			.fold(Zero::zero(), |a, i| a + i)
+		self.deposit +
+			self.judgements
+				.iter()
+				.map(|(_, ref j)| if let Judgement::FeePaid(fee) = j { *fee } else { Zero::zero() })
+				.fold(Zero::zero(), |a, i| a + i)
 	}
 }
 
 impl<
-	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,
-	MaxJudgements: Get<u32>,
-	MaxAdditionalFields: Get<u32>,
-> Decode for Registration<Balance, MaxJudgements, MaxAdditionalFields> {
+		Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,
+		MaxJudgements: Get<u32>,
+		MaxAdditionalFields: Get<u32>,
+	> Decode for Registration<Balance, MaxJudgements, MaxAdditionalFields>
+{
 	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let (judgements, deposit, info) = Decode::decode(&mut AppendZerosInput::new(input))?;
 		Ok(Self { judgements, deposit, info })
@@ -304,7 +305,7 @@ impl<
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
-	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq
+	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq,
 > {
 	/// The account of the registrar.
 	pub account: AccountId,

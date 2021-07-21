@@ -17,58 +17,129 @@
 
 //! Primitive traits for the runtime arithmetic.
 
-use sp_std::{self, convert::{TryFrom, TryInto}};
 use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
-	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
-	CheckedShl, CheckedShr, checked_pow, Signed, Unsigned,
+	checked_pow, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedShl, CheckedShr,
+	CheckedSub, One, Signed, Unsigned, Zero,
 };
-use sp_std::ops::{
-	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
-	RemAssign, Shl, Shr
+use sp_std::{
+	self,
+	convert::{TryFrom, TryInto},
+	ops::{
+		Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Shl, Shr, Sub, SubAssign,
+	},
 };
 
 /// A meta trait for arithmetic type operations, regardless of any limitation on size.
 pub trait BaseArithmetic:
-	From<u8> +
-	Zero + One + IntegerSquareRoot +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
-	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
-	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
-	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
-	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
-	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
-{}
+	From<u8>
+	+ Zero
+	+ One
+	+ IntegerSquareRoot
+	+ Add<Self, Output = Self>
+	+ AddAssign<Self>
+	+ Sub<Self, Output = Self>
+	+ SubAssign<Self>
+	+ Mul<Self, Output = Self>
+	+ MulAssign<Self>
+	+ Div<Self, Output = Self>
+	+ DivAssign<Self>
+	+ Rem<Self, Output = Self>
+	+ RemAssign<Self>
+	+ Shl<u32, Output = Self>
+	+ Shr<u32, Output = Self>
+	+ CheckedShl
+	+ CheckedShr
+	+ CheckedAdd
+	+ CheckedSub
+	+ CheckedMul
+	+ CheckedDiv
+	+ Saturating
+	+ PartialOrd<Self>
+	+ Ord
+	+ Bounded
+	+ HasCompact
+	+ Sized
+	+ TryFrom<u8>
+	+ TryInto<u8>
+	+ TryFrom<u16>
+	+ TryInto<u16>
+	+ TryFrom<u32>
+	+ TryInto<u32>
+	+ TryFrom<u64>
+	+ TryInto<u64>
+	+ TryFrom<u128>
+	+ TryInto<u128>
+	+ TryFrom<usize>
+	+ TryInto<usize>
+	+ UniqueSaturatedFrom<u8>
+	+ UniqueSaturatedInto<u8>
+	+ UniqueSaturatedFrom<u16>
+	+ UniqueSaturatedInto<u16>
+	+ UniqueSaturatedFrom<u32>
+	+ UniqueSaturatedInto<u32>
+	+ UniqueSaturatedFrom<u64>
+	+ UniqueSaturatedInto<u64>
+	+ UniqueSaturatedFrom<u128>
+	+ UniqueSaturatedInto<u128>
+{
+}
 
-impl<T:
-	From<u8> +
-	Zero + One + IntegerSquareRoot +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
-	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
-	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
-	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
-	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
-	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
-> BaseArithmetic for T {}
+impl<
+		T: From<u8>
+			+ Zero
+			+ One
+			+ IntegerSquareRoot
+			+ Add<Self, Output = Self>
+			+ AddAssign<Self>
+			+ Sub<Self, Output = Self>
+			+ SubAssign<Self>
+			+ Mul<Self, Output = Self>
+			+ MulAssign<Self>
+			+ Div<Self, Output = Self>
+			+ DivAssign<Self>
+			+ Rem<Self, Output = Self>
+			+ RemAssign<Self>
+			+ Shl<u32, Output = Self>
+			+ Shr<u32, Output = Self>
+			+ CheckedShl
+			+ CheckedShr
+			+ CheckedAdd
+			+ CheckedSub
+			+ CheckedMul
+			+ CheckedDiv
+			+ Saturating
+			+ PartialOrd<Self>
+			+ Ord
+			+ Bounded
+			+ HasCompact
+			+ Sized
+			+ TryFrom<u8>
+			+ TryInto<u8>
+			+ TryFrom<u16>
+			+ TryInto<u16>
+			+ TryFrom<u32>
+			+ TryInto<u32>
+			+ TryFrom<u64>
+			+ TryInto<u64>
+			+ TryFrom<u128>
+			+ TryInto<u128>
+			+ TryFrom<usize>
+			+ TryInto<usize>
+			+ UniqueSaturatedFrom<u8>
+			+ UniqueSaturatedInto<u8>
+			+ UniqueSaturatedFrom<u16>
+			+ UniqueSaturatedInto<u16>
+			+ UniqueSaturatedFrom<u32>
+			+ UniqueSaturatedInto<u32>
+			+ UniqueSaturatedFrom<u64>
+			+ UniqueSaturatedInto<u64>
+			+ UniqueSaturatedFrom<u128>
+			+ UniqueSaturatedInto<u128>,
+	> BaseArithmetic for T
+{
+}
 
 /// A meta trait for arithmetic.
 ///
@@ -129,35 +200,49 @@ pub trait Saturating {
 	fn saturating_pow(self, exp: usize) -> Self;
 
 	/// Increment self by one, saturating.
-	fn saturating_inc(&mut self) where Self: One {
+	fn saturating_inc(&mut self)
+	where
+		Self: One,
+	{
 		let mut o = Self::one();
 		sp_std::mem::swap(&mut o, self);
 		*self = o.saturating_add(One::one());
 	}
 
 	/// Decrement self by one, saturating at zero.
-	fn saturating_dec(&mut self) where Self: One {
+	fn saturating_dec(&mut self)
+	where
+		Self: One,
+	{
 		let mut o = Self::one();
 		sp_std::mem::swap(&mut o, self);
 		*self = o.saturating_sub(One::one());
 	}
 
 	/// Increment self by some `amount`, saturating.
-	fn saturating_accrue(&mut self, amount: Self) where Self: One {
+	fn saturating_accrue(&mut self, amount: Self)
+	where
+		Self: One,
+	{
 		let mut o = Self::one();
 		sp_std::mem::swap(&mut o, self);
 		*self = o.saturating_add(amount);
 	}
 
 	/// Decrement self by some `amount`, saturating at zero.
-	fn saturating_reduce(&mut self, amount: Self) where Self: One {
+	fn saturating_reduce(&mut self, amount: Self)
+	where
+		Self: One,
+	{
 		let mut o = Self::one();
 		sp_std::mem::swap(&mut o, self);
 		*self = o.saturating_sub(amount);
 	}
 }
 
-impl<T: Clone + Zero + One + PartialOrd + CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
+impl<T: Clone + Zero + One + PartialOrd + CheckedMul + Bounded + num_traits::Saturating> Saturating
+	for T
+{
 	fn saturating_add(self, o: Self) -> Self {
 		<Self as num_traits::Saturating>::saturating_add(self, o)
 	}
@@ -167,26 +252,24 @@ impl<T: Clone + Zero + One + PartialOrd + CheckedMul + Bounded + num_traits::Sat
 	}
 
 	fn saturating_mul(self, o: Self) -> Self {
-		self.checked_mul(&o)
-			.unwrap_or_else(||
-				if (self < T::zero()) != (o < T::zero()) {
-					Bounded::min_value()
-				} else {
-					Bounded::max_value()
-				}
-			)
+		self.checked_mul(&o).unwrap_or_else(|| {
+			if (self < T::zero()) != (o < T::zero()) {
+				Bounded::min_value()
+			} else {
+				Bounded::max_value()
+			}
+		})
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
 		let neg = self < T::zero() && exp % 2 != 0;
-		checked_pow(self, exp)
-			.unwrap_or_else(||
-				if neg {
-					Bounded::min_value()
-				} else {
-					Bounded::max_value()
-				}
-			)
+		checked_pow(self, exp).unwrap_or_else(|| {
+			if neg {
+				Bounded::min_value()
+			} else {
+				Bounded::max_value()
+			}
+		})
 	}
 }
 
@@ -199,7 +282,10 @@ pub trait SaturatedConversion {
 	/// This just uses `UniqueSaturatedFrom` internally but with this
 	/// variant you can provide the destination type using turbofish syntax
 	/// in case Rust happens not to assume the correct type.
-	fn saturated_from<T>(t: T) -> Self where Self: UniqueSaturatedFrom<T> {
+	fn saturated_from<T>(t: T) -> Self
+	where
+		Self: UniqueSaturatedFrom<T>,
+	{
 		<Self as UniqueSaturatedFrom<T>>::unique_saturated_from(t)
 	}
 
@@ -208,7 +294,10 @@ pub trait SaturatedConversion {
 	/// This just uses `UniqueSaturatedInto` internally but with this
 	/// variant you can provide the destination type using turbofish syntax
 	/// in case Rust happens not to assume the correct type.
-	fn saturated_into<T>(self) -> T where Self: UniqueSaturatedInto<T> {
+	fn saturated_into<T>(self) -> T
+	where
+		Self: UniqueSaturatedInto<T>,
+	{
 		<Self as UniqueSaturatedInto<T>>::unique_saturated_into(self)
 	}
 }

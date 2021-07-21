@@ -18,8 +18,8 @@
 //! Migrations to version [`4.0.0`], as denoted by the changelog.
 
 use frame_support::{
+	traits::{Get, GetPalletVersion, PalletVersion},
 	weights::Weight,
-	traits::{GetPalletVersion, PalletVersion, Get},
 };
 
 /// The old prefix.
@@ -32,17 +32,15 @@ pub const OLD_PREFIX: &[u8] = b"PhragmenElection";
 /// `<Runtime as frame_system::Config>::PalletInfo::name::<ElectionsPhragmenPallet>`.
 ///
 /// The old storage prefix, `PhragmenElection` is hardcoded in the migration code.
-pub fn migrate<
-	T: frame_system::Config,
-	P: GetPalletVersion,
-	N: AsRef<str>,
->(new_pallet_name: N) -> Weight {
+pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
+	new_pallet_name: N,
+) -> Weight {
 	if new_pallet_name.as_ref().as_bytes() == OLD_PREFIX {
 		log::info!(
 			target: "runtime::elections-phragmen",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
-		return 0;
+		return 0
 	}
 	let maybe_storage_version = <P as GetPalletVersion>::storage_version();
 	log::info!(
@@ -59,7 +57,7 @@ pub fn migrate<
 				new_pallet_name.as_ref().as_bytes(),
 			);
 			<T as frame_system::Config>::BlockWeights::get().max_block
-		}
+		},
 		_ => {
 			log::warn!(
 				target: "runtime::elections-phragmen",
@@ -103,7 +101,7 @@ pub fn pre_migration<P: GetPalletVersion, N: AsRef<str>>(new: N) {
 /// [`frame_support::traits::OnRuntimeUpgrade::post_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn post_migration<P : GetPalletVersion>() {
+pub fn post_migration<P: GetPalletVersion>() {
 	log::info!("post-migration elections-phragmen");
 	// ensure we've been updated to v4 by the automatic write of crate version -> storage version.
 	assert!(<P as GetPalletVersion>::storage_version().unwrap().major == 4);

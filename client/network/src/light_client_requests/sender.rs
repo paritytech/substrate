@@ -29,28 +29,21 @@
 //! 3. Wait for the response and forward the response via the [`futures::channel::oneshot::Sender`] provided earlier
 //! with [`LightClientRequestSender::request`](sender::LightClientRequestSender::request).
 
-use codec::{self, Encode, Decode};
 use crate::{
 	config::ProtocolId,
-	protocol::message::{BlockAttributes},
-	schema,
-	PeerId,
+	protocol::message::BlockAttributes,
+	request_responses::{OutboundFailure, RequestFailure},
+	schema, PeerId,
 };
-use crate::request_responses::{RequestFailure, OutboundFailure};
-use futures::{channel::{oneshot}, future::BoxFuture, prelude::*, stream::FuturesUnordered};
+use codec::{self, Decode, Encode};
+use futures::{channel::oneshot, future::BoxFuture, prelude::*, stream::FuturesUnordered};
 use prost::Message;
-use sc_client_api::{
-	light::{
-		self, RemoteBodyRequest,
-	}
-};
+use sc_client_api::light::{self, RemoteBodyRequest};
 use sc_peerset::ReputationChange;
-use sp_blockchain::{Error as ClientError};
-use sp_runtime::{
-	traits::{Block, Header, NumberFor},
-};
+use sp_blockchain::Error as ClientError;
+use sp_runtime::traits::{Block, Header, NumberFor};
 use std::{
-	collections::{BTreeMap, VecDeque, HashMap},
+	collections::{BTreeMap, HashMap, VecDeque},
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
@@ -60,9 +53,11 @@ mod rep {
 	use super::*;
 
 	/// Reputation change for a peer when a request timed out.
-	pub const TIMEOUT: ReputationChange = ReputationChange::new(-(1 << 8), "light client request timeout");
+	pub const TIMEOUT: ReputationChange =
+		ReputationChange::new(-(1 << 8), "light client request timeout");
 	/// Reputation change for a peer when a request is refused.
-	pub const REFUSED: ReputationChange = ReputationChange::new(-(1 << 8), "light client request refused");
+	pub const REFUSED: ReputationChange =
+		ReputationChange::new(-(1 << 8), "light client request refused");
 }
 
 /// Configuration options for [`LightClientRequestSender`].
@@ -95,9 +90,12 @@ pub struct LightClientRequestSender<B: Block> {
 	/// Pending (local) requests.
 	pending_requests: VecDeque<PendingRequest<B>>,
 	/// Requests on their way to remote peers.
-	sent_requests: FuturesUnordered<BoxFuture<
-			'static, (SentRequest<B>, Result<Result<Vec<u8>, RequestFailure>, oneshot::Canceled>),
-		>>,
+	sent_requests: FuturesUnordered<
+		BoxFuture<
+			'static,
+			(SentRequest<B>, Result<Result<Vec<u8>, RequestFailure>, oneshot::Canceled>),
+		>,
+	>,
 	/// Handle to use for reporting misbehaviour of peers.
 	peerset: sc_peerset::PeersetHandle,
 }
@@ -121,11 +119,7 @@ impl<B: Block> PendingRequest<B> {
 	}
 
 	fn into_sent(self, peer_id: PeerId) -> SentRequest<B> {
-		SentRequest {
-			attempts_left: self.attempts_left,
-			request: self.request,
-			peer: peer_id,
-		}
+		SentRequest { attempts_left: self.attempts_left, request: self.request, peer: peer_id }
 	}
 }
 
@@ -142,10 +136,7 @@ struct SentRequest<B: Block> {
 
 impl<B: Block> SentRequest<B> {
 	fn into_pending(self) -> PendingRequest<B> {
-		PendingRequest {
-			attempts_left: self.attempts_left,
-			request: self.request,
-		}
+		PendingRequest { attempts_left: self.attempts_left, request: self.request }
 	}
 }
 
@@ -206,7 +197,7 @@ where
 		peer: PeerId,
 		request: &Request<B>,
 		response: Response,
-	) -> Result<Reply<B>, Error>	{
+	) -> Result<Reply<B>, Error> {
 		log::trace!("response from {}", peer);
 		match response {
 			Response::Light(r) => self.on_response_light(request, r),
@@ -222,27 +213,26 @@ where
 		use schema::v1::light::response::Response;
 		match response.response {
 			Some(Response::RemoteCallResponse(response)) =>
-				if let Request::Call { request , .. } = request {
+				if let Request::Call { request, .. } = request {
 					let proof = Decode::decode(&mut response.proof.as_ref())?;
 					let reply = self.checker.check_execution_proof(request, proof)?;
 					Ok(Reply::VecU8(reply))
 				} else {
 					Err(Error::UnexpectedResponse)
-				}
-			Some(Response::RemoteReadResponse(response)) =>
-				match request {
-					Request::Read { request, .. } => {
-						let proof = Decode::decode(&mut response.proof.as_ref())?;
-						let reply = self.checker.check_read_proof(&request, proof)?;
-						Ok(Reply::MapVecU8OptVecU8(reply))
-					}
-					Request::ReadChild { request, .. } => {
-						let proof = Decode::decode(&mut response.proof.as_ref())?;
-						let reply = self.checker.check_read_child_proof(&request, proof)?;
-						Ok(Reply::MapVecU8OptVecU8(reply))
-					}
-					_ => Err(Error::UnexpectedResponse)
-				}
+				},
+			Some(Response::RemoteReadResponse(response)) => match request {
+				Request::Read { request, .. } => {
+					let proof = Decode::decode(&mut response.proof.as_ref())?;
+					let reply = self.checker.check_read_proof(&request, proof)?;
+					Ok(Reply::MapVecU8OptVecU8(reply))
+				},
+				Request::ReadChild { request, .. } => {
+					let proof = Decode::decode(&mut response.proof.as_ref())?;
+					let reply = self.checker.check_read_child_proof(&request, proof)?;
+					Ok(Reply::MapVecU8OptVecU8(reply))
+				},
+				_ => Err(Error::UnexpectedResponse),
+			},
 			Some(Response::RemoteChangesResponse(response)) =>
 				if let Request::Changes { request, .. } = request {
 					let max_block = Decode::decode(&mut response.max.as_ref())?;
@@ -256,31 +246,33 @@ where
 						}
 						r
 					};
-					let reply = self.checker.check_changes_proof(&request, light::ChangesProof {
-						max_block,
-						proof: response.proof,
-						roots,
-						roots_proof,
-					})?;
+					let reply = self.checker.check_changes_proof(
+						&request,
+						light::ChangesProof {
+							max_block,
+							proof: response.proof,
+							roots,
+							roots_proof,
+						},
+					)?;
 					Ok(Reply::VecNumberU32(reply))
 				} else {
 					Err(Error::UnexpectedResponse)
-				}
+				},
 			Some(Response::RemoteHeaderResponse(response)) =>
 				if let Request::Header { request, .. } = request {
-					let header =
-						if response.header.is_empty() {
-							None
-						} else {
-							Some(Decode::decode(&mut response.header.as_ref())?)
-						};
+					let header = if response.header.is_empty() {
+						None
+					} else {
+						Some(Decode::decode(&mut response.header.as_ref())?)
+					};
 					let proof = Decode::decode(&mut response.proof.as_ref())?;
 					let reply = self.checker.check_header_proof(&request, header, proof)?;
 					Ok(Reply::Header(reply))
 				} else {
 					Err(Error::UnexpectedResponse)
-				}
-			None => Err(Error::UnexpectedResponse)
+				},
+			None => Err(Error::UnexpectedResponse),
 		}
 	}
 
@@ -289,10 +281,10 @@ where
 		request: &Request<B>,
 		response: schema::v1::BlockResponse,
 	) -> Result<Reply<B>, Error> {
-		let request = if let Request::Body { request , .. } = &request {
+		let request = if let Request::Body { request, .. } = &request {
 			request
 		} else {
-			return Err(Error::UnexpectedResponse);
+			return Err(Error::UnexpectedResponse)
 		};
 
 		let body: Vec<_> = match response.blocks.into_iter().next() {
@@ -300,7 +292,8 @@ where
 			None => return Err(Error::UnexpectedResponse),
 		};
 
-		let body = body.into_iter()
+		let body = body
+			.into_iter()
 			.map(|extrinsic| B::Extrinsic::decode(&mut &extrinsic[..]))
 			.collect::<Result<_, _>>()?;
 
@@ -323,13 +316,14 @@ where
 	}
 }
 
-
 impl<B: Block> Stream for LightClientRequestSender<B> {
 	type Item = OutEvent;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		// If we have received responses to previously sent requests, check them and pass them on.
-		while let Poll::Ready(Some((sent_request, request_result))) = self.sent_requests.poll_next_unpin(cx) {
+		while let Poll::Ready(Some((sent_request, request_result))) =
+			self.sent_requests.poll_next_unpin(cx)
+		{
 			if let Some(info) = self.peers.get_mut(&sent_request.peer) {
 				if info.status != PeerStatus::Busy {
 					// If we get here, something is wrong with our internal handling of peer status
@@ -347,30 +341,38 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 				Err(oneshot::Canceled) => {
 					log::debug!("Oneshot for request to peer {} was canceled.", sent_request.peer);
 					self.remove_peer(sent_request.peer);
-					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("no response from peer"));
+					self.peerset.report_peer(
+						sent_request.peer,
+						ReputationChange::new_fatal("no response from peer"),
+					);
 					self.pending_requests.push_back(sent_request.into_pending());
-					continue;
-				}
+					continue
+				},
 			};
 
 			let decoded_request_result = request_result.map(|response| {
 				if sent_request.request.is_block_request() {
-					schema::v1::BlockResponse::decode(&response[..])
-						.map(|r| Response::Block(r))
+					schema::v1::BlockResponse::decode(&response[..]).map(|r| Response::Block(r))
 				} else {
-					schema::v1::light::Response::decode(&response[..])
-						.map(|r| Response::Light(r))
+					schema::v1::light::Response::decode(&response[..]).map(|r| Response::Light(r))
 				}
 			});
 
 			let response = match decoded_request_result {
 				Ok(Ok(response)) => response,
 				Ok(Err(e)) => {
-					log::debug!("Failed to decode response from peer {}: {:?}.", sent_request.peer, e);
+					log::debug!(
+						"Failed to decode response from peer {}: {:?}.",
+						sent_request.peer,
+						e
+					);
 					self.remove_peer(sent_request.peer);
-					self.peerset.report_peer(sent_request.peer, ReputationChange::new_fatal("invalid response from peer"));
+					self.peerset.report_peer(
+						sent_request.peer,
+						ReputationChange::new_fatal("invalid response from peer"),
+					);
 					self.pending_requests.push_back(sent_request.into_pending());
-					continue;
+					continue
 				},
 				Err(e) => {
 					log::debug!("Request to peer {} failed with {:?}.", sent_request.peer, e);
@@ -379,22 +381,19 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 						RequestFailure::NotConnected => {
 							self.remove_peer(sent_request.peer);
 							self.pending_requests.push_back(sent_request.into_pending());
-						}
+						},
 						RequestFailure::UnknownProtocol => {
 							debug_assert!(
 								false,
 								"Light client and block request protocol should be known when \
 								 sending requests.",
 							);
-						}
+						},
 						RequestFailure::Refused => {
 							self.remove_peer(sent_request.peer);
-							self.peerset.report_peer(
-								sent_request.peer,
-								rep::REFUSED,
-							);
+							self.peerset.report_peer(sent_request.peer, rep::REFUSED);
 							self.pending_requests.push_back(sent_request.into_pending());
-						}
+						},
 						RequestFailure::Obsolete => {
 							debug_assert!(
 								false,
@@ -402,13 +401,10 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 								 response receiver.",
 							);
 							self.pending_requests.push_back(sent_request.into_pending());
-						}
+						},
 						RequestFailure::Network(OutboundFailure::Timeout) => {
 							self.remove_peer(sent_request.peer);
-							self.peerset.report_peer(
-								sent_request.peer,
-								rep::TIMEOUT,
-							);
+							self.peerset.report_peer(sent_request.peer, rep::TIMEOUT);
 							self.pending_requests.push_back(sent_request.into_pending());
 						},
 						RequestFailure::Network(OutboundFailure::UnsupportedProtocols) => {
@@ -420,31 +416,27 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 								),
 							);
 							self.pending_requests.push_back(sent_request.into_pending());
-						}
+						},
 						RequestFailure::Network(OutboundFailure::DialFailure) => {
 							self.remove_peer(sent_request.peer);
 							self.peerset.report_peer(
 								sent_request.peer,
-								ReputationChange::new_fatal(
-									"failed to dial peer",
-								),
+								ReputationChange::new_fatal("failed to dial peer"),
 							);
 							self.pending_requests.push_back(sent_request.into_pending());
-						}
+						},
 						RequestFailure::Network(OutboundFailure::ConnectionClosed) => {
 							self.remove_peer(sent_request.peer);
 							self.peerset.report_peer(
 								sent_request.peer,
-								ReputationChange::new_fatal(
-									"connection to peer closed",
-								),
+								ReputationChange::new_fatal("connection to peer closed"),
 							);
 							self.pending_requests.push_back(sent_request.into_pending());
-						}
+						},
 					}
 
-					continue;
-				}
+					continue
+				},
 			};
 
 			match self.on_response(sent_request.peer, &sent_request.request, response) {
@@ -454,23 +446,23 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					self.remove_peer(sent_request.peer);
 					self.peerset.report_peer(
 						sent_request.peer,
-						ReputationChange::new_fatal(
-							"unexpected response from peer",
-						),
+						ReputationChange::new_fatal("unexpected response from peer"),
 					);
 					self.pending_requests.push_back(sent_request.into_pending());
-				}
+				},
 				Err(other) => {
-					log::debug!("error handling response from peer {}: {}", sent_request.peer, other);
+					log::debug!(
+						"error handling response from peer {}: {}",
+						sent_request.peer,
+						other
+					);
 					self.remove_peer(sent_request.peer);
 					self.peerset.report_peer(
 						sent_request.peer,
-						ReputationChange::new_fatal(
-							"invalid response from peer",
-						),
+						ReputationChange::new_fatal("invalid response from peer"),
 					);
 					self.pending_requests.push_back(sent_request.into_pending())
-				}
+				},
 			}
 		}
 
@@ -497,7 +489,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 							peer = Some((*peer_id, peer_info));
 							break
 						},
-						_ => peer = Some((*peer_id, peer_info))
+						_ => peer = Some((*peer_id, peer_info)),
 					}
 				}
 			}
@@ -509,8 +501,8 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					self.pending_requests.push_front(pending_request);
 					log::debug!("No peer available to send request to.");
 
-					break;
-				}
+					break
+				},
 			};
 
 			let request_bytes = match pending_request.request.serialize_request() {
@@ -519,7 +511,7 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 					log::debug!("failed to serialize request: {}", error);
 					pending_request.request.return_reply(Err(ClientError::RemoteFetchFailed));
 					continue
-				}
+				},
 			};
 
 			let (tx, rx) = oneshot::channel();
@@ -528,16 +520,15 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 
 			pending_request.attempts_left -= 1;
 
-			self.sent_requests.push(async move {
-				(pending_request.into_sent(peer_id), rx.await)
-			}.boxed());
+			self.sent_requests
+				.push(async move { (pending_request.into_sent(peer_id), rx.await) }.boxed());
 
 			return Poll::Ready(Some(OutEvent::SendRequest {
 				target: peer_id,
 				request: request_bytes,
 				pending_response: tx,
 				protocol_name: protocol,
-			}));
+			}))
 		}
 
 		Poll::Pending
@@ -557,7 +548,7 @@ pub enum OutEvent {
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		/// The name of the protocol to use to send the request.
 		protocol_name: String,
-	}
+	},
 }
 
 /// Incoming response from remote.
@@ -592,7 +583,6 @@ enum Error {
 }
 
 /// The data to send back to the light client over the oneshot channel.
-//
 // It is unified here in order to be able to return it as a function
 // result instead of delivering it to the client as a side effect of
 // response processing.
@@ -605,7 +595,6 @@ enum Reply<B: Block> {
 	Extrinsics(Vec<B::Extrinsic>),
 }
 
-
 /// Information we have about some peer.
 #[derive(Debug)]
 struct PeerInfo<B: Block> {
@@ -615,10 +604,7 @@ struct PeerInfo<B: Block> {
 
 impl<B: Block> Default for PeerInfo<B> {
 	fn default() -> Self {
-		PeerInfo {
-			best_block: None,
-			status: PeerStatus::Idle,
-		}
+		PeerInfo { best_block: None, status: PeerStatus::Idle }
 	}
 }
 
@@ -635,7 +621,6 @@ enum PeerStatus {
 ///
 /// The associated `oneshot::Sender` will be used to convey the result of
 /// their request back to them (cf. `Reply`).
-//
 // This is modeled after light_dispatch.rs's `RequestData` which is not
 // used because we currently only support a subset of those.
 #[derive(Debug)]
@@ -645,43 +630,43 @@ pub enum Request<B: Block> {
 		/// Request.
 		request: RemoteBodyRequest<B::Header>,
 		/// [`oneshot::Sender`] to return response.
-		sender: oneshot::Sender<Result<Vec<B::Extrinsic>, ClientError>>
+		sender: oneshot::Sender<Result<Vec<B::Extrinsic>, ClientError>>,
 	},
 	/// Remote header request.
 	Header {
 		/// Request.
 		request: light::RemoteHeaderRequest<B::Header>,
 		/// [`oneshot::Sender`] to return response.
-		sender: oneshot::Sender<Result<B::Header, ClientError>>
+		sender: oneshot::Sender<Result<B::Header, ClientError>>,
 	},
 	/// Remote read request.
 	Read {
 		/// Request.
 		request: light::RemoteReadRequest<B::Header>,
 		/// [`oneshot::Sender`] to return response.
-		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
+		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>,
 	},
 	/// Remote read child request.
 	ReadChild {
 		/// Request.
 		request: light::RemoteReadChildRequest<B::Header>,
 		/// [`oneshot::Sender`] to return response.
-		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
+		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>,
 	},
 	/// Remote call request.
 	Call {
 		/// Request.
 		request: light::RemoteCallRequest<B::Header>,
 		/// [`oneshot::Sender`] to return response.
-		sender: oneshot::Sender<Result<Vec<u8>, ClientError>>
+		sender: oneshot::Sender<Result<Vec<u8>, ClientError>>,
 	},
 	/// Remote changes request.
 	Changes {
 		/// Request.
 		request: light::RemoteChangesRequest<B::Header>,
 		/// [`oneshot::Sender`] to return response.
-		sender: oneshot::Sender<Result<Vec<(NumberFor<B>, u32)>, ClientError>>
-	}
+		sender: oneshot::Sender<Result<Vec<(NumberFor<B>, u32)>, ClientError>>,
+	},
 }
 
 impl<B: Block> Request<B> {
@@ -728,19 +713,19 @@ impl<B: Block> Request<B> {
 
 				let mut buf = Vec::with_capacity(rq.encoded_len());
 				rq.encode(&mut buf)?;
-				return Ok(buf);
-			}
+				return Ok(buf)
+			},
 			Request::Header { request, .. } => {
 				let r = schema::v1::light::RemoteHeaderRequest { block: request.block.encode() };
 				schema::v1::light::request::Request::RemoteHeaderRequest(r)
-			}
+			},
 			Request::Read { request, .. } => {
 				let r = schema::v1::light::RemoteReadRequest {
 					block: request.block.encode(),
 					keys: request.keys.clone(),
 				};
 				schema::v1::light::request::Request::RemoteReadRequest(r)
-			}
+			},
 			Request::ReadChild { request, .. } => {
 				let r = schema::v1::light::RemoteReadChildRequest {
 					block: request.block.encode(),
@@ -748,7 +733,7 @@ impl<B: Block> Request<B> {
 					keys: request.keys.clone(),
 				};
 				schema::v1::light::request::Request::RemoteReadChildRequest(r)
-			}
+			},
 			Request::Call { request, .. } => {
 				let r = schema::v1::light::RemoteCallRequest {
 					block: request.block.encode(),
@@ -756,19 +741,22 @@ impl<B: Block> Request<B> {
 					data: request.call_data.clone(),
 				};
 				schema::v1::light::request::Request::RemoteCallRequest(r)
-			}
+			},
 			Request::Changes { request, .. } => {
 				let r = schema::v1::light::RemoteChangesRequest {
 					first: request.first_block.1.encode(),
 					last: request.last_block.1.encode(),
 					min: request.tries_roots.1.encode(),
 					max: request.max_block.1.encode(),
-					storage_key: request.storage_key.clone().map(|s| s.into_inner())
+					storage_key: request
+						.storage_key
+						.clone()
+						.map(|s| s.into_inner())
 						.unwrap_or_default(),
 					key: request.key.clone(),
 				};
 				schema::v1::light::request::Request::RemoteChangesRequest(r)
-			}
+			},
 		};
 
 		let rq = schema::v1::light::Request { request: Some(request) };
@@ -786,32 +774,35 @@ impl<B: Block> Request<B> {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::Extrinsics(x)) => send(Ok(x), sender),
 				reply => log::error!("invalid reply for body request: {:?}, {:?}", reply, request),
-			}
+			},
 			Request::Header { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::Header(x)) => send(Ok(x), sender),
-				reply => log::error!("invalid reply for header request: {:?}, {:?}", reply, request),
-			}
+				reply =>
+					log::error!("invalid reply for header request: {:?}, {:?}", reply, request),
+			},
 			Request::Read { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
 				reply => log::error!("invalid reply for read request: {:?}, {:?}", reply, request),
-			}
+			},
 			Request::ReadChild { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
-				reply => log::error!("invalid reply for read child request: {:?}, {:?}", reply, request),
-			}
+				reply =>
+					log::error!("invalid reply for read child request: {:?}, {:?}", reply, request),
+			},
 			Request::Call { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::VecU8(x)) => send(Ok(x), sender),
 				reply => log::error!("invalid reply for call request: {:?}, {:?}", reply, request),
-			}
+			},
 			Request::Changes { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::VecNumberU32(x)) => send(Ok(x), sender),
-				reply => log::error!("invalid reply for changes request: {:?}, {:?}", reply, request),
-			}
+				reply =>
+					log::error!("invalid reply for changes request: {:?}, {:?}", reply, request),
+			},
 		}
 	}
 }
@@ -819,19 +810,17 @@ impl<B: Block> Request<B> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::light_client_requests::tests::{DummyFetchChecker, protocol_id, peerset, dummy_header};
-	use crate::request_responses::OutboundFailure;
+	use crate::{
+		light_client_requests::tests::{dummy_header, peerset, protocol_id, DummyFetchChecker},
+		request_responses::OutboundFailure,
+	};
 
 	use assert_matches::assert_matches;
-	use futures::channel::oneshot;
-	use futures::executor::block_on;
-	use futures::poll;
+	use futures::{channel::oneshot, executor::block_on, poll};
 	use sc_client_api::StorageProof;
 	use sp_core::storage::ChildInfo;
-	use sp_runtime::generic::Header;
-	use sp_runtime::traits::BlakeTwo256;
-	use std::collections::HashSet;
-	use std::iter::FromIterator;
+	use sp_runtime::{generic::Header, traits::BlakeTwo256};
+	use std::{collections::HashSet, iter::FromIterator};
 
 	fn empty_proof() -> Vec<u8> {
 		StorageProof::empty().encode()
@@ -843,10 +832,7 @@ mod tests {
 		let (_peer_set, peer_set_handle) = peerset();
 		let mut sender = LightClientRequestSender::<Block>::new(
 			&protocol_id(),
-			Arc::new(DummyFetchChecker {
-				ok: true,
-				_mark: std::marker::PhantomData,
-			}),
+			Arc::new(DummyFetchChecker { ok: true, _mark: std::marker::PhantomData }),
 			peer_set_handle,
 		);
 
@@ -864,17 +850,15 @@ mod tests {
 	fn body_request_fields_encoded_properly() {
 		let (sender, _receiver) = oneshot::channel();
 		let request = Request::<Block>::Body {
-			request: RemoteBodyRequest {
-				header: dummy_header(),
-				retry_count: None,
-			},
+			request: RemoteBodyRequest { header: dummy_header(), retry_count: None },
 			sender,
 		};
 		let serialized_request = request.serialize_request().unwrap();
-		let deserialized_request = schema::v1::BlockRequest::decode(&serialized_request[..]).unwrap();
+		let deserialized_request =
+			schema::v1::BlockRequest::decode(&serialized_request[..]).unwrap();
 		assert!(BlockAttributes::from_be_u32(deserialized_request.fields)
-				.unwrap()
-				.contains(BlockAttributes::BODY));
+			.unwrap()
+			.contains(BlockAttributes::BODY));
 	}
 
 	#[test]
@@ -916,29 +900,26 @@ mod tests {
 		sender.request(Request::Call { request, sender: chan.0 }).unwrap();
 		assert_eq!(1, sender.pending_requests.len(), "Expect one pending request.");
 
-		let OutEvent::SendRequest { target, pending_response, .. } = block_on(sender.next()).unwrap();
-		assert!(
-			target == peer0 || target == peer1,
-			"Expect request to originate from known peer.",
-		);
+		let OutEvent::SendRequest { target, pending_response, .. } =
+			block_on(sender.next()).unwrap();
+		assert!(target == peer0 || target == peer1, "Expect request to originate from known peer.",);
 
 		// And we should have one busy peer.
 		assert!({
-			let (idle, busy): (Vec<_>, Vec<_>) = sender
-				.peers
-				.iter()
-				.partition(|(_, info)| info.status == PeerStatus::Idle);
-			idle.len() == 1
-				&& busy.len() == 1
-				&& (idle[0].0 == &peer0 || busy[0].0 == &peer0)
-				&& (idle[0].0 == &peer1 || busy[0].0 == &peer1)
+			let (idle, busy): (Vec<_>, Vec<_>) =
+				sender.peers.iter().partition(|(_, info)| info.status == PeerStatus::Idle);
+			idle.len() == 1 &&
+				busy.len() == 1 && (idle[0].0 == &peer0 || busy[0].0 == &peer0) &&
+				(idle[0].0 == &peer1 || busy[0].0 == &peer1)
 		});
 
 		assert_eq!(0, sender.pending_requests.len(), "Expect no pending request.");
 		assert_eq!(1, sender.sent_requests.len(), "Expect one request to be sent.");
 
 		// Report first attempt as timed out.
-		pending_response.send(Err(RequestFailure::Network(OutboundFailure::Timeout))).unwrap();
+		pending_response
+			.send(Err(RequestFailure::Network(OutboundFailure::Timeout)))
+			.unwrap();
 
 		// Expect a new request to be issued.
 		let OutEvent::SendRequest { pending_response, .. } = block_on(sender.next()).unwrap();
@@ -948,13 +929,17 @@ mod tests {
 		assert_eq!(1, sender.sent_requests.len(), "Expect new request to be issued.");
 
 		// Report second attempt as timed out.
-		pending_response.send(Err(RequestFailure::Network(OutboundFailure::Timeout))).unwrap();
+		pending_response
+			.send(Err(RequestFailure::Network(OutboundFailure::Timeout)))
+			.unwrap();
 		assert_matches!(
-			block_on(async { poll!(sender.next()) }), Poll::Pending,
+			block_on(async { poll!(sender.next()) }),
+			Poll::Pending,
 			"Expect sender to not issue another attempt.",
 		);
 		assert_matches!(
-			block_on(chan.1).unwrap(), Err(ClientError::RemoteFetchFailed),
+			block_on(chan.1).unwrap(),
+			Err(ClientError::RemoteFetchFailed),
 			"Expect request failure to be reported.",
 		);
 		assert_eq!(0, sender.peers.len(), "Expect no peer to be left");
@@ -988,12 +973,7 @@ mod tests {
 			call_data: vec![],
 			retry_count: Some(1),
 		};
-		sender
-			.request(Request::Call {
-				request,
-				sender: chan.0,
-			})
-			.unwrap();
+		sender.request(Request::Call { request, sender: chan.0 }).unwrap();
 
 		assert_eq!(1, sender.pending_requests.len(), "Expect one pending request.");
 		assert_eq!(0, sender.sent_requests.len(), "Expect zero sent requests.");
@@ -1003,9 +983,7 @@ mod tests {
 		assert_eq!(1, sender.sent_requests.len(), "Expect one sent request.");
 
 		let response = {
-			let r = schema::v1::light::RemoteCallResponse {
-				proof: empty_proof(),
-			};
+			let r = schema::v1::light::RemoteCallResponse { proof: empty_proof() };
 			let response = schema::v1::light::Response {
 				response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
 			};
@@ -1017,7 +995,8 @@ mod tests {
 		pending_response.send(Ok(response)).unwrap();
 
 		assert_matches!(
-			block_on(async { poll!(sender.next()) }), Poll::Pending,
+			block_on(async { poll!(sender.next()) }),
+			Poll::Pending,
 			"Expect sender to not issue another attempt, given that there is no peer left.",
 		);
 
@@ -1050,12 +1029,7 @@ mod tests {
 			call_data: vec![],
 			retry_count: Some(1),
 		};
-		sender
-			.request(Request::Call {
-				request,
-				sender: chan.0,
-			})
-			.unwrap();
+		sender.request(Request::Call { request, sender: chan.0 }).unwrap();
 
 		assert_eq!(1, sender.pending_requests.len());
 		assert_eq!(0, sender.sent_requests.len());
@@ -1064,9 +1038,7 @@ mod tests {
 		assert_eq!(1, sender.sent_requests.len(), "Expect one sent request.");
 
 		let response = {
-			let r = schema::v1::light::RemoteReadResponse {
-				proof: empty_proof(),
-			}; // Not a RemoteCallResponse!
+			let r = schema::v1::light::RemoteReadResponse { proof: empty_proof() }; // Not a RemoteCallResponse!
 			let response = schema::v1::light::Response {
 				response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
 			};
@@ -1077,7 +1049,8 @@ mod tests {
 
 		pending_response.send(Ok(response)).unwrap();
 		assert_matches!(
-			block_on(async { poll!(sender.next()) }), Poll::Pending,
+			block_on(async { poll!(sender.next()) }),
+			Poll::Pending,
 			"Expect sender to not issue another attempt, given that there is no peer left.",
 		);
 
@@ -1114,12 +1087,7 @@ mod tests {
 			call_data: vec![],
 			retry_count: Some(3), // Attempt up to three retries.
 		};
-		sender
-			.request(Request::Call {
-				request,
-				sender: chan.0,
-			})
-			.unwrap();
+		sender.request(Request::Call { request, sender: chan.0 }).unwrap();
 
 		assert_eq!(1, sender.pending_requests.len());
 		assert_eq!(0, sender.sent_requests.len());
@@ -1132,9 +1100,7 @@ mod tests {
 		for (i, _peer) in peers.iter().enumerate() {
 			// Construct an invalid response
 			let response = {
-				let r = schema::v1::light::RemoteCallResponse {
-					proof: empty_proof(),
-				};
+				let r = schema::v1::light::RemoteCallResponse { proof: empty_proof() };
 				let response = schema::v1::light::Response {
 					response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
 				};
@@ -1152,13 +1118,11 @@ mod tests {
 			} else {
 				// Last peer and last attempt.
 				assert_matches!(
-					block_on(async { poll!(sender.next()) }), Poll::Pending,
+					block_on(async { poll!(sender.next()) }),
+					Poll::Pending,
 					"Expect sender to not issue another attempt, given that there is no peer left.",
 				);
-				assert_matches!(
-					chan.1.try_recv(),
-					Ok(Some(Err(ClientError::RemoteFetchFailed)))
-				)
+				assert_matches!(chan.1.try_recv(), Ok(Some(Err(ClientError::RemoteFetchFailed))))
 			}
 		}
 	}
@@ -1187,35 +1151,27 @@ mod tests {
 					proof: empty_proof(),
 				};
 				schema::v1::light::Response {
-					response: Some(schema::v1::light::response::Response::RemoteHeaderResponse(
-						r,
-					)),
+					response: Some(schema::v1::light::response::Response::RemoteHeaderResponse(r)),
 				}
-			}
+			},
 			Request::Read { .. } => {
-				let r = schema::v1::light::RemoteReadResponse {
-					proof: empty_proof(),
-				};
+				let r = schema::v1::light::RemoteReadResponse { proof: empty_proof() };
 				schema::v1::light::Response {
 					response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
 				}
-			}
+			},
 			Request::ReadChild { .. } => {
-				let r = schema::v1::light::RemoteReadResponse {
-					proof: empty_proof(),
-				};
+				let r = schema::v1::light::RemoteReadResponse { proof: empty_proof() };
 				schema::v1::light::Response {
 					response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
 				}
-			}
+			},
 			Request::Call { .. } => {
-				let r = schema::v1::light::RemoteCallResponse {
-					proof: empty_proof(),
-				};
+				let r = schema::v1::light::RemoteCallResponse { proof: empty_proof() };
 				schema::v1::light::Response {
 					response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
 				}
-			}
+			},
 			Request::Changes { .. } => {
 				let r = schema::v1::light::RemoteChangesResponse {
 					max: std::iter::repeat(1).take(32).collect(),
@@ -1226,7 +1182,7 @@ mod tests {
 				schema::v1::light::Response {
 					response: Some(schema::v1::light::response::Response::RemoteChangesResponse(r)),
 				}
-			}
+			},
 		};
 
 		let response = {
@@ -1245,7 +1201,8 @@ mod tests {
 
 		pending_response.send(Ok(response)).unwrap();
 		assert_matches!(
-			block_on(async { poll!(sender.next()) }), Poll::Pending,
+			block_on(async { poll!(sender.next()) }),
+			Poll::Pending,
 			"Expect sender to not issue another attempt, given that there is no peer left.",
 		);
 
@@ -1263,10 +1220,7 @@ mod tests {
 			call_data: vec![],
 			retry_count: None,
 		};
-		issue_request(Request::Call {
-			request,
-			sender: chan.0,
-		});
+		issue_request(Request::Call { request, sender: chan.0 });
 		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
 	}
 
@@ -1279,10 +1233,7 @@ mod tests {
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
-		issue_request(Request::Read {
-			request,
-			sender: chan.0,
-		});
+		issue_request(Request::Read { request, sender: chan.0 });
 		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
 	}
 
@@ -1297,10 +1248,7 @@ mod tests {
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
-		issue_request(Request::ReadChild {
-			request,
-			sender: chan.0,
-		});
+		issue_request(Request::ReadChild { request, sender: chan.0 });
 		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
 	}
 
@@ -1312,10 +1260,7 @@ mod tests {
 			block: 1,
 			retry_count: None,
 		};
-		issue_request(Request::Header {
-			request,
-			sender: chan.0,
-		});
+		issue_request(Request::Header { request, sender: chan.0 });
 		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
 	}
 
@@ -1336,10 +1281,7 @@ mod tests {
 			storage_key: None,
 			retry_count: None,
 		};
-		issue_request(Request::Changes {
-			request,
-			sender: chan.0,
-		});
+		issue_request(Request::Changes { request, sender: chan.0 });
 		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
 	}
 }

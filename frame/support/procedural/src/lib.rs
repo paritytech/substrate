@@ -19,21 +19,21 @@
 
 #![recursion_limit = "512"]
 
-mod storage;
+mod clone_no_bound;
 mod construct_runtime;
+mod debug_no_bound;
+mod default_no_bound;
+mod dummy_part_checker;
+mod key_prefix;
 mod pallet;
 mod pallet_version;
-mod transactional;
-mod debug_no_bound;
-mod clone_no_bound;
 mod partial_eq_no_bound;
-mod default_no_bound;
-mod key_prefix;
-mod dummy_part_checker;
+mod storage;
+mod transactional;
 
-pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
 use std::cell::RefCell;
+pub(crate) use storage::INHERENT_INSTANCE_NAME;
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -200,14 +200,14 @@ impl Counter {
 ///
 /// 		// Your storage items
 /// 	}
-///		add_extra_genesis {
-///			config(genesis_field): GenesisFieldType;
-///			config(genesis_field2): GenesisFieldType;
-///			...
-///			build(|_: &Self| {
-///				// Modification of storage
-///			})
-///		}
+/// 		add_extra_genesis {
+/// 			config(genesis_field): GenesisFieldType;
+/// 			config(genesis_field2): GenesisFieldType;
+/// 			...
+/// 			build(|_: &Self| {
+/// 				// Modification of storage
+/// 			})
+/// 		}
 /// }
 /// ```
 ///
@@ -219,7 +219,7 @@ impl Counter {
 ///         ...,
 ///         Example: example::{Pallet, Storage, ..., Config<T>},
 ///         ...,
-///	}
+/// 	}
 /// );
 /// ```
 ///
@@ -413,7 +413,8 @@ pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
 					}
 				}
 			};
-		).into()
+		)
+		.into()
 	}
 
 	#[cfg(feature = "std")]
@@ -444,7 +445,8 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 		const _: () = {
 			impl #impl_generics core::cmp::Eq for #name #ty_generics #where_clause {}
 		};
-	).into()
+	)
+	.into()
 }
 
 /// derive `Default` but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
@@ -455,12 +457,15 @@ pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::require_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+	transactional::require_transactional(attr, input)
+		.unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 #[proc_macro]
 pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
-	pallet_version::crate_to_pallet_version(input).unwrap_or_else(|e| e.to_compile_error()).into()
+	pallet_version::crate_to_pallet_version(input)
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
 }
 
 /// The number of module instances supported by the runtime, starting at index 1,
@@ -471,7 +476,9 @@ pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;
 /// It implements the trait `HasKeyPrefix` and `HasReversibleKeyPrefix` for tuple of `Key`.
 #[proc_macro]
 pub fn impl_key_prefix_for_tuples(input: TokenStream) -> TokenStream {
-	key_prefix::impl_key_prefix_for_tuples(input).unwrap_or_else(syn::Error::into_compile_error).into()
+	key_prefix::impl_key_prefix_for_tuples(input)
+		.unwrap_or_else(syn::Error::into_compile_error)
+		.into()
 }
 
 /// Internal macro use by frame_support to generate dummy part checker for old pallet declaration

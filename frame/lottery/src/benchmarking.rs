@@ -21,9 +21,9 @@
 
 use super::*;
 
-use frame_system::RawOrigin;
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_support::traits::{EnsureOrigin, OnInitialize, UnfilteredDispatchable};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
+use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, Zero};
 
 use crate::Pallet as Lottery;
@@ -170,8 +170,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Lottery,
-	crate::mock::new_test_ext(),
-	crate::mock::Test,
-);
+impl_benchmark_test_suite!(Lottery, crate::mock::new_test_ext(), crate::mock::Test,);
