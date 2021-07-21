@@ -306,7 +306,7 @@ macro_rules! benchmarks_iter {
 				<
 					Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
 				>::dispatch_bypass_filter(
-					Call::<T $(, $instance)? >::$dispatch($($arg),*), $origin.into()
+					Call::<T $(, $instance)? >::$dispatch { $($arg),* }, $origin.into()
 				)?;
 			}
 			verify $postcode
