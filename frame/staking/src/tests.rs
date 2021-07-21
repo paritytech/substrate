@@ -148,16 +148,13 @@ fn basic_setup_works() {
 		// New era is not being forced
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 
-		// genesis accounts must exist in the proper bags
-		let weight_of = Staking::weight_of_fn();
-		// for these stash ids, see
-		// https://github.com/paritytech/substrate/
-		//   blob/631d4cdbcad438248c2597213918d8207d85bf6e/frame/staking/src/mock.rs#L435-L441
-		for genesis_stash_account_id in [11, 21, 31, 101] {
-			let node = crate::voter_bags::Node::<Test>::from_id(&genesis_stash_account_id)
-				.expect(&format!("node was created for account {}", genesis_stash_account_id));
-			assert!(!node.is_misplaced(&weight_of));
-		}
+		// check the bags
+		assert_eq!(CounterForVoters::<Test>::get(), 4);
+
+		assert_eq!(
+			get_bags(),
+			vec![(10, vec![31]), (1000, vec![11, 21, 101])],
+		);
 	});
 }
 
@@ -3871,6 +3868,18 @@ fn on_finalize_weight_is_nonzero() {
 	})
 }
 
+// end-to-end nodes of the voter bags operation.
+mod voter_bags {
+
+	#[test]
+	fn rebag_works() {
+		todo!()
+	}
+}
+/*
+// TODO: this needs some love, retire it in favour of the one above. Use the mock data, don't make
+// it complicated with data setup, use the simplest data possible, instead check multiple
+// edge-cases.
 #[test]
 fn test_rebag() {
 	use crate::{
@@ -3901,8 +3910,8 @@ fn test_rebag() {
 	ExtBuilder::default().build_and_execute(|| {
 		// We want to have two validators: one, `stash`, is the one we will rebag.
 		// The other, `other_stash`, exists only so that the destination bag is not empty.
-		let stash = make_validator(0, 100).unwrap();
-		let other_stash = make_validator(1, 300).unwrap();
+		let stash = make_validator(0, 2000).unwrap();
+		let other_stash = make_validator(1, 9000).unwrap();
 
 		// verify preconditions
 		let weight_of = Staking::weight_of_fn();
@@ -3942,6 +3951,7 @@ fn test_rebag() {
 		assert!(!node.is_misplaced(&weight_of), "node must be in proper place after rebag");
 	});
 }
+*/
 
 mod election_data_provider {
 	use super::*;

@@ -21,18 +21,19 @@
 //! - It's efficient to iterate over the top* N voters by stake, where the precise ordering of
 //!   voters doesn't particularly matter.
 
-use crate::{
-	AccountIdOf, Config, Nominations, Nominators, Pallet, Validators, VoteWeight, VoterBagFor,
-	VotingDataOf, slashing::SlashingSpans,
-};
-use codec::{Encode, Decode};
-use frame_support::{DefaultNoBound, traits::Get};
+use codec::{Decode, Encode};
+use frame_support::{ensure, traits::Get, DefaultNoBound};
 use sp_runtime::SaturatedConversion;
 use sp_std::{
 	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter,
 	marker::PhantomData,
+};
+
+use crate::{
+	slashing::SlashingSpans, AccountIdOf, Config, Nominations, Nominators, Pallet, Validators,
+	VoteWeight, VoterBagFor, VotingDataOf,
 };
 
 /// [`Voter`] parametrized by [`Config`] instead of by `AccountId`.
@@ -77,7 +78,7 @@ pub struct VoterList<T: Config>(PhantomData<T>);
 impl<T: Config> VoterList<T> {
 	/// Remove all data associated with the voter list from storage.
 	pub fn clear() {
-		crate::VoterCount::<T>::kill();
+		crate::CounterForVoters::<T>::kill();
 		crate::VoterBagFor::<T>::remove_all(None);
 		crate::VoterBags::<T>::remove_all(None);
 		crate::VoterNodes::<T>::remove_all(None);
@@ -104,13 +105,14 @@ impl<T: Config> VoterList<T> {
 
 	/// Decode the length of the voter list.
 	pub fn decode_len() -> Option<usize> {
-		let maybe_len = crate::VoterCount::<T>::try_get().ok().map(|n| n.saturated_into());
+		let maybe_len = crate::CounterForVoters::<T>::try_get().ok().map(|n| n.saturated_into());
 		debug_assert_eq!(
 			maybe_len.unwrap_or_default(),
 			crate::VoterNodes::<T>::iter().count(),
 			"stored length must match count of nodes",
 		);
 		debug_assert_eq!(
+			// TODO: this case will fail in migration pre check
 			maybe_len.unwrap_or_default() as u32,
 			crate::CounterForNominators::<T>::get() + crate::CounterForValidators::<T>::get(),
 			"voter count must be sum of validator and nominator count",
@@ -175,6 +177,7 @@ impl<T: Config> VoterList<T> {
 		for voter in voters.into_iter() {
 			let weight = weight_of(&voter.id);
 			let bag = notional_bag_for::<T>(weight);
+			crate::log!(debug, "inserting {:?} into bag {:?}", voter, bag);
 			bags.entry(bag).or_insert_with(|| Bag::<T>::get_or_make(bag)).insert(voter);
 			count += 1;
 		}
@@ -183,13 +186,15 @@ impl<T: Config> VoterList<T> {
 			bag.put();
 		}
 
-		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_add(count));
+		crate::CounterForVoters::<T>::mutate(|prev_count| {
+			*prev_count = prev_count.saturating_add(count)
+		});
 		count
 	}
 
 	/// Remove a voter (by id) from the voter list.
 	pub fn remove(voter: &AccountIdOf<T>) {
-		Self::remove_many(sp_std::iter::once(voter))
+		Self::remove_many(sp_std::iter::once(voter));
 	}
 
 	/// Remove many voters (by id) from the voter list.
@@ -219,7 +224,9 @@ impl<T: Config> VoterList<T> {
 			bag.put();
 		}
 
-		crate::VoterCount::<T>::mutate(|prev_count| *prev_count = prev_count.saturating_sub(count));
+		crate::CounterForVoters::<T>::mutate(|prev_count| {
+			*prev_count = prev_count.saturating_sub(count)
+		});
 	}
 
 	/// Update a voter's position in the voter list.
@@ -227,7 +234,7 @@ impl<T: Config> VoterList<T> {
 	/// If the voter was in the correct bag, no effect. If the voter was in the incorrect bag, they
 	/// are moved into the correct bag.
 	///
-	/// Returns `true` if the voter moved.
+	/// Returns `Some((old_idx, new_idx))` if the voter moved, otherwise `None`.
 	///
 	/// This operation is somewhat more efficient than simply calling [`self.remove`] followed by
 	/// [`self.insert`]. However, given large quantities of voters to move, it may be more efficient
@@ -350,6 +357,50 @@ impl<T: Config> VoterList<T> {
 
 		num_affected
 	}
+
+	/// Sanity check the voter list.
+	///
+	/// This should be called from the call-site, whenever one of the mutating apis (e.g. `insert`)
+	/// is being used, after all other staking data (such as counter) has been updated. It checks
+	/// that:
+	///
+	/// * Iterate all voters in list and make sure there are no duplicates.
+	/// * Iterate all voters and ensure their count is in sync with `CounterForVoters`.
+	/// * Ensure `CounterForVoters` is `CounterForValidators + CounterForNominators`.
+	/// * Sanity-checks all bags. This will cascade down all the checks and makes sure all bags are
+	///   checked per *any* update to `VoterList`.
+	pub(super) fn sanity_check() -> Result<(), String> {
+		let mut seen_in_list = BTreeSet::new();
+		ensure!(
+			Self::iter().map(|node| node.voter.id).all(|voter| seen_in_list.insert(voter)),
+			String::from("duplicate identified")
+		);
+
+		let iter_count = Self::iter().collect::<sp_std::vec::Vec<_>>().len() as u32;
+		let stored_count = crate::CounterForVoters::<T>::get();
+		ensure!(
+			iter_count == stored_count,
+			format!("iter_count ({}) != voter_count ({})", iter_count, stored_count),
+		);
+
+		let validators = crate::CounterForValidators::<T>::get();
+		let nominators = crate::CounterForNominators::<T>::get();
+		ensure!(
+			validators + nominators == stored_count,
+			format!(
+				"validators {} + nominators {} != voters {}",
+				validators, nominators, stored_count
+			),
+		);
+
+		let _ = T::VoterBagThresholds::get()
+			.into_iter()
+			.map(|t| Bag::<T>::get(*t).unwrap_or_default())
+			.map(|b| b.sanity_check())
+			.collect::<Result<_, _>>()?;
+
+		Ok(())
+	}
 }
 
 /// A Bag is a doubly-linked list of voters.
@@ -384,6 +435,10 @@ impl<T: Config> Bag<T> {
 
 	/// Get a bag by its upper vote weight or make it, appropriately initialized.
 	pub fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
+		debug_assert!(
+			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			"it is a logic error to attempt to get a bag which is not in the thresholds list"
+		);
 		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
 	}
 
@@ -438,9 +493,9 @@ impl<T: Config> Bag<T> {
 		node.put();
 
 		// update the previous tail
-		if let Some(mut tail) = self.tail() {
-			tail.next = Some(id.clone());
-			tail.put();
+		if let Some(mut old_tail) = self.tail() {
+			old_tail.next = Some(id.clone());
+			old_tail.put();
 		}
 
 		// update the internal bag links
@@ -458,19 +513,19 @@ impl<T: Config> Bag<T> {
 	/// the first place. Generally, use [`VoterList::remove`] instead.
 	///
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
-	/// `self.put()` and `node.put()` after use.
+	/// `self.put()`, `VoterNodes::remove(voter_id)` and `VoterBagFor::remove(voter_id)`
+	/// to update storage for the bag and `node`.
 	fn remove_node(&mut self, node: &Node<T>) {
-		// TODO: we could merge this function here.
-		// node.excise();
+		// Update previous node.
 		if let Some(mut prev) = node.prev() {
-			prev.next = self.next.clone();
+			prev.next = node.next.clone();
 			prev.put();
 		}
+		// Update next node.
 		if let Some(mut next) = node.next() {
-			next.prev = self.prev.clone();
+			next.prev = node.prev.clone();
 			next.put();
 		}
-		// IDEA: debug_assert! prev.next.prev == self
 
 		// clear the bag head/tail pointers as necessary
 		if self.head.as_ref() == Some(&node.voter.id) {
@@ -479,6 +534,45 @@ impl<T: Config> Bag<T> {
 		if self.tail.as_ref() == Some(&node.voter.id) {
 			self.tail = node.prev.clone();
 		}
+	}
+
+	/// Sanity check this bag.
+	///
+	/// Should be called by the call-site, after each mutating operation on a bag. The call site of
+	/// this struct is always `VoterList`.
+	///
+	/// * Ensures head has no prev.
+	/// * Ensures tail has no next.
+	/// * Ensures there are no loops, traversal from head to tail is correct.
+	fn sanity_check(&self) -> Result<(), String> {
+		ensure!(
+			self.head()
+				.map(|head| head.prev().is_none())
+				// if there is no head, then there must not be a tail, meaning that the bag is
+				// empty.
+				.unwrap_or_else(|| self.tail.is_none()),
+			String::from("head has a prev")
+		);
+
+		ensure!(
+			self.tail()
+				.map(|tail| tail.next().is_none())
+				// if there is no tail, then there must not be a head, meaning that the bag is
+				// empty.
+				.unwrap_or_else(|| self.head.is_none()),
+			String::from("tail has a next")
+		);
+
+		let mut seen_in_bag = BTreeSet::new();
+		ensure!(
+			self.iter()
+				.map(|node| node.voter.id)
+				// each voter is only seen once, thus there is no cycle within a bag
+				.all(|voter| seen_in_bag.insert(voter)),
+			String::from("Duplicate found in bag.")
+		);
+
+		Ok(())
 	}
 }
 
@@ -498,7 +592,10 @@ pub struct Node<T: Config> {
 impl<T: Config> Node<T> {
 	/// Get a node by bag idx and account id.
 	pub fn get(bag_upper: VoteWeight, account_id: &AccountIdOf<T>) -> Option<Node<T>> {
-		// debug_assert!(bag_upper is in Threshold)
+		debug_assert!(
+			T::VoterBagThresholds::get().contains(&bag_upper) || bag_upper == VoteWeight::MAX,
+			"it is a logic error to attempt to get a bag which is not in the thresholds list"
+		);
 		crate::VoterNodes::<T>::try_get(account_id).ok().map(|mut node| {
 			node.bag_upper = bag_upper;
 			node
@@ -563,20 +660,6 @@ impl<T: Config> Node<T> {
 		}
 	}
 
-	/// Remove this node from the linked list.
-	///
-	/// Modifies storage, but only modifies the adjacent nodes. Does not modify `self` or any bag.
-	fn excise(&self) {
-		if let Some(mut prev) = self.prev() {
-			prev.next = self.next.clone();
-			prev.put();
-		}
-		if let Some(mut next) = self.next() {
-			next.prev = self.prev.clone();
-			next.put();
-		}
-	}
-
 	/// `true` when this voter is in the wrong bag.
 	pub fn is_misplaced(&self, weight_of: impl Fn(&T::AccountId) -> VoteWeight) -> bool {
 		notional_bag_for::<T>(weight_of(&self.voter.id)) != self.bag_upper
@@ -605,6 +688,12 @@ impl<T: Config> Node<T> {
 		let weight_of = crate::Pallet::<T>::weight_of_fn();
 		let current_weight = weight_of(&self.voter.id);
 		notional_bag_for::<T>(current_weight)
+	}
+
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	/// Get the underlying voter.
+	pub fn voter(&self) -> &Voter<T::AccountId> {
+		&self.voter
 	}
 }
 
@@ -706,7 +795,7 @@ pub mod make_bags {
 	fn path_to_header_file() -> Option<PathBuf> {
 		let repo = git2::Repository::open_from_env().ok()?;
 		let workdir = repo.workdir()?;
-		for file_name in ["HEADER-APACHE2", "HEADER-GPL3", "HEADER", "file_header.txt"] {
+		for file_name in &["HEADER-APACHE2", "HEADER-GPL3", "HEADER", "file_header.txt"] {
 			let path = workdir.join(file_name);
 			if path.exists() {
 				return Some(path);
@@ -853,22 +942,180 @@ pub mod make_bags {
 	}
 }
 
+// This is the highest level of abstraction provided by this module. More generic tests are here,
+// among those related to `VoterList` struct.
 #[cfg(test)]
-mod tests {
-	use crate::mock::{ExtBuilder, Staking, Test};
+mod voter_list {
 	use frame_support::traits::Currency;
-	use substrate_test_utils::assert_eq_uvec;
 	use super::*;
-
-	const GENESIS_VOTER_IDS: [u64; 5] = [11, 21, 31, 41, 101];
+	use crate::mock::*;
 
 	#[test]
-	fn voter_list_includes_genesis_accounts() {
-		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
-			let have_voters: Vec<_> = VoterList::<Test>::iter().map(|node| node.voter.id).collect();
-			assert_eq_uvec!(GENESIS_VOTER_IDS, have_voters);
-		});
+	fn basic_setup_works() {
+		// make sure ALL relevant data structures are setup correctly.
+		// TODO: we are not checking all of them yet.
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(crate::CounterForVoters::<Test>::get(), 4);
+
+			let weight_of = Staking::weight_of_fn();
+			assert_eq!(weight_of(&11), 1000);
+			assert_eq!(VoterBagFor::<Test>::get(11).unwrap(), 1000);
+
+			assert_eq!(weight_of(&21), 1000);
+			assert_eq!(VoterBagFor::<Test>::get(21).unwrap(), 1000);
+
+			assert_eq!(weight_of(&31), 1);
+			assert_eq!(VoterBagFor::<Test>::get(31).unwrap(), 10);
+
+			assert_eq!(VoterBagFor::<Test>::get(41), None); // this staker is chilled!
+
+			assert_eq!(weight_of(&101), 500);
+			assert_eq!(VoterBagFor::<Test>::get(101).unwrap(), 1000);
+
+			// iteration of the bags would yield:
+			assert_eq!(
+				VoterList::<Test>::iter().map(|n| n.voter().id).collect::<Vec<_>>(),
+				vec![11, 21, 101, 31],
+				//   ^^ note the order of insertion in genesis!
+			);
+
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1000, vec![11, 21, 101])],
+			);
+		})
 	}
+
+	#[test]
+	fn notional_bag_for_works() {
+		todo!();
+	}
+
+	#[test]
+	fn iteration_is_semi_sorted() {
+		ExtBuilder::default().build_and_execute(|| {
+			// add some new validators to the genesis state.
+			bond_validator(51, 50, 2000);
+			bond_validator(61, 60, 2000);
+
+			// given
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61])],
+			);
+
+			// when
+			let iteration = VoterList::<Test>::iter().map(|node| node.voter.id).collect::<Vec<_>>();
+
+			// then
+			assert_eq!(iteration, vec![
+				51, 61, // best bag
+				11, 21, 101, // middle bag
+				31, // last bag.
+			]);
+		})
+	}
+
+	/// This tests that we can `take` x voters, even if that quantity ends midway through a list.
+	#[test]
+	fn take_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// add some new validators to the genesis state.
+			bond_validator(51, 50, 2000);
+			bond_validator(61, 60, 2000);
+
+			// given
+			assert_eq!(
+				get_bags(),
+				vec![(10, vec![31]), (1000, vec![11, 21, 101]), (2000, vec![51, 61])],
+			);
+
+			// when
+			let iteration = VoterList::<Test>::iter()
+				.map(|node| node.voter.id)
+				.take(4)
+				.collect::<Vec<_>>();
+
+			// then
+			assert_eq!(iteration, vec![
+				51, 61, // best bag, fully iterated
+				11, 21, // middle bag, partially iterated
+			]);
+		})
+	}
+
+	#[test]
+	fn storage_is_cleaned_up_as_voters_are_removed() {}
+
+	#[test]
+	fn insert_works() {
+		todo!()
+	}
+
+	#[test]
+	fn insert_as_works() {
+		// insert a new one with role
+		// update the status of already existing one.
+		todo!()
+	}
+
+	#[test]
+	fn remove_works() {
+		todo!()
+	}
+
+	#[test]
+	fn update_position_for_works() {
+		// alter the genesis state to require a re-bag, then ensure this fixes it. Might be similar
+		// `rebag_works()`
+		todo!();
+	}
+}
+
+#[cfg(test)]
+mod bags {
+	#[test]
+	fn get_works() {
+		todo!()
+	}
+
+	#[test]
+	fn insert_works() {
+		todo!()
+	}
+
+	#[test]
+	fn remove_works() {
+		todo!()
+	}
+}
+
+#[cfg(test)]
+mod voter_node {
+	#[test]
+	fn get_voting_data_works() {
+		todo!()
+	}
+
+	#[test]
+	fn is_misplaced_works() {
+		todo!()
+	}
+}
+
+// TODO: I've created simpler versions of these tests above. We can probably remove the ones below
+// now. Peter was likely not very familiar with the staking mock and he came up with these rather
+// complicated test setups. Please see my versions above, we can test the same properties, easily,
+// without the need to alter the stakers so much.
+/*
+#[cfg(test)]
+mod tests {
+	use frame_support::traits::Currency;
+
+	use super::*;
+	use crate::mock::*;
+
+	const GENESIS_VOTER_IDS: [u64; 5] = [11, 21, 31, 41, 101];
 
 	/// This tests the property that when iterating through the `VoterList`, we iterate from higher
 	/// bags to lower.
@@ -888,8 +1135,7 @@ mod tests {
 
 		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
 			// initialize the voters' deposits
-			let existential_deposit = <Test as Config>::Currency::minimum_balance();
-			let mut balance = existential_deposit + 1;
+			let mut balance = 10;
 			for voter_id in voters.iter().rev() {
 				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
 				let controller = Staking::bonded(voter_id).unwrap();
@@ -899,11 +1145,138 @@ mod tests {
 				Staking::update_ledger(&controller, &ledger);
 				Staking::do_rebag(voter_id);
 
-				balance *= 2;
+				// Increase balance to the next threshold.
+				balance += 10;
 			}
 
 			let have_voters: Vec<_> = VoterList::<Test>::iter().map(|node| node.voter.id).collect();
 			assert_eq!(voters, have_voters);
 		});
 	}
+
+	/// This tests that we can `take` x voters, even if that quantity ends midway through a list.
+	#[test]
+	fn take_works() {
+		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
+			// initialize the voters' deposits
+			let mut balance = 0; // This will be 10 on the first loop iteration because 0 % 3 == 0
+			for (idx, voter_id) in GENESIS_VOTER_IDS.iter().enumerate() {
+				if idx % 3 == 0 {
+					// This increases the balance by 10, which is the amount each threshold
+					// increases by. Thus this will increase the balance by 1 bag.
+					//
+					// This will create 2 bags, the lower threshold bag having
+					// 3 voters with balance 10, and the higher threshold bag having
+					// 2 voters with balance 20.
+					balance += 10;
+				}
+
+				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
+				let controller = Staking::bonded(voter_id).unwrap();
+				let mut ledger = Staking::ledger(&controller).unwrap();
+				ledger.total = balance;
+				ledger.active = balance;
+				Staking::update_ledger(&controller, &ledger);
+				Staking::do_rebag(voter_id);
+			}
+
+			let bag_thresh10 = Bag::<Test>::get(10)
+				.unwrap()
+				.iter()
+				.map(|node| node.voter.id)
+				.collect::<Vec<_>>();
+			assert_eq!(bag_thresh10, vec![11, 21, 31]);
+
+			let bag_thresh20 = Bag::<Test>::get(20)
+				.unwrap()
+				.iter()
+				.map(|node| node.voter.id)
+				.collect::<Vec<_>>();
+			assert_eq!(bag_thresh20, vec![41, 101]);
+
+			let voters: Vec<_> = VoterList::<Test>::iter()
+				// take 4/5 from [41, 101],[11, 21, 31], demonstrating that we can do a
+				// take that stops mid bag.
+				.take(4)
+				.map(|node| node.voter.id)
+				.collect();
+
+			assert_eq!(voters, vec![41, 101, 11, 21]);
+		});
+	}
+
+	#[test]
+	fn storage_is_cleaned_up_as_voters_are_removed() {
+		ExtBuilder::default().validator_pool(true).build_and_execute(|| {
+			// Initialize voters deposits so there are 5 bags with one voter each.
+			let mut balance = 10;
+			for voter_id in GENESIS_VOTER_IDS.iter() {
+				<Test as Config>::Currency::make_free_balance_be(voter_id, balance);
+				let controller = Staking::bonded(voter_id).unwrap();
+				let mut ledger = Staking::ledger(&controller).unwrap();
+				ledger.total = balance;
+				ledger.active = balance;
+				Staking::update_ledger(&controller, &ledger);
+				Staking::do_rebag(voter_id);
+
+				// Increase balance to the next threshold.
+				balance += 10;
+			}
+
+			let voter_list_storage_items_eq = |mut v: Vec<u64>| {
+				v.sort();
+				let mut voters: Vec<_> =
+					VoterList::<Test>::iter().map(|node| node.voter.id).collect();
+				voters.sort();
+				assert_eq!(voters, v);
+
+				let mut nodes: Vec<_> =
+					<Staking as crate::Store>::VoterNodes::iter_keys().collect();
+				nodes.sort();
+				assert_eq!(nodes, v);
+
+				let mut flat_bags: Vec<_> = <Staking as crate::Store>::VoterBags::iter()
+					// We always get the bag with the Bag<T> getter because the bag_upper
+					// is only initialized in the getter.
+					.flat_map(|(key, _bag)| Bag::<Test>::get(key).unwrap().iter())
+					.map(|node| node.voter.id)
+					.collect();
+				flat_bags.sort();
+				assert_eq!(flat_bags, v);
+
+				let mut bags_for: Vec<_> =
+					<Staking as crate::Store>::VoterBagFor::iter_keys().collect();
+				bags_for.sort();
+				assert_eq!(bags_for, v);
+			};
+
+			let genesis_voters = vec![101, 41, 31, 21, 11];
+			voter_list_storage_items_eq(genesis_voters);
+			assert_eq!(<Staking as crate::Store>::CounterForVoters::get(), 5);
+
+			// Remove 1 voter,
+			VoterList::<Test>::remove(&101);
+			let remaining_voters = vec![41, 31, 21, 11];
+			// and assert they have been cleaned up.
+			voter_list_storage_items_eq(remaining_voters.clone());
+			assert_eq!(<Staking as crate::Store>::CounterForVoters::get(), 4);
+
+			// Now remove the remaining voters so we have 0 left,
+			remaining_voters.iter().for_each(|v| VoterList::<Test>::remove(v));
+			// and assert all of them have been cleaned up.
+			voter_list_storage_items_eq(vec![]);
+			assert_eq!(<Staking as crate::Store>::CounterForVoters::get(), 0);
+
+
+			// TODO bags do not get cleaned up from storages
+			// - is this ok? I assume its ok if this is not cleaned just because voters are removed
+			//   but it should be cleaned up if we migrate thresholds
+			assert_eq!(<Staking as crate::Store>::VoterBags::iter().collect::<Vec<_>>().len(), 6);
+			// and the voter list has no one in it.
+			assert_eq!(VoterList::<Test>::iter().collect::<Vec<_>>().len(), 0);
+			assert_eq!(<Staking as crate::Store>::VoterBagFor::iter().collect::<Vec<_>>().len(), 0);
+			assert_eq!(<Staking as crate::Store>::VoterNodes::iter().collect::<Vec<_>>().len(), 0);
+		});
+	}
 }
+*/

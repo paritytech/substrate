@@ -780,6 +780,7 @@ pub mod migrations {
 			log!(info, "Migrating staking to Releases::V8_0_0");
 
 			let migrated = VoterList::<T>::regenerate();
+			debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
 
 			StorageVersion::<T>::put(Releases::V8_0_0);
 			log!(
@@ -1313,7 +1314,7 @@ pub mod pallet {
 
 	/// How many voters are registered.
 	#[pallet::storage]
-	pub(crate) type VoterCount<T> = StorageValue<_, u32, ValueQuery>;
+	pub(crate) type CounterForVoters<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// Which bag currently contains a particular voter.
 	///
@@ -1397,32 +1398,62 @@ pub mod pallet {
 			MinNominatorBond::<T>::put(self.min_nominator_bond);
 			MinValidatorBond::<T>::put(self.min_validator_bond);
 
+			let mut num_voters: u32 = 0;
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
+				log!(
+					trace,
+					"inserting genesis staker: {:?} => {:?} => {:?}",
+					stash,
+					balance,
+					status
+				);
 				assert!(
 					T::Currency::free_balance(&stash) >= balance,
 					"Stash does not have enough balance to bond."
 				);
-				let _ = <Pallet<T>>::bond(
+
+				if let Err(why) = <Pallet<T>>::bond(
 					T::Origin::from(Some(stash.clone()).into()),
 					T::Lookup::unlookup(controller.clone()),
 					balance,
 					RewardDestination::Staked,
-				);
-				let _ = match status {
+				) {
+					// TODO: later on, fix all the tests that trigger these warnings, and
+					// make these assertions. Genesis stakers should all be correct!
+					log!(warn, "failed to bond staker at genesis: {:?}.", why);
+					continue;
+				}
+				match status {
 					StakerStatus::Validator => {
-						<Pallet<T>>::validate(
+						if let Err(why) = <Pallet<T>>::validate(
 							T::Origin::from(Some(controller.clone()).into()),
 							Default::default(),
-						)
+						) {
+							log!(warn, "failed to validate staker at genesis: {:?}.", why);
+						} else {
+							num_voters +=1 ;
+						}
 					},
 					StakerStatus::Nominator(votes) => {
-						<Pallet<T>>::nominate(
+						if let Err(why) = <Pallet<T>>::nominate(
 							T::Origin::from(Some(controller.clone()).into()),
 							votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
-						)
-					}, _ => Ok(())
+						) {
+							log!(warn, "failed to nominate staker at genesis: {:?}.", why);
+						} else {
+							num_voters += 1;
+						}
+					}
+					_ => ()
 				};
 			}
+
+			// all voters are inserted sanely.
+			assert_eq!(
+				CounterForVoters::<T>::get(),
+				num_voters,
+				"not all genesis stakers were inserted into bags, something is wrong."
+			);
 		}
 	}
 
@@ -3096,7 +3127,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Nominators::<T>::insert(who, nominations);
 		VoterList::<T>::insert_as(who, VoterType::Nominator);
-		debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
+		debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -3112,7 +3143,7 @@ impl<T: Config> Pallet<T> {
 			Nominators::<T>::remove(who);
 			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
 			VoterList::<T>::remove(who);
-			debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
+			debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
 			true
 		} else {
 			false
@@ -3133,7 +3164,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Validators::<T>::insert(who, prefs);
 		VoterList::<T>::insert_as(who, VoterType::Validator);
-		debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
+		debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a validator from the `Validators` storage map,
@@ -3149,7 +3180,7 @@ impl<T: Config> Pallet<T> {
 			Validators::<T>::remove(who);
 			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
 			VoterList::<T>::remove(who);
-			debug_assert!(VoterCount::<T>::get() == CounterForNominators::<T>::get() + CounterForValidators::<T>::get());
+			debug_assert_eq!(VoterList::<T>::sanity_check(), Ok(()));
 			true
 		} else {
 			false
