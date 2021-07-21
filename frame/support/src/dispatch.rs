@@ -2638,12 +2638,12 @@ mod tests {
 
 	#[test]
 	fn compact_attr() {
-		let call: Call<TraitImpl> = Call::aux_1(1);
+		let call: Call<TraitImpl> = Call::aux_1 { _data: 1 };
 		let encoded = call.encode();
 		assert_eq!(2, encoded.len());
 		assert_eq!(vec![1, 4], encoded);
 
-		let call: Call<TraitImpl> = Call::aux_5(1, 2);
+		let call: Call<TraitImpl> = Call::aux_5 { _data: 1, _data2: 2 };
 		let encoded = call.encode();
 		assert_eq!(6, encoded.len());
 		assert_eq!(vec![5, 1, 0, 0, 0, 8], encoded);
@@ -2651,13 +2651,13 @@ mod tests {
 
 	#[test]
 	fn encode_is_correct_and_decode_works() {
-		let call: Call<TraitImpl> = Call::aux_0();
+		let call: Call<TraitImpl> = Call::aux_0 {};
 		let encoded = call.encode();
 		assert_eq!(vec![0], encoded);
 		let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(decoded, call);
 
-		let call: Call<TraitImpl> = Call::aux_2(32, "hello".into());
+		let call: Call<TraitImpl> = Call::aux_2 { _data: 32, _data2: "hello".into() };
 		let encoded = call.encode();
 		assert_eq!(vec![2, 32, 0, 0, 0, 20, 104, 101, 108, 108, 111], encoded);
 		let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
@@ -2709,19 +2709,19 @@ mod tests {
 	fn weight_should_attach_to_call_enum() {
 		// operational.
 		assert_eq!(
-			Call::<TraitImpl>::operational().get_dispatch_info(),
+			Call::<TraitImpl>::operational {}.get_dispatch_info(),
 			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
 		);
 		// custom basic
 		assert_eq!(
-			Call::<TraitImpl>::aux_3().get_dispatch_info(),
+			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
 			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
 		);
 	}
 
 	#[test]
 	fn call_name() {
-		let name = Call::<TraitImpl>::aux_3().get_call_name();
+		let name = Call::<TraitImpl>::aux_3 {}.get_call_name();
 		assert_eq!("aux_3", name);
 	}
 
