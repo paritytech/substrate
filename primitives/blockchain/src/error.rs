@@ -156,6 +156,9 @@ pub enum Error {
 	#[error("State Database error: {0}")]
 	StateDatabase(String),
 
+	#[error("Failed to set the chain head to a block that's too old.")]
+	SetHeadTooOld,
+
 	#[error(transparent)]
 	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 

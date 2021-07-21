@@ -1179,7 +1179,13 @@ impl<Block: BlockT> Backend<Block> {
 		let mut enacted = Vec::default();
 		let mut retracted = Vec::default();
 
+		let (best_number, best_hash) = best_to;
+
 		let meta = self.blockchain.meta.read();
+
+		if meta.best_number > best_number && (meta.best_number - best_number).saturated_into::<u64>() > self.canonicalization_delay {
+			return Err(sp_blockchain::Error::SetHeadTooOld.into());
+		}
 
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
@@ -1221,13 +1227,13 @@ impl<Block: BlockT> Backend<Block> {
 			}
 		}
 
-		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
+		let lookup_key = utils::number_and_hash_to_lookup_key(best_number, &best_hash)?;
 		transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, lookup_key);
 		utils::insert_number_to_key_mapping(
 			transaction,
 			columns::KEY_LOOKUP,
-			best_to.0,
-			best_to.1,
+			best_number,
+			best_hash,
 		)?;
 
 		Ok((enacted, retracted))
@@ -3364,15 +3370,39 @@ pub(crate) mod tests {
 
 	#[test]
 	fn test_import_existing_block_as_new_head() {
-		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let backend: Backend<Block> = Backend::new_test(10, 3);
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let block1 = insert_header(&backend, 1, block0, None, Default::default());
 		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		let block3 = insert_header(&backend, 3, block2, None, Default::default());
+		let block4 = insert_header(&backend, 4, block3, None, Default::default());
+		let block5 = insert_header(&backend, 5, block4, None, Default::default());
+		assert_eq!(backend.blockchain().info().best_hash, block5);
 
+		// Insert 1 as best again. This should fail because canonicalization_delay == 3 and best == 5
+		let header = Header {
+			number: 1,
+			parent_hash: block0,
+			state_root: BlakeTwo256::trie_root(Vec::new()),
+			digest: Default::default(),
+			extrinsics_root: Default::default(),
+		};
+		let mut op = backend.begin_operation().unwrap();
+		op.set_block_data(header, None, None, None, NewBlockState::Best).unwrap();
+		assert!(matches!(backend.commit_operation(op), Err(sp_blockchain::Error::SetHeadTooOld)));
+
+		// Insert 2 as best again.
+		let header = Header {
+			number: 2,
+			parent_hash: block1,
+			state_root: BlakeTwo256::trie_root(Vec::new()),
+			digest: Default::default(),
+			extrinsics_root: Default::default(),
+		};
+		let mut op = backend.begin_operation().unwrap();
+		op.set_block_data(header, None, None, None, NewBlockState::Best).unwrap();
+		backend.commit_operation(op).unwrap();
 		assert_eq!(backend.blockchain().info().best_hash, block2);
-		// Insert 1 as best again.
-		insert_header(&backend, 1, block0, None, Default::default());
-		assert_eq!(backend.blockchain().info().best_hash, block1);
 	}
 
 	#[test]
