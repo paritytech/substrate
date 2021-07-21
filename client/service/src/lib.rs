@@ -386,26 +386,36 @@ fn start_rpc_servers<
 
 	let rpc_method_names = sc_rpc_server::method_names(|m| gen_handler(sc_rpc::DenyUnsafe::No, m));
 	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
-			&*path, gen_handler(
-				sc_rpc::DenyUnsafe::No,
-				sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), rpc_method_names.clone(), "ipc")
-			),
-			server_metrics.clone(),
-		)),
-		maybe_start_server(
-			config.rpc_http,
-			|address| sc_rpc_server::start_http(
+		config.rpc_ipc.as_ref().map(|path| {
+			sc_rpc_server::start_ipc(
+				&*path,
+				gen_handler(
+					sc_rpc::DenyUnsafe::No,
+					sc_rpc_server::RpcMiddleware::new(
+						rpc_metrics.clone(),
+						rpc_method_names.clone(),
+						"ipc",
+					),
+				),
+				server_metrics.clone(),
+			)
+		}),
+		maybe_start_server(config.rpc_http, |address| {
+			sc_rpc_server::start_http(
 				address,
 				config.rpc_http_threads,
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), rpc_method_names.clone(), "http")
+					sc_rpc_server::RpcMiddleware::new(
+						rpc_metrics.clone(),
+						rpc_method_names.clone(),
+						"http",
+					),
 				),
 				config.rpc_max_payload,
 			)
-		)?
+		})?
 		.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(config.rpc_ws, |address| {
 			sc_rpc_server::start_ws(
@@ -414,12 +424,17 @@ fn start_rpc_servers<
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), rpc_method_names.clone(), "ws")
+					sc_rpc_server::RpcMiddleware::new(
+						rpc_metrics.clone(),
+						rpc_method_names.clone(),
+						"ws",
+					),
 				),
 				config.rpc_max_payload,
 				server_metrics.clone(),
 			)
-		})?.map(|s| waiting::WsServer(Some(s))),
+		})?
+		.map(|s| waiting::WsServer(Some(s))),
 	)))
 }
 
