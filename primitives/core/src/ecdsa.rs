@@ -392,8 +392,10 @@ impl From<(libsecp256k1::Signature, libsecp256k1::RecoveryId)> for Signature {
 #[cfg(feature = "full_crypto")]
 impl<'a> TryFrom<&'a Signature> for (libsecp256k1::Signature, libsecp256k1::RecoveryId) {
 	type Error = ();
-	fn try_from(x: &'a Signature) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), Self::Error> {
-		parse_signature(&x.0).map_err(|_| ())
+	fn try_from(
+		x: &'a Signature,
+	) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), Self::Error> {
+		parse_signature_standard(&x.0).map_err(|_| ())
 	}
 }
 
@@ -507,7 +509,10 @@ impl TraitPair for Pair {
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
 		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
-		let sig: (_, _) = match sig.try_into() { Ok(x) => x, _ => return false };
+		let sig: (_, _) = match sig.try_into() {
+			Ok(x) => x,
+			_ => return false,
+		};
 		match libsecp256k1::recover(&message, &sig.0, &sig.1) {
 			Ok(actual) => pubkey.0[..] == actual.serialize_compressed()[..],
 			_ => false,
@@ -520,8 +525,10 @@ impl TraitPair for Pair {
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
 		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
-		if sig.len() != 65 { return false }
-		let (sig, ri) = match parse_signature(&sig) {
+		if sig.len() != 65 {
+			return false
+		}
+		let (sig, ri) = match parse_signature_standard(&sig) {
 			Ok(sigri) => sigri,
 			_ => return false,
 		};
@@ -582,9 +589,9 @@ impl Pair {
 	/// Parses Signature using parse_overflowing_slice
 	pub fn verify_deprecated<M: AsRef<[u8]>>(sig: &Signature, message: M, pubkey: &Public) -> bool {
 		let message = libsecp256k1::Message::parse(&blake2_256(message.as_ref()));
-		let (sig, ri) = match parse_signature_deprecated(&sig.0) {
+		let (sig, ri) = match parse_signature_overflowing(&sig.0) {
 			Ok(sigri) => sigri,
-			_ => return false
+			_ => return false,
 		};
 		match libsecp256k1::recover(&message, &sig, &ri) {
 			Ok(actual) => pubkey.0[..] == actual.serialize_compressed()[..],
@@ -594,21 +601,21 @@ impl Pair {
 }
 
 #[cfg(feature = "full_crypto")]
-fn parse_signature(
-    x: &[u8],
+fn parse_signature_standard(
+	x: &[u8],
 ) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), libsecp256k1::Error> {
-    let sig = libsecp256k1::Signature::parse_standard_slice(&x[0..64])?;
-    let ri = libsecp256k1::RecoveryId::parse(x[64])?;
-    Ok((sig, ri))
+	let sig = libsecp256k1::Signature::parse_standard_slice(&x[0..64])?;
+	let ri = libsecp256k1::RecoveryId::parse(x[64])?;
+	Ok((sig, ri))
 }
 
 #[cfg(feature = "full_crypto")]
-fn parse_signature_deprecated(
-    x: &[u8],
+fn parse_signature_overflowing(
+	x: &[u8],
 ) -> Result<(libsecp256k1::Signature, libsecp256k1::RecoveryId), libsecp256k1::Error> {
-    let sig = libsecp256k1::Signature::parse_overflowing_slice(&x[0..64])?;
-    let ri = libsecp256k1::RecoveryId::parse(x[64])?;
-    Ok((sig, ri))
+	let sig = libsecp256k1::Signature::parse_overflowing_slice(&x[0..64])?;
+	let ri = libsecp256k1::RecoveryId::parse(x[64])?;
+	Ok((sig, ri))
 }
 
 impl CryptoType for Public {
@@ -852,7 +859,8 @@ mod test {
 		// `msg` shouldn't be mangled
 		let msg = [0u8; 32];
 		let sig1 = pair.sign_prehashed(&msg);
-		let sig2: Signature = libsecp256k1::sign(&libsecp256k1::Message::parse(&msg), &pair.secret).into();
+		let sig2: Signature =
+			libsecp256k1::sign(&libsecp256k1::Message::parse(&msg), &pair.secret).into();
 
 		assert_eq!(sig1, sig2);
 
@@ -864,7 +872,8 @@ mod test {
 		// using pre-hashed `msg` works
 		let msg = keccak_256(b"this should be hashed");
 		let sig1 = pair.sign_prehashed(&msg);
-		let sig2: Signature = libsecp256k1::sign(&libsecp256k1::Message::parse(&msg), &pair.secret).into();
+		let sig2: Signature =
+			libsecp256k1::sign(&libsecp256k1::Message::parse(&msg), &pair.secret).into();
 
 		assert_eq!(sig1, sig2);
 	}
