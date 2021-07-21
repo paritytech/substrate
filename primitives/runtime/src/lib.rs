@@ -516,15 +516,6 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 	}
 }
 
-impl From<crate::traits::StoredMapError> for DispatchError {
-	fn from(e: crate::traits::StoredMapError) -> Self {
-		match e {
-			crate::traits::StoredMapError::ConsumerRemaining => Self::ConsumerRemaining,
-			crate::traits::StoredMapError::NoProviders => Self::NoProviders,
-		}
-	}
-}
-
 /// Description of what went wrong when trying to complete an operation on a token.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]

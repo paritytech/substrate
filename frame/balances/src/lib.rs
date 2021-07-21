@@ -175,7 +175,7 @@ use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError, ArithmeticError,
 	traits::{
 		Zero, AtLeast32BitUnsigned, StaticLookup, CheckedAdd, CheckedSub,
-		MaybeSerializeDeserialize, Saturating, Bounded, StoredMapError,
+		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
 };
 use frame_system as system;
@@ -830,8 +830,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn mutate_account<R>(
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>) -> R,
-	) -> Result<R, StoredMapError> {
-		Self::try_mutate_account(who, |a, _| -> Result<R, StoredMapError> { Ok(f(a)) })
+	) -> Result<R, DispatchError> {
+		Self::try_mutate_account(who, |a, _| -> Result<R, DispatchError> { Ok(f(a)) })
 	}
 
 	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
@@ -843,7 +843,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn try_mutate_account<R, E: From<StoredMapError>>(
+	fn try_mutate_account<R, E: From<DispatchError>>(
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>,
 	) -> Result<R, E> {
@@ -867,7 +867,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
-	fn try_mutate_account_with_dust<R, E: From<StoredMapError>>(
+	fn try_mutate_account_with_dust<R, E: From<DispatchError>>(
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>,
 	) -> Result<(R, DustCleaner<T, I>), E> {
@@ -1449,7 +1449,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 
 		for attempt in 0..2 {
 			match Self::try_mutate_account(who,
-				|account, _is_new| -> Result<(Self::NegativeImbalance, Self::Balance), StoredMapError> {
+				|account, _is_new| -> Result<(Self::NegativeImbalance, Self::Balance), DispatchError> {
 					// Best value is the most amount we can slash following liveness rules.
 					let best_value = match attempt {
 						// First attempt we try to slash the full amount, and see if liveness issues happen.
