@@ -42,11 +42,11 @@ pub fn migrate<
 	let maybe_storage_version = <P as GetPalletVersion>::storage_version();
 	log::info!(
 		target: "runtime::collective",
-		"Running migration to v4.0 for collective with storage version {:?}",
+		"Running migration to v4 for collective with storage version {:?}",
 		maybe_storage_version,
 	);
 	match maybe_storage_version {
-		Some(storage_version) if storage_version <= PalletVersion::new(4, 0, 0) => {
+		Some(storage_version) if storage_version <= PalletVersion::new(3, 0, 0) => {
 			log::info!(target: "runtime::collective", "new prefix: {}", new_pallet_name.as_ref());
 			frame_support::storage::migration::move_pallet(
 				old_pallet_name.as_ref().as_bytes(),
@@ -57,7 +57,7 @@ pub fn migrate<
 		_ => {
 			log::warn!(
 				target: "runtime::collective",
-				"Attempted to apply migration to v4.0 but failed because storage version is {:?}",
+				"Attempted to apply migration to v4 but failed because storage version is {:?}",
 				maybe_storage_version,
 			);
 			0
@@ -101,10 +101,7 @@ pub fn pre_migration<
 			&sp_io::storage::next_key(&twox_128(new.as_bytes())).unwrap()
 		),
 	);
-	assert_eq!(
-		<P as GetPalletVersion>::storage_version(),
-		Some(PalletVersion::new(3, 0, 0)),
-	);
+	assert_eq!(<P as GetPalletVersion>::storage_version().map(|version| version.major), Some(3));
 }
 
 /// Some checks for after migration. This can be linked to
@@ -116,14 +113,7 @@ pub fn post_migration<P: GetPalletVersion, N: AsRef<str>>(old_pallet_name: N) {
 
 	let old_pallet_name = old_pallet_name.as_ref().as_bytes();
 	// Assert that nothing remains at the old prefix
-	assert!(
-		sp_io::storage::next_key(&twox_128(old_pallet_name)).map_or(
-			true,
-			|next_key| !next_key.starts_with(&twox_128(old_pallet_name))
-		)
-	);
-	assert_eq!(
-		<P as GetPalletVersion>::storage_version(),
-		Some(PalletVersion::new(4, 0, 0)),
-	);
+	assert!(sp_io::storage::next_key(&twox_128(old_pallet_name))
+		.map_or(true, |next_key| !next_key.starts_with(&twox_128(old_pallet_name))));
+	assert_eq!(<P as GetPalletVersion>::storage_version().map(|version| version.major), Some(4));
 }

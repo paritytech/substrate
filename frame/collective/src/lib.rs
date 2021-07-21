@@ -155,9 +155,9 @@ pub struct Votes<AccountId, BlockNumber> {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -218,9 +218,9 @@ pub mod pallet {
 		fn build(&self) {
 			use sp_std::collections::btree_set::BTreeSet;
 			let members_set: BTreeSet<_> = self.members.iter().collect();
-			assert!(members_set.len() == self.members.len(), "Members cannot contain duplicate accounts.");
+			assert_eq!(members_set.len(), self.members.len(), "Members cannot contain duplicate accounts.");
 
-            Pallet::<T, I>::initialize_members(&self.members)
+			Pallet::<T, I>::initialize_members(&self.members)
 		}
 	}
 
@@ -1049,7 +1049,7 @@ mod tests {
 		BuildStorage,
 	};
 
-	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Pays};
+	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, traits::GenesisBuild, weights::Pays};
 	use frame_system::{EventRecord, Phase};
 
 	parameter_types! {
@@ -1916,7 +1916,6 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Members cannot contain duplicate accounts.")]
 	fn genesis_build_panics_with_duplicate_members() {
-        use frame_support::traits::GenesisBuild;
 		pallet_collective::GenesisConfig::<Test> {
 			members: vec![1, 2, 3, 1],
 			phantom: Default::default(),
