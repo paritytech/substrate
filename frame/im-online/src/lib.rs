@@ -280,6 +280,7 @@ pub mod pallet {
 		///
 		/// This is exposed so that it can be tuned for particular runtime, when
 		/// multiple pallets send unsigned transactions.
+		#[pallet::constant]
 		type UnsignedPriority: Get<TransactionPriority>;
 
 		/// Weight information for extrinsics in this pallet.

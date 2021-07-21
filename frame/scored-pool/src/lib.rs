@@ -141,10 +141,12 @@ pub mod pallet {
 		// The deposit which is reserved from candidates if they want to
 		// start a candidacy. The deposit gets returned when the candidacy is
 		// withdrawn or when the candidate is kicked.
+		#[pallet::constant]
 		type CandidateDeposit: Get<BalanceOf<Self, I>>;
 
 		/// Every `Period` blocks the `Members` are filled with the highest scoring
 		/// members in the `Pool`.
+		#[pallet::constant]
 		type Period: Get<Self::BlockNumber>;
 
 		/// The receiver of the signal for when the membership has been initialized.
