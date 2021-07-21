@@ -23,8 +23,8 @@
 // borthersome.
 #![cfg(feature = "wasmtime")]
 
-use crate::WasmExecutionMethod;
 use super::mk_test_runtime;
+use crate::WasmExecutionMethod;
 use codec::Encode as _;
 
 mod smaps;
@@ -54,17 +54,11 @@ fn memory_consumption_compiled() {
 	}
 
 	instance
-		.call_export(
-			"test_dirty_plenty_memory",
-			&(heap_base as u32, 1u32).encode(),
-		)
+		.call_export("test_dirty_plenty_memory", &(heap_base as u32, 1u32).encode())
 		.unwrap();
 	let probe_1 = probe_rss(&*instance);
 	instance
-		.call_export(
-			"test_dirty_plenty_memory",
-			&(heap_base as u32, 1024u32).encode(),
-		)
+		.call_export("test_dirty_plenty_memory", &(heap_base as u32, 1024u32).encode())
 		.unwrap();
 	let probe_2 = probe_rss(&*instance);
 

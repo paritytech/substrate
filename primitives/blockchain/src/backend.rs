@@ -19,11 +19,13 @@
 
 use std::sync::Arc;
 
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::generic::BlockId;
-use sp_runtime::Justifications;
 use log::warn;
 use parking_lot::RwLock;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	Justifications,
+};
 
 use crate::header_metadata::HeaderMetadata;
 
@@ -38,7 +40,10 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block status.
 	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
 	/// Get block number by hash. Returns `None` if the header is not in the chain.
-	fn number(&self, hash: Block::Hash) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>>;
+	fn number(
+		&self,
+		hash: Block::Hash,
+	) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
 
@@ -60,28 +65,29 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 
 	/// Get block header. Returns `UnknownBlock` error if block is not found.
 	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
-		self.header(id)?.ok_or_else(|| Error::UnknownBlock(format!("Expect header: {}", id)))
+		self.header(id)?
+			.ok_or_else(|| Error::UnknownBlock(format!("Expect header: {}", id)))
 	}
 
 	/// Convert an arbitrary block ID into a block number. Returns `UnknownBlock` error if block is not found.
 	fn expect_block_number_from_id(&self, id: &BlockId<Block>) -> Result<NumberFor<Block>> {
-		self.block_number_from_id(id)
-			.and_then(|n| n.ok_or_else(||
-				Error::UnknownBlock(format!("Expect block number from id: {}", id))
-			))
+		self.block_number_from_id(id).and_then(|n| {
+			n.ok_or_else(|| Error::UnknownBlock(format!("Expect block number from id: {}", id)))
+		})
 	}
 
 	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is not found.
 	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Block::Hash> {
-		self.block_hash_from_id(id)
-			.and_then(|n| n.ok_or_else(||
-				Error::UnknownBlock(format!("Expect block hash from id: {}", id))
-			))
+		self.block_hash_from_id(id).and_then(|n| {
+			n.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
+		})
 	}
 }
 
 /// Blockchain database backend. Does not perform any validation.
-pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, Error=Error> {
+pub trait Backend<Block: BlockT>:
+	HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>
+{
 	/// Get block body. Returns `None` if block is not found.
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justifications. Returns `None` if no justification exists.
@@ -120,14 +126,14 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 			match self.header(BlockId::Hash(target_hash))? {
 				Some(x) => x,
 				// target not in blockchain
-				None => { return Ok(None); },
+				None => return Ok(None),
 			}
 		};
 
 		if let Some(max_number) = maybe_max_number {
 			// target outside search range
 			if target_header.number() > &max_number {
-				return Ok(None);
+				return Ok(None)
 			}
 		}
 
@@ -148,12 +154,12 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 				// provided, we continue to search from all leaves below.
 				if let Some(max_number) = maybe_max_number {
 					if let Some(header) = self.hash(max_number)? {
-						return Ok(Some(header));
+						return Ok(Some(header))
 					}
 				}
 			} else if info.finalized_number >= *target_header.number() {
 				// header is on a dead fork.
-				return Ok(None);
+				return Ok(None)
 			}
 
 			self.leaves()?
@@ -171,12 +177,13 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 			// waiting until we are <= max_number
 			if let Some(max_number) = maybe_max_number {
 				loop {
-					let current_header = self.header(BlockId::Hash(current_hash.clone()))?
+					let current_header = self
+						.header(BlockId::Hash(current_hash.clone()))?
 						.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 					if current_header.number() <= &max_number {
 						best_hash = current_header.hash();
-						break;
+						break
 					}
 
 					current_hash = *current_header.parent_hash();
@@ -187,15 +194,16 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 			loop {
 				// until we find target
 				if current_hash == target_hash {
-					return Ok(Some(best_hash));
+					return Ok(Some(best_hash))
 				}
 
-				let current_header = self.header(BlockId::Hash(current_hash.clone()))?
+				let current_header = self
+					.header(BlockId::Hash(current_hash.clone()))?
 					.ok_or_else(|| Error::MissingHeader(current_hash.to_string()))?;
 
 				// stop search in this chain once we go below the target's block number
 				if current_header.number() < target_header.number() {
-					break;
+					break
 				}
 
 				current_hash = *current_header.parent_hash();
@@ -209,8 +217,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 		warn!(
 			"Block {:?} exists in chain but not found when following all \
 			leaves backwards. Number limit = {:?}",
-			target_hash,
-			maybe_max_number,
+			target_hash, maybe_max_number,
 		);
 
 		Ok(None)
@@ -218,10 +225,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 
 	/// Get single indexed transaction by content hash. Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn indexed_transaction(
-		&self,
-		hash: &Block::Hash,
-	) -> Result<Option<Vec<u8>>>;
+	fn indexed_transaction(&self, hash: &Block::Hash) -> Result<Option<Vec<u8>>>;
 
 	/// Check if indexed transaction exists.
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> Result<bool> {
@@ -253,7 +257,9 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 		&self,
 		key: &well_known_cache_keys::Id,
 		block: &BlockId<Block>,
-	) -> Result<Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>>;
+	) -> Result<
+		Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>,
+	>;
 }
 
 /// Blockchain info
@@ -272,7 +278,7 @@ pub struct Info<Block: BlockT> {
 	/// Last finalized state.
 	pub finalized_state: Option<(Block::Hash, <<Block as BlockT>::Header as HeaderT>::Number)>,
 	/// Number of concurrent leave forks.
-	pub number_leaves: usize
+	pub number_leaves: usize,
 }
 
 /// Block status.

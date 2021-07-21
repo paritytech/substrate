@@ -25,21 +25,20 @@ mod pruning_params;
 mod shared_params;
 mod transaction_pool_params;
 
-use std::{fmt::Debug, str::FromStr, convert::TryFrom};
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, NumberFor}};
+use crate::arg_enums::{CryptoScheme, OutputType};
 use sp_core::crypto::Ss58AddressFormat;
-use crate::arg_enums::{OutputType, CryptoScheme};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, NumberFor},
+};
+use std::{convert::TryFrom, fmt::Debug, str::FromStr};
 use structopt::StructOpt;
 
-pub use crate::params::database_params::*;
-pub use crate::params::import_params::*;
-pub use crate::params::keystore_params::*;
-pub use crate::params::network_params::*;
-pub use crate::params::node_key_params::*;
-pub use crate::params::offchain_worker_params::*;
-pub use crate::params::pruning_params::*;
-pub use crate::params::shared_params::*;
-pub use crate::params::transaction_pool_params::*;
+pub use crate::params::{
+	database_params::*, import_params::*, keystore_params::*, network_params::*,
+	node_key_params::*, offchain_worker_params::*, pruning_params::*, shared_params::*,
+	transaction_pool_params::*,
+};
 
 /// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
 #[derive(Debug, Clone)]
@@ -50,10 +49,7 @@ impl FromStr for GenericNumber {
 
 	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
 		if let Some(pos) = block_number.chars().position(|d| !d.is_digit(10)) {
-			Err(format!(
-				"Expected block number, found illegal digit at position: {}",
-				pos,
-			))
+			Err(format!("Expected block number, found illegal digit at position: {}", pos,))
 		} else {
 			Ok(Self(block_number.to_owned()))
 		}
@@ -66,9 +62,9 @@ impl GenericNumber {
 	/// See `https://doc.rust-lang.org/std/primitive.str.html#method.parse` for more elaborate
 	/// documentation.
 	pub fn parse<N>(&self) -> Result<N, String>
-		where
-			N: FromStr,
-			N::Err: std::fmt::Debug,
+	where
+		N: FromStr,
+		N::Err: std::fmt::Debug,
 	{
 		FromStr::from_str(&self.0).map_err(|e| format!("Failed to parse block number: {:?}", e))
 	}
@@ -109,14 +105,13 @@ impl BlockNumberOrHash {
 		if self.0.starts_with("0x") {
 			Ok(BlockId::Hash(
 				FromStr::from_str(&self.0[2..])
-					.map_err(|e| format!("Failed to parse block hash: {:?}", e))?
+					.map_err(|e| format!("Failed to parse block hash: {:?}", e))?,
 			))
 		} else {
 			GenericNumber(self.0.clone()).parse().map(BlockId::Number)
 		}
 	}
 }
-
 
 /// Optional flag for specifying crypto algorithm
 #[derive(Debug, StructOpt, Clone)]

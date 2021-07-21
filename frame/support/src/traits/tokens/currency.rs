@@ -17,17 +17,19 @@
 
 //! The Currency trait and associated types.
 
-use sp_std::fmt::Debug;
-use sp_runtime::traits::MaybeSerializeDeserialize;
-use crate::dispatch::{DispatchResult, DispatchError};
-use super::misc::{Balance, WithdrawReasons, ExistenceRequirement};
-use super::imbalance::{Imbalance, SignedImbalance};
+use super::{
+	imbalance::{Imbalance, SignedImbalance},
+	misc::{Balance, ExistenceRequirement, WithdrawReasons},
+};
+use crate::dispatch::{DispatchError, DispatchResult};
 use codec::MaxEncodedLen;
+use sp_runtime::traits::MaybeSerializeDeserialize;
+use sp_std::fmt::Debug;
 
 mod reservable;
-pub use reservable::{ReservableCurrency, NamedReservableCurrency};
+pub use reservable::{NamedReservableCurrency, ReservableCurrency};
 mod lockable;
-pub use lockable::{LockableCurrency, VestingSchedule, LockIdentifier};
+pub use lockable::{LockIdentifier, LockableCurrency, VestingSchedule};
 
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
@@ -36,11 +38,11 @@ pub trait Currency<AccountId> {
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
-	type PositiveImbalance: Imbalance<Self::Balance, Opposite=Self::NegativeImbalance>;
+	type PositiveImbalance: Imbalance<Self::Balance, Opposite = Self::NegativeImbalance>;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
-	type NegativeImbalance: Imbalance<Self::Balance, Opposite=Self::PositiveImbalance>;
+	type NegativeImbalance: Imbalance<Self::Balance, Opposite = Self::PositiveImbalance>;
 
 	// PUBLIC IMMUTABLES
 
@@ -123,17 +125,14 @@ pub trait Currency<AccountId> {
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then a non-zero second item will be returned.
-	fn slash(
-		who: &AccountId,
-		value: Self::Balance
-	) -> (Self::NegativeImbalance, Self::Balance);
+	fn slash(who: &AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance);
 
 	/// Mints `value` to the free balance of `who`.
 	///
 	/// If `who` doesn't exist, nothing is done and an Err returned.
 	fn deposit_into_existing(
 		who: &AccountId,
-		value: Self::Balance
+		value: Self::Balance,
 	) -> Result<Self::PositiveImbalance, DispatchError>;
 
 	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
@@ -152,17 +151,11 @@ pub trait Currency<AccountId> {
 	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created.
 	///
 	/// Infallible.
-	fn deposit_creating(
-		who: &AccountId,
-		value: Self::Balance,
-	) -> Self::PositiveImbalance;
+	fn deposit_creating(who: &AccountId, value: Self::Balance) -> Self::PositiveImbalance;
 
 	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and returns nothing on
 	/// success.
-	fn resolve_creating(
-		who: &AccountId,
-		value: Self::NegativeImbalance,
-	) {
+	fn resolve_creating(who: &AccountId, value: Self::NegativeImbalance) {
 		let v = value.peek();
 		drop(value.offset(Self::deposit_creating(who, v)));
 	}

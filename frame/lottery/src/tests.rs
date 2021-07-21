@@ -18,13 +18,12 @@
 //! Tests for the module.
 
 use super::*;
-use mock::{
-	Lottery, Balances, Test, Origin, Call, SystemCall, BalancesCall,
-	new_test_ext, run_to_block
-};
-use sp_runtime::traits::{BadOrigin};
 use frame_support::{assert_noop, assert_ok};
+use mock::{
+	new_test_ext, run_to_block, Balances, BalancesCall, Call, Lottery, Origin, SystemCall, Test,
+};
 use pallet_balances::Error as BalancesError;
+use sp_runtime::traits::BadOrigin;
 
 #[test]
 fn initial_state() {
@@ -86,13 +85,7 @@ fn basic_end_to_end_works() {
 		assert_eq!(LotteryIndex::<Test>::get(), 2);
 		assert_eq!(
 			crate::Lottery::<Test>::get().unwrap(),
-			LotteryConfig {
-				price,
-				start: 25,
-				length,
-				delay,
-				repeat: true,
-			}
+			LotteryConfig { price, start: 25, length, delay, repeat: true }
 		);
 	});
 }
@@ -184,10 +177,7 @@ fn buy_ticket_works_as_simple_passthrough() {
 		);
 
 		let bad_origin_call = Box::new(Call::Balances(BalancesCall::force_transfer(0, 0, 0)));
-		assert_noop!(
-			Lottery::buy_ticket(Origin::signed(1), bad_origin_call),
-			BadOrigin,
-		);
+		assert_noop!(Lottery::buy_ticket(Origin::signed(1), bad_origin_call), BadOrigin,);
 
 		// User can call other txs, but doesn't get a ticket
 		let remark_call = Box::new(Call::System(SystemCall::remark(b"hello, world!".to_vec())));
@@ -209,7 +199,6 @@ fn buy_ticket_works() {
 			Call::Balances(BalancesCall::transfer(0, 0)),
 		];
 		assert_ok!(Lottery::set_calls(Origin::root(), calls));
-
 
 		// Can't buy ticket before start
 		let call = Box::new(Call::Balances(BalancesCall::transfer(2, 1)));

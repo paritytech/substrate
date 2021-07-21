@@ -17,10 +17,10 @@
 
 //! Implementation of macros related to pallet versioning.
 
-use proc_macro2::{TokenStream, Span};
-use syn::{Result, Error};
-use std::{env, str::FromStr};
 use frame_support_procedural_tools::generate_crate_access_2018;
+use proc_macro2::{Span, TokenStream};
+use std::{env, str::FromStr};
+use syn::{Error, Result};
 
 /// Get the version from the given version environment variable.
 ///

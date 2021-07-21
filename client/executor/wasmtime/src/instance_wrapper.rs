@@ -19,26 +19,23 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use crate::util;
-use crate::imports::Imports;
+use crate::{imports::Imports, util};
 
-use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
 	runtime_blob,
 	wasm_runtime::InvokeMethod,
 };
-use sp_wasm_interface::{Pointer, WordSize, Value};
-use wasmtime::{Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
+use sp_wasm_interface::{Pointer, Value, WordSize};
+use std::{marker, slice};
+use wasmtime::{Extern, Func, Global, Instance, Memory, Module, Store, Table, Val};
 
 /// Invoked entrypoint format.
 pub enum EntryPointType {
 	/// Direct call.
 	///
 	/// Call is made by providing only payload reference and length.
-	Direct {
-		entrypoint: wasmtime::TypedFunc<(u32, u32), u64>,
-	},
+	Direct { entrypoint: wasmtime::TypedFunc<(u32, u32), u64> },
 	/// Indirect call.
 	///
 	/// Call is made by providing payload reference and length, and extra argument
@@ -66,17 +63,10 @@ impl EntryPoint {
 		}
 
 		match self.call_type {
-			EntryPointType::Direct { ref entrypoint } => {
-				entrypoint.call((data_ptr, data_len)).map_err(handle_trap)
-			}
-			EntryPointType::Wrapped {
-				func,
-				ref dispatcher,
-			} => {
-				dispatcher
-					.call((func, data_ptr, data_len))
-					.map_err(handle_trap)
-			}
+			EntryPointType::Direct { ref entrypoint } =>
+				entrypoint.call((data_ptr, data_len)).map_err(handle_trap),
+			EntryPointType::Wrapped { func, ref dispatcher } =>
+				dispatcher.call((func, data_ptr, data_len)).map_err(handle_trap),
 		}
 	}
 
@@ -85,9 +75,7 @@ impl EntryPoint {
 			.typed::<(u32, u32), u64>()
 			.map_err(|_| "Invalid signature for direct entry point")?
 			.clone();
-		Ok(Self {
-			call_type: EntryPointType::Direct { entrypoint },
-		})
+		Ok(Self { call_type: EntryPointType::Direct { entrypoint } })
 	}
 
 	pub fn wrapped(
@@ -98,9 +86,7 @@ impl EntryPoint {
 			.typed::<(u32, u32, u32), u64>()
 			.map_err(|_| "Invalid signature for wrapped entry point")?
 			.clone();
-		Ok(Self {
-			call_type: EntryPointType::Wrapped { func, dispatcher },
-		})
+		Ok(Self { call_type: EntryPointType::Wrapped { func, dispatcher } })
 	}
 }
 
@@ -126,7 +112,6 @@ fn extern_memory(extern_: &Extern) -> Option<&Memory> {
 		_ => None,
 	}
 }
-
 
 fn extern_global(extern_: &Extern) -> Option<&Global> {
 	match extern_ {
@@ -156,15 +141,13 @@ impl InstanceWrapper {
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {
-			Some(memory_idx) => {
-				extern_memory(&imports.externs[memory_idx])
-					.expect("only memory can be at the `memory_idx`; qed")
-					.clone()
-			}
+			Some(memory_idx) => extern_memory(&imports.externs[memory_idx])
+				.expect("only memory can be at the `memory_idx`; qed")
+				.clone(),
 			None => {
 				let memory = get_linear_memory(&instance)?;
 				if !memory.grow(heap_pages).is_ok() {
-					return Err("failed top increase the linear memory size".into());
+					return Err("failed top increase the linear memory size".into())
 				}
 				memory
 			},
@@ -186,42 +169,38 @@ impl InstanceWrapper {
 		Ok(match method {
 			InvokeMethod::Export(method) => {
 				// Resolve the requested method and verify that it has a proper signature.
-				let export = self
-					.instance
-					.get_export(method)
-					.ok_or_else(|| Error::from(format!("Exported method {} is not found", method)))?;
+				let export = self.instance.get_export(method).ok_or_else(|| {
+					Error::from(format!("Exported method {} is not found", method))
+				})?;
 				let func = extern_func(&export)
 					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?
 					.clone();
-				EntryPoint::direct(func)
-					.map_err(|_|
-						Error::from(format!(
-							"Exported function '{}' has invalid signature.",
-							method,
-						))
-					)?
+				EntryPoint::direct(func).map_err(|_| {
+					Error::from(format!("Exported function '{}' has invalid signature.", method,))
+				})?
 			},
 			InvokeMethod::Table(func_ref) => {
-				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
-				let val = table.get(func_ref)
-					.ok_or(Error::NoTableEntryWithIndex(func_ref))?;
+				let table =
+					self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
+				let val = table.get(func_ref).ok_or(Error::NoTableEntryWithIndex(func_ref))?;
 				let func = val
 					.funcref()
 					.ok_or(Error::TableElementIsNotAFunction(func_ref))?
 					.ok_or(Error::FunctionRefIsNull(func_ref))?
 					.clone();
 
-				EntryPoint::direct(func)
-					.map_err(|_|
-						Error::from(format!(
-							"Function @{} in exported table has invalid signature for direct call.",
-							func_ref,
-						))
-					)?
-				},
+				EntryPoint::direct(func).map_err(|_| {
+					Error::from(format!(
+						"Function @{} in exported table has invalid signature for direct call.",
+						func_ref,
+					))
+				})?
+			},
 			InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
-				let table = self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
-				let val = table.get(dispatcher_ref)
+				let table =
+					self.instance.get_table("__indirect_function_table").ok_or(Error::NoTable)?;
+				let val = table
+					.get(dispatcher_ref)
 					.ok_or(Error::NoTableEntryWithIndex(dispatcher_ref))?;
 				let dispatcher = val
 					.funcref()
@@ -229,13 +208,12 @@ impl InstanceWrapper {
 					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?
 					.clone();
 
-				EntryPoint::wrapped(dispatcher, func)
-					.map_err(|_|
-						Error::from(format!(
-							"Function @{} in exported table has invalid signature for wrapped call.",
-							dispatcher_ref,
-						))
-					)?
+				EntryPoint::wrapped(dispatcher, func).map_err(|_| {
+					Error::from(format!(
+						"Function @{} in exported table has invalid signature for wrapped call.",
+						dispatcher_ref,
+					))
+				})?
 			},
 		})
 	}
@@ -426,7 +404,7 @@ impl InstanceWrapper {
 	/// relied upon. Thus this function acts as a hint.
 	pub fn decommit(&self) {
 		if self.memory.data_size() == 0 {
-			return;
+			return
 		}
 
 		cfg_if::cfg_if! {

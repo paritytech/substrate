@@ -18,22 +18,26 @@
 
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
-use crate::host::HostState;
-use crate::imports::{Imports, resolve_imports};
-use crate::instance_wrapper::{InstanceWrapper, EntryPoint};
-use crate::state_holder;
+use crate::{
+	host::HostState,
+	imports::{resolve_imports, Imports},
+	instance_wrapper::{EntryPoint, InstanceWrapper},
+	state_holder,
+};
 
-use std::{path::PathBuf, rc::Rc};
-use std::sync::Arc;
-use std::path::Path;
+use sc_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
 	error::{Result, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob},
-	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
+	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
-use sc_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
-use sp_wasm_interface::{Function, Pointer, WordSize, Value};
+use sp_wasm_interface::{Function, Pointer, Value, WordSize};
+use std::{
+	path::{Path, PathBuf},
+	rc::Rc,
+	sync::Arc,
+};
 use wasmtime::{Engine, Store};
 
 enum Strategy {
@@ -102,7 +106,8 @@ impl WasmModule for WasmtimeRuntime {
 			// the mutable globals were collected. Here, it is easy to see that there is only a single
 			// runtime blob and thus it's the same that was used for both creating the instance and
 			// collecting the mutable globals.
-			let globals_snapshot = GlobalsSnapshot::take(&snapshot_data.mutable_globals, &instance_wrapper);
+			let globals_snapshot =
+				GlobalsSnapshot::take(&snapshot_data.mutable_globals, &instance_wrapper);
 
 			Strategy::FastInstanceReuse {
 				instance_wrapper: Rc::new(instance_wrapper),
@@ -150,14 +155,15 @@ impl WasmInstance for WasmtimeInstance {
 				globals_snapshot.apply(&**instance_wrapper);
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				let result = perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator);
+				let result =
+					perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator);
 
 				// Signal to the OS that we are done with the linear memory and that it can be
 				// reclaimed.
 				instance_wrapper.decommit();
 
 				result
-			}
+			},
 			Strategy::RecreateInstance(instance_creator) => {
 				let instance_wrapper = instance_creator.instantiate()?;
 				let heap_base = instance_wrapper.extract_heap_base()?;
@@ -165,18 +171,16 @@ impl WasmInstance for WasmtimeInstance {
 
 				let allocator = FreeingBumpHeapAllocator::new(heap_base);
 				perform_call(data, Rc::new(instance_wrapper), entrypoint, allocator)
-			}
+			},
 		}
 	}
 
 	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
 		match &self.strategy {
-			Strategy::FastInstanceReuse {
-				instance_wrapper, ..
-			} => instance_wrapper.get_global_val(name),
-			Strategy::RecreateInstance(instance_creator) => {
-				instance_creator.instantiate()?.get_global_val(name)
-			}
+			Strategy::FastInstanceReuse { instance_wrapper, .. } =>
+				instance_wrapper.get_global_val(name),
+			Strategy::RecreateInstance(instance_creator) =>
+				instance_creator.instantiate()?.get_global_val(name),
 		}
 	}
 
@@ -186,10 +190,9 @@ impl WasmInstance for WasmtimeInstance {
 				// We do not keep the wasm instance around, therefore there is no linear memory
 				// associated with it.
 				None
-			}
-			Strategy::FastInstanceReuse {
-				instance_wrapper, ..
-			} => Some(instance_wrapper.base_ptr()),
+			},
+			Strategy::FastInstanceReuse { instance_wrapper, .. } =>
+				Some(instance_wrapper.base_ptr()),
 		}
 	}
 }
@@ -237,9 +240,8 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 	config.cranelift_nan_canonicalization(semantics.canonicalize_nans);
 
-	if let Some(DeterministicStackLimit {
-		native_stack_max, ..
-	}) = semantics.deterministic_stack_limit
+	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
+		semantics.deterministic_stack_limit
 	{
 		config
 			.max_wasm_stack(native_stack_max as usize)
@@ -296,8 +298,8 @@ pub struct DeterministicStackLimit {
 	/// after translation into machine code. It is also not quite trivial.
 	///
 	/// Therefore, this number should be choosen conservatively. It must be so large so that it can
-	/// fit the [`logical_max`] logical values on the stack, according to the current instrumentation
-	/// algorithm.
+	/// fit the [`logical_max`](Self::logical_max) logical values on the stack, according to the current
+	/// instrumentation algorithm.
 	///
 	/// This value cannot be 0.
 	pub native_stack_max: u32,
@@ -315,8 +317,9 @@ pub struct Semantics {
 	/// This is not a problem for a standard substrate runtime execution because it's up to the
 	/// runtime itself to make sure that it doesn't involve any non-determinism.
 	///
-	/// Since this feature depends on instrumentation, it can be set only if [`CodeSupplyMode::Verbatim`]
-	/// is used.
+	/// Since this feature depends on instrumentation, it can be set only if runtime is
+	/// instantiated using the runtime blob, e.g. using [`create_runtime`].
+	// I.e. if [`CodeSupplyMode::Verbatim`] is used.
 	pub fast_instance_reuse: bool,
 
 	/// Specifiying `Some` will enable deterministic stack height. That is, all executor invocations
@@ -326,8 +329,9 @@ pub struct Semantics {
 	/// This is achieved by a combination of running an instrumentation pass on input code and
 	/// configuring wasmtime accordingly.
 	///
-	/// Since this feature depends on instrumentation, it can be set only if [`CodeSupplyMode::Verbatim`]
-	/// is used.
+	/// Since this feature depends on instrumentation, it can be set only if runtime is
+	/// instantiated using the runtime blob, e.g. using [`create_runtime`].
+	// I.e. if [`CodeSupplyMode::Verbatim`] is used.
 	pub deterministic_stack_limit: Option<DeterministicStackLimit>,
 
 	/// Controls whether wasmtime should compile floating point in a way that doesn't allow for
@@ -409,11 +413,7 @@ pub unsafe fn create_runtime_from_artifact(
 	config: Config,
 	host_functions: Vec<&'static dyn Function>,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
-	do_create_runtime(
-		CodeSupplyMode::Artifact { compiled_artifact },
-		config,
-		host_functions,
-	)
+	do_create_runtime(CodeSupplyMode::Artifact { compiled_artifact }, config, host_functions)
 }
 
 /// # Safety
@@ -454,16 +454,13 @@ unsafe fn do_create_runtime(
 				let module = wasmtime::Module::new(&engine, &blob.serialize())
 					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
-				(module, Some(InstanceSnapshotData {
-					data_segments_snapshot,
-					mutable_globals,
-				}))
+				(module, Some(InstanceSnapshotData { data_segments_snapshot, mutable_globals }))
 			} else {
 				let module = wasmtime::Module::new(&engine, &blob.serialize())
 					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 				(module, None)
 			}
-		}
+		},
 		CodeSupplyMode::Artifact { compiled_artifact } => {
 			// SAFETY: The unsafity of `deserialize` is covered by this function. The
 			//         responsibilities to maintain the invariants are passed to the caller.
@@ -471,16 +468,10 @@ unsafe fn do_create_runtime(
 				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {}", e)))?;
 
 			(module, None)
-		}
+		},
 	};
 
-	Ok(WasmtimeRuntime {
-		module: Arc::new(module),
-		snapshot_data,
-		config,
-		host_functions,
-		engine,
-	})
+	Ok(WasmtimeRuntime { module: Arc::new(module), snapshot_data, config, host_functions, engine })
 }
 
 fn instrument(

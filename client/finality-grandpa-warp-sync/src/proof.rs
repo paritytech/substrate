@@ -72,7 +72,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		if begin_number > blockchain.info().finalized_number {
 			return Err(HandleRequestError::InvalidRequest(
 				"Start block is not finalized".to_string(),
-			));
+			))
 		}
 
 		let canon_hash = blockchain.hash(begin_number)?.expect(
@@ -84,15 +84,15 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		if canon_hash != begin {
 			return Err(HandleRequestError::InvalidRequest(
 				"Start block is not in the finalized chain".to_string(),
-			));
+			))
 		}
 
 		let mut proofs = Vec::new();
 		let mut proofs_encoded_len = 0;
 		let mut proof_limit_reached = false;
 
-		let set_changes = set_changes.iter_from(begin_number)
-			.ok_or(HandleRequestError::MissingData)?;
+		let set_changes =
+			set_changes.iter_from(begin_number).ok_or(HandleRequestError::MissingData)?;
 
 		for (_, last_block) in set_changes {
 			let header = blockchain.header(BlockId::Number(*last_block))?.expect(
@@ -105,7 +105,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				// if it doesn't contain a signal for standard change then the set must have changed
 				// through a forced changed, in which case we stop collecting proofs as the chain of
 				// trust in authority handoffs was broken.
-				break;
+				break
 			}
 
 			let justification = blockchain
@@ -119,10 +119,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 			let justification = GrandpaJustification::<Block>::decode(&mut &justification[..])?;
 
-			let proof = WarpSyncFragment {
-				header: header.clone(),
-				justification,
-			};
+			let proof = WarpSyncFragment { header: header.clone(), justification };
 			let proof_size = proof.encoded_size();
 
 			// Check for the limit. We remove some bytes from the maximum size, because we're only
@@ -130,7 +127,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			// room for rest of the data (the size of the `Vec` and the boolean).
 			if proofs_encoded_len + proof_size >= MAX_WARP_SYNC_PROOF_SIZE - 50 {
 				proof_limit_reached = true;
-				break;
+				break
 			}
 
 			proofs_encoded_len += proof_size;
@@ -158,19 +155,13 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				let header = blockchain.header(BlockId::Hash(latest_justification.target().1))?
 					.expect("header hash corresponds to a justification in db; must exist in db as well; qed.");
 
-				proofs.push(WarpSyncFragment {
-					header,
-					justification: latest_justification,
-				})
+				proofs.push(WarpSyncFragment { header, justification: latest_justification })
 			}
 
 			true
 		};
 
-		let final_outcome = WarpSyncProof {
-			proofs,
-			is_finished,
-		};
+		let final_outcome = WarpSyncProof { proofs, is_finished };
 		debug_assert!(final_outcome.encoded_size() <= MAX_WARP_SYNC_PROOF_SIZE);
 		Ok(final_outcome)
 	}
@@ -196,8 +187,8 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 			if proof.justification.target().1 != proof.header.hash() {
 				return Err(HandleRequestError::InvalidProof(
-					"mismatch between header and justification".to_owned()
-				));
+					"mismatch between header and justification".to_owned(),
+				))
 			}
 
 			if let Some(scheduled_change) = find_scheduled_change::<Block>(&proof.header) {
@@ -208,7 +199,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				// set change.
 				return Err(HandleRequestError::InvalidProof(
 					"Header is missing authority set change digest".to_string(),
-				));
+				))
 			}
 		}
 
@@ -249,12 +240,7 @@ mod tests {
 		let mut authority_set_changes = Vec::new();
 
 		for n in 1..=100 {
-			let mut block = client
-				.new_block(Default::default())
-				.unwrap()
-				.build()
-				.unwrap()
-				.block;
+			let mut block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 
 			let mut new_authorities = None;
 
@@ -277,10 +263,7 @@ mod tests {
 				let digest = sp_runtime::generic::DigestItem::Consensus(
 					sp_finality_grandpa::GRANDPA_ENGINE_ID,
 					sp_finality_grandpa::ConsensusLog::ScheduledChange(
-						sp_finality_grandpa::ScheduledChange {
-							delay: 0u64,
-							next_authorities,
-						},
+						sp_finality_grandpa::ScheduledChange { delay: 0u64, next_authorities },
 					)
 					.encode(),
 				);
@@ -300,10 +283,7 @@ mod tests {
 
 				let mut precommits = Vec::new();
 				for keyring in &current_authorities {
-					let precommit = finality_grandpa::Precommit {
-						target_hash,
-						target_number,
-					};
+					let precommit = finality_grandpa::Precommit { target_hash, target_number };
 
 					let msg = finality_grandpa::Message::Precommit(precommit.clone());
 					let encoded = sp_finality_grandpa::localized_payload(42, current_set_id, &msg);
@@ -318,18 +298,14 @@ mod tests {
 					precommits.push(precommit);
 				}
 
-				let commit = finality_grandpa::Commit {
-					target_hash,
-					target_number,
-					precommits,
-				};
+				let commit = finality_grandpa::Commit { target_hash, target_number, precommits };
 
 				let justification = GrandpaJustification::from_commit(&client, 42, commit).unwrap();
 
 				client
 					.finalize_block(
 						BlockId::Hash(target_hash),
-						Some((GRANDPA_ENGINE_ID, justification.encode()))
+						Some((GRANDPA_ENGINE_ID, justification.encode())),
 					)
 					.unwrap();
 

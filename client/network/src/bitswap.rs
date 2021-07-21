@@ -20,31 +20,39 @@
 //! Only supports bitswap 1.2.0.
 //! CID is expected to reference 256-bit Blake2b transaction hash.
 
-use std::collections::VecDeque;
-use std::io;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use crate::{
+	chain::Client,
+	schema::bitswap::{
+		message::{wantlist::WantType, Block as MessageBlock, BlockPresence, BlockPresenceType},
+		Message as BitswapMessage,
+	},
+};
 use cid::Version;
 use core::pin::Pin;
-use futures::Future;
-use futures::io::{AsyncRead, AsyncWrite};
-use libp2p::core::{
-	connection::ConnectionId, Multiaddr, PeerId,
-	upgrade, InboundUpgrade, OutboundUpgrade, UpgradeInfo,
+use futures::{
+	io::{AsyncRead, AsyncWrite},
+	Future,
 };
-use libp2p::swarm::{
-	NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters,
-	ProtocolsHandler, IntoProtocolsHandler, OneShotHandler,
+use libp2p::{
+	core::{
+		connection::ConnectionId, upgrade, InboundUpgrade, Multiaddr, OutboundUpgrade, PeerId,
+		UpgradeInfo,
+	},
+	swarm::{
+		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
+		OneShotHandler, PollParameters, ProtocolsHandler,
+	},
 };
-use log::{error, debug, trace};
+use log::{debug, error, trace};
 use prost::Message;
-use sp_runtime::traits::{Block as BlockT};
-use unsigned_varint::{encode as varint_encode};
-use crate::chain::Client;
-use crate::schema::bitswap::{
-	Message as BitswapMessage,
-	message::{wantlist::WantType, Block as MessageBlock, BlockPresenceType, BlockPresence},
+use sp_runtime::traits::Block as BlockT;
+use std::{
+	collections::VecDeque,
+	io,
+	sync::Arc,
+	task::{Context, Poll},
 };
+use unsigned_varint::encode as varint_encode;
 
 const LOG_TARGET: &str = "bitswap";
 
@@ -182,10 +190,7 @@ pub struct Bitswap<B> {
 impl<B: BlockT> Bitswap<B> {
 	/// Create a new instance of the bitswap protocol handler.
 	pub fn new(client: Arc<dyn Client<B>>) -> Self {
-		Bitswap {
-			client,
-			ready_blocks: Default::default(),
-		}
+		Bitswap { client, ready_blocks: Default::default() }
 	}
 }
 
@@ -201,11 +206,9 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 		Vec::new()
 	}
 
-	fn inject_connected(&mut self, _peer: &PeerId) {
-	}
+	fn inject_connected(&mut self, _peer: &PeerId) {}
 
-	fn inject_disconnected(&mut self, _peer: &PeerId) {
-	}
+	fn inject_disconnected(&mut self, _peer: &PeerId) {}
 
 	fn inject_event(&mut self, peer: PeerId, _connection: ConnectionId, message: HandlerEvent) {
 		let request = match message {
@@ -215,7 +218,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 		trace!(target: LOG_TARGET, "Received request: {:?} from {}", request, peer);
 		if self.ready_blocks.len() > MAX_RESPONSE_QUEUE {
 			debug!(target: LOG_TARGET, "Ignored request: queue is full");
-			return;
+			return
 		}
 		let mut response = BitswapMessage {
 			wantlist: None,
@@ -227,29 +230,25 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 		let wantlist = match request.wantlist {
 			Some(wantlist) => wantlist,
 			None => {
-				debug!(
-					target: LOG_TARGET,
-					"Unexpected bitswap message from {}",
-					peer,
-				);
-				return;
-			}
+				debug!(target: LOG_TARGET, "Unexpected bitswap message from {}", peer,);
+				return
+			},
 		};
 		if wantlist.entries.len() > MAX_WANTED_BLOCKS {
 			trace!(target: LOG_TARGET, "Ignored request: too many entries");
-			return;
+			return
 		}
 		for entry in wantlist.entries {
 			let cid = match cid::Cid::read_bytes(entry.block.as_slice()) {
 				Ok(cid) => cid,
 				Err(e) => {
 					trace!(target: LOG_TARGET, "Bad CID {:?}: {:?}", entry.block, e);
-					continue;
-				}
+					continue
+				},
 			};
-			if cid.version() != cid::Version::V1
-				|| cid.hash().code() != u64::from(cid::multihash::Code::Blake2b256)
-				|| cid.hash().size() != 32
+			if cid.version() != cid::Version::V1 ||
+				cid.hash().code() != u64::from(cid::multihash::Code::Blake2b256) ||
+				cid.hash().size() != 32
 			{
 				debug!(target: LOG_TARGET, "Ignoring unsupported CID {}: {}", peer, cid);
 				continue
@@ -261,7 +260,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 				Err(e) => {
 					error!(target: LOG_TARGET, "Error retrieving transaction {}: {}", hash, e);
 					None
-				}
+				},
 			};
 			match transaction {
 				Some(transaction) => {
@@ -273,10 +272,9 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 							mh_type: cid.hash().code(),
 							mh_len: cid.hash().size(),
 						};
-						response.payload.push(MessageBlock {
-							prefix: prefix.to_bytes(),
-							data: transaction,
-						});
+						response
+							.payload
+							.push(MessageBlock { prefix: prefix.to_bytes(), data: transaction });
 					} else {
 						response.block_presences.push(BlockPresence {
 							r#type: BlockPresenceType::Have as i32,
@@ -292,7 +290,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 							cid: cid.to_bytes(),
 						});
 					}
-				}
+				},
 			}
 		}
 		trace!(target: LOG_TARGET, "Response: {:?}", response);
@@ -304,7 +302,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
 			Self::OutEvent,
 		>,
-	> {
+	>{
 		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 				peer_id: peer_id.clone(),

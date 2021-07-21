@@ -20,17 +20,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use sp_std::vec;
-use sp_std::prelude::*;
-use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_support::{storage, traits::Get, weights::DispatchClass};
+use frame_system::{Call, DigestItemOf, Pallet as System, RawOrigin};
+use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
 use sp_runtime::traits::Hash;
-use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
-use frame_support::{
-	storage,
-	traits::Get,
-	weights::DispatchClass,
-};
-use frame_system::{Pallet as System, Call, RawOrigin, DigestItemOf};
+use sp_std::{prelude::*, vec};
 
 mod mock;
 
@@ -144,8 +139,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Pallet,
-	crate::mock::new_test_ext(),
-	crate::mock::Test,
-);
+impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
