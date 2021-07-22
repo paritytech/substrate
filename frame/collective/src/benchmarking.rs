@@ -24,13 +24,9 @@ use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
 use frame_benchmarking::{
-	account, benchmarks_instance, impl_benchmark_test_suite, whitelisted_caller,
+	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
 };
 use frame_system::{Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin};
-use sp_runtime::traits::Bounded;
-use sp_std::mem::size_of;
-
-use crate::Module as Collective;
 
 const SEED: u32 = 0;
 
