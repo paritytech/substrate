@@ -18,7 +18,7 @@
 //! Block evaluation and evaluation errors.
 
 use codec::Encode;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
+use sp_runtime::traits::{Block as BlockT, CheckedConversion, Header as HeaderT, One};
 
 // This is just a best effort to encode the number. None indicated that it's too big to encode
 // in a u128.
@@ -48,15 +48,13 @@ pub fn evaluate_initial<Block: BlockT>(
 	parent_hash: &<Block as BlockT>::Hash,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 ) -> Result<()> {
-
 	let encoded = Encode::encode(proposal);
-	let proposal = Block::decode(&mut &encoded[..])
-		.map_err(|e| Error::BadProposalFormat(e))?;
+	let proposal = Block::decode(&mut &encoded[..]).map_err(|e| Error::BadProposalFormat(e))?;
 
 	if *parent_hash != *proposal.header().parent_hash() {
 		return Err(Error::WrongParentHash {
 			expected: format!("{:?}", *parent_hash),
-			got: format!("{:?}", proposal.header().parent_hash())
+			got: format!("{:?}", proposal.header().parent_hash()),
 		})
 	}
 

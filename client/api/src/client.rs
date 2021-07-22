@@ -18,20 +18,19 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
-use std::{fmt, collections::HashSet, sync::Arc, convert::TryFrom};
+use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
-	traits::{Block as BlockT, NumberFor},
 	generic::{BlockId, SignedBlock},
+	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use sp_consensus::BlockOrigin;
+use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
 
-use crate::blockchain::Info;
-use crate::notifications::StorageEventStream;
-use sp_utils::mpsc::TracingUnboundedReceiver;
-use sp_blockchain;
+use crate::{blockchain::Info, notifications::StorageEventStream};
 use sc_transaction_pool_api::ChainEvent;
+use sp_blockchain;
+use sp_utils::mpsc::TracingUnboundedReceiver;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = TracingUnboundedReceiver<BlockImportNotification<Block>>;
@@ -82,7 +81,7 @@ pub trait BlockBackend<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
 	fn block_body(
 		&self,
-		id: &BlockId<Block>
+		id: &BlockId<Block>,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 
 	/// Get all indexed transactions for a block,
@@ -99,7 +98,8 @@ pub trait BlockBackend<Block: BlockT> {
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
 
 	/// Get block status.
-	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<sp_consensus::BlockStatus>;
+	fn block_status(&self, id: &BlockId<Block>)
+		-> sp_blockchain::Result<sp_consensus::BlockStatus>;
 
 	/// Get block justifications for the block with the given id.
 	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>>;
@@ -107,14 +107,11 @@ pub trait BlockBackend<Block: BlockT> {
 	/// Get block hash by number.
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>>;
 
-	/// Get single indexed transaction by content hash. 
+	/// Get single indexed transaction by content hash.
 	///
 	/// Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn indexed_transaction(
-		&self,
-		hash: &Block::Hash,
-	) -> sp_blockchain::Result<Option<Vec<u8>>>;
+	fn indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>>;
 
 	/// Check if transaction index exists.
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
@@ -125,8 +122,11 @@ pub trait BlockBackend<Block: BlockT> {
 /// Provide a list of potential uncle headers for a given block.
 pub trait ProvideUncles<Block: BlockT> {
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
-	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>)
-		-> sp_blockchain::Result<Vec<Block::Header>>;
+	fn uncles(
+		&self,
+		target_hash: Block::Hash,
+		max_generation: NumberFor<Block>,
+	) -> sp_blockchain::Result<Vec<Block::Header>>;
 }
 
 /// Client info
@@ -284,10 +284,7 @@ impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
 
 	fn try_from(n: BlockImportNotification<B>) -> Result<Self, ()> {
 		if n.is_new_best {
-			Ok(Self::NewBestBlock {
-				hash: n.hash,
-				tree_route: n.tree_route,
-			})
+			Ok(Self::NewBestBlock { hash: n.hash, tree_route: n.tree_route })
 		} else {
 			Err(())
 		}
@@ -296,8 +293,6 @@ impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
 
 impl<B: BlockT> From<FinalityNotification<B>> for ChainEvent<B> {
 	fn from(n: FinalityNotification<B>) -> Self {
-		Self::Finalized {
-			hash: n.hash,
-		}
+		Self::Finalized { hash: n.hash }
 	}
 }

@@ -18,18 +18,22 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use futures::{future::{ready, Ready}, executor::block_on};
-use sc_transaction_pool::{*, test_helpers::*};
 use codec::Encode;
-use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
+use futures::{
+	executor::block_on,
+	future::{ready, Ready},
+};
+use sc_transaction_pool::{test_helpers::*, *};
+use sp_core::blake2_256;
 use sp_runtime::{
-	generic::BlockId, traits::Block as BlockT,
+	generic::BlockId,
+	traits::Block as BlockT,
 	transaction_validity::{
-		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionTag as Tag,
-		TransactionSource,
+		InvalidTransaction, TransactionSource, TransactionTag as Tag, TransactionValidity,
+		ValidTransaction,
 	},
 };
-use sp_core::blake2_256;
+use substrate_test_runtime::{AccountId, Block, Extrinsic, Transfer, H256};
 
 #[derive(Clone, Debug, Default)]
 struct TestApi {
@@ -65,25 +69,21 @@ impl ChainApi for TestApi {
 		let from = uxt.transfer().from.clone();
 
 		match self.block_id_to_number(at) {
-			Ok(Some(num)) if num > 5 => {
-				return ready(
-					Ok(Err(InvalidTransaction::Stale.into()))
-				)
-			},
+			Ok(Some(num)) if num > 5 => return ready(Ok(Err(InvalidTransaction::Stale.into()))),
 			_ => {},
 		}
 
-		ready(
-			Ok(Ok(ValidTransaction {
-				priority: 4,
-				requires: if nonce > 1 && self.nonce_dependant {
-					vec![to_tag(nonce-1, from.clone())]
-				} else { vec![] },
-				provides: vec![to_tag(nonce, from)],
-				longevity: 10,
-				propagate: true,
-			}))
-		)
+		ready(Ok(Ok(ValidTransaction {
+			priority: 4,
+			requires: if nonce > 1 && self.nonce_dependant {
+				vec![to_tag(nonce - 1, from.clone())]
+			} else {
+				vec![]
+			},
+			provides: vec![to_tag(nonce, from)],
+			longevity: 10,
+			propagate: true,
+		})))
 	}
 
 	fn block_id_to_number(
@@ -156,11 +156,7 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 
 	// Prune all transactions.
 	let block_num = 6;
-	block_on(pool.prune_tags(
-		&BlockId::Number(block_num),
-		tags,
-		vec![],
-	)).expect("Prune failed");
+	block_on(pool.prune_tags(&BlockId::Number(block_num), tags, vec![])).expect("Prune failed");
 
 	// pool is empty
 	assert_eq!(pool.validated_pool().status().ready, 0);
@@ -168,7 +164,6 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 }
 
 fn benchmark_main(c: &mut Criterion) {
-
 	c.bench_function("sequential 50 tx", |b| {
 		b.iter(|| {
 			bench_configured(

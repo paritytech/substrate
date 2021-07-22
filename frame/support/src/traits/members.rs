@@ -17,7 +17,7 @@
 
 //! Traits for dealing with the idea of membership.
 
-use sp_std::{prelude::*, marker::PhantomData};
+use sp_std::{marker::PhantomData, prelude::*};
 
 /// A trait for querying whether a type can be said to "contain" a value.
 pub trait Contains<T> {
@@ -28,7 +28,9 @@ pub trait Contains<T> {
 /// A `Contains` implementation which always returns `true`.
 pub struct All<T>(PhantomData<T>);
 impl<T> Contains<T> for All<T> {
-	fn contains(_: &T) -> bool { true }
+	fn contains(_: &T) -> bool {
+		true
+	}
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
@@ -77,32 +79,46 @@ pub trait SortedMembers<T: Ord> {
 	fn sorted_members() -> Vec<T>;
 
 	/// Return `true` if this "contains" the given value `t`.
-	fn contains(t: &T) -> bool { Self::sorted_members().binary_search(t).is_ok() }
+	fn contains(t: &T) -> bool {
+		Self::sorted_members().binary_search(t).is_ok()
+	}
 
 	/// Get the number of items in the set.
-	fn count() -> usize { Self::sorted_members().len() }
+	fn count() -> usize {
+		Self::sorted_members().len()
+	}
 
 	/// Add an item that would satisfy `contains`. It does not make sure any other
 	/// state is correctly maintained or generated.
 	///
 	/// **Should be used for benchmarking only!!!**
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_t: &T) { unimplemented!() }
+	fn add(_t: &T) {
+		unimplemented!()
+	}
 }
 
 /// Adapter struct for turning an `OrderedMembership` impl into a `Contains` impl.
 pub struct AsContains<OM>(PhantomData<(OM,)>);
 impl<T: Ord + Eq, OM: SortedMembers<T>> Contains<T> for AsContains<OM> {
-	fn contains(t: &T) -> bool { OM::contains(t) }
+	fn contains(t: &T) -> bool {
+		OM::contains(t)
+	}
 }
 
 /// Trivial utility for implementing `Contains`/`OrderedMembership` with a `Vec`.
 pub struct IsInVec<T>(PhantomData<T>);
 impl<X: Eq, T: super::Get<Vec<X>>> Contains<X> for IsInVec<T> {
-	fn contains(t: &X) -> bool { T::get().contains(t) }
+	fn contains(t: &X) -> bool {
+		T::get().contains(t)
+	}
 }
 impl<X: Ord + PartialOrd, T: super::Get<Vec<X>>> SortedMembers<X> for IsInVec<T> {
-	fn sorted_members() -> Vec<X> { let mut r = T::get(); r.sort(); r }
+	fn sorted_members() -> Vec<X> {
+		let mut r = T::get();
+		r.sort();
+		r
+	}
 }
 
 /// A trait for querying bound for the length of an implementation of `Contains`
@@ -174,19 +190,19 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 				(Some(old), Some(new)) if old == new => {
 					old_i = old_iter.next();
 					new_i = new_iter.next();
-				}
+				},
 				(Some(old), Some(new)) if old < new => {
 					outgoing.push(old.clone());
 					old_i = old_iter.next();
-				}
+				},
 				(Some(old), None) => {
 					outgoing.push(old.clone());
 					old_i = old_iter.next();
-				}
+				},
 				(_, Some(new)) => {
 					incoming.push(new.clone());
 					new_i = new_iter.next();
-				}
+				},
 			}
 		}
 		(incoming, outgoing)
