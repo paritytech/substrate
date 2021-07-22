@@ -29,7 +29,7 @@ impl<T: Config<I>, I: 'static> StoredMap<(T::AssetId, T::AccountId), T::Extra> f
 		}
 	}
 
-	fn try_mutate_exists<R, E: From<StoredMapError>>(
+	fn try_mutate_exists<R, E: From<DispatchError>>(
 		id_who: &(T::AssetId, T::AccountId),
 		f: impl FnOnce(&mut Option<T::Extra>) -> Result<R, E>,
 	) -> Result<R, E> {
@@ -46,11 +46,11 @@ impl<T: Config<I>, I: 'static> StoredMap<(T::AssetId, T::AccountId), T::Extra> f
 				if let Some(ref mut account) = maybe_account {
 					account.extra = extra;
 				} else {
-					Err(StoredMapError::NoProviders)?;
+					Err(DispatchError::NoProviders)?;
 				}
 			} else {
 				// They want to delete it. Let this pass if the item never existed anyway.
-				ensure!(maybe_account.is_none(), StoredMapError::ConsumerRemaining);
+				ensure!(maybe_account.is_none(), DispatchError::ConsumerRemaining);
 			}
 			Ok(r)
 		})

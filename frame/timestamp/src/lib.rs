@@ -95,28 +95,30 @@
 mod benchmarking;
 pub mod weights;
 
-use sp_std::{result, cmp};
-use frame_support::traits::{Time, UnixTime, OnTimestampSet};
-use sp_runtime::traits::{AtLeast32Bit, Zero, SaturatedConversion, Scale};
-use sp_timestamp::{
-	InherentError, INHERENT_IDENTIFIER, InherentType,
-};
+use frame_support::traits::{OnTimestampSet, Time, UnixTime};
+use sp_runtime::traits::{AtLeast32Bit, SaturatedConversion, Scale, Zero};
+use sp_std::{cmp, result};
+use sp_timestamp::{InherentError, InherentType, INHERENT_IDENTIFIER};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	/// The pallet configuration trait
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Type used for expressing timestamp.
-		type Moment: Parameter + Default + AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy + MaxEncodedLen;
+		type Moment: Parameter
+			+ Default
+			+ AtLeast32Bit
+			+ Scale<Self::BlockNumber, Output = Self::Moment>
+			+ Copy
+			+ MaxEncodedLen;
 
 		/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 		type OnTimestampSet: OnTimestampSet<Self::Moment>;
@@ -208,7 +210,8 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-			let inherent_data = data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+			let inherent_data = data
+				.get_data::<InherentType>(&INHERENT_IDENTIFIER)
 				.expect("Timestamp inherent data not correctly encoded")
 				.expect("Timestamp inherent data must be provided");
 			let data = (*inherent_data).saturated_into::<T::Moment>();
@@ -217,7 +220,10 @@ pub mod pallet {
 			Some(Call::set(next_time.into()))
 		}
 
-		fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
+		fn check_inherent(
+			call: &Self::Call,
+			data: &InherentData,
+		) -> result::Result<(), Self::Error> {
 			const MAX_TIMESTAMP_DRIFT_MILLIS: sp_timestamp::Timestamp =
 				sp_timestamp::Timestamp::new(30 * 1000);
 
@@ -226,7 +232,8 @@ pub mod pallet {
 				_ => return Ok(()),
 			};
 
-			let data = data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+			let data = data
+				.get_data::<InherentType>(&INHERENT_IDENTIFIER)
 				.expect("Timestamp inherent data not correctly encoded")
 				.expect("Timestamp inherent data must be provided");
 
@@ -293,13 +300,16 @@ impl<T: Config> UnixTime for Pallet<T> {
 
 #[cfg(test)]
 mod tests {
-	use crate as pallet_timestamp;
 	use super::*;
+	use crate as pallet_timestamp;
 
 	use frame_support::{assert_ok, parameter_types};
-	use sp_io::TestExternalities;
 	use sp_core::H256;
-	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sp_io::TestExternalities;
+	use sp_runtime::{
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+	};
 
 	pub fn new_test_ext() -> TestExternalities {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -380,7 +390,9 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
+	#[should_panic(
+		expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
+	)]
 	fn block_period_minimum_enforced() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);

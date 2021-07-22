@@ -19,22 +19,20 @@
 
 use lazy_static::lazy_static;
 use prometheus::{
-	Registry, Error as PrometheusError,
-	core::{ AtomicU64, GenericGauge, GenericCounter },
+	core::{AtomicU64, GenericCounter, GenericGauge},
+	Error as PrometheusError, Registry,
 };
 
 #[cfg(feature = "metered")]
 use prometheus::{core::GenericCounterVec, Opts};
 
-
 lazy_static! {
-	pub static ref TOKIO_THREADS_TOTAL: GenericCounter<AtomicU64> = GenericCounter::new(
-		"tokio_threads_total", "Total number of threads created"
-	).expect("Creating of statics doesn't fail. qed");
-
-	pub static ref TOKIO_THREADS_ALIVE: GenericGauge<AtomicU64> = GenericGauge::new(
-		"tokio_threads_alive", "Number of threads alive right now"
-	).expect("Creating of statics doesn't fail. qed");
+	pub static ref TOKIO_THREADS_TOTAL: GenericCounter<AtomicU64> =
+		GenericCounter::new("tokio_threads_total", "Total number of threads created")
+			.expect("Creating of statics doesn't fail. qed");
+	pub static ref TOKIO_THREADS_ALIVE: GenericGauge<AtomicU64> =
+		GenericGauge::new("tokio_threads_alive", "Number of threads alive right now")
+			.expect("Creating of statics doesn't fail. qed");
 }
 
 #[cfg(feature = "metered")]
@@ -45,7 +43,6 @@ lazy_static! {
 	).expect("Creating of statics doesn't fail. qed");
 
 }
-
 
 /// Register the statics to report to registry
 pub fn register_globals(registry: &Registry) -> Result<(), PrometheusError> {

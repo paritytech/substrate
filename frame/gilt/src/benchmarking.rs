@@ -19,17 +19,21 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use sp_std::prelude::*;
 use super::*;
-use sp_runtime::traits::{Zero, Bounded};
-use sp_arithmetic::Perquintill;
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{Currency, EnsureOrigin, Get},
+};
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
-use frame_support::{traits::{Currency, Get, EnsureOrigin}, dispatch::UnfilteredDispatchable};
+use sp_arithmetic::Perquintill;
+use sp_runtime::traits::{Bounded, Zero};
+use sp_std::prelude::*;
 
 use crate::Pallet as Gilt;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 benchmarks! {
 	place_bid {
@@ -129,8 +133,4 @@ benchmarks! {
 	}: { Gilt::<T>::pursue_target(q) }
 }
 
-impl_benchmark_test_suite!(
-	Gilt,
-	crate::mock::new_test_ext(),
-	crate::mock::Test,
-);
+impl_benchmark_test_suite!(Gilt, crate::mock::new_test_ext(), crate::mock::Test,);

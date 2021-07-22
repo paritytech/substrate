@@ -16,13 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sp_consensus::BlockOrigin;
-use std::time::Duration;
-use futures::{Future, executor::block_on};
 use super::*;
-use sp_consensus::block_validation::Validation;
-use substrate_test_runtime::Header;
+use futures::{executor::block_on, Future};
+use sp_consensus::{block_validation::Validation, BlockOrigin};
 use sp_runtime::Justifications;
+use std::time::Duration;
+use substrate_test_runtime::Header;
 
 fn test_ancestor_search_when_common_is(n: usize) {
 	sp_tracing::try_init_simple();
@@ -254,9 +253,18 @@ fn sync_justifications() {
 
 	// we finalize block #10, #15 and #20 for peer 0 with a justification
 	let just = (*b"FRNK", Vec::new());
-	net.peer(0).client().finalize_block(BlockId::Number(10), Some(just.clone()), true).unwrap();
-	net.peer(0).client().finalize_block(BlockId::Number(15), Some(just.clone()), true).unwrap();
-	net.peer(0).client().finalize_block(BlockId::Number(20), Some(just.clone()), true).unwrap();
+	net.peer(0)
+		.client()
+		.finalize_block(BlockId::Number(10), Some(just.clone()), true)
+		.unwrap();
+	net.peer(0)
+		.client()
+		.finalize_block(BlockId::Number(15), Some(just.clone()), true)
+		.unwrap();
+	net.peer(0)
+		.client()
+		.finalize_block(BlockId::Number(20), Some(just.clone()), true)
+		.unwrap();
 
 	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
 	let h2 = net.peer(1).client().header(&BlockId::Number(15)).unwrap().unwrap();
@@ -271,21 +279,15 @@ fn sync_justifications() {
 		net.poll(cx);
 
 		for height in (10..21).step_by(5) {
-			if net
-				.peer(0)
-				.client()
-				.justifications(&BlockId::Number(height))
-				.unwrap() != Some(Justifications::from((*b"FRNK", Vec::new())))
+			if net.peer(0).client().justifications(&BlockId::Number(height)).unwrap() !=
+				Some(Justifications::from((*b"FRNK", Vec::new())))
 			{
-				return Poll::Pending;
+				return Poll::Pending
 			}
-			if net
-				.peer(1)
-				.client()
-				.justifications(&BlockId::Number(height))
-				.unwrap() != Some(Justifications::from((*b"FRNK", Vec::new())))
+			if net.peer(1).client().justifications(&BlockId::Number(height)).unwrap() !=
+				Some(Justifications::from((*b"FRNK", Vec::new())))
 			{
-				return Poll::Pending;
+				return Poll::Pending
 			}
 		}
 
@@ -308,7 +310,10 @@ fn sync_justifications_across_forks() {
 	net.block_until_sync();
 
 	let just = (*b"FRNK", Vec::new());
-	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(just), true).unwrap();
+	net.peer(0)
+		.client()
+		.finalize_block(BlockId::Hash(f1_best), Some(just), true)
+		.unwrap();
 
 	net.peer(1).request_justification(&f1_best, 10);
 	net.peer(1).request_justification(&f2_best, 11);
@@ -316,16 +321,10 @@ fn sync_justifications_across_forks() {
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net
-			.peer(0)
-			.client()
-			.justifications(&BlockId::Number(10))
-			.unwrap() == Some(Justifications::from((*b"FRNK", Vec::new())))
-			&& net
-				.peer(1)
-				.client()
-				.justifications(&BlockId::Number(10))
-				.unwrap() == Some(Justifications::from((*b"FRNK", Vec::new())))
+		if net.peer(0).client().justifications(&BlockId::Number(10)).unwrap() ==
+			Some(Justifications::from((*b"FRNK", Vec::new()))) &&
+			net.peer(1).client().justifications(&BlockId::Number(10)).unwrap() ==
+				Some(Justifications::from((*b"FRNK", Vec::new())))
 		{
 			Poll::Ready(())
 		} else {
@@ -380,7 +379,8 @@ fn own_blocks_are_announced() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 	net.block_until_sync(); // connect'em
-	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block);
+	net.peer(0)
+		.generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block);
 
 	net.block_until_sync();
 
@@ -573,7 +573,7 @@ fn can_sync_explicit_forks() {
 	// poll until the two nodes connect, otherwise announcing the block will not work
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(0).num_peers() == 0  || net.peer(1).num_peers() == 0 {
+		if net.peer(0).num_peers() == 0 || net.peer(1).num_peers() == 0 {
 			Poll::Pending
 		} else {
 			Poll::Ready(())
@@ -658,7 +658,7 @@ fn full_sync_requires_block_body() {
 	// Wait for nodes to connect
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(0).num_peers() == 0  || net.peer(1).num_peers() == 0 {
+		if net.peer(0).num_peers() == 0 || net.peer(1).num_peers() == 0 {
 			Poll::Pending
 		} else {
 			Poll::Ready(())
@@ -718,8 +718,14 @@ fn can_sync_to_peers_with_wrong_common_block() {
 
 	// both peers re-org to the same fork without notifying each other
 	let just = Some((*b"FRNK", Vec::new()));
-	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), just.clone(), true).unwrap();
-	net.peer(1).client().finalize_block(BlockId::Hash(fork_hash), just, true).unwrap();
+	net.peer(0)
+		.client()
+		.finalize_block(BlockId::Hash(fork_hash), just.clone(), true)
+		.unwrap();
+	net.peer(1)
+		.client()
+		.finalize_block(BlockId::Hash(fork_hash), just, true)
+		.unwrap();
 	let final_hash = net.peer(0).push_blocks(1, false);
 
 	net.block_until_sync();
@@ -735,7 +741,8 @@ impl BlockAnnounceValidator<Block> for NewBestBlockAnnounceValidator {
 		&mut self,
 		_: &Header,
 		_: &[u8],
-	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>>
+	{
 		async { Ok(Validation::Success { is_new_best: true }) }.boxed()
 	}
 }
@@ -748,16 +755,18 @@ impl BlockAnnounceValidator<Block> for FailingBlockAnnounceValidator {
 		&mut self,
 		header: &Header,
 		_: &[u8],
-	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>>
+	{
 		let number = *header.number();
 		let target_number = self.0;
-		async move { Ok(
-			if number == target_number {
+		async move {
+			Ok(if number == target_number {
 				Validation::Failure { disconnect: false }
 			} else {
 				Validation::Success { is_new_best: true }
-			}
-		) }.boxed()
+			})
+		}
+		.boxed()
 	}
 }
 
@@ -794,11 +803,13 @@ impl BlockAnnounceValidator<Block> for DeferredBlockAnnounceValidator {
 		&mut self,
 		_: &Header,
 		_: &[u8],
-	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>>
+	{
 		async {
 			futures_timer::Delay::new(std::time::Duration::from_millis(500)).await;
 			Ok(Validation::Success { is_new_best: false })
-		}.boxed()
+		}
+		.boxed()
 	}
 }
 
@@ -863,17 +874,12 @@ fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 
 	let mut net = TestNet::new(3);
 
-	let block_hash = net.peer(0).push_blocks_at_without_informing_sync(
-		BlockId::Number(0),
-		10_000,
-		false,
-	);
+	let block_hash =
+		net.peer(0)
+			.push_blocks_at_without_informing_sync(BlockId::Number(0), 10_000, false);
 
-	net.peer(1).push_blocks_at_without_informing_sync(
-		BlockId::Number(0),
-		5_000,
-		false,
-	);
+	net.peer(1)
+		.push_blocks_at_without_informing_sync(BlockId::Number(0), 5_000, false);
 
 	net.block_until_connected();
 	net.block_until_idle();
@@ -897,7 +903,9 @@ fn block_announce_data_is_propagated() {
 			&mut self,
 			_: &Header,
 			data: &[u8],
-		) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+		) -> Pin<
+			Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>,
+		> {
 			let correct = data.get(0) == Some(&137);
 			async move {
 				if correct {
@@ -905,7 +913,8 @@ fn block_announce_data_is_propagated() {
 				} else {
 					Ok(Validation::Failure { disconnect: false })
 				}
-			}.boxed()
+			}
+			.boxed()
 		}
 	}
 
@@ -950,15 +959,19 @@ fn continue_to_sync_after_some_block_announcement_verifications_failed() {
 			&mut self,
 			header: &Header,
 			_: &[u8],
-		) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+		) -> Pin<
+			Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>,
+		> {
 			let number = *header.number();
 			async move {
 				if number < 100 {
-					Err(Box::<dyn std::error::Error + Send + Sync>::from(String::from("error")) as Box<_>)
+					Err(Box::<dyn std::error::Error + Send + Sync>::from(String::from("error"))
+						as Box<_>)
 				} else {
 					Ok(Validation::Success { is_new_best: false })
 				}
-			}.boxed()
+			}
+			.boxed()
 		}
 	}
 
@@ -1010,22 +1023,18 @@ fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 	}
 
 	// Finalize the block and make the justification available.
-	net.peer(0).client().finalize_block(
-		BlockId::Number(10),
-		Some((*b"FRNK", Vec::new())),
-		true,
-	).unwrap();
+	net.peer(0)
+		.client()
+		.finalize_block(BlockId::Number(10), Some((*b"FRNK", Vec::new())), true)
+		.unwrap();
 
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net
-			.peer(1)
-			.client()
-			.justifications(&BlockId::Number(10))
-			.unwrap() != Some(Justifications::from((*b"FRNK", Vec::new())))
+		if net.peer(1).client().justifications(&BlockId::Number(10)).unwrap() !=
+			Some(Justifications::from((*b"FRNK", Vec::new())))
 		{
-			return Poll::Pending;
+			return Poll::Pending
 		}
 
 		Poll::Ready(())
@@ -1091,7 +1100,7 @@ fn syncs_after_missing_announcement() {
 #[test]
 fn syncs_state() {
 	sp_tracing::try_init_simple();
-	for skip_proofs in &[ false, true ] {
+	for skip_proofs in &[false, true] {
 		let mut net = TestNet::new(0);
 		net.add_full_peer_with_config(Default::default());
 		net.add_full_peer_with_config(FullPeerConfig {
@@ -1104,7 +1113,10 @@ fn syncs_state() {
 		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
 
 		let just = (*b"FRNK", Vec::new());
-		net.peer(1).client().finalize_block(BlockId::Number(60), Some(just), true).unwrap();
+		net.peer(1)
+			.client()
+			.finalize_block(BlockId::Number(60), Some(just), true)
+			.unwrap();
 		// Wait for state sync.
 		block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
@@ -1133,10 +1145,7 @@ fn syncs_indexed_blocks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(0);
 	let mut n: u64 = 0;
-	net.add_full_peer_with_config(FullPeerConfig {
-		storage_chain: true,
-		..Default::default()
-	});
+	net.add_full_peer_with_config(FullPeerConfig { storage_chain: true, ..Default::default() });
 	net.add_full_peer_with_config(FullPeerConfig {
 		storage_chain: true,
 		sync_mode: SyncMode::Fast { skip_proofs: false, storage_chain_mode: true },
@@ -1145,7 +1154,8 @@ fn syncs_indexed_blocks() {
 	net.peer(0).generate_blocks_at(
 		BlockId::number(0),
 		64,
-		BlockOrigin::Own, |mut builder| {
+		BlockOrigin::Own,
+		|mut builder| {
 			let ex = Extrinsic::Store(n.to_le_bytes().to_vec());
 			n += 1;
 			builder.push(ex).unwrap();
@@ -1156,10 +1166,30 @@ fn syncs_indexed_blocks() {
 		true,
 	);
 	let indexed_key = sp_runtime::traits::BlakeTwo256::hash(&42u64.to_le_bytes());
-	assert!(net.peer(0).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_some());
-	assert!(net.peer(1).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_none());
+	assert!(net
+		.peer(0)
+		.client()
+		.as_full()
+		.unwrap()
+		.indexed_transaction(&indexed_key)
+		.unwrap()
+		.is_some());
+	assert!(net
+		.peer(1)
+		.client()
+		.as_full()
+		.unwrap()
+		.indexed_transaction(&indexed_key)
+		.unwrap()
+		.is_none());
 
 	net.block_until_sync();
-	assert!(net.peer(1).client().as_full().unwrap().indexed_transaction(&indexed_key).unwrap().is_some());
+	assert!(net
+		.peer(1)
+		.client()
+		.as_full()
+		.unwrap()
+		.indexed_transaction(&indexed_key)
+		.unwrap()
+		.is_some());
 }
-

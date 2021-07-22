@@ -18,8 +18,8 @@
 
 //! Testing utils used by the RPC tests.
 
+use futures::{compat::Future01CompatExt, executor, FutureExt};
 use rpc::futures::future as future01;
-use futures::{executor, compat::Future01CompatExt, FutureExt};
 
 // Executor shared by all tests.
 //
@@ -38,7 +38,7 @@ impl future01::Executor<Boxed01Future01> for TaskExecutor {
 	fn execute(
 		&self,
 		future: Boxed01Future01,
-	) -> std::result::Result<(), future01::ExecuteError<Boxed01Future01>>{
+	) -> std::result::Result<(), future01::ExecuteError<Boxed01Future01>> {
 		EXECUTOR.spawn_ok(future.compat().map(drop));
 		Ok(())
 	}
