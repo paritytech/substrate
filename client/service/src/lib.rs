@@ -22,65 +22,62 @@
 #![warn(missing_docs)]
 #![recursion_limit = "1024"]
 
-pub mod config;
 pub mod chain_ops;
+pub mod config;
 pub mod error;
 
-mod metrics;
 mod builder;
 #[cfg(feature = "test-helpers")]
 pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
+mod metrics;
 mod task_manager;
 
-use std::{io, pin::Pin};
-use std::net::SocketAddr;
-use std::collections::HashMap;
-use std::task::Poll;
+use std::{collections::HashMap, io, net::SocketAddr, pin::Pin, task::Poll};
 
-use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
-use sc_network::PeerId;
-use log::{warn, debug, error};
-use codec::{Encode, Decode};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use codec::{Decode, Encode};
+use futures::{compat::*, stream, Future, FutureExt, Stream, StreamExt};
+use log::{debug, error, warn};
 use parity_util_mem::MallocSizeOf;
+use sc_network::PeerId;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
+};
 use sp_utils::mpsc::TracingUnboundedReceiver;
 
-pub use self::error::Error;
-pub use self::builder::{
-	new_full_client, new_db_backend, new_client, new_full_parts, new_light_parts,
-	spawn_tasks, build_network, build_offchain_workers,
-	BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams, TFullClient, TLightClient,
-	TFullBackend, TLightBackend, TLightBackendWithHash, TLightClientWithBackend,
-	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
+pub use self::{
+	builder::{
+		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
+		new_full_parts, new_light_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer,
+		NetworkStarter, NoopRpcExtensionBuilder, RpcExtensionBuilder, SpawnTasksParams,
+		TFullBackend, TFullCallExecutor, TFullClient, TLightBackend, TLightBackendWithHash,
+		TLightCallExecutor, TLightClient, TLightClientWithBackend,
+	},
+	client::{ClientConfig, LocalCallExecutor},
+	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
-	KeepBlocks, TransactionStorageMode,
+	BasePath, Configuration, DatabaseConfig, KeepBlocks, PruningMode, Role, RpcMethods,
+	TaskExecutor, TaskType, TransactionStorageMode,
 };
 pub use sc_chain_spec::{
-	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
-	NoExtension, ChainType,
+	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
+	Properties, RuntimeGenesis,
 };
-pub use sc_transaction_pool_api::{TransactionPool, InPoolTransaction, error::IntoPoolError};
-pub use sc_transaction_pool::Options as TransactionPoolOptions;
-pub use sc_rpc::Metadata as RpcMetadata;
+use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
-pub use std::{ops::Deref, result::Result, sync::Arc};
-#[doc(hidden)]
-pub use sc_network::config::{
-	OnDemand, TransactionImport,
-	TransactionImportFuture,
-};
+pub use sc_network::config::{OnDemand, TransactionImport, TransactionImportFuture};
+pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_tracing::TracingReceiver;
-pub use task_manager::SpawnTaskHandle;
-pub use task_manager::TaskManager;
+pub use sc_transaction_pool::Options as TransactionPoolOptions;
+pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
 pub use sp_consensus::import_queue::ImportQueue;
-pub use self::client::{LocalCallExecutor, ClientConfig};
-use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
+#[doc(hidden)]
+pub use std::{ops::Deref, result::Result, sync::Arc};
+pub use task_manager::{SpawnTaskHandle, TaskManager};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -96,7 +93,9 @@ impl<T> MallocSizeOfWasm for T {}
 
 /// RPC handlers that can perform RPC queries.
 #[derive(Clone)]
-pub struct RpcHandlers(Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>);
+pub struct RpcHandlers(
+	Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
+);
 
 impl RpcHandlers {
 	/// Starts an RPC query.
@@ -108,17 +107,22 @@ impl RpcHandlers {
 	///
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
-	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
-		-> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		self.0.handle_request(request, mem.metadata.clone())
+	pub fn rpc_query(
+		&self,
+		mem: &RpcSession,
+		request: &str,
+	) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
+		self.0
+			.handle_request(request, mem.metadata.clone())
 			.compat()
 			.map(|res| res.expect("this should never fail"))
 			.boxed()
 	}
 
 	/// Provides access to the underlying `MetaIoHandler`
-	pub fn io_handler(&self)
-		-> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
+	pub fn io_handler(
+		&self,
+	) -> Arc<jsonrpc_core::MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>> {
 		self.0.clone()
 	}
 }
@@ -149,8 +153,8 @@ pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, Transact
 async fn build_network_future<
 	B: BlockT,
 	C: BlockchainEvents<B> + HeaderBackend<B>,
-	H: sc_network::ExHashT
-> (
+	H: sc_network::ExHashT,
+>(
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
@@ -171,7 +175,9 @@ async fn build_network_future<
 		// ready. This way, we only get the latest finalized block.
 		stream::poll_fn(move |cx| {
 			let mut last = None;
-			while let Poll::Ready(Some(item)) = Pin::new(&mut finality_notification_stream).poll_next(cx) {
+			while let Poll::Ready(Some(item)) =
+				Pin::new(&mut finality_notification_stream).poll_next(cx)
+			{
 				last = Some(item);
 			}
 			if let Some(last) = last {
@@ -179,11 +185,12 @@ async fn build_network_future<
 			} else {
 				Poll::Pending
 			}
-		}).fuse()
+		})
+		.fuse()
 	};
 
 	loop {
-		futures::select!{
+		futures::select! {
 			// List of blocks that the client has imported.
 			notification = imported_blocks_stream.next() => {
 				let notification = match notification {
@@ -338,79 +345,90 @@ mod waiting {
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
-	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
-	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+	H: FnMut(
+		sc_rpc::DenyUnsafe,
+		sc_rpc_server::RpcMiddleware,
+	) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 >(
 	config: &Configuration,
 	mut gen_handler: H,
 	rpc_metrics: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
-	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
-		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
-		{
-			address.map(|mut address| start(&address)
-				.or_else(|e| match e.kind() {
-					io::ErrorKind::AddrInUse |
-					io::ErrorKind::PermissionDenied => {
+	fn maybe_start_server<T, F>(
+		address: Option<SocketAddr>,
+		mut start: F,
+	) -> Result<Option<T>, io::Error>
+	where
+		F: FnMut(&SocketAddr) -> Result<T, io::Error>,
+	{
+		address
+			.map(|mut address| {
+				start(&address).or_else(|e| match e.kind() {
+					io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied => {
 						warn!("Unable to bind RPC server to {}. Trying random port.", address);
 						address.set_port(0);
 						start(&address)
 					},
 					_ => Err(e),
-				}
-			) ).transpose()
-		}
+				})
+			})
+			.transpose()
+	}
 
 	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = !addr.ip().is_loopback();
 		match (is_exposed_addr, methods) {
-			| (_, RpcMethods::Unsafe)
-			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
-			_ => sc_rpc::DenyUnsafe::Yes
+			| (_, RpcMethods::Unsafe) | (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
+			_ => sc_rpc::DenyUnsafe::Yes,
 		}
 	}
 
 	Ok(Box::new((
-		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(
-			&*path, gen_handler(
-				sc_rpc::DenyUnsafe::No,
-				sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc")
+		config.rpc_ipc.as_ref().map(|path| {
+			sc_rpc_server::start_ipc(
+				&*path,
+				gen_handler(
+					sc_rpc::DenyUnsafe::No,
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ipc"),
+				),
 			)
-		)),
-		maybe_start_server(
-			config.rpc_http,
-			|address| sc_rpc_server::start_http(
+		}),
+		maybe_start_server(config.rpc_http, |address| {
+			sc_rpc_server::start_http(
 				address,
 				config.rpc_http_threads,
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http"),
 				),
-				config.rpc_max_payload
-			),
-		)?.map(|s| waiting::HttpServer(Some(s))),
-		maybe_start_server(
-			config.rpc_ws,
-			|address| sc_rpc_server::start_ws(
+				config.rpc_max_payload,
+			)
+		})?
+		.map(|s| waiting::HttpServer(Some(s))),
+		maybe_start_server(config.rpc_ws, |address| {
+			sc_rpc_server::start_ws(
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
-					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws")
+					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws"),
 				),
-				config.rpc_max_payload
-			),
-		)?.map(|s| waiting::WsServer(Some(s))),
+				config.rpc_max_payload,
+			)
+		})?
+		.map(|s| waiting::WsServer(Some(s))),
 	)))
 }
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
 fn start_rpc_servers<
-	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
-	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+	H: FnMut(
+		sc_rpc::DenyUnsafe,
+		sc_rpc_server::RpcMiddleware,
+	) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 >(
 	_: &Configuration,
 	_: H,
@@ -434,9 +452,7 @@ impl RpcSession {
 	///
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
 	pub fn new(sender: futures01::sync::mpsc::Sender<String>) -> RpcSession {
-		RpcSession {
-			metadata: sender.into(),
-		}
+		RpcSession { metadata: sender.into() }
 	}
 }
 
@@ -450,10 +466,9 @@ pub struct TransactionPoolAdapter<C, P> {
 /// Get transactions for propagation.
 ///
 /// Function extracted to simplify the test and prevent creating `ServiceFactory`.
-fn transactions_to_propagate<Pool, B, H, E>(pool: &Pool)
-	-> Vec<(H, B::Extrinsic)>
+fn transactions_to_propagate<Pool, B, H, E>(pool: &Pool) -> Vec<(H, B::Extrinsic)>
 where
-	Pool: TransactionPool<Block=B, Hash=H, Error=E>,
+	Pool: TransactionPool<Block = B, Hash = H, Error = E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
 	E: IntoPoolError + From<sc_transaction_pool_api::error::Error>,
@@ -468,11 +483,10 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for
-	TransactionPoolAdapter<C, Pool>
+impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for TransactionPoolAdapter<C, Pool>
 where
 	C: sc_network::config::Client<B> + Send + Sync,
-	Pool: 'static + TransactionPool<Block=B, Hash=H, Error=E>,
+	Pool: 'static + TransactionPool<Block = B, Hash = H, Error = E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sp_runtime::traits::Member + sp_runtime::traits::MaybeSerialize,
 	E: 'static + IntoPoolError + From<sc_transaction_pool_api::error::Error>,
@@ -485,10 +499,7 @@ where
 		self.pool.hash_of(transaction)
 	}
 
-	fn import(
-		&self,
-		transaction: B::Extrinsic,
-	) -> TransactionImportFuture {
+	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
 			Box::pin(futures::future::ready(TransactionImport::None));
@@ -499,28 +510,33 @@ where
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad));
-			}
+				return Box::pin(futures::future::ready(TransactionImport::Bad))
+			},
 		};
 
 		let best_block_id = BlockId::hash(self.client.info().best_hash);
 
-		let import_future = self.pool.submit_one(&best_block_id, sc_transaction_pool_api::TransactionSource::External, uxt);
+		let import_future = self.pool.submit_one(
+			&best_block_id,
+			sc_transaction_pool_api::TransactionSource::External,
+			uxt,
+		);
 		Box::pin(async move {
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
+						TransactionImport::KnownGood,
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad
-					}
+					},
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
 						// it is not bad at least, just some internal node logic error, so peer is innocent.
 						TransactionImport::KnownGood
-					}
-				}
+					},
+				},
 			}
 		})
 	}
@@ -530,11 +546,10 @@ where
 	}
 
 	fn transaction(&self, hash: &H) -> Option<B::Extrinsic> {
-		self.pool.ready_transaction(hash)
-			.and_then(
-				// Only propagable transactions should be resolved for network service.
-				|tx| if tx.is_propagable() { Some(tx.data().clone()) } else { None }
-			)
+		self.pool.ready_transaction(hash).and_then(
+			// Only propagable transactions should be resolved for network service.
+			|tx| if tx.is_propagable() { Some(tx.data().clone()) } else { None },
+		)
 	}
 }
 
@@ -542,10 +557,13 @@ where
 mod tests {
 	use super::*;
 	use futures::executor::block_on;
+	use sc_transaction_pool::BasicPool;
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
-	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
-	use sc_transaction_pool::BasicPool;
+	use substrate_test_runtime_client::{
+		prelude::*,
+		runtime::{Extrinsic, Transfer},
+	};
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
@@ -553,13 +571,8 @@ mod tests {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let pool = BasicPool::new_full(
-			Default::default(),
-			true.into(),
-			None,
-			spawner,
-			client.clone(),
-		);
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = block_on(longest_chain.best_chain()).unwrap();
 		let transaction = Transfer {
@@ -569,12 +582,14 @@ mod tests {
 			to: Default::default(),
 		}
 		.into_signed_tx();
+		block_on(pool.submit_one(&BlockId::hash(best.hash()), source, transaction.clone()))
+			.unwrap();
 		block_on(pool.submit_one(
-			&BlockId::hash(best.hash()), source, transaction.clone()),
-		).unwrap();
-		block_on(pool.submit_one(
-			&BlockId::hash(best.hash()), source, Extrinsic::IncludeData(vec![1])),
-		).unwrap();
+			&BlockId::hash(best.hash()),
+			source,
+			Extrinsic::IncludeData(vec![1]),
+		))
+		.unwrap();
 		assert_eq!(pool.status().ready, 2);
 
 		// when

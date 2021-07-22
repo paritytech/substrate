@@ -22,7 +22,9 @@ use std::sync::Arc;
 use codec::Codec;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use pallet_contracts_primitives::RentProjection;
+use pallet_contracts_primitives::{
+	Code, ContractExecResult, ContractInstantiateResult, RentProjection,
+};
 use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -33,7 +35,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 };
 use std::convert::{TryFrom, TryInto};
-use pallet_contracts_primitives::{Code, ContractExecResult, ContractInstantiateResult};
 
 pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
 
@@ -164,10 +165,7 @@ pub struct Contracts<C, B> {
 impl<C, B> Contracts<C, B> {
 	/// Create new `Contracts` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
-		Contracts {
-			client,
-			_marker: Default::default(),
-		}
+		Contracts { client, _marker: Default::default() }
 	}
 }
 impl<C, Block, AccountId, Balance, Hash>
@@ -202,13 +200,7 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let CallRequest {
-			origin,
-			dest,
-			value,
-			gas_limit,
-			input_data,
-		} = call_request;
+		let CallRequest { origin, dest, value, gas_limit, input_data } = call_request;
 
 		let value: Balance = decode_hex(value, "balance")?;
 		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
@@ -225,20 +217,15 @@ where
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<ContractInstantiateResult<AccountId, <<Block as BlockT>::Header as HeaderT>::Number>> {
+	) -> Result<ContractInstantiateResult<AccountId, <<Block as BlockT>::Header as HeaderT>::Number>>
+	{
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let InstantiateRequest {
-			origin,
-			endowment,
-			gas_limit,
-			code,
-			data,
-			salt,
-		} = instantiate_request;
+		let InstantiateRequest { origin, endowment, gas_limit, code, data, salt } =
+			instantiate_request;
 
 		let endowment: Balance = decode_hex(endowment, "balance")?;
 		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
@@ -337,7 +324,8 @@ mod tests {
 	#[test]
 	fn call_request_should_serialize_deserialize_properly() {
 		type Req = CallRequest<String>;
-		let req: Req = serde_json::from_str(r#"
+		let req: Req = serde_json::from_str(
+			r#"
 		{
 			"origin": "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
 			"dest": "5DRakbLVnjVrW6niwLfHGW24EeCEvDAFGEXrtaYS5M4ynoom",
@@ -345,7 +333,9 @@ mod tests {
 			"gasLimit": 1000000000000,
 			"inputData": "0x8c97db39"
 		}
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 		assert_eq!(req.gas_limit.into_u256(), U256::from(0xe8d4a51000u64));
 		assert_eq!(req.value.into_u256(), U256::from(1234567890987654321u128));
 	}
@@ -353,7 +343,8 @@ mod tests {
 	#[test]
 	fn instantiate_request_should_serialize_deserialize_properly() {
 		type Req = InstantiateRequest<String, String>;
-		let req: Req = serde_json::from_str(r#"
+		let req: Req = serde_json::from_str(
+			r#"
 		{
 			"origin": "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
 			"endowment": "0x88",
@@ -362,7 +353,9 @@ mod tests {
 			"data": "0x4299",
 			"salt": "0x9988"
 		}
-		"#).unwrap();
+		"#,
+		)
+		.unwrap();
 
 		assert_eq!(req.origin, "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL");
 		assert_eq!(req.endowment.into_u256(), 0x88.into());
@@ -383,7 +376,8 @@ mod tests {
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, trim(expected).as_str());
 		}
-		test(r#"{
+		test(
+			r#"{
 			"gasConsumed": 5000,
 			"gasRequired": 8000,
 			"debugMessage": "HelloWorld",
@@ -393,25 +387,30 @@ mod tests {
 				"data": "0x1234"
 			  }
 			}
-		}"#);
-		test(r#"{
+		}"#,
+		);
+		test(
+			r#"{
 			"gasConsumed": 3400,
 			"gasRequired": 5200,
 			"debugMessage": "HelloWorld",
 			"result": {
 			  "Err": "BadOrigin"
 			}
-		}"#);
+		}"#,
+		);
 	}
 
 	#[test]
 	fn instantiate_result_should_serialize_deserialize_properly() {
 		fn test(expected: &str) {
-			let res: ContractInstantiateResult<String, u64> = serde_json::from_str(expected).unwrap();
+			let res: ContractInstantiateResult<String, u64> =
+				serde_json::from_str(expected).unwrap();
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, trim(expected).as_str());
 		}
-		test(r#"{
+		test(
+			r#"{
 			"gasConsumed": 5000,
 			"gasRequired": 8000,
 			"debugMessage": "HelloWorld",
@@ -425,14 +424,17 @@ mod tests {
 				  "rentProjection": null
 			   }
 			}
-		}"#);
-		test(r#"{
+		}"#,
+		);
+		test(
+			r#"{
 			"gasConsumed": 3400,
 			"gasRequired": 5200,
 			"debugMessage": "HelloWorld",
 			"result": {
 			  "Err": "BadOrigin"
 			}
-		}"#);
+		}"#,
+		);
 	}
 }

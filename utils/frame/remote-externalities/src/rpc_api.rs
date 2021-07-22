@@ -18,14 +18,13 @@
 //! WS RPC API for one off RPC calls to a substrate node.
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
-use sp_runtime::{generic::SignedBlock, traits::{Block as BlockT, Header as HeaderT}};
 use jsonrpsee_ws_client::{
-	WsClientBuilder,
-	WsClient,
-	types::{
-		v2::params::JsonRpcParams,
-		traits::Client
-	},
+	types::{traits::Client, v2::params::JsonRpcParams},
+	WsClient, WsClientBuilder,
+};
+use sp_runtime::{
+	generic::SignedBlock,
+	traits::{Block as BlockT, Header as HeaderT},
 };
 
 /// Get the header of the block identified by `at`
@@ -38,7 +37,8 @@ where
 	let params = vec![hash_to_json::<Block>(at)?];
 	let client = build_client(from).await?;
 
-	client.request::<Block::Header>("chain_getHeader", JsonRpcParams::Array(params))
+	client
+		.request::<Block::Header>("chain_getHeader", JsonRpcParams::Array(params))
 		.await
 		.map_err(|e| format!("chain_getHeader request failed: {:?}", e))
 }
@@ -51,7 +51,8 @@ where
 {
 	let client = build_client(from).await?;
 
-	client.request::<Block::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams)
+	client
+		.request::<Block::Hash>("chain_getFinalizedHead", JsonRpcParams::NoParams)
 		.await
 		.map_err(|e| format!("chain_getFinalizedHead request failed: {:?}", e))
 }
@@ -81,7 +82,7 @@ fn hash_to_json<Block: BlockT>(hash: Block::Hash) -> Result<serde_json::Value, S
 
 /// Build a website client that connects to `from`.
 async fn build_client<S: AsRef<str>>(from: S) -> Result<WsClient, String> {
-	 WsClientBuilder::default()
+	WsClientBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.build(from.as_ref())
 		.await

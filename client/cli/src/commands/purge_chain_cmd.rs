@@ -16,13 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::{DatabaseParams, SharedParams};
-use crate::CliConfiguration;
+use crate::{
+	error,
+	params::{DatabaseParams, SharedParams},
+	CliConfiguration,
+};
 use sc_service::DatabaseConfig;
-use std::fmt::Debug;
-use std::fs;
-use std::io::{self, Write};
+use std::{
+	fmt::Debug,
+	fs,
+	io::{self, Write},
+};
 use structopt::StructOpt;
 
 /// The `purge-chain` command used to remove the whole chain.
@@ -44,10 +48,9 @@ pub struct PurgeChainCmd {
 impl PurgeChainCmd {
 	/// Run the purge command
 	pub fn run(&self, database_config: DatabaseConfig) -> error::Result<()> {
-		let db_path = database_config.path()
-			.ok_or_else(||
-				error::Error::Input("Cannot purge custom database implementation".into())
-		)?;
+		let db_path = database_config.path().ok_or_else(|| {
+			error::Error::Input("Cannot purge custom database implementation".into())
+		})?;
 
 		if !self.yes {
 			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
@@ -61,7 +64,7 @@ impl PurgeChainCmd {
 				Some('y') | Some('Y') => {},
 				_ => {
 					println!("Aborted");
-					return Ok(());
+					return Ok(())
 				},
 			}
 		}

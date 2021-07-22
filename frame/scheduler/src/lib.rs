@@ -54,17 +54,23 @@
 mod benchmarking;
 pub mod weights;
 
-use sp_std::{prelude::*, marker::PhantomData, borrow::Borrow};
-use codec::{Encode, Decode, Codec};
-use sp_runtime::{RuntimeDebug, traits::{Zero, One, BadOrigin, Saturating}};
+use codec::{Codec, Decode, Encode};
 use frame_support::{
-	dispatch::{Dispatchable, DispatchError, DispatchResult, Parameter},
-	traits::{Get, schedule::{self, DispatchTime}, OriginTrait, EnsureOrigin, IsType},
+	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
+	traits::{
+		schedule::{self, DispatchTime},
+		EnsureOrigin, Get, IsType, OriginTrait,
+	},
 	weights::{GetDispatchInfo, Weight},
 };
 use frame_system::{self as system, ensure_signed};
-pub use weights::WeightInfo;
 pub use pallet::*;
+use sp_runtime::{
+	traits::{BadOrigin, One, Saturating, Zero},
+	RuntimeDebug,
+};
+use sp_std::{borrow::Borrow, marker::PhantomData, prelude::*};
+pub use weights::WeightInfo;
 
 /// Just a simple index for naming period tasks.
 pub type PeriodicIndex = u32;
@@ -210,21 +216,21 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
- 	pub struct GenesisConfig;
+	pub struct GenesisConfig;
 
- 	#[cfg(feature = "std")]
- 	impl Default for GenesisConfig {
- 		fn default() -> Self {
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
 			Self
 		}
- 	}
+	}
 
- 	#[pallet::genesis_build]
- 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
- 		fn build(&self) {
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
 			StorageVersion::<T>::put(Releases::V2);
- 		}
- 	}
+		}
+	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -291,9 +297,9 @@ pub mod pallet {
 					// - It's priority is `HARD_DEADLINE`
 					// - It does not push the weight past the limit.
 					// - It is the first item in the schedule
-					if s.priority <= schedule::HARD_DEADLINE
-						|| cumulative_weight <= limit
-						|| order == 0
+					if s.priority <= schedule::HARD_DEADLINE ||
+						cumulative_weight <= limit ||
+						order == 0
 					{
 						let r = s.call.clone().dispatch(s.origin.clone().into());
 						let maybe_id = s.maybe_id.clone();
@@ -497,20 +503,25 @@ impl<T: Config> Pallet<T> {
 			StorageVersion::<T>::put(Releases::V2);
 
 			Agenda::<T>::translate::<
-				Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _
-			>(|_, agenda| Some(
-				agenda
-					.into_iter()
-					.map(|schedule| schedule.map(|schedule| ScheduledV2 {
-						maybe_id: schedule.maybe_id,
-						priority: schedule.priority,
-						call: schedule.call,
-						maybe_periodic: schedule.maybe_periodic,
-						origin: system::RawOrigin::Root.into(),
-						_phantom: Default::default(),
-					}))
-					.collect::<Vec<_>>()
-			));
+				Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>,
+				_,
+			>(|_, agenda| {
+				Some(
+					agenda
+						.into_iter()
+						.map(|schedule| {
+							schedule.map(|schedule| ScheduledV2 {
+								maybe_id: schedule.maybe_id,
+								priority: schedule.priority,
+								call: schedule.call,
+								maybe_periodic: schedule.maybe_periodic,
+								origin: system::RawOrigin::Root.into(),
+								_phantom: Default::default(),
+							})
+						})
+						.collect::<Vec<_>>(),
+				)
+			});
 
 			true
 		} else {
@@ -521,20 +532,25 @@ impl<T: Config> Pallet<T> {
 	/// Helper to migrate scheduler when the pallet origin type has changed.
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
 		Agenda::<T>::translate::<
-			Vec<Option<Scheduled<<T as Config>::Call, T::BlockNumber, OldOrigin, T::AccountId>>>, _
-		>(|_, agenda| Some(
-			agenda
-				.into_iter()
-				.map(|schedule| schedule.map(|schedule| Scheduled {
-					maybe_id: schedule.maybe_id,
-					priority: schedule.priority,
-					call: schedule.call,
-					maybe_periodic: schedule.maybe_periodic,
-					origin: schedule.origin.into(),
-					_phantom: Default::default(),
-				}))
-				.collect::<Vec<_>>()
-		));
+			Vec<Option<Scheduled<<T as Config>::Call, T::BlockNumber, OldOrigin, T::AccountId>>>,
+			_,
+		>(|_, agenda| {
+			Some(
+				agenda
+					.into_iter()
+					.map(|schedule| {
+						schedule.map(|schedule| Scheduled {
+							maybe_id: schedule.maybe_id,
+							priority: schedule.priority,
+							call: schedule.call,
+							maybe_periodic: schedule.maybe_periodic,
+							origin: schedule.origin.into(),
+							_phantom: Default::default(),
+						})
+					})
+					.collect::<Vec<_>>(),
+			)
+		});
 	}
 
 	fn resolve_time(when: DispatchTime<T::BlockNumber>) -> Result<T::BlockNumber, DispatchError> {
@@ -548,7 +564,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		if when <= now {
-			return Err(Error::<T>::TargetBlockNumberInPast.into());
+			return Err(Error::<T>::TargetBlockNumberInPast.into())
 		}
 
 		Ok(when)
@@ -600,7 +616,7 @@ impl<T: Config> Pallet<T> {
 				|s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
 					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
 						if *o != s.origin {
-							return Err(BadOrigin.into());
+							return Err(BadOrigin.into())
 						}
 					};
 					Ok(s.take())
@@ -625,7 +641,7 @@ impl<T: Config> Pallet<T> {
 		let new_time = Self::resolve_time(new_time)?;
 
 		if new_time == when {
-			return Err(Error::<T>::RescheduleNoChange.into());
+			return Err(Error::<T>::RescheduleNoChange.into())
 		}
 
 		Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
@@ -652,7 +668,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		// ensure id it is unique
 		if Lookup::<T>::contains_key(&id) {
-			return Err(Error::<T>::FailedToSchedule)?;
+			return Err(Error::<T>::FailedToSchedule)?
 		}
 
 		let when = Self::resolve_time(when)?;
@@ -695,7 +711,7 @@ impl<T: Config> Pallet<T> {
 					if let Some(s) = agenda.get_mut(i) {
 						if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
 							if *o != s.origin {
-								return Err(BadOrigin.into());
+								return Err(BadOrigin.into())
 							}
 						}
 						*s = None;
@@ -722,7 +738,7 @@ impl<T: Config> Pallet<T> {
 				let (when, index) = lookup.ok_or(Error::<T>::NotFound)?;
 
 				if new_time == when {
-					return Err(Error::<T>::RescheduleNoChange.into());
+					return Err(Error::<T>::RescheduleNoChange.into())
 				}
 
 				Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
@@ -772,10 +788,7 @@ impl<T: Config> schedule::Anon<T::BlockNumber, <T as Config>::Call, T::PalletsOr
 	}
 
 	fn next_dispatch_time((when, index): Self::Address) -> Result<T::BlockNumber, ()> {
-		Agenda::<T>::get(when)
-			.get(index as usize)
-			.ok_or(())
-			.map(|_| when)
+		Agenda::<T>::get(when).get(index as usize).ok_or(()).map(|_| when)
 	}
 }
 
@@ -867,7 +880,10 @@ mod tests {
 		}
 
 		#[pallet::call]
-		impl<T: Config> Pallet<T> where <T as system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>  {
+		impl<T: Config> Pallet<T>
+		where
+			<T as system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>,
+		{
 			#[pallet::weight(*weight)]
 			pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 				Self::deposit_event(Event::Logged(i, weight));
@@ -878,7 +894,11 @@ mod tests {
 			}
 
 			#[pallet::weight(*weight)]
-			pub fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
+			pub fn log_without_filter(
+				origin: OriginFor<T>,
+				i: u32,
+				weight: Weight,
+			) -> DispatchResult {
 				Self::deposit_event(Event::Logged(i, weight));
 				LOG.with(|log| {
 					log.borrow_mut().push((origin.caller().clone(), i));
@@ -986,9 +1006,7 @@ mod tests {
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(
-				&call
-			));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -1004,9 +1022,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
 			let call = Call::Logger(LoggerCall::log(42, 1000));
-			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(
-				&call
-			));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call));
 			run_to_block(5);
@@ -1038,7 +1054,11 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
 			assert_ok!(Scheduler::do_schedule(
-				DispatchTime::At(4), Some((3, 3)), 127, root(), Call::Logger(logger::Call::log(42, 1000))
+				DispatchTime::At(4),
+				Some((3, 3)),
+				127,
+				root(),
+				Call::Logger(logger::Call::log(42, 1000))
 			));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -1051,15 +1071,9 @@ mod tests {
 			run_to_block(9);
 			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 42u32)]);
 			run_to_block(10);
-			assert_eq!(
-				logger::log(),
-				vec![(root(), 42u32), (root(), 42u32), (root(), 42u32)]
-			);
+			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 42u32), (root(), 42u32)]);
 			run_to_block(100);
-			assert_eq!(
-				logger::log(),
-				vec![(root(), 42u32), (root(), 42u32), (root(), 42u32)]
-			);
+			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 42u32), (root(), 42u32)]);
 		});
 	}
 
@@ -1068,14 +1082,20 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
 			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
-			assert_eq!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call).unwrap(), (4, 0));
+			assert_eq!(
+				Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call).unwrap(),
+				(4, 0)
+			);
 
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 
 			assert_eq!(Scheduler::do_reschedule((4, 0), DispatchTime::At(6)).unwrap(), (6, 0));
 
-			assert_noop!(Scheduler::do_reschedule((6, 0), DispatchTime::At(6)), Error::<Test>::RescheduleNoChange);
+			assert_noop!(
+				Scheduler::do_reschedule((6, 0), DispatchTime::At(6)),
+				Error::<Test>::RescheduleNoChange
+			);
 
 			run_to_block(4);
 			assert!(logger::log().is_empty());
@@ -1093,16 +1113,31 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
 			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
-			assert_eq!(Scheduler::do_schedule_named(
-				1u32.encode(), DispatchTime::At(4), None, 127, root(), call
-			).unwrap(), (4, 0));
+			assert_eq!(
+				Scheduler::do_schedule_named(
+					1u32.encode(),
+					DispatchTime::At(4),
+					None,
+					127,
+					root(),
+					call
+				)
+				.unwrap(),
+				(4, 0)
+			);
 
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 
-			assert_eq!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)).unwrap(), (6, 0));
+			assert_eq!(
+				Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)).unwrap(),
+				(6, 0)
+			);
 
-			assert_noop!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)), Error::<Test>::RescheduleNoChange);
+			assert_noop!(
+				Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)),
+				Error::<Test>::RescheduleNoChange
+			);
 
 			run_to_block(4);
 			assert!(logger::log().is_empty());
@@ -1120,15 +1155,30 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(LoggerCall::log(42, 1000));
 			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
-			assert_eq!(Scheduler::do_schedule_named(
-				1u32.encode(), DispatchTime::At(4), Some((3, 3)), 127, root(), call
-			).unwrap(), (4, 0));
+			assert_eq!(
+				Scheduler::do_schedule_named(
+					1u32.encode(),
+					DispatchTime::At(4),
+					Some((3, 3)),
+					127,
+					root(),
+					call
+				)
+				.unwrap(),
+				(4, 0)
+			);
 
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 
-			assert_eq!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(5)).unwrap(), (5, 0));
-			assert_eq!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)).unwrap(), (6, 0));
+			assert_eq!(
+				Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(5)).unwrap(),
+				(5, 0)
+			);
+			assert_eq!(
+				Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(6)).unwrap(),
+				(6, 0)
+			);
 
 			run_to_block(5);
 			assert!(logger::log().is_empty());
@@ -1136,7 +1186,10 @@ mod tests {
 			run_to_block(6);
 			assert_eq!(logger::log(), vec![(root(), 42u32)]);
 
-			assert_eq!(Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(10)).unwrap(), (10, 0));
+			assert_eq!(
+				Scheduler::do_reschedule_named(1u32.encode(), DispatchTime::At(10)).unwrap(),
+				(10, 0)
+			);
 
 			run_to_block(9);
 			assert_eq!(logger::log(), vec![(root(), 42u32)]);
@@ -1157,11 +1210,22 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// at #4.
 			Scheduler::do_schedule_named(
-				1u32.encode(), DispatchTime::At(4), None, 127, root(), Call::Logger(LoggerCall::log(69, 1000))
-			).unwrap();
+				1u32.encode(),
+				DispatchTime::At(4),
+				None,
+				127,
+				root(),
+				Call::Logger(LoggerCall::log(69, 1000)),
+			)
+			.unwrap();
 			let i = Scheduler::do_schedule(
-				DispatchTime::At(4), None, 127, root(), Call::Logger(LoggerCall::log(42, 1000))
-			).unwrap();
+				DispatchTime::At(4),
+				None,
+				127,
+				root(),
+				Call::Logger(LoggerCall::log(42, 1000)),
+			)
+			.unwrap();
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			assert_ok!(Scheduler::do_cancel_named(None, 1u32.encode()));
@@ -1315,10 +1379,7 @@ mod tests {
 			assert_eq!(logger::log(), vec![(root(), 2600u32)]);
 			// 69 and 42 fit together
 			run_to_block(5);
-			assert_eq!(
-				logger::log(),
-				vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]
-			);
+			assert_eq!(logger::log(), vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]);
 		});
 	}
 
@@ -1372,9 +1433,9 @@ mod tests {
 			let call_weight = MaximumSchedulerWeight::get() / 2;
 			assert_eq!(
 				actual_weight,
-				call_weight
-					+ base_weight + base_multiplier
-					+ named_multiplier + periodic_multiplier
+				call_weight +
+					base_weight + base_multiplier +
+					named_multiplier + periodic_multiplier
 			);
 			assert_eq!(logger::log(), vec![(root(), 2600u32)]);
 
@@ -1385,10 +1446,7 @@ mod tests {
 				actual_weight,
 				call_weight + base_weight + base_multiplier * 2 + periodic_multiplier
 			);
-			assert_eq!(
-				logger::log(),
-				vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]
-			);
+			assert_eq!(logger::log(), vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]);
 
 			// Will include named only
 			let actual_weight = Scheduler::on_initialize(3);
@@ -1399,12 +1457,7 @@ mod tests {
 			);
 			assert_eq!(
 				logger::log(),
-				vec![
-					(root(), 2600u32),
-					(root(), 69u32),
-					(root(), 42u32),
-					(root(), 3u32)
-				]
+				vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32), (root(), 3u32)]
 			);
 
 			// Will contain none
@@ -1488,10 +1541,7 @@ mod tests {
 			// Scheduled calls are in the agenda.
 			assert_eq!(Agenda::<Test>::get(4).len(), 2);
 			assert!(logger::log().is_empty());
-			assert_ok!(Scheduler::cancel_named(
-				system::RawOrigin::Signed(1).into(),
-				1u32.encode()
-			));
+			assert_ok!(Scheduler::cancel_named(system::RawOrigin::Signed(1).into(), 1u32.encode()));
 			assert_ok!(Scheduler::cancel(system::RawOrigin::Signed(1).into(), 4, 1));
 			// Scheduled calls are made NONE, so should not effect state
 			run_to_block(100);
@@ -1550,18 +1600,12 @@ mod tests {
 				Scheduler::cancel_named(system::RawOrigin::Signed(2).into(), 1u32.encode()),
 				BadOrigin
 			);
-			assert_noop!(
-				Scheduler::cancel(system::RawOrigin::Signed(2).into(), 4, 1),
-				BadOrigin
-			);
+			assert_noop!(Scheduler::cancel(system::RawOrigin::Signed(2).into(), 4, 1), BadOrigin);
 			assert_noop!(
 				Scheduler::cancel_named(system::RawOrigin::Root.into(), 1u32.encode()),
 				BadOrigin
 			);
-			assert_noop!(
-				Scheduler::cancel(system::RawOrigin::Root.into(), 4, 1),
-				BadOrigin
-			);
+			assert_noop!(Scheduler::cancel(system::RawOrigin::Root.into(), 4, 1), BadOrigin);
 			run_to_block(5);
 			assert_eq!(
 				logger::log(),

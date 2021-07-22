@@ -26,11 +26,10 @@ use sp_io::hashing::twox_128;
 /// This new prefix must be the same as the one set in construct_runtime. For safety, use
 /// `PalletInfo` to get it, as:
 /// `<Runtime as frame_system::Config>::PalletInfo::name::<CollectivePallet>`.
-pub fn migrate<
-	T: frame_system::Config,
-	P: GetPalletVersion,
-	N: AsRef<str>
->(old_pallet_name: N, new_pallet_name: N) -> Weight {
+pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
+	old_pallet_name: N,
+	new_pallet_name: N,
+) -> Weight {
 	if new_pallet_name.as_ref() == old_pallet_name.as_ref() {
 		log::info!(
 			target: "runtime::collective",
@@ -69,11 +68,10 @@ pub fn migrate<
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migration<
-	T: frame_system::Config,
-	P: GetPalletVersion + 'static,
-	N: AsRef<str>,
->(old: N, new: N) {
+pub fn pre_migration<T: frame_system::Config, P: GetPalletVersion + 'static, N: AsRef<str>>(
+	old: N,
+	new: N,
+) {
 	let new = new.as_ref();
 	log::info!("pre-migration collective test with new = {}", new);
 
