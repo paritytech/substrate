@@ -70,6 +70,7 @@ members = [
 	"frame/authorship",
 	"frame/babe",
 	"frame/balances",
+	"frame/balances/rpc",
 	"frame/benchmarking",
 	"frame/bounties",
 	"frame/collective",

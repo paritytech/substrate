@@ -1,0 +1,27 @@
+[package]
+name = "pallet-balances-rpc"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Node-specific RPC methods for interaction with the Balances pallet"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+jsonrpc-core = "15.1.0"
+jsonrpc-core-client = "15.1.0"
+jsonrpc-derive = "15.1.0"
+serde = { version = "1.0.126", features = ["derive"] }
+
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
+sp-rpc = { version = "4.0.0-dev", path = "../../../primitives/rpc" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+
+[dev-dependencies]
+serde_json = "1.0.41"
