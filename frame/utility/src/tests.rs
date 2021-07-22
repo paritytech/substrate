@@ -286,7 +286,7 @@ fn as_derivative_filters() {
 fn batch_with_root_works() {
 	new_test_ext().execute_with(|| {
 		let k = b"a".to_vec();
-		let call = Call::System(frame_system::Call::set_storage(vec![(k.clone(), k.clone())]));
+		let call = Call::System(frame_system::Call::set_storage { items: vec![(k.clone(), k.clone())] });
 		assert!(!TestBaseCallFilter::filter(&call));
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
@@ -356,7 +356,7 @@ fn batch_early_exit_works() {
 fn batch_weight_calculation_doesnt_overflow() {
 	use sp_runtime::Perbill;
 	new_test_ext().execute_with(|| {
-		let big_call = Call::System(SystemCall::fill_block(Perbill::from_percent(50)));
+		let big_call = Call::System(SystemCall::fill_block { _ratio: Perbill::from_percent(50) });
 		assert_eq!(big_call.get_dispatch_info().weight, Weight::max_value() / 2);
 
 		// 3 * 50% saturates to 100%

@@ -1079,7 +1079,7 @@ mod tests {
 					id, &1, 110, lock,
 				);
 				let xt =
-					TestXt::new(Call::System(SystemCall::remark(vec![1u8])), sign_extra(1, 0, 0));
+					TestXt::new(Call::System(SystemCall::remark { _remark: vec![1u8] }), sign_extra(1, 0, 0));
 				let weight = xt.get_dispatch_info().weight +
 					<Runtime as frame_system::Config>::BlockWeights::get()
 						.get(DispatchClass::Normal)

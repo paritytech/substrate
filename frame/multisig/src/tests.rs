@@ -132,7 +132,7 @@ fn now() -> Timepoint<u64> {
 	Multisig::timepoint()
 }
 
-fn call_transfer(dest: u32, value: u32) -> Call {
+fn call_transfer(dest: u64, value: u64) -> Call {
 	Call::Balances(BalancesCall::transfer { dest, value })
 }
 
@@ -778,7 +778,7 @@ fn multisig_1_of_3_works() {
 #[test]
 fn multisig_filters() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::System(frame_system::Call::set_code(vec![])));
+		let call = Box::new(Call::System(frame_system::Call::set_code { code: vec![] }));
 		assert_noop!(
 			Multisig::as_multi_threshold_1(Origin::signed(1), vec![2], call.clone()),
 			DispatchError::BadOrigin,
