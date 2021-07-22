@@ -438,8 +438,6 @@ mod tests {
 					.find(|v| v.name() == &variant_name)
 					.expect(&format!("Expected to find variant {}", variant_name));
 
-				let index = variant.index().expect("index for all variants should be set");
-
 				let field_arr_len = variant
 					.fields()
 					.first()
@@ -454,7 +452,7 @@ mod tests {
 					.unwrap_or(0);
 
 				let encoded = data.encode();
-				assert_eq!(encoded[0], index);
+				assert_eq!(encoded[0], variant.index());
 				assert_eq!(encoded.len() as u32 - 1, field_arr_len);
 			} else {
 				panic!("Should be a variant type")

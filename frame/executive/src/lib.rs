@@ -937,7 +937,7 @@ mod tests {
 	fn block_weight_limit_enforced() {
 		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
-		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
+		let xt = TestXt::new(Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }), sign_extra(1, 0, 0));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
 		// on_initialize weight + base block execution weight
@@ -958,7 +958,7 @@ mod tests {
 
 			for nonce in 0..=num_to_exhaust_block {
 				let xt = TestXt::new(
-					Call::Balances(BalancesCall::transfer(33, 0)),
+					Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 					sign_extra(1, nonce.into(), 0),
 				);
 				let res = Executive::apply_extrinsic(xt);
@@ -982,9 +982,9 @@ mod tests {
 
 	#[test]
 	fn block_weight_and_size_is_stored_per_tx() {
-		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
-		let x1 = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 1, 0));
-		let x2 = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 2, 0));
+		let xt = TestXt::new(Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }), sign_extra(1, 0, 0));
+		let x1 = TestXt::new(Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }), sign_extra(1, 1, 0));
+		let x2 = TestXt::new(Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }), sign_extra(1, 2, 0));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
@@ -1226,7 +1226,7 @@ mod tests {
 	/// used through the `ExecuteBlock` trait.
 	#[test]
 	fn custom_runtime_upgrade_is_called_when_using_execute_block_trait() {
-		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
+		let xt = TestXt::new(Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }), sign_extra(1, 0, 0));
 
 		let header = new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
@@ -1356,7 +1356,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid inherent position for extrinsic at index 1")]
 	fn invalid_inherent_position_fail() {
-		let xt1 = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
+		let xt1 = TestXt::new(Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }), sign_extra(1, 0, 0));
 		let xt2 = TestXt::new(Call::Custom(custom::Call::inherent_call()), None);
 
 		let header = new_test_ext(1).execute_with(|| {
