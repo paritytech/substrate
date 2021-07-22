@@ -79,6 +79,7 @@ impl BenchmarkCmd {
 		<BB as BlockT>::Hash: std::str::FromStr,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
+
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())
@@ -122,6 +123,34 @@ impl BenchmarkCmd {
 			extensions.register(OffchainWorkerExt::new(offchain.clone()));
 			extensions.register(OffchainDbExt::new(offchain));
 			extensions.register(TransactionPoolExt::new(pool));
+
+			if self.list {
+				let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+					&state,
+					None,
+					&mut changes,
+					&executor,
+					"Benchmark_benchmarks",
+					&(self.extra).encode(),
+					extensions,
+					&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+					sp_core::testing::TaskExecutor::new(),
+				)
+				.execute(strategy.into())
+				.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
+
+				let lists = <Vec<frame_benchmarking::BenchmarkList> as Decode>::decode(&mut &result[..])
+					.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))?;
+
+				for list in lists {
+					println!("{}", String::from_utf8(list.pallet).unwrap());
+					for benchmark in list.benchmarks {
+						println!("- {}", String::from_utf8(benchmark).unwrap());
+					}
+				}
+
+				return Ok(())
+			}
 
 			let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 				&state,
@@ -268,3 +297,33 @@ impl CliConfiguration for BenchmarkCmd {
 		})
 	}
 }
+
+// fn list<BB>(extra: bool) -> Result<()>
+// where
+// 	BB: BlockT + Debug,
+// 	<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+// 	<BB as BlockT>::Hash: std::str::FromStr,
+// {
+// 	let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+// 		&state,
+// 		None,
+// 		&mut changes,
+// 		&executor,
+// 		"Benchmark_benchmarks",
+// 		&(extra).encode(),
+// 		extensions,
+// 		&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+// 		sp_core::testing::TaskExecutor::new(),
+// 	)
+// 	.execute(strategy.into())
+// 	.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
+
+// 	let list = <std::result::Result<
+// 			Vec<frame_benchmarking::BenchmarkList>,
+// 			String,
+// 		> as Decode>::decode(&mut &result[..])
+// 		.map_err(|e| format!("Failed to decode benchmark list: {:?}", e))??;
+
+// 	println!("{:?}", list);
+// 	Ok(())
+// }

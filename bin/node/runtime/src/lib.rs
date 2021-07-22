@@ -1534,6 +1534,21 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
+		fn benchmarks(extra: bool) -> Vec<frame_benchmarking::BenchmarkList> {
+			use frame_benchmarking::{Benchmarking, BenchmarkList};
+
+			let benchmarks = Assets::benchmarks(extra)
+				.iter()
+				.map(|b| b.to_vec())
+				.collect::<Vec<_>>();
+			let list = BenchmarkList {
+				pallet: b"Balances".to_vec(),
+				benchmarks: benchmarks.to_vec(),
+			};
+
+			return vec![list]
+		}
+
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
 		) -> Result<

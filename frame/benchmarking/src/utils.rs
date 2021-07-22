@@ -113,6 +113,12 @@ pub struct BenchmarkConfig {
 	pub extra: bool,
 }
 
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BenchmarkList {
+	pub pallet: Vec<u8>,
+	pub benchmarks: Vec<Vec<u8>>,
+}
+
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
@@ -121,7 +127,7 @@ sp_api::decl_runtime_apis! {
 		/// Parameters
 		/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be
 		///            needed for weight calculation.
-		//fn benchmarks(extra: bool) -> Vec<(&'static [u8], Vec<&'static [u8])>;
+		fn benchmarks(extra: bool) -> Vec<BenchmarkList>;
 
 		/// Dispatch the given benchmark.
 		fn dispatch_benchmark(config: BenchmarkConfig)

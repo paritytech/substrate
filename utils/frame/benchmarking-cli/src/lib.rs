@@ -129,4 +129,8 @@ pub struct BenchmarkCmd {
 	/// Limit the memory the database cache can use.
 	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
+
+	/// List the benchmarks available
+	#[structopt(long)]
+	pub list: bool,
 }
