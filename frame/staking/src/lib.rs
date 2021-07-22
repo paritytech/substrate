@@ -274,9 +274,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod testing_utils;
-#[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod testing_utils;
 
 #[cfg(test)]
 pub(crate) mod mock;

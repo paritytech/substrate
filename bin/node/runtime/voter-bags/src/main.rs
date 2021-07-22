@@ -17,7 +17,7 @@
 
 //! Make the set of voting bag thresholds to be used in `voter_bags.rs`.
 
-use pallet_staking::{voter_bags::make_bags::generate_thresholds_module};
+use pallet_staking::voter_bags::make_bags::generate_thresholds_module;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -34,7 +34,5 @@ struct Opt {
 fn main() -> Result<(), std::io::Error> {
 	let Opt { n_bags, output } = Opt::from_args();
 	let mut ext = sp_io::TestExternalities::new_empty();
-	ext.execute_with(|| {
-		generate_thresholds_module::<node_runtime::Runtime>(n_bags, &output)
-	})
+	ext.execute_with(|| generate_thresholds_module::<node_runtime::Runtime>(n_bags, &output))
 }

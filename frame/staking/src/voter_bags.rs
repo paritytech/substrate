@@ -673,8 +673,8 @@ impl<T: Config> Node<T> {
 		notional_bag_for::<T>(current_weight)
 	}
 
-	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	/// Get the underlying voter.
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	pub fn voter(&self) -> &Voter<T::AccountId> {
 		&self.voter
 	}
@@ -963,7 +963,20 @@ mod voter_list {
 
 	#[test]
 	fn notional_bag_for_works() {
-		todo!();
+		// under a threshold gives the next threshold.
+		assert_eq!(notional_bag_for::<Test>(0), 10);
+		assert_eq!(notional_bag_for::<Test>(9), 10);
+		assert_eq!(notional_bag_for::<Test>(11), 20);
+
+		// at a threshold gives the threshold.
+		assert_eq!(notional_bag_for::<Test>(10), 10);
+
+		let max_explicit_threshold = *<Test as Config>::VoterBagThresholds::get().last().unwrap();
+		assert_eq!(max_explicit_threshold, 10_000);
+		// if the max explicit threshold is less than VoteWeight::MAX,
+		assert!(VoteWeight::MAX > max_explicit_threshold);
+		// anything above it will have belong to the threshold VoteWeight::MAX.
+		assert_eq!(notional_bag_for::<Test>(max_explicit_threshold + 1), VoteWeight::MAX);
 	}
 
 	#[test]
