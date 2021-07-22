@@ -1414,7 +1414,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 						// TODO: This is over-conservative. There may now be other providers, and this pallet
 						//   may not even be a provider.
 						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-						let allow_death = allow_death && !system::Pallet::<T>::is_provider_required(transactor);
+						let allow_death = allow_death && system::Pallet::<T>::can_dec_provider(transactor);
 						ensure!(allow_death || from_account.total() >= ed, Error::<T, I>::KeepAlive);
 
 						Ok(())
