@@ -677,11 +677,11 @@ publish-to-crates-io:
     - job:                         unleash-check
   <<:                              *docker-env
   script:
+    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     # TODO: Don't specify crates version in dev-dependencies - cargo automatically
     # prunes such dependencies from the manifest. Otherwise we form a package
     # cycle and cannot proceed with publishing/checking
     - cargo unleash de-dev-deps
-    - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs --dry-run
   allow_failure:                   true
 
