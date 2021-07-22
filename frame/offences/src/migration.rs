@@ -16,18 +16,13 @@
 // limitations under the License.
 
 use super::{Config, OffenceDetails, Perbill, SessionIndex};
-use frame_support::{traits::Get, weights::Weight, generate_storage_alias};
+use frame_support::{generate_storage_alias, traits::Get, weights::Weight};
 use sp_staking::offence::OnOffenceHandler;
 use sp_std::vec::Vec;
 
 /// Type of data stored as a deferred offence
 type DeferredOffenceOf<T> = (
-	Vec<
-		OffenceDetails<
-			<T as frame_system::Config>::AccountId,
-			<T as Config>::IdentificationTuple,
-		>,
-	>,
+	Vec<OffenceDetails<<T as frame_system::Config>::AccountId, <T as Config>::IdentificationTuple>>,
 	Vec<Perbill>,
 	SessionIndex,
 );

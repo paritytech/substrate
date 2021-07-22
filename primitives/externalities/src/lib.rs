@@ -25,12 +25,16 @@
 //!
 //! This crate exposes the main [`Externalities`] trait.
 
-use sp_std::{any::{Any, TypeId}, vec::Vec, boxed::Box};
+use sp_std::{
+	any::{Any, TypeId},
+	boxed::Box,
+	vec::Vec,
+};
 
 use sp_storage::{ChildInfo, TrackedStorageKey};
 
+pub use extensions::{Extension, ExtensionStore, Extensions};
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
-pub use extensions::{Extension, Extensions, ExtensionStore};
 
 mod extensions;
 mod scope_limited;
@@ -68,20 +72,12 @@ pub trait Externalities: ExtensionStore {
 	/// This may be optimized for large values.
 	///
 	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn child_storage_hash(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
+	fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Read child runtime storage.
 	///
 	/// Returns an `Option` that holds the SCALE encoded hash.
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
+	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
@@ -89,12 +85,7 @@ pub trait Externalities: ExtensionStore {
 	}
 
 	/// Set child storage entry `key` of current contract being called (effective immediately).
-	fn set_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		key: Vec<u8>,
-		value: Vec<u8>,
-	) {
+	fn set_child_storage(&mut self, child_info: &ChildInfo, key: Vec<u8>, value: Vec<u8>) {
 		self.place_child_storage(child_info, key, Some(value))
 	}
 
@@ -104,11 +95,7 @@ pub trait Externalities: ExtensionStore {
 	}
 
 	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
-	fn clear_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) {
+	fn clear_child_storage(&mut self, child_info: &ChildInfo, key: &[u8]) {
 		self.place_child_storage(child_info, key.to_vec(), None)
 	}
 
@@ -118,11 +105,7 @@ pub trait Externalities: ExtensionStore {
 	}
 
 	/// Whether a child storage entry exists.
-	fn exists_child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> bool {
+	fn exists_child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> bool {
 		self.child_storage(child_info, key).is_some()
 	}
 
@@ -130,11 +113,7 @@ pub trait Externalities: ExtensionStore {
 	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Returns the key immediately following the given key, if it exists, in child storage.
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>>;
+	fn next_child_storage_key(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Clear an entire child storage.
 	///
@@ -169,12 +148,7 @@ pub trait Externalities: ExtensionStore {
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a child storage entry.
-	fn place_child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		key: Vec<u8>,
-		value: Option<Vec<u8>>,
-	);
+	fn place_child_storage(&mut self, child_info: &ChildInfo, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Get the trie root of the current storage map.
 	///
@@ -189,19 +163,12 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// If the storage root equals the default hash as defined by the trie, the key in the top-level
 	/// storage map will be removed.
-	fn child_storage_root(
-		&mut self,
-		child_info: &ChildInfo,
-	) -> Vec<u8>;
+	fn child_storage_root(&mut self, child_info: &ChildInfo) -> Vec<u8>;
 
 	/// Append storage item.
 	///
 	/// This assumes specific format of the storage item. Also there is no way to undo this operation.
-	fn storage_append(
-		&mut self,
-		key: Vec<u8>,
-		value: Vec<u8>,
-	);
+	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>);
 
 	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
 	///

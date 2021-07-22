@@ -23,16 +23,16 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
 use frame_support::traits::OneSessionHandler;
 use sp_authority_discovery::AuthorityId;
+use sp_std::prelude::*;
 
 pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
 	use super::*;
+	use frame_support::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -45,20 +45,12 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn keys)]
 	/// Keys of the current authority set.
-	pub(super) type Keys<T: Config> = StorageValue<
-		_,
-		Vec<AuthorityId>,
-		ValueQuery,
-	>;
+	pub(super) type Keys<T: Config> = StorageValue<_, Vec<AuthorityId>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn next_keys)]
 	/// Keys of the next authority set.
-	pub(super) type NextKeys<T: Config> = StorageValue<
-		_,
-		Vec<AuthorityId>,
-		ValueQuery,
-	>;
+	pub(super) type NextKeys<T: Config> = StorageValue<_, Vec<AuthorityId>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
@@ -68,9 +60,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-				keys: Default::default(),
-			}
+			Self { keys: Default::default() }
 		}
 	}
 	#[pallet::genesis_build]
@@ -148,18 +138,18 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 
 #[cfg(test)]
 mod tests {
-	use crate as pallet_authority_discovery;
 	use super::*;
-	use sp_authority_discovery::AuthorityPair;
+	use crate as pallet_authority_discovery;
+	use frame_support::{parameter_types, traits::GenesisBuild};
 	use sp_application_crypto::Pair;
+	use sp_authority_discovery::AuthorityPair;
 	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
 	use sp_runtime::{
-		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		Perbill, KeyTypeId,
+		testing::{Header, UintAuthorityId},
+		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
+		KeyTypeId, Perbill,
 	};
-	use frame_support::parameter_types;
-	use frame_support::traits::GenesisBuild;
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
@@ -260,41 +250,44 @@ mod tests {
 		// everywhere.
 		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref()).unwrap().public();
 
-		let mut first_authorities: Vec<AuthorityId> = vec![0, 1].into_iter()
+		let mut first_authorities: Vec<AuthorityId> = vec![0, 1]
+			.into_iter()
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
 
-		let second_authorities: Vec<AuthorityId> = vec![2, 3].into_iter()
+		let second_authorities: Vec<AuthorityId> = vec![2, 3]
+			.into_iter()
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
 		// Needed for `pallet_session::OneSessionHandler::on_new_session`.
-		let second_authorities_and_account_ids = second_authorities.clone()
+		let second_authorities_and_account_ids = second_authorities
+			.clone()
 			.into_iter()
 			.map(|id| (&account_id, id))
-			.collect::<Vec<(&AuthorityId, AuthorityId)> >();
+			.collect::<Vec<(&AuthorityId, AuthorityId)>>();
 
-		let mut third_authorities: Vec<AuthorityId> = vec![4, 5].into_iter()
+		let mut third_authorities: Vec<AuthorityId> = vec![4, 5]
+			.into_iter()
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
 		// Needed for `pallet_session::OneSessionHandler::on_new_session`.
-		let third_authorities_and_account_ids = third_authorities.clone()
+		let third_authorities_and_account_ids = third_authorities
+			.clone()
 			.into_iter()
 			.map(|id| (&account_id, id))
-			.collect::<Vec<(&AuthorityId, AuthorityId)> >();
+			.collect::<Vec<(&AuthorityId, AuthorityId)>>();
 
 		// Build genesis.
-		let mut t = frame_system::GenesisConfig::default()
-			.build_storage::<Test>()
-			.unwrap();
-
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 		GenesisBuild::<Test>::assimilate_storage(
-			&pallet_authority_discovery::GenesisConfig{keys: vec![]},
-			&mut t
-		).unwrap();
+			&pallet_authority_discovery::GenesisConfig { keys: vec![] },
+			&mut t,
+		)
+		.unwrap();
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
@@ -303,7 +296,7 @@ mod tests {
 			use frame_support::traits::OneSessionHandler;
 
 			AuthorityDiscovery::on_genesis_session(
-				first_authorities.iter().map(|id| (id, id.clone()))
+				first_authorities.iter().map(|id| (id, id.clone())),
 			);
 			first_authorities.sort();
 			let mut authorities_returned = AuthorityDiscovery::authorities();
@@ -318,8 +311,7 @@ mod tests {
 			);
 			let authorities_returned = AuthorityDiscovery::authorities();
 			assert_eq!(
-				first_authorities,
-				authorities_returned,
+				first_authorities, authorities_returned,
 				"Expected authority set not to change as `changed` was set to false.",
 			);
 
@@ -329,7 +321,8 @@ mod tests {
 				second_authorities_and_account_ids.into_iter(),
 				third_authorities_and_account_ids.clone().into_iter(),
 			);
-			let mut second_and_third_authorities = second_authorities.iter()
+			let mut second_and_third_authorities = second_authorities
+				.iter()
 				.chain(third_authorities.iter())
 				.cloned()
 				.collect::<Vec<AuthorityId>>();

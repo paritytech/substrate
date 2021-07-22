@@ -7,8 +7,6 @@ imports_granularity = "Crate"
 reorder_imports = true
 # Consistency
 newline_style = "Unix"
-normalize_comments = true
-normalize_doc_attributes = true
 # Misc
 chain_width = 80
 spaces_around_ranges = false

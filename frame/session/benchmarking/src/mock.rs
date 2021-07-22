@@ -19,9 +19,9 @@
 
 #![cfg(test)]
 
-use sp_runtime::traits::IdentityLookup;
 use frame_election_provider_support::onchain;
 use frame_support::parameter_types;
+use sp_runtime::traits::IdentityLookup;
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -114,7 +114,8 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 		_: bool,
 		_: &[(AccountId, Ks)],
 		_: &[(AccountId, Ks)],
-	) {}
+	) {
+	}
 
 	fn on_disabled(_: usize) {}
 }

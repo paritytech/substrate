@@ -49,7 +49,6 @@
 //!
 //! When allowing unbounded parallelism, malicious transactions can exploit it and partition
 //! network consensus based on how much resources nodes have.
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -61,9 +60,9 @@ pub use async_externalities::{new_async_externalities, AsyncExternalities};
 
 #[cfg(feature = "std")]
 mod inner {
-	use std::{panic::AssertUnwindSafe, sync::mpsc};
-	use sp_externalities::ExternalitiesExt as _;
 	use sp_core::traits::TaskExecutorExt;
+	use sp_externalities::ExternalitiesExt as _;
+	use std::{panic::AssertUnwindSafe, sync::mpsc};
 
 	/// Task handle (wasm).
 	///
@@ -77,55 +76,62 @@ mod inner {
 	impl DataJoinHandle {
 		/// Join handle returned by `spawn` function
 		pub fn join(self) -> Vec<u8> {
-			self.receiver.recv().expect("Spawned runtime task terminated before sending result.")
+			self.receiver
+				.recv()
+				.expect("Spawned runtime task terminated before sending result.")
 		}
 	}
 
 	/// Spawn new runtime task (native).
 	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, data: Vec<u8>) -> DataJoinHandle {
-		let scheduler = sp_externalities::with_externalities(|mut ext| ext.extension::<TaskExecutorExt>()
-			.expect("No task executor associated with the current context!")
-			.clone()
-		).expect("Spawn called outside of externalities context!");
+		let scheduler = sp_externalities::with_externalities(|mut ext| {
+			ext.extension::<TaskExecutorExt>()
+				.expect("No task executor associated with the current context!")
+				.clone()
+		})
+		.expect("Spawn called outside of externalities context!");
 
 		let (sender, receiver) = mpsc::channel();
 		let extra_scheduler = scheduler.clone();
-		scheduler.spawn("parallel-runtime-spawn", Box::pin(async move {
-			let result = match crate::new_async_externalities(extra_scheduler) {
-				Ok(mut ext) => {
-					let mut ext = AssertUnwindSafe(&mut ext);
-					match std::panic::catch_unwind(move || {
-						sp_externalities::set_and_run_with_externalities(
-							&mut **ext,
-							move || entry_point(data),
-						)
-					}) {
-						Ok(result) => result,
-						Err(panic) => {
-							log::error!(
-								target: "runtime",
-								"Spawned task panicked: {:?}",
-								panic,
-							);
+		scheduler.spawn(
+			"parallel-runtime-spawn",
+			Box::pin(async move {
+				let result = match crate::new_async_externalities(extra_scheduler) {
+					Ok(mut ext) => {
+						let mut ext = AssertUnwindSafe(&mut ext);
+						match std::panic::catch_unwind(move || {
+							sp_externalities::set_and_run_with_externalities(
+								&mut **ext,
+								move || entry_point(data),
+							)
+						}) {
+							Ok(result) => result,
+							Err(panic) => {
+								log::error!(
+									target: "runtime",
+									"Spawned task panicked: {:?}",
+									panic,
+								);
 
-							// This will drop sender without sending anything.
-							return;
+								// This will drop sender without sending anything.
+								return
+							},
 						}
-					}
-				},
-				Err(e) => {
-					log::error!(
-						target: "runtime",
-						"Unable to run async task: {}",
-						e,
-					);
+					},
+					Err(e) => {
+						log::error!(
+							target: "runtime",
+							"Unable to run async task: {}",
+							e,
+						);
 
-					return;
-				},
-			};
+						return
+					},
+				};
 
-			let _ = sender.send(result);
-		}));
+				let _ = sender.send(result);
+			}),
+		);
 
 		DataJoinHandle { receiver }
 	}
@@ -146,7 +152,11 @@ mod inner {
 	///
 	/// NOTE: Since this dynamic dispatch function and the invoked function are compiled with
 	/// the same compiler, there should be no problem with ABI incompatibility.
-	extern "C" fn dispatch_wrapper(func_ref: *const u8, payload_ptr: *mut u8, payload_len: u32) -> u64 {
+	extern "C" fn dispatch_wrapper(
+		func_ref: *const u8,
+		payload_ptr: *mut u8,
+		payload_len: u32,
+	) -> u64 {
 		let payload_len = payload_len as usize;
 		let output = unsafe {
 			let payload = Vec::from_raw_parts(payload_ptr, payload_len, payload_len);
@@ -160,11 +170,8 @@ mod inner {
 	pub fn spawn(entry_point: fn(Vec<u8>) -> Vec<u8>, payload: Vec<u8>) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
 
-		let handle = sp_io::runtime_tasks::spawn(
-			dispatch_wrapper as usize as _,
-			func_ptr as u32,
-			payload,
-		);
+		let handle =
+			sp_io::runtime_tasks::spawn(dispatch_wrapper as usize as _, func_ptr as u32, payload);
 		DataJoinHandle { handle }
 	}
 
@@ -185,7 +192,7 @@ mod inner {
 	}
 }
 
-pub use inner::{DataJoinHandle, spawn};
+pub use inner::{spawn, DataJoinHandle};
 
 #[cfg(test)]
 mod tests {
@@ -211,7 +218,7 @@ mod tests {
 
 	#[test]
 	fn panicking() {
-		let res = sp_io::TestExternalities::default().execute_with_safe(||{
+		let res = sp_io::TestExternalities::default().execute_with_safe(|| {
 			spawn(async_panicker, vec![5, 2, 1]).join();
 		});
 
@@ -220,28 +227,30 @@ mod tests {
 
 	#[test]
 	fn many_joins() {
-		sp_io::TestExternalities::default().execute_with_safe(|| {
-			// converges to 1 only after 1000+ steps
-			let mut running_val = 9780657630u64;
-			let mut data = vec![];
-			let handles = (0..1024).map(
-				|_| {
-					running_val = if running_val % 2 == 0 {
-						running_val / 2
-					} else {
-						3 * running_val + 1
-					};
-					data.push(running_val as u8);
-					(spawn(async_runner, data.clone()), data.clone())
+		sp_io::TestExternalities::default()
+			.execute_with_safe(|| {
+				// converges to 1 only after 1000+ steps
+				let mut running_val = 9780657630u64;
+				let mut data = vec![];
+				let handles = (0..1024)
+					.map(|_| {
+						running_val = if running_val % 2 == 0 {
+							running_val / 2
+						} else {
+							3 * running_val + 1
+						};
+						data.push(running_val as u8);
+						(spawn(async_runner, data.clone()), data.clone())
+					})
+					.collect::<Vec<_>>();
+
+				for (handle, mut data) in handles {
+					let result = handle.join();
+					data.sort();
+
+					assert_eq!(result, data);
 				}
-			).collect::<Vec<_>>();
-
-			for (handle, mut data) in handles {
-				let result = handle.join();
-				data.sort();
-
-				assert_eq!(result, data);
-			}
-		}).expect("Failed to run with externalities");
+			})
+			.expect("Failed to run with externalities");
 	}
 }

@@ -21,7 +21,7 @@
 use super::{
 	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
 };
-use frame_support::{traits::Randomness as RandomnessT};
+use frame_support::traits::Randomness as RandomnessT;
 use sp_runtime::traits::Hash;
 
 /// Randomness usable by consensus protocols that **depend** upon finality and take action

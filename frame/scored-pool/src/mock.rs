@@ -20,13 +20,14 @@
 use super::*;
 use crate as pallet_scored_pool;
 
-use std::cell::RefCell;
-use frame_support::{parameter_types, ord_parameter_types, traits::GenesisBuild};
+use frame_support::{ord_parameter_types, parameter_types, traits::GenesisBuild};
+use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
 };
-use frame_system::EnsureSignedBy;
+use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -145,32 +146,26 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(40, 500_000),
 			(99, 1),
 		],
-	}.assimilate_storage(&mut t).unwrap();
-	pallet_scored_pool::GenesisConfig::<Test>{
-		pool: vec![
-			(5, None),
-			(10, Some(1)),
-			(20, Some(2)),
-			(31, Some(2)),
-			(40, Some(3)),
-		],
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	pallet_scored_pool::GenesisConfig::<Test> {
+		pool: vec![(5, None), (10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3))],
 		member_count: 2,
-		.. Default::default()
-	}.assimilate_storage(&mut t).unwrap();
+		..Default::default()
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }
 
 /// Fetch an entity from the pool, if existent.
 pub fn fetch_from_pool(who: u64) -> Option<(u64, Option<u64>)> {
-	<Pallet<Test>>::pool()
-		.into_iter()
-		.find(|item| item.0 == who)
+	<Pallet<Test>>::pool().into_iter().find(|item| item.0 == who)
 }
 
 /// Find an entity in the pool.
 /// Returns its position in the `Pool` vec, if existent.
 pub fn find_in_pool(who: u64) -> Option<usize> {
-	<Pallet<Test>>::pool()
-		.into_iter()
-		.position(|item| item.0 == who)
+	<Pallet<Test>>::pool().into_iter().position(|item| item.0 == who)
 }

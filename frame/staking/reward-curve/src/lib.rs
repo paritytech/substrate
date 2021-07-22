@@ -21,7 +21,7 @@ mod log;
 
 use log::log2;
 use proc_macro::TokenStream;
-use proc_macro2::{TokenStream as TokenStream2, Span};
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{quote, ToTokens};
 use std::convert::TryInto;
@@ -82,7 +82,9 @@ pub fn build(input: TokenStream) -> TokenStream {
 	let test_module = generate_test_module(&input);
 
 	let imports = match crate_name("sp-runtime") {
-		Ok(FoundCrate::Itself) => quote!( extern crate sp_runtime as _sp_runtime; ),
+		Ok(FoundCrate::Itself) => quote!(
+			extern crate sp_runtime as _sp_runtime;
+		),
 		Ok(FoundCrate::Name(sp_runtime)) => {
 			let ident = syn::Ident::new(&sp_runtime, Span::call_site());
 			quote!( extern crate #ident as _sp_runtime; )
@@ -99,7 +101,8 @@ pub fn build(input: TokenStream) -> TokenStream {
 			#declaration
 		};
 		#test_module
-	).into()
+	)
+	.into()
 }
 
 const MILLION: u32 = 1_000_000;
@@ -134,10 +137,10 @@ struct Bounds {
 
 impl Bounds {
 	fn check(&self, value: u32) -> bool {
-		let wrong = (self.min_strict && value <= self.min)
-			|| (!self.min_strict && value < self.min)
-			|| (self.max_strict && value >= self.max)
-			|| (!self.max_strict && value > self.max);
+		let wrong = (self.min_strict && value <= self.min) ||
+			(!self.min_strict && value < self.min) ||
+			(self.max_strict && value >= self.max) ||
+			(!self.max_strict && value > self.max);
 
 		!wrong
 	}
@@ -156,17 +159,24 @@ impl core::fmt::Display for Bounds {
 	}
 }
 
-fn parse_field<Token: Parse + Default + ToTokens>(input: ParseStream, bounds: Bounds)
-	-> syn::Result<u32>
-{
+fn parse_field<Token: Parse + Default + ToTokens>(
+	input: ParseStream,
+	bounds: Bounds,
+) -> syn::Result<u32> {
 	<Token>::parse(&input)?;
 	<syn::Token![:]>::parse(&input)?;
 	let value_lit = syn::LitInt::parse(&input)?;
 	let value: u32 = value_lit.base10_parse()?;
 	if !bounds.check(value) {
-		return Err(syn::Error::new(value_lit.span(), format!(
-			"Invalid {}: {},  must be in {}", Token::default().to_token_stream(), value, bounds,
-		)));
+		return Err(syn::Error::new(
+			value_lit.span(),
+			format!(
+				"Invalid {}: {},  must be in {}",
+				Token::default().to_token_stream(),
+				value,
+				bounds,
+			),
+		))
 	}
 
 	Ok(value)
@@ -187,54 +197,42 @@ impl Parse for INposInput {
 		<syn::Token![;]>::parse(&input)?;
 
 		if !input.is_empty() {
-			return Err(input.error("expected end of input stream, no token expected"));
+			return Err(input.error("expected end of input stream, no token expected"))
 		}
 
-		let min_inflation = parse_field::<keyword::min_inflation>(&args_input, Bounds {
-			min: 0,
-			min_strict: true,
-			max: 1_000_000,
-			max_strict: false,
-		})?;
+		let min_inflation = parse_field::<keyword::min_inflation>(
+			&args_input,
+			Bounds { min: 0, min_strict: true, max: 1_000_000, max_strict: false },
+		)?;
 		<syn::Token![,]>::parse(&args_input)?;
-		let max_inflation = parse_field::<keyword::max_inflation>(&args_input, Bounds {
-			min: min_inflation,
-			min_strict: true,
-			max: 1_000_000,
-			max_strict: false,
-		})?;
+		let max_inflation = parse_field::<keyword::max_inflation>(
+			&args_input,
+			Bounds { min: min_inflation, min_strict: true, max: 1_000_000, max_strict: false },
+		)?;
 		<syn::Token![,]>::parse(&args_input)?;
-		let ideal_stake = parse_field::<keyword::ideal_stake>(&args_input, Bounds {
-			min: 0_100_000,
-			min_strict: false,
-			max: 0_900_000,
-			max_strict: false,
-		})?;
+		let ideal_stake = parse_field::<keyword::ideal_stake>(
+			&args_input,
+			Bounds { min: 0_100_000, min_strict: false, max: 0_900_000, max_strict: false },
+		)?;
 		<syn::Token![,]>::parse(&args_input)?;
-		let falloff = parse_field::<keyword::falloff>(&args_input, Bounds {
-			min: 0_010_000,
-			min_strict: false,
-			max: 1_000_000,
-			max_strict: false,
-		})?;
+		let falloff = parse_field::<keyword::falloff>(
+			&args_input,
+			Bounds { min: 0_010_000, min_strict: false, max: 1_000_000, max_strict: false },
+		)?;
 		<syn::Token![,]>::parse(&args_input)?;
-		let max_piece_count = parse_field::<keyword::max_piece_count>(&args_input, Bounds {
-			min: 2,
-			min_strict: false,
-			max: 1_000,
-			max_strict: false,
-		})?;
+		let max_piece_count = parse_field::<keyword::max_piece_count>(
+			&args_input,
+			Bounds { min: 2, min_strict: false, max: 1_000, max_strict: false },
+		)?;
 		<syn::Token![,]>::parse(&args_input)?;
-		let test_precision = parse_field::<keyword::test_precision>(&args_input, Bounds {
-			min: 0,
-			min_strict: false,
-			max: 1_000_000,
-			max_strict: false,
-		})?;
+		let test_precision = parse_field::<keyword::test_precision>(
+			&args_input,
+			Bounds { min: 0, min_strict: false, max: 1_000_000, max_strict: false },
+		)?;
 		<Option<syn::Token![,]>>::parse(&args_input)?;
 
 		if !args_input.is_empty() {
-			return Err(args_input.error("expected end of input stream, no token expected"));
+			return Err(args_input.error("expected end of input stream, no token expected"))
 		}
 
 		Ok(Self {
@@ -263,7 +261,8 @@ impl INPoS {
 		INPoS {
 			i_0: input.min_inflation,
 			i_ideal: (input.max_inflation as u64 * MILLION as u64 / input.ideal_stake as u64)
-				.try_into().unwrap(),
+				.try_into()
+				.unwrap(),
 			i_ideal_times_x_ideal: input.max_inflation,
 			x_ideal: input.ideal_stake,
 			d: input.falloff,
@@ -275,7 +274,7 @@ impl INPoS {
 	// See web3 docs for the details
 	fn compute_opposite_after_x_ideal(&self, y: u32) -> u32 {
 		if y == self.i_0 {
-			return u32::MAX;
+			return u32::MAX
 		}
 		// Note: the log term calculated here represents a per_million value
 		let log = log2(self.i_ideal_times_x_ideal - self.i_0, y - self.i_0);
@@ -295,8 +294,8 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 
 	// For each point p: (next_p.0 - p.0) < segment_length && (next_p.1 - p.1) < segment_length.
 	// This ensures that the total number of segment doesn't overflow max_piece_count.
-	let max_length = (input.max_inflation - input.min_inflation + 1_000_000 - inpos.x_ideal)
-		/ (input.max_piece_count - 1);
+	let max_length = (input.max_inflation - input.min_inflation + 1_000_000 - inpos.x_ideal) /
+		(input.max_piece_count - 1);
 
 	let mut delta_y = max_length;
 	let mut y = input.max_inflation;
@@ -322,16 +321,15 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 			let prev = points.last().unwrap();
 			// Compute the y corresponding to x=1_000_000 using the this point and the previous one.
 
-			let delta_y: u32 = (
-				(next_x - 1_000_000) as u64
-				* (prev.1 - next_y) as u64
-				/ (next_x - prev.0) as u64
-			).try_into().unwrap();
+			let delta_y: u32 = ((next_x - 1_000_000) as u64 * (prev.1 - next_y) as u64 /
+				(next_x - prev.0) as u64)
+				.try_into()
+				.unwrap();
 
 			let y = next_y + delta_y;
 
 			points.push((1_000_000, y));
-			return points;
+			return points
 		}
 		points.push((next_x, next_y));
 		y = next_y;
@@ -345,7 +343,8 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 	let mut points_tokens = quote!();
 
-	let max = points.iter()
+	let max = points
+		.iter()
 		.map(|&(_, x)| x)
 		.max()
 		.unwrap_or(0)
@@ -354,13 +353,15 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 		.unwrap_or(1_000_000_000);
 
 	for (x, y) in points {
-		let error = || panic!(
-			"Generated reward curve approximation doesn't fit into [0, 1] -> [0, 1] \
+		let error = || {
+			panic!(
+				"Generated reward curve approximation doesn't fit into [0, 1] -> [0, 1] \
 			because of point:
 			x = {:07} per million
 			y = {:07} per million",
-			x, y
-		);
+				x, y
+			)
+		};
 
 		let x_perbill = x.checked_mul(1_000).unwrap_or_else(error);
 		let y_perbill = y.checked_mul(1_000).unwrap_or_else(error);
@@ -386,7 +387,7 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 
 	let ident = &input.ident;
 	let precision = input.test_precision;
-	let i_0 = inpos.i_0 as f64/ MILLION as f64;
+	let i_0 = inpos.i_0 as f64 / MILLION as f64;
 	let i_ideal_times_x_ideal = inpos.i_ideal_times_x_ideal as f64 / MILLION as f64;
 	let i_ideal = inpos.i_ideal as f64 / MILLION as f64;
 	let x_ideal = inpos.x_ideal as f64 / MILLION as f64;
@@ -443,5 +444,6 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 				);
 			}
 		}
-	).into()
+	)
+	.into()
 }

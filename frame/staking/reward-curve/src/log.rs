@@ -4,7 +4,7 @@ use std::convert::TryInto;
 macro_rules! pow2 {
 	($n:expr) => {
 		1_u32 << $n
-	}
+	};
 }
 
 /// Returns the k_th per_million taylor term for a log2 function
@@ -33,7 +33,7 @@ fn taylor_term(k: u32, y_num: u128, y_den: u128) -> u32 {
 /// * result represents a per-million output of log2
 pub fn log2(p: u32, q: u32) -> u32 {
 	assert!(p >= q); // keep p/q bound to [1, inf)
-	assert!(p <= u32::MAX/2);
+	assert!(p <= u32::MAX / 2);
 
 	// This restriction should not be mandatory. But function is only tested and used for this.
 	assert!(p <= 1_000_000);
@@ -79,7 +79,7 @@ fn test_log() {
 			let p: u32 = (1_000_000 as u64 * p as u64 / div as u64).try_into().unwrap();
 			let q: u32 = (1_000_000 as u64 * q as u64 / div as u64).try_into().unwrap();
 
-			let res = - (log2(p, q) as i64);
+			let res = -(log2(p, q) as i64);
 			let expected = ((q as f64 / p as f64).log(2.0) * 1_000_000 as f64).round() as i64;
 			assert!((res - expected).abs() <= 6);
 		}
