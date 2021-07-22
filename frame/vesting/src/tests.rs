@@ -402,7 +402,7 @@ fn vested_transfer_correctly_fails() {
 fn vested_transfer_allows_max_schedules() {
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let mut user_4_free_balance = Balances::free_balance(&4);
-		let max_schedules = <Test as Config>::MaxVestingSchedules::get();
+		let max_schedules = <Test as Config>::MAX_VESTING_SCHEDULES;
 		let sched = VestingInfo::new(
 			<Test as Config>::MinVestedTransfer::get(),
 			1, // Vest over 2 * 256 blocks.
@@ -547,7 +547,7 @@ fn force_vested_transfer_correctly_fails() {
 fn force_vested_transfer_allows_max_schedules() {
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let mut user_4_free_balance = Balances::free_balance(&4);
-		let max_schedules = <Test as Config>::MaxVestingSchedules::get();
+		let max_schedules = <Test as Config>::MAX_VESTING_SCHEDULES;
 		let sched = VestingInfo::new(
 			<Test as Config>::MinVestedTransfer::get(),
 			1, // Vest over 2 * 256 blocks.

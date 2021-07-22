@@ -1053,7 +1053,6 @@ impl pallet_society::Config for Runtime {
 
 parameter_types! {
 	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
-	pub const MaxVestingSchedules: u32 = 28;
 }
 
 impl pallet_vesting::Config for Runtime {
@@ -1062,7 +1061,7 @@ impl pallet_vesting::Config for Runtime {
 	type BlockNumberToBalance = ConvertInto;
 	type MinVestedTransfer = MinVestedTransfer;
 	type WeightInfo = pallet_vesting::weights::SubstrateWeight<Runtime>;
-	type MaxVestingSchedules = MaxVestingSchedules;
+	const MAX_VESTING_SCHEDULES: u32 = 28;
 }
 
 impl pallet_mmr::Config for Runtime {
