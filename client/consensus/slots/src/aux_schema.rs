@@ -169,21 +169,21 @@ mod test {
 		let header6 = create_header(3); // @ slot 4
 
 		// It's ok to sign same headers.
-		assert!(check_equivocation(&client, 2.into(), 2.into(), &header1, &public,)
+		assert!(check_equivocation(&client, 2.into(), 2.into(), &header1, &public)
 			.unwrap()
 			.is_none(),);
 
-		assert!(check_equivocation(&client, 3.into(), 2.into(), &header1, &public,)
+		assert!(check_equivocation(&client, 3.into(), 2.into(), &header1, &public)
 			.unwrap()
 			.is_none(),);
 
 		// But not two different headers at the same slot.
-		assert!(check_equivocation(&client, 4.into(), 2.into(), &header2, &public,)
+		assert!(check_equivocation(&client, 4.into(), 2.into(), &header2, &public)
 			.unwrap()
 			.is_some(),);
 
 		// Different slot is ok.
-		assert!(check_equivocation(&client, 5.into(), 4.into(), &header3, &public,)
+		assert!(check_equivocation(&client, 5.into(), 4.into(), &header3, &public)
 			.unwrap()
 			.is_none(),);
 

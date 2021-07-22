@@ -344,7 +344,7 @@ impl<B: BlockT> Builder<B> {
 
 	/// initialize `Self` from state snapshot. Panics if the file does not exist.
 	fn load_state_snapshot(&self, path: &Path) -> Result<Vec<KeyPair>, &'static str> {
-		info!(target: LOG_TARGET, "scraping key-pairs from state snapshot {:?}", path,);
+		info!(target: LOG_TARGET, "scraping key-pairs from state snapshot {:?}", path);
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}

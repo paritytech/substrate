@@ -747,7 +747,7 @@ mod assignment_convert_normalize {
 			}
 		);
 
-		assert_eq!(assignment.into_staked(125), staked,);
+		assert_eq!(assignment.into_staked(125), staked);
 	}
 
 	#[test]
@@ -817,7 +817,7 @@ mod assignment_convert_normalize {
 	fn staked_assignment_can_normalize() {
 		let mut a = StakedAssignment { who: 1, distribution: vec![(2, 33), (3, 66)] };
 		a.try_normalize(100).unwrap();
-		assert_eq!(a, StakedAssignment { who: 1, distribution: vec![(2, 34), (3, 66),] },);
+		assert_eq!(a, StakedAssignment { who: 1, distribution: vec![(2, 34), (3, 66),] });
 	}
 }
 
@@ -827,16 +827,16 @@ mod score {
 	fn score_comparison_is_lexicographical_no_epsilon() {
 		let epsilon = Perbill::zero();
 		// only better in the fist parameter, worse in the other two ✅
-		assert_eq!(is_score_better([12, 10, 35], [10, 20, 30], epsilon), true,);
+		assert_eq!(is_score_better([12, 10, 35], [10, 20, 30], epsilon), true);
 
 		// worse in the first, better in the other two ❌
-		assert_eq!(is_score_better([9, 30, 10], [10, 20, 30], epsilon), false,);
+		assert_eq!(is_score_better([9, 30, 10], [10, 20, 30], epsilon), false);
 
 		// equal in the first, the second one dictates.
-		assert_eq!(is_score_better([10, 25, 40], [10, 20, 30], epsilon), true,);
+		assert_eq!(is_score_better([10, 25, 40], [10, 20, 30], epsilon), true);
 
 		// equal in the first two, the last one dictates.
-		assert_eq!(is_score_better([10, 20, 40], [10, 20, 30], epsilon), false,);
+		assert_eq!(is_score_better([10, 20, 40], [10, 20, 30], epsilon), false);
 	}
 
 	#[test]
@@ -845,37 +845,37 @@ mod score {
 
 		{
 			// no more than 1 percent (10) better in the first param.
-			assert_eq!(is_score_better([1009, 5000, 100000], [1000, 5000, 100000], epsilon), false,);
+			assert_eq!(is_score_better([1009, 5000, 100000], [1000, 5000, 100000], epsilon), false);
 
 			// now equal, still not better.
-			assert_eq!(is_score_better([1010, 5000, 100000], [1000, 5000, 100000], epsilon), false,);
+			assert_eq!(is_score_better([1010, 5000, 100000], [1000, 5000, 100000], epsilon), false);
 
 			// now it is.
-			assert_eq!(is_score_better([1011, 5000, 100000], [1000, 5000, 100000], epsilon), true,);
+			assert_eq!(is_score_better([1011, 5000, 100000], [1000, 5000, 100000], epsilon), true);
 		}
 
 		{
 			// First score score is epsilon better, but first score is no longer `ge`. Then this is
 			// still not a good solution.
-			assert_eq!(is_score_better([999, 6000, 100000], [1000, 5000, 100000], epsilon), false,);
+			assert_eq!(is_score_better([999, 6000, 100000], [1000, 5000, 100000], epsilon), false);
 		}
 
 		{
 			// first score is equal or better, but not epsilon. Then second one is the determinant.
-			assert_eq!(is_score_better([1005, 5000, 100000], [1000, 5000, 100000], epsilon), false,);
+			assert_eq!(is_score_better([1005, 5000, 100000], [1000, 5000, 100000], epsilon), false);
 
-			assert_eq!(is_score_better([1005, 5050, 100000], [1000, 5000, 100000], epsilon), false,);
+			assert_eq!(is_score_better([1005, 5050, 100000], [1000, 5000, 100000], epsilon), false);
 
-			assert_eq!(is_score_better([1005, 5051, 100000], [1000, 5000, 100000], epsilon), true,);
+			assert_eq!(is_score_better([1005, 5051, 100000], [1000, 5000, 100000], epsilon), true);
 		}
 
 		{
 			// first score and second are equal or less than epsilon more, third is determinant.
-			assert_eq!(is_score_better([1005, 5025, 100000], [1000, 5000, 100000], epsilon), false,);
+			assert_eq!(is_score_better([1005, 5025, 100000], [1000, 5000, 100000], epsilon), false);
 
-			assert_eq!(is_score_better([1005, 5025, 99_000], [1000, 5000, 100000], epsilon), false,);
+			assert_eq!(is_score_better([1005, 5025, 99_000], [1000, 5000, 100000], epsilon), false);
 
-			assert_eq!(is_score_better([1005, 5025, 98_999], [1000, 5000, 100000], epsilon), true,);
+			assert_eq!(is_score_better([1005, 5025, 98_999], [1000, 5000, 100000], epsilon), true);
 		}
 	}
 
@@ -999,7 +999,7 @@ mod solution_type {
 
 		let encoded = compact.encode();
 
-		assert_eq!(compact, Decode::decode(&mut &encoded[..]).unwrap(),);
+		assert_eq!(compact, Decode::decode(&mut &encoded[..]).unwrap());
 		assert_eq!(compact.voter_count(), 4);
 		assert_eq!(compact.edge_count(), 2 + 4);
 		assert_eq!(compact.unique_targets(), vec![10, 11, 20, 40, 50, 51]);
@@ -1137,7 +1137,7 @@ mod solution_type {
 			}
 		);
 
-		assert_eq!(compacted.unique_targets(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8],);
+		assert_eq!(compacted.unique_targets(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8]);
 
 		let voter_at = |a: u32| -> Option<AccountId> {
 			voters.get(<u32 as TryInto<usize>>::try_into(a).unwrap()).cloned()
@@ -1146,7 +1146,7 @@ mod solution_type {
 			targets.get(<u8 as TryInto<usize>>::try_into(a).unwrap()).cloned()
 		};
 
-		assert_eq!(compacted.into_assignment(voter_at, target_at).unwrap(), assignments,);
+		assert_eq!(compacted.into_assignment(voter_at, target_at).unwrap(), assignments);
 	}
 
 	#[test]

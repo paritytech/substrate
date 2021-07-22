@@ -489,7 +489,7 @@ fn compact_wasm_file(
 			wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone());
 
 		let wasm_compact_compressed_file =
-			project.join(format!("{}.compact.compressed.wasm", file_name,));
+			project.join(format!("{}.compact.compressed.wasm", file_name));
 
 		if compress_wasm(&compact_binary.0, &wasm_compact_compressed_file) {
 			Some(WasmBinary(wasm_compact_compressed_file))

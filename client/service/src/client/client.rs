@@ -1913,7 +1913,7 @@ where
 		// (i.e. fork blocks and bad blocks respectively)
 		match self.block_rules.lookup(number, &hash) {
 			BlockLookupResult::KnownBad => {
-				trace!("Rejecting known bad block: #{} {:?}", number, hash,);
+				trace!("Rejecting known bad block: #{} {:?}", number, hash);
 				return Ok(ImportResult::KnownBad)
 			},
 			BlockLookupResult::Expected(expected_hash) => {

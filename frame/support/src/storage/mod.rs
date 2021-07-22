@@ -1030,7 +1030,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 					None => unhashed::kill(&previous_key),
 				},
 				None => {
-					log::error!("old key failed to decode at {:?}", previous_key,);
+					log::error!("old key failed to decode at {:?}", previous_key);
 					continue
 				},
 			}

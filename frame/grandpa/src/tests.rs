@@ -234,7 +234,7 @@ fn schedule_pause_only_when_live() {
 		Grandpa::schedule_pause(1).unwrap();
 
 		// we've switched to the pending pause state
-		assert_eq!(Grandpa::state(), StoredState::PendingPause { scheduled_at: 1u64, delay: 1 },);
+		assert_eq!(Grandpa::state(), StoredState::PendingPause { scheduled_at: 1u64, delay: 1 });
 
 		Grandpa::on_finalize(1);
 		let _ = System::finalize();
@@ -248,7 +248,7 @@ fn schedule_pause_only_when_live() {
 		let _ = System::finalize();
 
 		// after finalizing block 2 the set should have switched to paused state
-		assert_eq!(Grandpa::state(), StoredState::Paused,);
+		assert_eq!(Grandpa::state(), StoredState::Paused);
 	});
 }
 
@@ -260,14 +260,14 @@ fn schedule_resume_only_when_paused() {
 		// the set is currently live, resuming it is an error
 		assert_noop!(Grandpa::schedule_resume(1), Error::<Test>::ResumeFailed);
 
-		assert_eq!(Grandpa::state(), StoredState::Live,);
+		assert_eq!(Grandpa::state(), StoredState::Live);
 
 		// we schedule a pause to be applied instantly
 		Grandpa::schedule_pause(0).unwrap();
 		Grandpa::on_finalize(1);
 		let _ = System::finalize();
 
-		assert_eq!(Grandpa::state(), StoredState::Paused,);
+		assert_eq!(Grandpa::state(), StoredState::Paused);
 
 		// we schedule the set to go back live in 2 blocks
 		initialize_block(2, Default::default());
@@ -284,7 +284,7 @@ fn schedule_resume_only_when_paused() {
 		let _ = System::finalize();
 
 		// it should be live at block 4
-		assert_eq!(Grandpa::state(), StoredState::Live,);
+		assert_eq!(Grandpa::state(), StoredState::Live);
 	});
 }
 

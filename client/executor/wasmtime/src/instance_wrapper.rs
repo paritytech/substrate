@@ -176,7 +176,7 @@ impl InstanceWrapper {
 					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?
 					.clone();
 				EntryPoint::direct(func).map_err(|_| {
-					Error::from(format!("Exported function '{}' has invalid signature.", method,))
+					Error::from(format!("Exported function '{}' has invalid signature.", method))
 				})?
 			},
 			InvokeMethod::Table(func_ref) => {

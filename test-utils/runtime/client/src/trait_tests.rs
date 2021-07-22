@@ -56,7 +56,7 @@ where
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
-	assert_eq!(blockchain.leaves().unwrap(), vec![a1.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a1.hash()]);
 
 	// A1 -> A2
 	let a2 = client
@@ -68,7 +68,7 @@ where
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
 
 	#[allow(deprecated)]
-	assert_eq!(blockchain.leaves().unwrap(), vec![a2.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a2.hash()]);
 
 	// A2 -> A3
 	let a3 = client
@@ -79,7 +79,7 @@ where
 		.block;
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
 
-	assert_eq!(blockchain.leaves().unwrap(), vec![a3.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a3.hash()]);
 
 	// A3 -> A4
 	let a4 = client
@@ -89,7 +89,7 @@ where
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a4.clone())).unwrap();
-	assert_eq!(blockchain.leaves().unwrap(), vec![a4.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a4.hash()]);
 
 	// A4 -> A5
 	let a5 = client
@@ -100,7 +100,7 @@ where
 		.block;
 
 	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
-	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash()]);
 
 	// A1 -> B2
 	let mut builder = client
@@ -118,7 +118,7 @@ where
 		.unwrap();
 	let b2 = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
-	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b2.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b2.hash()]);
 
 	// B2 -> B3
 	let b3 = client
@@ -129,7 +129,7 @@ where
 		.block;
 
 	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
-	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b3.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b3.hash()]);
 
 	// B3 -> B4
 	let b4 = client
@@ -139,7 +139,7 @@ where
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, b4.clone())).unwrap();
-	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b4.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b4.hash()]);
 
 	// // B2 -> C3
 	let mut builder = client
@@ -156,7 +156,7 @@ where
 		.unwrap();
 	let c3 = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, c3.clone())).unwrap();
-	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b4.hash(), c3.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b4.hash(), c3.hash()]);
 
 	// A1 -> D2
 	let mut builder = client
@@ -173,7 +173,7 @@ where
 		.unwrap();
 	let d2 = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, d2.clone())).unwrap();
-	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b4.hash(), c3.hash(), d2.hash()],);
+	assert_eq!(blockchain.leaves().unwrap(), vec![a5.hash(), b4.hash(), c3.hash(), d2.hash()]);
 }
 
 /// helper to test the `children` implementation for various backends

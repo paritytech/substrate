@@ -49,7 +49,7 @@ impl FromStr for GenericNumber {
 
 	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
 		if let Some(pos) = block_number.chars().position(|d| !d.is_digit(10)) {
-			Err(format!("Expected block number, found illegal digit at position: {}", pos,))
+			Err(format!("Expected block number, found illegal digit at position: {}", pos))
 		} else {
 			Ok(Self(block_number.to_owned()))
 		}
