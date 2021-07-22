@@ -26,7 +26,10 @@ use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
 use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
-use sp_std::{convert::{TryFrom, TryInto}, boxed::Box};
+use sp_std::{
+	boxed::Box,
+	convert::{TryFrom, TryInto},
+};
 
 const SEED: u32 = 999;
 

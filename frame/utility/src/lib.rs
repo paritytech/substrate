@@ -126,7 +126,7 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Too many calls batched.
-		TooManyCalls
+		TooManyCalls,
 	}
 
 	#[pallet::call]

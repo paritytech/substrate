@@ -349,8 +349,11 @@ pub mod pallet {
 					id.info = *info;
 					id
 				},
-				None =>
-					Registration { info: *info, judgements: BoundedVec::default(), deposit: Zero::zero() },
+				None => Registration {
+					info: *info,
+					judgements: BoundedVec::default(),
+					deposit: Zero::zero(),
+				},
 			};
 
 			let old_deposit = id.deposit;

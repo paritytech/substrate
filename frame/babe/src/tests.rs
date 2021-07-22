@@ -420,7 +420,7 @@ fn report_equivocation_current_session_works() {
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		)
-			.unwrap();
+		.unwrap();
 
 		// start a new era so that the results of the offence report
 		// are applied at era end
@@ -492,7 +492,7 @@ fn report_equivocation_old_session_works() {
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		)
-			.unwrap();
+		.unwrap();
 
 		// start a new era so that the results of the offence report
 		// are applied at era end
@@ -738,9 +738,9 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		Babe::report_equivocation_unsigned(
 			Origin::none(),
 			Box::new(equivocation_proof),
-			key_owner_proof
+			key_owner_proof,
 		)
-			.unwrap();
+		.unwrap();
 
 		// the report should now be considered stale and the transaction is invalid.
 		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
@@ -827,9 +827,9 @@ fn valid_equivocation_reports_dont_pay_fees() {
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		)
-			.err()
-			.unwrap()
-			.post_info;
+		.err()
+		.unwrap()
+		.post_info;
 
 		// the fee is not waived and the original weight is kept.
 		assert!(post_info.actual_weight.is_none());

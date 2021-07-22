@@ -34,7 +34,7 @@ use sp_runtime::{
 	traits::TrailingZeroInput,
 	DispatchError, SaturatedConversion,
 };
-use sp_std::{cmp::Ordering, convert::TryFrom, vec::Vec, boxed::Box};
+use sp_std::{boxed::Box, cmp::Ordering, convert::TryFrom, vec::Vec};
 
 /// Storage key used to store the last block number at which offchain worker ran.
 pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -1054,9 +1054,11 @@ mod tests {
 				};
 				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
-				assert_ok!(
-					MultiPhase::submit_unsigned(Origin::none(), Box::new(solution), witness)
-				);
+				assert_ok!(MultiPhase::submit_unsigned(
+					Origin::none(),
+					Box::new(solution),
+					witness
+				));
 				assert_eq!(MultiPhase::queued_solution().unwrap().score[0], 10);
 
 				// trial 1: a solution who's score is only 2, i.e. 20% better in the first element.
@@ -1098,9 +1100,11 @@ mod tests {
 
 				// and it is fine
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
-				assert_ok!(
-					MultiPhase::submit_unsigned(Origin::none(), Box::new(solution), witness)
-				);
+				assert_ok!(MultiPhase::submit_unsigned(
+					Origin::none(),
+					Box::new(solution),
+					witness
+				));
 			})
 	}
 

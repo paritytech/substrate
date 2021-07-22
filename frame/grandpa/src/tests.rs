@@ -716,8 +716,12 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		assert_ok!(<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call));
 
 		// we submit the report
-		Grandpa::report_equivocation_unsigned(Origin::none(), Box::new(equivocation_proof), key_owner_proof)
-			.unwrap();
+		Grandpa::report_equivocation_unsigned(
+			Origin::none(),
+			Box::new(equivocation_proof),
+			key_owner_proof,
+		)
+		.unwrap();
 
 		// the report should now be considered stale and the transaction is invalid
 		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
