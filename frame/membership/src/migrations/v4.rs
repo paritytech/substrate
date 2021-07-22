@@ -26,11 +26,10 @@ use sp_io::hashing::twox_128;
 /// This new prefix must be the same as the one set in construct_runtime. For safety, use
 /// `PalletInfo` to get it, as:
 /// `<Runtime as frame_system::Config>::PalletInfo::name::<MembershipPallet>`.
-pub fn migrate<
-	T: frame_system::Config,
-	P: GetPalletVersion,
-	N: AsRef<str>
->(old_pallet_name: N, new_pallet_name: N) -> Weight {
+pub fn migrate<T: frame_system::Config, P: GetPalletVersion, N: AsRef<str>>(
+	old_pallet_name: N,
+	new_pallet_name: N,
+) -> Weight {
 	if new_pallet_name.as_ref() == old_pallet_name.as_ref() {
 		log::info!(
 			target: "runtime::membership",
@@ -69,11 +68,10 @@ pub fn migrate<
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migration<
-	T: frame_system::Config,
-	P: GetPalletVersion + 'static,
-	N: AsRef<str>,
->(old: N, new: N) {
+pub fn pre_migration<T: frame_system::Config, P: GetPalletVersion + 'static, N: AsRef<str>>(
+	old: N,
+	new: N,
+) {
 	let new = new.as_ref();
 	log::info!("pre-migration membership test with new = {}", new);
 
@@ -101,10 +99,7 @@ pub fn pre_migration<
 			&sp_io::storage::next_key(&twox_128(new.as_bytes())).unwrap()
 		),
 	);
-	assert_eq!(
-		<P as GetPalletVersion>::storage_version().map(|version| version.major),
-        Some(3)
-	);
+	assert_eq!(<P as GetPalletVersion>::storage_version().map(|version| version.major), Some(3));
 }
 
 /// Some checks for after migration. This can be linked to
@@ -116,14 +111,7 @@ pub fn post_migration<P: GetPalletVersion, N: AsRef<str>>(old_pallet_name: N) {
 
 	let old_pallet_name = old_pallet_name.as_ref().as_bytes();
 	// Assert that nothing remains at the old prefix
-	assert!(
-		sp_io::storage::next_key(&twox_128(old_pallet_name)).map_or(
-			true,
-			|next_key| !next_key.starts_with(&twox_128(old_pallet_name))
-		)
-	);
-	assert_eq!(
-		<P as GetPalletVersion>::storage_version().map(|version| version.major),
-		Some(4)
-	);
+	assert!(sp_io::storage::next_key(&twox_128(old_pallet_name))
+		.map_or(true, |next_key| !next_key.starts_with(&twox_128(old_pallet_name))));
+	assert_eq!(<P as GetPalletVersion>::storage_version().map(|version| version.major), Some(4));
 }

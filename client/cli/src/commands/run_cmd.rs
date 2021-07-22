@@ -16,15 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::arg_enums::RpcMethods;
-use crate::error::{Error, Result};
-use crate::params::ImportParams;
-use crate::params::KeystoreParams;
-use crate::params::NetworkParams;
-use crate::params::OffchainWorkerParams;
-use crate::params::SharedParams;
-use crate::params::TransactionPoolParams;
-use crate::CliConfiguration;
+use crate::{
+	arg_enums::RpcMethods,
+	error::{Error, Result},
+	params::{
+		ImportParams, KeystoreParams, NetworkParams, OffchainWorkerParams, SharedParams,
+		TransactionPoolParams,
+	},
+	CliConfiguration,
+};
 use regex::Regex;
 use sc_service::{
 	config::{BasePath, PrometheusConfig, TransactionPoolOptions},
@@ -308,7 +308,7 @@ impl CliConfiguration for RunCmd {
 			Error::Input(format!(
 				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
 				name, msg
-		))
+			))
 		})?;
 
 		Ok(name)
@@ -363,18 +363,13 @@ impl CliConfiguration for RunCmd {
 		Ok(if self.no_prometheus {
 			None
 		} else {
-			let interface = if self.prometheus_external {
-				Ipv4Addr::UNSPECIFIED
-			} else {
-				Ipv4Addr::LOCALHOST
-			};
+			let interface =
+				if self.prometheus_external { Ipv4Addr::UNSPECIFIED } else { Ipv4Addr::LOCALHOST };
 
-			Some(PrometheusConfig::new_with_default_registry(
-				SocketAddr::new(
-					interface.into(),
-					self.prometheus_port.unwrap_or(default_listen_port),
-				)
-			))
+			Some(PrometheusConfig::new_with_default_registry(SocketAddr::new(
+				interface.into(),
+				self.prometheus_port.unwrap_or(default_listen_port),
+			)))
 		})
 	}
 
@@ -416,7 +411,7 @@ impl CliConfiguration for RunCmd {
 			self.rpc_external,
 			self.unsafe_rpc_external,
 			self.rpc_methods,
-			self.validator
+			self.validator,
 		)?;
 
 		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(default_listen_port))))
@@ -466,19 +461,19 @@ impl CliConfiguration for RunCmd {
 pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
-		return Err("Node name too long");
+		return Err("Node name too long")
 	}
 
 	let invalid_chars = r"[\\.@]";
 	let re = Regex::new(invalid_chars).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain invalid chars such as '.' and '@'");
+		return Err("Node name should not contain invalid chars such as '.' and '@'")
 	}
 
 	let invalid_patterns = r"(https?:\\/+)?(www)+";
 	let re = Regex::new(invalid_patterns).unwrap();
 	if re.is_match(&name) {
-		return Err("Node name should not contain urls");
+		return Err("Node name should not contain urls")
 	}
 
 	Ok(())
@@ -497,7 +492,7 @@ fn rpc_interface(
 		or `--rpc-methods=unsafe` if you understand the risks. See the options \
 		description for more information."
 				.to_owned(),
-		));
+		))
 	}
 
 	if is_external || is_unsafe_external {
@@ -537,11 +532,10 @@ fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), Telem
 		None => Err(TelemetryParsingError::MissingVerbosity),
 		Some(pos_) => {
 			let url = s[..pos_].to_string();
-			let verbosity = s[pos_ + 1..]
-				.parse()
-				.map_err(TelemetryParsingError::VerbosityParsingError)?;
+			let verbosity =
+				s[pos_ + 1..].parse().map_err(TelemetryParsingError::VerbosityParsingError)?;
 			Ok((url, verbosity))
-		}
+		},
 	}
 }
 
@@ -574,17 +568,13 @@ fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> 
 		match part {
 			"all" | "*" => {
 				is_all = true;
-				break;
-			}
+				break
+			},
 			other => origins.push(other.to_owned()),
 		}
 	}
 
-	Ok(if is_all {
-		Cors::All
-	} else {
-		Cors::List(origins)
-	})
+	Ok(if is_all { Cors::All } else { Cors::List(origins) })
 }
 
 #[cfg(test)]
@@ -600,7 +590,8 @@ mod tests {
 	fn tests_node_name_bad() {
 		assert!(is_node_name_valid(
 			"very very long names are really not very cool for the ui at all, really they're not"
-		).is_err());
+		)
+		.is_err());
 		assert!(is_node_name_valid("Dots.not.Ok").is_err());
 		assert!(is_node_name_valid("http://visit.me").is_err());
 		assert!(is_node_name_valid("https://visit.me").is_err());

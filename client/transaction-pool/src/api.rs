@@ -18,26 +18,35 @@
 
 //! Chain api required for the transaction pool.
 
-use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use codec::{Decode, Encode};
 use futures::{
-	channel::{oneshot, mpsc}, future::{Future, FutureExt, ready, Ready}, lock::Mutex, SinkExt,
-	StreamExt,
+	channel::{mpsc, oneshot},
+	future::{ready, Future, FutureExt, Ready},
+	lock::Mutex,
+	SinkExt, StreamExt,
 };
+use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
+use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_client_api::{
-	blockchain::HeaderBackend, light::{Fetcher, RemoteCallRequest, RemoteBodyRequest}, BlockBackend,
+	blockchain::HeaderBackend,
+	light::{Fetcher, RemoteBodyRequest, RemoteCallRequest},
+	BlockBackend,
 };
+use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{
-	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
-	transaction_validity::{TransactionValidity, TransactionSource},
+	generic::BlockId,
+	traits::{self, Block as BlockT, BlockIdTo, Hash as HashT, Header as HeaderT},
+	transaction_validity::{TransactionSource, TransactionValidity},
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use sp_api::{ProvideRuntimeApi, ApiExt};
-use prometheus_endpoint::Registry as PrometheusRegistry;
-use sp_core::traits::SpawnEssentialNamed;
 
-use crate::{metrics::{ApiMetrics, ApiMetricsExt}, error::{self, Error}};
+use crate::{
+	error::{self, Error},
+	graph,
+	metrics::{ApiMetrics, ApiMetricsExt},
+};
 
 /// The transaction pool logic for full client.
 pub struct FullChainApi<Client, Block> {
@@ -63,7 +72,8 @@ fn spawn_validation_pool_task(
 					Some(task) => task.await,
 				}
 			}
-		}.boxed(),
+		}
+		.boxed(),
 	);
 }
 
@@ -74,18 +84,16 @@ impl<Client, Block> FullChainApi<Client, Block> {
 		prometheus: Option<&PrometheusRegistry>,
 		spawner: &impl SpawnEssentialNamed,
 	) -> Self {
-		let metrics = prometheus.map(ApiMetrics::register).and_then(|r| {
-			match r {
-				Err(err) => {
-					log::warn!(
-						target: "txpool",
-						"Failed to register transaction pool api prometheus metrics: {:?}",
-						err,
-					);
-					None
-				},
-				Ok(api) => Some(Arc::new(api))
-			}
+		let metrics = prometheus.map(ApiMetrics::register).and_then(|r| match r {
+			Err(err) => {
+				log::warn!(
+					target: "txpool",
+					"Failed to register transaction pool api prometheus metrics: {:?}",
+					err,
+				);
+				None
+			},
+			Ok(api) => Some(Arc::new(api)),
 		});
 
 		let (sender, receiver) = mpsc::channel(0);
@@ -103,18 +111,18 @@ impl<Client, Block> FullChainApi<Client, Block> {
 	}
 }
 
-impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block>
+impl<Client, Block> graph::ChainApi for FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client:
+		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
 	type Block = Block;
 	type Error = error::Error;
-	type ValidationFuture = Pin<
-		Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>
-	>;
+	type ValidationFuture =
+		Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
 	type BodyFuture = Ready<error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>;
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
@@ -125,7 +133,7 @@ where
 		&self,
 		at: &BlockId<Self::Block>,
 		source: TransactionSource,
-		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
+		uxt: graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let (tx, rx) = oneshot::channel();
 		let client = self.client.clone();
@@ -136,14 +144,16 @@ where
 		async move {
 			metrics.report(|m| m.validations_scheduled.inc());
 
-			validation_pool.lock()
+			validation_pool
+				.lock()
 				.await
 				.send(
 					async move {
 						let res = validate_transaction_blocking(&*client, &at, source, uxt);
 						let _ = tx.send(res);
 						metrics.report(|m| m.validations_finished.inc());
-					}.boxed()
+					}
+					.boxed(),
 				)
 				.await
 				.map_err(|e| Error::RuntimeApi(format!("Validation pool down: {:?}", e)))?;
@@ -152,30 +162,33 @@ where
 				Ok(r) => r,
 				Err(_) => Err(Error::RuntimeApi("Validation was canceled".into())),
 			}
-		}.boxed()
+		}
+		.boxed()
 	}
 
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
-		self.client.to_number(at).map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
+	) -> error::Result<Option<graph::NumberFor<Self>>> {
+		self.client
+			.to_number(at)
+			.map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
 	}
 
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
-		self.client.to_hash(at).map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
+	) -> error::Result<Option<graph::BlockHash<Self>>> {
+		self.client
+			.to_hash(at)
+			.map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
 	}
 
 	fn hash_and_length(
 		&self,
-		ex: &sc_transaction_graph::ExtrinsicFor<Self>,
-	) -> (sc_transaction_graph::ExtrinsicHash<Self>, usize) {
-		ex.using_encoded(|x| {
-			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
-		})
+		ex: &graph::ExtrinsicFor<Self>,
+	) -> (graph::ExtrinsicHash<Self>, usize) {
+		ex.using_encoded(|x| (<traits::HashFor<Block> as traits::Hash>::hash(x), x.len()))
 	}
 
 	fn block_header(
@@ -192,42 +205,74 @@ fn validate_transaction_blocking<Client, Block>(
 	client: &Client,
 	at: &BlockId<Block>,
 	source: TransactionSource,
-	uxt: sc_transaction_graph::ExtrinsicFor<FullChainApi<Client, Block>>,
+	uxt: graph::ExtrinsicFor<FullChainApi<Client, Block>>,
 ) -> error::Result<TransactionValidity>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client:
+		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
 	sp_tracing::within_span!(sp_tracing::Level::TRACE, "validate_transaction";
 	{
 		let runtime_api = client.runtime_api();
-		let has_v2 = sp_tracing::within_span! { sp_tracing::Level::TRACE, "check_version";
+		let api_version = sp_tracing::within_span! { sp_tracing::Level::TRACE, "check_version";
 			runtime_api
-				.has_api_with::<dyn TaggedTransactionQueue<Block>, _>(&at, |v| v >= 2)
-				.unwrap_or_default()
-		};
+				.api_version::<dyn TaggedTransactionQueue<Block>>(&at)
+				.map_err(|e| Error::RuntimeApi(e.to_string()))?
+				.ok_or_else(|| Error::RuntimeApi(
+					format!("Could not find `TaggedTransactionQueue` api for block `{:?}`.", at)
+				))
+		}?;
 
-		let res = sp_tracing::within_span!(
+		let block_hash = client.to_hash(at)
+			.map_err(|e| Error::RuntimeApi(format!("{:?}", e)))?
+			.ok_or_else(|| Error::RuntimeApi(format!("Could not get hash for block `{:?}`.", at)))?;
+
+		use sp_api::Core;
+
+		sp_tracing::within_span!(
 			sp_tracing::Level::TRACE, "runtime::validate_transaction";
 		{
-			if has_v2 {
-				runtime_api.validate_transaction(&at, source, uxt)
+			if api_version >= 3 {
+				runtime_api.validate_transaction(&at, source, uxt, block_hash)
+					.map_err(|e| Error::RuntimeApi(e.to_string()))
 			} else {
-				#[allow(deprecated)] // old validate_transaction
-				runtime_api.validate_transaction_before_version_2(&at, uxt)
-			}
-		});
+				let block_number = client.to_number(at)
+					.map_err(|e| Error::RuntimeApi(format!("{:?}", e)))?
+					.ok_or_else(||
+						Error::RuntimeApi(format!("Could not get number for block `{:?}`.", at))
+					)?;
 
-		res.map_err(|e| Error::RuntimeApi(e.to_string()))
+				// The old versions require us to call `initialize_block` before.
+				runtime_api.initialize_block(at, &sp_runtime::traits::Header::new(
+					block_number + sp_runtime::traits::One::one(),
+					Default::default(),
+					Default::default(),
+					block_hash,
+					Default::default()),
+				).map_err(|e| Error::RuntimeApi(e.to_string()))?;
+
+				if api_version == 2 {
+					#[allow(deprecated)] // old validate_transaction
+					runtime_api.validate_transaction_before_version_3(&at, source, uxt)
+						.map_err(|e| Error::RuntimeApi(e.to_string()))
+				} else {
+					#[allow(deprecated)] // old validate_transaction
+					runtime_api.validate_transaction_before_version_2(&at, uxt)
+						.map_err(|e| Error::RuntimeApi(e.to_string()))
+				}
+			}
+		})
 	})
 }
 
 impl<Client, Block> FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client:
+		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -239,7 +284,7 @@ where
 		&self,
 		at: &BlockId<Block>,
 		source: TransactionSource,
-		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
+		uxt: graph::ExtrinsicFor<Self>,
 	) -> error::Result<TransactionValidity> {
 		validate_transaction_blocking(&*self.client, at, source, uxt)
 	}
@@ -255,42 +300,39 @@ pub struct LightChainApi<Client, F, Block> {
 impl<Client, F, Block> LightChainApi<Client, F, Block> {
 	/// Create new transaction pool logic.
 	pub fn new(client: Arc<Client>, fetcher: Arc<F>) -> Self {
-		LightChainApi {
-			client,
-			fetcher,
-			_phantom: Default::default(),
-		}
+		LightChainApi { client, fetcher, _phantom: Default::default() }
 	}
 }
 
-impl<Client, F, Block> sc_transaction_graph::ChainApi for
-	LightChainApi<Client, F, Block> where
-		Block: BlockT,
-		Client: HeaderBackend<Block> + 'static,
-		F: Fetcher<Block> + 'static,
+impl<Client, F, Block> graph::ChainApi for LightChainApi<Client, F, Block>
+where
+	Block: BlockT,
+	Client: HeaderBackend<Block> + 'static,
+	F: Fetcher<Block> + 'static,
 {
 	type Block = Block;
 	type Error = error::Error;
-	type ValidationFuture = Box<
-		dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin
-	>;
+	type ValidationFuture =
+		Box<dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin>;
 	type BodyFuture = Pin<
 		Box<
 			dyn Future<Output = error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>
-				+ Send
-		>
+				+ Send,
+		>,
 	>;
 
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
 		source: TransactionSource,
-		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
+		uxt: graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let header_hash = self.client.expect_block_hash_from_id(at);
-		let header_and_hash = header_hash
-			.and_then(|header_hash| self.client.expect_header(BlockId::Hash(header_hash))
-				.map(|header| (header_hash, header)));
+		let header_and_hash = header_hash.and_then(|header_hash| {
+			self.client
+				.expect_header(BlockId::Hash(header_hash))
+				.map(|header| (header_hash, header))
+		});
 		let (block, header) = match header_and_hash {
 			Ok((header_hash, header)) => (header_hash, header),
 			Err(err) => return Box::new(ready(Err(err.into()))),
@@ -303,13 +345,12 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for
 			retry_count: None,
 		});
 		let remote_validation_request = remote_validation_request.then(move |result| {
-			let result: error::Result<TransactionValidity> = result
-				.map_err(Into::into)
-				.and_then(|result| Decode::decode(&mut &result[..])
-					.map_err(|e| Error::RuntimeApi(
-						format!("Error decoding tx validation result: {:?}", e)
-					))
-				);
+			let result: error::Result<TransactionValidity> =
+				result.map_err(Into::into).and_then(|result| {
+					Decode::decode(&mut &result[..]).map_err(|e| {
+						Error::RuntimeApi(format!("Error decoding tx validation result: {:?}", e))
+					})
+				});
 			ready(result)
 		});
 
@@ -319,45 +360,41 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
+	) -> error::Result<Option<graph::NumberFor<Self>>> {
 		Ok(self.client.block_number_from_id(at)?)
 	}
 
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
+	) -> error::Result<Option<graph::BlockHash<Self>>> {
 		Ok(self.client.block_hash_from_id(at)?)
 	}
 
 	fn hash_and_length(
 		&self,
-		ex: &sc_transaction_graph::ExtrinsicFor<Self>,
-	) -> (sc_transaction_graph::ExtrinsicHash<Self>, usize) {
-		ex.using_encoded(|x| {
-			(<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len())
-		})
+		ex: &graph::ExtrinsicFor<Self>,
+	) -> (graph::ExtrinsicHash<Self>, usize) {
+		ex.using_encoded(|x| (<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len()))
 	}
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		let header = self.client.header(*id)
+		let header = self
+			.client
+			.header(*id)
 			.and_then(|h| h.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id))));
 		let header = match header {
 			Ok(header) => header,
 			Err(err) => {
 				log::warn!(target: "txpool", "Failed to query header: {:?}", err);
-				return Box::pin(ready(Ok(None)));
-			}
+				return Box::pin(ready(Ok(None)))
+			},
 		};
 
 		let fetcher = self.fetcher.clone();
 		async move {
-			let transactions = fetcher.remote_body({
-					RemoteBodyRequest {
-						header,
-						retry_count: None,
-					}
-				})
+			let transactions = fetcher
+				.remote_body(RemoteBodyRequest { header, retry_count: None })
 				.await
 				.unwrap_or_else(|e| {
 					log::warn!(target: "txpool", "Failed to fetch block body: {:?}", e);
@@ -365,7 +402,8 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for
 				});
 
 			Ok(Some(transactions))
-		}.boxed()
+		}
+		.boxed()
 	}
 
 	fn block_header(

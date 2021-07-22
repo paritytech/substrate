@@ -18,13 +18,12 @@
 
 //! Helpers for outgoing and incoming light client requests.
 
-/// For outgoing light client requests.
-pub mod sender;
 /// For incoming light client requests.
 pub mod handler;
+/// For outgoing light client requests.
+pub mod sender;
 
-use crate::config::ProtocolId;
-use crate::request_responses::ProtocolConfig;
+use crate::{config::ProtocolId, request_responses::ProtocolConfig};
 
 use std::time::Duration;
 
@@ -51,24 +50,30 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::request_responses::IncomingRequest;
-	use crate::config::ProtocolId;
+	use crate::{config::ProtocolId, request_responses::IncomingRequest};
 
 	use assert_matches::assert_matches;
-	use futures::executor::{block_on, LocalPool};
-	use futures::task::Spawn;
-	use futures::{channel::oneshot, prelude::*};
+	use futures::{
+		channel::oneshot,
+		executor::{block_on, LocalPool},
+		prelude::*,
+		task::Spawn,
+	};
 	use libp2p::PeerId;
-	use sc_client_api::StorageProof;
-	use sc_client_api::light::{RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest};
-	use sc_client_api::light::{self, RemoteReadRequest, RemoteBodyRequest, ChangesProof};
-	use sc_client_api::{FetchChecker, RemoteReadChildRequest};
+	use sc_client_api::{
+		light::{
+			self, ChangesProof, RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest,
+			RemoteHeaderRequest, RemoteReadRequest,
+		},
+		FetchChecker, RemoteReadChildRequest, StorageProof,
+	};
 	use sp_blockchain::Error as ClientError;
 	use sp_core::storage::ChildInfo;
-	use sp_runtime::generic::Header;
-	use sp_runtime::traits::{BlakeTwo256, Block as BlockT, NumberFor};
-	use std::collections::HashMap;
-	use std::sync::Arc;
+	use sp_runtime::{
+		generic::Header,
+		traits::{BlakeTwo256, Block as BlockT, NumberFor},
+	};
+	use std::{collections::HashMap, sync::Arc};
 
 	pub struct DummyFetchChecker<B> {
 		pub ok: bool,
@@ -94,12 +99,7 @@ mod tests {
 			_: StorageProof,
 		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
 			match self.ok {
-				true => Ok(request
-					.keys
-					.iter()
-					.cloned()
-					.map(|k| (k, Some(vec![42])))
-					.collect()),
+				true => Ok(request.keys.iter().cloned().map(|k| (k, Some(vec![42]))).collect()),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
@@ -110,12 +110,7 @@ mod tests {
 			_: StorageProof,
 		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
 			match self.ok {
-				true => Ok(request
-					.keys
-					.iter()
-					.cloned()
-					.map(|k| (k, Some(vec![42])))
-					.collect()),
+				true => Ok(request.keys.iter().cloned().map(|k| (k, Some(vec![42]))).collect()),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}
@@ -184,7 +179,8 @@ mod tests {
 
 	fn send_receive(request: sender::Request<Block>, pool: &LocalPool) {
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let (handler, protocol_config) = handler::LightClientRequestHandler::new(&protocol_id(), client);
+		let (handler, protocol_config) =
+			handler::LightClientRequestHandler::new(&protocol_id(), client);
 		pool.spawner().spawn_obj(handler.run().boxed().into()).unwrap();
 
 		let (_peer_set, peer_set_handle) = peerset();
@@ -199,18 +195,28 @@ mod tests {
 		sender.inject_connected(PeerId::random());
 
 		sender.request(request).unwrap();
-		let sender::OutEvent::SendRequest { pending_response, request, .. } = block_on(sender.next()).unwrap();
+		let sender::OutEvent::SendRequest { pending_response, request, .. } =
+			block_on(sender.next()).unwrap();
 		let (tx, rx) = oneshot::channel();
 		block_on(protocol_config.inbound_queue.unwrap().send(IncomingRequest {
 			peer: PeerId::random(),
 			payload: request,
 			pending_response: tx,
-		})).unwrap();
-		pool.spawner().spawn_obj(async move {
-			pending_response.send(Ok(rx.await.unwrap().result.unwrap())).unwrap();
-		}.boxed().into()).unwrap();
+		}))
+		.unwrap();
+		pool.spawner()
+			.spawn_obj(
+				async move {
+					pending_response.send(Ok(rx.await.unwrap().result.unwrap())).unwrap();
+				}
+				.boxed()
+				.into(),
+			)
+			.unwrap();
 
-		pool.spawner().spawn_obj(sender.for_each(|_| future::ready(())).boxed().into()).unwrap();
+		pool.spawner()
+			.spawn_obj(sender.for_each(|_| future::ready(())).boxed().into())
+			.unwrap();
 	}
 
 	#[test]
@@ -225,10 +231,7 @@ mod tests {
 		};
 
 		let mut pool = LocalPool::new();
-		send_receive(sender::Request::Call {
-			request,
-			sender: chan.0,
-		}, &pool);
+		send_receive(sender::Request::Call { request, sender: chan.0 }, &pool);
 		assert_eq!(vec![42], pool.run_until(chan.1).unwrap().unwrap());
 		//              ^--- from `DummyFetchChecker::check_execution_proof`
 	}
@@ -243,17 +246,10 @@ mod tests {
 			retry_count: None,
 		};
 		let mut pool = LocalPool::new();
-		send_receive(sender::Request::Read {
-			request,
-			sender: chan.0,
-		}, &pool);
+		send_receive(sender::Request::Read { request, sender: chan.0 }, &pool);
 		assert_eq!(
 			Some(vec![42]),
-			pool.run_until(chan.1)
-				.unwrap()
-				.unwrap()
-				.remove(&b":key"[..])
-				.unwrap()
+			pool.run_until(chan.1).unwrap().unwrap().remove(&b":key"[..]).unwrap()
 		);
 		//                   ^--- from `DummyFetchChecker::check_read_proof`
 	}
@@ -270,17 +266,10 @@ mod tests {
 			retry_count: None,
 		};
 		let mut pool = LocalPool::new();
-		send_receive(sender::Request::ReadChild {
-			request,
-			sender: chan.0,
-		}, &pool);
+		send_receive(sender::Request::ReadChild { request, sender: chan.0 }, &pool);
 		assert_eq!(
 			Some(vec![42]),
-			pool.run_until(chan.1)
-				.unwrap()
-				.unwrap()
-				.remove(&b":key"[..])
-				.unwrap()
+			pool.run_until(chan.1).unwrap().unwrap().remove(&b":key"[..]).unwrap()
 		);
 		//                   ^--- from `DummyFetchChecker::check_read_child_proof`
 	}
@@ -295,15 +284,9 @@ mod tests {
 			retry_count: None,
 		};
 		let mut pool = LocalPool::new();
-		send_receive(sender::Request::Header {
-			request,
-			sender: chan.0,
-		}, &pool);
+		send_receive(sender::Request::Header { request, sender: chan.0 }, &pool);
 		// The remote does not know block 1:
-		assert_matches!(
-			pool.run_until(chan.1).unwrap(),
-			Err(ClientError::RemoteFetchFailed)
-		);
+		assert_matches!(pool.run_until(chan.1).unwrap(), Err(ClientError::RemoteFetchFailed));
 	}
 
 	#[test]
@@ -324,10 +307,7 @@ mod tests {
 			retry_count: None,
 		};
 		let mut pool = LocalPool::new();
-		send_receive(sender::Request::Changes {
-			request,
-			sender: chan.0,
-		}, &pool);
+		send_receive(sender::Request::Changes { request, sender: chan.0 }, &pool);
 		assert_eq!(vec![(100, 2)], pool.run_until(chan.1).unwrap().unwrap());
 		//              ^--- from `DummyFetchChecker::check_changes_proof`
 	}
