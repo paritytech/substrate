@@ -17,16 +17,14 @@
 
 //! Block import helpers.
 
-use sp_runtime::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor, HashFor};
-use sp_runtime::{Justification, Justifications};
-use serde::{Serialize, Deserialize};
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::any::Any;
+use serde::{Deserialize, Serialize};
+use sp_runtime::{
+	traits::{Block as BlockT, DigestItemFor, HashFor, Header as HeaderT, NumberFor},
+	Justification, Justifications,
+};
+use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 
-use crate::Error;
-use crate::import_queue::CacheKeyId;
+use crate::{import_queue::CacheKeyId, Error};
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -88,8 +86,8 @@ impl ImportResult {
 				if aux.needs_justification {
 					justification_sync_link.request_justification(hash, number);
 				}
-			}
-			_ => {}
+			},
+			_ => {},
 		}
 	}
 }
@@ -154,9 +152,7 @@ pub struct ImportedState<B: BlockT> {
 
 impl<B: BlockT> std::fmt::Debug for ImportedState<B> {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-		fmt.debug_struct("ImportedState")
-			.field("block", &self.block)
-			.finish()
+		fmt.debug_struct("ImportedState").field("block", &self.block).finish()
 	}
 }
 
@@ -226,12 +222,10 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 
 impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	/// Create a new block import params.
-	pub fn new(
-		origin: BlockOrigin,
-		header: Block::Header,
-	) -> Self {
+	pub fn new(origin: BlockOrigin, header: Block::Header) -> Self {
 		Self {
-			origin, header,
+			origin,
+			header,
 			justifications: None,
 			post_digests: Vec::new(),
 			body: None,
@@ -273,7 +267,9 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	///
 	/// Actually this just sets `StorageChanges::Changes` to `None` and makes rustc think that `Self` now
 	/// uses a different transaction type.
-	pub fn clear_storage_changes_and_mutate<Transaction2>(self) -> BlockImportParams<Block, Transaction2> {
+	pub fn clear_storage_changes_and_mutate<Transaction2>(
+		self,
+	) -> BlockImportParams<Block, Transaction2> {
 		// Preserve imported state.
 		let state_action = match self.state_action {
 			StateAction::ApplyChanges(StorageChanges::Import(state)) =>
@@ -305,14 +301,15 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 		let (k, v) = self.intermediates.remove_entry(key).ok_or(Error::NoIntermediate)?;
 
 		v.downcast::<T>().or_else(|v| {
-				self.intermediates.insert(k, v);
-				Err(Error::InvalidIntermediate)
+			self.intermediates.insert(k, v);
+			Err(Error::InvalidIntermediate)
 		})
 	}
 
 	/// Get a reference to a given intermediate.
 	pub fn intermediate<T: 'static>(&self, key: &[u8]) -> Result<&T, Error> {
-		self.intermediates.get(key)
+		self.intermediates
+			.get(key)
 			.ok_or(Error::NoIntermediate)?
 			.downcast_ref::<T>()
 			.ok_or(Error::InvalidIntermediate)
@@ -320,7 +317,8 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 
 	/// Get a mutable reference to a given intermediate.
 	pub fn intermediate_mut<T: 'static>(&mut self, key: &[u8]) -> Result<&mut T, Error> {
-		self.intermediates.get_mut(key)
+		self.intermediates
+			.get_mut(key)
 			.ok_or(Error::NoIntermediate)?
 			.downcast_mut::<T>()
 			.ok_or(Error::InvalidIntermediate)
@@ -353,8 +351,8 @@ pub trait BlockImport<B: BlockT> {
 
 #[async_trait::async_trait]
 impl<B: BlockT, Transaction> BlockImport<B> for crate::import_queue::BoxBlockImport<B, Transaction>
-	where
-		Transaction: Send + 'static,
+where
+	Transaction: Send + 'static,
 {
 	type Error = crate::error::Error;
 	type Transaction = Transaction;
@@ -381,10 +379,10 @@ impl<B: BlockT, Transaction> BlockImport<B> for crate::import_queue::BoxBlockImp
 
 #[async_trait::async_trait]
 impl<B: BlockT, T, E: std::error::Error + Send + 'static, Transaction> BlockImport<B> for Arc<T>
-	where
-		for<'r> &'r T: BlockImport<B, Error = E, Transaction = Transaction>,
-		T: Send + Sync,
-		Transaction: Send + 'static,
+where
+	for<'r> &'r T: BlockImport<B, Error = E, Transaction = Transaction>,
+	T: Send + Sync,
+	Transaction: Send + 'static,
 {
 	type Error = E;
 	type Transaction = Transaction;

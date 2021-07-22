@@ -159,7 +159,7 @@ pub trait SubstrateCli: Sized {
 					let _ = std::io::stdout().write_all(e.message.as_bytes());
 					std::process::exit(0);
 				}
-			}
+			},
 		};
 
 		<Self as StructOpt>::from_clap(&matches)

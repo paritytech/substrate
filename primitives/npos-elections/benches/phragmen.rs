@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 //! Benchmarks of the phragmen election algorithm.
 //! Note that execution times will not be accurate in an absolute scale, since
 //! - Everything is executed in the context of `TestExternalities`
@@ -27,13 +26,12 @@ use test::Bencher;
 use rand::{self, Rng};
 use sp_npos_elections::{ElectionResult, VoteWeight};
 
-use std::collections::BTreeMap;
-use sp_runtime::{Perbill, PerThing, traits::Zero};
 use sp_npos_elections::{
-	balance_solution, assignment_ratio_to_staked, to_support_map, to_without_backing, VoteWeight,
-	ExtendedBalance, Assignment, StakedAssignment, IdentifierT, assignment_ratio_to_staked,
-	seq_phragmen,
+	assignment_ratio_to_staked, balance_solution, seq_phragmen, to_support_map, to_without_backing,
+	Assignment, ExtendedBalance, IdentifierT, StakedAssignment, VoteWeight,
 };
+use sp_runtime::{traits::Zero, PerThing, Perbill};
+use std::collections::BTreeMap;
 
 // default params. Each will be scaled by the benchmarks individually.
 const VALIDATORS: u64 = 100;
@@ -69,15 +67,13 @@ mod bench_closure_and_slice {
 		ratio
 			.into_iter()
 			.zip(stakes.into_iter().map(|x| *x as ExtendedBalance))
-			.map(|(a, stake)| {
-				a.into_staked(stake.into(), true)
-			})
+			.map(|(a, stake)| a.into_staked(stake.into(), true))
 			.collect()
 	}
 
 	#[bench]
 	fn closure(b: &mut Bencher) {
-		let assignments = (0..1000).map(|_| random_assignment()).collect::<Vec<Assignment<_ ,_>>>();
+		let assignments = (0..1000).map(|_| random_assignment()).collect::<Vec<Assignment<_, _>>>();
 		let stake_of = |x: &u32| -> VoteWeight { (x * 2 + 100).into() };
 
 		// each have one clone of assignments
@@ -86,7 +82,7 @@ mod bench_closure_and_slice {
 
 	#[bench]
 	fn slice(b: &mut Bencher) {
-		let assignments = (0..1000).map(|_| random_assignment()).collect::<Vec<Assignment<_ ,_>>>();
+		let assignments = (0..1000).map(|_| random_assignment()).collect::<Vec<Assignment<_, _>>>();
 		let stake_of = |x: &u32| -> VoteWeight { (x * 2 + 100).into() };
 
 		b.iter(|| {
@@ -112,20 +108,19 @@ fn do_phragmen(
 	let mut candidates = Vec::with_capacity(num_validators as usize);
 	let mut stake_of_tree: BTreeMap<AccountId, VoteWeight> = BTreeMap::new();
 
-	(1 ..= num_validators).for_each(|acc| {
+	(1..=num_validators).for_each(|acc| {
 		candidates.push(acc);
 		stake_of_tree.insert(acc, STAKE + rr(10, 1000));
 	});
 
 	let mut voters = Vec::with_capacity(num_nominators as usize);
-	(PREFIX ..= (PREFIX + num_nominators)).for_each(|acc| {
+	(PREFIX..=(PREFIX + num_nominators)).for_each(|acc| {
 		// all possible targets
 		let mut all_targets = candidates.clone();
 		// we remove and pop into `targets` `edge_per_voter` times.
-		let targets = (0 .. edge_per_voter).map(|_| {
-			all_targets.remove(rr(0, all_targets.len()) as usize)
-		})
-		.collect::<Vec<AccountId>>();
+		let targets = (0..edge_per_voter)
+			.map(|_| all_targets.remove(rr(0, all_targets.len()) as usize))
+			.collect::<Vec<AccountId>>();
 
 		let stake = STAKE + rr(10, 1000);
 		stake_of_tree.insert(acc, stake);
@@ -138,20 +133,16 @@ fn do_phragmen(
 			Zero::zero(),
 			candidates.clone(),
 			voters.clone(),
-		).unwrap();
+		)
+		.unwrap();
 
-		let stake_of = |who: &AccountId| -> VoteWeight {
-			*stake_of_tree.get(who).unwrap()
-		};
+		let stake_of = |who: &AccountId| -> VoteWeight { *stake_of_tree.get(who).unwrap() };
 
 		// Do the benchmarking with balancing.
 		if eq_iters > 0 {
 			let staked = assignment_ratio_to_staked(assignments, &stake_of);
 			let winners = to_without_backing(winners);
-			let mut support = to_support_map(
-				winners.as_ref(),
-				staked.as_ref(),
-			).unwrap();
+			let mut support = to_support_map(winners.as_ref(), staked.as_ref()).unwrap();
 
 			balance_solution(
 				staked.into_iter().map(|a| (a.clone(), stake_of(&a.who))).collect(),

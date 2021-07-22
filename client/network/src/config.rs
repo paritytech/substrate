@@ -21,14 +21,14 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::chain::Client;
-pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
-pub use crate::request_responses::{
-	IncomingRequest,
-	OutgoingResponse,
-	ProtocolConfig as RequestResponseConfig,
+pub use crate::{
+	chain::Client,
+	on_demand_layer::{AlwaysBadChecker, OnDemand},
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
 };
-pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
+pub use libp2p::{build_multiaddr, core::PublicKey, identity, wasm_ext::ExtTransport};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
 // the future.
@@ -46,15 +46,19 @@ use libp2p::{
 use prometheus_endpoint::Registry;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::traits::Block as BlockT;
-use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
 use std::{
+	borrow::Cow,
 	collections::HashMap,
+	convert::TryFrom,
 	error::Error,
 	fs,
+	future::Future,
 	io::{self, Write},
 	net::Ipv4Addr,
 	path::{Path, PathBuf},
+	pin::Pin,
 	str,
+	str::FromStr,
 	sync::Arc,
 };
 use zeroize::Zeroize;
@@ -181,7 +185,7 @@ pub enum TransactionImport {
 }
 
 /// Future resolving to transaction import result.
-pub type TransactionImportFuture = Pin<Box<dyn Future<Output=TransactionImport> + Send>>;
+pub type TransactionImportFuture = Pin<Box<dyn Future<Output = TransactionImport> + Send>>;
 
 /// Transaction pool interface
 pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
@@ -192,10 +196,7 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	/// Import a transaction into the pool.
 	///
 	/// This will return future.
-	fn import(
-		&self,
-		transaction: B::Extrinsic,
-	) -> TransactionImportFuture;
+	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture;
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
 	/// Get transaction by hash.
@@ -219,16 +220,15 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 		Default::default()
 	}
 
-	fn import(
-		&self,
-		_transaction: B::Extrinsic
-	) -> TransactionImportFuture {
+	fn import(&self, _transaction: B::Extrinsic) -> TransactionImportFuture {
 		Box::pin(future::ready(TransactionImport::KnownGood))
 	}
 
 	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
 
-	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
+	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> {
+		None
+	}
 }
 
 /// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
@@ -267,17 +267,16 @@ impl fmt::Debug for ProtocolId {
 /// assert_eq!(peer_id, "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse::<PeerId>().unwrap());
 /// assert_eq!(addr, "/ip4/198.51.100.19/tcp/30333".parse::<Multiaddr>().unwrap());
 /// ```
-///
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let addr: Multiaddr = addr_str.parse()?;
 	parse_addr(addr)
 }
 
 /// Splits a Multiaddress into a Multiaddress and PeerId.
-pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
+pub fn parse_addr(mut addr: Multiaddr) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-			.map_err(|_| ParseErr::InvalidPeerId)?,
+		Some(multiaddr::Protocol::P2p(key)) =>
+			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?,
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
@@ -325,10 +324,7 @@ impl FromStr for MultiaddrWithPeerId {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let (peer_id, multiaddr) = parse_str_addr(s)?;
-		Ok(MultiaddrWithPeerId {
-			peer_id,
-			multiaddr,
-		})
+		Ok(MultiaddrWithPeerId { peer_id, multiaddr })
 	}
 }
 
@@ -504,18 +500,13 @@ impl NetworkConfiguration {
 
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new(
-			"test-node",
-			"test-client",
-			Default::default(),
-			None,
-		);
+		let mut config =
+			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
 
-		config.listen_addresses = vec![
-			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+		config.listen_addresses =
+			vec![iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
 				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
-				.collect()
-		];
+				.collect()];
 
 		config.allow_non_globals_in_dht = true;
 		config
@@ -523,18 +514,13 @@ impl NetworkConfiguration {
 
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_memory() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new(
-			"test-node",
-			"test-client",
-			Default::default(),
-			None,
-		);
+		let mut config =
+			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
 
-		config.listen_addresses = vec![
-			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+		config.listen_addresses =
+			vec![iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
 				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
-				.collect()
-		];
+				.collect()];
 
 		config.allow_non_globals_in_dht = true;
 		config
@@ -674,7 +660,7 @@ impl NonReservedPeerMode {
 #[derive(Clone, Debug)]
 pub enum NodeKeyConfig {
 	/// A Ed25519 secret key configuration.
-	Ed25519(Secret<ed25519::SecretKey>)
+	Ed25519(Secret<ed25519::SecretKey>),
 }
 
 impl Default for NodeKeyConfig {
@@ -698,7 +684,7 @@ pub enum Secret<K> {
 	///   * `ed25519::SecretKey`: An unencoded 32 bytes Ed25519 secret key.
 	File(PathBuf),
 	/// Always generate a new secret key `K`.
-	New
+	New,
 }
 
 impl<K> fmt::Debug for Secret<K> {
@@ -725,35 +711,27 @@ impl NodeKeyConfig {
 	pub fn into_keypair(self) -> io::Result<Keypair> {
 		use NodeKeyConfig::*;
 		match self {
-			Ed25519(Secret::New) =>
-				Ok(Keypair::generate_ed25519()),
+			Ed25519(Secret::New) => Ok(Keypair::generate_ed25519()),
 
-			Ed25519(Secret::Input(k)) =>
-				Ok(Keypair::Ed25519(k.into())),
+			Ed25519(Secret::Input(k)) => Ok(Keypair::Ed25519(k.into())),
 
-			Ed25519(Secret::File(f)) =>
-				get_secret(
-					f,
-					|mut b| {
-						match String::from_utf8(b.to_vec())
-							.ok()
-							.and_then(|s|{
-								if s.len() == 64 {
-									hex::decode(&s).ok()
-								} else {
-									None
-								}}
-							)
-						{
-							Some(s) => ed25519::SecretKey::from_bytes(s),
-							_ => ed25519::SecretKey::from_bytes(&mut b),
-						}
-					},
-					ed25519::SecretKey::generate,
-					|b| b.as_ref().to_vec()
-				)
-				.map(ed25519::Keypair::from)
-				.map(Keypair::Ed25519),
+			Ed25519(Secret::File(f)) => get_secret(
+				f,
+				|mut b| match String::from_utf8(b.to_vec()).ok().and_then(|s| {
+					if s.len() == 64 {
+						hex::decode(&s).ok()
+					} else {
+						None
+					}
+				}) {
+					Some(s) => ed25519::SecretKey::from_bytes(s),
+					_ => ed25519::SecretKey::from_bytes(&mut b),
+				},
+				ed25519::SecretKey::generate,
+				|b| b.as_ref().to_vec(),
+			)
+			.map(ed25519::Keypair::from)
+			.map(Keypair::Ed25519),
 		}
 	}
 }
@@ -770,9 +748,9 @@ where
 	W: Fn(&K) -> Vec<u8>,
 {
 	std::fs::read(&file)
-		.and_then(|mut sk_bytes|
-			parse(&mut sk_bytes)
-				.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e)))
+		.and_then(|mut sk_bytes| {
+			parse(&mut sk_bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+		})
 		.or_else(|e| {
 			if e.kind() == io::ErrorKind::NotFound {
 				file.as_ref().parent().map_or(Ok(()), fs::create_dir_all)?;
@@ -790,7 +768,7 @@ where
 /// Write secret bytes to a file.
 fn write_secret_file<P>(path: P, sk_bytes: &[u8]) -> io::Result<()>
 where
-	P: AsRef<Path>
+	P: AsRef<Path>,
 {
 	let mut file = open_secret_file(&path)?;
 	file.write_all(sk_bytes)
@@ -800,26 +778,19 @@ where
 #[cfg(unix)]
 fn open_secret_file<P>(path: P) -> io::Result<fs::File>
 where
-	P: AsRef<Path>
+	P: AsRef<Path>,
 {
 	use std::os::unix::fs::OpenOptionsExt;
-	fs::OpenOptions::new()
-		.write(true)
-		.create_new(true)
-		.mode(0o600)
-		.open(path)
+	fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)
 }
 
 /// Opens a file containing a secret key in write mode.
 #[cfg(not(unix))]
 fn open_secret_file<P>(path: P) -> Result<fs::File, io::Error>
 where
-	P: AsRef<Path>
+	P: AsRef<Path>,
 {
-	fs::OpenOptions::new()
-		.write(true)
-		.create_new(true)
-		.open(path)
+	fs::OpenOptions::new().write(true).create_new(true).open(path)
 }
 
 #[cfg(test)]
@@ -835,7 +806,7 @@ mod tests {
 		match kp {
 			Keypair::Ed25519(p) => p.secret().as_ref().iter().cloned().collect(),
 			Keypair::Secp256k1(p) => p.secret().to_bytes().to_vec(),
-			_ => panic!("Unexpected keypair.")
+			_ => panic!("Unexpected keypair."),
 		}
 	}
 

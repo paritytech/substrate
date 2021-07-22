@@ -16,19 +16,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{fs, path::{Path, PathBuf}, sync::Arc};
+use std::{
+	fs,
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 
 use ansi_term::Style;
-use rand::{Rng, distributions::Alphanumeric, rngs::OsRng};
+use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 use structopt::StructOpt;
 
-use sc_keystore::LocalKeystore;
 use node_cli::chain_spec::{self, AccountId};
+use sc_keystore::LocalKeystore;
 use sp_core::{
-	sr25519,
 	crypto::{Public, Ss58Codec},
+	sr25519,
 };
-use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
@@ -86,10 +90,8 @@ impl ChainSpecBuilder {
 	/// Returns the path where the chain spec should be saved.
 	fn chain_spec_path(&self) -> &Path {
 		match self {
-			ChainSpecBuilder::New { chain_spec_path, .. } =>
-				chain_spec_path.as_path(),
-			ChainSpecBuilder::Generate { chain_spec_path, .. } =>
-				chain_spec_path.as_path(),
+			ChainSpecBuilder::New { chain_spec_path, .. } => chain_spec_path.as_path(),
+			ChainSpecBuilder::Generate { chain_spec_path, .. } => chain_spec_path.as_path(),
 		}
 	}
 }
@@ -125,11 +127,15 @@ fn generate_chain_spec(
 			.map_err(|err| format!("Failed to parse account address: {:?}", err))
 	};
 
-	let nominator_accounts =
-		nominator_accounts.into_iter().map(parse_account).collect::<Result<Vec<_>, String>>()?;
+	let nominator_accounts = nominator_accounts
+		.into_iter()
+		.map(parse_account)
+		.collect::<Result<Vec<_>, String>>()?;
 
-	let endowed_accounts =
-		endowed_accounts.into_iter().map(parse_account).collect::<Result<Vec<_>, String>>()?;
+	let endowed_accounts = endowed_accounts
+		.into_iter()
+		.map(parse_account)
+		.collect::<Result<Vec<_>, String>>()?;
 
 	let sudo_account = parse_account(sudo_account)?;
 
@@ -137,7 +143,14 @@ fn generate_chain_spec(
 		"Custom",
 		"custom",
 		sc_chain_spec::ChainType::Live,
-		move || genesis_constructor(&authority_seeds, &nominator_accounts, &endowed_accounts, &sudo_account),
+		move || {
+			genesis_constructor(
+				&authority_seeds,
+				&nominator_accounts,
+				&endowed_accounts,
+				&sudo_account,
+			)
+		},
 		vec![],
 		None,
 		None,
@@ -148,42 +161,26 @@ fn generate_chain_spec(
 	chain_spec.as_json(false).map_err(|err| err)
 }
 
-fn generate_authority_keys_and_store(
-	seeds: &[String],
-	keystore_path: &Path,
-) -> Result<(), String> {
+fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> Result<(), String> {
 	for (n, seed) in seeds.into_iter().enumerate() {
-		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(
-			keystore_path.join(format!("auth-{}", n)),
-			None,
-		).map_err(|err| err.to_string())?);
+		let keystore: SyncCryptoStorePtr = Arc::new(
+			LocalKeystore::open(keystore_path.join(format!("auth-{}", n)), None)
+				.map_err(|err| err.to_string())?,
+		);
 
 		let (_, _, grandpa, babe, im_online, authority_discovery) =
 			chain_spec::authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
-			SyncCryptoStore::insert_unknown(
-				&*keystore,
-				key_type,
-				&format!("//{}", seed),
-				public,
-			).map_err(|_| format!("Failed to insert key: {}", grandpa))
+			SyncCryptoStore::insert_unknown(&*keystore, key_type, &format!("//{}", seed), public)
+				.map_err(|_| format!("Failed to insert key: {}", grandpa))
 		};
 
-		insert_key(
-			sp_core::crypto::key_types::BABE,
-			babe.as_slice(),
-		)?;
+		insert_key(sp_core::crypto::key_types::BABE, babe.as_slice())?;
 
-		insert_key(
-			sp_core::crypto::key_types::GRANDPA,
-			grandpa.as_slice(),
-		)?;
+		insert_key(sp_core::crypto::key_types::GRANDPA, grandpa.as_slice())?;
 
-		insert_key(
-			sp_core::crypto::key_types::IM_ONLINE,
-			im_online.as_slice(),
-		)?;
+		insert_key(sp_core::crypto::key_types::IM_ONLINE, im_online.as_slice())?;
 
 		insert_key(
 			sp_core::crypto::key_types::AUTHORITY_DISCOVERY,
@@ -206,10 +203,7 @@ fn print_seeds(
 	println!("{}", header.paint("Authority seeds"));
 
 	for (n, seed) in authority_seeds.iter().enumerate() {
-		println!("{} //{}",
-			entry.paint(format!("auth-{}:", n)),
-			seed,
-		);
+		println!("{} //{}", entry.paint(format!("auth-{}:", n)), seed,);
 	}
 
 	println!("{}", header.paint("Nominator seeds"));
@@ -223,10 +217,7 @@ fn print_seeds(
 	if !endowed_seeds.is_empty() {
 		println!("{}", header.paint("Endowed seeds"));
 		for (n, seed) in endowed_seeds.iter().enumerate() {
-			println!("{} //{}",
-				entry.paint(format!("endowed-{}:", n)),
-				seed,
-			);
+			println!("{} //{}", entry.paint(format!("endowed-{}:", n)), seed,);
 		}
 
 		println!();
@@ -260,10 +251,7 @@ fn main() -> Result<(), String> {
 			print_seeds(&authority_seeds, &nominator_seeds, &endowed_seeds, &sudo_seed);
 
 			if let Some(keystore_path) = keystore_path {
-				generate_authority_keys_and_store(
-					&authority_seeds,
-					&keystore_path,
-				)?;
+				generate_authority_keys_and_store(&authority_seeds, &keystore_path)?;
 			}
 
 			let nominator_accounts = nominator_seeds
@@ -284,7 +272,7 @@ fn main() -> Result<(), String> {
 				chain_spec::get_account_id_from_seed::<sr25519::Public>(&sudo_seed).to_ss58check();
 
 			(authority_seeds, nominator_accounts, endowed_accounts, sudo_account)
-		}
+		},
 		ChainSpecBuilder::New {
 			authority_seeds,
 			nominator_accounts,
@@ -294,12 +282,8 @@ fn main() -> Result<(), String> {
 		} => (authority_seeds, nominator_accounts, endowed_accounts, sudo_account),
 	};
 
-	let json = generate_chain_spec(
-		authority_seeds,
-		nominator_accounts,
-		endowed_accounts,
-		sudo_account,
-	)?;
+	let json =
+		generate_chain_spec(authority_seeds, nominator_accounts, endowed_accounts, sudo_account)?;
 
 	fs::write(chain_spec_path, json).map_err(|err| err.to_string())
 }

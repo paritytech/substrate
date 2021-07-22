@@ -18,7 +18,7 @@
 //! Proc macro for a npos compact assignment.
 
 use proc_macro::TokenStream;
-use proc_macro2::{TokenStream as TokenStream2, Span, Ident};
+use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Result};
@@ -82,15 +82,8 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// ```
 #[proc_macro]
 pub fn generate_solution_type(item: TokenStream) -> TokenStream {
-	let SolutionDef {
-		vis,
-		ident,
-		count,
-		voter_type,
-		target_type,
-		weight_type,
-		compact_encoding,
-	} = syn::parse_macro_input!(item as SolutionDef);
+	let SolutionDef { vis, ident, count, voter_type, target_type, weight_type, compact_encoding } =
+		syn::parse_macro_input!(item as SolutionDef);
 
 	let imports = imports().unwrap_or_else(|e| e.to_compile_error());
 
@@ -102,7 +95,8 @@ pub fn generate_solution_type(item: TokenStream) -> TokenStream {
 		target_type.clone(),
 		weight_type.clone(),
 		compact_encoding,
-	).unwrap_or_else(|e| e.to_compile_error());
+	)
+	.unwrap_or_else(|e| e.to_compile_error());
 
 	quote!(
 		#imports
@@ -167,7 +161,7 @@ fn struct_def(
 			weight_type.clone(),
 			count,
 		);
-		quote!{
+		quote! {
 			#compact_impl
 			#[derive(Default, PartialEq, Eq, Clone, Debug, PartialOrd, Ord)]
 		}
@@ -321,23 +315,27 @@ fn remove_voter_impl(count: usize) -> TokenStream2 {
 }
 
 fn len_impl(count: usize) -> TokenStream2 {
-	(1..=count).map(|c| {
-		let field_name = field_name_for(c);
-		quote!(
-			all_len = all_len.saturating_add(self.#field_name.len());
-		)
-	}).collect::<TokenStream2>()
+	(1..=count)
+		.map(|c| {
+			let field_name = field_name_for(c);
+			quote!(
+				all_len = all_len.saturating_add(self.#field_name.len());
+			)
+		})
+		.collect::<TokenStream2>()
 }
 
 fn edge_count_impl(count: usize) -> TokenStream2 {
-	(1..=count).map(|c| {
-		let field_name = field_name_for(c);
-		quote!(
-			all_edges = all_edges.saturating_add(
-				self.#field_name.len().saturating_mul(#c as usize)
-			);
-		)
-	}).collect::<TokenStream2>()
+	(1..=count)
+		.map(|c| {
+			let field_name = field_name_for(c);
+			quote!(
+				all_edges = all_edges.saturating_add(
+					self.#field_name.len().saturating_mul(#c as usize)
+				);
+			)
+		})
+		.collect::<TokenStream2>()
 }
 
 fn unique_targets_impl(count: usize) -> TokenStream2 {
@@ -360,17 +358,19 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 		}
 	};
 
-	let unique_targets_impl_rest = (3..=count).map(|c| {
-		let field_name = field_name_for(c);
-		quote! {
-			self.#field_name.iter().for_each(|(_, inners, t_last)| {
-				inners.iter().for_each(|(t, _)| {
-					maybe_insert_target(*t);
+	let unique_targets_impl_rest = (3..=count)
+		.map(|c| {
+			let field_name = field_name_for(c);
+			quote! {
+				self.#field_name.iter().for_each(|(_, inners, t_last)| {
+					inners.iter().for_each(|(t, _)| {
+						maybe_insert_target(*t);
+					});
+					maybe_insert_target(*t_last);
 				});
-				maybe_insert_target(*t_last);
-			});
-		}
-	}).collect::<TokenStream2>();
+			}
+		})
+		.collect::<TokenStream2>();
 
 	quote! {
 		#unique_targets_impl_single
@@ -440,23 +440,29 @@ impl Parse for SolutionDef {
 
 		let expected_types = ["VoterIndex", "TargetIndex", "Accuracy"];
 
-		let mut types: Vec<syn::Type> = generics.args.iter().zip(expected_types.iter()).map(|(t, expected)|
-			match t {
+		let mut types: Vec<syn::Type> = generics
+			.args
+			.iter()
+			.zip(expected_types.iter())
+			.map(|(t, expected)| match t {
 				syn::GenericArgument::Type(ty) => {
 					// this is now an error
-					Err(syn::Error::new_spanned(ty, format!("Expected binding: `{} = ...`", expected)))
+					Err(syn::Error::new_spanned(
+						ty,
+						format!("Expected binding: `{} = ...`", expected),
+					))
 				},
-				syn::GenericArgument::Binding(syn::Binding{ident, ty, ..}) => {
+				syn::GenericArgument::Binding(syn::Binding { ident, ty, .. }) => {
 					// check that we have the right keyword for this position in the argument list
 					if ident == expected {
 						Ok(ty.clone())
 					} else {
 						Err(syn::Error::new_spanned(ident, format!("Expected `{}`", expected)))
 					}
-				}
+				},
 				_ => Err(syn_err("Wrong type of generic provided. Must be a `type`.")),
-			}
-		).collect::<Result<_>>()?;
+			})
+			.collect::<Result<_>>()?;
 
 		let weight_type = types.pop().expect("Vector of length 3 can be popped; qed");
 		let target_type = types.pop().expect("Vector of length 2 can be popped; qed");
@@ -467,15 +473,15 @@ impl Parse for SolutionDef {
 		let expr = count_expr.expr;
 		let expr_lit = match *expr {
 			syn::Expr::Lit(count_lit) => count_lit.lit,
-			_ => return Err(syn_err("Count must be literal."))
+			_ => return Err(syn_err("Count must be literal.")),
 		};
 		let int_lit = match expr_lit {
 			syn::Lit::Int(int_lit) => int_lit,
-			_ => return Err(syn_err("Count must be int literal."))
+			_ => return Err(syn_err("Count must be int literal.")),
 		};
 		let count = int_lit.base10_parse::<usize>()?;
 
-		Ok(Self { vis, ident, voter_type, target_type, weight_type, count, compact_encoding } )
+		Ok(Self { vis, ident, voter_type, target_type, weight_type, count, compact_encoding })
 	}
 }
 

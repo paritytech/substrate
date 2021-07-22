@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Config, Weight, Pallet};
+use crate::{Config, Pallet, Weight};
 use frame_support::{
 	storage::migration,
-	traits::{GetPalletVersion, PalletVersion, PalletInfoAccess, Get},
+	traits::{Get, GetPalletVersion, PalletInfoAccess, PalletVersion},
 };
 
 pub fn migrate<T: Config>() -> Weight {
@@ -32,7 +32,7 @@ pub fn migrate<T: Config>() -> Weight {
 				b"CurrentSchedule",
 				b"",
 			);
-		}
+		},
 		_ => (),
 	}
 

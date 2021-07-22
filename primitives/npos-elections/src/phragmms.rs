@@ -1,4 +1,4 @@
- // This file is part of Substrate.
+// This file is part of Substrate.
 
 // Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -22,10 +22,10 @@
 //! MMS algorithm.
 
 use crate::{
-	IdentifierT, ElectionResult, ExtendedBalance, setup_inputs, VoteWeight, Voter, CandidatePtr,
-	balance, PerThing128,
+	balance, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT, PerThing128,
+	VoteWeight, Voter,
 };
-use sp_arithmetic::{PerThing, Rational128, traits::Bounded};
+use sp_arithmetic::{traits::Bounded, PerThing, Rational128};
 use sp_std::{prelude::*, rc::Rc};
 
 /// Execute the phragmms method.
@@ -62,15 +62,17 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 				balance(&mut voters, iterations, tolerance);
 			}
 		} else {
-			break;
+			break
 		}
 	}
 
-	let mut assignments = voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
+	let mut assignments =
+		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 	let _ = assignments.iter_mut().map(|a| a.try_normalize()).collect::<Result<(), _>>()?;
-	let winners = winners.into_iter().map(|w_ptr|
-		(w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake)
-	).collect();
+	let winners = winners
+		.into_iter()
+		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
+		.collect();
 
 	Ok(ElectionResult { winners, assignments })
 }
@@ -101,10 +103,8 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 		for edge in voter.edges.iter() {
 			let edge_candidate = edge.candidate.borrow();
 			if edge_candidate.elected {
-				let edge_contribution: ExtendedBalance = P::from_rational(
-					edge.weight,
-					edge_candidate.backed_stake,
-				).deconstruct().into();
+				let edge_contribution: ExtendedBalance =
+					P::from_rational(edge.weight, edge_candidate.backed_stake).deconstruct().into();
 				denominator_contribution += edge_contribution;
 			}
 		}
@@ -125,7 +125,7 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 
 	for c_ptr in candidates.iter() {
 		let mut candidate = c_ptr.borrow_mut();
-		if candidate.approval_stake > 0  {
+		if candidate.approval_stake > 0 {
 			// finalise the score value.
 			let score_d = candidate.score.d();
 			let one: ExtendedBalance = P::ACCURACY.into();
@@ -153,7 +153,10 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 			// `RationalInfinite` as the score type does not introduce significant overhead. Then we
 			// can switch the score type to `RationalInfinite` and ensure compatibility with any
 			// crazy token scale.
-			let score_n = candidate.approval_stake.checked_mul(one).unwrap_or_else(|| Bounded::max_value());
+			let score_n = candidate
+				.approval_stake
+				.checked_mul(one)
+				.unwrap_or_else(|| Bounded::max_value());
 			candidate.score = Rational128::from(score_n, score_d);
 
 			// check if we have a new winner.
@@ -180,7 +183,10 @@ pub(crate) fn apply_elected<AccountId: IdentifierT>(
 	elected_ptr: CandidatePtr<AccountId>,
 ) {
 	let elected_who = elected_ptr.borrow().who.clone();
-	let cutoff = elected_ptr.borrow().score.to_den(1)
+	let cutoff = elected_ptr
+		.borrow()
+		.score
+		.to_den(1)
 		.expect("(n / d) < u128::MAX and (n' / 1) == (n / d), thus n' < u128::MAX'; qed.")
 		.n();
 
@@ -193,18 +199,19 @@ pub(crate) fn apply_elected<AccountId: IdentifierT>(
 			elected_backed_stake = elected_backed_stake.saturating_add(new_edge_weight);
 
 			// Iterate over all other edges.
-			for (_, edge) in voter.edges
-				.iter_mut()
-				.enumerate()
-				.filter(|(edge_index, edge_inner)| *edge_index != new_edge_index && edge_inner.weight > 0)
-			{
+			for (_, edge) in
+				voter.edges.iter_mut().enumerate().filter(|(edge_index, edge_inner)| {
+					*edge_index != new_edge_index && edge_inner.weight > 0
+				}) {
 				let mut edge_candidate = edge.candidate.borrow_mut();
 				if edge_candidate.backed_stake > cutoff {
-					let stake_to_take = edge.weight.saturating_mul(cutoff) / edge_candidate.backed_stake.max(1);
+					let stake_to_take =
+						edge.weight.saturating_mul(cutoff) / edge_candidate.backed_stake.max(1);
 
 					// subtract this amount from this edge.
 					edge.weight = edge.weight.saturating_sub(stake_to_take);
-					edge_candidate.backed_stake = edge_candidate.backed_stake.saturating_sub(stake_to_take);
+					edge_candidate.backed_stake =
+						edge_candidate.backed_stake.saturating_sub(stake_to_take);
 
 					// inject it into the outer loop's edge.
 					elected_backed_stake = elected_backed_stake.saturating_add(stake_to_take);
@@ -223,7 +230,7 @@ pub(crate) fn apply_elected<AccountId: IdentifierT>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{ElectionResult, Assignment};
+	use crate::{Assignment, ElectionResult};
 	use sp_runtime::{Perbill, Percent};
 	use sp_std::rc::Rc;
 
@@ -232,32 +239,31 @@ mod tests {
 		//! Manually run the internal steps of phragmms. In each round we select a new winner by
 		//! `max_score`, then apply this change by `apply_elected`, and finally do a `balance` round.
 		let candidates = vec![1, 2, 3];
-		let voters = vec![
-			(10, 10, vec![1, 2]),
-			(20, 20, vec![1, 3]),
-			(30, 30, vec![2, 3]),
-		];
+		let voters = vec![(10, 10, vec![1, 2]), (20, 20, vec![1, 3]), (30, 30, vec![2, 3])];
 
 		let (candidates, mut voters) = setup_inputs(candidates, voters);
 
 		// Round 1
-		let winner = calculate_max_score::<u32, Percent>(candidates.as_ref(), voters.as_ref()).unwrap();
+		let winner =
+			calculate_max_score::<u32, Percent>(candidates.as_ref(), voters.as_ref()).unwrap();
 		assert_eq!(winner.borrow().who, 3);
 		assert_eq!(winner.borrow().score, 50u32.into());
 
 		apply_elected(&mut voters, Rc::clone(&winner));
 		assert_eq!(
-			voters.iter().find(|x| x.who == 30).map(|v| (
-				v.who,
-				v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
-			)).unwrap(),
+			voters
+				.iter()
+				.find(|x| x.who == 30)
+				.map(|v| (v.who, v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()))
+				.unwrap(),
 			(30, vec![(2, 0), (3, 30)]),
 		);
 		assert_eq!(
-			voters.iter().find(|x| x.who == 20).map(|v| (
-				v.who,
-				v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
-			)).unwrap(),
+			voters
+				.iter()
+				.find(|x| x.who == 20)
+				.map(|v| (v.who, v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()))
+				.unwrap(),
 			(20, vec![(1, 0), (3, 20)]),
 		);
 
@@ -270,30 +276,34 @@ mod tests {
 		balance(&mut voters, 10, 0);
 
 		// round 2
-		let winner = calculate_max_score::<u32, Percent>(candidates.as_ref(), voters.as_ref()).unwrap();
+		let winner =
+			calculate_max_score::<u32, Percent>(candidates.as_ref(), voters.as_ref()).unwrap();
 		assert_eq!(winner.borrow().who, 2);
 		assert_eq!(winner.borrow().score, 25u32.into());
 
 		apply_elected(&mut voters, Rc::clone(&winner));
 		assert_eq!(
-			voters.iter().find(|x| x.who == 30).map(|v| (
-				v.who,
-				v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
-			)).unwrap(),
+			voters
+				.iter()
+				.find(|x| x.who == 30)
+				.map(|v| (v.who, v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()))
+				.unwrap(),
 			(30, vec![(2, 15), (3, 15)]),
 		);
 		assert_eq!(
-			voters.iter().find(|x| x.who == 20).map(|v| (
-				v.who,
-				v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
-			)).unwrap(),
+			voters
+				.iter()
+				.find(|x| x.who == 20)
+				.map(|v| (v.who, v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()))
+				.unwrap(),
 			(20, vec![(1, 0), (3, 20)]),
 		);
 		assert_eq!(
-			voters.iter().find(|x| x.who == 10).map(|v| (
-				v.who,
-				v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
-			)).unwrap(),
+			voters
+				.iter()
+				.find(|x| x.who == 10)
+				.map(|v| (v.who, v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()))
+				.unwrap(),
 			(10, vec![(1, 0), (2, 10)]),
 		);
 
@@ -306,24 +316,27 @@ mod tests {
 		balance(&mut voters, 10, 0);
 
 		assert_eq!(
-			voters.iter().find(|x| x.who == 30).map(|v| (
-				v.who,
-				v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
-			)).unwrap(),
+			voters
+				.iter()
+				.find(|x| x.who == 30)
+				.map(|v| (v.who, v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()))
+				.unwrap(),
 			(30, vec![(2, 20), (3, 10)]),
 		);
 		assert_eq!(
-			voters.iter().find(|x| x.who == 20).map(|v| (
-				v.who,
-				v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
-			)).unwrap(),
+			voters
+				.iter()
+				.find(|x| x.who == 20)
+				.map(|v| (v.who, v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()))
+				.unwrap(),
 			(20, vec![(1, 0), (3, 20)]),
 		);
 		assert_eq!(
-			voters.iter().find(|x| x.who == 10).map(|v| (
-				v.who,
-				v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
-			)).unwrap(),
+			voters
+				.iter()
+				.find(|x| x.who == 10)
+				.map(|v| (v.who, v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()))
+				.unwrap(),
 			(10, vec![(1, 0), (2, 10)]),
 		);
 	}
@@ -331,25 +344,16 @@ mod tests {
 	#[test]
 	fn basic_election_works() {
 		let candidates = vec![1, 2, 3];
-		let voters = vec![
-			(10, 10, vec![1, 2]),
-			(20, 20, vec![1, 3]),
-			(30, 30, vec![2, 3]),
-		];
+		let voters = vec![(10, 10, vec![1, 2]), (20, 20, vec![1, 3]), (30, 30, vec![2, 3])];
 
-		let ElectionResult { winners, assignments } = phragmms::<_, Perbill>(2, candidates, voters, Some((2, 0))).unwrap();
+		let ElectionResult { winners, assignments } =
+			phragmms::<_, Perbill>(2, candidates, voters, Some((2, 0))).unwrap();
 		assert_eq!(winners, vec![(3, 30), (2, 30)]);
 		assert_eq!(
 			assignments,
 			vec![
-				Assignment {
-					who: 10u64,
-					distribution: vec![(2, Perbill::one())],
-				},
-				Assignment {
-					who: 20,
-					distribution: vec![(3, Perbill::one())],
-				},
+				Assignment { who: 10u64, distribution: vec![(2, Perbill::one())] },
+				Assignment { who: 20, distribution: vec![(3, Perbill::one())] },
 				Assignment {
 					who: 30,
 					distribution: vec![
@@ -374,13 +378,9 @@ mod tests {
 			(130, 1000, vec![61, 71]),
 		];
 
-		let ElectionResult { winners, assignments: _ } = phragmms::<_, Perbill>(4, candidates, voters, Some((2, 0))).unwrap();
-		assert_eq!(winners, vec![
-			(11, 3000),
-			(31, 2000),
-			(51, 1500),
-			(61, 1500),
-		]);
+		let ElectionResult { winners, assignments: _ } =
+			phragmms::<_, Perbill>(4, candidates, voters, Some((2, 0))).unwrap();
+		assert_eq!(winners, vec![(11, 3000), (31, 2000), (51, 1500), (61, 1500),]);
 	}
 
 	#[test]
@@ -391,7 +391,8 @@ mod tests {
 		// give a bit more to 1 and 3.
 		voters.push((2, u64::MAX, vec![1, 3]));
 
-		let ElectionResult { winners, assignments: _ } = phragmms::<_, Perbill>(2, candidates, voters, Some((2, 0))).unwrap();
+		let ElectionResult { winners, assignments: _ } =
+			phragmms::<_, Perbill>(2, candidates, voters, Some((2, 0))).unwrap();
 		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![1u32, 3]);
 	}
 }

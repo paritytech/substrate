@@ -73,12 +73,16 @@ macro_rules! override_host_functions {
 pub struct SignatureVerificationOverride;
 
 impl sp_wasm_interface::HostFunctions for SignatureVerificationOverride {
-    fn host_functions() -> Vec<&'static dyn sp_wasm_interface::Function> {
-        override_host_functions!(
-            "ext_crypto_ecdsa_verify_version_1", EcdsaVerify,
-            "ext_crypto_ed25519_verify_version_1", Ed25519Verify,
-            "ext_crypto_sr25519_verify_version_1", Sr25519Verify,
-            "ext_crypto_sr25519_verify_version_2", Sr25519VerifyV2,
-        )
-    }
+	fn host_functions() -> Vec<&'static dyn sp_wasm_interface::Function> {
+		override_host_functions!(
+			"ext_crypto_ecdsa_verify_version_1",
+			EcdsaVerify,
+			"ext_crypto_ed25519_verify_version_1",
+			Ed25519Verify,
+			"ext_crypto_sr25519_verify_version_1",
+			Sr25519Verify,
+			"ext_crypto_sr25519_verify_version_2",
+			Sr25519VerifyV2,
+		)
+	}
 }

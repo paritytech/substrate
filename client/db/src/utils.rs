@@ -19,24 +19,27 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-use std::sync::Arc;
-use std::convert::TryInto;
+use std::{convert::TryInto, sync::Arc};
 
 use log::debug;
 
+use crate::{Database, DatabaseSettings, DatabaseSettingsSrc, DbHash};
 use codec::Decode;
-use sp_trie::DBValue;
 use sp_database::Transaction;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, Zero,
-	UniqueSaturatedFrom, UniqueSaturatedInto,
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedFrom, UniqueSaturatedInto, Zero},
 };
-use crate::{DatabaseSettings, DatabaseSettingsSrc, Database, DbHash};
+use sp_trie::DBValue;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
-#[cfg(any(feature = "with-kvdb-rocksdb", feature = "with-parity-db", feature = "test-helpers", test))]
+#[cfg(any(
+	feature = "with-kvdb-rocksdb",
+	feature = "with-parity-db",
+	feature = "test-helpers",
+	test
+))]
 pub const NUM_COLUMNS: u32 = 12;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
@@ -98,24 +101,17 @@ pub enum DatabaseType {
 /// In the current database schema, this kind of key is only used for
 /// lookups into an index, NOT for storing header data or others.
 pub fn number_index_key<N: TryInto<u32>>(n: N) -> sp_blockchain::Result<NumberIndexKey> {
-	let n = n.try_into().map_err(|_|
+	let n = n.try_into().map_err(|_| {
 		sp_blockchain::Error::Backend("Block number cannot be converted to u32".into())
-	)?;
+	})?;
 
-	Ok([
-		(n >> 24) as u8,
-		((n >> 16) & 0xff) as u8,
-		((n >> 8) & 0xff) as u8,
-		(n & 0xff) as u8
-	])
+	Ok([(n >> 24) as u8, ((n >> 16) & 0xff) as u8, ((n >> 8) & 0xff) as u8, (n & 0xff) as u8])
 }
 
 /// Convert number and hash into long lookup key for blocks that are
 /// not in the canonical chain.
-pub fn number_and_hash_to_lookup_key<N, H>(
-	number: N,
-	hash: H,
-) -> sp_blockchain::Result<Vec<u8>>	where
+pub fn number_and_hash_to_lookup_key<N, H>(number: N, hash: H) -> sp_blockchain::Result<Vec<u8>>
+where
 	N: TryInto<u32>,
 	H: AsRef<[u8]>,
 {
@@ -126,16 +122,15 @@ pub fn number_and_hash_to_lookup_key<N, H>(
 
 /// Convert block lookup key into block number.
 /// all block lookup keys start with the block number.
-pub fn lookup_key_to_number<N>(key: &[u8]) -> sp_blockchain::Result<N> where
-	N: From<u32>
+pub fn lookup_key_to_number<N>(key: &[u8]) -> sp_blockchain::Result<N>
+where
+	N: From<u32>,
 {
 	if key.len() < 4 {
-		return Err(sp_blockchain::Error::Backend("Invalid block key".into()));
+		return Err(sp_blockchain::Error::Backend("Invalid block key".into()))
 	}
-	Ok((key[0] as u32) << 24
-		| (key[1] as u32) << 16
-		| (key[2] as u32) << 8
-		| (key[3] as u32)).map(Into::into)
+	Ok((key[0] as u32) << 24 | (key[1] as u32) << 16 | (key[2] as u32) << 8 | (key[3] as u32))
+		.map(Into::into)
 }
 
 /// Delete number to hash mapping in DB transaction.
@@ -197,17 +192,15 @@ pub fn insert_hash_to_key_mapping<N: TryInto<u32>, H: AsRef<[u8]> + Clone>(
 pub fn block_id_to_lookup_key<Block>(
 	db: &dyn Database<DbHash>,
 	key_lookup_col: u32,
-	id: BlockId<Block>
-) -> Result<Option<Vec<u8>>, sp_blockchain::Error> where
+	id: BlockId<Block>,
+) -> Result<Option<Vec<u8>>, sp_blockchain::Error>
+where
 	Block: BlockT,
 	::sp_runtime::traits::NumberFor<Block>: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
 {
 	Ok(match id {
-		BlockId::Number(n) => db.get(
-			key_lookup_col,
-			number_index_key(n)?.as_ref(),
-		),
-		BlockId::Hash(h) => db.get(key_lookup_col, h.as_ref())
+		BlockId::Number(n) => db.get(key_lookup_col, number_index_key(n)?.as_ref()),
+		BlockId::Hash(h) => db.get(key_lookup_col, h.as_ref()),
 	})
 }
 
@@ -218,9 +211,10 @@ pub fn open_database<Block: BlockT>(
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
 	#[allow(unused)]
 	fn db_open_error(feat: &'static str) -> sp_blockchain::Error {
-		sp_blockchain::Error::Backend(
-			format!("`{}` feature not enabled, database can not be opened", feat),
-		)
+		sp_blockchain::Error::Backend(format!(
+			"`{}` feature not enabled, database can not be opened",
+			feat
+		))
 	}
 
 	let db: Arc<dyn Database<DbHash>> = match &config.source {
@@ -231,14 +225,16 @@ pub fn open_database<Block: BlockT>(
 
 			// and now open database assuming that it has the latest version
 			let mut db_config = kvdb_rocksdb::DatabaseConfig::with_columns(NUM_COLUMNS);
-			let path = path.to_str()
+			let path = path
+				.to_str()
 				.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 
 			let mut memory_budget = std::collections::HashMap::new();
 			match db_type {
 				DatabaseType::Full => {
 					let state_col_budget = (*cache_size as f64 * 0.9) as usize;
-					let other_col_budget = (cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
+					let other_col_budget =
+						(cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
 
 					for i in 0..NUM_COLUMNS {
 						if i == crate::columns::STATE {
@@ -267,7 +263,7 @@ pub fn open_database<Block: BlockT>(
 						path,
 						col_budget,
 					);
-				}
+				},
 			}
 			db_config.memory_budget = memory_budget;
 
@@ -276,18 +272,12 @@ pub fn open_database<Block: BlockT>(
 			sp_database::as_database(db)
 		},
 		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
-		DatabaseSettingsSrc::RocksDb { .. } => {
-			return Err(db_open_error("with-kvdb-rocksdb"));
-		},
+		DatabaseSettingsSrc::RocksDb { .. } => return Err(db_open_error("with-kvdb-rocksdb")),
 		#[cfg(feature = "with-parity-db")]
-		DatabaseSettingsSrc::ParityDb { path } => {
-			crate::parity_db::open(&path, db_type)
-				.map_err(|e| sp_blockchain::Error::Backend(format!("{}", e)))?
-		},
+		DatabaseSettingsSrc::ParityDb { path } => crate::parity_db::open(&path, db_type)
+			.map_err(|e| sp_blockchain::Error::Backend(format!("{}", e)))?,
 		#[cfg(not(feature = "with-parity-db"))]
-		DatabaseSettingsSrc::ParityDb { .. } => {
-			return Err(db_open_error("with-parity-db"))
-		},
+		DatabaseSettingsSrc::ParityDb { .. } => return Err(db_open_error("with-parity-db")),
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
 
@@ -297,14 +287,19 @@ pub fn open_database<Block: BlockT>(
 }
 
 /// Check database type.
-pub fn check_database_type(db: &dyn Database<DbHash>, db_type: DatabaseType) -> sp_blockchain::Result<()> {
+pub fn check_database_type(
+	db: &dyn Database<DbHash>,
+	db_type: DatabaseType,
+) -> sp_blockchain::Result<()> {
 	match db.get(COLUMN_META, meta_keys::TYPE) {
-		Some(stored_type) => {
+		Some(stored_type) =>
 			if db_type.as_str().as_bytes() != &*stored_type {
-				return Err(sp_blockchain::Error::Backend(
-					format!("Unexpected database type. Expected: {}", db_type.as_str())).into());
-			}
-		},
+				return Err(sp_blockchain::Error::Backend(format!(
+					"Unexpected database type. Expected: {}",
+					db_type.as_str()
+				))
+				.into())
+			},
 		None => {
 			let mut transaction = Transaction::new();
 			transaction.set(COLUMN_META, meta_keys::TYPE, db_type.as_str().as_bytes());
@@ -320,10 +315,10 @@ pub fn read_db<Block>(
 	db: &dyn Database<DbHash>,
 	col_index: u32,
 	col: u32,
-	id: BlockId<Block>
+	id: BlockId<Block>,
 ) -> sp_blockchain::Result<Option<DBValue>>
-	where
-		Block: BlockT,
+where
+	Block: BlockT,
 {
 	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
 		Some(key) => Ok(db.get(col, key.as_ref())),
@@ -358,10 +353,8 @@ pub fn read_header<Block: BlockT>(
 	match read_db(db, col_index, col, id)? {
 		Some(header) => match Block::Header::decode(&mut &header[..]) {
 			Ok(header) => Ok(Some(header)),
-			Err(_) => return Err(
-				sp_blockchain::Error::Backend("Error decoding header".into())
-			),
-		}
+			Err(_) => return Err(sp_blockchain::Error::Backend("Error decoding header".into())),
+		},
 		None => Ok(None),
 	}
 }
@@ -373,34 +366,35 @@ pub fn require_header<Block: BlockT>(
 	col: u32,
 	id: BlockId<Block>,
 ) -> sp_blockchain::Result<Block::Header> {
-	read_header(db, col_index, col, id)
-		.and_then(|header| header.ok_or_else(||
-			sp_blockchain::Error::UnknownBlock(format!("Require header: {}", id))
-		))
+	read_header(db, col_index, col, id).and_then(|header| {
+		header.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("Require header: {}", id)))
+	})
 }
 
 /// Read meta from the database.
-pub fn read_meta<Block>(db: &dyn Database<DbHash>, col_header: u32) -> Result<
-	Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
-	sp_blockchain::Error,
->
-	where
-		Block: BlockT,
+pub fn read_meta<Block>(
+	db: &dyn Database<DbHash>,
+	col_header: u32,
+) -> Result<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>, sp_blockchain::Error>
+where
+	Block: BlockT,
 {
 	let genesis_hash: Block::Hash = match read_genesis_hash(db)? {
 		Some(genesis_hash) => genesis_hash,
-		None => return Ok(Meta {
-			best_hash: Default::default(),
-			best_number: Zero::zero(),
-			finalized_hash: Default::default(),
-			finalized_number: Zero::zero(),
-			genesis_hash: Default::default(),
-			finalized_state: None,
-		}),
+		None =>
+			return Ok(Meta {
+				best_hash: Default::default(),
+				best_number: Zero::zero(),
+				finalized_hash: Default::default(),
+				finalized_number: Zero::zero(),
+				genesis_hash: Default::default(),
+				finalized_state: None,
+			}),
 	};
 
 	let load_meta_block = |desc, key| -> Result<_, sp_blockchain::Error> {
-		if let Some(Some(header)) = db.get(COLUMN_META, key)
+		if let Some(Some(header)) = db
+			.get(COLUMN_META, key)
 			.and_then(|id| db.get(col_header, &id).map(|b| Block::Header::decode(&mut &b[..]).ok()))
 		{
 			let hash = header.hash();
@@ -419,7 +413,8 @@ pub fn read_meta<Block>(db: &dyn Database<DbHash>, col_header: u32) -> Result<
 
 	let (best_hash, best_number) = load_meta_block("best", meta_keys::BEST_BLOCK)?;
 	let (finalized_hash, finalized_number) = load_meta_block("final", meta_keys::FINALIZED_BLOCK)?;
-	let (finalized_state_hash, finalized_state_number) = load_meta_block("final_state", meta_keys::FINALIZED_STATE)?;
+	let (finalized_state_hash, finalized_state_number) =
+		load_meta_block("final_state", meta_keys::FINALIZED_STATE)?;
 	let finalized_state = if finalized_state_hash != Default::default() {
 		Some((finalized_state_hash, finalized_state_number))
 	} else {
@@ -437,13 +432,14 @@ pub fn read_meta<Block>(db: &dyn Database<DbHash>, col_header: u32) -> Result<
 }
 
 /// Read genesis hash from database.
-pub fn read_genesis_hash<Hash: Decode>(db: &dyn Database<DbHash>) -> sp_blockchain::Result<Option<Hash>> {
+pub fn read_genesis_hash<Hash: Decode>(
+	db: &dyn Database<DbHash>,
+) -> sp_blockchain::Result<Option<Hash>> {
 	match db.get(COLUMN_META, meta_keys::GENESIS_HASH) {
 		Some(h) => match Decode::decode(&mut &h[..]) {
 			Ok(h) => Ok(Some(h)),
-			Err(err) => Err(sp_blockchain::Error::Backend(
-				format!("Error decoding genesis hash: {}", err)
-			)),
+			Err(err) =>
+				Err(sp_blockchain::Error::Backend(format!("Error decoding genesis hash: {}", err))),
 		},
 		None => Ok(None),
 	}
@@ -461,7 +457,7 @@ impl DatabaseType {
 
 pub(crate) struct JoinInput<'a, 'b>(&'a [u8], &'b [u8]);
 
-pub(crate) fn join_input<'a, 'b>(i1: &'a[u8], i2: &'b [u8]) -> JoinInput<'a, 'b> {
+pub(crate) fn join_input<'a, 'b>(i1: &'a [u8], i2: &'b [u8]) -> JoinInput<'a, 'b> {
 	JoinInput(i1, i2)
 }
 
@@ -486,8 +482,8 @@ impl<'a, 'b> codec::Input for JoinInput<'a, 'b> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 	use codec::Input;
+	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	#[test]
