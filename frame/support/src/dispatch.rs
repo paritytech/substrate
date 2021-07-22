@@ -2487,52 +2487,6 @@ mod tests {
 		}
 	}
 
-	fn expected_calls() -> Vec<FunctionMetadata> {
-		vec![
-			FunctionMetadata { name: "aux_0", args: vec![], docs: vec![" Hi, this is a comment."] },
-			FunctionMetadata {
-				name: "aux_1",
-				args: vec![FunctionArgumentMetadata {
-					name: "_data",
-					ty: scale_info::meta_type::<codec::Compact<u32>>(),
-				}],
-				docs: vec![],
-			},
-			FunctionMetadata {
-				name: "aux_2",
-				args: vec![
-					FunctionArgumentMetadata { name: "_data", ty: scale_info::meta_type::<i32>() },
-					FunctionArgumentMetadata {
-						name: "_data2",
-						ty: scale_info::meta_type::<String>(),
-					},
-				],
-				docs: vec![],
-			},
-			FunctionMetadata { name: "aux_3", args: vec![], docs: vec![] },
-			FunctionMetadata {
-				name: "aux_4",
-				args: vec![FunctionArgumentMetadata {
-					name: "_data",
-					ty: scale_info::meta_type::<i32>(),
-				}],
-				docs: vec![],
-			},
-			FunctionMetadata {
-				name: "aux_5",
-				args: vec![
-					FunctionArgumentMetadata { name: "_data", ty: scale_info::meta_type::<i32>() },
-					FunctionArgumentMetadata {
-						name: "_data2",
-						ty: scale_info::meta_type::<codec::Compact<u32>>(),
-					},
-				],
-				docs: vec![],
-			},
-			FunctionMetadata { name: "operational", args: vec![], docs: vec![] },
-		]
-	}
-
 	#[derive(scale_info::TypeInfo)]
 	pub struct TraitImpl {}
 	impl Config for TraitImpl {}
@@ -2617,7 +2571,6 @@ mod tests {
 	fn module_json_metadata() {
 		let metadata = Module::<TraitImpl>::call_functions();
 		let expected_metadata = PalletCallMetadata {
-			calls: expected_calls(),
 			ty: scale_info::meta_type::<Call<TraitImpl>>(),
 		};
 		assert_eq!(expected_metadata, metadata);
