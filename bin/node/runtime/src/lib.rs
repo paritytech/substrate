@@ -1176,6 +1176,51 @@ impl pallet_transaction_storage::Config for Runtime {
 	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
 }
 
+#[test]
+fn foo() {
+		println!("System{}", std::mem::size_of::<frame_system::Call::<Runtime>>());
+		println!("Utility{}", std::mem::size_of::<pallet_utility::Call::<Runtime>>());
+		println!("Babe{}", std::mem::size_of::<pallet_babe::Call::<Runtime>>());
+		println!("Timestamp{}", std::mem::size_of::<pallet_timestamp::Call::<Runtime>>());
+		println!("Authorship{}", std::mem::size_of::<pallet_authorship::Call::<Runtime>>());
+		println!("Indices{}", std::mem::size_of::<pallet_indices::Call::<Runtime>>());
+		println!("Balances{}", std::mem::size_of::<pallet_balances::Call::<Runtime>>());
+		println!("TransactionPayment{}", std::mem::size_of::<pallet_transaction_payment::Call::<Runtime>>());
+		println!("ElectionProviderMultiPhase{}", std::mem::size_of::<pallet_election_provider_multi_phase::Call::<Runtime>>());
+		println!("Staking{}", std::mem::size_of::<pallet_staking::Call::<Runtime>>());
+		println!("Session{}", std::mem::size_of::<pallet_session::Call::<Runtime>>());
+		println!("Democracy{}", std::mem::size_of::<pallet_democracy::Call::<Runtime>>());
+		println!("Council{}", std::mem::size_of::<pallet_collective::Call::<Runtime, pallet_collective::Instance1>>());
+		println!("TechnicalCommittee{}", std::mem::size_of::<pallet_collective::Call::<Runtime, pallet_collective::Instance2>>());
+		println!("Elections{}", std::mem::size_of::<pallet_elections_phragmen::Call::<Runtime>>());
+		println!("TechnicalMembership{}", std::mem::size_of::<pallet_membership::Call::<Runtime, pallet_membership::Instance1>>());
+		println!("Grandpa{}", std::mem::size_of::<pallet_grandpa::Call::<Runtime>>());
+		println!("Treasury{}", std::mem::size_of::<pallet_treasury::Call::<Runtime>>());
+		println!("Contracts{}", std::mem::size_of::<pallet_contracts::Call::<Runtime>>());
+		println!("Sudo{}", std::mem::size_of::<pallet_sudo::Call::<Runtime>>());
+		println!("ImOnline{}", std::mem::size_of::<pallet_im_online::Call::<Runtime>>());
+		println!("AuthorityDiscovery{}", std::mem::size_of::<pallet_authority_discovery::Call::<Runtime>>());
+		println!("Offences{}", std::mem::size_of::<pallet_offences::Call::<Runtime>>());
+		println!("Historical{}", std::mem::size_of::<pallet_session_historical::Call::<Runtime>>());
+		println!("RandomnessCollectiveFlip{}", std::mem::size_of::<pallet_randomness_collective_flip::Call::<Runtime>>());
+		println!("Identity{}", std::mem::size_of::<pallet_identity::Call::<Runtime>>());
+		println!("Society{}", std::mem::size_of::<pallet_society::Call::<Runtime>>());
+		println!("Recovery{}", std::mem::size_of::<pallet_recovery::Call::<Runtime>>());
+		println!("Vesting{}", std::mem::size_of::<pallet_vesting::Call::<Runtime>>());
+		println!("Scheduler{}", std::mem::size_of::<pallet_scheduler::Call::<Runtime>>());
+		println!("Proxy{}", std::mem::size_of::<pallet_proxy::Call::<Runtime>>());
+		println!("Multisig{}", std::mem::size_of::<pallet_multisig::Call::<Runtime>>());
+		println!("Bounties{}", std::mem::size_of::<pallet_bounties::Call::<Runtime>>());
+		println!("Tips{}", std::mem::size_of::<pallet_tips::Call::<Runtime>>());
+		println!("Assets{}", std::mem::size_of::<pallet_assets::Call::<Runtime>>());
+		println!("Mmr{}", std::mem::size_of::<pallet_mmr::Call::<Runtime>>());
+		println!("Lottery{}", std::mem::size_of::<pallet_lottery::Call::<Runtime>>());
+		println!("Gilt{}", std::mem::size_of::<pallet_gilt::Call::<Runtime>>());
+		println!("Uniques{}", std::mem::size_of::<pallet_uniques::Call::<Runtime>>());
+		println!("TransactionStorage{}", std::mem::size_of::<pallet_transaction_storage::Call::<Runtime>>());
+		panic!();
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
