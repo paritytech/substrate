@@ -569,7 +569,7 @@ mod tests {
 		let opaque = cases.iter().map(OpaqueLeaf::from_leaf).collect::<Vec<_>>();
 
 		// then
-		assert_eq!(encoded_compact, opaque,);
+		assert_eq!(encoded_compact, opaque);
 	}
 
 	#[test]

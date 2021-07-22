@@ -1108,7 +1108,7 @@ pub trait Logging {
 	/// Instead of using directly, prefer setting up `RuntimeLogger` and using `log` macros.
 	fn log(level: LogLevel, target: &str, message: &[u8]) {
 		if let Ok(message) = std::str::from_utf8(message) {
-			log::log!(target: target, log::Level::from(level), "{}", message,)
+			log::log!(target: target, log::Level::from(level), "{}", message)
 		}
 	}
 

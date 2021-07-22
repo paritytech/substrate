@@ -318,7 +318,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let proposal = match futures::future::select(proposing, proposing_remaining).await {
 			Either::Left((Ok(p), _)) => p,
 			Either::Left((Err(err), _)) => {
-				warn!(target: logging_target, "Proposing failed: {:?}", err,);
+				warn!(target: logging_target, "Proposing failed: {:?}", err);
 
 				return None
 			},
@@ -363,7 +363,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		) {
 			Ok(bi) => bi,
 			Err(err) => {
-				warn!(target: logging_target, "Failed to create block import params: {:?}", err,);
+				warn!(target: logging_target, "Failed to create block import params: {:?}", err);
 
 				return None
 			},
@@ -922,7 +922,7 @@ mod test {
 		}
 
 		// but we cap it to a maximum of 20 slots
-		assert_eq!(super::slot_lenience_linear(1u64.into(), &slot(23)), Some(SLOT_DURATION * 20),);
+		assert_eq!(super::slot_lenience_linear(1u64.into(), &slot(23)), Some(SLOT_DURATION * 20));
 	}
 
 	#[test]

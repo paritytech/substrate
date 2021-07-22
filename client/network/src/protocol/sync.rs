@@ -2272,7 +2272,7 @@ mod test {
 			.any(|(who, request)| { who == peer_id && request.from == FromBlock::Hash(a1_hash) }));
 
 		// there are no extra pending requests
-		assert_eq!(sync.extra_justifications.pending_requests().count(), 0,);
+		assert_eq!(sync.extra_justifications.pending_requests().count(), 0);
 
 		// there's one in-flight extra request to the expected peer
 		assert!(sync.extra_justifications.active_requests().any(|(who, (hash, number))| {
@@ -2290,7 +2290,7 @@ mod test {
 		);
 
 		// there should be no in-flight requests
-		assert_eq!(sync.extra_justifications.active_requests().count(), 0,);
+		assert_eq!(sync.extra_justifications.active_requests().count(), 0);
 
 		// and the request should now be pending again, waiting for reschedule
 		assert!(sync
