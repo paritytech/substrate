@@ -21,7 +21,7 @@
 use ansi_term::Colour;
 use futures::prelude::*;
 use futures_timer::Delay;
-use log::{info, trace, debug};
+use log::{debug, info, trace};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
 use sc_network::NetworkService;

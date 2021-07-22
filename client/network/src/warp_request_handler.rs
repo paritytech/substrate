@@ -16,15 +16,16 @@
 
 //! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer.
 
-use codec::{Encode, Decode};
 use crate::config::{IncomingRequest, OutgoingResponse, ProtocolId, RequestResponseConfig};
-use futures::channel::{mpsc, oneshot};
-use futures::stream::StreamExt;
+use codec::{Decode, Encode};
+use futures::{
+	channel::{mpsc, oneshot},
+	stream::StreamExt,
+};
 use log::debug;
+use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::Block as BlockT;
-use sp_finality_grandpa::{SetId, AuthorityList};
-use std::time::Duration;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 /// Scale-encoded warp sync proof response.
 pub struct EncodedProof(pub Vec<u8>);
@@ -98,13 +99,7 @@ impl<TBlock: BlockT> RequestHandler<TBlock> {
 		let mut request_response_config = generate_request_response_config(protocol_id);
 		request_response_config.inbound_queue = Some(tx);
 
-		(
-			Self {
-				backend,
-				request_receiver,
-			},
-			request_response_config,
-		)
+		(Self { backend, request_receiver }, request_response_config)
 	}
 
 	fn handle_request(
@@ -114,13 +109,18 @@ impl<TBlock: BlockT> RequestHandler<TBlock> {
 	) -> Result<(), HandleRequestError> {
 		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
-		let EncodedProof(proof) = self.backend.generate(request.begin).map_err(HandleRequestError::InvalidRequest)?;
+		let EncodedProof(proof) = self
+			.backend
+			.generate(request.begin)
+			.map_err(HandleRequestError::InvalidRequest)?;
 
-		pending_response.send(OutgoingResponse {
-			result: Ok(proof),
-			reputation_changes: Vec::new(),
-			sent_feedback: None,
-		}).map_err(|_| HandleRequestError::SendResponse)
+		pending_response
+			.send(OutgoingResponse {
+				result: Ok(proof),
+				reputation_changes: Vec::new(),
+				sent_feedback: None,
+			})
+			.map_err(|_| HandleRequestError::SendResponse)
 	}
 
 	/// Run [`RequestHandler`].
@@ -129,7 +129,8 @@ impl<TBlock: BlockT> RequestHandler<TBlock> {
 			let IncomingRequest { peer, payload, pending_response } = request;
 
 			match self.handle_request(payload, pending_response) {
-				Ok(()) => debug!(target: "sync", "Handled grandpa warp sync request from {}.", peer),
+				Ok(()) =>
+					debug!(target: "sync", "Handled grandpa warp sync request from {}.", peer),
 				Err(e) => debug!(
 					target: "sync",
 					"Failed to handle grandpa warp sync request from {}: {}",

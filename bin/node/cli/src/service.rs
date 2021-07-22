@@ -229,8 +229,8 @@ pub fn new_full_base(
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 	let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
-			backend.clone(),
-			import_setup.1.shared_authority_set().clone(),
+		backend.clone(),
+		import_setup.1.shared_authority_set().clone(),
 	));
 
 	let (network, system_rpc_tx, network_starter) =

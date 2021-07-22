@@ -16,26 +16,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use sp_runtime::traits::{Block as BlockT, NumberFor, Header, Zero};
-use sp_finality_grandpa::{SetId, AuthorityList};
-use crate::schema::v1::{StateRequest, StateResponse};
-use crate::chain::Client;
-use super::state::StateSync;
-use crate::{WarpSyncProgress, WarpSyncPhase};
-pub use crate::warp_request_handler::{
-	Request as WarpProofRequest, WarpSyncProvider, EncodedProof, VerificationResult,
-};
 pub use super::state::ImportResult;
+use super::state::StateSync;
+pub use crate::warp_request_handler::{
+	EncodedProof, Request as WarpProofRequest, VerificationResult, WarpSyncProvider,
+};
+use crate::{
+	chain::Client,
+	schema::v1::{StateRequest, StateResponse},
+	WarpSyncPhase, WarpSyncProgress,
+};
+use sp_finality_grandpa::{AuthorityList, SetId};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor, Zero};
+use std::sync::Arc;
 
 /// Warp sync support.
 
 enum Phase<B: BlockT> {
-	WarpProof {
-		set_id: SetId,
-		authorities: AuthorityList,
-		last_hash: B::Hash,
-	},
+	WarpProof { set_id: SetId, authorities: AuthorityList, last_hash: B::Hash },
 	State(StateSync<B>),
 }
 
@@ -65,8 +63,7 @@ impl<B: BlockT> WarpSync<B> {
 		client: Arc<dyn Client<B>>,
 		warp_sync_provider: Arc<dyn WarpSyncProvider<B>>,
 	) -> Self {
-		let last_hash = client.hash(Zero::zero()).unwrap()
-			.expect("Genesis header always exists");
+		let last_hash = client.hash(Zero::zero()).unwrap().expect("Genesis header always exists");
 		let phase = Phase::WarpProof {
 			set_id: 0,
 			authorities: warp_sync_provider.current_authorities(),
@@ -85,11 +82,11 @@ impl<B: BlockT> WarpSync<B> {
 	///  Validate and import a state reponse.
 	pub fn import_state(&mut self, response: StateResponse) -> ImportResult<B> {
 		match &mut self.phase {
-			Phase::WarpProof {..} => {
+			Phase::WarpProof { .. } => {
 				log::debug!(target: "sync", "Unexpected state response");
-				return ImportResult::BadResponse;
-			}
-			Phase::State(sync) => sync.import(response)
+				return ImportResult::BadResponse
+			},
+			Phase::State(sync) => sync.import(response),
 		}
 	}
 
@@ -108,7 +105,7 @@ impl<B: BlockT> WarpSync<B> {
 				) {
 					Err(e) => {
 						log::debug!(target: "sync", "Bad warp proof response: {:?}", e);
-						return WarpProofImportResult::BadResponse;
+						return WarpProofImportResult::BadResponse
 					},
 					Ok(VerificationResult::Partial(new_set_id, new_authorities, new_last_hash)) => {
 						log::debug!(target: "sync", "Verified partial proof, set_id={:?}", new_set_id);
@@ -117,10 +114,10 @@ impl<B: BlockT> WarpSync<B> {
 						*last_hash = new_last_hash.clone();
 						self.total_proof_bytes += response.0.len() as u64;
 						WarpProofImportResult::WarpProofRequest(WarpProofRequest {
-							begin: new_last_hash
+							begin: new_last_hash,
 						})
 					},
-					Ok(VerificationResult::Complete(new_set_id, _, header)) =>  {
+					Ok(VerificationResult::Complete(new_set_id, _, header)) => {
 						log::debug!(target: "sync", "Verified complete proof, set_id={:?}", new_set_id);
 						self.target_hash = header.hash();
 						self.target_num = *header.number();
@@ -129,17 +126,17 @@ impl<B: BlockT> WarpSync<B> {
 						let request = state_sync.next_request();
 						self.phase = Phase::State(state_sync);
 						WarpProofImportResult::StateRequest(request)
-					}
+					},
 				}
-			}
+			},
 		}
 	}
 
 	/// Produce next state request.
 	pub fn next_state_request(&self) -> Option<StateRequest> {
 		match &self.phase {
-			Phase::WarpProof {..} => None,
-			Phase::State(sync) => Some(sync.next_request())
+			Phase::WarpProof { .. } => None,
+			Phase::State(sync) => Some(sync.next_request()),
 		}
 	}
 
@@ -147,11 +144,8 @@ impl<B: BlockT> WarpSync<B> {
 	pub fn next_warp_poof_request(&self) -> Option<WarpProofRequest<B>> {
 		match &self.phase {
 			Phase::State(_) => None,
-			Phase::WarpProof { last_hash, .. } => {
-				Some(WarpProofRequest {
-					begin: last_hash.clone(),
-				})
-			}
+			Phase::WarpProof { last_hash, .. } =>
+				Some(WarpProofRequest { begin: last_hash.clone() }),
 		}
 	}
 
@@ -168,7 +162,7 @@ impl<B: BlockT> WarpSync<B> {
 	/// Check if the state is complete.
 	pub fn is_complete(&self) -> bool {
 		match &self.phase {
-			Phase::WarpProof {..} => false,
+			Phase::WarpProof { .. } => false,
 			Phase::State(sync) => sync.is_complete(),
 		}
 	}
@@ -176,7 +170,7 @@ impl<B: BlockT> WarpSync<B> {
 	/// Returns state sync estimated progress (percentage, bytes)
 	pub fn progress(&self) -> WarpSyncProgress {
 		match &self.phase {
-			Phase::WarpProof {..} => WarpSyncProgress {
+			Phase::WarpProof { .. } => WarpSyncProgress {
 				phase: WarpSyncPhase::DownloadingWarpProofs,
 				total_bytes: self.total_proof_bytes,
 			},
@@ -187,8 +181,7 @@ impl<B: BlockT> WarpSync<B> {
 					WarpSyncPhase::DownloadingState
 				},
 				total_bytes: self.total_proof_bytes + sync.progress().size,
-			}
+			},
 		}
 	}
 }
-

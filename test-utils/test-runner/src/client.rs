@@ -16,44 +16,54 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Client parts
-use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use sp_consensus_babe::BabeApi;
-use sp_finality_grandpa::GrandpaApi;
-use crate::{ChainInfo, default_config};
-use manual_seal::consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider};
-use sp_keyring::sr25519::Keyring::Alice;
-use std::str::FromStr;
-use sp_runtime::traits::Header;
+use crate::{default_config, ChainInfo};
 use futures::channel::mpsc;
 use jsonrpc_core::MetaIoHandler;
-use manual_seal::{run_manual_seal, EngineCommand, ManualSealParams, import_queue, rpc::{ManualSeal, ManualSealApi}};
+use manual_seal::{
+	consensus::babe::{BabeConsensusDataProvider, SlotTimestampProvider},
+	import_queue,
+	rpc::{ManualSeal, ManualSealApi},
+	run_manual_seal, EngineCommand, ManualSealParams,
+};
 use sc_client_api::backend::Backend;
 use sc_service::{
-	build_network, spawn_tasks, BuildNetworkParams, SpawnTasksParams, TFullBackend,
-	TFullClient, TaskManager, new_full_parts, Configuration, ChainSpec, TaskExecutor,
+	build_network, new_full_parts, spawn_tasks, BuildNetworkParams, ChainSpec, Configuration,
+	SpawnTasksParams, TFullBackend, TFullClient, TaskExecutor, TaskManager,
 };
 use sc_transaction_pool::BasicPool;
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{ApiExt, ConstructRuntimeApi, Core, Metadata};
 use sp_block_builder::BlockBuilder;
-use sp_runtime::traits::Block as BlockT;
-use sp_session::SessionKeys;
+use sp_consensus_babe::BabeApi;
+use sp_finality_grandpa::GrandpaApi;
+use sp_keyring::sr25519::Keyring::Alice;
 use sp_offchain::OffchainWorkerApi;
-use std::sync::Arc;
+use sp_runtime::traits::{Block as BlockT, Header};
+use sp_session::SessionKeys;
+use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
+use std::{str::FromStr, sync::Arc};
 
 type ClientParts<T> = (
 	Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
 	TaskManager,
-	Arc<TFullClient<<T as ChainInfo>::Block, <T as ChainInfo>::RuntimeApi, <T as ChainInfo>::Executor>>,
-	Arc<dyn TransactionPool<
-		Block = <T as ChainInfo>::Block,
-		Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
-		Error = sc_transaction_pool::error::Error,
-		InPoolTransaction = sc_transaction_pool::Transaction<
-			<<T as ChainInfo>::Block as BlockT>::Hash,
-			<<T as ChainInfo>::Block as BlockT>::Extrinsic,
+	Arc<
+		TFullClient<
+			<T as ChainInfo>::Block,
+			<T as ChainInfo>::RuntimeApi,
+			<T as ChainInfo>::Executor,
 		>,
-	>>,
+	>,
+	Arc<
+		dyn TransactionPool<
+			Block = <T as ChainInfo>::Block,
+			Hash = <<T as ChainInfo>::Block as BlockT>::Hash,
+			Error = sc_transaction_pool::error::Error,
+			InPoolTransaction = sc_transaction_pool::Transaction<
+				<<T as ChainInfo>::Block as BlockT>::Hash,
+				<<T as ChainInfo>::Block as BlockT>::Extrinsic,
+			>,
+		>,
+	>,
 	mpsc::Sender<EngineCommand<<<T as ChainInfo>::Block as BlockT>::Hash>>,
 	Arc<TFullBackend<<T as ChainInfo>::Block>>,
 );
@@ -63,27 +73,36 @@ pub enum ConfigOrChainSpec {
 	/// Configuration object
 	Config(Configuration),
 	/// Chain spec object
-	ChainSpec(Box<dyn ChainSpec>, TaskExecutor)
+	ChainSpec(Box<dyn ChainSpec>, TaskExecutor),
 }
 /// Creates all the client parts you need for [`Node`](crate::node::Node)
-pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<ClientParts<T>, sc_service::Error>
-	where
-		T: ChainInfo + 'static,
-		<T::RuntimeApi as ConstructRuntimeApi<T::Block, TFullClient<T::Block, T::RuntimeApi, T::Executor>>>::RuntimeApi:
-		Core<T::Block> + Metadata<T::Block> + OffchainWorkerApi<T::Block> + SessionKeys<T::Block>
-		+ TaggedTransactionQueue<T::Block> + BlockBuilder<T::Block> + BabeApi<T::Block>
+pub fn client_parts<T>(
+	config_or_chain_spec: ConfigOrChainSpec,
+) -> Result<ClientParts<T>, sc_service::Error>
+where
+	T: ChainInfo + 'static,
+	<T::RuntimeApi as ConstructRuntimeApi<
+		T::Block,
+		TFullClient<T::Block, T::RuntimeApi, T::Executor>,
+	>>::RuntimeApi: Core<T::Block>
+		+ Metadata<T::Block>
+		+ OffchainWorkerApi<T::Block>
+		+ SessionKeys<T::Block>
+		+ TaggedTransactionQueue<T::Block>
+		+ BlockBuilder<T::Block>
+		+ BabeApi<T::Block>
 		+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>
 		+ GrandpaApi<T::Block>,
-		<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>,
-		<<T as ChainInfo>::Block as BlockT>::Hash: FromStr,
-		<<<T as ChainInfo>::Block as BlockT>::Header as Header>::Number: num_traits::cast::AsPrimitive<usize>,
+	<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>,
+	<<T as ChainInfo>::Block as BlockT>::Hash: FromStr,
+	<<<T as ChainInfo>::Block as BlockT>::Header as Header>::Number:
+		num_traits::cast::AsPrimitive<usize>,
 {
 	use sp_consensus_babe::AuthorityId;
 	let config = match config_or_chain_spec {
 		ConfigOrChainSpec::Config(config) => config,
-		ConfigOrChainSpec::ChainSpec(chain_spec, task_executor) => {
-			default_config(task_executor, chain_spec)
-		},
+		ConfigOrChainSpec::ChainSpec(chain_spec, task_executor) =>
+			default_config(task_executor, chain_spec),
 	};
 
 	let (client, backend, keystore, mut task_manager) =
@@ -92,8 +111,12 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
-	let (grandpa_block_import, ..) =
-		grandpa::block_import(client.clone(), &(client.clone() as Arc<_>), select_chain.clone(), None)?;
+	let (grandpa_block_import, ..) = grandpa::block_import(
+		client.clone(),
+		&(client.clone() as Arc<_>),
+		select_chain.clone(),
+		None,
+	)?;
 
 	let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
 	let (block_import, babe_link) = sc_consensus_babe::block_import(
@@ -108,7 +131,7 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
 		babe_link.epoch_changes().clone(),
 		vec![(AuthorityId::from(Alice.public()), 1000)],
 	)
-		.expect("failed to create ConsensusDataProvider");
+	.expect("failed to create ConsensusDataProvider");
 
 	let import_queue =
 		import_queue(Box::new(block_import.clone()), &task_manager.spawn_essential_handle(), None);
@@ -149,7 +172,7 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
 		client.clone(),
 		transaction_pool.clone(),
 		config.prometheus_registry(),
-		None
+		None,
 	);
 
 	// Channel for the rpc handler to communicate with the authorship task.
@@ -168,15 +191,13 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
 			transaction_pool: transaction_pool.clone(),
 			rpc_extensions_builder: Box::new(move |_, _| {
 				let mut io = jsonrpc_core::IoHandler::default();
-				io.extend_with(
-					ManualSealApi::to_delegate(ManualSeal::new(rpc_sink.clone()))
-				);
+				io.extend_with(ManualSealApi::to_delegate(ManualSeal::new(rpc_sink.clone())));
 				io
 			}),
 			remote_blockchain: None,
 			network,
 			system_rpc_tx,
-			telemetry: None
+			telemetry: None,
 		};
 		spawn_tasks(params)?
 	};
@@ -185,8 +206,10 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
 	let create_inherent_data_providers = Box::new(move |_, _| {
 		let client = cloned_client.clone();
 		async move {
-			let timestamp = SlotTimestampProvider::new(client.clone()).map_err(|err| format!("{:?}", err))?;
-			let babe = sp_consensus_babe::inherents::InherentDataProvider::new(timestamp.slot().into());
+			let timestamp =
+				SlotTimestampProvider::new(client.clone()).map_err(|err| format!("{:?}", err))?;
+			let babe =
+				sp_consensus_babe::inherents::InherentDataProvider::new(timestamp.slot().into());
 			Ok((timestamp, babe))
 		}
 	});
@@ -204,19 +227,10 @@ pub fn client_parts<T>(config_or_chain_spec: ConfigOrChainSpec) -> Result<Client
 	});
 
 	// spawn the authorship task as an essential task.
-	task_manager
-		.spawn_essential_handle()
-		.spawn("manual-seal", authorship_future);
+	task_manager.spawn_essential_handle().spawn("manual-seal", authorship_future);
 
 	network_starter.start_network();
 	let rpc_handler = rpc_handlers.io_handler();
 
-	Ok((
-		rpc_handler,
-		task_manager,
-		client,
-		transaction_pool,
-		command_sink,
-		backend,
-	))
+	Ok((rpc_handler, task_manager, client, transaction_pool, command_sink, backend))
 }

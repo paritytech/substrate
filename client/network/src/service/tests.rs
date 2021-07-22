@@ -58,7 +58,8 @@ fn build_test_full_node(
 			),
 			String,
 		> {
-			let maybe_keys = block.header
+			let maybe_keys = block
+				.header
 				.digest()
 				.log(|l| {
 					l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"aura"))
