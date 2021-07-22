@@ -1,18 +1,17 @@
-use proc_macro::TokenStream;
 use crate::COUNTER;
+use proc_macro::TokenStream;
 
 pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 	if !input.is_empty() {
 		return syn::Error::new(proc_macro2::Span::call_site(), "No arguments expected")
-			.to_compile_error().into()
+			.to_compile_error()
+			.into()
 	}
 
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 
-	let no_op_macro_ident = syn::Ident::new(
-		&format!("__dummy_part_checker_{}", count),
-		proc_macro2::Span::call_site(),
-	);
+	let no_op_macro_ident =
+		syn::Ident::new(&format!("__dummy_part_checker_{}", count), proc_macro2::Span::call_site());
 
 	quote::quote!(
 		#[macro_export]
@@ -58,5 +57,6 @@ pub fn generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 			#[doc(hidden)]
 			pub use #no_op_macro_ident as is_origin_part_defined;
 		}
-	).into()
+	)
+	.into()
 }

@@ -54,23 +54,24 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
 mod benchmarking;
+mod tests;
 pub mod weights;
 
-use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error, Parameter};
-use frame_support::traits::{
-	Currency, Get, ExistenceRequirement::{KeepAlive},
-	ReservableCurrency
+use frame_support::{
+	decl_error, decl_event, decl_module, decl_storage, ensure,
+	traits::{Currency, ExistenceRequirement::KeepAlive, Get, ReservableCurrency},
+	Parameter,
 };
+use sp_std::prelude::*;
 
-use sp_runtime::{ Percent, RuntimeDebug, traits::{
-	Zero, AccountIdConversion, Hash, BadOrigin
-}};
-use frame_support::traits::{SortedMembers, ContainsLengthBound, OnUnbalanced, EnsureOrigin};
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use frame_support::traits::{ContainsLengthBound, EnsureOrigin, OnUnbalanced, SortedMembers};
 use frame_system::{self as system, ensure_signed};
+use sp_runtime::{
+	traits::{AccountIdConversion, BadOrigin, Hash, Zero},
+	Percent, RuntimeDebug,
+};
 pub use weights::WeightInfo;
 
 pub type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
@@ -484,9 +485,9 @@ impl<T: Config> Module<T> {
 					if m < a {
 						continue
 					} else {
-						break true;
+						break true
 					}
-				}
+				},
 			}
 		});
 	}
@@ -495,7 +496,10 @@ impl<T: Config> Module<T> {
 	///
 	/// Up to three balance operations.
 	/// Plus `O(T)` (`T` is Tippers length).
-	fn payout_tip(hash: T::Hash, tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>) {
+	fn payout_tip(
+		hash: T::Hash,
+		tip: OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+	) {
 		let mut tips = tip.tips;
 		Self::retain_active_tips(&mut tips);
 		tips.sort_by_key(|i| i.1);
@@ -549,22 +553,18 @@ impl<T: Config> Module<T> {
 			tips: Vec<(AccountId, Balance)>,
 		}
 
-		use frame_support::{Twox64Concat, migration::storage_key_iter};
+		use frame_support::{migration::storage_key_iter, Twox64Concat};
 
 		for (hash, old_tip) in storage_key_iter::<
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
-		>(b"Treasury", b"Tips").drain()
+		>(b"Treasury", b"Tips")
+		.drain()
 		{
-
 			let (finder, deposit, finders_fee) = match old_tip.finder {
-				Some((finder, deposit)) => {
-					(finder, deposit, true)
-				},
-				None => {
-					(T::AccountId::default(), Zero::zero(), false)
-				},
+				Some((finder, deposit)) => (finder, deposit, true),
+				None => (T::AccountId::default(), Zero::zero(), false),
 			};
 			let new_tip = OpenTip {
 				reason: old_tip.reason,
@@ -573,7 +573,7 @@ impl<T: Config> Module<T> {
 				deposit,
 				closes: old_tip.closes,
 				tips: old_tip.tips,
-				finders_fee
+				finders_fee,
 			};
 			Tips::<T>::insert(hash, new_tip)
 		}

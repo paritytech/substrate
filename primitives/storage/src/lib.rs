@@ -20,16 +20,22 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use sp_debug_derive::RuntimeDebug;
 
-use sp_std::{vec::Vec, ops::{Deref, DerefMut}};
+use codec::{Decode, Encode};
 use ref_cast::RefCast;
-use codec::{Encode, Decode};
+use sp_std::{
+	ops::{Deref, DerefMut},
+	vec::Vec,
+};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode))]
+#[cfg_attr(
+	feature = "std",
+	derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode)
+)]
 pub struct StorageKey(
 	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
@@ -53,12 +59,7 @@ pub struct TrackedStorageKey {
 impl TrackedStorageKey {
 	/// Create a default `TrackedStorageKey`
 	pub fn new(key: Vec<u8>) -> Self {
-		Self {
-			key,
-			reads: 0,
-			writes: 0,
-			whitelisted: false,
-		}
+		Self { key, reads: 0, writes: 0, whitelisted: false }
 	}
 	/// Check if this key has been "read", i.e. it exists in the memory overlay.
 	///
@@ -90,12 +91,7 @@ impl TrackedStorageKey {
 // Easily convert a key to a `TrackedStorageKey` that has been whitelisted.
 impl From<Vec<u8>> for TrackedStorageKey {
 	fn from(key: Vec<u8>) -> Self {
-		Self {
-			key: key,
-			reads: 0,
-			writes: 0,
-			whitelisted: true,
-		}
+		Self { key, reads: 0, writes: 0, whitelisted: true }
 	}
 }
 
@@ -105,8 +101,7 @@ impl From<Vec<u8>> for TrackedStorageKey {
 #[repr(transparent)]
 #[derive(RefCast)]
 pub struct PrefixedStorageKey(
-	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
-	Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] Vec<u8>,
 );
 
 impl Deref for PrefixedStorageKey {
@@ -235,7 +230,6 @@ pub mod well_known_keys {
 			CHILD_STORAGE_KEY_PREFIX.starts_with(key)
 		}
 	}
-
 }
 
 /// Information related to a child state.
@@ -257,9 +251,7 @@ impl ChildInfo {
 
 	/// Same as `new_default` but with `Vec<u8>` as input.
 	pub fn new_default_from_vec(storage_key: Vec<u8>) -> Self {
-		ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-			data: storage_key,
-		})
+		ChildInfo::ParentKeyId(ChildTrieParentKeyId { data: storage_key })
 	}
 
 	/// Try to update with another instance, return false if both instance
@@ -284,9 +276,7 @@ impl ChildInfo {
 	/// child trie.
 	pub fn storage_key(&self) -> &[u8] {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-				data,
-			}) => &data[..],
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) => &data[..],
 		}
 	}
 
@@ -294,9 +284,8 @@ impl ChildInfo {
 	/// this trie.
 	pub fn prefixed_storage_key(&self) -> PrefixedStorageKey {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-				data,
-			}) => ChildType::ParentKeyId.new_prefixed_key(data.as_slice()),
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) =>
+				ChildType::ParentKeyId.new_prefixed_key(data.as_slice()),
 		}
 	}
 
@@ -304,9 +293,7 @@ impl ChildInfo {
 	/// this trie.
 	pub fn into_prefixed_storage_key(self) -> PrefixedStorageKey {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-				mut data,
-			}) => {
+			ChildInfo::ParentKeyId(ChildTrieParentKeyId { mut data }) => {
 				ChildType::ParentKeyId.do_prefix_key(&mut data);
 				PrefixedStorageKey(data)
 			},

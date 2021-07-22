@@ -1,4 +1,4 @@
- // This file is part of Substrate.
+// This file is part of Substrate.
 
 // Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -23,20 +23,11 @@
 //! See [`pjr_check`] which is the main entry point of the module.
 
 use crate::{
-	Candidate,
-	CandidatePtr,
-	Edge,
-	ExtendedBalance,
-	IdentifierT,
-	Support,
-	SupportMap,
-	Supports,
-	Voter,
-	VoteWeight,
+	Candidate, CandidatePtr, Edge, ExtendedBalance, IdentifierT, Support, SupportMap, Supports,
+	VoteWeight, Voter,
 };
-use sp_std::{rc::Rc, vec::Vec};
-use sp_std::collections::btree_map::BTreeMap;
 use sp_arithmetic::{traits::Zero, Perbill};
+use sp_std::{collections::btree_map::BTreeMap, rc::Rc, vec::Vec};
 /// The type used as the threshold.
 ///
 /// Just some reading sugar; Must always be same as [`ExtendedBalance`];
@@ -60,10 +51,8 @@ pub fn standard_threshold(
 ) -> Threshold {
 	weights
 		.into_iter()
-		.fold(Threshold::zero(), |acc, elem| {
-			acc.saturating_add(elem)
-		})
-	/ committee_size.max(1) as Threshold
+		.fold(Threshold::zero(), |acc, elem| acc.saturating_add(elem)) /
+		committee_size.max(1) as Threshold
 }
 
 /// Check a solution to be PJR.
@@ -74,7 +63,10 @@ pub fn pjr_check<AccountId: IdentifierT>(
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> Result<(), AccountId> {
-	let t = standard_threshold(supports.len(), all_voters.iter().map(|voter| voter.1 as ExtendedBalance));
+	let t = standard_threshold(
+		supports.len(),
+		all_voters.iter().map(|voter| voter.1 as ExtendedBalance),
+	);
 	t_pjr_check(supports, all_candidates, all_voters, t)
 }
 
@@ -101,7 +93,6 @@ pub fn pjr_check<AccountId: IdentifierT>(
 /// needs to inspect un-elected candidates and edges, thus `all_candidates` and `all_voters`.
 ///
 /// [NPoS]: https://arxiv.org/pdf/2004.12990v1.pdf
-//
 // ### Implementation Notes
 //
 // The paper uses mathematical notation, which priorities single-symbol names. For programmer ease,
@@ -120,11 +111,7 @@ pub fn t_pjr_check<AccountId: IdentifierT>(
 	t: Threshold,
 ) -> Result<(), AccountId> {
 	// First order of business: derive `(candidates, voters)` from `supports`.
-	let (candidates, voters) = prepare_pjr_input(
-		supports,
-		all_candidates,
-		all_voters,
-	);
+	let (candidates, voters) = prepare_pjr_input(supports, all_candidates, all_voters);
 	// compute with threshold t.
 	pjr_check_core(candidates.as_ref(), voters.as_ref(), t)
 }
@@ -141,7 +128,9 @@ pub fn pjr_check_core<AccountId: IdentifierT>(
 	t: Threshold,
 ) -> Result<(), AccountId> {
 	let unelected = candidates.iter().filter(|c| !c.borrow().elected);
-	let maybe_max_pre_score = unelected.map(|c| (pre_score(Rc::clone(c), voters, t), c.borrow().who.clone())).max();
+	let maybe_max_pre_score = unelected
+		.map(|c| (pre_score(Rc::clone(c), voters, t), c.borrow().who.clone()))
+		.max();
 	// if unelected is empty then the solution is indeed PJR.
 	match maybe_max_pre_score {
 		Some((max_pre_score, counter_example)) if max_pre_score >= t => Err(counter_example),
@@ -165,7 +154,10 @@ pub fn validate_pjr_challenge<AccountId: IdentifierT>(
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> bool {
-	let threshold = standard_threshold(supports.len(), all_voters.iter().map(|voter| voter.1 as ExtendedBalance));
+	let threshold = standard_threshold(
+		supports.len(),
+		all_voters.iter().map(|voter| voter.1 as ExtendedBalance),
+	);
 	validate_t_pjr_challenge(counter_example, supports, all_candidates, all_voters, threshold)
 }
 
@@ -186,11 +178,7 @@ pub fn validate_t_pjr_challenge<AccountId: IdentifierT>(
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	threshold: Threshold,
 ) -> bool {
-	let (candidates, voters) = prepare_pjr_input(
-		supports,
-		all_candidates,
-		all_voters,
-	);
+	let (candidates, voters) = prepare_pjr_input(supports, all_candidates, all_voters);
 	validate_pjr_challenge_core(counter_example, &candidates, &voters, threshold)
 }
 
@@ -219,10 +207,11 @@ fn validate_pjr_challenge_core<AccountId: IdentifierT>(
 	//   unsafe code leveraging the existing `candidates_index`: allocate an uninitialized vector of
 	//   appropriate length, then copy in all the elements. We'd really prefer to avoid unsafe code
 	//   in the runtime, though.
-	let candidate = match candidates.iter().find(|candidate| candidate.borrow().who == counter_example) {
-		None => return false,
-		Some(candidate) => candidate.clone(),
-	};
+	let candidate =
+		match candidates.iter().find(|candidate| candidate.borrow().who == counter_example) {
+			None => return false,
+			Some(candidate) => candidate.clone(),
+		};
 	pre_score(candidate, &voters, threshold) >= threshold
 }
 
@@ -261,10 +250,14 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 	let mut candidates_index: BTreeMap<AccountId, usize> = BTreeMap::new();
 
 	// dump the staked assignments in a voter-major map for faster access down the road.
-	let mut assignment_map: BTreeMap<AccountId, Vec<(AccountId, ExtendedBalance)>> = BTreeMap::new();
+	let mut assignment_map: BTreeMap<AccountId, Vec<(AccountId, ExtendedBalance)>> =
+		BTreeMap::new();
 	for (winner_id, Support { voters, .. }) in supports.iter() {
 		for (voter_id, support) in voters.iter() {
-			assignment_map.entry(voter_id.clone()).or_default().push((winner_id.clone(), *support));
+			assignment_map
+				.entry(voter_id.clone())
+				.or_default()
+				.push((winner_id.clone(), *support));
 		}
 	}
 
@@ -282,47 +275,56 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 	let supports: SupportMap<AccountId> = supports.iter().cloned().collect();
 
 	// collect all candidates and winners into a unified `Vec<CandidatePtr>`.
-	let candidates = all_candidates.into_iter().enumerate().map(|(i, c)| {
-		candidates_index.insert(c.clone(), i);
+	let candidates = all_candidates
+		.into_iter()
+		.enumerate()
+		.map(|(i, c)| {
+			candidates_index.insert(c.clone(), i);
 
-		// set the backing value and elected flag if the candidate is among the winners.
-		let who = c;
-		let maybe_support = supports.get(&who);
-		let elected = maybe_support.is_some();
-		let backed_stake = maybe_support.map(|support| support.total).unwrap_or_default();
+			// set the backing value and elected flag if the candidate is among the winners.
+			let who = c;
+			let maybe_support = supports.get(&who);
+			let elected = maybe_support.is_some();
+			let backed_stake = maybe_support.map(|support| support.total).unwrap_or_default();
 
-		Candidate { who, elected, backed_stake, ..Default::default() }.to_ptr()
-	}).collect::<Vec<_>>();
+			Candidate { who, elected, backed_stake, ..Default::default() }.to_ptr()
+		})
+		.collect::<Vec<_>>();
 
 	// collect all voters into a unified Vec<Voters>.
-	let voters = all_voters.into_iter().map(|(v, w, ts)| {
-		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(ts.len());
-		for t in ts {
-			if edges.iter().any(|e| e.who == t) {
-				// duplicate edge.
-				continue;
+	let voters = all_voters
+		.into_iter()
+		.map(|(v, w, ts)| {
+			let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(ts.len());
+			for t in ts {
+				if edges.iter().any(|e| e.who == t) {
+					// duplicate edge.
+					continue
+				}
+
+				if let Some(idx) = candidates_index.get(&t) {
+					// if this edge is among the assignments, set the weight as well.
+					let weight = assignment_map
+						.get(&v)
+						.and_then(|d| {
+							d.iter().find_map(|(x, y)| if x == &t { Some(y) } else { None })
+						})
+						.cloned()
+						.unwrap_or_default();
+					edges.push(Edge {
+						who: t,
+						candidate: Rc::clone(&candidates[*idx]),
+						weight,
+						..Default::default()
+					});
+				}
 			}
 
-			if let Some(idx) = candidates_index.get(&t) {
-				// if this edge is among the assignments, set the weight as well.
-				let weight = assignment_map
-					.get(&v)
-					.and_then(|d| d.iter().find_map(|(x, y)| if x == &t { Some(y) } else { None }))
-					.cloned()
-					.unwrap_or_default();
-				edges.push(Edge {
-					who: t,
-					candidate: Rc::clone(&candidates[*idx]),
-					weight,
-					..Default::default()
-				});
-			}
-		}
-
-		let who = v;
-		let budget: ExtendedBalance = w.into();
-		Voter { who, budget, edges, ..Default::default() }
-	}).collect::<Vec<_>>();
+			let who = v;
+			let budget: ExtendedBalance = w.into();
+			Voter { who, budget, edges, ..Default::default() }
+		})
+		.collect::<Vec<_>>();
 
 	(candidates, voters)
 }
@@ -345,7 +347,6 @@ fn pre_score<AccountId: IdentifierT>(
 		.fold(Zero::zero(), |acc: ExtendedBalance, voter| acc.saturating_add(slack(voter, t)))
 }
 
-
 /// The slack of a voter at a given state.
 ///
 /// The slack of each voter, with threshold `t` is the total amount of stake that this voter can
@@ -363,8 +364,7 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 		let candidate = edge.candidate.borrow();
 		if candidate.elected {
 			let extra =
-				Perbill::one().min(Perbill::from_rational(t, candidate.backed_stake))
-				* edge.weight;
+				Perbill::one().min(Perbill::from_rational(t, candidate.backed_stake)) * edge.weight;
 			acc.saturating_add(extra)
 		} else {
 			// No slack generated here.
@@ -383,13 +383,22 @@ mod tests {
 	fn setup_voter(who: u32, votes: Vec<(u32, u128, bool)>) -> Voter<u32> {
 		let mut voter = Voter::new(who);
 		let mut budget = 0u128;
-		let candidates = votes.into_iter().map(|(t, w, e)| {
-			budget += w;
-			Candidate { who: t, elected: e, backed_stake: w, ..Default::default() }
-		}).collect::<Vec<_>>();
-		let edges = candidates.into_iter().map(|c|
-			Edge { who: c.who, weight: c.backed_stake, candidate: c.to_ptr(), ..Default::default() }
-		).collect::<Vec<_>>();
+		let candidates = votes
+			.into_iter()
+			.map(|(t, w, e)| {
+				budget += w;
+				Candidate { who: t, elected: e, backed_stake: w, ..Default::default() }
+			})
+			.collect::<Vec<_>>();
+		let edges = candidates
+			.into_iter()
+			.map(|c| Edge {
+				who: c.who,
+				weight: c.backed_stake,
+				candidate: c.to_ptr(),
+				..Default::default()
+			})
+			.collect::<Vec<_>>();
 		voter.edges = edges;
 		voter.budget = budget;
 		voter
@@ -412,7 +421,6 @@ mod tests {
 		assert_eq!(slack(&voter, 17), 3);
 		assert_eq!(slack(&voter, 10), 10);
 		assert_eq!(slack(&voter, 5), 20);
-
 	}
 
 	#[test]
@@ -440,15 +448,11 @@ mod tests {
 		];
 		// tuples in voters vector are (AccountId, Balance)
 		let supports: Supports<u32> = vec![
-			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
-			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)] }),
+			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)] }),
 		];
 
-		let (candidates, voters) = prepare_pjr_input(
-			&supports,
-			all_candidates,
-			all_voters,
-		);
+		let (candidates, voters) = prepare_pjr_input(&supports, all_candidates, all_voters);
 
 		// elected flag and backing must be set correctly
 		assert_eq!(
@@ -467,7 +471,8 @@ mod tests {
 					v.who,
 					v.budget,
 					v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>(),
-				)).collect::<Vec<_>>(),
+				))
+				.collect::<Vec<_>>(),
 			vec![
 				(1, 10, vec![(10, 0), (20, 5), (30, 0), (40, 5)]),
 				(2, 20, vec![(10, 0), (20, 10), (30, 0), (40, 10)]),
@@ -498,15 +503,11 @@ mod tests {
 		];
 		// tuples in voters vector are (AccountId, Balance)
 		let supports: Supports<u32> = vec![
-			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
-			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)] }),
+			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)] }),
 		];
 
-		let (candidates, voters) = prepare_pjr_input(
-			&supports,
-			all_candidates,
-			all_voters,
-		);
+		let (candidates, voters) = prepare_pjr_input(&supports, all_candidates, all_voters);
 
 		find_threshold_phase_change_for_scenario(candidates, voters);
 	}
@@ -521,15 +522,11 @@ mod tests {
 		];
 		// tuples in voters vector are (AccountId, Balance)
 		let supports: Supports<u32> = vec![
-			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
-			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)] }),
+			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)] }),
 		];
 
-		let (candidates, voters) = prepare_pjr_input(
-			&supports,
-			all_candidates,
-			all_voters,
-		);
+		let (candidates, voters) = prepare_pjr_input(&supports, all_candidates, all_voters);
 
 		find_threshold_phase_change_for_scenario(candidates, voters);
 	}
@@ -544,22 +541,18 @@ mod tests {
 		];
 		// tuples in voters vector are (AccountId, Balance)
 		let supports: Supports<u32> = vec![
-			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
-			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)] }),
+			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)] }),
 		];
 
-		let (candidates, voters) = prepare_pjr_input(
-			&supports,
-			all_candidates,
-			all_voters,
-		);
+		let (candidates, voters) = prepare_pjr_input(&supports, all_candidates, all_voters);
 
 		find_threshold_phase_change_for_scenario(candidates, voters);
 	}
 
 	fn find_threshold_phase_change_for_scenario<AccountId: IdentifierT>(
 		candidates: Vec<CandidatePtr<AccountId>>,
-		voters: Vec<Voter<AccountId>>
+		voters: Vec<Voter<AccountId>>,
 	) -> Threshold {
 		let mut threshold = 1;
 		let mut prev_threshold = 0;
@@ -567,7 +560,9 @@ mod tests {
 		// find the binary range containing the threshold beyond which the PJR check succeeds
 		while pjr_check_core(&candidates, &voters, threshold).is_err() {
 			prev_threshold = threshold;
-			threshold = threshold.checked_mul(2).expect("pjr check must fail before we run out of capacity in u128");
+			threshold = threshold
+				.checked_mul(2)
+				.expect("pjr check must fail before we run out of capacity in u128");
 		}
 
 		// now binary search within that range to find the phase threshold
@@ -595,7 +590,7 @@ mod tests {
 				unexpected_successes.push(t);
 			}
 		}
-		for t in high_bound..(high_bound*2) {
+		for t in high_bound..(high_bound * 2) {
 			if pjr_check_core(&candidates, &voters, t).is_err() {
 				unexpected_failures.push(t);
 			}

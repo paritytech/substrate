@@ -16,23 +16,34 @@
 
 //! Utilities for tracing block execution
 
-use std::{collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}, time::Instant};
+use std::{
+	collections::HashMap,
+	sync::{
+		atomic::{AtomicU64, Ordering},
+		Arc,
+	},
+	time::Instant,
+};
 
 use parking_lot::Mutex;
-use tracing::{Dispatch, dispatcher, Subscriber, Level, span::{Attributes, Record, Id}};
+use tracing::{
+	dispatcher,
+	span::{Attributes, Id, Record},
+	Dispatch, Level, Subscriber,
+};
 
+use crate::{SpanDatum, TraceEvent, Values};
 use sc_client_api::BlockBackend;
 use sc_rpc_server::RPC_MAX_PAYLOAD_DEFAULT;
-use sp_api::{Core, Metadata, ProvideRuntimeApi, Encode};
+use sp_api::{Core, Encode, Metadata, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
+use sp_core::hexdisplay::HexDisplay;
+use sp_rpc::tracing::{BlockTrace, Span, TraceBlockResponse, TraceError};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
-use sp_rpc::tracing::{BlockTrace, Span, TraceError, TraceBlockResponse};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
-use sp_core::hexdisplay::HexDisplay;
-use crate::{SpanDatum, TraceEvent, Values};
 
 // Heuristic for average event size in bytes.
 const AVG_EVENT: usize = 600 * 8;
@@ -53,7 +64,7 @@ const BASE_PAYLOAD: usize = 100;
 const DEFAULT_TARGETS: &str = "pallet,frame,state";
 const TRACE_TARGET: &str = "block_trace";
 // The name of a field required for all events.
-const REQUIRED_EVENT_FIELD: &str  = "method";
+const REQUIRED_EVENT_FIELD: &str = "method";
 const MEGABYTE: usize = 1024 * 1024;
 
 /// Tracing Block Result type alias
@@ -69,7 +80,7 @@ pub enum Error {
 	#[error("Missing block component: {0}")]
 	MissingBlockComponent(String),
 	#[error("Dispatch error: {0}")]
-	Dispatch(String)
+	Dispatch(String),
 }
 
 struct BlockSubscriber {
@@ -82,10 +93,7 @@ struct BlockSubscriber {
 impl BlockSubscriber {
 	fn new(targets: &str) -> Self {
 		let next_id = AtomicU64::new(1);
-		let mut targets: Vec<_> = targets
-			.split(',')
-			.map(crate::parse_target)
-			.collect();
+		let mut targets: Vec<_> = targets.split(',').map(crate::parse_target).collect();
 		// Ensure that WASM traces are always enabled
 		// Filtering happens when decoding the actual target / level
 		targets.push((WASM_TRACE_IDENTIFIER.to_owned(), Level::TRACE));
@@ -101,11 +109,11 @@ impl BlockSubscriber {
 impl Subscriber for BlockSubscriber {
 	fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
 		if !metadata.is_span() && !metadata.fields().field(REQUIRED_EVENT_FIELD).is_some() {
-			return false;
+			return false
 		}
 		for (target, level) in &self.targets {
 			if metadata.level() <= level && metadata.target().starts_with(target) {
-				return true;
+				return true
 			}
 		}
 		false
@@ -125,7 +133,7 @@ impl Subscriber for BlockSubscriber {
 			line: attrs.metadata().line().unwrap_or(0),
 			start_time: Instant::now(),
 			values,
-			overall_time: Default::default()
+			overall_time: Default::default(),
 		};
 
 		self.spans.lock().insert(id.clone(), span);
@@ -158,11 +166,9 @@ impl Subscriber for BlockSubscriber {
 		self.events.lock().push(trace_event);
 	}
 
-	fn enter(&self, _id: &Id) {
-	}
+	fn enter(&self, _id: &Id) {}
 
-	fn exit(&self, _span: &Id) {
-	}
+	fn exit(&self, _span: &Id) {}
 }
 
 /// Holds a reference to the client in order to execute the given block.
@@ -179,11 +185,15 @@ pub struct BlockExecutor<Block: BlockT, Client> {
 }
 
 impl<Block, Client> BlockExecutor<Block, Client>
-	where
-		Block: BlockT + 'static,
-		Client: HeaderBackend<Block> + BlockBackend<Block> + ProvideRuntimeApi<Block>
-		+ Send + Sync + 'static,
-		Client::Api: Metadata<Block>,
+where
+	Block: BlockT + 'static,
+	Client: HeaderBackend<Block>
+		+ BlockBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+	Client::Api: Metadata<Block>,
 {
 	/// Create a new `BlockExecutor`
 	pub fn new(
@@ -193,7 +203,8 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		storage_keys: Option<String>,
 		rpc_max_payload: Option<usize>,
 	) -> Self {
-		let rpc_max_payload = rpc_max_payload.map(|mb| mb.saturating_mul(MEGABYTE))
+		let rpc_max_payload = rpc_max_payload
+			.map(|mb| mb.saturating_mul(MEGABYTE))
 			.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
 		Self { client, block, targets, storage_keys, rpc_max_payload }
 	}
@@ -205,10 +216,14 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		tracing::debug!(target: "state_tracing", "Tracing block: {}", self.block);
 		// Prepare the block
 		let id = BlockId::Hash(self.block);
-		let mut header = self.client.header(id)
+		let mut header = self
+			.client
+			.header(id)
 			.map_err(|e| Error::InvalidBlockId(e))?
 			.ok_or_else(|| Error::MissingBlockComponent("Header not found".to_string()))?;
-		let extrinsics = self.client.block_body(&id)
+		let extrinsics = self
+			.client
+			.block_body(&id)
 			.map_err(|e| Error::InvalidBlockId(e))?
 			.ok_or_else(|| Error::MissingBlockComponent("Extrinsics not found".to_string()))?;
 		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
@@ -231,45 +246,46 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			);
 			let _guard = dispatcher_span.enter();
 			if let Err(e) = dispatcher::with_default(&dispatch, || {
-				let span = tracing::info_span!(
-					target: TRACE_TARGET,
-					"trace_block",
-				);
+				let span = tracing::info_span!(target: TRACE_TARGET, "trace_block",);
 				let _enter = span.enter();
 				self.client.runtime_api().execute_block(&parent_id, block)
 			}) {
-				return Err(Error::Dispatch(format!("Failed to collect traces and execute block: {:?}", e).to_string()));
+				return Err(Error::Dispatch(
+					format!("Failed to collect traces and execute block: {:?}", e).to_string(),
+				))
 			}
 		}
 
-		let block_subscriber = dispatch.downcast_ref::<BlockSubscriber>()
-			.ok_or(Error::Dispatch(
-				"Cannot downcast Dispatch to BlockSubscriber after tracing block".to_string()
+		let block_subscriber =
+			dispatch.downcast_ref::<BlockSubscriber>().ok_or(Error::Dispatch(
+				"Cannot downcast Dispatch to BlockSubscriber after tracing block".to_string(),
 			))?;
-		let spans: Vec<_> = block_subscriber.spans
+		let spans: Vec<_> = block_subscriber
+			.spans
 			.lock()
 			.drain()
 			// Patch wasm identifiers
 			.filter_map(|(_, s)| patch_and_filter(SpanDatum::from(s), targets))
 			.collect();
-		let events: Vec<_> = block_subscriber.events
+		let events: Vec<_> = block_subscriber
+			.events
 			.lock()
 			.drain(..)
-			.filter(|e| self.storage_keys
-				.as_ref()
-				.map(|keys| event_key_filter(e, keys))
-				.unwrap_or(false)
-			)
+			.filter(|e| {
+				self.storage_keys
+					.as_ref()
+					.map(|keys| event_key_filter(e, keys))
+					.unwrap_or(false)
+			})
 			.map(|s| s.into())
 			.collect();
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
 		let approx_payload_size = BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN;
 		let response = if approx_payload_size > self.rpc_max_payload {
-				TraceBlockResponse::TraceError(TraceError {
-					error:
-						"Payload likely exceeds max payload size of RPC server.".to_string()
-				})
+			TraceBlockResponse::TraceError(TraceError {
+				error: "Payload likely exceeds max payload size of RPC server.".to_string(),
+			})
 		} else {
 			TraceBlockResponse::BlockTrace(BlockTrace {
 				block_hash: block_id_as_string(id),
@@ -286,14 +302,16 @@ impl<Block, Client> BlockExecutor<Block, Client>
 }
 
 fn event_key_filter(event: &TraceEvent, storage_keys: &str) -> bool {
-	event.values.string_values.get("key")
+	event
+		.values
+		.string_values
+		.get("key")
 		.and_then(|key| Some(check_target(storage_keys, key, &event.level)))
 		.unwrap_or(false)
 }
 
 /// Filter out spans that do not match our targets and if the span is from WASM update its `name`
 /// and `target` fields to the WASM values for those fields.
-//
 // The `tracing` crate requires trace metadata to be static. This does not work for wasm code in
 // substrate, as it is regularly updated with new code from on-chain events. The workaround for this
 // is for substrate's WASM tracing wrappers to put the `name` and `target` data in the `values` map
@@ -310,7 +328,7 @@ fn patch_and_filter(mut span: SpanDatum, targets: &str) -> Option<Span> {
 			span.target = t;
 		}
 		if !check_target(targets, &span.target, &span.level) {
-			return None;
+			return None
 		}
 	}
 	Some(span.into())
@@ -320,15 +338,15 @@ fn patch_and_filter(mut span: SpanDatum, targets: &str) -> Option<Span> {
 fn check_target(targets: &str, target: &str, level: &Level) -> bool {
 	for (t, l) in targets.split(',').map(crate::parse_target) {
 		if target.starts_with(t.as_str()) && level <= &l {
-			return true;
+			return true
 		}
 	}
 	false
 }
 
 fn block_id_as_string<T: BlockT>(block_id: BlockId<T>) -> String {
-	 match block_id {
+	match block_id {
 		BlockId::Hash(h) => HexDisplay::from(&h.encode()).to_string(),
-		BlockId::Number(n) =>  HexDisplay::from(&n.encode()).to_string()
+		BlockId::Number(n) => HexDisplay::from(&n.encode()).to_string(),
 	}
 }

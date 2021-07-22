@@ -21,30 +21,28 @@
 
 pub mod backend;
 pub mod call_executor;
-pub mod client;
 pub mod cht;
+pub mod client;
 pub mod execution_extensions;
 pub mod in_mem;
-pub mod light;
 pub mod leaves;
+pub mod light;
 pub mod notifications;
 pub mod proof_provider;
 
-pub use sp_blockchain as blockchain;
 pub use backend::*;
-pub use notifications::*;
 pub use call_executor::*;
 pub use client::*;
 pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
+pub use sp_blockchain as blockchain;
 pub use sp_blockchain::HeaderBackend;
 
-pub use sp_state_machine::{StorageProof, ExecutionStrategy};
-pub use sp_storage::{StorageData, StorageKey, PrefixedStorageKey, ChildInfo};
+pub use sp_state_machine::{ExecutionStrategy, StorageProof};
+pub use sp_storage::{ChildInfo, PrefixedStorageKey, StorageData, StorageKey};
 
 /// Usage Information Provider interface
-///
 pub trait UsageProvider<Block: sp_runtime::traits::Block> {
 	/// Get usage info about current client.
 	fn usage_info(&self) -> ClientInfo<Block>;
@@ -52,7 +50,7 @@ pub trait UsageProvider<Block: sp_runtime::traits::Block> {
 
 /// Utility methods for the client.
 pub mod utils {
-	use sp_blockchain::{HeaderBackend, HeaderMetadata, Error};
+	use sp_blockchain::{Error, HeaderBackend, HeaderMetadata};
 	use sp_runtime::traits::Block as BlockT;
 	use std::borrow::Borrow;
 
@@ -66,19 +64,24 @@ pub mod utils {
 		client: &'a T,
 		current: Option<(Block::Hash, Block::Hash)>,
 	) -> impl Fn(&Block::Hash, &Block::Hash) -> Result<bool, Error> + 'a
-		where T: HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>,
+	where
+		T: HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>,
 	{
 		move |base, hash| {
-			if base == hash { return Ok(false); }
+			if base == hash {
+				return Ok(false)
+			}
 
 			let current = current.as_ref().map(|(c, p)| (c.borrow(), p.borrow()));
 
 			let mut hash = hash;
 			if let Some((current_hash, current_parent_hash)) = current {
-				if base == current_hash { return Ok(false); }
+				if base == current_hash {
+					return Ok(false)
+				}
 				if hash == current_hash {
 					if base == current_parent_hash {
-						return Ok(true);
+						return Ok(true)
 					} else {
 						hash = current_parent_hash;
 					}

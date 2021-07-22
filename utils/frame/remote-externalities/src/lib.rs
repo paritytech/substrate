@@ -20,21 +20,19 @@
 //! An equivalent of `sp_io::TestExternalities` that can load its state from a remote substrate
 //! based chain, or a local state snapshot file.
 
+use codec::{Decode, Encode};
+use jsonrpsee_ws_client::{types::v2::params::JsonRpcParams, WsClient, WsClientBuilder};
+use log::*;
+use sp_core::{
+	hashing::twox_128,
+	hexdisplay::HexDisplay,
+	storage::{StorageData, StorageKey},
+};
+pub use sp_io::TestExternalities;
+use sp_runtime::traits::Block as BlockT;
 use std::{
 	fs,
 	path::{Path, PathBuf},
-};
-use log::*;
-use sp_core::hashing::twox_128;
-pub use sp_io::TestExternalities;
-use sp_core::{
-	hexdisplay::HexDisplay,
-	storage::{StorageKey, StorageData},
-};
-use codec::{Encode, Decode};
-use sp_runtime::traits::Block as BlockT;
-use jsonrpsee_ws_client::{
-	WsClientBuilder, WsClient, types::v2::params::JsonRpcParams,
 };
 
 pub mod rpc_api;
@@ -122,7 +120,10 @@ pub struct OnlineConfig<B: BlockT> {
 impl<B: BlockT> OnlineConfig<B> {
 	/// Return rpc (ws) client.
 	fn rpc_client(&self) -> &WsClient {
-		self.transport.client.as_ref().expect("ws client must have been initialized by now; qed.")
+		self.transport
+			.client
+			.as_ref()
+			.expect("ws client must have been initialized by now; qed.")
 	}
 }
 
@@ -136,7 +137,6 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 		}
 	}
 }
-
 
 /// Configuration of the state snapshot.
 #[derive(Clone)]
@@ -208,10 +208,12 @@ impl<B: BlockT> Builder<B> {
 		maybe_at: Option<B::Hash>,
 	) -> Result<StorageData, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: get_storage");
-		RpcApi::<B>::get_storage(self.as_online().rpc_client(), key, maybe_at).await.map_err(|e| {
-			error!("Error = {:?}", e);
-			"rpc get_storage failed."
-		})
+		RpcApi::<B>::get_storage(self.as_online().rpc_client(), key, maybe_at)
+			.await
+			.map_err(|e| {
+				error!("Error = {:?}", e);
+				"rpc get_storage failed."
+			})
 	}
 	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
@@ -249,7 +251,7 @@ impl<B: BlockT> Builder<B> {
 
 			if page_len < PAGE as usize {
 				debug!(target: LOG_TARGET, "last page received: {}", page_len);
-				break all_keys;
+				break all_keys
 			} else {
 				let new_last_key =
 					all_keys.last().expect("all_keys is populated; has .last(); qed");
@@ -290,21 +292,22 @@ impl<B: BlockT> Builder<B> {
 				.map(|key| {
 					(
 						"state_getStorage",
-						JsonRpcParams::Array(
-							vec![
-								to_value(key).expect("json serialization will work; qed."),
-								to_value(at).expect("json serialization will work; qed."),
-							]
-						),
+						JsonRpcParams::Array(vec![
+							to_value(key).expect("json serialization will work; qed."),
+							to_value(at).expect("json serialization will work; qed."),
+						]),
 					)
 				})
 				.collect::<Vec<_>>();
-			let values = client.batch_request::<Option<StorageData>>(batch)
-				.await
-				.map_err(|e| {
-					log::error!(target: LOG_TARGET, "failed to execute batch: {:?}. Error: {:?}", chunk_keys, e);
-					"batch failed."
-				})?;
+			let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
+				log::error!(
+					target: LOG_TARGET,
+					"failed to execute batch: {:?}. Error: {:?}",
+					chunk_keys,
+					e
+				);
+				"batch failed."
+			})?;
 			assert_eq!(chunk_keys.len(), values.len());
 			for (idx, key) in chunk_keys.into_iter().enumerate() {
 				let maybe_value = values[idx].clone();
@@ -428,7 +431,7 @@ impl<B: BlockT> Builder<B> {
 					self.save_state_snapshot(&kp, &c.path)?;
 				}
 				kp
-			}
+			},
 		};
 
 		info!(
@@ -497,7 +500,7 @@ impl<B: BlockT> Builder<B> {
 #[cfg(test)]
 mod test_prelude {
 	pub(crate) use super::*;
-	pub(crate) use sp_runtime::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
+	pub(crate) use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256 as Hash};
 
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
@@ -551,7 +554,11 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				modules: vec!["Proxy".to_owned(), "Multisig".to_owned(), "PhragmenElection".to_owned()],
+				modules: vec![
+					"Proxy".to_owned(),
+					"Multisig".to_owned(),
+					"PhragmenElection".to_owned(),
+				],
 				..Default::default()
 			}))
 			.build()

@@ -26,7 +26,10 @@ pub trait Len {
 	fn len(&self) -> usize;
 }
 
-impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: ExactSizeIterator {
+impl<T: IntoIterator + Clone> Len for T
+where
+	<T as IntoIterator>::IntoIter: ExactSizeIterator,
+{
 	fn len(&self) -> usize {
 		self.clone().into_iter().len()
 	}
@@ -41,7 +44,9 @@ pub trait Get<T> {
 }
 
 impl<T: Default> Get<T> for () {
-	fn get() -> T { T::default() }
+	fn get() -> T {
+		T::default()
+	}
 }
 
 /// Implement Get by returning Default for any type that implements Default.
@@ -122,7 +127,10 @@ impl<A, B> SameOrOther<A, B> {
 		}
 	}
 
-	pub fn same(self) -> Result<A, B> where A: Default {
+	pub fn same(self) -> Result<A, B>
+	where
+		A: Default,
+	{
 		match self {
 			SameOrOther::Same(a) => Ok(a),
 			SameOrOther::None => Ok(A::default()),
@@ -130,7 +138,10 @@ impl<A, B> SameOrOther<A, B> {
 		}
 	}
 
-	pub fn other(self) -> Result<B, A> where B: Default {
+	pub fn other(self) -> Result<B, A>
+	where
+		B: Default,
+	{
 		match self {
 			SameOrOther::Same(a) => Err(a),
 			SameOrOther::None => Ok(B::default()),
@@ -156,10 +167,14 @@ pub trait OnKilledAccount<AccountId> {
 /// A simple, generic one-parameter event notifier/handler.
 pub trait HandleLifetime<T> {
 	/// An account was created.
-	fn created(_t: &T) -> Result<(), DispatchError> { Ok(()) }
+	fn created(_t: &T) -> Result<(), DispatchError> {
+		Ok(())
+	}
 
 	/// An account was killed.
-	fn killed(_t: &T) -> Result<(), DispatchError> { Ok(()) }
+	fn killed(_t: &T) -> Result<(), DispatchError> {
+		Ok(())
+	}
 }
 
 impl<T> HandleLifetime<T> for () {}
@@ -194,10 +209,18 @@ pub trait IsType<T>: Into<T> + From<T> {
 }
 
 impl<T> IsType<T> for T {
-	fn from_ref(t: &T) -> &Self { t }
-	fn into_ref(&self) -> &T { self }
-	fn from_mut(t: &mut T) -> &mut Self { t }
-	fn into_mut(&mut self) -> &mut T { self }
+	fn from_ref(t: &T) -> &Self {
+		t
+	}
+	fn into_ref(&self) -> &T {
+		self
+	}
+	fn from_mut(t: &mut T) -> &mut Self {
+		t
+	}
+	fn into_mut(&mut self) -> &mut T {
+		self
+	}
 }
 
 /// Something that can be checked to be a of sub type `T`.
@@ -299,8 +322,6 @@ pub trait GetBacking {
 	fn get_backing(&self) -> Option<Backing>;
 }
 
-
-
 /// A trait to ensure the inherent are before non-inherent in a block.
 ///
 /// This is typically implemented on runtime, through `construct_runtime!`.
@@ -318,7 +339,8 @@ pub trait ExtrinsicCall: sp_runtime::traits::Extrinsic {
 }
 
 #[cfg(feature = "std")]
-impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra> where
+impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra>
+where
 	Call: codec::Codec + Sync + Send,
 {
 	fn call(&self) -> &Self::Call {

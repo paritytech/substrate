@@ -15,20 +15,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{pin::Pin, time::Duration, marker::PhantomData};
-use futures::{prelude::*, task::Context, task::Poll};
+use futures::{
+	prelude::*,
+	task::{Context, Poll},
+};
 use futures_timer::Delay;
-use sp_runtime::{Justification, Justifications, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
-use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded, TracingUnboundedReceiver};
 use prometheus_endpoint::Registry;
+use sp_runtime::{
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	Justification, Justifications,
+};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use std::{marker::PhantomData, pin::Pin, time::Duration};
 
 use crate::{
 	block_import::BlockOrigin,
 	import_queue::{
-		BlockImportResult, BlockImportError, Verifier, BoxBlockImport,
-		BoxJustificationImport, ImportQueue, Link, Origin,
-		IncomingBlock, import_single_block_metered,
-		buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver},
+		buffered_link::{self, BufferedLinkReceiver, BufferedLinkSender},
+		import_single_block_metered, BlockImportError, BlockImportResult, BoxBlockImport,
+		BoxJustificationImport, ImportQueue, IncomingBlock, Link, Origin, Verifier,
 	},
 	metrics::Metrics,
 };
@@ -85,24 +90,20 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 
 		spawner.spawn_essential_blocking("basic-block-import-worker", future.boxed());
 
-		Self {
-			justification_sender,
-			block_import_sender,
-			result_port,
-			_phantom: PhantomData,
-		}
+		Self { justification_sender, block_import_sender, result_port, _phantom: PhantomData }
 	}
 }
 
 impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction> {
 	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		if blocks.is_empty() {
-			return;
+			return
 		}
 
 		trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
-		let res =
-			self.block_import_sender.unbounded_send(worker_messages::ImportBlocks(origin, blocks));
+		let res = self
+			.block_import_sender
+			.unbounded_send(worker_messages::ImportBlocks(origin, blocks));
 
 		if res.is_err() {
 			log::error!(
@@ -145,7 +146,12 @@ mod worker_messages {
 	use super::*;
 
 	pub struct ImportBlocks<B: BlockT>(pub BlockOrigin, pub Vec<IncomingBlock<B>>);
-	pub struct ImportJustification<B: BlockT>(pub Origin, pub B::Hash, pub NumberFor<B>, pub Justification);
+	pub struct ImportJustification<B: BlockT>(
+		pub Origin,
+		pub B::Hash,
+		pub NumberFor<B>,
+		pub Justification,
+	);
 }
 
 /// The process of importing blocks.
@@ -164,7 +170,8 @@ async fn block_import_process<B: BlockT, Transaction: Send + 'static>(
 	delay_between_blocks: Duration,
 ) {
 	loop {
-		let worker_messages::ImportBlocks(origin, blocks) = match block_import_receiver.next().await {
+		let worker_messages::ImportBlocks(origin, blocks) = match block_import_receiver.next().await
+		{
 			Some(blocks) => blocks,
 			None => {
 				log::debug!(
@@ -182,7 +189,8 @@ async fn block_import_process<B: BlockT, Transaction: Send + 'static>(
 			&mut verifier,
 			delay_between_blocks,
 			metrics.clone(),
-		).await;
+		)
+		.await;
 
 		result_sender.blocks_processed(res.imported, res.block_count, res.results);
 	}
@@ -214,11 +222,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 		let (block_import_sender, block_import_port) =
 			tracing_unbounded("mpsc_import_queue_worker_blocks");
 
-		let mut worker = BlockImportWorker {
-			result_sender,
-			justification_import,
-			metrics,
-		};
+		let mut worker = BlockImportWorker { result_sender, justification_import, metrics };
 
 		let delay_between_blocks = Duration::default();
 
@@ -248,29 +252,26 @@ impl<B: BlockT> BlockImportWorker<B> {
 						target: "block-import",
 						"Stopping block import because result channel was closed!",
 					);
-					return;
+					return
 				}
 
 				// Make sure to first process all justifications
 				while let Poll::Ready(justification) = futures::poll!(justification_port.next()) {
 					match justification {
-						Some(ImportJustification(who, hash, number, justification)) => {
-							worker
-								.import_justification(who, hash, number, justification)
-								.await
-						}
+						Some(ImportJustification(who, hash, number, justification)) =>
+							worker.import_justification(who, hash, number, justification).await,
 						None => {
 							log::debug!(
 								target: "block-import",
 								"Stopping block import because justification channel was closed!",
 							);
-							return;
-						}
+							return
+						},
 					}
 				}
 
 				if let Poll::Ready(()) = futures::poll!(&mut block_import_process) {
-					return;
+					return
 				}
 
 				// All futures that we polled are now pending.
@@ -310,13 +311,10 @@ impl<B: BlockT> BlockImportWorker<B> {
 		};
 
 		if let Some(metrics) = self.metrics.as_ref() {
-			metrics
-				.justification_import_time
-				.observe(started.elapsed().as_secs_f64());
+			metrics.justification_import_time.observe(started.elapsed().as_secs_f64());
 		}
 
-		self.result_sender
-			.justification_imported(who, &hash, number, success);
+		self.result_sender.justification_imported(who, &hash, number, success);
 	}
 }
 
@@ -382,7 +380,8 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'stat
 				block,
 				verifier,
 				metrics.clone(),
-			).await
+			)
+			.await
 		};
 
 		if let Some(metrics) = metrics.as_ref() {
@@ -604,7 +603,7 @@ mod tests {
 		block_on(futures::future::poll_fn(|cx| {
 			while link.events.len() < 9 {
 				match Future::poll(Pin::new(&mut worker), cx) {
-					Poll::Pending => {}
+					Poll::Pending => {},
 					Poll::Ready(()) => panic!("import queue worker should not conclude."),
 				}
 

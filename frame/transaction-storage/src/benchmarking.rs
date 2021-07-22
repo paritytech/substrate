@@ -19,17 +19,18 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use sp_std::*;
 use super::*;
-use sp_runtime::traits::{Zero, One, Bounded};
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_support::traits::{Currency, OnFinalize, OnInitialize};
+use frame_system::{EventRecord, Pallet as System, RawOrigin};
+use sp_runtime::traits::{Bounded, One, Zero};
+use sp_std::*;
 use sp_transaction_storage_proof::TransactionStorageProof;
-use frame_system::{RawOrigin, Pallet as System, EventRecord};
-use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
-use frame_support::{traits::{Currency, OnFinalize, OnInitialize}};
 
 use crate::Pallet as TransactionStorage;
 
-const PROOF: &[u8] = &hex_literal::hex!("
+const PROOF: &[u8] = &hex_literal::hex!(
+	"
 	0104000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 	0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 	0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -75,9 +76,11 @@ const PROOF: &[u8] = &hex_literal::hex!("
 	0c8e67d9b280f2b31a5707d52b892977acaac84d530bd188544c5f9b80b4f23ac50c8e67d9b280f2b31a5707d52b89297
 	7acaac84d530bd188544c5f9b80b4f23ac50c8e67d9b280f2b31a5707d52b892977acaac84d530bd188544c5f9b104401
 	0000
-");
+"
+);
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	let events = System::<T>::events();
@@ -90,7 +93,9 @@ pub fn run_to_block<T: Config>(n: T::BlockNumber) {
 	while frame_system::Pallet::<T>::block_number() < n {
 		crate::Pallet::<T>::on_finalize(frame_system::Pallet::<T>::block_number());
 		frame_system::Pallet::<T>::on_finalize(frame_system::Pallet::<T>::block_number());
-		frame_system::Pallet::<T>::set_block_number(frame_system::Pallet::<T>::block_number() + One::one());
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::Pallet::<T>::block_number() + One::one(),
+		);
 		frame_system::Pallet::<T>::on_initialize(frame_system::Pallet::<T>::block_number());
 		crate::Pallet::<T>::on_initialize(frame_system::Pallet::<T>::block_number());
 	}
@@ -140,8 +145,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	TransactionStorage,
-	crate::mock::new_test_ext(),
-	crate::mock::Test,
-);
+impl_benchmark_test_suite!(TransactionStorage, crate::mock::new_test_ext(), crate::mock::Test,);

@@ -21,11 +21,8 @@ use crate::{Error, SubstrateCli};
 use structopt::StructOpt;
 
 use super::{
-	insert_key::InsertKeyCmd,
-	inspect_key::InspectKeyCmd,
-	generate::GenerateCmd,
-	inspect_node_key::InspectNodeKeyCmd,
-	generate_node_key::GenerateNodeKeyCmd,
+	generate::GenerateCmd, generate_node_key::GenerateNodeKeyCmd, insert_key::InsertKeyCmd,
+	inspect_key::InspectKeyCmd, inspect_node_key::InspectNodeKeyCmd,
 };
 
 /// Key utilities for the cli.

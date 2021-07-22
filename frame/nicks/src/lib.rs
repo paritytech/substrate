@@ -41,21 +41,26 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
-use sp_runtime::{
-	traits::{StaticLookup, Zero}
-};
-use frame_support::traits::{Currency, ReservableCurrency, OnUnbalanced};
+use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
 pub use pallet::*;
+use sp_runtime::traits::{StaticLookup, Zero};
+use sp_std::prelude::*;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+	<T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_system::{ensure_signed, pallet_prelude::*};
-	use frame_support::{ensure, pallet_prelude::*, traits::{EnsureOrigin, Get}};
 	use super::*;
+	use frame_support::{
+		ensure,
+		pallet_prelude::*,
+		traits::{EnsureOrigin, Get},
+	};
+	use frame_system::{ensure_signed, pallet_prelude::*};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -113,7 +118,8 @@ pub mod pallet {
 
 	/// The lookup table for names.
 	#[pallet::storage]
-	pub(super) type NameOf<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, (Vec<u8>, BalanceOf<T>)>;
+	pub(super) type NameOf<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, (Vec<u8>, BalanceOf<T>)>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -197,7 +203,7 @@ pub mod pallet {
 		#[pallet::weight(70_000_000)]
 		pub fn kill_name(
 			origin: OriginFor<T>,
-			target: <T::Lookup as StaticLookup>::Source
+			target: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
@@ -228,7 +234,7 @@ pub mod pallet {
 		pub fn force_name(
 			origin: OriginFor<T>,
 			target: <T::Lookup as StaticLookup>::Source,
-			name: Vec<u8>
+			name: Vec<u8>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
@@ -247,11 +253,12 @@ mod tests {
 	use super::*;
 	use crate as pallet_nicks;
 
-	use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
-	use sp_core::H256;
+	use frame_support::{assert_noop, assert_ok, ord_parameter_types, parameter_types};
 	use frame_system::EnsureSignedBy;
+	use sp_core::H256;
 	use sp_runtime::{
-		testing::Header, traits::{BlakeTwo256, IdentityLookup, BadOrigin},
+		testing::Header,
+		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -333,12 +340,9 @@ mod tests {
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		pallet_balances::GenesisConfig::<Test> {
-			balances: vec![
-				(1, 10),
-				(2, 10),
-			],
-		}.assimilate_storage(&mut t).unwrap();
+		pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 10), (2, 10)] }
+			.assimilate_storage(&mut t)
+			.unwrap();
 		t.into()
 	}
 
@@ -398,7 +402,10 @@ mod tests {
 				pallet_balances::Error::<Test, _>::InsufficientBalance
 			);
 
-			assert_noop!(Nicks::set_name(Origin::signed(1), b"Ga".to_vec()), Error::<Test>::TooShort);
+			assert_noop!(
+				Nicks::set_name(Origin::signed(1), b"Ga".to_vec()),
+				Error::<Test>::TooShort
+			);
 			assert_noop!(
 				Nicks::set_name(Origin::signed(1), b"Gavin James Wood, Esquire".to_vec()),
 				Error::<Test>::TooLong
