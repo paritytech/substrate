@@ -703,7 +703,7 @@ mod tests {
 	);
 
 	const CALL: &<Runtime as frame_system::Config>::Call =
-		&Call::Balances(BalancesCall::transfer(2, 69));
+		&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
 	thread_local! {
 		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
@@ -1043,7 +1043,7 @@ mod tests {
 
 	#[test]
 	fn query_info_works() {
-		let call = Call::Balances(BalancesCall::transfer(2, 69));
+		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 		let origin = 111111;
 		let extra = ();
 		let xt = TestXt::new(call, Some((origin, extra)));

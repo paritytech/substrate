@@ -717,7 +717,7 @@ where
 
 		// check for `set_dummy`
 		match call.is_sub_type() {
-			Some(Call::set_dummy(..)) => {
+			Some(Call::set_dummy { .. }) => {
 				sp_runtime::print("set_dummy was received.");
 
 				let mut valid_tx = ValidTransaction::default();

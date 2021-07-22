@@ -645,7 +645,7 @@ mod tests {
 				None
 			}
 			fn is_inherent(call: &Self::Call) -> bool {
-				*call == Call::<T>::inherent_call()
+				*call == Call::<T>::inherent_call { }
 			}
 		}
 
@@ -658,7 +658,7 @@ mod tests {
 				call: &Self::Call,
 			) -> TransactionValidity {
 				match call {
-					Call::allowed_unsigned(..) => Ok(Default::default()),
+					Call::allowed_unsigned { .. } => Ok(Default::default()),
 					_ => UnknownTransaction::NoUnsignedValidator.into(),
 				}
 			}
@@ -666,8 +666,8 @@ mod tests {
 			// Inherent call is accepted for being dispatched
 			fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 				match call {
-					Call::allowed_unsigned(..) => Ok(()),
-					Call::inherent_call(..) => Ok(()),
+					Call::allowed_unsigned { .. } => Ok(()),
+					Call::inherent_call { .. } => Ok(()),
 					_ => Err(UnknownTransaction::NoUnsignedValidator.into()),
 				}
 			}
@@ -809,13 +809,17 @@ mod tests {
 		Some((who, extra(nonce, fee)))
 	}
 
+	fn call_transfer(dest: u32, value: u32) -> Call {
+		Call::Balances(BalancesCall::transfer { dest, value })
+	}
+
 	#[test]
 	fn balance_transfer_dispatch_works() {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 211)] }
 			.assimilate_storage(&mut t)
 			.unwrap();
-		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(2, 69)), sign_extra(1, 0, 0));
+		let xt = TestXt::new(call_transfer(2, 69), sign_extra(1, 0, 0));
 		let weight = xt.get_dispatch_info().weight +
 			<Runtime as frame_system::Config>::BlockWeights::get()
 				.get(DispatchClass::Normal)
@@ -912,7 +916,7 @@ mod tests {
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext(1);
 		// bad nonce check!
-		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(33, 69)), sign_extra(1, 30, 0));
+		let xt = TestXt::new(call_transfer(33, 69), sign_extra(1, 30, 0));
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -1378,8 +1382,8 @@ mod tests {
 
 	#[test]
 	fn valid_inherents_position_works() {
-		let xt1 = TestXt::new(Call::Custom(custom::Call::inherent_call()), None);
-		let xt2 = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
+		let xt1 = TestXt::new(Call::Custom(custom::Call::inherent_call { }), None);
+		let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
 
 		let header = new_test_ext(1).execute_with(|| {
 			// Let's build some fake block.
