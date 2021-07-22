@@ -513,7 +513,7 @@ pub enum SyncMode {
 	Full,
 	// Sync headers and the last finalied state
 	LightState { storage_chain_mode: bool, skip_proofs: bool },
-	// GRANDPA warp sync mode.
+	// Warp sync mode.
 	Warp,
 }
 

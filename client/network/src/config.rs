@@ -395,7 +395,7 @@ pub enum SyncMode {
 		/// Download indexed transactions for recent blocks.
 		storage_chain_mode: bool,
 	},
-	/// GRANDPA Warp sync - verify authority set transitions and the latest state.
+	/// Warp sync - verify authority set transitions and the latest state.
 	Warp,
 }
 
