@@ -154,7 +154,7 @@ impl<T: Config> Pallet<T> {
 		let call = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
-				if let Call::submit_unsigned(solution, _) = &call {
+				if let Call::submit_unsigned { solution, .. } = &call {
 					// prevent errors arising from state changes in a forkful chain
 					Self::basic_checks(solution, "restored")?;
 					Ok(call)

@@ -304,7 +304,7 @@ pub mod pallet {
 					return InvalidTransaction::BadProof.into()
 				}
 				Self::validate_transaction_parameters(&payload.block_number, &payload.price)
-			} else if let Call::submit_price_unsigned { block_number, new_price } = call {
+			} else if let Call::submit_price_unsigned { _block_number: block_number, price: new_price } = call {
 				Self::validate_transaction_parameters(block_number, new_price)
 			} else {
 				InvalidTransaction::Call.into()
@@ -473,7 +473,7 @@ impl<T: Config> Pallet<T> {
 		// Received price is wrapped into a call to `submit_price_unsigned` public function of this
 		// pallet. This means that the transaction, when executed, will simply call that function
 		// passing `price` as an argument.
-		let call = Call::submit_price_unsigned { block_number, price };
+		let call = Call::submit_price_unsigned { _block_number: block_number, price };
 
 		// Now let's create a transaction out of this call and submit it to the pool.
 		// Here we showcase two ways to send an unsigned transaction / unsigned payload (raw)
@@ -509,8 +509,8 @@ impl<T: Config> Pallet<T> {
 			.send_unsigned_transaction(
 				|account| PricePayload { price, block_number, public: account.public.clone() },
 				|payload, signature| Call::submit_price_unsigned_with_signed_payload {
-					payload,
-					signature,
+					price_payload: payload,
+					_signature: signature,
 				},
 			)
 			.ok_or("No local accounts accounts available.")?;
@@ -539,8 +539,8 @@ impl<T: Config> Pallet<T> {
 			.send_unsigned_transaction(
 				|account| PricePayload { price, block_number, public: account.public.clone() },
 				|payload, signature| Call::submit_price_unsigned_with_signed_payload {
-					payload,
-					signature,
+					price_payload: payload,
+					_signature: signature,
 				},
 			);
 		for (_account_id, result) in transaction_results.into_iter() {

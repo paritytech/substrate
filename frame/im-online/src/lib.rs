@@ -627,7 +627,7 @@ impl<T: Config> Pallet<T> {
 		let prepare_heartbeat = || -> OffchainResult<T, Call<T>> {
 			let network_state =
 				sp_io::offchain::network_state().map_err(|_| OffchainErr::NetworkState)?;
-			let heartbeat_data = Heartbeat {
+			let heartbeat = Heartbeat {
 				block_number,
 				network_state,
 				session_index,
