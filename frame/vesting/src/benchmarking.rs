@@ -32,6 +32,11 @@ const SEED: u32 = 0;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+// Minimum vested transfer to create a new account.
+fn min_new_account_transfer<T: Config>() {
+	T::MinVestedTransfer.max(T::Currency::minimum_balance())
+}
+
 fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
 	for id in 0..n {
 		let lock_id = [id; 8];
@@ -45,7 +50,7 @@ fn add_vesting_schedules<T: Config>(
 	target: <T::Lookup as StaticLookup>::Source,
 	n: u32,
 ) -> Result<BalanceOf<T>, &'static str> {
-	let min_transfer = T::MinVestedTransfer::get();
+	let min_transfer = min_new_account_transfer::<T>();
 	let locked = min_transfer.checked_mul(&20u32.into()).unwrap();
 	// Schedule has a duration of 20.
 	let per_block = min_transfer;
@@ -115,8 +120,8 @@ benchmarks! {
 		add_locks::<T>(&caller, l as u8);
 		add_vesting_schedules::<T>(caller_lookup, s)?;
 
-		// At block 22, everything is guaranteed unlocked.
-		System::<T>::set_block_number(22u32.into());
+		// At block 21, everything is unlocked.
+		System::<T>::set_block_number(21u32.into());
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
 			Some(BalanceOf::<T>::zero()),
@@ -201,10 +206,10 @@ benchmarks! {
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
-		// Add one less than max vesting schedules.
+		// Add one vesting schedules.
 		let mut expected_balance = add_vesting_schedules::<T>(target_lookup.clone(), s)?;
 
-		let transfer_amount = T::MinVestedTransfer::get();
+		let transfer_amount = min_new_account_transfer::<T>();
 		let per_block = transfer_amount.checked_div(&20u32.into()).unwrap();
 		expected_balance += transfer_amount;
 
@@ -242,7 +247,7 @@ benchmarks! {
 		// Add one less than max vesting schedules
 		let mut expected_balance = add_vesting_schedules::<T>(target_lookup.clone(), s)?;
 
-		let transfer_amount = T::MinVestedTransfer::get();
+		let transfer_amount = min_new_account_transfer::<T>();
 		let per_block = transfer_amount.checked_div(&20u32.into()).unwrap();
 		expected_balance += transfer_amount;
 
@@ -291,8 +296,8 @@ benchmarks! {
 	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, s - 1)
 	verify {
 		let expected_schedule = VestingInfo::new(
-			T::MinVestedTransfer::get() * 20u32.into() * 2u32.into(),
-			T::MinVestedTransfer::get() * 2u32.into(),
+			min_new_account_transfer::<T>() * 20u32.into() * 2u32.into(),
+			min_new_account_transfer::<T>() * 2u32.into(),
 			1u32.into(),
 		);
 		let expected_index = (s - 2) as usize;
@@ -345,8 +350,8 @@ benchmarks! {
 	}: merge_schedules(RawOrigin::Signed(caller.clone()), 0, s - 1)
 	verify {
 		let expected_schedule = VestingInfo::new(
-			T::MinVestedTransfer::get() * 2u32.into() * 10u32.into(),
-			T::MinVestedTransfer::get() * 2u32.into(),
+			min_new_account_transfer::<T>() * 2u32.into() * 10u32.into(),
+			min_new_account_transfer::<T>() * 2u32.into(),
 			11u32.into(),
 		);
 		let expected_index = (s - 2) as usize;
