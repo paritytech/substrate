@@ -52,7 +52,7 @@ use codec::{Decode, Encode};
 use sp_runtime::{
 	traits::{
 		Convert, DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SaturatedConversion, Saturating,
-		SignedExtension,
+		SignedExtension, Zero,
 	},
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
@@ -63,7 +63,7 @@ use sp_std::prelude::*;
 
 use frame_support::{
 	dispatch::DispatchResult,
-	traits::Get,
+	traits::{EstimateCallFee, Get},
 	weights::{
 		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight,
 		WeightToFeeCoefficient, WeightToFeePolynomial,
@@ -656,8 +656,6 @@ where
 	}
 }
 
-use frame_support::traits::EstimateCallFee;
-use sp_runtime::traits::Zero;
 impl<T: Config, AnyCall: GetDispatchInfo + Encode> EstimateCallFee<AnyCall, BalanceOf<T>>
 	for Pallet<T>
 where
