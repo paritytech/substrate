@@ -155,7 +155,8 @@ where
 		+ Debug
 		+ Copy
 		+ Clone
-		+ Bounded;
+		+ Bounded
+		+ Encode;
 
 	/// The target type. Needs to be an index (convert to usize).
 	type Target: UniqueSaturatedInto<usize>
@@ -164,7 +165,8 @@ where
 		+ Debug
 		+ Copy
 		+ Clone
-		+ Bounded;
+		+ Bounded
+		+ Encode;
 
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;

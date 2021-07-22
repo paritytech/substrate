@@ -3111,12 +3111,6 @@ impl<T: Config> Pallet<T> {
 		maybe_max_len: Option<usize>,
 		voter_count: usize,
 	) -> Vec<VotingDataOf<T>> {
-		debug_assert_eq!(
-			voter_count,
-			VoterList::<T>::decode_len().unwrap_or_default(),
-			"voter_count must be accurate",
-		);
-
 		let wanted_voters = maybe_max_len.unwrap_or(voter_count).min(voter_count);
 
 		let weight_of = Self::weight_of_fn();
@@ -3240,8 +3234,15 @@ impl<T: Config>
 		let nominator_count = CounterForNominators::<T>::get();
 		let validator_count = CounterForValidators::<T>::get();
 		let voter_count = nominator_count.saturating_add(validator_count) as usize;
+
+		// check a few counters one last time...
 		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
 		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
+		debug_assert_eq!(
+			voter_count,
+			VoterList::<T>::decode_len().unwrap_or_default(),
+			"voter_count must be accurate",
+		);
 
 		let slashing_span_count = <SlashingSpans<T>>::iter().count();
 		let weight = T::WeightInfo::get_npos_voters(
@@ -3249,6 +3250,7 @@ impl<T: Config>
 			validator_count,
 			slashing_span_count as u32,
 		);
+
 		Ok((Self::get_npos_voters(maybe_max_len, voter_count), weight))
 	}
 
