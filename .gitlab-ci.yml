@@ -41,7 +41,6 @@ variables:                         &default-vars
   CI_IMAGE:                        "paritytech/ci-linux:production"
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.12"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
 default:
   cache:                           {}
@@ -345,7 +344,7 @@ unleash-check:
     # TODO: Implement this optimization in cargo-unleash rather than here
     - mkdir -p target/unleash
     - export CARGO_TARGET_DIR=target/unleash
-    - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
+    - cargo unleash check
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -686,7 +685,7 @@ publish-to-crates-io:
     # cycle and cannot proceed with publishing/checking
     - cargo unleash de-dev-deps
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
-    - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs ${CARGO_UNLEASH_PKG_DEF}
+    - cargo unleash em-dragons --no-check --owner github:paritytech:core-devs
   allow_failure:                   true
 
 #### stage:                        deploy
