@@ -288,8 +288,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// ```nocompile
 /// construct_runtime!(
 ///     pub enum Runtime where
-///         Block = runtime::Block,
-///         NodeBlock = Block,
+///         Block = Block,
+///         NodeBlock = node::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
 ///         System: system::{Pallet, Call, Event<T>, Config<T>} = 0,
