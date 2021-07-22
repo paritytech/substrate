@@ -191,20 +191,20 @@ mod tests {
 		Node::set_parent_of(&e, &a);
 		Node::set_parent_of(&a, &d);
 
-		assert_eq!(Node::root(&e), (d.clone(), vec![e.clone(), a.clone(), d.clone()]),);
+		assert_eq!(Node::root(&e), (d.clone(), vec![e.clone(), a.clone(), d.clone()]));
 
-		assert_eq!(Node::root(&a), (d.clone(), vec![a.clone(), d.clone()]),);
+		assert_eq!(Node::root(&a), (d.clone(), vec![a.clone(), d.clone()]));
 
-		assert_eq!(Node::root(&c), (d.clone(), vec![c.clone(), b.clone(), a.clone(), d.clone()]),);
+		assert_eq!(Node::root(&c), (d.clone(), vec![c.clone(), b.clone(), a.clone(), d.clone()]));
 
 		// 	D 	    A <-- B <-- C
 		// 	F <-- /	\
 		// 			 <-- E
 		Node::set_parent_of(&a, &f);
 
-		assert_eq!(Node::root(&a), (f.clone(), vec![a.clone(), f.clone()]),);
+		assert_eq!(Node::root(&a), (f.clone(), vec![a.clone(), f.clone()]));
 
-		assert_eq!(Node::root(&c), (f.clone(), vec![c.clone(), b.clone(), a.clone(), f.clone()]),);
+		assert_eq!(Node::root(&c), (f.clone(), vec![c.clone(), b.clone(), a.clone(), f.clone()]));
 	}
 
 	#[test]

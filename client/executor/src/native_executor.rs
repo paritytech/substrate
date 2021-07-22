@@ -658,7 +658,7 @@ mod tests {
 	fn native_executor_registers_custom_interface() {
 		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None, 8);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
-			assert_eq!(executor.wasm.host_functions.iter().filter(|f| f == &function).count(), 2,);
+			assert_eq!(executor.wasm.host_functions.iter().filter(|f| f == &function).count(), 2);
 		});
 
 		my_interface::say_hello_world("hey");

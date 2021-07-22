@@ -1631,7 +1631,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	);
 
 	// the justification should be imported and available from the client
-	assert!(client.justifications(&BlockId::Hash(block_hash)).unwrap().is_some(),);
+	assert!(client.justifications(&BlockId::Hash(block_hash)).unwrap().is_some());
 }
 
 #[test]
