@@ -172,7 +172,7 @@ impl<T: Config> VoterList<T> {
 		for voter in voters.into_iter() {
 			let weight = weight_of(&voter.id);
 			let bag = notional_bag_for::<T>(weight);
-			crate::log!(debug, "inserting {:?} into bag {:?}", voter, bag);
+			crate::log!(debug, "inserting {:?} with weight {} into bag {:?}", voter, weight, bag);
 			bags.entry(bag).or_insert_with(|| Bag::<T>::get_or_make(bag)).insert(voter);
 			count += 1;
 		}
