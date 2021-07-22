@@ -96,4 +96,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(ImOnline, crate::mock::new_test_ext(), crate::mock::Runtime,);
+impl_benchmark_test_suite!(ImOnline, crate::mock::new_test_ext(), crate::mock::Runtime);

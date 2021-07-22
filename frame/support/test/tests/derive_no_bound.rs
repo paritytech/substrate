@@ -153,8 +153,8 @@ fn test_enum() {
 		TestEnum::VariantUnnamed(0, 0, 0, Default::default())
 	);
 
-	assert_eq!(Enum2::<Runtime>::default(), Enum2::<Runtime>::VariantNamed { a: 0, b: 0, c: 0 },);
-	assert_eq!(Enum3::<Runtime>::default(), Enum3::<Runtime>::VariantUnit,);
+	assert_eq!(Enum2::<Runtime>::default(), Enum2::<Runtime>::VariantNamed { a: 0, b: 0, c: 0 });
+	assert_eq!(Enum3::<Runtime>::default(), Enum3::<Runtime>::VariantUnit);
 
 	assert!(variant_0 != variant_0_bis);
 	assert!(variant_1 != variant_1_bis);
@@ -184,6 +184,6 @@ fn test_enum() {
 		format!("{:?}", variant_1),
 		String::from("Enum::VariantNamed { a: 1, b: 2, c: 3, phantom: PhantomData }"),
 	);
-	assert_eq!(format!("{:?}", variant_2), String::from("Enum::VariantUnit"),);
-	assert_eq!(format!("{:?}", variant_3), String::from("Enum::VariantUnit2"),);
+	assert_eq!(format!("{:?}", variant_2), String::from("Enum::VariantUnit"));
+	assert_eq!(format!("{:?}", variant_3), String::from("Enum::VariantUnit2"));
 }

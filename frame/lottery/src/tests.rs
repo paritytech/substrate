@@ -177,7 +177,7 @@ fn buy_ticket_works_as_simple_passthrough() {
 		);
 
 		let bad_origin_call = Box::new(Call::Balances(BalancesCall::force_transfer(0, 0, 0)));
-		assert_noop!(Lottery::buy_ticket(Origin::signed(1), bad_origin_call), BadOrigin,);
+		assert_noop!(Lottery::buy_ticket(Origin::signed(1), bad_origin_call), BadOrigin);
 
 		// User can call other txs, but doesn't get a ticket
 		let remark_call = Box::new(Call::System(SystemCall::remark(b"hello, world!".to_vec())));

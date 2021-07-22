@@ -2258,7 +2258,7 @@ mod tests {
 		// we accept messages from rounds 9, 10 and 11
 		// therefore neither of those should be considered expired
 		for round in &[9, 10, 11] {
-			assert!(!is_expired(crate::communication::round_topic::<Block>(*round, 1), &[],))
+			assert!(!is_expired(crate::communication::round_topic::<Block>(*round, 1), &[]))
 		}
 	}
 
@@ -2533,10 +2533,10 @@ mod tests {
 		);
 
 		// it should be expired if it is for a lower block
-		assert!(message_expired(crate::communication::global_topic::<Block>(1), &commit(1, 1, 1),));
+		assert!(message_expired(crate::communication::global_topic::<Block>(1), &commit(1, 1, 1)));
 
 		// or the same block height but from the previous round
-		assert!(message_expired(crate::communication::global_topic::<Block>(1), &commit(0, 1, 2),));
+		assert!(message_expired(crate::communication::global_topic::<Block>(1), &commit(0, 1, 2)));
 	}
 
 	#[test]

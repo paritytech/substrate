@@ -635,4 +635,4 @@ benchmarks_instance! {
 	}
 }
 
-impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test,);
+impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);

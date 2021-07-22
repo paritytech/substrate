@@ -51,7 +51,7 @@ fn main() {
 					let sum: u128 = normalized.iter().map(|x| *x as u128).sum();
 
 					// if this function returns Ok(), then it will ALWAYS be accurate.
-					assert_eq!(sum, norm as u128, "sums don't match {:?}, {}", normalized, norm,);
+					assert_eq!(sum, norm as u128, "sums don't match {:?}, {}", normalized, norm);
 				} else {
 					panic!("Should have returned Ok for input = {:?}, target = {:?}", data, norm);
 				}
