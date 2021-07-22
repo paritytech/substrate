@@ -17,13 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Proof utilities
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT},
-};
-use crate::{StorageProof, ChangesProof, CompactProof};
-use sp_storage::{ChildInfo, StorageKey, PrefixedStorageKey};
+use crate::{ChangesProof, CompactProof, StorageProof};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{KeyValueStates, KeyValueStorageLevel};
+use sp_storage::{ChildInfo, PrefixedStorageKey, StorageKey};
 
 /// Interface for providing block proving utilities.
 pub trait ProofProvider<Block: BlockT> {

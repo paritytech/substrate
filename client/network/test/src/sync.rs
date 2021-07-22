@@ -1123,15 +1123,22 @@ fn syncs_state() {
 			data: child_data.clone(),
 			child_info: sp_core::storage::ChildInfo::new_default(b"child2"),
 		};
-		genesis_storage.children_default.insert(child1.child_info.storage_key().to_vec(), child1);
-		genesis_storage.children_default.insert(child2.child_info.storage_key().to_vec(), child2);
-		genesis_storage.children_default.insert(child3.child_info.storage_key().to_vec(), child3);
+		genesis_storage
+			.children_default
+			.insert(child1.child_info.storage_key().to_vec(), child1);
+		genesis_storage
+			.children_default
+			.insert(child2.child_info.storage_key().to_vec(), child2);
+		genesis_storage
+			.children_default
+			.insert(child3.child_info.storage_key().to_vec(), child3);
 		let mut config_one = FullPeerConfig::default();
 		config_one.extra_storage = Some(genesis_storage.clone());
 		net.add_full_peer_with_config(config_one);
 		let mut config_two = FullPeerConfig::default();
 		config_two.extra_storage = Some(genesis_storage);
-		config_two.sync_mode = SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false };
+		config_two.sync_mode =
+			SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false };
 		net.add_full_peer_with_config(config_two);
 		net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.

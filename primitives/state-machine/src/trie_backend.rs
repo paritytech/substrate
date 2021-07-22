@@ -321,7 +321,9 @@ pub mod tests {
 	fn read_from_child_storage_returns_some() {
 		let test_trie = test_trie();
 		assert_eq!(
-			test_trie.child_storage(&ChildInfo::new_default(CHILD_KEY_1), b"value3").unwrap(),
+			test_trie
+				.child_storage(&ChildInfo::new_default(CHILD_KEY_1), b"value3")
+				.unwrap(),
 			Some(vec![142u8; 33]),
 		);
 	}

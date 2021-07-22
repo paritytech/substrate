@@ -17,11 +17,11 @@
 //! Helper for handling (i.e. answering) state requests from a remote peer via the
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
-use crate::schema::v1::{StateResponse, StateRequest, StateEntry, KeyValueStateEntry};
 use crate::{
 	chain::Client,
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse},
 	PeerId, ReputationChange,
 };
 use codec::{Decode, Encode};
@@ -191,14 +191,18 @@ impl<B: BlockT> StateRequestHandler<B> {
 					request.start.as_slice(),
 					MAX_RESPONSE_BYTES,
 				)?;
-				response.entries = entries.into_iter().map(|(state, complete)| {
-					KeyValueStateEntry {
+				response.entries = entries
+					.into_iter()
+					.map(|(state, complete)| KeyValueStateEntry {
 						state_root: state.state_root,
-						entries: state.key_values.into_iter()
-							.map(|(key, value)| StateEntry { key, value }).collect(),
+						entries: state
+							.key_values
+							.into_iter()
+							.map(|(key, value)| StateEntry { key, value })
+							.collect(),
 						complete,
-					}
-				}).collect();
+					})
+					.collect();
 			}
 
 			log::trace!(
@@ -206,9 +210,13 @@ impl<B: BlockT> StateRequestHandler<B> {
 				"StateResponse contains {} keys, {}, proof nodes, from {:?} to {:?}",
 				response.entries.len(),
 				response.proof.len(),
-				response.entries.get(0).and_then(|top| top.entries.first()
+				response.entries.get(0).and_then(|top| top
+					.entries
+					.first()
 					.map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key))),
-				response.entries.get(0).and_then(|top| top.entries.last()
+				response.entries.get(0).and_then(|top| top
+					.entries
+					.last()
 					.map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key))),
 			);
 			if let Some(value) = self.seen_requests.get_mut(&key) {

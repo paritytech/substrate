@@ -141,7 +141,6 @@ pub enum StorageChanges<Block: BlockT, Transaction> {
 	Import(ImportedState<Block>),
 }
 
-
 /// Imported state data. A vector of key-value pairs that should form a trie.
 #[derive(PartialEq, Eq, Clone)]
 pub struct ImportedState<B: BlockT> {

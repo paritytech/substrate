@@ -163,10 +163,8 @@ where
 	let mut previous_extracted_child_trie = None;
 	for child_root in child_tries.into_iter() {
 		if previous_extracted_child_trie.is_none() && nodes_iter.peek().is_some() {
-			let (top_root, _) = trie_db::decode_compact_from_iter::<L, _, _, _>(
-				db,
-				&mut nodes_iter,
-			)?;
+			let (top_root, _) =
+				trie_db::decode_compact_from_iter::<L, _, _, _>(db, &mut nodes_iter)?;
 			previous_extracted_child_trie = Some(top_root);
 		}
 

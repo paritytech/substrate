@@ -63,8 +63,8 @@ use sp_consensus::{
 use sp_core::{
 	convert_hash,
 	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey,
-		StorageData, StorageKey, StorageChild,
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
+		StorageKey,
 	},
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
@@ -79,13 +79,12 @@ use sp_runtime::{
 	BuildStorage, Justification, Justifications,
 };
 use sp_state_machine::{
-	key_changes, key_changes_proof, prove_child_read, prove_read,
-	Backend as StateBackend, ChangesTrieAnchorBlockId,
-	ChangesTrieConfigurationRange, ChangesTrieRootsStorage, ChangesTrieStorage, DBValue,
-	prove_range_read_with_child_with_size, KeyValueStates, KeyValueStorageLevel,
-	read_range_proof_check_with_child_on_proving_backend, MAX_NESTED_TRIE_DEPTH,
+	key_changes, key_changes_proof, prove_child_read, prove_range_read_with_child_with_size,
+	prove_read, read_range_proof_check_with_child_on_proving_backend, Backend as StateBackend,
+	ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange, ChangesTrieRootsStorage,
+	ChangesTrieStorage, DBValue, KeyValueStates, KeyValueStorageLevel, MAX_NESTED_TRIE_DEPTH,
 };
-use sp_trie::{StorageProof, CompactProof};
+use sp_trie::{CompactProof, StorageProof};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
@@ -828,11 +827,18 @@ where
 							} else {
 								for parent_storage in state.parent_storage_keys {
 									let storage_key = PrefixedStorageKey::new_ref(&parent_storage);
-									let storage_key = match ChildType::from_prefixed_key(&storage_key) {
-										Some((ChildType::ParentKeyId, storage_key)) => storage_key,
-										None => return Err(Error::Backend("Invalid child storage key.".to_string())),
-									};
-									let entry = storage.children_default.entry(storage_key.to_vec())
+									let storage_key =
+										match ChildType::from_prefixed_key(&storage_key) {
+											Some((ChildType::ParentKeyId, storage_key)) =>
+												storage_key,
+											None =>
+												return Err(Error::Backend(
+													"Invalid child storage key.".to_string(),
+												)),
+										};
+									let entry = storage
+										.children_default
+										.entry(storage_key.to_vec())
 										.or_insert_with(|| StorageChild {
 											data: Default::default(),
 											child_info: ChildInfo::new_default(storage_key),
@@ -1371,9 +1377,7 @@ where
 		let root = state.storage_root(std::iter::empty()).0;
 
 		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
-			state,
-			size_limit,
-			start_key,
+			state, size_limit, start_key,
 		)?;
 		let proof = sp_trie::encode_compact::<sp_trie::Layout<HashFor<Block>>>(proof, root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
@@ -1387,34 +1391,40 @@ where
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>> {
 		if start_key.len() > MAX_NESTED_TRIE_DEPTH {
-			return Err(Error::Backend("Invalid start key.".to_string()));
+			return Err(Error::Backend("Invalid start key.".to_string()))
 		}
 		let state = self.state_at(id)?;
 		let child_info = |storage_key: &Vec<u8>| -> sp_blockchain::Result<ChildInfo> {
 			let storage_key = PrefixedStorageKey::new_ref(&storage_key);
 			match ChildType::from_prefixed_key(&storage_key) {
-				Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+				Some((ChildType::ParentKeyId, storage_key)) =>
+					Ok(ChildInfo::new_default(storage_key)),
 				None => Err(Error::Backend("Invalid child storage key.".to_string())),
 			}
 		};
 		let mut current_child = if start_key.len() == 2 {
 			let start_key = start_key.get(0).expect("checked len");
-			if let Some(child_root) = state.storage(&start_key)
-				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))? {
+			if let Some(child_root) = state
+				.storage(&start_key)
+				.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			{
 				Some((child_info(start_key)?, child_root))
 			} else {
-				return Err(Error::Backend("Invalid root start key.".to_string()));
+				return Err(Error::Backend("Invalid root start key.".to_string()))
 			}
 		} else {
 			None
 		};
 		let mut current_key = start_key.last().map(Clone::clone).unwrap_or(Vec::new());
 		let mut total_size = 0;
-		let mut result = vec![(KeyValueStorageLevel {
-			state_root: Vec::new(),
-			key_values: Vec::new(),
-			parent_storage_keys: Vec::new(),
-		}, false)];
+		let mut result = vec![(
+			KeyValueStorageLevel {
+				state_root: Vec::new(),
+				key_values: Vec::new(),
+				parent_storage_keys: Vec::new(),
+			},
+			false,
+		)];
 
 		let mut child_roots = HashSet::new();
 		loop {
@@ -1444,17 +1454,18 @@ where
 				let size = value.len() + next_key.len();
 				if total_size + size > size_limit && !entries.is_empty() {
 					complete = false;
-					break;
+					break
 				}
 				total_size += size;
 
-				if current_child.is_none()
-					&& sp_core::storage::well_known_keys::is_child_storage_key(next_key.as_slice()) {
+				if current_child.is_none() &&
+					sp_core::storage::well_known_keys::is_child_storage_key(next_key.as_slice())
+				{
 					if !child_roots.contains(value.as_slice()) {
 						child_roots.insert(value.clone());
 						switch_child_key = Some((next_key.clone(), value.clone()));
 						entries.push((next_key.clone(), value));
-						break;
+						break
 					}
 				}
 				entries.push((next_key.clone(), value));
@@ -1466,18 +1477,21 @@ where
 				current_key = Vec::new();
 			} else if let Some((child, child_root)) = current_child.take() {
 				current_key = child.into_prefixed_storage_key().into_inner();
-				result.push((KeyValueStorageLevel {
-					state_root: child_root,
-					key_values: entries,
-					parent_storage_keys: Vec::new(),
-				}, complete));
+				result.push((
+					KeyValueStorageLevel {
+						state_root: child_root,
+						key_values: entries,
+						parent_storage_keys: Vec::new(),
+					},
+					complete,
+				));
 				if !complete {
-					break;
+					break
 				}
 			} else {
 				result[0].0.key_values.extend(entries.into_iter());
 				result[0].1 = complete;
-				break;
+				break
 			}
 		}
 		Ok(result)
@@ -1494,13 +1508,12 @@ where
 			&mut db,
 			proof.iter_compact_encoded_nodes(),
 			Some(&root),
-		).map_err(|e| {
-			sp_blockchain::Error::from_state(Box::new(e))
-		})?;
+		)
+		.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		let proving_backend = sp_state_machine::TrieBackend::new(db, root);
 		let state = read_range_proof_check_with_child_on_proving_backend::<HashFor<Block>>(
-				&proving_backend,
-				start_key,
+			&proving_backend,
+			start_key,
 		)?;
 
 		Ok(state)

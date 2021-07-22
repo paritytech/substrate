@@ -759,7 +759,7 @@ where
 			*genesis_extra_storage = storage;
 		}
 
-		if matches!(config.sync_mode, SyncMode::Fast{..}) {
+		if matches!(config.sync_mode, SyncMode::Fast { .. }) {
 			test_client_builder = test_client_builder.set_no_genesis();
 		}
 		let backend = test_client_builder.backend();

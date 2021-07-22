@@ -163,7 +163,7 @@ mod std_reexport {
 	};
 	pub use sp_trie::{
 		trie_types::{Layout, TrieDBMut},
-		DBValue, MemoryDB, StorageProof, CompactProof, TrieMut,
+		CompactProof, DBValue, MemoryDB, StorageProof, TrieMut,
 	};
 }
 
@@ -173,6 +173,7 @@ mod execution {
 	use codec::{Codec, Decode, Encode};
 	use hash_db::Hasher;
 	use log::{trace, warn};
+	use smallvec::SmallVec;
 	use sp_core::{
 		hexdisplay::HexDisplay,
 		storage::{ChildInfo, ChildType, PrefixedStorageKey},
@@ -180,8 +181,12 @@ mod execution {
 		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_externalities::Extensions;
-	use smallvec::SmallVec;
-	use std::{collections::{HashMap, HashSet}, fmt, panic::UnwindSafe, result};
+	use std::{
+		collections::{HashMap, HashSet},
+		fmt,
+		panic::UnwindSafe,
+		result,
+	};
 
 	const PROOF_CLOSE_TRANSACTION: &str = "\
 		Closing a transaction that was started in this function. Client initiated transactions
@@ -736,7 +741,8 @@ mod execution {
 	}
 
 	impl<I> From<I> for KeyValueStates
-		where I: IntoIterator<Item = (Vec<u8>, (Vec<(Vec<u8>, Vec<u8>)>, Vec<Vec<u8>>))>
+	where
+		I: IntoIterator<Item = (Vec<u8>, (Vec<(Vec<u8>, Vec<u8>)>, Vec<Vec<u8>>))>,
 	{
 		fn from(b: I) -> Self {
 			let mut result = Vec::new();
@@ -758,13 +764,18 @@ mod execution {
 		}
 
 		/// Update last keys accessed from this state.
-		pub fn update_last_key(&self, stopped_at: usize, last: &mut SmallVec<[Vec<u8>; 2]>) -> bool {
+		pub fn update_last_key(
+			&self,
+			stopped_at: usize,
+			last: &mut SmallVec<[Vec<u8>; 2]>,
+		) -> bool {
 			if stopped_at == 0 || stopped_at > MAX_NESTED_TRIE_DEPTH {
-				return false;
+				return false
 			}
 			match stopped_at {
 				1 => {
-					let top_last = self.0.get(0).and_then(|s| s.key_values.last().map(|kv| kv.0.clone()));
+					let top_last =
+						self.0.get(0).and_then(|s| s.key_values.last().map(|kv| kv.0.clone()));
 					if let Some(top_last) = top_last {
 						match last.len() {
 							0 => {
@@ -778,24 +789,26 @@ mod execution {
 						}
 						// update top trie access.
 						last[0] = top_last;
-						return true;
+						return true
 					} else {
 						// No change in top trie accesses.
 						// Indicates end of reading of a child trie.
 						last.truncate(1);
-						return true;
+						return true
 					}
 				},
 				2 => {
-					let top_last = self.0.get(0).and_then(|s| s.key_values.last().map(|kv| kv.0.clone()));
-					let child_last = self.0.last().and_then(|s| s.key_values.last().map(|kv| kv.0.clone()));
+					let top_last =
+						self.0.get(0).and_then(|s| s.key_values.last().map(|kv| kv.0.clone()));
+					let child_last =
+						self.0.last().and_then(|s| s.key_values.last().map(|kv| kv.0.clone()));
 
 					if let Some(child_last) = child_last {
 						if last.len() == 0 {
 							if let Some(top_last) = top_last {
 								last.push(top_last)
 							} else {
-								return false;
+								return false
 							}
 						} else if let Some(top_last) = top_last {
 							last[0] = top_last;
@@ -804,10 +817,10 @@ mod execution {
 							last.pop();
 						}
 						last.push(child_last);
-						return true;
+						return true
 					} else {
 						// stopped at level 2 so child last is define.
-						return false;
+						return false
 					}
 				},
 				_ => (),
@@ -833,13 +846,10 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
-		let trie_backend = backend.as_trie_backend()
+		let trie_backend = backend
+			.as_trie_backend()
 			.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
-		prove_range_read_with_child_with_size_on_trie_backend(
-			trie_backend,
-			size_limit,
-			start_at,
-		)
+		prove_range_read_with_child_with_size_on_trie_backend(trie_backend, size_limit, start_at)
 	}
 
 	/// Generate range storage read proof, with child tries
@@ -856,7 +866,7 @@ mod execution {
 		H::Out: Ord + Codec,
 	{
 		if start_at.len() > MAX_NESTED_TRIE_DEPTH {
-			return Err(Box::new("Invalid start of range."));
+			return Err(Box::new("Invalid start of range."))
 		}
 
 		let proving_backend = proving_backend::ProvingBackend::<S, H>::new(trie_backend);
@@ -865,11 +875,13 @@ mod execution {
 		let mut child_roots = HashSet::new();
 		let (mut child_key, mut start_at) = if start_at.len() == 2 {
 			let storage_key = start_at.get(0).expect("Checked length.").clone();
-			if let Some(state_root) = proving_backend.storage(&storage_key)
-				.map_err(|e| Box::new(e) as Box<dyn Error>)? {
+			if let Some(state_root) = proving_backend
+				.storage(&storage_key)
+				.map_err(|e| Box::new(e) as Box<dyn Error>)?
+			{
 				child_roots.insert(state_root.clone());
 			} else {
-				return Err(Box::new("Invalid range start child trie key."));
+				return Err(Box::new("Invalid range start child trie key."))
 			}
 
 			(Some(storage_key), start_at.get(1).cloned())
@@ -880,10 +892,14 @@ mod execution {
 		loop {
 			let (child_info, depth) = if let Some(storage_key) = child_key.as_ref() {
 				let storage_key = PrefixedStorageKey::new_ref(storage_key);
-				(Some(match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-					None => return Err(Box::new("Invalid range start child trie key.")),
-				}), 2)
+				(
+					Some(match ChildType::from_prefixed_key(&storage_key) {
+						Some((ChildType::ParentKeyId, storage_key)) =>
+							ChildInfo::new_default(storage_key),
+						None => return Err(Box::new("Invalid range start child trie key.")),
+					}),
+					2,
+				)
 			} else {
 				(None, 1)
 			};
@@ -891,48 +907,55 @@ mod execution {
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
 			let mut first = start_at.is_some();
-			let completed = proving_backend.apply_to_key_values_while(
-				child_info.as_ref(),
-				None,
-				start_at_ref,
-				|key, value| {
-					if first {
-						if start_at_ref.as_ref().map(|start| &key.as_slice() > start)
-							.unwrap_or(true) {
-							first = false;
+			let completed = proving_backend
+				.apply_to_key_values_while(
+					child_info.as_ref(),
+					None,
+					start_at_ref,
+					|key, value| {
+						if first {
+							if start_at_ref
+								.as_ref()
+								.map(|start| &key.as_slice() > start)
+								.unwrap_or(true)
+							{
+								first = false;
+							}
 						}
-					}
-					if first {
-						true
-					} else if depth < MAX_NESTED_TRIE_DEPTH
-							&& sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice()) {
-						count += 1;
-						if !child_roots.contains(value.as_slice()) {
-							child_roots.insert(value);
-							switch_child_key = Some(key);
-							false
-						} else {
-							// do not add two child trie with same root
+						if first {
 							true
+						} else if depth < MAX_NESTED_TRIE_DEPTH &&
+							sp_core::storage::well_known_keys::is_child_storage_key(
+								key.as_slice(),
+							) {
+							count += 1;
+							if !child_roots.contains(value.as_slice()) {
+								child_roots.insert(value);
+								switch_child_key = Some(key);
+								false
+							} else {
+								// do not add two child trie with same root
+								true
+							}
+						} else if proving_backend.estimate_encoded_size() <= size_limit {
+							count += 1;
+							true
+						} else {
+							false
 						}
-					} else if proving_backend.estimate_encoded_size() <= size_limit {
-						count += 1;
-						true
-					} else {
-						false
-					}
-				},
-				false,
-			).map_err(|e| Box::new(e) as Box<dyn Error>)?;
+					},
+					false,
+				)
+				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
 			if switch_child_key.is_none() {
 				if depth == 1 {
-					break;
+					break
 				} else {
 					if completed {
 						start_at = child_key.take();
 					} else {
-						break;
+						break
 					}
 				}
 			} else {
@@ -1100,10 +1123,7 @@ mod execution {
 		H::Out: Ord + Codec,
 	{
 		let proving_backend = create_proof_check_backend::<H>(root, proof)?;
-		read_range_proof_check_with_child_on_proving_backend(
-			&proving_backend,
-			start_at,
-		)
+		read_range_proof_check_with_child_on_proving_backend(&proving_backend, start_at)
 	}
 
 	/// Check child storage range proof, generated by `prove_range_read_with_size` call.
@@ -1231,18 +1251,20 @@ mod execution {
 			parent_storage_keys: Default::default(),
 		}];
 		if start_at.len() > MAX_NESTED_TRIE_DEPTH {
-			return Err(Box::new("Invalid start of range."));
+			return Err(Box::new("Invalid start of range."))
 		}
 
 		let mut child_roots = HashSet::new();
 		let (mut child_key, mut start_at) = if start_at.len() == 2 {
 			let storage_key = start_at.get(0).expect("Checked length.").clone();
-			let child_key = if let Some(state_root) = proving_backend.storage(&storage_key)
-				.map_err(|e| Box::new(e) as Box<dyn Error>)? {
+			let child_key = if let Some(state_root) = proving_backend
+				.storage(&storage_key)
+				.map_err(|e| Box::new(e) as Box<dyn Error>)?
+			{
 				child_roots.insert(state_root.clone());
 				Some((storage_key, state_root))
 			} else {
-				return Err(Box::new("Invalid range start child trie key."));
+				return Err(Box::new("Invalid range start child trie key."))
 			};
 
 			(child_key, start_at.get(1).cloned())
@@ -1259,10 +1281,14 @@ mod execution {
 				});
 
 				let storage_key = PrefixedStorageKey::new_ref(storage_key);
-				(Some(match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
-					None => return Err(Box::new("Invalid range start child trie key.")),
-				}), 2)
+				(
+					Some(match ChildType::from_prefixed_key(&storage_key) {
+						Some((ChildType::ParentKeyId, storage_key)) =>
+							ChildInfo::new_default(storage_key),
+						None => return Err(Box::new("Invalid range start child trie key.")),
+					}),
+					2,
+				)
 			} else {
 				(None, 1)
 			};
@@ -1275,45 +1301,52 @@ mod execution {
 			let start_at_ref = start_at.as_ref().map(AsRef::as_ref);
 			let mut switch_child_key = None;
 			let mut first = start_at.is_some();
-			let completed = proving_backend.apply_to_key_values_while(
-				child_info.as_ref(),
-				None,
-				start_at_ref,
-				|key, value| {
-					if first {
-						if start_at_ref.as_ref().map(|start| &key.as_slice() > start)
-							.unwrap_or(true) {
-							first = false;
+			let completed = proving_backend
+				.apply_to_key_values_while(
+					child_info.as_ref(),
+					None,
+					start_at_ref,
+					|key, value| {
+						if first {
+							if start_at_ref
+								.as_ref()
+								.map(|start| &key.as_slice() > start)
+								.unwrap_or(true)
+							{
+								first = false;
+							}
 						}
-					}
-					if !first {
-						values.push((key.to_vec(), value.to_vec()));
-					}
-					if first {
-						true
-					} else if depth < MAX_NESTED_TRIE_DEPTH
-							&& sp_core::storage::well_known_keys::is_child_storage_key(key.as_slice()) {
-						if child_roots.contains(value.as_slice()) {
-							// Do not add two chid trie with same root.
+						if !first {
+							values.push((key.to_vec(), value.to_vec()));
+						}
+						if first {
 							true
+						} else if depth < MAX_NESTED_TRIE_DEPTH &&
+							sp_core::storage::well_known_keys::is_child_storage_key(
+								key.as_slice(),
+							) {
+							if child_roots.contains(value.as_slice()) {
+								// Do not add two chid trie with same root.
+								true
+							} else {
+								child_roots.insert(value.clone());
+								switch_child_key = Some((key, value));
+								false
+							}
 						} else {
-							child_roots.insert(value.clone());
-							switch_child_key = Some((key, value));
-							false
+							true
 						}
-					} else {
-						true
-					}
-				},
-				true,
-			).map_err(|e| Box::new(e) as Box<dyn Error>)?;
+					},
+					true,
+				)
+				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
 			if switch_child_key.is_none() {
 				if !completed {
-					break depth;
+					break depth
 				}
 				if depth == 1 {
-					break 0;
+					break 0
 				} else {
 					start_at = child_key.take().map(|entry| entry.0);
 				}
@@ -1906,7 +1939,8 @@ mod tests {
 	fn prove_read_with_size_limit_works() {
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-		let (proof, count) = prove_range_read_with_size(remote_backend, None, None, 0, None).unwrap();
+		let (proof, count) =
+			prove_range_read_with_size(remote_backend, None, None, 0, None).unwrap();
 		// Always contains at least some nodes.
 		assert_eq!(proof.into_memory_db::<BlakeTwo256>().drain().len(), 3);
 		assert_eq!(count, 1);
@@ -1969,7 +2003,8 @@ mod tests {
 				trie_backend,
 				1,
 				start_at.as_slice(),
-			).unwrap();
+			)
+			.unwrap();
 			// Always contains at least some nodes.
 			assert!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len() > 0);
 			assert!(count < 3); // when doing child we include parent and first child key.
@@ -1978,10 +2013,11 @@ mod tests {
 				remote_root,
 				proof.clone(),
 				start_at.as_slice(),
-			).unwrap();
+			)
+			.unwrap();
 
 			if completed_depth == 0 {
-				break;
+				break
 			}
 			assert!(result.update_last_key(completed_depth, &mut start_at));
 		}

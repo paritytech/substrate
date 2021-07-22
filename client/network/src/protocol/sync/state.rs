@@ -16,18 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use sc_client_api::CompactProof;
-use smallvec::SmallVec;
-use std::collections::HashMap;
-use sp_core::storage::well_known_keys;
 use super::StateDownloadProgress;
 use crate::{
 	chain::{Client, ImportedState},
 	schema::v1::{StateEntry, StateRequest, StateResponse},
 };
 use codec::{Decode, Encode};
+use sc_client_api::CompactProof;
+use smallvec::SmallVec;
+use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
+use std::{collections::HashMap, sync::Arc};
 
 /// State sync support.
 
@@ -98,8 +97,8 @@ impl<B: BlockT> StateSync<B> {
 				Ok(proof) => proof,
 				Err(e) => {
 					log::debug!(target: "sync", "Error decoding proof: {:?}", e);
-					return ImportResult::BadResponse;
-				}
+					return ImportResult::BadResponse
+				},
 			};
 			let (values, completed) = match self.client.verify_range_proof(
 				self.target_root,
@@ -112,7 +111,7 @@ impl<B: BlockT> StateSync<B> {
 						"StateResponse failed proof verification: {:?}",
 						e,
 					);
-					return ImportResult::BadResponse;
+					return ImportResult::BadResponse
 				},
 				Ok(values) => values,
 			};
@@ -126,15 +125,21 @@ impl<B: BlockT> StateSync<B> {
 			for values in values.0 {
 				let key_values = if values.state_root.is_empty() {
 					// Read child trie roots.
-					values.key_values.into_iter()
-						.filter(|key_value| if well_known_keys::is_child_storage_key(key_value.0.as_slice()) {
-								self.state.entry(key_value.1.clone())
-									.or_default().1
+					values
+						.key_values
+						.into_iter()
+						.filter(|key_value| {
+							if well_known_keys::is_child_storage_key(key_value.0.as_slice()) {
+								self.state
+									.entry(key_value.1.clone())
+									.or_default()
+									.1
 									.push(key_value.0.clone());
 								false
 							} else {
 								true
-							})
+							}
+						})
 						.collect()
 				} else {
 					values.key_values
@@ -202,9 +207,7 @@ impl<B: BlockT> StateSync<B> {
 						}
 					}
 					for (root, storage_key) in child_roots {
-						self.state.entry(root)
-							.or_default().1
-							.push(storage_key);
+						self.state.entry(root).or_default().1.push(storage_key);
 					}
 				}
 			}
@@ -212,10 +215,14 @@ impl<B: BlockT> StateSync<B> {
 		};
 		if complete {
 			self.complete = true;
-			ImportResult::Import(self.target_block.clone(), self.target_header.clone(), ImportedState {
-				block: self.target_block.clone(),
-				state: std::mem::take(&mut self.state).into(),
-			})
+			ImportResult::Import(
+				self.target_block.clone(),
+				self.target_header.clone(),
+				ImportedState {
+					block: self.target_block.clone(),
+					state: std::mem::take(&mut self.state).into(),
+				},
+			)
 		} else {
 			ImportResult::Continue(self.next_request())
 		}
@@ -248,10 +255,7 @@ impl<B: BlockT> StateSync<B> {
 	/// Returns state sync estimated progress.
 	pub fn progress(&self) -> StateDownloadProgress {
 		let cursor = *self.last_key.get(0).and_then(|last| last.get(0)).unwrap_or(&0u8);
-		let percent_done =  cursor as u32 * 100 / 256;
-		StateDownloadProgress {
-			percentage: percent_done,
-			size: self.imported_bytes,
-		}
+		let percent_done = cursor as u32 * 100 / 256;
+		StateDownloadProgress { percentage: percent_done, size: self.imported_bytes }
 	}
 }
