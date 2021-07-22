@@ -1,7 +1,7 @@
 [package]
 description = "Substrate offchain workers primitives"
 name = "sp-offchain"
-version = "3.0.0"
+version = "4.0.0-dev"
 license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -13,12 +13,12 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-core = { version = "3.0.0", default-features = false, path = "../core" }
-sp-api = { version = "3.0.0", default-features = false, path = "../api" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
 
 [dev-dependencies]
-sp-state-machine = { version = "0.9.0", default-features = false, path = "../state-machine" }
+sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../state-machine" }
 
 [features]
 default = ["std"]

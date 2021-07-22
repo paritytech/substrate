@@ -24,36 +24,22 @@
 //! DO NOT depend on user input). Thus transaction generation should be
 //! based on randomized data.
 
-use std::{
-	borrow::Cow,
-	collections::HashMap,
-	pin::Pin,
-	sync::Arc,
-};
 use futures::Future;
+use std::{borrow::Cow, collections::HashMap, pin::Pin, sync::Arc};
 
 use node_primitives::Block;
-use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes, DatabaseType};
-use sp_runtime::{
-	generic::BlockId,
-	traits::NumberFor,
-	OpaqueExtrinsic,
-};
-use sp_transaction_pool::{
-	ImportNotificationStream,
-	PoolFuture,
-	PoolStatus,
-	TransactionFor,
-	TransactionSource,
-	TransactionStatusStreamFor,
-	TxHash,
+use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
+use sc_transaction_pool_api::{
+	ImportNotificationStream, PoolFuture, PoolStatus, TransactionFor, TransactionSource,
+	TransactionStatusStreamFor, TxHash,
 };
 use sp_consensus::{Environment, Proposer};
 use sp_inherents::InherentDataProvider;
+use sp_runtime::{generic::BlockId, traits::NumberFor, OpaqueExtrinsic};
 
 use crate::{
 	common::SizeType,
-	core::{self, Path, Mode},
+	core::{self, Mode, Path},
 };
 
 pub struct ConstructionBenchmarkDescription {
@@ -72,7 +58,6 @@ pub struct ConstructionBenchmark {
 
 impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 	fn path(&self) -> Path {
-
 		let mut path = Path::new(&["node", "proposer"]);
 
 		match self.profile {
@@ -104,11 +89,7 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
 		let mut extrinsics: Vec<Arc<PoolTransaction>> = Vec::new();
 
-		let mut bench_db = BenchDb::with_key_types(
-			self.database_type,
-			50_000,
-			self.key_types
-		);
+		let mut bench_db = BenchDb::with_key_types(self.database_type, 50_000, self.key_types);
 
 		let client = bench_db.client();
 
@@ -127,11 +108,9 @@ impl core::BenchmarkDescription for ConstructionBenchmarkDescription {
 	fn name(&self) -> Cow<'static, str> {
 		format!(
 			"Block construction ({:?}/{}, {:?}, {:?} backend)",
-			self.block_type,
-			self.size,
-			self.profile,
-			self.database_type,
-		).into()
+			self.block_type, self.size, self.profile, self.database_type,
+		)
+		.into()
 	}
 }
 
@@ -139,7 +118,9 @@ impl core::Benchmark for ConstructionBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let context = self.database.create_context(self.profile);
 
-		let _ = context.client.runtime_version_at(&BlockId::Number(0))
+		let _ = context
+			.client
+			.runtime_version_at(&BlockId::Number(0))
 			.expect("Failed to get runtime version")
 			.spec_version;
 
@@ -158,20 +139,25 @@ impl core::Benchmark for ConstructionBenchmark {
 
 		let start = std::time::Instant::now();
 
-		let proposer = futures::executor::block_on(proposer_factory.init(
-			&context.client.header(&BlockId::number(0))
-				.expect("Database error querying block #0")
-				.expect("Block #0 should exist"),
-		)).expect("Proposer initialization failed");
-
-		let _block = futures::executor::block_on(
-			proposer.propose(
-				timestamp_provider.create_inherent_data().expect("Create inherent data failed"),
-				Default::default(),
-				std::time::Duration::from_secs(20),
-				None,
+		let proposer = futures::executor::block_on(
+			proposer_factory.init(
+				&context
+					.client
+					.header(&BlockId::number(0))
+					.expect("Database error querying block #0")
+					.expect("Block #0 should exist"),
 			),
-		).map(|r| r.block).expect("Proposing failed");
+		)
+		.expect("Proposer initialization failed");
+
+		let _block = futures::executor::block_on(proposer.propose(
+			timestamp_provider.create_inherent_data().expect("Create inherent data failed"),
+			Default::default(),
+			std::time::Duration::from_secs(20),
+			None,
+		))
+		.map(|r| r.block)
+		.expect("Proposing failed");
 
 		let elapsed = start.elapsed();
 
@@ -191,14 +177,11 @@ pub struct PoolTransaction {
 
 impl From<OpaqueExtrinsic> for PoolTransaction {
 	fn from(e: OpaqueExtrinsic) -> Self {
-		PoolTransaction {
-			data: e,
-			hash: node_primitives::Hash::zero(),
-		}
+		PoolTransaction { data: e, hash: node_primitives::Hash::zero() }
 	}
 }
 
-impl sp_transaction_pool::InPoolTransaction for PoolTransaction {
+impl sc_transaction_pool_api::InPoolTransaction for PoolTransaction {
 	type Transaction = OpaqueExtrinsic;
 	type Hash = node_primitives::Hash;
 
@@ -210,25 +193,35 @@ impl sp_transaction_pool::InPoolTransaction for PoolTransaction {
 		&self.hash
 	}
 
-	fn priority(&self) -> &u64 { unimplemented!() }
+	fn priority(&self) -> &u64 {
+		unimplemented!()
+	}
 
-	fn longevity(&self) -> &u64 { unimplemented!() }
+	fn longevity(&self) -> &u64 {
+		unimplemented!()
+	}
 
-	fn requires(&self) -> &[Vec<u8>] { unimplemented!() }
+	fn requires(&self) -> &[Vec<u8>] {
+		unimplemented!()
+	}
 
-	fn provides(&self) -> &[Vec<u8>] { unimplemented!() }
+	fn provides(&self) -> &[Vec<u8>] {
+		unimplemented!()
+	}
 
-	fn is_propagable(&self) -> bool { unimplemented!() }
+	fn is_propagable(&self) -> bool {
+		unimplemented!()
+	}
 }
 
 #[derive(Clone, Debug)]
 pub struct Transactions(Vec<Arc<PoolTransaction>>);
 
-impl sp_transaction_pool::TransactionPool for Transactions {
+impl sc_transaction_pool_api::TransactionPool for Transactions {
 	type Block = Block;
 	type Hash = node_primitives::Hash;
 	type InPoolTransaction = PoolTransaction;
-	type Error = sp_transaction_pool::error::Error;
+	type Error = sc_transaction_pool_api::error::Error;
 
 	/// Returns a future that imports a bunch of unverified transactions to the pool.
 	fn submit_at(
@@ -236,7 +229,7 @@ impl sp_transaction_pool::TransactionPool for Transactions {
 		_at: &BlockId<Self::Block>,
 		_source: TransactionSource,
 		_xts: Vec<TransactionFor<Self>>,
-	) -> PoolFuture<Vec<Result<node_primitives::Hash, Self::Error>>, Self::Error>  {
+	) -> PoolFuture<Vec<Result<node_primitives::Hash, Self::Error>>, Self::Error> {
 		unimplemented!()
 	}
 
@@ -259,14 +252,21 @@ impl sp_transaction_pool::TransactionPool for Transactions {
 		unimplemented!()
 	}
 
-	fn ready_at(&self, _at: NumberFor<Self::Block>)
-		-> Pin<Box<dyn Future<Output=Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>> + Send>>
-	{
-		let iter: Box<dyn Iterator<Item=Arc<PoolTransaction>> + Send> = Box::new(self.0.clone().into_iter());
+	fn ready_at(
+		&self,
+		_at: NumberFor<Self::Block>,
+	) -> Pin<
+		Box<
+			dyn Future<Output = Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send>>
+				+ Send,
+		>,
+	> {
+		let iter: Box<dyn Iterator<Item = Arc<PoolTransaction>> + Send> =
+			Box::new(self.0.clone().into_iter());
 		Box::pin(futures::future::ready(iter))
 	}
 
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send> {
+	fn ready(&self) -> Box<dyn Iterator<Item = Arc<Self::InPoolTransaction>> + Send> {
 		unimplemented!()
 	}
 

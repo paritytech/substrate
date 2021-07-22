@@ -15,8 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{Def, parse::helper::get_doc_literals};
-use crate::COUNTER;
+use crate::{
+	pallet::{parse::helper::get_doc_literals, Def},
+	COUNTER,
+};
 use syn::{spanned::Spanned, Ident};
 
 /// * Add __Ignore variant on Event
@@ -29,10 +31,8 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		let ident = Ident::new(&format!("__is_event_part_defined_{}", count), event.attr_span);
 		(event, ident)
 	} else {
-		let macro_ident = Ident::new(
-			&format!("__is_event_part_defined_{}", count),
-			def.item.span(),
-		);
+		let macro_ident =
+			Ident::new(&format!("__is_event_part_defined_{}", count), def.item.span());
 
 		return quote::quote! {
 			#[doc(hidden)]
@@ -49,42 +49,39 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 						));
 					}
 				}
-	
+
 				#[doc(hidden)]
 				pub use #macro_ident as is_event_part_defined;
 			}
-		};
+		}
 	};
 
 	let event_where_clause = &event.where_clause;
 
 	// NOTE: actually event where clause must be a subset of config where clause because of
 	// `type Event: From<Event<Self>>`. But we merge either way for potential better error message
-	let completed_where_clause = super::merge_where_clauses(&[
-		&event.where_clause,
-		&def.config.where_clause,
-	]);
+	let completed_where_clause =
+		super::merge_where_clauses(&[&event.where_clause, &def.config.where_clause]);
 
 	let event_ident = &event.event;
 	let frame_system = &def.frame_system;
 	let frame_support = &def.frame_support;
 	let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
-	let event_impl_gen= &event.gen_kind.type_impl_gen(event.attr_span);
-	let metadata = event.metadata.iter()
-		.map(|(ident, args, docs)| {
-			let name = format!("{}", ident);
-			quote::quote_spanned!(event.attr_span =>
-				#frame_support::event::EventMetadata {
-					name: #frame_support::event::DecodeDifferent::Encode(#name),
-					arguments: #frame_support::event::DecodeDifferent::Encode(&[
-						#( #args, )*
-					]),
-					documentation: #frame_support::event::DecodeDifferent::Encode(&[
-						#( #docs, )*
-					]),
-				},
-			)
-		});
+	let event_impl_gen = &event.gen_kind.type_impl_gen(event.attr_span);
+	let metadata = event.metadata.iter().map(|(ident, args, docs)| {
+		let name = format!("{}", ident);
+		quote::quote_spanned!(event.attr_span =>
+			#frame_support::event::EventMetadata {
+				name: #frame_support::event::DecodeDifferent::Encode(#name),
+				arguments: #frame_support::event::DecodeDifferent::Encode(&[
+					#( #args, )*
+				]),
+				documentation: #frame_support::event::DecodeDifferent::Encode(&[
+					#( #docs, )*
+				]),
+			},
+		)
+	});
 
 	let event_item = {
 		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[event.index];
@@ -166,7 +163,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 			macro_rules! #macro_ident {
 				($pallet_name:ident) => {};
 			}
-	
+
 			#[doc(hidden)]
 			pub use #macro_ident as is_event_part_defined;
 		}

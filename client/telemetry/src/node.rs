@@ -17,12 +17,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::TelemetryPayload;
-use futures::channel::mpsc;
-use futures::prelude::*;
-use libp2p::core::transport::Transport;
-use libp2p::Multiaddr;
+use futures::{channel::mpsc, prelude::*};
+use libp2p::{core::transport::Transport, Multiaddr};
 use rand::Rng as _;
-use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
+use std::{
+	fmt, mem,
+	pin::Pin,
+	task::{Context, Poll},
+	time::Duration,
+};
 use wasm_timer::Delay;
 
 pub(crate) type ConnectionNotifierSender = mpsc::Sender<()>;
@@ -122,7 +125,7 @@ where
 	) -> Poll<Result<(), TSinkErr>> {
 		while let Some(item) = conn.buf.pop() {
 			if let Err(e) = conn.sink.start_send_unpin(item) {
-				return Poll::Ready(Err(e));
+				return Poll::Ready(Err(e))
 			}
 			futures::ready!(conn.sink.poll_ready_unpin(cx))?;
 		}
@@ -152,25 +155,25 @@ where
 							Poll::Ready(Err(err)) => {
 								log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
 								socket = NodeSocket::wait_reconnect();
-							}
+							},
 							Poll::Ready(Ok(())) => {
 								self.socket = NodeSocket::Connected(conn);
-								return Poll::Ready(Ok(()));
-							}
+								return Poll::Ready(Ok(()))
+							},
 							Poll::Pending => {
 								self.socket = NodeSocket::Connected(conn);
-								return Poll::Pending;
-							}
+								return Poll::Pending
+							},
 						}
-					}
+					},
 					Poll::Ready(Err(err)) => {
 						log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
 						socket = NodeSocket::wait_reconnect();
-					}
+					},
 					Poll::Pending => {
 						self.socket = NodeSocket::Connected(conn);
-						return Poll::Pending;
-					}
+						return Poll::Pending
+					},
 				},
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
 					Poll::Ready(Ok(sink)) => {
@@ -201,39 +204,39 @@ where
 										err,
 									);
 									None
-								}
+								},
 							})
 							.collect();
 
 						socket = NodeSocket::Connected(NodeSocketConnected { sink, buf });
-					}
+					},
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
 						log::warn!(target: "telemetry", "❌ Error while dialing {}: {:?}", self.addr, err);
 						socket = NodeSocket::wait_reconnect();
-					}
+					},
 				},
 				NodeSocket::ReconnectNow => match self.transport.clone().dial(self.addr.clone()) {
 					Ok(d) => {
 						log::trace!(target: "telemetry", "Re-dialing {}", self.addr);
 						socket = NodeSocket::Dialing(d);
-					}
+					},
 					Err(err) => {
 						log::warn!(target: "telemetry", "❌ Error while re-dialing {}: {:?}", self.addr, err);
 						socket = NodeSocket::wait_reconnect();
-					}
+					},
 				},
 				NodeSocket::WaitingReconnect(mut s) => {
 					if let Poll::Ready(_) = Future::poll(Pin::new(&mut s), cx) {
 						socket = NodeSocket::ReconnectNow;
 					} else {
-						break NodeSocket::WaitingReconnect(s);
+						break NodeSocket::WaitingReconnect(s)
 					}
-				}
+				},
 				NodeSocket::Poisoned => {
 					log::error!(target: "telemetry", "‼️ Poisoned connection with {}", self.addr);
-					break NodeSocket::Poisoned;
-				}
+					break NodeSocket::Poisoned
+				},
 			}
 		};
 
@@ -250,7 +253,7 @@ where
 				Ok(data) => {
 					log::trace!(target: "telemetry", "Sending {} bytes", data.len());
 					let _ = conn.sink.start_send_unpin(data);
-				}
+				},
 				Err(err) => log::debug!(
 					target: "telemetry",
 					"Could not serialize payload: {}",
@@ -262,7 +265,7 @@ where
 			// A new connection should be started as soon as possible.
 			NodeSocket::ReconnectNow => log::trace!(target: "telemetry", "Reconnecting"),
 			// Waiting before attempting to dial again.
-			NodeSocket::WaitingReconnect(_) => {}
+			NodeSocket::WaitingReconnect(_) => {},
 			// Temporary transition state.
 			NodeSocket::Poisoned => log::trace!(target: "telemetry", "Poisoned"),
 		}
@@ -280,7 +283,7 @@ where
 					log::trace!(target: "telemetry", "[poll_flush] Error: {:?}", e);
 					self.socket = NodeSocket::wait_reconnect();
 					Poll::Ready(Ok(()))
-				}
+				},
 				Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
 				Poll::Pending => Poll::Pending,
 			},

@@ -15,10 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{biguint::BigUint, helpers_128bit};
+use num_traits::{Bounded, One, Zero};
 use sp_std::{cmp::Ordering, prelude::*};
-use crate::helpers_128bit;
-use num_traits::{Zero, One, Bounded};
-use crate::biguint::BigUint;
 
 /// A wrapper for any rational number with infinitely large numerator and denominator.
 ///
@@ -160,9 +159,11 @@ impl Rational128 {
 	/// accurately calculated.
 	pub fn lcm(&self, other: &Self) -> Result<u128, &'static str> {
 		// this should be tested better: two large numbers that are almost the same.
-		if self.1 == other.1 { return Ok(self.1) }
+		if self.1 == other.1 {
+			return Ok(self.1)
+		}
 		let g = helpers_128bit::gcd(self.1, other.1);
-		helpers_128bit::multiply_by_rational(self.1 , other.1, g)
+		helpers_128bit::multiply_by_rational(self.1, other.1, g)
 	}
 
 	/// A saturating add that assumes `self` and `other` have the same denominator.
@@ -170,7 +171,7 @@ impl Rational128 {
 		if other.is_zero() {
 			self
 		} else {
-			Self(self.0.saturating_add(other.0) ,self.1)
+			Self(self.0.saturating_add(other.0), self.1)
 		}
 	}
 
@@ -179,7 +180,7 @@ impl Rational128 {
 		if other.is_zero() {
 			self
 		} else {
-			Self(self.0.saturating_sub(other.0) ,self.1)
+			Self(self.0.saturating_sub(other.0), self.1)
 		}
 	}
 
@@ -190,7 +191,9 @@ impl Rational128 {
 		let lcm = self.lcm(&other).map_err(|_| "failed to scale to denominator")?;
 		let self_scaled = self.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
 		let other_scaled = other.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
-		let n = self_scaled.0.checked_add(other_scaled.0)
+		let n = self_scaled
+			.0
+			.checked_add(other_scaled.0)
 			.ok_or("overflow while adding numerators")?;
 		Ok(Self(n, self_scaled.1))
 	}
@@ -203,7 +206,9 @@ impl Rational128 {
 		let self_scaled = self.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
 		let other_scaled = other.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
 
-		let n = self_scaled.0.checked_sub(other_scaled.0)
+		let n = self_scaled
+			.0
+			.checked_sub(other_scaled.0)
 			.ok_or("overflow while subtracting numerators")?;
 		Ok(Self(n, self_scaled.1))
 	}
@@ -243,7 +248,8 @@ impl Ord for Rational128 {
 		} else {
 			// Don't even compute gcd.
 			let self_n = helpers_128bit::to_big_uint(self.0) * helpers_128bit::to_big_uint(other.1);
-			let other_n = helpers_128bit::to_big_uint(other.0) * helpers_128bit::to_big_uint(self.1);
+			let other_n =
+				helpers_128bit::to_big_uint(other.0) * helpers_128bit::to_big_uint(self.1);
 			self_n.cmp(&other_n)
 		}
 	}
@@ -256,7 +262,8 @@ impl PartialEq for Rational128 {
 			self.0.eq(&other.0)
 		} else {
 			let self_n = helpers_128bit::to_big_uint(self.0) * helpers_128bit::to_big_uint(other.1);
-			let other_n = helpers_128bit::to_big_uint(other.0) * helpers_128bit::to_big_uint(self.1);
+			let other_n =
+				helpers_128bit::to_big_uint(other.0) * helpers_128bit::to_big_uint(self.1);
 			self_n.eq(&other_n)
 		}
 	}
@@ -264,8 +271,7 @@ impl PartialEq for Rational128 {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use super::helpers_128bit::*;
+	use super::{helpers_128bit::*, *};
 
 	const MAX128: u128 = u128::MAX;
 	const MAX64: u128 = u64::MAX as u128;
@@ -277,7 +283,9 @@ mod tests {
 
 	fn mul_div(a: u128, b: u128, c: u128) -> u128 {
 		use primitive_types::U256;
-		if a.is_zero() { return Zero::zero(); }
+		if a.is_zero() {
+			return Zero::zero()
+		}
 		let c = c.max(1);
 
 		// e for extended
@@ -295,14 +303,8 @@ mod tests {
 
 	#[test]
 	fn truth_value_function_works() {
-		assert_eq!(
-			mul_div(2u128.pow(100), 8, 4),
-			2u128.pow(101)
-		);
-		assert_eq!(
-			mul_div(2u128.pow(100), 4, 8),
-			2u128.pow(99)
-		);
+		assert_eq!(mul_div(2u128.pow(100), 8, 4), 2u128.pow(101));
+		assert_eq!(mul_div(2u128.pow(100), 4, 8), 2u128.pow(99));
 
 		// and it returns a if result cannot fit
 		assert_eq!(mul_div(MAX128 - 10, 2, 1), MAX128 - 10);
@@ -319,13 +321,10 @@ mod tests {
 		assert_eq!(r(MAX128 / 2, MAX128).to_den(10), Ok(r(5, 10)));
 
 		// large to perbill. This is very well needed for npos-elections.
-		assert_eq!(
-			r(MAX128 / 2, MAX128).to_den(1000_000_000),
-			Ok(r(500_000_000, 1000_000_000))
-		);
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(1000_000_000), Ok(r(500_000_000, 1000_000_000)));
 
 		// large to large
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128/2), Ok(r(MAX128/4, MAX128/2)));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128 / 2), Ok(r(MAX128 / 4, MAX128 / 2)));
 	}
 
 	#[test]
@@ -343,11 +342,11 @@ mod tests {
 
 		// large numbers
 		assert_eq!(
-			r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128-1)),
+			r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128 - 1)),
 			Err("result cannot fit in u128"),
 		);
 		assert_eq!(
-			r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64-1)),
+			r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64 - 1)),
 			Ok(340282366920938463408034375210639556610),
 		);
 		assert!(340282366920938463408034375210639556610 < MAX128);
@@ -362,7 +361,7 @@ mod tests {
 
 		// errors
 		assert_eq!(
-			r(1, MAX128).checked_add(r(1, MAX128-1)),
+			r(1, MAX128).checked_add(r(1, MAX128 - 1)),
 			Err("failed to scale to denominator"),
 		);
 		assert_eq!(
@@ -383,17 +382,14 @@ mod tests {
 
 		// errors
 		assert_eq!(
-			r(2, MAX128).checked_sub(r(1, MAX128-1)),
+			r(2, MAX128).checked_sub(r(1, MAX128 - 1)),
 			Err("failed to scale to denominator"),
 		);
 		assert_eq!(
 			r(7, MAX128).checked_sub(r(MAX128, MAX128)),
 			Err("overflow while subtracting numerators"),
 		);
-		assert_eq!(
-			r(1, 10).checked_sub(r(2,10)),
-			Err("overflow while subtracting numerators"),
-		);
+		assert_eq!(r(1, 10).checked_sub(r(2, 10)), Err("overflow while subtracting numerators"),);
 	}
 
 	#[test]
@@ -428,7 +424,7 @@ mod tests {
 		);
 		assert_eq!(
 			// MAX128 % 7 == 3
-			multiply_by_rational(MAX128, 11 , 13).unwrap(),
+			multiply_by_rational(MAX128, 11, 13).unwrap(),
 			(MAX128 / 13 * 11) + (8 * 11 / 13),
 		);
 		assert_eq!(
@@ -437,14 +433,8 @@ mod tests {
 			(MAX128 / 1000 * 555) + (455 * 555 / 1000),
 		);
 
-		assert_eq!(
-			multiply_by_rational(2 * MAX64 - 1, MAX64, MAX64).unwrap(),
-			2 * MAX64 - 1,
-		);
-		assert_eq!(
-			multiply_by_rational(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(),
-			2 * MAX64 - 3,
-		);
+		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64, MAX64).unwrap(), 2 * MAX64 - 1,);
+		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(), 2 * MAX64 - 3,);
 
 		assert_eq!(
 			multiply_by_rational(MAX64 + 100, MAX64_2, MAX64_2 / 2).unwrap(),
@@ -459,31 +449,23 @@ mod tests {
 			multiply_by_rational(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).unwrap(),
 			73786976294838206461,
 		);
-		assert_eq!(
-			multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(),
-			250000000,
-		);
+		assert_eq!(multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(), 250000000,);
 
 		assert_eq!(
 			multiply_by_rational(
 				29459999999999999988000u128,
 				1000000000000000000u128,
 				10000000000000000000u128
-			).unwrap(),
+			)
+			.unwrap(),
 			2945999999999999998800u128
 		);
 	}
 
 	#[test]
 	fn multiply_by_rational_a_b_are_interchangeable() {
-		assert_eq!(
-			multiply_by_rational(10, MAX128, MAX128 / 2),
-			Ok(20),
-		);
-		assert_eq!(
-			multiply_by_rational(MAX128, 10, MAX128 / 2),
-			Ok(20),
-		);
+		assert_eq!(multiply_by_rational(10, MAX128, MAX128 / 2), Ok(20),);
+		assert_eq!(multiply_by_rational(MAX128, 10, MAX128 / 2), Ok(20),);
 	}
 
 	#[test]
