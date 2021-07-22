@@ -231,12 +231,7 @@ pub fn new_full_base(
 	let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
 			backend.clone(),
 			import_setup.1.shared_authority_set().clone(),
-<<<<<<< HEAD
 	));
-=======
-		),
-	);
->>>>>>> 1d5abf0
 
 	let (network, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {

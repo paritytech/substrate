@@ -1226,9 +1226,9 @@ mod tests {
 
 		let header = new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
-			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
-				spec_version: 1,
-				..Default::default()
+			RUNTIME_VERSION.with(|v| {
+				*v.borrow_mut() =
+					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			// Let's build some fake block.
@@ -1246,16 +1246,15 @@ mod tests {
 		});
 
 		// Reset to get the correct new genesis below.
-		RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
-			spec_version: 0,
-			..Default::default()
+		RUNTIME_VERSION.with(|v| {
+			*v.borrow_mut() = sp_version::RuntimeVersion { spec_version: 0, ..Default::default() }
 		});
 
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
-			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
-				spec_version: 1,
-				..Default::default()
+			RUNTIME_VERSION.with(|v| {
+				*v.borrow_mut() =
+					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]));
