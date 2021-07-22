@@ -702,7 +702,8 @@ macro_rules! impl_benchmark {
 				extrinsic: &[u8],
 				lowest_range_values: &[u32],
 				highest_range_values: &[u32],
-				steps: &[u32],
+				steps: (u32, u32),
+				repeat: (u32, u32),
 				whitelist: &[$crate::TrackedStorageKey],
 				verify: bool,
 			) -> Result<$crate::Vec<$crate::BenchmarkResults>, &'static str> {
@@ -733,8 +734,6 @@ macro_rules! impl_benchmark {
 				>::components(&selected_benchmark);
 
 				let mut progress = $crate::benchmarking::current_time();
-				// Default number of steps for a component.
-				let mut prev_steps = 10;
 
 				let mut do_benchmark = |
 					c: &[($crate::BenchmarkParameter, u32)],
@@ -848,11 +847,7 @@ macro_rules! impl_benchmark {
 					// Select the component we will be benchmarking. Each component will be benchmarked.
 					for (idx, (name, low, high)) in components.iter().enumerate() {
 						// Get the number of steps for this component.
-						let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
-						prev_steps = steps;
-
-						// Skip this loop if steps is zero
-						if steps == 0 { continue }
+						let (_current_step, total_steps) = steps;
 
 						let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
 						let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
@@ -860,7 +855,7 @@ macro_rules! impl_benchmark {
 						let diff = highest - lowest;
 
 						// Create up to `STEPS` steps for that component between high and low.
-						let step_size = (diff / steps).max(1);
+						let step_size = (diff / total_steps).max(1);
 						let num_of_steps = diff / step_size + 1;
 
 						for s in 0..num_of_steps {
@@ -1235,7 +1230,8 @@ pub fn show_benchmark_debug_info(
 	benchmark: &[u8],
 	lowest_range_values: &sp_std::prelude::Vec<u32>,
 	highest_range_values: &sp_std::prelude::Vec<u32>,
-	steps: &sp_std::prelude::Vec<u32>,
+	steps: &(u32, u32),
+	repeat: &(u32, u32),
 	verify: &bool,
 	error_message: &str,
 ) -> sp_runtime::RuntimeString {
@@ -1245,6 +1241,7 @@ pub fn show_benchmark_debug_info(
 		* Lowest_range_values: {:?}\n\
 		* Highest_range_values: {:?}\n\
 		* Steps: {:?}\n\
+		* Repeat: {:?}\n\
 		* Verify: {:?}\n\
 		* Error message: {}",
 		sp_std::str::from_utf8(instance_string)
@@ -1253,7 +1250,8 @@ pub fn show_benchmark_debug_info(
 		.expect("it's all just strings ran through the wasm interface. qed"),
 		lowest_range_values,
 		highest_range_values,
-		steps,
+		steps.1,
+		repeat.1,
 		verify,
 		error_message,
 	)
@@ -1334,6 +1332,7 @@ macro_rules! add_benchmark {
 			lowest_range_values,
 			highest_range_values,
 			steps,
+			repeat,
 			verify,
 			extra,
 		} = config;
@@ -1348,7 +1347,8 @@ macro_rules! add_benchmark {
 							benchmark,
 							&lowest_range_values[..],
 							&highest_range_values[..],
-							&steps[..],
+							*steps,
+							*repeat,
 							whitelist,
 							*verify,
 						).map_err(|e| {
@@ -1358,6 +1358,7 @@ macro_rules! add_benchmark {
 								lowest_range_values,
 								highest_range_values,
 								steps,
+								repeat,
 								verify,
 								e,
 							)
@@ -1373,7 +1374,8 @@ macro_rules! add_benchmark {
 						&benchmark[..],
 						&lowest_range_values[..],
 						&highest_range_values[..],
-						&steps[..],
+						*steps,
+						*repeat,
 						whitelist,
 						*verify,
 					).map_err(|e| {
@@ -1383,6 +1385,7 @@ macro_rules! add_benchmark {
 							lowest_range_values,
 							highest_range_values,
 							steps,
+							repeat,
 							verify,
 							e,
 						)

@@ -39,8 +39,8 @@ pub struct BenchmarkCmd {
 	pub extrinsic: String,
 
 	/// Select how many samples we should take across the variable components.
-	#[structopt(short, long, use_delimiter = true)]
-	pub steps: Vec<u32>,
+	#[structopt(short, long, default_value = "1")]
+	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
 	#[structopt(long = "low", use_delimiter = true)]
