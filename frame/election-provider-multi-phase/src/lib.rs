@@ -48,7 +48,7 @@
 //!
 //! ### Signed Phase
 //!
-//! 	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
+//! In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
 //! on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
 //! maximum of `pallet::Config::MaxSignedSubmissions` solutions are stored. The queue is always
@@ -228,34 +228,31 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{Currency, Get, ReservableCurrency, OnUnbalanced},
+	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
-use frame_election_provider_support::{ElectionDataProvider, ElectionProvider, onchain};
+use sp_arithmetic::{
+	traits::{CheckedAdd, Saturating, Zero},
+	UpperOf,
+};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, CompactSolution, ElectionScore,
-	EvaluateSupport, PerThing128, Supports, VoteWeight,
+	assignment_ratio_to_staked_normalized, CompactSolution, ElectionScore, EvaluateSupport,
+	PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
+	traits::Bounded,
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
 	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
-	traits::Bounded,
 };
-use sp_std::{
-	convert::TryInto,
-	prelude::*,
-};
-use sp_arithmetic::{
-	UpperOf,
-	traits::{Zero, CheckedAdd},
-};
+use sp_std::{convert::TryInto, prelude::*};
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -570,8 +567,8 @@ pub mod pallet {
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
 
-		/// Something that can predict the fee of a call.
-		type EstimateCallFee: frame_support::traits::EstimateCallFee<Call<Self>, BalanceOf<Self>>;
+		/// Something that can predict the fee of a call. Used to sensibly distribute rewards.
+		type EstimateCallFee: EstimateCallFee<Call<Self>, BalanceOf<Self>>;
 
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
@@ -982,7 +979,6 @@ pub mod pallet {
 			// create the submission
 			let deposit = Self::deposit_for(&solution, size);
 			let reward = {
-				use sp_runtime::traits::Saturating;
 				let call = Call::submit(solution.clone(), num_signed_submissions);
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)

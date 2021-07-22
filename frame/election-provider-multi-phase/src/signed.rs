@@ -559,7 +559,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			assert!(MultiPhase::finalize_signed_phase().0);
-			assert_eq!(balances(&99), (100 + 7, 0));
+			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 		})
 	}
 
@@ -608,7 +608,7 @@ mod tests {
 			assert!(MultiPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
-			assert_eq!(balances(&99), (100 + 7, 0));
+			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 gets everything back.
 			assert_eq!(balances(&999), (100, 0));
 		})
@@ -800,7 +800,7 @@ mod tests {
 			assert!(MultiPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
-			assert_eq!(balances(&99), (100 + 7, 0));
+			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 is slashed.
 			assert_eq!(balances(&999), (95, 0));
 			// 9999 gets everything back.
