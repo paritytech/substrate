@@ -110,6 +110,7 @@ impl<
 			+ CheckedSub
 			+ CheckedMul
 			+ CheckedDiv
+			+ CheckedRem
 			+ Saturating
 			+ PartialOrd<Self>
 			+ Ord
