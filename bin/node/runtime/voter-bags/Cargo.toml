@@ -10,7 +10,7 @@ description = "Voter Bag generation script for pallet-staking and node-runtime."
 readme = "README.md"
 
 [dependencies]
-node-runtime = { version = "2.0.0", path = ".." }
-pallet-staking = { version = "3.0.0", path = "../../../../frame/staking", features = ["make-bags"] }
-sp-io = { version = "3.0.0", path = "../../../../primitives/io" }
+node-runtime = { version = "3.0.0-dev", path = ".." }
+pallet-staking = { version = "4.0.0-dev", path = "../../../../frame/staking", features = ["make-bags"] }
+sp-io = { version = "4.0.0-dev", path = "../../../../primitives/io" }
 structopt = "0.3.21"

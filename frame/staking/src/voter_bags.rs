@@ -369,11 +369,11 @@ impl<T: Config> VoterList<T> {
 	/// * Ensure `CounterForVoters` is `CounterForValidators + CounterForNominators`.
 	/// * Sanity-checks all bags. This will cascade down all the checks and makes sure all bags are
 	///   checked per *any* update to `VoterList`.
-	pub(super) fn sanity_check() -> Result<(), String> {
+	pub(super) fn sanity_check() -> Result<(), std::string::String> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.voter.id).all(|voter| seen_in_list.insert(voter)),
-			String::from("duplicate identified")
+			String::from("duplicate identified"),
 		);
 
 		let iter_count = Self::iter().collect::<sp_std::vec::Vec<_>>().len() as u32;
@@ -544,7 +544,7 @@ impl<T: Config> Bag<T> {
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
-	fn sanity_check(&self) -> Result<(), String> {
+	fn sanity_check(&self) -> Result<(), std::string::String> {
 		ensure!(
 			self.head()
 				.map(|head| head.prev().is_none())
@@ -698,8 +698,7 @@ impl<T: Config> Node<T> {
 }
 
 /// Fundamental information about a voter.
-#[derive(Clone, Encode, Decode, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, PartialOrd, Ord, sp_runtime::RuntimeDebug)]
 pub struct Voter<AccountId> {
 	/// Account Id of this voter
 	pub id: AccountId,
