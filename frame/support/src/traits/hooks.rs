@@ -17,9 +17,9 @@
 
 //! Traits for hooking tasks to events in a blockchain's lifecycle.
 
+use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::MaybeSerializeDeserialize;
-use impl_trait_for_tuples::impl_for_tuples;
 
 /// The block initialization trait.
 ///
@@ -33,7 +33,9 @@ pub trait OnInitialize<BlockNumber> {
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
 	/// including inherent extrinsics. Hence for instance, if you runtime includes
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
+		0
+	}
 }
 
 #[impl_for_tuples(30)]
@@ -71,7 +73,7 @@ pub trait OnIdle<BlockNumber> {
 	/// in a block are applied but before `on_finalize` is executed.
 	fn on_idle(
 		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight
+		_remaining_weight: crate::weights::Weight,
 	) -> crate::weights::Weight {
 		0
 	}
@@ -79,7 +81,7 @@ pub trait OnIdle<BlockNumber> {
 
 #[impl_for_tuples(30)]
 impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
-	fn on_idle(n: BlockNumber,  remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
+	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
 		let mut weight = 0;
 		for_tuples!( #(
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
@@ -170,13 +172,17 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> { Ok(()) }
+	fn pre_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> { Ok(()) }
+	fn post_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
 }
 
 #[impl_for_tuples(30)]
@@ -214,7 +220,7 @@ pub trait Hooks<BlockNumber> {
 	/// and pass the result to the next `on_idle` hook if it exists.
 	fn on_idle(
 		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight
+		_remaining_weight: crate::weights::Weight,
 	) -> crate::weights::Weight {
 		0
 	}
@@ -222,7 +228,9 @@ pub trait Hooks<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
+		0
+	}
 
 	/// Perform a module upgrade.
 	///
@@ -238,7 +246,9 @@ pub trait Hooks<BlockNumber> {
 	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+	fn on_runtime_upgrade() -> crate::weights::Weight {
+		0
+	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
@@ -282,7 +292,7 @@ pub trait Hooks<BlockNumber> {
 /// A trait to define the build function of a genesis config, T and I are placeholder for pallet
 /// trait and pallet instance.
 #[cfg(feature = "std")]
-pub trait GenesisBuild<T, I=()>: Default + MaybeSerializeDeserialize {
+pub trait GenesisBuild<T, I = ()>: Default + MaybeSerializeDeserialize {
 	/// The build function is called within an externalities allowing storage APIs.
 	/// Thus one can write to storage using regular pallet storages.
 	fn build(&self);

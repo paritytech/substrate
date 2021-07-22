@@ -17,12 +17,12 @@
 
 //! Substrate client possible errors.
 
-use std::{self, result};
-use sp_state_machine;
-use sp_runtime::transaction_validity::TransactionValidityError;
-use sp_consensus;
 use codec::Error as CodecError;
 use sp_api::ApiError;
+use sp_consensus;
+use sp_runtime::transaction_validity::TransactionValidityError;
+use sp_state_machine;
+use std::{self, result};
 
 /// Client Result type alias
 pub type Result<T> = result::Result<T, Error>;
@@ -93,6 +93,9 @@ pub enum Error {
 	#[error("Genesis config provided is invalid")]
 	GenesisInvalid,
 
+	#[error("Provided state is invalid")]
+	InvalidState,
+
 	#[error("error decoding justification for header")]
 	JustificationDecode,
 
@@ -156,6 +159,9 @@ pub enum Error {
 	#[error("State Database error: {0}")]
 	StateDatabase(String),
 
+	#[error("Failed to set the chain head to a block that's too old.")]
+	SetHeadTooOld,
+
 	#[error(transparent)]
 	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 
@@ -205,7 +211,10 @@ impl Error {
 	/// Construct from a state db error.
 	// Can not be done directly, since that would make cargo run out of stack if
 	// `sc-state-db` is lib is added as dependency.
-	pub fn from_state_db<E>(e: E) -> Self where E: std::fmt::Debug {
+	pub fn from_state_db<E>(e: E) -> Self
+	where
+		E: std::fmt::Debug,
+	{
 		Error::StateDatabase(format!("{:?}", e))
 	}
 }

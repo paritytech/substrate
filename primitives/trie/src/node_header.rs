@@ -18,12 +18,11 @@
 //! The node header.
 
 use crate::trie_constants;
-use codec::{Encode, Decode, Input, Output};
+use codec::{Decode, Encode, Input, Output};
 use sp_std::iter::once;
 
 /// A node header
-#[derive(Copy, Clone, PartialEq, Eq)]
-#[derive(sp_core::RuntimeDebug)]
+#[derive(Copy, Clone, PartialEq, Eq, sp_core::RuntimeDebug)]
 pub(crate) enum NodeHeader {
 	Null,
 	// contains wether there is a value and nibble count
@@ -97,7 +96,7 @@ impl Decode for NodeHeader {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let mut i = input.read_byte()?;
 		if i == trie_constants::EMPTY_TRIE {
-			return Ok(NodeHeader::Null);
+			return Ok(NodeHeader::Null)
 		}
 		let contain_hash = if trie_constants::DEAD_HEADER_META_HASHED_VALUE == i {
 			i = input.read_byte()?;
@@ -182,7 +181,7 @@ fn decode_size(
 	while result <= trie_constants::NIBBLE_SIZE_BOUND {
 		let n = input.read_byte()? as usize;
 		if n < 255 {
-			return Ok(result + n + 1);
+			return Ok(result + n + 1)
 		}
 		result += 255;
 	}

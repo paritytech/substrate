@@ -17,7 +17,7 @@
 
 //! Some helper functions/macros for this crate.
 
-use super::{Config, VoteWeight, CompactVoterIndexOf, CompactTargetIndexOf};
+use super::{CompactTargetIndexOf, CompactVoterIndexOf, Config, VoteWeight};
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
 #[macro_export]
@@ -47,18 +47,20 @@ pub fn generate_voter_cache<T: Config>(
 	cache
 }
 
-/// Create a function the returns the index a voter in the snapshot.
+/// Create a function that returns the index of a voter in the snapshot.
 ///
 /// The returning index type is the same as the one defined in `T::CompactSolution::Voter`.
 ///
 /// ## Warning
 ///
-/// The snapshot must be the same is the one used to create `cache`.
+/// Note that this will represent the snapshot data from which the `cache` is generated.
 pub fn voter_index_fn<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_ {
 	move |who| {
-		cache.get(who).and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
+		cache
+			.get(who)
+			.and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
 	}
 }
 
@@ -70,7 +72,9 @@ pub fn voter_index_fn_owned<T: Config>(
 	cache: BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> {
 	move |who| {
-		cache.get(who).and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
+		cache
+			.get(who)
+			.and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
 	}
 }
 
@@ -78,7 +82,7 @@ pub fn voter_index_fn_owned<T: Config>(
 ///
 /// ## Warning
 ///
-/// The snapshot must be the same is the one used to create `cache`.
+/// Note that this will represent the snapshot data from which the `cache` is generated.
 pub fn voter_index_fn_usize<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<usize> + '_ {
@@ -103,7 +107,7 @@ pub fn voter_index_fn_linear<T: Config>(
 	}
 }
 
-/// Create a function the returns the index to a target in the snapshot.
+/// Create a function that returns the index of a target in the snapshot.
 ///
 /// The returned index type is the same as the one defined in `T::CompactSolution::Target`.
 ///
@@ -173,7 +177,11 @@ pub fn stake_of_fn_linear<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + '_ {
 	move |who| {
-		snapshot.iter().find(|(x, _, _)| x == who).map(|(_, x, _)| *x).unwrap_or_default()
+		snapshot
+			.iter()
+			.find(|(x, _, _)| x == who)
+			.map(|(_, x, _)| *x)
+			.unwrap_or_default()
 	}
 }
 

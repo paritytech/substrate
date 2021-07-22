@@ -18,10 +18,12 @@
 //! Implementations for `nonfungibles` traits.
 
 use super::*;
-use sp_std::convert::TryFrom;
-use frame_support::traits::tokens::nonfungibles::{Inspect, Mutate, Transfer};
-use frame_support::BoundedSlice;
+use frame_support::{
+	traits::tokens::nonfungibles::{Inspect, InspectEnumerable, Mutate, Transfer},
+	BoundedSlice,
+};
 use sp_runtime::DispatchResult;
+use sp_std::convert::TryFrom;
 
 impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	type InstanceId = T::InstanceId;
@@ -43,9 +45,11 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	/// When `key` is empty, we return the instance metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn attribute(class: &Self::ClassId, instance: &Self::InstanceId, key: &[u8])
-		-> Option<Vec<u8>>
-	{
+	fn attribute(
+		class: &Self::ClassId,
+		instance: &Self::InstanceId,
+		key: &[u8],
+	) -> Option<Vec<u8>> {
 		if key.is_empty() {
 			// We make the empty key map to the instance metadata value.
 			InstanceMetadataOf::<T, I>::get(class, instance).map(|m| m.data.into())
@@ -60,9 +64,7 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	/// When `key` is empty, we return the instance metadata value.
 	///
 	/// By default this is `None`; no attributes are defined.
-	fn class_attribute(class: &Self::ClassId, key: &[u8])
-		-> Option<Vec<u8>>
-	{
+	fn class_attribute(class: &Self::ClassId, key: &[u8]) -> Option<Vec<u8>> {
 		if key.is_empty() {
 			// We make the empty key map to the instance metadata value.
 			ClassMetadataOf::<T, I>::get(class).map(|m| m.data.into())
@@ -104,5 +106,38 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		destination: &T::AccountId,
 	) -> DispatchResult {
 		Self::do_transfer(class.clone(), instance.clone(), destination.clone(), |_, _| Ok(()))
+	}
+}
+
+impl<T: Config<I>, I: 'static> InspectEnumerable<T::AccountId> for Pallet<T, I> {
+	/// Returns an iterator of the asset classes in existence.
+	///
+	/// NOTE: iterating this list invokes a storage read per item.
+	fn classes() -> Box<dyn Iterator<Item = Self::ClassId>> {
+		Box::new(ClassMetadataOf::<T, I>::iter_keys())
+	}
+
+	/// Returns an iterator of the instances of an asset `class` in existence.
+	///
+	/// NOTE: iterating this list invokes a storage read per item.
+	fn instances(class: &Self::ClassId) -> Box<dyn Iterator<Item = Self::InstanceId>> {
+		Box::new(InstanceMetadataOf::<T, I>::iter_key_prefix(class))
+	}
+
+	/// Returns an iterator of the asset instances of all classes owned by `who`.
+	///
+	/// NOTE: iterating this list invokes a storage read per item.
+	fn owned(who: &T::AccountId) -> Box<dyn Iterator<Item = (Self::ClassId, Self::InstanceId)>> {
+		Box::new(Account::<T, I>::iter_key_prefix((who,)))
+	}
+
+	/// Returns an iterator of the asset instances of `class` owned by `who`.
+	///
+	/// NOTE: iterating this list invokes a storage read per item.
+	fn owned_in_class(
+		class: &Self::ClassId,
+		who: &T::AccountId,
+	) -> Box<dyn Iterator<Item = Self::InstanceId>> {
+		Box::new(Account::<T, I>::iter_key_prefix((who, class)))
 	}
 }

@@ -19,12 +19,16 @@
 //! * error declareed with decl_error works
 //! * integrity test is generated
 
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-use sp_runtime::{generic, traits::{BlakeTwo256, Verify}, DispatchError};
-use sp_core::{H256, sr25519};
-use sp_std::cell::RefCell;
 use frame_support::traits::PalletInfo as _;
+use sp_core::{sr25519, H256};
+use sp_runtime::{
+	generic,
+	traits::{BlakeTwo256, Verify},
+	DispatchError,
+};
+use sp_std::cell::RefCell;
 
 mod system;
 
@@ -51,7 +55,7 @@ mod module1 {
 	}
 
 	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
-	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData::<(T, I)>);
+	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData<(T, I)>);
 
 	frame_support::decl_event! {
 		pub enum Event<T, I: Instance = DefaultInstance> where
@@ -172,6 +176,22 @@ pub mod module3 {
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
 				Err(Error::<T>::Something.into())
 			}
+			#[weight = 0]
+			pub fn aux_1(_origin, #[compact] _data: u32) -> frame_support::dispatch::DispatchResult {
+				unreachable!()
+			}
+			#[weight = 0]
+			pub fn aux_2(_origin, _data: i32, #[compact] _data2: u32) -> frame_support::dispatch::DispatchResult {
+				unreachable!()
+			}
+			#[weight = 0]
+			fn aux_3(_origin, _data: i32, _data2: String) -> frame_support::dispatch::DispatchResult {
+				unreachable!()
+			}
+			#[weight = 3]
+			fn aux_4(_origin) -> frame_support::dispatch::DispatchResult { unreachable!() }
+			#[weight = (5, frame_support::weights::DispatchClass::Operational)]
+			fn operational(_origin) { unreachable!() }
 		}
 	}
 
@@ -209,7 +229,7 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 
 impl system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::AllowAll;
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
@@ -247,8 +267,8 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 mod origin_test {
-	use frame_support::traits::{Filter, OriginTrait};
 	use super::{module3, nested, system, Block, UncheckedExtrinsic};
+	use frame_support::traits::{Filter, OriginTrait};
 
 	impl nested::module3::Config for RuntimeOriginTest {}
 	impl module3::Config for RuntimeOriginTest {}
@@ -466,6 +486,112 @@ fn call_codec() {
 }
 
 #[test]
+fn call_compact_attr() {
+	use codec::Encode;
+	let call: module3::Call<Runtime> = module3::Call::aux_1(1);
+	let encoded = call.encode();
+	assert_eq!(2, encoded.len());
+	assert_eq!(vec![1, 4], encoded);
+
+	let call: module3::Call<Runtime> = module3::Call::aux_2(1, 2);
+	let encoded = call.encode();
+	assert_eq!(6, encoded.len());
+	assert_eq!(vec![2, 1, 0, 0, 0, 8], encoded);
+}
+
+#[test]
+fn call_encode_is_correct_and_decode_works() {
+	use codec::{Decode, Encode};
+	let call: module3::Call<Runtime> = module3::Call::fail();
+	let encoded = call.encode();
+	assert_eq!(vec![0], encoded);
+	let decoded = module3::Call::<Runtime>::decode(&mut &encoded[..]).unwrap();
+	assert_eq!(decoded, call);
+
+	let call: module3::Call<Runtime> = module3::Call::aux_3(32, "hello".into());
+	let encoded = call.encode();
+	assert_eq!(vec![3, 32, 0, 0, 0, 20, 104, 101, 108, 108, 111], encoded);
+	let decoded = module3::Call::<Runtime>::decode(&mut &encoded[..]).unwrap();
+	assert_eq!(decoded, call);
+}
+
+#[test]
+fn call_weight_should_attach_to_call_enum() {
+	use frame_support::{
+		dispatch::{DispatchInfo, GetDispatchInfo},
+		weights::{DispatchClass, Pays},
+	};
+	// operational.
+	assert_eq!(
+		module3::Call::<Runtime>::operational().get_dispatch_info(),
+		DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
+	);
+	// custom basic
+	assert_eq!(
+		module3::Call::<Runtime>::aux_4().get_dispatch_info(),
+		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
+	);
+}
+
+#[test]
+fn call_name() {
+	use frame_support::dispatch::GetCallName;
+	let name = module3::Call::<Runtime>::aux_4().get_call_name();
+	assert_eq!("aux_4", name);
+}
+
+#[test]
+fn call_metadata() {
+	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
+	let call = Call::Module3(module3::Call::<Runtime>::aux_4());
+	let metadata = call.get_call_metadata();
+	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
+	assert_eq!(metadata, expected);
+}
+
+#[test]
+fn get_call_names() {
+	use frame_support::dispatch::GetCallName;
+	let call_names = module3::Call::<Runtime>::get_call_names();
+	assert_eq!(["fail", "aux_1", "aux_2", "aux_3", "aux_4", "operational"], call_names);
+}
+
+#[test]
+fn get_module_names() {
+	use frame_support::dispatch::GetCallMetadata;
+	let module_names = Call::get_module_names();
+	assert_eq!(
+		[
+			"System",
+			"Module1_1",
+			"Module2",
+			"Module1_2",
+			"NestedModule3",
+			"Module3",
+			"Module1_4",
+			"Module1_6",
+			"Module1_7",
+			"Module1_8",
+			"Module1_9",
+		],
+		module_names
+	);
+}
+
+#[test]
+fn call_subtype_conversion() {
+	use frame_support::{dispatch::CallableCallFor, traits::IsSubType};
+	let call = Call::Module3(module3::Call::<Runtime>::fail());
+	let subcall: Option<&CallableCallFor<Module3, Runtime>> = call.is_sub_type();
+	let subcall_none: Option<&CallableCallFor<Module2, Runtime>> = call.is_sub_type();
+	assert_eq!(Some(&module3::Call::<Runtime>::fail()), subcall);
+	assert_eq!(None, subcall_none);
+
+	let from = Call::from(subcall.unwrap().clone());
+	assert_eq!(from, call);
+}
+
+#[test]
 fn test_metadata() {
 	use frame_metadata::*;
 	let expected_metadata: RuntimeMetadataLastVersion = RuntimeMetadataLastVersion {
@@ -473,28 +599,32 @@ fn test_metadata() {
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("System"),
 				storage: None,
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-					name: DecodeDifferent::Encode("noop"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("ExtrinsicSuccess"),
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
+						name: DecodeDifferent::Encode("noop"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("ExtrinsicFailed"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("Ignore"),
-						arguments: DecodeDifferent::Encode(&["BlockNumber"]),
-						documentation: DecodeDifferent::Encode(&[]),
-					},
-				]))),
+					}]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[
+						EventMetadata {
+							name: DecodeDifferent::Encode("ExtrinsicSuccess"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+						EventMetadata {
+							name: DecodeDifferent::Encode("ExtrinsicFailed"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+						EventMetadata {
+							name: DecodeDifferent::Encode("Ignore"),
+							arguments: DecodeDifferent::Encode(&["BlockNumber"]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+					]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 30,
@@ -505,18 +635,20 @@ fn test_metadata() {
 					prefix: DecodeDifferent::Encode("Instance1Module"),
 					entries: DecodeDifferent::Encode(&[]),
 				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[
-					FunctionMetadata {
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
 						name: DecodeDifferent::Encode("fail"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
-					},
-				]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-					name: DecodeDifferent::Encode("A"),
-					arguments: DecodeDifferent::Encode(&["AccountId"]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
+					}]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
+						name: DecodeDifferent::Encode("A"),
+						arguments: DecodeDifferent::Encode(&["AccountId"]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 31,
@@ -527,20 +659,20 @@ fn test_metadata() {
 					prefix: DecodeDifferent::Encode("Module"),
 					entries: DecodeDifferent::Encode(&[]),
 				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[
-					FunctionMetadata {
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
 						name: DecodeDifferent::Encode("fail"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
-					},
-				]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[
-					EventMetadata {
+					}]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
 						name: DecodeDifferent::Encode("A"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
-					},
-				]))),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 32,
@@ -551,16 +683,20 @@ fn test_metadata() {
 					prefix: DecodeDifferent::Encode("Instance2Module"),
 					entries: DecodeDifferent::Encode(&[]),
 				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-					name: DecodeDifferent::Encode("fail"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-					name: DecodeDifferent::Encode("A"),
-					arguments: DecodeDifferent::Encode(&["AccountId"]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
+						name: DecodeDifferent::Encode("fail"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
+						name: DecodeDifferent::Encode("A"),
+						arguments: DecodeDifferent::Encode(&["AccountId"]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 33,
@@ -571,20 +707,20 @@ fn test_metadata() {
 					prefix: DecodeDifferent::Encode("Module"),
 					entries: DecodeDifferent::Encode(&[]),
 				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[
-					FunctionMetadata {
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
 						name: DecodeDifferent::Encode("fail"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
-					},
-				]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[
-					EventMetadata {
+					}]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
 						name: DecodeDifferent::Encode("A"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
-					},
-				]))),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 34,
@@ -595,20 +731,68 @@ fn test_metadata() {
 					prefix: DecodeDifferent::Encode("Module"),
 					entries: DecodeDifferent::Encode(&[]),
 				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[
-					FunctionMetadata {
-						name: DecodeDifferent::Encode("fail"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
-					},
-				]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[
-					EventMetadata {
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[
+						FunctionMetadata {
+							name: DecodeDifferent::Encode("fail"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+						FunctionMetadata {
+							name: DecodeDifferent::Encode("aux_1"),
+							arguments: DecodeDifferent::Encode(&[FunctionArgumentMetadata {
+								name: DecodeDifferent::Encode("_data"),
+								ty: DecodeDifferent::Encode("Compact<u32>"),
+							}]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+						FunctionMetadata {
+							name: DecodeDifferent::Encode("aux_2"),
+							arguments: DecodeDifferent::Encode(&[
+								FunctionArgumentMetadata {
+									name: DecodeDifferent::Encode("_data"),
+									ty: DecodeDifferent::Encode("i32"),
+								},
+								FunctionArgumentMetadata {
+									name: DecodeDifferent::Encode("_data2"),
+									ty: DecodeDifferent::Encode("Compact<u32>"),
+								},
+							]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+						FunctionMetadata {
+							name: DecodeDifferent::Encode("aux_3"),
+							arguments: DecodeDifferent::Encode(&[
+								FunctionArgumentMetadata {
+									name: DecodeDifferent::Encode("_data"),
+									ty: DecodeDifferent::Encode("i32"),
+								},
+								FunctionArgumentMetadata {
+									name: DecodeDifferent::Encode("_data2"),
+									ty: DecodeDifferent::Encode("String"),
+								},
+							]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+						FunctionMetadata {
+							name: DecodeDifferent::Encode("aux_4"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+						FunctionMetadata {
+							name: DecodeDifferent::Encode("operational"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[]),
+						},
+					]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
 						name: DecodeDifferent::Encode("A"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
-					},
-				]))),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 35,
@@ -628,11 +812,13 @@ fn test_metadata() {
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_4"),
 				storage: None,
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-					name: DecodeDifferent::Encode("fail"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
+						name: DecodeDifferent::Encode("fail"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
 				event: None,
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
@@ -642,11 +828,13 @@ fn test_metadata() {
 				name: DecodeDifferent::Encode("Module1_5"),
 				storage: None,
 				calls: None,
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-					name: DecodeDifferent::Encode("A"),
-					arguments: DecodeDifferent::Encode(&["AccountId"]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
+						name: DecodeDifferent::Encode("A"),
+						arguments: DecodeDifferent::Encode(&["AccountId"]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 4,
@@ -657,16 +845,20 @@ fn test_metadata() {
 					prefix: DecodeDifferent::Encode("Instance6Module"),
 					entries: DecodeDifferent::Encode(&[]),
 				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-					name: DecodeDifferent::Encode("fail"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-					name: DecodeDifferent::Encode("A"),
-					arguments: DecodeDifferent::Encode(&["AccountId"]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
+						name: DecodeDifferent::Encode("fail"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
+						name: DecodeDifferent::Encode("A"),
+						arguments: DecodeDifferent::Encode(&["AccountId"]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 1,
@@ -677,16 +869,20 @@ fn test_metadata() {
 					prefix: DecodeDifferent::Encode("Instance7Module"),
 					entries: DecodeDifferent::Encode(&[]),
 				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-					name: DecodeDifferent::Encode("fail"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-					name: DecodeDifferent::Encode("A"),
-					arguments: DecodeDifferent::Encode(&["AccountId"]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
+						name: DecodeDifferent::Encode("fail"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
+						name: DecodeDifferent::Encode("A"),
+						arguments: DecodeDifferent::Encode(&["AccountId"]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 2,
@@ -697,16 +893,20 @@ fn test_metadata() {
 					prefix: DecodeDifferent::Encode("Instance8Module"),
 					entries: DecodeDifferent::Encode(&[]),
 				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-					name: DecodeDifferent::Encode("fail"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-					name: DecodeDifferent::Encode("A"),
-					arguments: DecodeDifferent::Encode(&["AccountId"]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
+						name: DecodeDifferent::Encode("fail"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
+						name: DecodeDifferent::Encode("A"),
+						arguments: DecodeDifferent::Encode(&["AccountId"]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 12,
@@ -717,16 +917,20 @@ fn test_metadata() {
 					prefix: DecodeDifferent::Encode("Instance9Module"),
 					entries: DecodeDifferent::Encode(&[]),
 				}))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[FunctionMetadata {
-					name: DecodeDifferent::Encode("fail"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
-				event: Some(DecodeDifferent::Encode(FnEncode(|| &[EventMetadata {
-					name: DecodeDifferent::Encode("A"),
-					arguments: DecodeDifferent::Encode(&["AccountId"]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}]))),
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[FunctionMetadata {
+						name: DecodeDifferent::Encode("fail"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| {
+					&[EventMetadata {
+						name: DecodeDifferent::Encode("A"),
+						arguments: DecodeDifferent::Encode(&["AccountId"]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}]
+				}))),
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 13,

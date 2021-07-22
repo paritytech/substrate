@@ -15,14 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
 use crate::Config;
+use codec::{Decode, Encode};
 use frame_support::weights::DispatchInfo;
 use sp_runtime::{
-	traits::{SignedExtension, DispatchInfoOf, Dispatchable, One},
+	traits::{DispatchInfoOf, Dispatchable, One, SignedExtension},
 	transaction_validity::{
-		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
-		TransactionLongevity,
+		InvalidTransaction, TransactionLongevity, TransactionValidity, TransactionValidityError,
+		ValidTransaction,
 	},
 };
 use sp_std::vec;
@@ -53,8 +53,9 @@ impl<T: Config> sp_std::fmt::Debug for CheckNonce<T> {
 	}
 }
 
-impl<T: Config> SignedExtension for CheckNonce<T> where
-	T::Call: Dispatchable<Info=DispatchInfo>
+impl<T: Config> SignedExtension for CheckNonce<T>
+where
+	T::Call: Dispatchable<Info = DispatchInfo>,
 {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
@@ -62,7 +63,9 @@ impl<T: Config> SignedExtension for CheckNonce<T> where
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckNonce";
 
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
+		Ok(())
+	}
 
 	fn pre_dispatch(
 		self,
@@ -73,13 +76,12 @@ impl<T: Config> SignedExtension for CheckNonce<T> where
 	) -> Result<(), TransactionValidityError> {
 		let mut account = crate::Account::<T>::get(who);
 		if self.0 != account.nonce {
-			return Err(
-				if self.0 < account.nonce {
-					InvalidTransaction::Stale
-				} else {
-					InvalidTransaction::Future
-				}.into()
-			)
+			return Err(if self.0 < account.nonce {
+				InvalidTransaction::Stale
+			} else {
+				InvalidTransaction::Future
+			}
+			.into())
 		}
 		account.nonce += T::Index::one();
 		crate::Account::<T>::insert(who, account);
@@ -119,19 +121,22 @@ impl<T: Config> SignedExtension for CheckNonce<T> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{Test, new_test_ext, CALL};
+	use crate::mock::{new_test_ext, Test, CALL};
 	use frame_support::{assert_noop, assert_ok};
 
 	#[test]
 	fn signed_ext_check_nonce_works() {
 		new_test_ext().execute_with(|| {
-			crate::Account::<Test>::insert(1, crate::AccountInfo {
-				nonce: 1,
-				consumers: 0,
-				providers: 0,
-				sufficients: 0,
-				data: 0,
-			});
+			crate::Account::<Test>::insert(
+				1,
+				crate::AccountInfo {
+					nonce: 1,
+					consumers: 0,
+					providers: 0,
+					sufficients: 0,
+					data: 0,
+				},
+			);
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale

@@ -24,16 +24,11 @@
 //! `cargo hfuzz run-debug per_thing_rational hfuzz_workspace/per_thing_rational/*.fuzz`.
 
 use honggfuzz::fuzz;
-use sp_arithmetic::{
-	PerThing, PerU16, Percent, Perbill, Perquintill, traits::SaturatedConversion,
-};
+use sp_arithmetic::{traits::SaturatedConversion, PerThing, PerU16, Perbill, Percent, Perquintill};
 
 fn main() {
 	loop {
-		fuzz!(|
-			data: ((u16, u16), (u32, u32), (u64, u64))
-		| {
-
+		fuzz!(|data: ((u16, u16), (u32, u32), (u64, u64))| {
 			let (u16_pair, u32_pair, u64_pair) = data;
 
 			// peru16
@@ -109,7 +104,6 @@ fn main() {
 				Perquintill::from_float(smaller as f64 / bigger.max(1) as f64),
 				1000,
 			);
-
 		})
 	}
 }

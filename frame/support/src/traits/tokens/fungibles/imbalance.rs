@@ -18,12 +18,14 @@
 //! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
-use super::*;
+use super::{
+	balanced::Balanced,
+	fungibles::{AssetId, Balance},
+	*,
+};
+use crate::traits::misc::{SameOrOther, TryDrop};
+use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::marker::PhantomData;
-use sp_runtime::traits::Zero;
-use super::fungibles::{AssetId, Balance};
-use super::balanced::Balanced;
-use crate::traits::misc::{TryDrop, SameOrOther};
 
 /// Handler for when an imbalance gets dropped. This could handle either a credit (negative) or
 /// debt (positive) imbalance.
@@ -37,6 +39,7 @@ pub trait HandleImbalanceDrop<AssetId, Balance> {
 ///
 /// Importantly, it has a special `Drop` impl, and cannot be created outside of this module.
 #[must_use]
+#[derive(RuntimeDebug, Eq, PartialEq)]
 pub struct Imbalance<
 	A: AssetId,
 	B: Balance,
@@ -49,11 +52,12 @@ pub struct Imbalance<
 }
 
 impl<
-	A: AssetId,
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<A, B>,
-	OppositeOnDrop: HandleImbalanceDrop<A, B>
-> Drop for Imbalance<A, B, OnDrop, OppositeOnDrop> {
+		A: AssetId,
+		B: Balance,
+		OnDrop: HandleImbalanceDrop<A, B>,
+		OppositeOnDrop: HandleImbalanceDrop<A, B>,
+	> Drop for Imbalance<A, B, OnDrop, OppositeOnDrop>
+{
 	fn drop(&mut self) {
 		if !self.amount.is_zero() {
 			OnDrop::handle(self.asset, self.amount)
@@ -62,11 +66,12 @@ impl<
 }
 
 impl<
-	A: AssetId,
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<A, B>,
-	OppositeOnDrop: HandleImbalanceDrop<A, B>,
-> TryDrop for Imbalance<A, B, OnDrop, OppositeOnDrop> {
+		A: AssetId,
+		B: Balance,
+		OnDrop: HandleImbalanceDrop<A, B>,
+		OppositeOnDrop: HandleImbalanceDrop<A, B>,
+	> TryDrop for Imbalance<A, B, OnDrop, OppositeOnDrop>
+{
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".
 	fn try_drop(self) -> Result<(), Self> {
 		self.drop_zero()
@@ -74,11 +79,12 @@ impl<
 }
 
 impl<
-	A: AssetId,
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<A, B>,
-	OppositeOnDrop: HandleImbalanceDrop<A, B>,
-> Imbalance<A, B, OnDrop, OppositeOnDrop> {
+		A: AssetId,
+		B: Balance,
+		OnDrop: HandleImbalanceDrop<A, B>,
+		OppositeOnDrop: HandleImbalanceDrop<A, B>,
+	> Imbalance<A, B, OnDrop, OppositeOnDrop>
+{
 	pub fn zero(asset: A) -> Self {
 		Self { asset, amount: Zero::zero(), _phantom: PhantomData }
 	}
@@ -121,7 +127,10 @@ impl<
 			Err(other)
 		}
 	}
-	pub fn offset(self, other: Imbalance<A, B, OppositeOnDrop, OnDrop>) -> Result<
+	pub fn offset(
+		self,
+		other: Imbalance<A, B, OppositeOnDrop, OnDrop>,
+	) -> Result<
 		SameOrOther<Self, Imbalance<A, B, OppositeOnDrop, OnDrop>>,
 		(Self, Imbalance<A, B, OppositeOnDrop, OnDrop>),
 	> {

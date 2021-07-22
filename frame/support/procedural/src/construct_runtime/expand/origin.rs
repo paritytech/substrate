@@ -18,7 +18,7 @@
 use crate::construct_runtime::{Pallet, SYSTEM_PALLET_NAME};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{token, Ident, Generics};
+use syn::{token, Generics, Ident};
 
 pub fn expand_outer_origin(
 	runtime: &Ident,
@@ -26,45 +26,62 @@ pub fn expand_outer_origin(
 	pallets_token: token::Brace,
 	scrate: &TokenStream,
 ) -> syn::Result<TokenStream> {
-	let system_pallet = pallets.iter()
-		.find(|decl| decl.name == SYSTEM_PALLET_NAME)
-		.ok_or_else(|| syn::Error::new(
-			pallets_token.span,
-			"`System` pallet declaration is missing. \
+	let system_pallet =
+		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
+			syn::Error::new(
+				pallets_token.span,
+				"`System` pallet declaration is missing. \
 			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
-		))?;
+			)
+		})?;
 
 	let mut caller_variants = TokenStream::new();
 	let mut pallet_conversions = TokenStream::new();
+	let mut query_origin_part_macros = Vec::new();
 
 	for pallet_decl in pallets.iter().filter(|pallet| pallet.name != SYSTEM_PALLET_NAME) {
 		if let Some(pallet_entry) = pallet_decl.find_part("Origin") {
 			let instance = pallet_decl.instance.as_ref();
 			let index = pallet_decl.index;
 			let generics = &pallet_entry.generics;
+			let name = &pallet_decl.name;
+			let path = &pallet_decl.path;
 
 			if instance.is_some() && generics.params.is_empty() {
 				let msg = format!(
 					"Instantiable pallet with no generic `Origin` cannot \
 					 be constructed: pallet `{}` must have generic `Origin`",
-					pallet_decl.name
+					name
 				);
-				return Err(syn::Error::new(pallet_decl.name.span(), msg));
+				return Err(syn::Error::new(name.span(), msg))
 			}
 
-			caller_variants.extend(
-				expand_origin_caller_variant(runtime, pallet_decl, index, instance, generics),
-			);
-			pallet_conversions.extend(
-				expand_origin_pallet_conversions(scrate, runtime, pallet_decl, instance, generics),
-			);
+			caller_variants.extend(expand_origin_caller_variant(
+				runtime,
+				pallet_decl,
+				index,
+				instance,
+				generics,
+			));
+			pallet_conversions.extend(expand_origin_pallet_conversions(
+				scrate,
+				runtime,
+				pallet_decl,
+				instance,
+				generics,
+			));
+			query_origin_part_macros.push(quote! {
+				#path::__substrate_origin_check::is_origin_part_defined!(#name);
+			});
 		}
 	}
 
 	let system_path = &system_pallet.path;
 	let system_index = system_pallet.index;
 
-	Ok(quote!{
+	Ok(quote! {
+		#( #query_origin_part_macros )*
+
 		// WARNING: All instance must hold the filter `frame_system::Config::BaseCallFilter`, except
 		// when caller is system Root. One can use `OriginTrait::reset_filter` to do so.
 		#[derive(Clone)]
@@ -262,16 +279,16 @@ fn expand_origin_caller_variant(
 	match instance {
 		Some(inst) if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime, #path::#inst>),)
-		}
+		},
 		Some(inst) => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#path::#inst>),)
-		}
+		},
 		None if part_is_generic => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime>),)
-		}
+		},
 		None => {
 			quote!(#[codec(index = #index)] #variant_name(#path::Origin),)
-		}
+		},
 	}
 }
 
@@ -293,7 +310,7 @@ fn expand_origin_pallet_conversions(
 		None => quote!(#path::Origin),
 	};
 
-	quote!{
+	quote! {
 		impl From<#pallet_origin> for OriginCaller {
 			fn from(x: #pallet_origin) -> Self {
 				OriginCaller::#variant_name(x)

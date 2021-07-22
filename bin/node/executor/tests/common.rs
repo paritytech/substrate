@@ -15,34 +15,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
-use frame_system::offchain::AppCrypto;
+use codec::{Decode, Encode};
 use frame_support::Hashable;
-use sp_state_machine::TestExternalities as CoreTestExternalities;
-use sp_consensus_babe::{BABE_ENGINE_ID, Slot, digests::{PreDigest, SecondaryPlainPreDigest}};
+use frame_system::offchain::AppCrypto;
+use sc_executor::{error::Result, NativeExecutor, WasmExecutionMethod};
+use sp_consensus_babe::{
+	digests::{PreDigest, SecondaryPlainPreDigest},
+	Slot, BABE_ENGINE_ID,
+};
 use sp_core::{
-	NeverNativeValue, NativeOrEncoded,
 	crypto::KeyTypeId,
 	sr25519::Signature,
 	traits::{CodeExecutor, RuntimeCode},
+	NativeOrEncoded, NeverNativeValue,
 };
 use sp_runtime::{
-	ApplyExtrinsicResult,
-	MultiSigner,
-	MultiSignature,
-	Digest,
-	DigestItem,
-	traits::{Header as HeaderT, BlakeTwo256},
+	traits::{BlakeTwo256, Header as HeaderT},
+	ApplyExtrinsicResult, Digest, DigestItem, MultiSignature, MultiSigner,
 };
-use sc_executor::{NativeExecutor, WasmExecutionMethod};
-use sc_executor::error::Result;
+use sp_state_machine::TestExternalities as CoreTestExternalities;
 
 use node_executor::Executor;
+use node_primitives::{BlockNumber, Hash};
 use node_runtime::{
-	Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Runtime, BuildStorage,
-	constants::currency::*,
+	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, Header, Runtime,
+	UncheckedExtrinsic,
 };
-use node_primitives::{Hash, BlockNumber};
 use node_testing::keyring::*;
 use sp_externalities::Externalities;
 
@@ -50,8 +48,8 @@ pub const TEST_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"test");
 
 pub mod sr25519 {
 	mod app_sr25519 {
-		use sp_application_crypto::{app_crypto, sr25519};
 		use super::super::TEST_KEY_TYPE_ID;
+		use sp_application_crypto::{app_crypto, sr25519};
 		app_crypto!(sr25519, TEST_KEY_TYPE_ID);
 	}
 
@@ -72,8 +70,10 @@ impl AppCrypto<MultiSigner, MultiSignature> for TestAuthorityId {
 /// as canonical. This is why `native_executor_instance` also uses the compact version of the
 /// runtime.
 pub fn compact_code_unwrap() -> &'static [u8] {
-	node_runtime::WASM_BINARY.expect("Development wasm binary is not available. \
-									  Testing is only supported with the flag disabled.")
+	node_runtime::WASM_BINARY.expect(
+		"Development wasm binary is not available. \
+									  Testing is only supported with the flag disabled.",
+	)
 }
 
 pub const GENESIS_HASH: [u8; 32] = [69u8; 32];
@@ -101,8 +101,9 @@ pub fn executor() -> NativeExecutor<Executor> {
 }
 
 pub fn executor_call<
-	R:Decode + Encode + PartialEq,
-	NC: FnOnce() -> std::result::Result<R, Box<dyn std::error::Error + Send + Sync>> + std::panic::UnwindSafe
+	R: Decode + Encode + PartialEq,
+	NC: FnOnce() -> std::result::Result<R, Box<dyn std::error::Error + Send + Sync>>
+		+ std::panic::UnwindSafe,
 >(
 	t: &mut TestExternalities<BlakeTwo256>,
 	method: &str,
@@ -120,20 +121,15 @@ pub fn executor_call<
 		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
 	};
 
-	executor().call::<R, NC>(
-		&mut t,
-		&runtime_code,
-		method,
-		data,
-		use_native,
-		native_call,
-	)
+	executor().call::<R, NC>(&mut t, &runtime_code, method, data, use_native, native_call)
 }
 
 pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<BlakeTwo256> {
 	let mut ext = TestExternalities::new_with_code(
 		code,
-		node_testing::genesis::config(support_changes_trie, Some(code)).build_storage().unwrap(),
+		node_testing::genesis::config(support_changes_trie, Some(code))
+			.build_storage()
+			.unwrap(),
 	);
 	ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 	ext
@@ -150,7 +146,7 @@ pub fn construct_block(
 	extrinsics: Vec<CheckedExtrinsic>,
 	babe_slot: Slot,
 ) -> (Vec<u8>, Hash) {
-	use sp_trie::{TrieConfiguration, trie_types::Layout};
+	use sp_trie::{trie_types::Layout, TrieConfiguration};
 
 	// sign extrinsics.
 	let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
@@ -167,15 +163,14 @@ pub fn construct_block(
 		extrinsics_root,
 		state_root: Default::default(),
 		digest: Digest {
-			logs: vec![
-				DigestItem::PreRuntime(
-					BABE_ENGINE_ID,
-					PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-						slot: babe_slot,
-						authority_index: 42,
-					}).encode()
-				),
-			],
+			logs: vec![DigestItem::PreRuntime(
+				BABE_ENGINE_ID,
+				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
+					slot: babe_slot,
+					authority_index: 42,
+				})
+				.encode(),
+			)],
 		},
 	};
 
@@ -186,7 +181,9 @@ pub fn construct_block(
 		&header.encode(),
 		true,
 		None,
-	).0.unwrap();
+	)
+	.0
+	.unwrap();
 
 	for extrinsic in extrinsics.iter() {
 		// Try to apply the `extrinsic`. It should be valid, in the sense that it passes
@@ -197,8 +194,13 @@ pub fn construct_block(
 			&extrinsic.encode(),
 			true,
 			None,
-		).0.expect("application of an extrinsic failed").into_encoded();
-		match ApplyExtrinsicResult::decode(&mut &r[..]).expect("apply result deserialization failed") {
+		)
+		.0
+		.expect("application of an extrinsic failed")
+		.into_encoded();
+		match ApplyExtrinsicResult::decode(&mut &r[..])
+			.expect("apply result deserialization failed")
+		{
 			Ok(_) => {},
 			Err(e) => panic!("Applying extrinsic failed: {:?}", e),
 		}
@@ -207,10 +209,13 @@ pub fn construct_block(
 	let header = match executor_call::<NeverNativeValue, fn() -> _>(
 		env,
 		"BlockBuilder_finalize_block",
-		&[0u8;0],
+		&[0u8; 0],
 		true,
 		None,
-	).0.unwrap() {
+	)
+	.0
+	.unwrap()
+	{
 		NativeOrEncoded::Native(_) => unreachable!(),
 		NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
 	};

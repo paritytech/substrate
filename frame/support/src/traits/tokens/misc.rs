@@ -17,11 +17,11 @@
 
 //! Miscellaneous types.
 
-use sp_std::fmt::Debug;
-use codec::{Encode, Decode, FullCodec};
+use codec::{Decode, Encode, FullCodec};
+use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
-use sp_arithmetic::traits::{Zero, AtLeast32BitUnsigned};
-use sp_runtime::{DispatchError, ArithmeticError, TokenError};
+use sp_runtime::{ArithmeticError, DispatchError, TokenError};
+use sp_std::fmt::Debug;
 
 /// One of a number of consequences of withdrawing a fungible from an account.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -150,7 +150,7 @@ impl WithdrawReasons {
 	/// assert_eq!(
 	/// 	WithdrawReasons::FEE | WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE | WithdrawReasons::TIP,
 	/// 	WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT),
-	///	);
+	/// 	);
 	/// # }
 	/// ```
 	pub fn except(one: WithdrawReasons) -> WithdrawReasons {
@@ -161,9 +161,15 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy  + Eq + PartialEq + Debug {}
+pub trait AssetId: FullCodec + Copy + Eq + PartialEq + Debug {}
 impl<T: FullCodec + Copy + Eq + PartialEq + Debug> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
 pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug {}
 impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug> Balance for T {}
+
+/// Converts a balance value into an asset balance.
+pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
+	type Error;
+	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
+}
