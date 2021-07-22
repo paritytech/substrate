@@ -66,6 +66,9 @@ pub mod example {
 					Ok(end_weight.into())
 				}
 			}
+
+			#[weight = 0]
+			fn big_variant(_origin, _arg: [u8; 400]) {}
 		}
 	}
 }
@@ -586,5 +589,14 @@ fn batch_all_does_not_nest() {
 		);
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
+	});
+}
+
+#[test]
+fn batch_limit() {
+	new_test_ext().execute_with(|| {
+		let calls = vec![Call::System(SystemCall::remark(vec![])); 40_000];
+		assert_noop!(Utility::batch(Origin::signed(1), calls.clone()), Error::<Test>::TooManyCalls);
+		assert_noop!(Utility::batch_all(Origin::signed(1), calls), Error::<Test>::TooManyCalls);
 	});
 }
