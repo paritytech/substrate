@@ -19,7 +19,7 @@
 use sp_core::crypto::Pair;
 
 use codec::Codec;
-use sp_core::crypto::{KeyTypeId, CryptoType, CryptoTypeId, IsWrappedBy, Public};
+use sp_core::crypto::{CryptoType, CryptoTypeId, IsWrappedBy, KeyTypeId, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
@@ -57,7 +57,7 @@ impl<T> MaybeHash for T {}
 
 /// Type which implements Debug and Hash in std, not when no-std (no-std variant with crypto).
 #[cfg(all(not(feature = "std"), feature = "full_crypto"))]
-pub trait MaybeDebugHash: sp_std::hash::Hash  {}
+pub trait MaybeDebugHash: sp_std::hash::Hash {}
 #[cfg(all(not(feature = "std"), feature = "full_crypto"))]
 impl<T: sp_std::hash::Hash> MaybeDebugHash for T {}
 
@@ -66,15 +66,23 @@ pub trait AppPublic:
 	AppKey + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec
 {
 	/// The wrapped type which is just a plain instance of `Public`.
-	type Generic:
-		IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + Debug + MaybeHash + codec::Codec;
+	type Generic: IsWrappedBy<Self>
+		+ Public
+		+ Ord
+		+ PartialOrd
+		+ Eq
+		+ PartialEq
+		+ Debug
+		+ MaybeHash
+		+ codec::Codec;
 }
 
 /// A application's key pair.
 #[cfg(feature = "full_crypto")]
-pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
+pub trait AppPair: AppKey + Pair<Public = <Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
-	type Generic: IsWrappedBy<Self> + Pair<Public = <<Self as AppKey>::Public as AppPublic>::Generic>;
+	type Generic: IsWrappedBy<Self>
+		+ Pair<Public = <<Self as AppKey>::Public as AppPublic>::Generic>;
 }
 
 /// A application's signature.

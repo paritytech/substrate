@@ -17,15 +17,17 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
-use codec::{Encode, Decode};
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use sc_client_api::CompactProof;
-use crate::schema::v1::{StateRequest, StateResponse, StateEntry};
-use crate::chain::{Client, ImportedState};
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use sp_core::storage::well_known_keys;
 use super::StateDownloadProgress;
+use crate::{
+	chain::{Client, ImportedState},
+	schema::v1::{StateEntry, StateRequest, StateResponse},
+};
+use codec::{Decode, Encode};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 
 /// State sync support.
 
@@ -76,14 +78,14 @@ impl<B: BlockT> StateSync<B> {
 				target: "sync",
 				"Bad state response",
 			);
-			return ImportResult::BadResponse;
+			return ImportResult::BadResponse
 		}
 		if !self.skip_proof && response.proof.is_empty() {
 			log::debug!(
 				target: "sync",
 				"Missing proof",
 			);
-			return ImportResult::BadResponse;
+			return ImportResult::BadResponse
 		}
 		let complete = if !self.skip_proof {
 			log::debug!(

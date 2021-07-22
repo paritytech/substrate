@@ -19,7 +19,8 @@
 //! This file was not auto-generated.
 
 use frame_support::weights::{
-	Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS, RocksDbWeight as DbWeight},
+	constants::{RocksDbWeight as DbWeight, WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
+	Weight,
 };
 
 impl crate::WeightInfo for () {
@@ -48,7 +49,6 @@ impl crate::WeightInfo for () {
 	}
 
 	fn note_stalled() -> Weight {
-		(3 * WEIGHT_PER_MICROS)
-			.saturating_add(DbWeight::get().writes(1))
+		(3 * WEIGHT_PER_MICROS).saturating_add(DbWeight::get().writes(1))
 	}
 }

@@ -35,7 +35,7 @@
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecExtension)]
 //! pub struct MyExtension {
-//!		pub known_blocks: HashMap<u64, String>,
+//! 		pub known_blocks: HashMap<u64, String>,
 //! }
 //!
 //! pub type MyChainSpec<G> = GenericChainSpec<G, MyExtension>;
@@ -53,19 +53,19 @@
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
-//!		max_block_size: usize,
-//!		max_extrinsic_size: usize,
+//! 		max_block_size: usize,
+//! 		max_extrinsic_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
-//!		max_transaction_size: usize,
+//! 		max_transaction_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup, ChainSpecExtension)]
 //! pub struct Extension {
-//!		pub client: ClientParams,
-//!		pub pool: PoolParams,
+//! 		pub client: ClientParams,
+//! 		pub pool: PoolParams,
 //! }
 //!
 //! pub type BlockNumber = u64;
@@ -88,20 +88,20 @@
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
-//!		max_block_size: usize,
-//!		max_extrinsic_size: usize,
+//! 		max_block_size: usize,
+//! 		max_extrinsic_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
-//!		max_transaction_size: usize,
+//! 		max_transaction_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
 //! pub struct Extension {
-//!		pub client: ClientParams,
-//!		#[forks]
-//!		pub pool: Forks<u64, PoolParams>,
+//! 		pub client: ClientParams,
+//! 		#[forks]
+//! 		pub pool: Forks<u64, PoolParams>,
 //! }
 //!
 //! pub type MyChainSpec<G> = GenericChainSpec<G, Extension>;
@@ -111,16 +111,16 @@ mod chain_spec;
 mod extension;
 
 pub use chain_spec::{
-	ChainSpec as GenericChainSpec, NoExtension, LightSyncState, SerializableLightSyncState,
+	ChainSpec as GenericChainSpec, LightSyncState, NoExtension, SerializableLightSyncState,
 };
-pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
+pub use extension::{get_extension, Extension, Fork, Forks, GetExtension, Group};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
-use serde::{Serialize, de::DeserializeOwned};
-use sp_runtime::BuildStorage;
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
+use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::Storage;
+use sp_runtime::BuildStorage;
 
 /// The type of a chain.
 ///

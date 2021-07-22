@@ -17,7 +17,7 @@
 
 //! Some helper functions/macros for this crate.
 
-use super::{Config, VoteWeight, CompactVoterIndexOf, CompactTargetIndexOf};
+use super::{CompactTargetIndexOf, CompactVoterIndexOf, Config, VoteWeight};
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
 #[macro_export]
@@ -58,7 +58,9 @@ pub fn voter_index_fn<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_ {
 	move |who| {
-		cache.get(who).and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
+		cache
+			.get(who)
+			.and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
 	}
 }
 
@@ -70,7 +72,9 @@ pub fn voter_index_fn_owned<T: Config>(
 	cache: BTreeMap<T::AccountId, usize>,
 ) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> {
 	move |who| {
-		cache.get(who).and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
+		cache
+			.get(who)
+			.and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
 	}
 }
 
@@ -173,7 +177,11 @@ pub fn stake_of_fn_linear<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 ) -> impl Fn(&T::AccountId) -> VoteWeight + '_ {
 	move |who| {
-		snapshot.iter().find(|(x, _, _)| x == who).map(|(_, x, _)| *x).unwrap_or_default()
+		snapshot
+			.iter()
+			.find(|(x, _, _)| x == who)
+			.map(|(_, x, _)| *x)
+			.unwrap_or_default()
 	}
 }
 

@@ -18,18 +18,16 @@
 
 //! RPC interface for the `ManualSeal` Engine.
 
-use sp_consensus::ImportedAux;
-use jsonrpc_core::Error;
-use jsonrpc_derive::rpc;
+pub use self::gen_client::Client as ManualSealClient;
 use futures::{
 	channel::{mpsc, oneshot},
-	TryFutureExt,
-	FutureExt,
-	SinkExt
+	FutureExt, SinkExt, TryFutureExt,
 };
+use jsonrpc_core::Error;
+use jsonrpc_derive::rpc;
 use serde::{Deserialize, Serialize};
+use sp_consensus::ImportedAux;
 use sp_runtime::EncodedJustification;
-pub use self::gen_client::Client as ManualSealClient;
 
 /// Future's type for jsonrpc
 type FutureResult<T> = Box<dyn jsonrpc_core::futures::Future<Item = T, Error = Error> + Send>;
@@ -63,7 +61,7 @@ pub enum EngineCommand<Hash> {
 		sender: Sender<()>,
 		/// finalization justification
 		justification: Option<EncodedJustification>,
-	}
+	},
 }
 
 /// RPC trait that provides methods for interacting with the manual-seal authorship task over rpc.
@@ -75,7 +73,7 @@ pub trait ManualSealApi<Hash> {
 		&self,
 		create_empty: bool,
 		finalize: bool,
-		parent_hash: Option<Hash>
+		parent_hash: Option<Hash>,
 	) -> FutureResult<CreatedBlock<Hash>>;
 
 	/// Instructs the manual-seal authorship task to finalize a block
@@ -83,7 +81,7 @@ pub trait ManualSealApi<Hash> {
 	fn finalize_block(
 		&self,
 		hash: Hash,
-		justification: Option<EncodedJustification>
+		justification: Option<EncodedJustification>,
 	) -> FutureResult<bool>;
 }
 
@@ -98,7 +96,7 @@ pub struct CreatedBlock<Hash> {
 	/// hash of the created block.
 	pub hash: Hash,
 	/// some extra details about the import operation
-	pub aux: ImportedAux
+	pub aux: ImportedAux,
 }
 
 impl<Hash> ManualSeal<Hash> {
@@ -113,7 +111,7 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 		&self,
 		create_empty: bool,
 		finalize: bool,
-		parent_hash: Option<Hash>
+		parent_hash: Option<Hash>,
 	) -> FutureResult<CreatedBlock<Hash>> {
 		let mut sink = self.import_block_channel.clone();
 		let future = async move {
@@ -126,18 +124,22 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 			};
 			sink.send(command).await?;
 			receiver.await?
-		}.boxed();
+		}
+		.boxed();
 
 		Box::new(future.map_err(Error::from).compat())
 	}
 
-	fn finalize_block(&self, hash: Hash, justification: Option<EncodedJustification>) -> FutureResult<bool> {
+	fn finalize_block(
+		&self,
+		hash: Hash,
+		justification: Option<EncodedJustification>,
+	) -> FutureResult<bool> {
 		let mut sink = self.import_block_channel.clone();
 		let future = async move {
 			let (sender, receiver) = oneshot::channel();
-			sink.send(
-				EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification }
-			).await?;
+			sink.send(EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification })
+				.await?;
 
 			receiver.await?.map(|_| true)
 		};
@@ -150,7 +152,7 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 /// to the rpc
 pub fn send_result<T: std::fmt::Debug>(
 	sender: &mut Sender<T>,
-	result: std::result::Result<T, crate::Error>
+	result: std::result::Result<T, crate::Error>,
 ) {
 	if let Some(sender) = sender.take() {
 		if let Err(err) = sender.send(result) {
@@ -160,7 +162,7 @@ pub fn send_result<T: std::fmt::Debug>(
 		// instant seal doesn't report errors over rpc, simply log them.
 		match result {
 			Ok(r) => log::info!("Instant Seal success: {:?}", r),
-			Err(e) => log::error!("Instant Seal encountered an error: {}", e)
+			Err(e) => log::error!("Instant Seal encountered an error: {}", e),
 		}
 	}
 }

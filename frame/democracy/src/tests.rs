@@ -17,23 +17,25 @@
 
 //! The crate's tests.
 
-use crate as pallet_democracy;
 use super::*;
+use crate as pallet_democracy;
 use codec::Encode;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types, ord_parameter_types,
-	traits::{SortedMembers, OnInitialize, Filter, GenesisBuild},
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
+	traits::{Filter, GenesisBuild, OnInitialize, SortedMembers},
 	weights::Weight,
 };
+use frame_system::{EnsureRoot, EnsureSignedBy};
+use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
-	testing::Header, Perbill,
+	testing::Header,
+	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	Perbill,
 };
-use pallet_balances::{BalanceLock, Error as BalancesError};
-use frame_system::{EnsureSignedBy, EnsureRoot};
 
 mod cancellation;
+mod decoders;
 mod delegation;
 mod external_proposing;
 mod fast_tracking;
@@ -42,7 +44,6 @@ mod preimage;
 mod public_proposals;
 mod scheduling;
 mod voting;
-mod decoders;
 
 const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
 const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
@@ -194,10 +195,14 @@ impl Config for Test {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-	}.assimilate_storage(&mut t).unwrap();
-	pallet_democracy::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	pallet_democracy::GenesisConfig::<Test>::default()
+		.assimilate_storage(&mut t)
+		.unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
@@ -246,19 +251,11 @@ fn set_balance_proposal_hash_and_note(value: u64) -> H256 {
 }
 
 fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
-	Democracy::propose(
-		Origin::signed(who),
-		set_balance_proposal_hash(value),
-		delay,
-	)
+	Democracy::propose(Origin::signed(who), set_balance_proposal_hash(value), delay)
 }
 
 fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchResult {
-	Democracy::propose(
-		Origin::signed(who),
-		set_balance_proposal_hash_and_note(value),
-		delay,
-	)
+	Democracy::propose(Origin::signed(who), set_balance_proposal_hash_and_note(value), delay)
 }
 
 fn next_block() {
