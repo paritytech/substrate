@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{Layout, TrieLayout};
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use sp_std::vec::Vec;
 use trie_db::NodeCodec;
-use crate::{Layout, TrieLayout};
 
 /// A proof that some set of key-value pairs are included in the storage trie. The proof contains
 /// the storage values so that the partial storage backend can be reconstructed by a verifier that
@@ -178,11 +178,11 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 		for item in proof.trie_nodes.iter() {
 			let mut meta = Default::default();
 			// Read meta from state (required for value layout).
-			let _ = <Layout::<H> as TrieLayout>::Codec::decode_plan(item.as_slice(), &mut meta);
+			let _ = <Layout<H> as TrieLayout>::Codec::decode_plan(item.as_slice(), &mut meta);
 			db.alt_insert(
 				crate::EMPTY_PREFIX,
 				item,
-				meta.resolve_alt_hashing::<<Layout::<H> as TrieLayout>::Codec>(),
+				meta.resolve_alt_hashing::<<Layout<H> as TrieLayout>::Codec>(),
 			);
 		}
 		db

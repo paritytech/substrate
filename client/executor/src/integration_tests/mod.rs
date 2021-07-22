@@ -184,7 +184,8 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 			&b"Hello worldHello worldHello worldHello world".to_vec().encode(),
 			wasm_method,
 			&mut ext,
-		).unwrap();
+		)
+		.unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec().encode());
 	}
@@ -373,13 +374,11 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 	assert_eq!(
-		call_in_wasm(
-			"test_ordered_trie_root",
-			&[0],
-			wasm_method,
-			&mut ext.ext(),
-		).unwrap(),
-		Layout::<BlakeTwo256>::default().ordered_trie_root(trie_input.iter()).as_bytes().encode(),
+		call_in_wasm("test_ordered_trie_root", &[0], wasm_method, &mut ext.ext(),).unwrap(),
+		Layout::<BlakeTwo256>::default()
+			.ordered_trie_root(trie_input.iter())
+			.as_bytes()
+			.encode(),
 	);
 }
 
@@ -672,12 +671,8 @@ fn state_hashing_update(wasm_method: WasmExecutionMethod) {
 	let root1 = {
 		let mut ext = ext.ext();
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
-		let output = call_in_wasm(
-			"test_data_in",
-			&vec![1u8; 100].encode(),
-			wasm_method,
-			&mut ext,
-		).unwrap();
+		let output =
+			call_in_wasm("test_data_in", &vec![1u8; 100].encode(), wasm_method, &mut ext).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec().encode());
 		ext.storage_root()
@@ -687,12 +682,8 @@ fn state_hashing_update(wasm_method: WasmExecutionMethod) {
 	let root2 = {
 		let mut ext = ext.ext();
 		// flag state.
-		let _ = call_in_wasm(
-			"test_switch_state",
-			Default::default(),
-			wasm_method,
-			&mut ext,
-		).unwrap();
+		let _ =
+			call_in_wasm("test_switch_state", Default::default(), wasm_method, &mut ext).unwrap();
 		ext.storage_root()
 	};
 
@@ -701,12 +692,9 @@ fn state_hashing_update(wasm_method: WasmExecutionMethod) {
 	ext.commit_all().unwrap();
 	let root3 = {
 		let mut ext = ext.ext();
-		let _ = call_in_wasm(
-			"test_data_in",
-			&vec![2u8; 100].to_vec().encode(),
-			wasm_method,
-			&mut ext,
-		).unwrap();
+		let _ =
+			call_in_wasm("test_data_in", &vec![2u8; 100].to_vec().encode(), wasm_method, &mut ext)
+				.unwrap();
 		ext.storage_root()
 	};
 	assert!(root2 != root3);
@@ -716,12 +704,9 @@ fn state_hashing_update(wasm_method: WasmExecutionMethod) {
 		let mut ext = ext.ext();
 		// revert to root 2 state, but this time
 		// inner hashing should apply
-		let _ = call_in_wasm(
-			"test_data_in",
-			&vec![1u8; 100].to_vec().encode(),
-			wasm_method,
-			&mut ext,
-		).unwrap();
+		let _ =
+			call_in_wasm("test_data_in", &vec![1u8; 100].to_vec().encode(), wasm_method, &mut ext)
+				.unwrap();
 		ext.storage_root()
 	};
 	assert!(root2 != root3);

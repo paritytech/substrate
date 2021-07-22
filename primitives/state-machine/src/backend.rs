@@ -195,10 +195,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
-			let (child_root, empty, child_txs) = self.child_storage_root(
-				&child_info,
-				child_delta,
-			);
+			let (child_root, empty, child_txs) = self.child_storage_root(&child_info, child_delta);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
@@ -207,13 +204,10 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
 			}
 		}
-		let (root, parent_txs) = self.storage_root(delta
-			.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
-			.chain(
-				child_roots
-					.iter()
-					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
-			),
+		let (root, parent_txs) = self.storage_root(
+			delta
+				.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+				.chain(child_roots.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))),
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
@@ -272,7 +266,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Read current trie hashing threshold.
 	/// Please do not change default implementation when implementing this trait.
 	fn get_trie_alt_hashing_threshold(&self) -> Option<u32> {
-		self.storage(sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG).ok().flatten()
+		self.storage(sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG)
+			.ok()
+			.flatten()
 			.and_then(|encoded| sp_core::storage::trie_threshold_decode(&mut encoded.as_slice()))
 	}
 
@@ -301,9 +297,9 @@ impl Consolidate for Vec<(Option<ChildInfo>, StorageCollection)> {
 }
 
 impl<H, KF> Consolidate for sp_trie::GenericMemoryDB<H, KF>
-	where
-		H: Hasher,
-		KF: sp_trie::KeyFunction<H>,
+where
+	H: Hasher,
+	KF: sp_trie::KeyFunction<H>,
 {
 	fn consolidate(&mut self, other: Self) {
 		sp_trie::GenericMemoryDB::consolidate(self, other)

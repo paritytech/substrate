@@ -202,7 +202,7 @@ impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H>
 		self.0.get(key, prefix)
 	}
 
-	fn access_from(&self, _key: &H::Out) { }
+	fn access_from(&self, _key: &H::Out) {}
 }
 
 /// Changes trie configuration.

@@ -1445,9 +1445,9 @@ impl<T: Config> Pallet<T> {
 			],
 			children_default: map![],
 		};
-		storage.modify_trie_alt_hashing_threshold(
-			Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD),
-		);
+		storage.modify_trie_alt_hashing_threshold(Some(
+			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
+		));
 		TestExternalities::new(storage)
 	}
 

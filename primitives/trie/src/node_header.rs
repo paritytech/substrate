@@ -38,8 +38,7 @@ pub(crate) enum NodeHeader {
 impl NodeHeader {
 	pub(crate) fn contains_hash_of_value(&self) -> bool {
 		match self {
-			NodeHeader::AltHashBranch(_, true)
-			| NodeHeader::AltHashLeaf(_, true) => true,
+			NodeHeader::AltHashBranch(_, true) | NodeHeader::AltHashLeaf(_, true) => true,
 			_ => false,
 		}
 	}
@@ -63,16 +62,28 @@ impl Encode for NodeHeader {
 		}
 		match self {
 			NodeHeader::Null => output.push_byte(trie_constants::EMPTY_TRIE),
-			NodeHeader::Branch(true, nibble_count)	=>
+			NodeHeader::Branch(true, nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITH_MASK, 2, output),
-			NodeHeader::Branch(false, nibble_count) =>
-				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, 2, output),
+			NodeHeader::Branch(false, nibble_count) => encode_size_and_prefix(
+				*nibble_count,
+				trie_constants::BRANCH_WITHOUT_MASK,
+				2,
+				output,
+			),
 			NodeHeader::Leaf(nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::LEAF_PREFIX_MASK, 2, output),
-			NodeHeader::AltHashBranch(nibble_count, _)	=>
-				encode_size_and_prefix(*nibble_count, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4, output),
-			NodeHeader::AltHashLeaf(nibble_count, _)	=>
-				encode_size_and_prefix(*nibble_count, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3, output),
+			NodeHeader::AltHashBranch(nibble_count, _) => encode_size_and_prefix(
+				*nibble_count,
+				trie_constants::ALT_HASHING_BRANCH_WITH_MASK,
+				4,
+				output,
+			),
+			NodeHeader::AltHashLeaf(nibble_count, _) => encode_size_and_prefix(
+				*nibble_count,
+				trie_constants::ALT_HASHING_LEAF_PREFIX_MASK,
+				3,
+				output,
+			),
 		}
 	}
 }
@@ -81,11 +92,8 @@ impl NodeHeader {
 	/// Is this header using alternate hashing scheme.
 	pub(crate) fn alt_hashing(&self) -> bool {
 		match self {
-			NodeHeader::Null
-			| NodeHeader::Leaf(..)
-			| NodeHeader::Branch(..) => false,
-			NodeHeader::AltHashBranch(..)
-			| NodeHeader::AltHashLeaf(..) => true,
+			NodeHeader::Null | NodeHeader::Leaf(..) | NodeHeader::Branch(..) => false,
+			NodeHeader::AltHashBranch(..) | NodeHeader::AltHashLeaf(..) => true,
 		}
 	}
 }
@@ -106,8 +114,10 @@ impl Decode for NodeHeader {
 		};
 		match i & (0b11 << 6) {
 			trie_constants::LEAF_PREFIX_MASK => Ok(NodeHeader::Leaf(decode_size(i, input, 2)?)),
-			trie_constants::BRANCH_WITH_MASK => Ok(NodeHeader::Branch(true, decode_size(i, input, 2)?)),
-			trie_constants::BRANCH_WITHOUT_MASK => Ok(NodeHeader::Branch(false, decode_size(i, input, 2)?)),
+			trie_constants::BRANCH_WITH_MASK =>
+				Ok(NodeHeader::Branch(true, decode_size(i, input, 2)?)),
+			trie_constants::BRANCH_WITHOUT_MASK =>
+				Ok(NodeHeader::Branch(false, decode_size(i, input, 2)?)),
 			trie_constants::EMPTY_TRIE => {
 				if i & (0b111 << 5) == trie_constants::ALT_HASHING_LEAF_PREFIX_MASK {
 					Ok(NodeHeader::AltHashLeaf(decode_size(i, input, 3)?, contain_hash))
@@ -159,7 +169,8 @@ pub(crate) fn size_and_prefix_iterator(
 
 /// Encodes size and prefix to a stream output (prefix on 2 first bit only).
 fn encode_size_and_prefix<W>(size: usize, prefix: u8, prefix_mask: usize, out: &mut W)
-	where W: Output + ?Sized,
+where
+	W: Output + ?Sized,
 {
 	for b in size_and_prefix_iterator(size, prefix, prefix_mask) {
 		out.push_byte(b)
@@ -175,7 +186,7 @@ fn decode_size(
 	let max_value = 255u8 >> prefix_mask;
 	let mut result = (first & max_value) as usize;
 	if result < max_value as usize {
-		return Ok(result);
+		return Ok(result)
 	}
 	result -= 1;
 	while result <= trie_constants::NIBBLE_SIZE_BOUND {

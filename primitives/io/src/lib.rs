@@ -55,7 +55,7 @@ use sp_core::{
 };
 
 #[cfg(feature = "std")]
-use sp_trie::{TrieConfiguration, Layout};
+use sp_trie::{Layout, TrieConfiguration};
 
 use sp_runtime_interface::{
 	pass_by::{PassBy, PassByCodec},
@@ -1493,12 +1493,10 @@ mod tests {
 		});
 
 		let value = vec![7u8; 35];
-		let mut storage = Storage {
-			top: map![b"foo00".to_vec() => value.clone()],
-			children_default: map![],
-		};
+		let mut storage =
+			Storage { top: map![b"foo00".to_vec() => value.clone()], children_default: map![] };
 		storage.modify_trie_alt_hashing_threshold(Some(
-			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD
+			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
 		));
 		t = BasicExternalities::new(storage);
 

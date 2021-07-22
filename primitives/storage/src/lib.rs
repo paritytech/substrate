@@ -244,8 +244,7 @@ pub fn trie_threshold_encode(threshold: u32) -> Vec<u8> {
 /// Configuration threshold from encoded, invalid encoded
 /// is same as no threshold.
 pub fn trie_threshold_decode(mut encoded: &[u8]) -> Option<u32> {
-	codec::Compact::<u32>::decode(&mut encoded).ok()
-		.map(|compact| compact.0)
+	codec::Compact::<u32>::decode(&mut encoded).ok().map(|compact| compact.0)
 }
 
 /// Default value to use as a threshold for testing.

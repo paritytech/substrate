@@ -17,26 +17,28 @@
 
 //! Trie-based state machine backend.
 
-use crate::{warn, debug};
-use hash_db::Hasher;
-use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root,
-	Layout};
-use sp_trie::trie_types::{TrieDB, TrieError};
-use sp_core::storage::{ChildInfo, ChildType};
-use codec::{Codec, Decode};
 use crate::{
+	debug,
 	trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage},
-	Backend, StorageKey, StorageValue,
+	warn, Backend, StorageKey, StorageValue,
 };
+use codec::{Codec, Decode};
+use hash_db::Hasher;
+use sp_core::storage::{ChildInfo, ChildType};
 use sp_std::{boxed::Box, vec::Vec};
+use sp_trie::{
+	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
+	trie_types::{TrieDB, TrieError},
+	Layout, Trie,
+};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
-	pub (crate) essence: TrieBackendEssence<S, H>,
+	pub(crate) essence: TrieBackendEssence<S, H>,
 	// Allows setting alt hashing at start for testing only
 	// (mainly for in_memory_backend when it cannot read it from
 	// state).
-	pub (crate) force_alt_hashing: Option<Option<u32>>,
+	pub(crate) force_alt_hashing: Option<Option<u32>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H>
@@ -45,10 +47,7 @@ where
 {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackend {
-			essence: TrieBackendEssence::new(storage, root),
-			force_alt_hashing: None,
-		}
+		TrieBackend { essence: TrieBackendEssence::new(storage, root), force_alt_hashing: None }
 	}
 
 	/// Get backend essence reference.
@@ -195,8 +194,11 @@ where
 
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (H::Out, Self::Transaction) where H::Out: Ord {
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, Self::Transaction)
+	where
+		H::Out: Ord,
+	{
 		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
 			force.clone()
 		} else {
@@ -206,10 +208,7 @@ where
 		let mut root = *self.essence.root();
 
 		{
-			let mut eph = Ephemeral::new(
-				self.essence.backend_storage(),
-				&mut write_overlay,
-			);
+			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
 			let res = || {
 				let layout = if let Some(threshold) = use_inner_hash_value {
 					sp_trie::Layout::with_alt_hashing(threshold)
@@ -231,8 +230,11 @@ where
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction)
+	where
+		H::Out: Ord,
+	{
 		let use_inner_hash_value = if let Some(force) = self.force_alt_hashing.as_ref() {
 			force.clone()
 		} else {
@@ -298,12 +300,11 @@ where
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use std::{collections::HashSet, iter};
-	use sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD;
 	use codec::Encode;
-	use sp_core::H256;
+	use sp_core::{storage::TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD, H256};
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::{trie_types::TrieDBMut, KeySpacedDBMut, PrefixedMemoryDB, TrieMut};
+	use std::{collections::HashSet, iter};
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
 
@@ -338,7 +339,8 @@ pub mod tests {
 				trie.insert(
 					sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG,
 					sp_core::storage::trie_threshold_encode(TRESHOLD).as_slice(),
-				).unwrap();
+				)
+				.unwrap();
 			}
 			for i in 128u8..255u8 {
 				trie.insert(&[i], &[i]).unwrap();
@@ -421,9 +423,8 @@ pub mod tests {
 		storage_root_transaction_is_non_empty_inner(true);
 	}
 	fn storage_root_transaction_is_non_empty_inner(flagged: bool) {
-		let (new_root, mut tx) = test_trie(flagged).storage_root(
-			iter::once((&b"new-key"[..], Some(&b"new-value"[..]))),
-		);
+		let (new_root, mut tx) =
+			test_trie(flagged).storage_root(iter::once((&b"new-key"[..], Some(&b"new-value"[..]))));
 		assert!(!tx.drain().is_empty());
 		assert!(new_root != test_trie(false).storage_root(iter::empty()).0);
 	}

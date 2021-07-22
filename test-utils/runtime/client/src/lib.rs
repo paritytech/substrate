@@ -394,7 +394,9 @@ pub fn new(hashed_state: bool) -> Client<Backend> {
 }
 
 /// Creates new light client instance used for tests.
-pub fn new_light(hashed_state: bool) -> (
+pub fn new_light(
+	hashed_state: bool,
+) -> (
 	client::Client<
 		LightBackend,
 		LightExecutor,
@@ -420,10 +422,7 @@ pub fn new_light(hashed_state: bool) -> (
 	if hashed_state {
 		builder = builder.state_hashed_value();
 	}
-	(
-		builder.build_with_executor(call_executor).0,
-		backend,
-	)
+	(builder.build_with_executor(call_executor).0, backend)
 }
 
 /// Creates new light client fetcher used for tests.

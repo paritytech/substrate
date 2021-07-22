@@ -19,9 +19,9 @@
 
 use std::{
 	any::{Any, TypeId},
+	collections::{BTreeMap, HashMap},
 	panic::{AssertUnwindSafe, UnwindSafe},
 };
-use std::collections::{HashMap, BTreeMap};
 
 use crate::{
 	backend::Backend,
@@ -39,7 +39,7 @@ use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
 		well_known_keys::{is_child_storage_key, CHANGES_TRIE_CONFIG, CODE},
-		Storage, ChildInfo,
+		ChildInfo, Storage,
 	},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
@@ -97,7 +97,6 @@ where
 		Self::new_with_code_inner(&[], storage, true)
 	}
 
-
 	/// New empty test externalities.
 	pub fn new_empty() -> Self {
 		Self::new_with_code(&[], Storage::default())
@@ -130,15 +129,20 @@ where
 			let mut backend: InMemoryBackend<H> = {
 				let mut storage = Storage::default();
 				storage.modify_trie_alt_hashing_threshold(Some(
-					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD
+					sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
 				));
 				storage.into()
 			};
-			let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>
-				= storage.children_default.into_iter().map(|(_k, c)| (Some(c.child_info), c.data)).collect();
+			let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> = storage
+				.children_default
+				.into_iter()
+				.map(|(_k, c)| (Some(c.child_info), c.data))
+				.collect();
 			inner.insert(None, storage.top);
 			backend.insert(
-				inner.into_iter().map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())),
+				inner
+					.into_iter()
+					.map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())),
 			);
 			backend
 		} else {
@@ -274,9 +278,9 @@ where
 	fn default() -> Self {
 		// default to inner hashed.
 		let mut storage = Storage::default();
-		storage.modify_trie_alt_hashing_threshold(
-			Some(sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD),
-		);
+		storage.modify_trie_alt_hashing_threshold(Some(
+			sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD,
+		));
 		Self::new(storage)
 	}
 }

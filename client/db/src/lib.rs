@@ -882,18 +882,17 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		Ok(())
 	}
 
-	fn reset_storage(
-		&mut self,
-		storage: Storage,
-	) -> ClientResult<Block::Hash> {
+	fn reset_storage(&mut self, storage: Storage) -> ClientResult<Block::Hash> {
 		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
-			return Err(sp_blockchain::Error::GenesisInvalid.into());
+			return Err(sp_blockchain::Error::GenesisInvalid.into())
 		}
 
-		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)|(
-			&child_content.child_info,
-			child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
-		));
+		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)| {
+			(
+				&child_content.child_info,
+				child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
+			)
+		});
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
 		let (root, transaction) = self.old_state.full_storage_root(
@@ -901,7 +900,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
 					changes_trie_config = Some(
 						Decode::decode(&mut &v[..])
-							.expect("changes trie configuration is encoded properly at genesis")
+							.expect("changes trie configuration is encoded properly at genesis"),
 					);
 				}
 				(&k[..], Some(&v[..]))
@@ -994,7 +993,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 		.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 
-	fn access_from(&self, _key: &Block::Hash) { }
+	fn access_from(&self, _key: &Block::Hash) {}
 }
 
 impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
@@ -1022,7 +1021,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStora
 		use hash_db::HashDB;
 		Ok(self.storage.get(key, prefix))
 	}
-	fn access_from(&self, _key: &Block::Hash) { }
+	fn access_from(&self, _key: &Block::Hash) {}
 }
 
 struct EmptyStorage<Block: BlockT>(pub Block::Hash);
@@ -1041,8 +1040,7 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for EmptyStorage<B
 		Ok(None)
 	}
 
-	fn access_from(&self, _key: &Block::Hash) {
-	}
+	fn access_from(&self, _key: &Block::Hash) {}
 }
 
 /// Frozen `value` at time `at`.
@@ -2572,10 +2570,7 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let mut storage = vec![
-				(vec![1, 3, 5], vec![2, 4, 6]),
-				(vec![1, 2, 3], vec![9, 9, 9]),
-			];
+			let mut storage = vec![(vec![1, 3, 5], vec![2, 4, 6]), (vec![1, 2, 3], vec![9, 9, 9])];
 
 			if alt_hashing {
 				storage.push((
@@ -2586,10 +2581,11 @@ pub(crate) mod tests {
 				));
 			}
 
-			header.state_root = op.old_state.storage_root(storage
-				.iter()
-				.map(|(x, y)| (&x[..], Some(&y[..]))),
-			).0.into();
+			header.state_root = op
+				.old_state
+				.storage_root(storage.iter().map(|(x, y)| (&x[..], Some(&y[..]))))
+				.0
+				.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
@@ -2624,10 +2620,9 @@ pub(crate) mod tests {
 
 			let storage = vec![(vec![1, 3, 5], None), (vec![5, 5, 5], Some(vec![4, 5, 6]))];
 
-			let (root, overlay) = op.old_state.storage_root(
-				storage.iter()
-					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))),
-			);
+			let (root, overlay) = op
+				.old_state
+				.storage_root(storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))));
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
@@ -2702,11 +2697,11 @@ pub(crate) mod tests {
 
 			let storage: Vec<(_, _)> = vec![];
 
-			header.state_root = op.old_state.storage_root(storage
-				.iter()
-				.cloned()
-				.map(|(x, y)| (x, Some(y))),
-			).0.into();
+			header.state_root = op
+				.old_state
+				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))))
+				.0
+				.into();
 			let hash = header.hash();
 
 			op.db_updates.insert(EMPTY_PREFIX, b"hello");
@@ -2739,11 +2734,11 @@ pub(crate) mod tests {
 
 			let storage: Vec<(_, _)> = vec![];
 
-			header.state_root = op.old_state.storage_root(storage
-				.iter()
-				.cloned()
-				.map(|(x, y)| (x, Some(y))),
-			).0.into();
+			header.state_root = op
+				.old_state
+				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))))
+				.0
+				.into();
 			let hash = header.hash();
 
 			op.db_updates.remove(&key, EMPTY_PREFIX);
@@ -2773,11 +2768,11 @@ pub(crate) mod tests {
 
 			let storage: Vec<(_, _)> = vec![];
 
-			header.state_root = op.old_state.storage_root(storage
-				.iter()
-				.cloned()
-				.map(|(x, y)| (x, Some(y))),
-			).0.into();
+			header.state_root = op
+				.old_state
+				.storage_root(storage.iter().cloned().map(|(x, y)| (x, Some(y))))
+				.0
+				.into();
 
 			op.set_block_data(header, Some(vec![]), None, None, NewBlockState::Best)
 				.unwrap();
@@ -3127,10 +3122,11 @@ pub(crate) mod tests {
 
 			let storage = vec![(b"test".to_vec(), b"test".to_vec())];
 
-			header.state_root = op.old_state.storage_root(storage
-				.iter()
-				.map(|(x, y)| (&x[..], Some(&y[..]))),
-			).0.into();
+			header.state_root = op
+				.old_state
+				.storage_root(storage.iter().map(|(x, y)| (&x[..], Some(&y[..]))))
+				.0
+				.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
@@ -3165,10 +3161,9 @@ pub(crate) mod tests {
 
 			let storage = vec![(b"test".to_vec(), Some(b"test2".to_vec()))];
 
-			let (root, overlay) = op.old_state.storage_root(
-				storage.iter()
-					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))),
-			);
+			let (root, overlay) = op
+				.old_state
+				.storage_root(storage.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..]))));
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 			let hash = header.hash();

@@ -22,11 +22,10 @@ use crate::{
 	node_header::{size_and_prefix_iterator, NodeKind},
 	trie_constants,
 };
-use codec::{Encode, Compact};
+use codec::{Compact, Encode};
 use hash_db::Hasher;
-use sp_std::vec::Vec;
+use sp_std::{ops::Range, vec::Vec};
 use trie_root;
-use sp_std::ops::Range;
 
 const BRANCH_NODE_NO_VALUE: u8 = 254;
 const BRANCH_NODE_WITH_VALUE: u8 = 255;
@@ -69,14 +68,16 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 
 	let iter_start = match kind {
 		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK, 2),
-		NodeKind::BranchNoValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK, 2),
-		NodeKind::BranchWithValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK, 2),
+		NodeKind::BranchNoValue =>
+			size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK, 2),
+		NodeKind::BranchWithValue =>
+			size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK, 2),
 		NodeKind::AltHashLeaf =>
 			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_LEAF_PREFIX_MASK, 3),
 		NodeKind::AltHashBranchWithValue =>
 			size_and_prefix_iterator(size, trie_constants::ALT_HASHING_BRANCH_WITH_MASK, 4),
-		NodeKind::AltHashBranchWithValueHash
-		| NodeKind::AltHashLeafHash => unreachable!("only added value that do not contain hash"),
+		NodeKind::AltHashBranchWithValueHash | NodeKind::AltHashLeafHash =>
+			unreachable!("only added value that do not contain hash"),
 	};
 	iter_start
 		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })
@@ -98,14 +99,12 @@ impl trie_root::TrieStream for TrieStream {
 	}
 
 	fn append_leaf(&mut self, key: &[u8], value: &[u8]) {
-		self.apply_inner_hashing = self.inner_value_hashing.as_ref().map(|threshold|
-			value_do_hash(value, threshold)
-		).unwrap_or(false);
-		let kind = if self.apply_inner_hashing {
-			NodeKind::AltHashLeaf
-		} else {
-			NodeKind::Leaf
-		};
+		self.apply_inner_hashing = self
+			.inner_value_hashing
+			.as_ref()
+			.map(|threshold| value_do_hash(value, threshold))
+			.unwrap_or(false);
+		let kind = if self.apply_inner_hashing { NodeKind::AltHashLeaf } else { NodeKind::Leaf };
 		self.buffer.extend(fuse_nibbles_node(key, kind));
 		let start = self.buffer.len();
 		Compact(value.len() as u32).encode_to(&mut self.buffer);
@@ -121,9 +120,11 @@ impl trie_root::TrieStream for TrieStream {
 	) {
 		if let Some(partial) = maybe_partial {
 			if let Some(value) = maybe_value {
-				self.apply_inner_hashing = self.inner_value_hashing.as_ref().map(|threshold|
-					value_do_hash(value, threshold)
-				).unwrap_or(false);
+				self.apply_inner_hashing = self
+					.inner_value_hashing
+					.as_ref()
+					.map(|threshold| value_do_hash(value, threshold))
+					.unwrap_or(false);
 				let kind = if self.apply_inner_hashing {
 					NodeKind::AltHashBranchWithValue
 				} else {
@@ -157,17 +158,18 @@ impl trie_root::TrieStream for TrieStream {
 		let data = other.out();
 		match data.len() {
 			0..=31 => data.encode_to(&mut self.buffer),
-			_ => {
+			_ =>
 				if apply_inner_hashing {
 					hash_db::AltHashing {
 						encoded_offset: 0,
 						value_range: range.map(|r| (r.start, r.end)),
-					}.alt_hash::<H>(&data).as_ref()
-						.encode_to(&mut self.buffer);
+					}
+					.alt_hash::<H>(&data)
+					.as_ref()
+					.encode_to(&mut self.buffer);
 				} else {
 					H::hash(&data).as_ref().encode_to(&mut self.buffer);
-				}
-			},
+				},
 		}
 	}
 
@@ -176,10 +178,8 @@ impl trie_root::TrieStream for TrieStream {
 		let range = self.current_value_range;
 		let data = self.buffer;
 		if apply_inner_hashing {
-			hash_db::AltHashing {
-				encoded_offset: 0,
-				value_range: range.map(|r| (r.start, r.end)),
-			}.alt_hash::<H>(&data)
+			hash_db::AltHashing { encoded_offset: 0, value_range: range.map(|r| (r.start, r.end)) }
+				.alt_hash::<H>(&data)
 		} else {
 			H::hash(&data)
 		}

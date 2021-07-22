@@ -119,6 +119,7 @@ impl sp_std::fmt::Display for DefaultError {
 
 pub use crate::{
 	backend::Backend,
+	error::{Error, ExecutionError},
 	ext::Ext,
 	overlayed_changes::{
 		ChildStorageCollection, IndexOperation, OffchainChangesCollection,
@@ -128,7 +129,6 @@ pub use crate::{
 	stats::{StateMachineStats, UsageInfo, UsageUnit},
 	trie_backend::TrieBackend,
 	trie_backend_essence::{Storage, TrieBackendStorage},
-	error::{Error, ExecutionError},
 };
 
 #[cfg(not(feature = "std"))]
@@ -142,30 +142,25 @@ mod changes_trie {
 
 #[cfg(feature = "std")]
 mod std_reexport {
-	pub use sp_trie::{trie_types::TrieDBMut, Layout, StorageProof, TrieMut,
-		DBValue, MemoryDB};
-	pub use crate::testing::TestExternalities;
-	pub use crate::basic::BasicExternalities;
-	pub use crate::read_only::{ReadOnlyExternalities, InspectState};
-	pub use crate::proving_backend::{
-		create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
+	pub use crate::{
+		basic::BasicExternalities,
+		changes_trie::{
+			disabled_state as disabled_changes_trie_state, key_changes, key_changes_proof,
+			key_changes_proof_check, key_changes_proof_check_with_db, prune as prune_changes_tries,
+			AnchorBlockId as ChangesTrieAnchorBlockId, BlockNumber as ChangesTrieBlockNumber,
+			BuildCache as ChangesTrieBuildCache, CacheAction as ChangesTrieCacheAction,
+			ConfigurationRange as ChangesTrieConfigurationRange,
+			InMemoryStorage as InMemoryChangesTrieStorage, RootsStorage as ChangesTrieRootsStorage,
+			State as ChangesTrieState, Storage as ChangesTrieStorage,
+		},
+		in_memory_backend::new_in_mem,
+		proving_backend::{
+			create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
+		},
+		read_only::{InspectState, ReadOnlyExternalities},
+		testing::TestExternalities,
 	};
-	pub use crate::changes_trie::{
-		AnchorBlockId as ChangesTrieAnchorBlockId,
-		State as ChangesTrieState,
-		Storage as ChangesTrieStorage,
-		RootsStorage as ChangesTrieRootsStorage,
-		InMemoryStorage as InMemoryChangesTrieStorage,
-		BuildCache as ChangesTrieBuildCache,
-		CacheAction as ChangesTrieCacheAction,
-		ConfigurationRange as ChangesTrieConfigurationRange,
-		key_changes, key_changes_proof,
-		key_changes_proof_check, key_changes_proof_check_with_db,
-		prune as prune_changes_tries,
-		disabled_state as disabled_changes_trie_state,
-		BlockNumber as ChangesTrieBlockNumber,
-	};
-	pub use crate::in_memory_backend::new_in_mem;
+	pub use sp_trie::{trie_types::TrieDBMut, DBValue, Layout, MemoryDB, StorageProof, TrieMut};
 }
 
 #[cfg(feature = "std")]
@@ -984,7 +979,7 @@ mod tests {
 	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
-		storage::ChildInfo,
+		storage::{ChildInfo, TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD},
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
 		NativeOrEncoded, NeverNativeValue,
@@ -995,7 +990,6 @@ mod tests {
 		panic::UnwindSafe,
 		result,
 	};
-	use sp_core::storage::TEST_DEFAULT_ALT_HASH_THRESHOLD as TRESHOLD;
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -1628,15 +1622,11 @@ mod tests {
 
 	#[test]
 	fn inner_state_hashing_switch_proofs() {
-
 		let mut layout = Layout::default();
 		let (mut mdb, mut root) = trie_backend::tests::test_db(false);
 		{
-			let mut trie = TrieDBMut::from_existing_with_layout(
-				&mut mdb,
-				&mut root,
-				layout.clone(),
-			).unwrap();
+			let mut trie =
+				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
 			trie.insert(b"foo", vec![1u8; 1_000].as_slice()) // big inner hash
 				.expect("insert failed");
 			trie.insert(b"foo2", vec![3u8; 16].as_slice()) // no inner hash
@@ -1644,17 +1634,15 @@ mod tests {
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
 				.expect("insert failed");
 		}
-		
+
 		let check_proof = |mdb, root| -> StorageProof {
 			let remote_backend = TrieBackend::new(mdb, root);
 			let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 			let remote_proof = prove_read(remote_backend, &[b"foo222"]).unwrap();
 			// check proof locally
-			let local_result1 = read_proof_check::<BlakeTwo256, _>(
-				remote_root,
-				remote_proof.clone(),
-				&[b"foo222"],
-			).unwrap();
+			let local_result1 =
+				read_proof_check::<BlakeTwo256, _>(remote_root, remote_proof.clone(), &[b"foo222"])
+					.unwrap();
 			// check that results are correct
 			assert_eq!(
 				local_result1.into_iter().collect::<Vec<_>>(),
@@ -1669,16 +1657,12 @@ mod tests {
 		assert!(remote_proof.encoded_size() > 1_100);
 		let root1 = root.clone();
 
-
 		// do switch
 		layout = Layout::with_alt_hashing(TRESHOLD);
 		// update with same value do not change
 		{
-			let mut trie = TrieDBMut::from_existing_with_layout(
-				&mut mdb,
-				&mut root,
-				layout.clone(),
-			).unwrap();
+			let mut trie =
+				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
 				.expect("insert failed");
 		}
@@ -1689,11 +1673,8 @@ mod tests {
 		// work with state machine as only changes do makes
 		// it to payload (would require a special host function).
 		{
-			let mut trie = TrieDBMut::from_existing_with_layout(
-				&mut mdb,
-				&mut root,
-				layout.clone(),
-			).unwrap();
+			let mut trie =
+				TrieDBMut::from_existing_with_layout(&mut mdb, &mut root, layout.clone()).unwrap();
 			trie.insert(b"foo222", vec![4u8].as_slice()) // inner hash
 				.expect("insert failed");
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
@@ -1705,8 +1686,7 @@ mod tests {
 		// nodes foo is replaced by its hashed value form.
 		assert!(remote_proof.encode().len() < 1000);
 		assert!(remote_proof.encoded_size() < 1000);
-		assert_eq!(remote_proof.encode().len(),
-			remote_proof.encoded_size());
+		assert_eq!(remote_proof.encode().len(), remote_proof.encoded_size());
 	}
 
 	#[test]
@@ -1727,32 +1707,35 @@ mod tests {
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
 			vec![
-				(&child_info1, vec![
-					// a inner hashable node 
-					(&b"k"[..], Some(&long_vec[..])),
-					// need to ensure this is not an inline node
-					// otherwhise we do not know what is accessed when
-					// storing proof.
-					(&b"key1"[..], Some(&vec![5u8; 32][..])),
-					(&b"key2"[..], Some(&b"val3"[..])),
-				].into_iter()),
-				(&child_info2, vec![
-					(&b"key3"[..], Some(&b"val4"[..])),
-					(&b"key4"[..], Some(&b"val5"[..])),
-				].into_iter()),
-				(&child_info3, vec![
-					(&b"key5"[..], Some(&b"val6"[..])),
-					(&b"key6"[..], Some(&b"val7"[..])),
-				].into_iter()),
-			].into_iter(),
+				(
+					&child_info1,
+					vec![
+						// a inner hashable node
+						(&b"k"[..], Some(&long_vec[..])),
+						// need to ensure this is not an inline node
+						// otherwhise we do not know what is accessed when
+						// storing proof.
+						(&b"key1"[..], Some(&vec![5u8; 32][..])),
+						(&b"key2"[..], Some(&b"val3"[..])),
+					]
+					.into_iter(),
+				),
+				(
+					&child_info2,
+					vec![(&b"key3"[..], Some(&b"val4"[..])), (&b"key4"[..], Some(&b"val5"[..]))]
+						.into_iter(),
+				),
+				(
+					&child_info3,
+					vec![(&b"key5"[..], Some(&b"val6"[..])), (&b"key6"[..], Some(&b"val7"[..]))]
+						.into_iter(),
+				),
+			]
+			.into_iter(),
 		);
 		remote_backend.backend_storage_mut().consolidate(transaction);
 		remote_backend.essence.set_root(remote_root.clone());
-		let remote_proof = prove_child_read(
-			remote_backend,
-			&child_info1,
-			&[b"key1"],
-		).unwrap();
+		let remote_proof = prove_child_read(remote_backend, &child_info1, &[b"key1"]).unwrap();
 		let size = remote_proof.encoded_size();
 		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(

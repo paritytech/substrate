@@ -1286,9 +1286,8 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 
 #[test]
 fn finalizing_diverged_block_should_trigger_reorg() {
-	let (mut client, select_chain) = TestClientBuilder::new()
-		.state_hashed_value()
-		.build_with_longest_chain();
+	let (mut client, select_chain) =
+		TestClientBuilder::new().state_hashed_value().build_with_longest_chain();
 
 	// G -> A1 -> A2
 	//   \
@@ -2049,17 +2048,23 @@ fn storage_keys_iter_works_inner(hashed_value: bool) {
 		.map(|x| x.0)
 		.collect();
 	if hashed_value {
-		assert_eq!(res, [
-			hex!("3a686561707061676573").to_vec(),
-			sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
-			hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
-		]);
+		assert_eq!(
+			res,
+			[
+				hex!("3a686561707061676573").to_vec(),
+				sp_core::storage::well_known_keys::TRIE_HASHING_CONFIG.to_vec(),
+				hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
+			]
+		);
 	} else {
-		assert_eq!(res, [
-			hex!("3a686561707061676573").to_vec(),
-			hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
-			hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
-		]);
+		assert_eq!(
+			res,
+			[
+				hex!("3a686561707061676573").to_vec(),
+				hex!("6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081").to_vec(),
+				hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
+			]
+		);
 	}
 
 	let res: Vec<_> = client
