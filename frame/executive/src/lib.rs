@@ -809,7 +809,7 @@ mod tests {
 		Some((who, extra(nonce, fee)))
 	}
 
-	fn call_transfer(dest: u32, value: u32) -> Call {
+	fn call_transfer(dest: u64, value: u64) -> Call {
 		Call::Balances(BalancesCall::transfer { dest, value })
 	}
 
@@ -1038,8 +1038,8 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let valid = TestXt::new(Call::Custom(custom::Call::allowed_unsigned()), None);
-		let invalid = TestXt::new(Call::Custom(custom::Call::unallowed_unsigned()), None);
+		let valid = TestXt::new(Call::Custom(custom::Call::allowed_unsigned { }), None);
+		let invalid = TestXt::new(Call::Custom(custom::Call::unallowed_unsigned { }), None);
 		let mut t = new_test_ext(1);
 
 		let mut default_with_prio_3 = ValidTransaction::default();
@@ -1330,7 +1330,7 @@ mod tests {
 
 	#[test]
 	fn calculating_storage_root_twice_works() {
-		let call = Call::Custom(custom::Call::calculate_storage_root());
+		let call = Call::Custom(custom::Call::calculate_storage_root { });
 		let xt = TestXt::new(call, sign_extra(1, 0, 0));
 
 		let header = new_test_ext(1).execute_with(|| {
@@ -1357,7 +1357,7 @@ mod tests {
 	#[should_panic(expected = "Invalid inherent position for extrinsic at index 1")]
 	fn invalid_inherent_position_fail() {
 		let xt1 = TestXt::new(Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }), sign_extra(1, 0, 0));
-		let xt2 = TestXt::new(Call::Custom(custom::Call::inherent_call()), None);
+		let xt2 = TestXt::new(Call::Custom(custom::Call::inherent_call { }), None);
 
 		let header = new_test_ext(1).execute_with(|| {
 			// Let's build some fake block.
