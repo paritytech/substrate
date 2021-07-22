@@ -42,7 +42,7 @@ pub fn migrate<
 	let maybe_storage_version = <P as GetPalletVersion>::storage_version();
 	log::info!(
 		target: "runtime::membership",
-		"Running migration to v3.1 for membership with storage version {:?}",
+		"Running migration to v4 for membership with storage version {:?}",
 		maybe_storage_version,
 	);
 	match maybe_storage_version {
@@ -57,7 +57,7 @@ pub fn migrate<
 		_ => {
 			log::warn!(
 				target: "runtime::membership",
-				"Attempted to apply migration to v3.1 but failed because storage version is {:?}",
+				"Attempted to apply migration to v4 but failed because storage version is {:?}",
 				maybe_storage_version,
 			);
 			0
@@ -102,8 +102,8 @@ pub fn pre_migration<
 		),
 	);
 	assert_eq!(
-		<P as GetPalletVersion>::storage_version(),
-		Some(PalletVersion::new(3, 0, 0)),
+		<P as GetPalletVersion>::storage_version().map(|version| version.major),
+        Some(3)
 	);
 }
 
@@ -123,7 +123,7 @@ pub fn post_migration<P: GetPalletVersion, N: AsRef<str>>(old_pallet_name: N) {
 		)
 	);
 	assert_eq!(
-		<P as GetPalletVersion>::storage_version(),
-		Some(PalletVersion::new(3, 1, 0)),
+		<P as GetPalletVersion>::storage_version().map(|version| version.major),
+		Some(4)
 	);
 }
