@@ -803,7 +803,7 @@ pub mod tests {
 	};
 	use codec::{Codec, EncodeLike};
 	use sp_io::TestExternalities;
-	use sp_std::{marker::PhantomData, result};
+	use sp_std::result;
 
 	/// A PalletInfo implementation which just panics.
 	pub struct PanicPalletInfo;
