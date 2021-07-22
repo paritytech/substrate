@@ -97,7 +97,7 @@ impl Default for Releases {
 	}
 }
 
-/// Actions to take on a user's `Vesting` storage entry.
+/// Actions to take against a user's `Vesting` storage entry.
 #[derive(Clone, Copy)]
 enum VestingAction {
 	/// Do not actively remove any schedules.
@@ -186,7 +186,7 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			if StorageVersion::<T>::get() == Releases::V0 {
 				StorageVersion::<T>::put(Releases::V1);
-				migrations::v1::migrate::<T>()
+				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
 			} else {
 				T::DbWeight::get().reads(1)
 			}
@@ -295,7 +295,7 @@ pub mod pallet {
 		AmountLow,
 		/// An index was out of bounds of the vesting schedules.
 		ScheduleIndexOutOfBounds,
-		/// Failed to create a new schedule because some parameter was invalid. e.g. `locked` was 0.
+		/// Failed to create a new schedule because some parameter was invalid.
 		InvalidScheduleParams,
 	}
 
@@ -553,10 +553,10 @@ impl<T: Config> Pallet<T> {
 	/// filter out completed and specified schedules.
 	///
 	/// Returns a tuple that consists of:
-	/// - vec of vesting schedules, where completed schedules and those specified
+	/// - Vec of vesting schedules, where completed schedules and those specified
 	/// 	by filter are removed. (Note the vec is not checked for respecting
 	/// 	bounded length.)
-	/// - the amount locked at the current block number based on the given schedules.
+	/// - The amount locked at the current block number based on the given schedules.
 	///
 	/// NOTE: the amount locked does not include any schedules that are filtered out via `action`.
 	fn report_schedule_updates(
@@ -634,8 +634,8 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>, BalanceOf<T>), DispatchError> {
 		let (schedules, locked_now) = match action {
 			VestingAction::Merge(idx1, idx2) => {
-				// The schedule index is based off of the schedule ordering prior to filtering out any
-				// schedules that may be ending at this block.
+				// The schedule index is based off of the schedule ordering prior to filtering out
+				// any schedules that may be ending at this block.
 				let schedule1 = *schedules.get(idx1).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
 				let schedule2 = *schedules.get(idx2).ok_or(Error::<T>::ScheduleIndexOutOfBounds)?;
 

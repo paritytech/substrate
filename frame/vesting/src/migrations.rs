@@ -69,7 +69,6 @@ pub(crate) mod v1 {
 		assert_eq!(StorageVersion::<T>::get(), Releases::V1);
 
 		for (_key, schedules) in Vesting::<T>::iter() {
-			// Assert the new bound vec respects size.
 			assert!(
 				schedules.len() == 1,
 				"A bounded vec with incorrect count of items was created."

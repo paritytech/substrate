@@ -1123,3 +1123,34 @@ fn per_block_works() {
 	assert_eq!(per_block_1.per_block(), 1u32);
 	assert_eq!(per_block_1.raw_per_block(), 1u32);
 }
+
+// When an accounts free balance + schedule.locked is less than ED, the vested transfer will fail.
+#[test]
+fn vested_transfer_less_than_existential_deposit_fails() {
+	ExtBuilder::default().existential_deposit(4 * ED).build().execute_with(|| {
+		// MinVestedTransfer is less the ED.
+		assert!(
+			<Test as Config>::Currency::minimum_balance() >
+				<Test as Config>::MinVestedTransfer::get()
+		);
+
+		let sched =
+			VestingInfo::new(<Test as Config>::MinVestedTransfer::get() as u64, 1u64, 10u64);
+		// The new account balance with the schedule's locked amount would be less than ED.
+		assert!(
+			Balances::free_balance(&99) + sched.locked() <
+				<Test as Config>::Currency::minimum_balance()
+		);
+
+		// vested_transfer fails.
+		assert_noop!(
+			Vesting::vested_transfer(Some(3).into(), 99, sched),
+			pallet_balances::Error::<Test, _>::ExistentialDeposit,
+		);
+		// force_vested_transfer fails.
+		assert_noop!(
+			Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 99, sched),
+			pallet_balances::Error::<Test, _>::ExistentialDeposit,
+		);
+	});
+}
