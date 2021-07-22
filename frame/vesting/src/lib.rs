@@ -748,8 +748,7 @@ where
 		}
 
 		ensure!(
-			(Vesting::<T>::decode_len(who).unwrap_or_default() as u32) <
-				T::MAX_VESTING_SCHEDULES,
+			(Vesting::<T>::decode_len(who).unwrap_or_default() as u32) < T::MAX_VESTING_SCHEDULES,
 			Error::<T>::AtMaxVestingSchedules
 		);
 
