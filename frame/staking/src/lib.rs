@@ -276,10 +276,10 @@
 
 #[cfg(any(test, feature = "make-bags"))]
 pub mod mock;
-#[cfg(test)]
-mod tests;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod testing_utils;
+#[cfg(test)]
+mod tests;
 
 pub mod inflation;
 pub mod slashing;
@@ -303,19 +303,19 @@ use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, p
 pub use pallet::*;
 use pallet_session::historical;
 use sp_runtime::{
-	DispatchError, Perbill, Percent, RuntimeDebug,
 	curve::PiecewiseLinear,
 	traits::{
 		AtLeast32BitUnsigned, Bounded, CheckedSub, Convert, SaturatedConversion, Saturating,
 		StaticLookup, Zero,
 	},
+	DispatchError, Perbill, Percent, RuntimeDebug,
 };
 use sp_staking::{
 	offence::{Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
 	SessionIndex,
 };
-use voter_bags::{VoterList, VoterType};
 use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*, result};
+use voter_bags::{VoterList, VoterType};
 pub use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -763,7 +763,10 @@ pub mod migrations {
 
 		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 			ensure!(StorageVersion::<T>::get() == Releases::V7_0_0, "must upgrade linearly");
-			ensure!(VoterList::<T>::decode_len().unwrap_or_default() == 0, "voter list already exists");
+			ensure!(
+				VoterList::<T>::decode_len().unwrap_or_default() == 0,
+				"voter list already exists"
+			);
 			Ok(())
 		}
 
@@ -783,7 +786,8 @@ pub mod migrations {
 			T::WeightInfo::regenerate(
 				CounterForValidators::<T>::get(),
 				CounterForNominators::<T>::get(),
-			).saturating_add(T::DbWeight::get().reads(2))
+			)
+			.saturating_add(T::DbWeight::get().reads(2))
 		}
 	}
 
@@ -1305,7 +1309,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
-
 	// The next storage items collectively comprise the voter bags: a composite data structure
 	// designed to allow efficient iteration of the top N voters by stake, mostly. See
 	// `mod voter_bags` for details.
@@ -1321,16 +1324,14 @@ pub mod pallet {
 	/// This may not be the appropriate bag for the voter's weight if they have been rewarded or
 	/// slashed.
 	#[pallet::storage]
-	pub(crate) type VoterBagFor<T: Config> = StorageMap<_, Twox64Concat, AccountIdOf<T>, VoteWeight>;
+	pub(crate) type VoterBagFor<T: Config> =
+		StorageMap<_, Twox64Concat, AccountIdOf<T>, VoteWeight>;
 
 	/// This storage item maps a bag (identified by its upper threshold) to the `Bag` struct, which
 	/// mainly exists to store head and tail pointers to the appropriate nodes.
 	#[pallet::storage]
-	pub(crate) type VoterBags<T: Config> = StorageMap<
-		_,
-		Twox64Concat, VoteWeight,
-		voter_bags::Bag<T>,
-	>;
+	pub(crate) type VoterBags<T: Config> =
+		StorageMap<_, Twox64Concat, VoteWeight, voter_bags::Bag<T>>;
 
 	/// Voter nodes store links forward and back within their respective bags, the stash id, and
 	/// whether the voter is a validator or nominator.
@@ -1338,11 +1339,8 @@ pub mod pallet {
 	/// There is nothing in this map directly identifying to which bag a particular node belongs.
 	/// However, the `Node` data structure has helpers which can provide that information.
 	#[pallet::storage]
-	pub(crate) type VoterNodes<T: Config> = StorageMap<
-		_,
-		Twox64Concat, AccountIdOf<T>,
-		voter_bags::Node<T>,
-	>;
+	pub(crate) type VoterNodes<T: Config> =
+		StorageMap<_, Twox64Concat, AccountIdOf<T>, voter_bags::Node<T>>;
 
 	// End of voter bags data.
 
@@ -1421,7 +1419,7 @@ pub mod pallet {
 					// TODO: later on, fix all the tests that trigger these warnings, and
 					// make these assertions. Genesis stakers should all be correct!
 					log!(warn, "failed to bond staker at genesis: {:?}.", why);
-					continue;
+					continue
 				}
 				match status {
 					StakerStatus::Validator => {
@@ -1431,7 +1429,7 @@ pub mod pallet {
 						) {
 							log!(warn, "failed to validate staker at genesis: {:?}.", why);
 						} else {
-							num_voters +=1 ;
+							num_voters += 1;
 						}
 					},
 					StakerStatus::Nominator(votes) => {
@@ -1443,8 +1441,8 @@ pub mod pallet {
 						} else {
 							num_voters += 1;
 						}
-					}
-					_ => ()
+					},
+					_ => (),
 				};
 			}
 
@@ -2502,10 +2500,7 @@ pub mod pallet {
 		///
 		/// Anyone can call this function about any stash.
 		#[pallet::weight(T::WeightInfo::rebag())]
-		pub fn rebag(
-			origin: OriginFor<T>,
-			stash: AccountIdOf<T>,
-		) -> DispatchResult {
+		pub fn rebag(origin: OriginFor<T>, stash: AccountIdOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 			Pallet::<T>::do_rebag(&stash);
 			Ok(())

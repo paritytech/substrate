@@ -17,12 +17,11 @@
 
 //! Make the set of voting bag thresholds to be used in `voter_bags.rs`.
 
-use pallet_staking::voter_bags::make_bags::generate_thresholds_module;
-use pallet_staking::mock::Test;
+use pallet_staking::{mock::Test, voter_bags::make_bags::generate_thresholds_module};
 use std::path::{Path, PathBuf};
-use structopt::{StructOpt, clap::arg_enum};
+use structopt::{clap::arg_enum, StructOpt};
 
-arg_enum!{
+arg_enum! {
 	#[derive(Debug)]
 	enum Runtime {
 		Node,
@@ -42,10 +41,7 @@ impl Runtime {
 #[derive(Debug, StructOpt)]
 struct Opt {
 	/// How many bags to generate.
-	#[structopt(
-		long,
-		default_value = "200",
-	)]
+	#[structopt(long, default_value = "200")]
 	n_bags: usize,
 
 	/// Which runtime to generate.

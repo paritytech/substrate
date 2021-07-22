@@ -825,10 +825,11 @@ pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 use crate::voter_bags::Bag;
 /// Returns the nodes of all non-empty bags.
 pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<AccountId>)> {
-	VoterBagThresholds::get().into_iter().filter_map(|t| {
-		Bag::<Test>::get(*t).map(|bag| (
-			*t,
-			bag.iter().map(|n| n.voter().id).collect::<Vec<_>>()
-		))
-	}).collect::<Vec<_>>()
+	VoterBagThresholds::get()
+		.into_iter()
+		.filter_map(|t| {
+			Bag::<Test>::get(*t)
+				.map(|bag| (*t, bag.iter().map(|n| n.voter().id).collect::<Vec<_>>()))
+		})
+		.collect::<Vec<_>>()
 }

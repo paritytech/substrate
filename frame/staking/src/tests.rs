@@ -25,6 +25,7 @@ use frame_support::{
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use mock::*;
+use pallet_balances::Error as BalancesError;
 use sp_npos_elections::supports_eq_unordered;
 use sp_runtime::{
 	assert_eq_error_rate,
@@ -32,7 +33,6 @@ use sp_runtime::{
 };
 use sp_staking::offence::OffenceDetails;
 use substrate_test_utils::assert_eq_uvec;
-use pallet_balances::Error as BalancesError;
 
 #[test]
 fn force_unstake_works() {
@@ -174,10 +174,7 @@ fn basic_setup_works() {
 		// check the bags
 		assert_eq!(CounterForVoters::<Test>::get(), 4);
 
-		assert_eq!(
-			get_bags(),
-			vec![(10, vec![31]), (1000, vec![11, 21, 101])],
-		);
+		assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])],);
 	});
 }
 

@@ -97,10 +97,7 @@ impl<T: Config> VoterList<T> {
 		let validators_iter = Validators::<T>::iter().map(|(id, _)| Voter::validator(id));
 		let weight_of = Pallet::<T>::weight_of_fn();
 
-		Self::insert_many(
-			nominators_iter.chain(validators_iter),
-			weight_of,
-		)
+		Self::insert_many(nominators_iter.chain(validators_iter), weight_of)
 	}
 
 	/// Decode the length of the voter list.
@@ -140,9 +137,7 @@ impl<T: Config> VoterList<T> {
 			// otherwise, insert it here.
 			Box::new(iter.chain(iter::once(VoteWeight::MAX)).rev())
 		};
-		iter
-			.filter_map(Bag::get)
-			.flat_map(|bag| bag.iter())
+		iter.filter_map(Bag::get).flat_map(|bag| bag.iter())
 	}
 
 	/// Insert a new voter into the appropriate bag in the voter list.
@@ -212,7 +207,9 @@ impl<T: Config> VoterList<T> {
 			count += 1;
 
 			// clear the bag head/tail pointers as necessary
-			let bag = bags.entry(node.bag_upper).or_insert_with(|| Bag::<T>::get_or_make(node.bag_upper));
+			let bag = bags
+				.entry(node.bag_upper)
+				.or_insert_with(|| Bag::<T>::get_or_make(node.bag_upper));
 			bag.remove_node(&node);
 
 			// now get rid of the node itself
@@ -470,12 +467,7 @@ impl<T: Config> Bag<T> {
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
 	fn insert(&mut self, voter: VoterOf<T>) {
-		self.insert_node(Node::<T> {
-			voter,
-			prev: None,
-			next: None,
-			bag_upper: self.bag_upper,
-		});
+		self.insert_node(Node::<T> { voter, prev: None, next: None, bag_upper: self.bag_upper });
 	}
 
 	/// Insert a voter node into this bag.
@@ -656,7 +648,7 @@ impl<T: Config> Node<T> {
 
 				(!targets.is_empty())
 					.then(move || (self.voter.id.clone(), weight_of(&self.voter.id), targets))
-			}
+			},
 		}
 	}
 
@@ -708,17 +700,11 @@ pub struct Voter<AccountId> {
 
 impl<AccountId> Voter<AccountId> {
 	pub fn nominator(id: AccountId) -> Self {
-		Self {
-			id,
-			voter_type: VoterType::Nominator,
-		}
+		Self { id, voter_type: VoterType::Nominator }
 	}
 
 	pub fn validator(id: AccountId) -> Self {
-		Self {
-			id,
-			voter_type: VoterType::Validator,
-		}
+		Self { id, voter_type: VoterType::Validator }
 	}
 }
 
@@ -782,10 +768,13 @@ pub fn existential_weight<T: Config>() -> VoteWeight {
 ///    ```
 #[cfg(feature = "make-bags")]
 pub mod make_bags {
-	use crate::{Config, voter_bags::existential_weight};
+	use crate::{voter_bags::existential_weight, Config};
 	use frame_election_provider_support::VoteWeight;
 	use frame_support::traits::Get;
-	use std::{io::Write, path::{Path, PathBuf}};
+	use std::{
+		io::Write,
+		path::{Path, PathBuf},
+	};
 
 	/// Return the path to a header file used in this repository if is exists.
 	///
@@ -797,7 +786,7 @@ pub mod make_bags {
 		for file_name in &["HEADER-APACHE2", "HEADER-GPL3", "HEADER", "file_header.txt"] {
 			let path = workdir.join(file_name);
 			if path.exists() {
-				return Some(path);
+				return Some(path)
 			}
 		}
 		None
@@ -945,9 +934,9 @@ pub mod make_bags {
 // among those related to `VoterList` struct.
 #[cfg(test)]
 mod voter_list {
-	use frame_support::traits::Currency;
 	use super::*;
 	use crate::mock::*;
+	use frame_support::traits::Currency;
 
 	#[test]
 	fn basic_setup_works() {
@@ -978,10 +967,7 @@ mod voter_list {
 				//   ^^ note the order of insertion in genesis!
 			);
 
-			assert_eq!(
-				get_bags(),
-				vec![(10, vec![31]), (1000, vec![11, 21, 101])],
-			);
+			assert_eq!(get_bags(), vec![(10, vec![31]), (1000, vec![11, 21, 101])],);
 		})
 	}
 
@@ -1007,11 +993,14 @@ mod voter_list {
 			let iteration = VoterList::<Test>::iter().map(|node| node.voter.id).collect::<Vec<_>>();
 
 			// then
-			assert_eq!(iteration, vec![
-				51, 61, // best bag
-				11, 21, 101, // middle bag
-				31, // last bag.
-			]);
+			assert_eq!(
+				iteration,
+				vec![
+					51, 61, // best bag
+					11, 21, 101, // middle bag
+					31,  // last bag.
+				]
+			);
 		})
 	}
 
@@ -1030,16 +1019,17 @@ mod voter_list {
 			);
 
 			// when
-			let iteration = VoterList::<Test>::iter()
-				.map(|node| node.voter.id)
-				.take(4)
-				.collect::<Vec<_>>();
+			let iteration =
+				VoterList::<Test>::iter().map(|node| node.voter.id).take(4).collect::<Vec<_>>();
 
 			// then
-			assert_eq!(iteration, vec![
-				51, 61, // best bag, fully iterated
-				11, 21, // middle bag, partially iterated
-			]);
+			assert_eq!(
+				iteration,
+				vec![
+					51, 61, // best bag, fully iterated
+					11, 21, // middle bag, partially iterated
+				]
+			);
 		})
 	}
 

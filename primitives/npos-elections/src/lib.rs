@@ -499,7 +499,10 @@ impl<AccountId: Ord + Clone> Support<AccountId> {
 pub type Supports<A> = Vec<(A, Support<A>)>;
 
 #[cfg(feature = "mocks")]
-pub fn supports_eq_unordered<AccountId: Ord + Clone>(a: &Supports<AccountId>, b: &Supports<AccountId>) -> bool {
+pub fn supports_eq_unordered<AccountId: Ord + Clone>(
+	a: &Supports<AccountId>,
+	b: &Supports<AccountId>,
+) -> bool {
 	let map: BTreeMap<_, _> = a.iter().cloned().collect();
 	b.iter().all(|(id, b_support)| {
 		let a_support = match map.get(id) {
