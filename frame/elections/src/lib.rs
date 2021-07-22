@@ -694,7 +694,7 @@ pub mod pallet {
 			#[pallet::compact] index: VoteIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(!total.is_zero(), Error::<T>::ZeroDeposit,);
+			ensure!(!total.is_zero(), Error::<T>::ZeroDeposit);
 
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
@@ -711,7 +711,7 @@ pub mod pallet {
 			ensure!(total > leaderboard[0].0, Error::<T>::UnworthyCandidate);
 
 			if let Some(p) = Self::members().iter().position(|&(ref c, _)| c == &candidate) {
-				ensure!(p < expiring.len(), Error::<T>::DuplicatedCandidate,);
+				ensure!(p < expiring.len(), Error::<T>::DuplicatedCandidate);
 			}
 
 			let voters = Self::all_voters();
@@ -916,12 +916,12 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(!Self::presentation_active(), Error::<T>::ApprovalPresentation);
 		ensure!(index == Self::vote_index(), Error::<T>::InvalidVoteIndex);
-		ensure!(!candidates_len.is_zero(), Error::<T>::ZeroCandidates,);
+		ensure!(!candidates_len.is_zero(), Error::<T>::ZeroCandidates);
 		// Prevent a vote from voters that provide a list of votes that exceeds the candidates
 		// length since otherwise an attacker may be able to submit a very long list of `votes` that
 		// far exceeds the amount of candidates and waste more computation than a reasonable voting
 		// bond would cover.
-		ensure!(candidates_len >= votes.len(), Error::<T>::TooManyVotes,);
+		ensure!(candidates_len >= votes.len(), Error::<T>::TooManyVotes);
 		ensure!(value >= T::MinimumVotingLock::get(), Error::<T>::InsufficientLockedValue);
 
 		// Amount to be locked up.

@@ -639,9 +639,9 @@ pub mod tests {
 
 	#[test]
 	fn equality_works() {
-		assert_eq!(BigUint { digits: vec![1, 2, 3] } == BigUint { digits: vec![1, 2, 3] }, true,);
-		assert_eq!(BigUint { digits: vec![3, 2, 3] } == BigUint { digits: vec![1, 2, 3] }, false,);
-		assert_eq!(BigUint { digits: vec![0, 1, 2, 3] } == BigUint { digits: vec![1, 2, 3] }, true,);
+		assert_eq!(BigUint { digits: vec![1, 2, 3] } == BigUint { digits: vec![1, 2, 3] }, true);
+		assert_eq!(BigUint { digits: vec![3, 2, 3] } == BigUint { digits: vec![1, 2, 3] }, false);
+		assert_eq!(BigUint { digits: vec![0, 1, 2, 3] } == BigUint { digits: vec![1, 2, 3] }, true);
 	}
 
 	#[test]
@@ -667,7 +667,7 @@ pub mod tests {
 		use sp_std::convert::TryFrom;
 		assert_eq!(u64::try_from(with_limbs(1)).unwrap(), 1);
 		assert_eq!(u64::try_from(with_limbs(2)).unwrap(), u32::MAX as u64 + 2);
-		assert_eq!(u64::try_from(with_limbs(3)).unwrap_err(), "cannot fit a number into u64",);
+		assert_eq!(u64::try_from(with_limbs(3)).unwrap_err(), "cannot fit a number into u64");
 		assert_eq!(u128::try_from(with_limbs(3)).unwrap(), u32::MAX as u128 + u64::MAX as u128 + 3);
 	}
 

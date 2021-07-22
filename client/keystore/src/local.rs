@@ -709,7 +709,7 @@ mod tests {
 		let file_name = temp_dir.path().join(hex::encode(&SR25519.0[..2]));
 		fs::write(file_name, "test").expect("Invalid file is written");
 
-		assert!(SyncCryptoStore::sr25519_public_keys(&store, SR25519).is_empty(),);
+		assert!(SyncCryptoStore::sr25519_public_keys(&store, SR25519).is_empty());
 	}
 
 	#[test]

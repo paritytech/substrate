@@ -170,7 +170,7 @@ mod test {
 			)
 			.unwrap();
 
-		assert_eq!(load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(), None,);
+		assert_eq!(load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(), None);
 
 		let epoch_changes = load_epoch_changes::<TestBlock, _>(
 			&client,
@@ -202,6 +202,6 @@ mod test {
 			client.insert_aux(values, &[]).unwrap();
 		});
 
-		assert_eq!(load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(), Some(2),);
+		assert_eq!(load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(), Some(2));
 	}
 }
