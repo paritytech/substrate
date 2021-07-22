@@ -18,8 +18,12 @@
 use crate::construct_runtime::{construct_runtime_parsed, parse::RuntimeDefinition};
 use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro::TokenStream;
-use quote::{ToTokens, quote};
-use syn::{parse::{Parse, ParseStream}, spanned::Spanned, ItemMacro, Token};
+use quote::{quote, ToTokens};
+use syn::{
+	parse::{Parse, ParseStream},
+	spanned::Spanned,
+	ItemMacro, Token,
+};
 
 mod keyword {
 	syn::custom_keyword!(AccountData);
@@ -121,28 +125,27 @@ impl Parse for TestSetupAttr {
 			parse_keyword!(attr, input, lookahead, Version, version);
 
 			// If we reach this point, none of the keywords were successfully parsed
-			return Err(lookahead.error());
+			return Err(lookahead.error())
 		}
 		Ok(attr)
 	}
 }
 
-pub fn setup_default_test_parameters(attr: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
+pub fn setup_default_test_parameters(
+	attr: TokenStream,
+	item: TokenStream,
+) -> syn::Result<TokenStream> {
 	let ItemMacro { mac, .. } = syn::parse(item)?;
-	let attr: TestSetupAttr = if !attr.is_empty() {
-		syn::parse(attr)?
-	} else {
-		Default::default()
-	};
+	let attr: TestSetupAttr = if !attr.is_empty() { syn::parse(attr)? } else { Default::default() };
 
 	match mac.path.segments.last() {
-		Some(segment) if segment.ident == "construct_runtime" => {}
+		Some(segment) if segment.ident == "construct_runtime" => {},
 		_ => {
 			let msg =
 				"Invalid test setup attribute macro: expected `construct_runtime!` macro call";
 			let span = mac.path.span();
-			return Err(syn::Error::new(span, msg));
-		}
+			return Err(syn::Error::new(span, msg))
+		},
 	}
 
 	let frame_system = generate_crate_access_2018("frame-system")?;
@@ -177,10 +180,16 @@ pub fn setup_default_test_parameters(attr: TokenStream, item: TokenStream) -> sy
 		.unwrap_or(quote! {BlockHashCount});
 	let block_length =
 		attr.block_length.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {()});
-	let block_number =
-		attr.block_number.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {u64});
-	let block_weights =
-		attr.block_weights.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {()});
+	let block_number = attr
+		.block_number
+		.as_ref()
+		.map(ToTokens::to_token_stream)
+		.unwrap_or(quote! {u64});
+	let block_weights = attr
+		.block_weights
+		.as_ref()
+		.map(ToTokens::to_token_stream)
+		.unwrap_or(quote! {()});
 	let call = attr.call.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {Call});
 	let db_weight = attr.db_weight.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {()});
 	let event = attr.event.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {Event});
@@ -205,17 +214,29 @@ pub fn setup_default_test_parameters(attr: TokenStream, item: TokenStream) -> sy
 		.as_ref()
 		.map(ToTokens::to_token_stream)
 		.unwrap_or(quote! {#sp_runtime::traits::IdentityLookup<Self::AccountId>});
-	let on_killed_account =
-		attr.on_killed_account.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {()});
-	let on_new_account =
-		attr.on_new_account.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {()});
+	let on_killed_account = attr
+		.on_killed_account
+		.as_ref()
+		.map(ToTokens::to_token_stream)
+		.unwrap_or(quote! {()});
+	let on_new_account = attr
+		.on_new_account
+		.as_ref()
+		.map(ToTokens::to_token_stream)
+		.unwrap_or(quote! {()});
 	let on_set_code =
 		attr.on_set_code.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {()});
 	let origin = attr.origin.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {Origin});
-	let pallet_info =
-		attr.pallet_info.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {PalletInfo});
-	let system_weight_info =
-		attr.system_weight_info.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {()});
+	let pallet_info = attr
+		.pallet_info
+		.as_ref()
+		.map(ToTokens::to_token_stream)
+		.unwrap_or(quote! {PalletInfo});
+	let system_weight_info = attr
+		.system_weight_info
+		.as_ref()
+		.map(ToTokens::to_token_stream)
+		.unwrap_or(quote! {()});
 	let ss58_prefix =
 		attr.ss58_prefix.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {()});
 	let version = attr.version.as_ref().map(ToTokens::to_token_stream).unwrap_or(quote! {()});
