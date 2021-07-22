@@ -366,29 +366,20 @@ impl<T: Config> VoterList<T> {
 	/// * Ensure `CounterForVoters` is `CounterForValidators + CounterForNominators`.
 	/// * Sanity-checks all bags. This will cascade down all the checks and makes sure all bags are
 	///   checked per *any* update to `VoterList`.
-	pub(super) fn sanity_check() -> Result<(), std::string::String> {
+	pub(super) fn sanity_check() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.voter.id).all(|voter| seen_in_list.insert(voter)),
-			String::from("duplicate identified"),
+			"duplicate identified",
 		);
 
 		let iter_count = Self::iter().collect::<sp_std::vec::Vec<_>>().len() as u32;
 		let stored_count = crate::CounterForVoters::<T>::get();
-		ensure!(
-			iter_count == stored_count,
-			format!("iter_count ({}) != voter_count ({})", iter_count, stored_count),
-		);
+		ensure!(iter_count == stored_count, "iter_count != voter_count");
 
 		let validators = crate::CounterForValidators::<T>::get();
 		let nominators = crate::CounterForNominators::<T>::get();
-		ensure!(
-			validators + nominators == stored_count,
-			format!(
-				"validators {} + nominators {} != voters {}",
-				validators, nominators, stored_count
-			),
-		);
+		ensure!(validators + nominators == stored_count, "validators + nominators != voters");
 
 		let _ = T::VoterBagThresholds::get()
 			.into_iter()
@@ -536,14 +527,14 @@ impl<T: Config> Bag<T> {
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
-	fn sanity_check(&self) -> Result<(), std::string::String> {
+	fn sanity_check(&self) -> Result<(), &'static str> {
 		ensure!(
 			self.head()
 				.map(|head| head.prev().is_none())
 				// if there is no head, then there must not be a tail, meaning that the bag is
 				// empty.
 				.unwrap_or_else(|| self.tail.is_none()),
-			String::from("head has a prev")
+			"head has a prev"
 		);
 
 		ensure!(
@@ -552,7 +543,7 @@ impl<T: Config> Bag<T> {
 				// if there is no tail, then there must not be a head, meaning that the bag is
 				// empty.
 				.unwrap_or_else(|| self.head.is_none()),
-			String::from("tail has a next")
+			"tail has a next"
 		);
 
 		let mut seen_in_bag = BTreeSet::new();
@@ -561,7 +552,7 @@ impl<T: Config> Bag<T> {
 				.map(|node| node.voter.id)
 				// each voter is only seen once, thus there is no cycle within a bag
 				.all(|voter| seen_in_bag.insert(voter)),
-			String::from("Duplicate found in bag.")
+			"Duplicate found in bag"
 		);
 
 		Ok(())
@@ -936,7 +927,6 @@ pub mod make_bags {
 mod voter_list {
 	use super::*;
 	use crate::mock::*;
-	use frame_support::traits::Currency;
 
 	#[test]
 	fn basic_setup_works() {

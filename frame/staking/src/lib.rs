@@ -271,13 +271,15 @@
 //! - [Session](../pallet_session/index.html): Used to manage sessions. Also, a list of new
 //!   validators is stored in the Session pallet's `Validators` at the end of each era.
 
-#![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(any(test, feature = "make-bags"))]
-pub mod mock;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod testing_utils;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod benchmarking;
+
+#[cfg(test)]
+pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
